@@ -5,7 +5,7 @@ import {
   leaf,
   branch,
   withAuth,
-  validated,
+  check,
 } from '@rhi-zone/fractal-core'
 import { serve, type HttpRequestLike } from './index.ts'
 
@@ -54,7 +54,7 @@ describe('http interpreter: annotation grants only that capability handle + enfo
 
 describe('http interpreter: seq validation stage maps error to status', () => {
   it('422 on invalid input, 200 on valid', async () => {
-    const parse = validated<{ n: number }>((i) =>
+    const parse = check<{ n: number }>((i) =>
       typeof (i as { n?: unknown })?.n === 'number'
         ? ok(i as { n: number })
         : err({ code: 'invalid', message: 'n must be a number' }),

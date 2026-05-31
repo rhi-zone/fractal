@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import {
   ok,
   err,
@@ -9,6 +10,7 @@ import {
   identity,
   withAuth,
   withRateLimit,
+  check,
   validated,
   client,
   evaluate,
@@ -24,6 +26,30 @@ import {
   type Meta,
   type Result,
 } from './index.ts'
+
+// A hand-rolled Standard Schema fixture (no real validator dependency).
+const numberSchema = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: (v: unknown) =>
+      typeof v === 'number' ? { value: v } : { issues: [{ message: 'not a number' }] },
+    jsonSchema: { input: () => ({ type: 'number' }), output: () => ({ type: 'number' }) },
+    types: undefined,
+  },
+} as unknown as StandardSchemaV1<unknown, number>
+
+// An ASYNC-validate fixture: validate resolves a Promise.
+const asyncNumberSchema = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: async (v: unknown) =>
+      typeof v === 'number' ? { value: v } : { issues: [{ message: 'not a number' }] },
+    jsonSchema: { input: () => ({ type: 'number' }), output: () => ({ type: 'number' }) },
+    types: undefined,
+  },
+} as unknown as StandardSchemaV1<unknown, number>
 
 // ============================================================================
 // TYPE-LEVEL ASSERTIONS
@@ -291,9 +317,37 @@ describe('seq short-circuits on error', () => {
   })
 })
 
-describe('validated seq stage', () => {
-  it('parses unknown→T and joins the error union', async () => {
-    const parseNum = validated<number>((i) =>
+describe('validated seq stage (Standard Schema)', () => {
+  it('validates unknown→T via a Standard Schema and joins the error union', async () => {
+    const square = leaf<number, number>((i) => ok(i * i))
+    const pipeline = validated(numberSchema).then(square)
+    expect(await run(pipeline, 4)).toEqual(ok(16))
+    expect(await run(pipeline, 'x')).toEqual(err({ code: 'invalid', message: 'not a number' }))
+  })
+
+  it('wraps the validating leaf in an inert kind:schema / role:input annotation', () => {
+    const node = validated(numberSchema)
+    expect(node.tag).toBe('annotated')
+    expect(node.annotation.kind).toBe('schema')
+    const value = node.annotation.value as { role: string; schema: unknown }
+    expect(value.role).toBe('input')
+    expect(value.schema).toBe(numberSchema)
+    // No enforce gate ⇒ inert: interpreters walk it transparently.
+    expect('enforce' in (node.annotation.value as object)).toBe(false)
+    expect(node.child.tag).toBe('leaf')
+  })
+
+  it('supports an async validate (Promise-returning) schema', async () => {
+    const square = leaf<number, number>((i) => ok(i * i))
+    const pipeline = validated(asyncNumberSchema).then(square)
+    expect(await run(pipeline, 5)).toEqual(ok(25))
+    expect(await run(pipeline, 'x')).toEqual(err({ code: 'invalid', message: 'not a number' }))
+  })
+})
+
+describe('check raw-parse stage', () => {
+  it('parses unknown→T from a raw parse fn and joins the error union', async () => {
+    const parseNum = check<number>((i) =>
       typeof i === 'number' ? ok(i) : err({ code: 'invalid', message: 'not a number' }),
     )
     const square = leaf<number, number>((i) => ok(i * i))

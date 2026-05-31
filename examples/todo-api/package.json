@@ -10,6 +10,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@standard-schema/spec":         "^1.1.0",
     "@rhi-zone/fractal-core":        "workspace:*",
     "@rhi-zone/fractal-transport":   "workspace:*",
     "@rhi-zone/fractal-channel-http": "workspace:*",

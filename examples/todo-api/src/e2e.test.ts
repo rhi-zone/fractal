@@ -74,6 +74,10 @@ describe('todos/add (validated seq)', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect((result.error as { code: string }).code).toBe('invalid')
+      // The new `validated` joins the schema's issue messages with '; '.
+      expect((result.error as { message: string }).message).toBe(
+        'title must be a non-empty string',
+      )
     }
   })
 

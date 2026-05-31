@@ -6,7 +6,7 @@ import {
   streamLeaf,
   branch,
   withAuth,
-  validated,
+  check,
 } from '@rhi-zone/fractal-core'
 import { dispatcher, clientOver, type Transport, type DispatchRequest } from './index.ts'
 
@@ -48,7 +48,7 @@ describe('dispatcher: generalized walk (branch path + grant + delegate to core)'
   })
 
   it('delegates seq semantics to core (validation short-circuit)', async () => {
-    const parse = validated<{ n: number }>((i) =>
+    const parse = check<{ n: number }>((i) =>
       typeof (i as { n?: unknown })?.n === 'number'
         ? ok(i as { n: number })
         : err({ code: 'invalid', message: 'n must be a number' }),

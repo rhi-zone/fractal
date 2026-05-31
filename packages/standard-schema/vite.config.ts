@@ -4,11 +4,11 @@ export default defineConfig({
   build: {
     lib: {
       entry: 'src/index.ts',
-      name: 'FractalSchema',
-      fileName: 'schema',
+      name: 'FractalStandardSchema',
+      fileName: 'standard-schema',
     },
     rollupOptions: {
-      external: ['@rhi-zone/fractal-core'],
+      external: ['@rhi-zone/fractal-core', '@standard-schema/spec'],
     },
   },
 })

@@ -46,7 +46,9 @@ export type {
 export {
   withAuth,
   withRateLimit,
+  check,
   validated,
+  returns,
   route,
   get,
 } from './presets.ts'
@@ -56,6 +58,7 @@ export type {
   RateLimitedError,
   RateLimitCaps,
   ValidationError,
+  SchemaAnnotationValue,
 } from './presets.ts'
 
 export { evaluate, evaluateStream } from './evaluate.ts'
