@@ -7,7 +7,7 @@
 // One test also exercises the bare `compose` one-liner directly to prove both
 // paths (preset sugar and raw compose) produce identical results.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'bun:test'
 import { ok, branch, leaf, streamLeaf, withAuth, type AnyNode } from '@rhi-zone/fractal-core'
 import { clientOver, compose, attach, type CapGrant, type DispatcherOptions } from '@rhi-zone/fractal-transport'
 import { jsonCodec } from '@rhi-zone/fractal-codec-json'

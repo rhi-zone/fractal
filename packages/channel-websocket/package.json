@@ -18,7 +18,7 @@
     "dev":        "vite build --watch",
     "build":      "vite build && tsgo --emitDeclarationOnly",
     "typecheck":  "tsgo --noEmit",
-    "test":       "vitest run",
+    "test":       "bun test",
     "test:watch": "vitest"
   },
   "dependencies": {

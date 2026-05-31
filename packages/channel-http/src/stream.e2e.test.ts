@@ -3,7 +3,7 @@
 // order, (2) per-call meta threads as a header the server reads, and (3) client
 // disconnect mid-stream aborts the server generator (cancellation).
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'bun:test'
 import { ok, branch, leaf, streamLeaf, withAuth } from '@rhi-zone/fractal-core'
 import { clientOver, composeRequestResponse } from '@rhi-zone/fractal-transport'
 import { jsonCodec } from '@rhi-zone/fractal-codec-json'

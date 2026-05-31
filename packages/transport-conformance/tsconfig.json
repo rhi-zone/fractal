@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["bun-types"]
   },
   "include": ["src"]
 }

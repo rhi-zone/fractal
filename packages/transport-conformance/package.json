@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck":  "tsgo --noEmit",
-    "test":       "vitest run",
+    "test":       "bun test",
     "test:watch": "vitest"
   },
   "devDependencies": {

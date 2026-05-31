@@ -2,7 +2,7 @@
 // End-to-end integration test: boots a real Bun server, calls it via the
 // typed fetch client, then shuts the server down.
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
 import { serveBun, type BunServer } from '@rhi-zone/fractal-channel-http/bun'
 import { clientOver, composeRequestResponse } from '@rhi-zone/fractal-transport'
 import { httpExchange } from '@rhi-zone/fractal-channel-http/client'

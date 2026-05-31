@@ -6,7 +6,7 @@
 // We run the same unary + stream calls across every transport and assert every
 // path returns the same Results as the HTTP reference path.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'bun:test'
 import { ok, branch, leaf, streamLeaf } from '@rhi-zone/fractal-core'
 import {
   clientOver,
@@ -50,7 +50,10 @@ const exercise = async (api: ReturnType<typeof clientOver<ReturnType<typeof make
   return { unary, stream }
 }
 
-const EXPECTED = {
+// bun:test's toEqual checks the argument type against the actual; cast to any
+// so the literal object (with widened ok: boolean) satisfies the Result<> constraint.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EXPECTED: any = {
   unary: { ok: true, value: 'echo:hi' },
   stream: [
     { ok: true, value: 0 },
