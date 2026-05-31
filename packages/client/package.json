@@ -22,7 +22,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@rhi-zone/fractal-core": "workspace:*"
+    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-http": "workspace:*",
+    "@rhi-zone/fractal-rpc-dispatch": "workspace:*"
   },
   "devDependencies": {
     "fast-check": "^4.5.3",

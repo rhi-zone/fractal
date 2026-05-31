@@ -8,7 +8,12 @@ export default defineConfig({
       fileName: 'client',
     },
     rollupOptions: {
-      external: ['@rhi-zone/fractal-core'],
+      external: [
+        '@rhi-zone/fractal-core',
+        '@rhi-zone/fractal-http',
+        '@rhi-zone/fractal-http/client',
+        '@rhi-zone/fractal-rpc-dispatch',
+      ],
     },
   },
 })

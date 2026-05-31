@@ -1,27 +1,37 @@
 // @rhi-zone/fractal-http
-// HTTP server interpreter. Transport lives ONLY here; leaves stay (input, ctx) => Result.
+// HTTP adapter over the unified transport core (rpc-dispatch).
 //
-// The interpreter walks the reflectable node union:
-//   branch     → path segments (one segment per child key)
-//   annotated  → grant ONLY that capability's handle into ctx.caps + enforce its gate
-//   leaf       → call `run`
-//   seq        → thread left.output into right.input (short-circuit on error)
-// and maps the resulting Result to an HTTP status.
+// HTTP concepts (URL segments, status codes, response framing) live ONLY here;
+// the tree walk, capability granting, and leaf/seq semantics live in
+// rpc-dispatch + core. This file decodes a request into a `DispatchRequest`,
+// calls a `Dispatcher`, and frames the `DispatchOutcome`:
+//
+//   unary  → a JSON Response with a status mapped from the (error) value
+//   stream → a chunked HTTP body of NDJSON-framed Results (see web.ts)
+//
+// Wire contract (unary, UNCHANGED from the prior interpreter):
+//   URL path  → segments (one per branch key) → branch dispatch
+//   JSON body → leaf input
+//   Result<O> → 200 + JSON
+//   Result<E> → errorStatus(E) + JSON
 
-import type { AnyNode, Context, Handler, Result } from '@rhi-zone/fractal-core'
+import {
+  dispatcher,
+  type CapGrant as DispatchCapGrant,
+  type DispatchRequest,
+  type DispatchOutcome,
+  type Meta,
+} from '@rhi-zone/fractal-rpc-dispatch'
+import type { AnyNode, Result } from '@rhi-zone/fractal-core'
 
-// This HTTP interpreter is UNARY-only in this step (streaming transport lands in
-// a later step). `AnyNode` now admits streaming leaves, so a leaf's `run` is the
-// union of the unary `Handler` and the stream handler. The interpreter only
-// services unary leaves; this cast pins `run` to the unary signature at the call
-// sites below. (A streaming leaf reaching here would mis-serialize; routing
-// streaming over HTTP is deferred to the transport step.)
-type UnaryRun = Handler<unknown, unknown, unknown, Record<string, unknown>>
-
-/** A function that produces the pre-opened handle for one capability `kind`. */
+/**
+ * A function that produces the pre-opened handle for one capability `kind`,
+ * given the HTTP request. Re-exported from rpc-dispatch's `CapGrant` but typed
+ * over `HttpRequestLike` for adapter ergonomics (the structural shape matches).
+ */
 export type CapGrant = (req: HttpRequestLike) => Record<string, unknown>
 
-/** Minimal request shape the interpreter reads — framework-agnostic. */
+/** Minimal request shape the adapter reads — framework-agnostic. */
 export interface HttpRequestLike {
   readonly method: string
   /** Path already split into non-empty segments, e.g. ['users', '42']. */
@@ -31,13 +41,12 @@ export interface HttpRequestLike {
   readonly signal?: AbortSignal
   /**
    * Raw request headers, available to `CapGrant` implementations (e.g. for
-   * reading an Authorization token). Optional so simple test fixtures need not
-   * supply them; absent in tests that don't exercise grants.
+   * reading an Authorization token) and used to thread per-call `meta`.
    */
   readonly headers?: Headers
 }
 
-/** What the interpreter returns; a framework adapter writes this to the wire. */
+/** What the unary adapter returns; a framework adapter writes this to the wire. */
 export interface HttpResponseLike {
   readonly status: number
   readonly body: unknown
@@ -60,97 +69,75 @@ const defaultErrorStatus = (error: unknown): number => {
   return 400
 }
 
-// We re-implement the walk here (rather than reuse core.evaluate) because the
-// HTTP interpreter must (a) consume path segments at branches and (b) grant
-// capability handles incrementally as it descends annotations.
-const walk = async (
-  node: AnyNode,
-  segments: readonly string[],
-  req: HttpRequestLike,
-  caps: Record<string, unknown>,
-  grants: Readonly<Record<string, CapGrant>>,
-): Promise<Result<unknown, unknown>> => {
-  switch (node.tag) {
-    case 'branch': {
-      const [head, ...rest] = segments
-      const children = node.children as Record<string, AnyNode>
-      if (head === undefined || !(head in children)) {
-        return { ok: false, error: { code: 'not_callable', message: `no route for /${segments.join('/')}` } }
-      }
-      const child = children[head]
-      if (child === undefined) {
-        return { ok: false, error: { code: 'not_callable', message: head } }
-      }
-      return walk(child, rest, req, caps, grants)
-    }
-    case 'annotated': {
-      const kind = node.annotation.kind
-      // Grant ONLY this capability's handle (capability security: nothing else leaks in).
-      const granted: Record<string, unknown> = { ...caps }
-      const grant = grants[kind]
-      if (grant) Object.assign(granted, grant(req))
-      // Enforce the capability's own gate, if it carries one.
-      const cap = node.annotation.value as
-        | { enforce?: (c: Record<string, unknown>, s?: AbortSignal) => { ok: true } | { ok: false; error: unknown } }
-        | undefined
-      if (cap && typeof cap.enforce === 'function') {
-        const verdict = cap.enforce(granted, req.signal)
-        if (!verdict.ok) return { ok: false, error: verdict.error }
-      }
-      return walk(node.child, segments, req, granted, grants)
-    }
-    case 'seq': {
-      // seq does not consume path segments; both stages see the remaining path.
-      const left = await walk(node.left, segments, req, caps, grants)
-      if (!left.ok) return left
-      const ctx: Context = req.signal ? { caps, signal: req.signal } : { caps }
-      return runFrom(node.right, left.value, ctx)
-    }
-    case 'leaf': {
-      const ctx: Context = req.signal ? { caps, signal: req.signal } : { caps }
-      return (node.run as UnaryRun)(req.body, ctx)
-    }
+/**
+ * Build the shared `Dispatcher` for a tree + grants. The HTTP `CapGrant` and the
+ * dispatch `CapGrant` are structurally identical — both `(req) => handle` — so
+ * the grants map passes through; the dispatcher hands each grant a
+ * `DispatchRequest` whose fields (`signal`, decoded body via `meta`/`input`) the
+ * grantor reads. We re-key the HTTP `headers` onto the dispatch request so
+ * header-reading grants keep working.
+ */
+const buildDispatcher = (tree: AnyNode, options: ServeOptions) => {
+  const grants = options.grants ?? {}
+  // Adapt each HTTP CapGrant to a dispatch CapGrant. The DispatchRequest we
+  // construct in `serve`/`toWebHandler` carries the HTTP request fields the
+  // grantor needs (it is the same object shape with `path` instead of
+  // `segments`); we expose `segments`/`headers`/`body` on it too (see below).
+  const adapted: Record<string, DispatchCapGrant> = {}
+  for (const [kind, grant] of Object.entries(grants)) {
+    adapted[kind] = (req) => grant(req as unknown as HttpRequestLike)
   }
-}
-
-// After a seq's left stage produces a value, the right stage runs as a pure
-// data transform (no further path consumption) — capability grants already
-// applied on the way down are carried in ctx.caps.
-const runFrom = async (node: AnyNode, input: unknown, ctx: Context): Promise<Result<unknown, unknown>> => {
-  switch (node.tag) {
-    case 'leaf':
-      return (node.run as UnaryRun)(input, ctx)
-    case 'seq': {
-      const left = await runFrom(node.left, input, ctx)
-      if (!left.ok) return left
-      return runFrom(node.right, left.value, ctx)
-    }
-    case 'annotated': {
-      const cap = node.annotation.value as
-        | { enforce?: (c: Record<string, unknown>, s?: AbortSignal) => { ok: true } | { ok: false; error: unknown } }
-        | undefined
-      if (cap && typeof cap.enforce === 'function') {
-        const verdict = cap.enforce(ctx.caps, ctx.signal)
-        if (!verdict.ok) return { ok: false, error: verdict.error }
-      }
-      return runFrom(node.child, input, ctx)
-    }
-    case 'branch':
-      return { ok: false, error: { code: 'not_callable', message: 'branch reached mid-seq' } }
-  }
+  return dispatcher(tree, { grants: adapted })
 }
 
 /**
- * Build an HTTP handler over a node tree. Returns a function from a parsed
- * request to a status + body. The tree's leaves never see transport; this
- * interpreter is the only place HTTP concepts (segments, status) appear.
+ * The DispatchRequest the HTTP adapter constructs. It carries the canonical
+ * dispatch fields (`path`, `input`, `meta`, `signal`) PLUS the original HTTP
+ * fields (`segments`, `body`, `headers`, `method`) so existing header-reading
+ * `CapGrant`s — which were written against `HttpRequestLike` — keep working
+ * unchanged. (`segments` === `path`; `body` === `input`.)
+ */
+const toDispatchRequest = (req: HttpRequestLike, meta?: Meta): DispatchRequest =>
+  ({
+    path: req.segments,
+    input: req.body,
+    ...(meta !== undefined ? { meta } : {}),
+    ...(req.signal ? { signal: req.signal } : {}),
+    // HTTP fields retained for header-reading grants:
+    segments: req.segments,
+    body: req.body,
+    headers: req.headers,
+    method: req.method,
+  }) as DispatchRequest
+
+/**
+ * Build a UNARY HTTP handler over a node tree. Returns a function from a parsed
+ * request to a status + body. Streaming leaves are not representable in the
+ * `{status, body}` shape — for those use {@link toWebHandler}, which frames a
+ * stream as a chunked NDJSON body. A streaming leaf reaching `serve` is
+ * surfaced as a 400 `not_unary` error rather than mis-serialized.
+ *
+ * Backwards-compatible: the unary path produces byte-identical results to the
+ * prior hand-rolled interpreter — it is the regression contract.
  */
 export const serve = (tree: AnyNode, options: ServeOptions = {}) => {
-  const grants = options.grants ?? {}
+  const dispatch = buildDispatcher(tree, options)
   const errorStatus = options.errorStatus ?? defaultErrorStatus
   return async (req: HttpRequestLike): Promise<HttpResponseLike> => {
-    const result = await walk(tree, req.segments, req, {}, grants)
+    const outcome = await dispatch(toDispatchRequest(req))
+    if (outcome.kind === 'stream') {
+      return { status: 400, body: { code: 'not_unary', message: 'leaf is streaming; use the streaming handler' } }
+    }
+    const result = outcome.result
     if (result.ok) return { status: 200, body: result.value }
     return { status: errorStatus(result.error), body: result.error }
   }
 }
+
+/** Map a unary outcome's Result to a status (shared by serve + toWebHandler). */
+export const outcomeStatus = (result: Result<unknown, unknown>, errorStatus = defaultErrorStatus): number =>
+  result.ok ? 200 : errorStatus(result.error)
+
+export { defaultErrorStatus }
+export { buildDispatcher, toDispatchRequest }
+export type { DispatchOutcome }

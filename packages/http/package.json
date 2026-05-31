@@ -17,6 +17,11 @@
       "import":  "./dist/web.js",
       "require": "./dist/web.cjs"
     },
+    "./client": {
+      "types":   "./dist/client.d.ts",
+      "import":  "./dist/client.js",
+      "require": "./dist/client.cjs"
+    },
     "./bun": {
       "types":   "./dist/bun.d.ts",
       "import":  "./dist/bun.js",
@@ -37,7 +42,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@rhi-zone/fractal-core": "workspace:*"
+    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-rpc-dispatch": "workspace:*"
   },
   "devDependencies": {
     "fast-check": "^4.5.3",
