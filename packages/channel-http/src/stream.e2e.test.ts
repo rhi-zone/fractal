@@ -5,9 +5,18 @@
 
 import { describe, it, expect } from 'vitest'
 import { ok, branch, leaf, streamLeaf, withAuth } from '@rhi-zone/fractal-core'
+import { clientOver, composeRequestResponse } from '@rhi-zone/fractal-transport'
+import { jsonCodec } from '@rhi-zone/fractal-codec-json'
+import type { AnyNode } from '@rhi-zone/fractal-core'
 import { serveBun, type BunServer } from './bun.ts'
-import { httpClient } from './client.ts'
+import { httpExchange } from './client.ts'
 import type { CapGrant } from './index.ts'
+
+// SELF-COMPOSE: NO preset. `httpExchange` is the pure HTTP CHANNEL (request/
+// response medium); the codec + the request-response protocol form are wired
+// here via the kernel's `composeRequestResponse`.
+const httpClient = <N extends AnyNode>(node: N, baseUrl: string) =>
+  clientOver(node, composeRequestResponse(httpExchange(baseUrl), jsonCodec))
 
 // A counter stream that records, via the shared flag below, whether its
 // generator ran to completion or was cut short by client disconnect.

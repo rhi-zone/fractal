@@ -6,10 +6,18 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import {
   serveBun,
   type BunServer,
-  httpClientWithHeaders,
+  clientOver,
+  composeRequestResponse,
+  httpExchange,
+  jsonCodec,
   type HttpCapGrant as CapGrant,
 } from '@rhi-zone/fractal-facade'
 import { tree } from './tree.ts'
+
+// SELF-COMPOSE HTTP client (NO preset): `httpExchange` is the pure HTTP CHANNEL;
+// the request-response protocol form + JSON codec are wired via the kernel's
+// `composeRequestResponse`. Per-call headers are the `meta?` arg on each method.
+//   clientOver(tree, composeRequestResponse(httpExchange(baseUrl), jsonCodec))
 
 // ── auth grant ────────────────────────────────────────────────────────────
 // Reads Authorization header: "Bearer <username>" → { auth: { user: username } }
@@ -23,7 +31,7 @@ const authGrant: CapGrant = (req) => {
 // ── server lifecycle ──────────────────────────────────────────────────────
 let server: BunServer
 let baseUrl: string
-let api: ReturnType<typeof httpClientWithHeaders<typeof tree>>
+let api: ReturnType<typeof clientOver<typeof tree>>
 
 beforeAll(() => {
   server = serveBun(tree, {
@@ -31,7 +39,7 @@ beforeAll(() => {
     grants: { auth: authGrant },
   })
   baseUrl = `http://127.0.0.1:${server.port}`
-  api = httpClientWithHeaders(tree, baseUrl)
+  api = clientOver(tree, composeRequestResponse(httpExchange(baseUrl), jsonCodec))
 })
 
 afterAll(() => {

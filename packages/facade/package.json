@@ -27,7 +27,6 @@
     "@rhi-zone/fractal-codec-json":              "workspace:*",
     "@rhi-zone/fractal-codec-structured-clone":  "workspace:*",
     "@rhi-zone/fractal-protocol-correlation":    "workspace:*",
-    "@rhi-zone/fractal-protocol-request-response": "workspace:*",
     "@rhi-zone/fractal-channel-http":            "workspace:*",
     "@rhi-zone/fractal-channel-websocket":       "workspace:*",
     "@rhi-zone/fractal-channel-worker":          "workspace:*",

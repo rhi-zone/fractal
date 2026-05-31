@@ -1,37 +1,28 @@
 // @rhi-zone/fractal-channel-websocket
 // CHANNEL axis instance — WebSocket. A WebSocket is a PERSISTENT DUPLEX medium,
 // so this package wraps it as a `Channel<string>` (the medium moves text frames
-// and owns frame boundaries ONLY — encoding is the codec's job) and ships the
-// ready-made client/server that compose it with `jsonCodec` + the `correlation`
-// protocol via the kernel's `compose` / `attach`.
+// and owns frame boundaries ONLY — encoding is the codec's job).
 //
-//   channel → `wsChannel` / `wsServerChannel`   (the pure Channel<string>)
-//   client  → `wsClient(node, url)`             wraps a `WebSocket` (the global)
-//   server  → `serveWsBun(tree, {grants})`      Bun's native Bun.serve websocket
+// AXIS PURITY: this package depends on the transport KERNEL ONLY. It picks NO
+// codec and NO protocol — those are chosen at the call site by `compose` /
+// `attach`. The exports are:
 //
-// NOTE (axis purity): the pure CHANNEL (`wsChannel`/`wsServerChannel`) depends on
-// the kernel ONLY. The `wsClient`/`serveWsBun` CONVENIENCE presets additionally
-// pick a codec (`@rhi-zone/fractal-codec-json`) and a protocol
-// (`@rhi-zone/fractal-protocol-correlation`); that is the price of a ready-made
-// preset and is intrinsic to it, not channel logic leaking out.
+//   wsClientChannel(url, opts)  → pure Channel<string>, opens a WebSocket
+//   wsServerChannel(ws)         → pure Channel<string> over a server connection
+//   wsServeBun(onConnection, …) → pure Bun WS server: invokes your callback with
+//                                 a Channel<string> per connection; YOU pick the
+//                                 codec + protocol via the kernel's `attach`.
+//
+// SELF-COMPOSE (no preset needed — this IS the preset):
+//
+//   client : clientOver(node, compose(wsClientChannel(url), jsonCodec, correlation))
+//   server : wsServeBun((ch) => attach(tree, ch, jsonCodec, correlation, opts), { port })
 //
 // NODE WS-SERVER CAVEAT: Node has no built-in WebSocket *server*. Rather than
 // install a dependency (`ws`), Node users bring their own server library and
 // wrap each connection with `wsServerChannel(ws)` + the kernel's `attach`.
 
-import {
-  attach,
-  compose,
-  clientOver,
-  type Channel,
-  type DispatcherOptions,
-} from '@rhi-zone/fractal-transport'
-import { correlation } from '@rhi-zone/fractal-protocol-correlation'
-import { jsonCodec } from '@rhi-zone/fractal-codec-json'
-import type { AnyNode, UClient } from '@rhi-zone/fractal-core'
-
-/** Options for the WS server attach (capability grants). */
-type AttachOptions = DispatcherOptions
+import type { Channel } from '@rhi-zone/fractal-transport'
 
 // ── Minimal WebSocket shapes ─────────────────────────────────────────────────
 // We avoid lib.dom / @types — only the members used here are declared.
@@ -97,34 +88,27 @@ const wsChannel = (ws: WebSocketLike, isOpen: () => boolean): Channel<string> =>
  */
 export const wsServerChannel = (ws: WebSocketLike): Channel<string> => wsChannel(ws, () => true)
 
-// ── Client ────────────────────────────────────────────────────────────────────
+// ── Client channel ──────────────────────────────────────────────────────────
 
 declare const WebSocket: WebSocketCtor
 
-/** Options for {@link wsClient}: inject a WebSocket implementation (else global). */
+/** Options for {@link wsClientChannel}: inject a WebSocket implementation (else global). */
 export interface WsClientOptions {
   WebSocket?: WebSocketCtor
 }
 
 /**
- * Build a typed WebSocket client over a node tree. Opens a `WebSocket` to `url`,
- * wraps it as a {@link Channel}, and routes every call through the kernel's
- * `compose(channel, jsonCodec, correlation)`. Unary leaves return
- * `Promise<Result>`; streaming leaves return `AsyncIterable<Result>`. Per-call
- * `meta` rides the correlation envelope (no headers — WebSocket has none after
- * the handshake).
+ * Open a WebSocket to `url` and wrap it as a pure {@link Channel}<string>.
+ * Compose it with a codec + protocol to get a Transport:
+ *
+ *   clientOver(node, compose(wsClientChannel(url), jsonCodec, correlation))
  *
  * Works wherever the global `WebSocket` exists: Bun, Node 22+, Deno, browsers.
  */
-export const wsClient = <N extends AnyNode>(
-  node: N,
-  url: string,
-  opts?: WsClientOptions,
-): UClient<N> => {
+export const wsClientChannel = (url: string, opts?: WsClientOptions): Channel<string> => {
   const Ctor = opts?.WebSocket ?? WebSocket
   const ws = new Ctor(url)
-  const channel = wsChannel(ws, () => ws.readyState === Ctor.OPEN)
-  return clientOver(node, compose(channel, jsonCodec, correlation))
+  return wsChannel(ws, () => ws.readyState === Ctor.OPEN)
 }
 
 // ── Server (Bun native) ───────────────────────────────────────────────────────
@@ -155,7 +139,7 @@ interface BunServerHandle {
 }
 declare const Bun: { serve(config: BunServeWsConfig): BunServerHandle }
 
-export interface ServeWsOptions extends AttachOptions {
+export interface ServeWsOptions {
   /** Port to listen on. 0 = OS-assigned ephemeral port. */
   readonly port?: number
   /** Hostname to bind. Defaults to '127.0.0.1'. */
@@ -168,17 +152,23 @@ export interface WsServer {
 }
 
 /**
- * Start a Bun-native WebSocket server over a node tree. Each upgraded
- * connection becomes a {@link Channel}, attached via the kernel's `attach`; the
- * correlation protocol + streaming + cancellation are the protocol's, so this
- * file only bridges Bun's ServerWebSocket callback API (open / message / close)
- * onto the `Channel` interface.
+ * Start a Bun-native WebSocket server. This is the PURE channel-server factory:
+ * it owns ONLY the Bun WS lifecycle (upgrade / open / message / close) and hands
+ * your `onConnection` callback a {@link Channel}<string> per connection. YOU pick
+ * the codec + protocol via the kernel's `attach`, and return its detach fn:
+ *
+ *   wsServeBun((ch) => attach(tree, ch, jsonCodec, correlation, opts), { port: 0 })
+ *
+ * It picks NO codec/protocol itself — that is the call site's choice.
  *
  * NODE NOTE: Bun has a built-in WS server; Node does not. Node users wrap each
  * connection from an external `ws` library with {@link wsServerChannel} + the
  * kernel's `attach` instead (we do NOT depend on `ws`).
  */
-export const serveWsBun = (tree: AnyNode, options: ServeWsOptions = {}): WsServer => {
+export const wsServeBun = (
+  onConnection: (channel: Channel<string>) => () => void,
+  options: ServeWsOptions = {},
+): WsServer => {
   const server = Bun.serve({
     port: options.port ?? 0,
     hostname: options.hostname ?? '127.0.0.1',
@@ -198,7 +188,7 @@ export const serveWsBun = (tree: AnyNode, options: ServeWsOptions = {}): WsServe
           },
           close: () => ws.close(),
         }
-        ws.data.detach = attach(tree, channel, jsonCodec, correlation, options)
+        ws.data.detach = onConnection(channel)
       },
       message(ws, message) {
         const cb = ws.data.onMessage

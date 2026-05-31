@@ -7,29 +7,17 @@
 // `correlation` protocol via the kernel's `compose` / `attach`.
 //
 //   channel → `portChannel(port)`               (the pure Channel<unknown>)
-//   client  → `portClient(node, port)`          server → `servePort(tree, port, …)`
 //
 // Covers both `node:worker_threads` MessagePort and the web `MessageChannel`
 // port.
 //
-// NOTE (axis purity): the pure CHANNEL (`portChannel`) depends on the kernel
-// ONLY; `portClient`/`servePort` CONVENIENCE presets additionally pick the codec
-// (`@rhi-zone/fractal-codec-structured-clone`) and protocol
-// (`@rhi-zone/fractal-protocol-correlation`) — intrinsic to a ready-made preset.
+// AXIS PURITY: this package depends on the transport KERNEL ONLY. It picks NO
+// codec and NO protocol. Self-compose at the call site (this IS the preset):
+//
+//   client : clientOver(node, compose(portChannel(port), structuredCloneCodec, correlation))
+//   server : attach(tree, portChannel(port), structuredCloneCodec, correlation, opts)
 
-import {
-  attach,
-  compose,
-  clientOver,
-  type Channel,
-  type DispatcherOptions,
-} from '@rhi-zone/fractal-transport'
-import { correlation } from '@rhi-zone/fractal-protocol-correlation'
-import { structuredCloneCodec } from '@rhi-zone/fractal-codec-structured-clone'
-import type { AnyNode, UClient } from '@rhi-zone/fractal-core'
-
-/** Options for a worker server attach (capability grants). */
-type AttachOptions = DispatcherOptions
+import type { Channel } from '@rhi-zone/fractal-transport'
 
 /**
  * The MessagePort surface used here — covers both `node:worker_threads`
@@ -68,14 +56,3 @@ export const portChannel = (port: MessagePortLike): Channel<unknown> => ({
     port.close?.()
   },
 })
-
-/** Build a typed client over a {@link MessagePortLike} (structured clone). */
-export const portClient = <N extends AnyNode>(node: N, port: MessagePortLike): UClient<N> =>
-  clientOver(node, compose(portChannel(port), structuredCloneCodec, correlation))
-
-/** Attach a node tree to a {@link MessagePortLike} as the server. Returns a detach fn. */
-export const servePort = (
-  tree: AnyNode,
-  port: MessagePortLike,
-  options: AttachOptions = {},
-): (() => void) => attach(tree, portChannel(port), structuredCloneCodec, correlation, options)

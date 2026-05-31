@@ -24,6 +24,12 @@ import {
 } from '@rhi-zone/fractal-transport'
 import type { AnyNode, Result } from '@rhi-zone/fractal-core'
 
+// NOTE (axis purity): this file owns ONLY HTTP-medium concerns — URL→segments,
+// status mapping, request/response shapes. The codec (JSON, or any other) is
+// applied by the kernel's `serveExchange` inside the wire-facing `toWebHandler`
+// (web.ts); the unary `serve` handler below returns the DECODED Result payload
+// as its `{ status, body }` body, so it needs no codec at all.
+
 /**
  * A function that produces the pre-opened handle for one capability `kind`,
  * given the HTTP request. Re-exported from rpc-dispatch's `CapGrant` but typed

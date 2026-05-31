@@ -8,26 +8,14 @@
 // `compose` / `attach`.
 //
 //   channel → `stdioChannel(ends)`               (the pure Channel<string>)
-//   client  → `stdioClient(node, {in, out})`     server → `serveStdio(tree, {in,out}, …)`
 //
-// NOTE (axis purity): the pure CHANNEL (`stdioChannel`) depends on the kernel
-// ONLY; `stdioClient`/`serveStdio` CONVENIENCE presets additionally pick the
-// codec (`@rhi-zone/fractal-codec-json`) and protocol
-// (`@rhi-zone/fractal-protocol-correlation`) — intrinsic to a ready-made preset.
+// AXIS PURITY: this package depends on the transport KERNEL ONLY. It picks NO
+// codec and NO protocol. Self-compose at the call site (this IS the preset):
+//
+//   client : clientOver(node, compose(stdioChannel(ends), jsonCodec, correlation))
+//   server : attach(tree, stdioChannel(ends), jsonCodec, correlation, opts)
 
-import {
-  attach,
-  compose,
-  clientOver,
-  type Channel,
-  type DispatcherOptions,
-} from '@rhi-zone/fractal-transport'
-import { correlation } from '@rhi-zone/fractal-protocol-correlation'
-import { jsonCodec } from '@rhi-zone/fractal-codec-json'
-import type { AnyNode, UClient } from '@rhi-zone/fractal-core'
-
-/** Options for a stdio server attach (capability grants). */
-type AttachOptions = DispatcherOptions
+import type { Channel } from '@rhi-zone/fractal-transport'
 
 /** Minimal writable stream surface (process.stdout, any Node Writable). */
 export interface WritableLike {
@@ -82,14 +70,3 @@ export const stdioChannel = (ends: StdioEnds): Channel<string> => {
     },
   }
 }
-
-/** Build a typed client over a stdio pair (line-framed JSON). */
-export const stdioClient = <N extends AnyNode>(node: N, ends: StdioEnds): UClient<N> =>
-  clientOver(node, compose(stdioChannel(ends), jsonCodec, correlation))
-
-/** Attach a node tree to a stdio pair as the server. Returns a detach fn. */
-export const serveStdio = (
-  tree: AnyNode,
-  ends: StdioEnds,
-  options: AttachOptions = {},
-): (() => void) => attach(tree, stdioChannel(ends), jsonCodec, correlation, options)

@@ -10,8 +10,13 @@
 // composeRequestResponse), the `dispatcher`, and the `clientOver` Proxy. Concrete
 // instances along each axis live in their own per-axis packages:
 //   codecs    → fractal-codec-json, fractal-codec-structured-clone
-//   protocols → fractal-protocol-correlation, fractal-protocol-request-response
+//   protocols → fractal-protocol-correlation
 //   channels  → fractal-channel-websocket / -worker / -stdio / -http
+//
+// The one-shot request/response form has NO standalone protocol package: its
+// whole logic IS the kernel assemblers `composeRequestResponse` (client) and
+// `serveExchange` (server). HTTP is its present instance (fractal-channel-http
+// supplies the `httpExchange` medium + the Web/Bun/Node server handlers).
 //
 // Dependency direction: every per-axis package → fractal-transport → core. They
 // provide a `Transport` to `clientOver` and call a `Dispatcher` on the server
@@ -276,7 +281,10 @@ export {
   compose,
   attach,
   composeRequestResponse,
+  serveExchange,
   type Protocol,
   type Exchange,
   type ExchangeResponse,
+  type EncodedRequest,
+  type EncodedOutcome,
 } from './protocol.ts'

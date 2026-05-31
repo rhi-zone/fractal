@@ -12,15 +12,23 @@ import {
   branch,
   leaf,
   streamLeaf,
+  // kernel assemblers — the self-compose surface (NO presets):
+  clientOver,
+  compose,
+  composeRequestResponse,
+  attach,
+  // codecs + protocol:
+  jsonCodec,
+  structuredCloneCodec,
+  correlation,
+  // pure channels + medium server factories:
   serveBun,
   type BunServer,
-  httpClient,
-  portClient,
-  servePort,
-  stdioClient,
-  serveStdio,
-  serveWsBun,
-  wsClient,
+  httpExchange,
+  portChannel,
+  stdioChannel,
+  wsClientChannel,
+  wsServeBun,
   type MessagePortLike,
   type StdioEnds,
 } from './index.ts'
@@ -45,7 +53,7 @@ const makeTree = () =>
 declare const MessageChannel: { new (): { port1: MessagePortLike; port2: MessagePortLike } }
 
 // Run the SAME calls against a typed client (whatever transport backs it).
-const exercise = async (api: ReturnType<typeof httpClient<ReturnType<typeof makeTree>>>) => {
+const exercise = async (api: ReturnType<typeof clientOver<ReturnType<typeof makeTree>>>) => {
   const unary = await api.echo('hi')
   const stream: unknown[] = []
   for await (const r of api.count(3)) stream.push(r)
@@ -65,7 +73,8 @@ describe('transport agnosticism: identical Results over HTTP / WS / IPC', () => 
   it('HTTP (reference)', async () => {
     const server: BunServer = serveBun(makeTree(), { port: 0 })
     try {
-      const got = await exercise(httpClient(makeTree(), `http://127.0.0.1:${server.port}`))
+      const url = `http://127.0.0.1:${server.port}`
+      const got = await exercise(clientOver(makeTree(), composeRequestResponse(httpExchange(url), jsonCodec)))
       expect(got).toEqual(EXPECTED)
     } finally {
       server.stop()
@@ -73,9 +82,10 @@ describe('transport agnosticism: identical Results over HTTP / WS / IPC', () => 
   })
 
   it('WebSocket matches the HTTP reference', async () => {
-    const server = serveWsBun(makeTree(), { port: 0 })
+    const server = wsServeBun((ch) => attach(makeTree(), ch, jsonCodec, correlation), { port: 0 })
     try {
-      const got = await exercise(wsClient(makeTree(), `ws://127.0.0.1:${server.port}`))
+      const url = `ws://127.0.0.1:${server.port}`
+      const got = await exercise(clientOver(makeTree(), compose(wsClientChannel(url), jsonCodec, correlation)))
       expect(got).toEqual(EXPECTED)
     } finally {
       server.stop()
@@ -84,9 +94,9 @@ describe('transport agnosticism: identical Results over HTTP / WS / IPC', () => 
 
   it('worker_threads (MessagePort) matches the HTTP reference', async () => {
     const { port1, port2 } = new MessageChannel()
-    const detach = servePort(makeTree(), port1)
+    const detach = attach(makeTree(), portChannel(port1), structuredCloneCodec, correlation)
     try {
-      const got = await exercise(portClient(makeTree(), port2))
+      const got = await exercise(clientOver(makeTree(), compose(portChannel(port2), structuredCloneCodec, correlation)))
       expect(got).toEqual(EXPECTED)
     } finally {
       detach()
@@ -99,9 +109,9 @@ describe('transport agnosticism: identical Results over HTTP / WS / IPC', () => 
     const s2c = new PassThrough()
     const client: StdioEnds = { in: s2c as unknown as StdioEnds['in'], out: c2s as unknown as StdioEnds['out'] }
     const server: StdioEnds = { in: c2s as unknown as StdioEnds['in'], out: s2c as unknown as StdioEnds['out'] }
-    const detach = serveStdio(makeTree(), server)
+    const detach = attach(makeTree(), stdioChannel(server), jsonCodec, correlation)
     try {
-      const got = await exercise(stdioClient(makeTree(), client))
+      const got = await exercise(clientOver(makeTree(), compose(stdioChannel(client), jsonCodec, correlation)))
       expect(got).toEqual(EXPECTED)
     } finally {
       detach()

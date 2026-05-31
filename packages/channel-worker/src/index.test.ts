@@ -5,7 +5,13 @@
 
 import { describe, it, expect } from 'vitest'
 import { ok, branch, leaf, streamLeaf } from '@rhi-zone/fractal-core'
-import { portClient, servePort, type MessagePortLike } from './index.ts'
+import { clientOver, compose, attach } from '@rhi-zone/fractal-transport'
+import { structuredCloneCodec } from '@rhi-zone/fractal-codec-structured-clone'
+import { correlation } from '@rhi-zone/fractal-protocol-correlation'
+import { portChannel, type MessagePortLike } from './index.ts'
+
+// SELF-COMPOSE call sites: NO preset. The channel package supplies only the pure
+// `portChannel`; the codec + protocol are chosen here via the kernel assemblers.
 
 let yieldedCount = 0
 let generatorFinished = false
@@ -33,9 +39,9 @@ declare const MessageChannel: {
 describe('worker_threads (MessagePort) channel e2e', () => {
   it('unary + stream over an in-process MessagePort', async () => {
     const { port1, port2 } = new MessageChannel()
-    const detach = servePort(makeTree(), port1)
+    const detach = attach(makeTree(), portChannel(port1), structuredCloneCodec, correlation)
     try {
-      const api = portClient(makeTree(), port2)
+      const api = clientOver(makeTree(), compose(portChannel(port2), structuredCloneCodec, correlation))
       expect(await api.ping('m')).toEqual({ ok: true, value: 'pong:m' })
 
       const got: unknown[] = []
@@ -52,9 +58,9 @@ describe('worker_threads (MessagePort) channel e2e', () => {
 
   it('cancels the server generator on early break', async () => {
     const { port1, port2 } = new MessageChannel()
-    const detach = servePort(makeTree(), port1)
+    const detach = attach(makeTree(), portChannel(port1), structuredCloneCodec, correlation)
     try {
-      const api = portClient(makeTree(), port2)
+      const api = clientOver(makeTree(), compose(portChannel(port2), structuredCloneCodec, correlation))
       const got: number[] = []
       for await (const r of api.count(1000)) {
         if (r.ok) got.push(r.value)

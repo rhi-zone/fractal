@@ -8,21 +8,27 @@
 // {@link Dispatcher} (server side).
 //
 // This kernel module declares the protocol-axis INTERFACES (`Protocol`,
-// `Exchange`, `ExchangeResponse`) and the AXIS ASSEMBLERS (`compose`/`attach` for
-// the duplex `MessageStream` form, `composeRequestResponse` for the one-shot
-// `Exchange` form). The assemblers are generic over any protocol/exchange; the
-// concrete protocol INSTANCES live in their own per-axis packages:
+// `Exchange`, `ExchangeResponse`) and the AXIS ASSEMBLERS: `compose`/`attach`
+// for the duplex `MessageStream` form, and `composeRequestResponse` (client) +
+// `serveExchange` (server) for the one-shot `Exchange` form. The assemblers are
+// generic over any protocol/exchange; the concrete duplex protocol INSTANCE
+// lives in its own per-axis package:
 //   - `@rhi-zone/fractal-protocol-correlation`        → correlation
-//   - `@rhi-zone/fractal-protocol-request-response`   → requestResponse helpers
+// The one-shot request/response form has NO standalone package — its whole logic
+// IS `composeRequestResponse` + `serveExchange` here; HTTP is its instance
+// (fractal-channel-http supplies the `httpExchange` medium + server handlers).
 //
 // RESERVED seams (NOT implemented): JSON-RPC, dbus, gRPC — each would be a new
 // `Protocol` value, plugged into `compose` without changing the kernel. A
 // protocol MAY constrain/carry its own codec.
 
 import type { AnyNode, Meta, Result } from '@rhi-zone/fractal-core'
-import type {
-  DispatcherOptions,
-  Transport,
+import {
+  dispatcher,
+  type DispatcherOptions,
+  type DispatchOutcome,
+  type DispatchRequest,
+  type Transport,
 } from './index.ts'
 import type { Channel, MessageStream } from './channel.ts'
 import type { Codec } from './codec.ts'
@@ -141,4 +147,80 @@ export const composeRequestResponse = <W>(exchange: Exchange<W>, codec: Codec<W>
     }
   }
   return transport
+}
+
+// ── request-response axis: SERVER side ────────────────────────────────────────
+// The server analogue of `composeRequestResponse`. It owns the SAME codec seam
+// the client side does — decode the encoded request body into the leaf input,
+// run the shared `dispatcher`, then encode the response payload(s) back to the
+// wire unit `W`. What it does NOT own is the medium's framing: a unary outcome
+// is reported as `{ kind:'unary', result, body }` so the channel can map the
+// Result's ok-ness onto a transport status (HTTP 2xx/4xx); a streaming outcome
+// is reported as `{ kind:'stream', units }` of pre-encoded `W` so the channel
+// can frame them (HTTP NDJSON). This keeps the channel codec-AGNOSTIC: it never
+// calls `JSON.stringify`/`JSON.parse` — only `codec.encode`/`codec.decode` here.
+
+/**
+ * A request whose body is still the encoded wire unit `W` (codec not yet
+ * applied). Channels MAY attach their own extra fields (e.g. HTTP `headers`,
+ * `segments`) — those flow through onto the {@link DispatchRequest} unchanged so
+ * capability grants written against a channel's request shape keep working.
+ */
+export interface EncodedRequest<W> {
+  readonly path: readonly string[]
+  /** The encoded request body; `serveExchange` decodes it via the codec. */
+  readonly body: W
+  readonly meta?: Meta
+  readonly signal?: AbortSignal
+  /** Channel-specific extras passed through to grants (HTTP headers, …). */
+  readonly [extra: string]: unknown
+}
+
+/**
+ * The codec-encoded result of one server-side exchange. A unary outcome carries
+ * both the original `Result` (so the channel can map ok-ness → transport status)
+ * and the encoded body; a stream carries an AsyncIterable of pre-encoded units.
+ */
+export type EncodedOutcome<W> =
+  | { readonly kind: 'unary'; readonly result: Result<unknown, unknown>; readonly body: W }
+  | { readonly kind: 'stream'; readonly units: AsyncIterable<W> }
+
+/**
+ * Build a server-side request-response handler from a node tree + a {@link Codec}:
+ * the request-response analogue of {@link attach}. Returns a function from an
+ * {@link EncodedRequest} to an {@link EncodedOutcome}. The codec seam lives HERE
+ * (decode request body, encode response payloads), so the channel handler stays
+ * codec-agnostic and only does medium framing + status mapping.
+ *
+ *   unary  → decode body, dispatch, encode the ok-value or error payload.
+ *   stream → decode body, dispatch, encode each framed `Result` as one unit.
+ */
+export const serveExchange = <W>(
+  tree: AnyNode,
+  codec: Codec<W>,
+  options: DispatcherOptions = {},
+): ((req: EncodedRequest<W>) => Promise<EncodedOutcome<W>>) => {
+  const dispatch = dispatcher(tree, options)
+  return async (req: EncodedRequest<W>): Promise<EncodedOutcome<W>> => {
+    // Spread the channel's extra fields through to grants, then overwrite the
+    // canonical dispatch fields (decoding the body) so they take precedence.
+    const dreq = {
+      ...req,
+      path: req.path,
+      input: codec.decode(req.body),
+      ...(req.meta !== undefined ? { meta: req.meta } : {}),
+      ...(req.signal ? { signal: req.signal } : {}),
+    } as unknown as DispatchRequest
+    const outcome: DispatchOutcome = await dispatch(dreq)
+    if (outcome.kind === 'unary') {
+      const result = outcome.result
+      const payload = result.ok ? result.value : result.error
+      return { kind: 'unary', result, body: codec.encode(payload) }
+    }
+    const stream = outcome.stream
+    const units = (async function* (): AsyncIterable<W> {
+      for await (const item of stream) yield codec.encode(item)
+    })()
+    return { kind: 'stream', units }
+  }
 }

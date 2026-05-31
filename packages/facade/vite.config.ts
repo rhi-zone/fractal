@@ -14,7 +14,6 @@ export default defineConfig({
         '@rhi-zone/fractal-codec-json',
         '@rhi-zone/fractal-codec-structured-clone',
         '@rhi-zone/fractal-protocol-correlation',
-        '@rhi-zone/fractal-protocol-request-response',
         '@rhi-zone/fractal-channel-http',
         '@rhi-zone/fractal-channel-http/web',
         '@rhi-zone/fractal-channel-http/bun',

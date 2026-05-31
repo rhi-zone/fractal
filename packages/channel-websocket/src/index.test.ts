@@ -5,9 +5,20 @@
 // token threaded via the per-call meta slot rather than a header).
 
 import { describe, it, expect } from 'vitest'
-import { ok, branch, leaf, streamLeaf, withAuth } from '@rhi-zone/fractal-core'
-import { serveWsBun, wsClient, type WsServer } from './index.ts'
-import type { CapGrant } from '@rhi-zone/fractal-transport'
+import { ok, branch, leaf, streamLeaf, withAuth, type AnyNode } from '@rhi-zone/fractal-core'
+import { clientOver, compose, attach, type CapGrant, type DispatcherOptions } from '@rhi-zone/fractal-transport'
+import { jsonCodec } from '@rhi-zone/fractal-codec-json'
+import { correlation } from '@rhi-zone/fractal-protocol-correlation'
+import { wsServeBun, wsClientChannel, type WsServer } from './index.ts'
+
+// SELF-COMPOSE call sites: NO preset. The channel package supplies only the pure
+// `wsClientChannel` / `wsServeBun`; the codec (JSON) + protocol (correlation)
+// are chosen here via the kernel assemblers. The server one-liner wires each
+// connection's pure Channel through `attach`.
+const serveWsBun = (tree: AnyNode, opts: { port: number } & DispatcherOptions) =>
+  wsServeBun((ch) => attach(tree, ch, jsonCodec, correlation, opts), { port: opts.port })
+const wsClient = <N extends AnyNode>(node: N, url: string) =>
+  clientOver(node, compose(wsClientChannel(url), jsonCodec, correlation))
 
 // Shared flags to observe server-side generator behaviour (cancellation).
 let generatorFinished = false

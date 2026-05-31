@@ -4,7 +4,7 @@
   "type": "module",
   "workspaces": ["packages/*", "examples/*"],
   "scripts": {
-    "build":     "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-transport' build && bun run --filter '@rhi-zone/fractal-codec-json' --filter '@rhi-zone/fractal-codec-structured-clone' --filter '@rhi-zone/fractal-protocol-correlation' --filter '@rhi-zone/fractal-protocol-request-response' build && bun run --filter '@rhi-zone/fractal-channel-http' --filter '@rhi-zone/fractal-channel-websocket' --filter '@rhi-zone/fractal-channel-worker' --filter '@rhi-zone/fractal-channel-stdio' build && bun run --filter '@rhi-zone/fractal-schema' --filter '@rhi-zone/fractal-facade' --filter '@rhi-zone/fractal-example-todo-api' build",
+    "build":     "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-transport' build && bun run --filter '@rhi-zone/fractal-codec-json' --filter '@rhi-zone/fractal-codec-structured-clone' --filter '@rhi-zone/fractal-protocol-correlation' build && bun run --filter '@rhi-zone/fractal-channel-http' --filter '@rhi-zone/fractal-channel-websocket' --filter '@rhi-zone/fractal-channel-worker' --filter '@rhi-zone/fractal-channel-stdio' build && bun run --filter '@rhi-zone/fractal-schema' --filter '@rhi-zone/fractal-facade' --filter '@rhi-zone/fractal-example-todo-api' build",
     "typecheck": "bun run --filter '*' typecheck",
     "test":      "bun run --filter '*' test",
     "dev":       "bun run --filter '!*example*' dev"

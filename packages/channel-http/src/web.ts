@@ -3,25 +3,44 @@
 // Uses ONLY Web Platform APIs (Request, Response, URL, Headers, ReadableStream);
 // runtime adapters (bun.ts, node.ts) wrap it as thin shims.
 //
-// This is an ADAPTER over the unified `Dispatcher` (rpc-dispatch): it decodes a
-// Request into a DispatchRequest, calls dispatch, and frames the outcome:
+// This is an ADAPTER over the request-response SERVER assembler
+// (`serveExchange`, the request-response analogue of `attach`). The codec seam
+// lives in `serveExchange`: this file decodes/encodes NOTHING by hand. It owns
+// only HTTP-MEDIUM concerns:
 //
-//   unary  → Response(JSON, errorStatus)
-//   stream → a chunked HTTP body of NDJSON-framed Results, aborting the server
-//            generator when the client disconnects (request.signal)
+//   request  → URL path → segments; raw text body → encoded wire unit `W`;
+//              headers → meta + grant-visible extras
+//   unary    → Response(encoded body, errorStatus mapped from the Result)
+//   stream   → a chunked HTTP body of NDJSON-framed encoded units, aborting the
+//              server generator when the client disconnects (request.signal)
 //
-// NDJSON (newline-delimited JSON) is the stream wire format: one JSON-encoded
-// Result per line. Chosen over SSE for framing simplicity — the client is a
-// fetch reader, not a browser EventSource, so SSE's event/data ceremony and
-// text/event-stream semantics buy nothing here; one `JSON.stringify(result) +
-// "\n"` per item is the whole protocol.
+// NDJSON (newline-delimited JSON) is the stream wire format: one encoded Result
+// per line. Chosen over SSE for framing simplicity — the client is a fetch
+// reader, not a browser EventSource, so SSE's event/data ceremony buys nothing
+// here; one encoded unit + "\n" per item is the whole protocol.
+//
+// CODEC: the JSON codec is the default (HTTP's historical wire format). It is a
+// PARAMETER — pass any `Codec<string>` to serve a different textual encoding
+// over HTTP without touching this file.
 
 import type { AnyNode } from '@rhi-zone/fractal-core'
-import type { Meta } from '@rhi-zone/fractal-transport'
-import { buildDispatcher, toDispatchRequest, defaultErrorStatus, type ServeOptions, type HttpRequestLike } from './index.ts'
+import {
+  serveExchange,
+  type CapGrant as DispatchCapGrant,
+  type Codec,
+  type EncodedRequest,
+  type Meta,
+} from '@rhi-zone/fractal-transport'
+import { jsonCodec } from '@rhi-zone/fractal-codec-json'
+import { defaultErrorStatus, type ServeOptions, type HttpRequestLike } from './index.ts'
 
 export interface WebHandlerOptions extends ServeOptions {
-  // No additional options at the web layer for now; extend here as needed.
+  /**
+   * The textual codec for request/response bodies. Defaults to {@link jsonCodec}
+   * (HTTP's historical wire format). Supply any `Codec<string>` to serve a
+   * different encoding — the handler itself encodes/decodes nothing by hand.
+   */
+  readonly codec?: Codec<string>
 }
 
 /** Content-type marking an NDJSON stream of framed Results. */
@@ -38,57 +57,53 @@ const metaFromHeaders = (headers: Headers): Meta => {
 
 /**
  * Build a Web-standard request handler over a fractal node tree, over the
- * unified Dispatcher. Works as-is in Bun, Cloudflare Workers, Deno, and any
- * runtime that speaks the Web Fetch API. Node needs the bridge in node.ts.
+ * request-response server assembler (`serveExchange`). Works as-is in Bun,
+ * Cloudflare Workers, Deno, and any runtime that speaks the Web Fetch API. Node
+ * needs the bridge in node.ts.
  */
 export const toWebHandler = (
   tree: AnyNode,
   options: WebHandlerOptions = {},
 ): ((request: Request) => Promise<Response>) => {
-  const dispatch = buildDispatcher(tree, options)
+  const codec = options.codec ?? jsonCodec
+  const handle = serveExchange(tree, codec, { grants: adaptGrants(options) })
   const errorStatus = options.errorStatus ?? defaultErrorStatus
 
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url)
     const segments = url.pathname.split('/').filter(Boolean)
 
-    let body: unknown = undefined
-    const ct = request.headers.get('content-type') ?? ''
-    if (ct.includes('application/json')) {
-      try {
-        body = await request.json()
-      } catch {
-        body = undefined
-      }
-    }
+    // The medium hands the raw text body to the codec as the encoded wire unit.
+    // An empty body is the codec's "no value" (jsonCodec: '' → undefined).
+    const bodyText = await request.text()
 
-    const httpReq: HttpRequestLike = {
-      method: request.method,
-      segments,
-      body,
-      signal: request.signal,
-      headers: request.headers,
-    }
     const meta = metaFromHeaders(request.headers)
-    const outcome = await dispatch(toDispatchRequest(httpReq, meta))
+    const req: EncodedRequest<string> = {
+      path: segments,
+      body: bodyText,
+      meta,
+      ...(request.signal ? { signal: request.signal } : {}),
+      // Grant-visible HTTP extras (CapGrants read `headers`/`segments`/`method`):
+      segments,
+      headers: request.headers,
+      method: request.method,
+    }
+    const outcome = await handle(req)
 
     if (outcome.kind === 'unary') {
-      const result = outcome.result
-      const status = result.ok ? 200 : errorStatus(result.error)
-      const payload = result.ok ? result.value : result.error
-      return new Response(JSON.stringify(payload), {
+      const status = outcome.result.ok ? 200 : errorStatus(outcome.result.error)
+      return new Response(outcome.body, {
         status,
         headers: { 'content-type': 'application/json' },
       })
     }
 
-    // Streaming outcome: frame each Result as one NDJSON line. The server
+    // Streaming outcome: frame each ENCODED unit as one NDJSON line. The server
     // generator is driven by the ReadableStream's pull; when the client
     // disconnects, request.signal aborts and we stop pulling + close the
-    // iterator (which propagates cancellation into evaluateStream, whose loop
-    // checks ctx.signal before each yield).
+    // iterator (which propagates cancellation into evaluateStream).
     const encoder = new TextEncoder()
-    const iterator = outcome.stream[Symbol.asyncIterator]()
+    const iterator = outcome.units[Symbol.asyncIterator]()
     const stream = new ReadableStream<Uint8Array>({
       async pull(controller) {
         if (request.signal?.aborted) {
@@ -101,7 +116,7 @@ export const toWebHandler = (
           controller.close()
           return
         }
-        controller.enqueue(encoder.encode(JSON.stringify(value) + '\n'))
+        controller.enqueue(encoder.encode(value + '\n'))
       },
       async cancel() {
         // Client disconnected mid-stream — stop the server generator.
@@ -114,4 +129,16 @@ export const toWebHandler = (
       headers: { 'content-type': NDJSON_CONTENT_TYPE },
     })
   }
+}
+
+// Adapt the HTTP-flavoured CapGrants (`(req: HttpRequestLike) => handle`) to the
+// dispatch CapGrant shape. Structurally identical — the EncodedRequest we build
+// above carries the HTTP fields (`headers`/`segments`/`method`) the grant reads.
+const adaptGrants = (options: ServeOptions): Record<string, DispatchCapGrant> => {
+  const grants = options.grants ?? {}
+  const adapted: Record<string, DispatchCapGrant> = {}
+  for (const [kind, grant] of Object.entries(grants)) {
+    adapted[kind] = (req) => grant(req as unknown as HttpRequestLike)
+  }
+  return adapted
 }

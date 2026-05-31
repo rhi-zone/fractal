@@ -4,7 +4,13 @@
 
 import { describe, it, expect } from 'vitest'
 import { ok, branch, leaf, streamLeaf } from '@rhi-zone/fractal-core'
-import { stdioClient, serveStdio, type StdioEnds } from './index.ts'
+import { clientOver, compose, attach } from '@rhi-zone/fractal-transport'
+import { jsonCodec } from '@rhi-zone/fractal-codec-json'
+import { correlation } from '@rhi-zone/fractal-protocol-correlation'
+import { stdioChannel, type StdioEnds } from './index.ts'
+
+// SELF-COMPOSE call sites: NO preset. The channel package supplies only the pure
+// `stdioChannel`; the codec (JSON) + protocol (correlation) are chosen here.
 
 // Load node:stream's PassThrough behind a variable specifier so the type
 // checker never resolves 'node:stream' (the repo does not depend on @types/node;
@@ -45,9 +51,9 @@ describe('stdio (line-framed JSON) channel e2e', () => {
 
   it('unary + stream over line-framed JSON', async () => {
     const { client, server } = await wire()
-    const detach = serveStdio(makeTree(), server)
+    const detach = attach(makeTree(), stdioChannel(server), jsonCodec, correlation)
     try {
-      const api = stdioClient(makeTree(), client)
+      const api = clientOver(makeTree(), compose(stdioChannel(client), jsonCodec, correlation))
       expect(await api.ping('s')).toEqual({ ok: true, value: 'pong:s' })
 
       const got: unknown[] = []

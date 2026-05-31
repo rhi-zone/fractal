@@ -6,8 +6,14 @@
 // (from the fractal monorepo root, after `bun run build`)
 
 import { serveNode } from '../../../packages/channel-http/dist/node.js'
-import { httpClientWithHeaders } from '../../../packages/facade/dist/facade.js'
+import { httpExchange } from '../../../packages/channel-http/dist/client.js'
+import { clientOver, composeRequestResponse } from '../../../packages/transport/dist/transport.js'
+import { jsonCodec } from '../../../packages/codec-json/dist/codec-json.js'
 import { tree } from './tree.node.mjs'
+
+// SELF-COMPOSE HTTP client (NO preset): pure HTTP CHANNEL + request-response form.
+const httpClientWithHeaders = (node, baseUrl) =>
+  clientOver(node, composeRequestResponse(httpExchange(baseUrl), jsonCodec))
 
 // ── assertion helper ──────────────────────────────────────────────────────────
 let passed = 0

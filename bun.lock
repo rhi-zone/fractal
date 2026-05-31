@@ -37,12 +37,12 @@
       "name": "@rhi-zone/fractal-channel-stdio",
       "version": "0.1.0-alpha.0",
       "dependencies": {
-        "@rhi-zone/fractal-codec-json": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
         "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
+        "@rhi-zone/fractal-codec-json": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
         "fast-check": "^4.5.3",
         "vite": "^6.0.0",
         "vitest": "^2.0.0",
@@ -52,12 +52,12 @@
       "name": "@rhi-zone/fractal-channel-websocket",
       "version": "0.1.0-alpha.0",
       "dependencies": {
-        "@rhi-zone/fractal-codec-json": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
         "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
+        "@rhi-zone/fractal-codec-json": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
         "fast-check": "^4.5.3",
         "vite": "^6.0.0",
         "vitest": "^2.0.0",
@@ -67,12 +67,12 @@
       "name": "@rhi-zone/fractal-channel-worker",
       "version": "0.1.0-alpha.0",
       "dependencies": {
-        "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
         "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
+        "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
         "fast-check": "^4.5.3",
         "vite": "^6.0.0",
         "vitest": "^2.0.0",
@@ -123,7 +123,6 @@
         "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
         "@rhi-zone/fractal-core": "workspace:*",
         "@rhi-zone/fractal-protocol-correlation": "workspace:*",
-        "@rhi-zone/fractal-protocol-request-response": "workspace:*",
         "@rhi-zone/fractal-schema": "workspace:*",
         "@rhi-zone/fractal-transport": "workspace:*",
       },
@@ -138,18 +137,6 @@
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/protocol-request-response": {
-      "name": "@rhi-zone/fractal-protocol-request-response",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
         "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
@@ -257,8 +244,6 @@
     "@rhi-zone/fractal-facade": ["@rhi-zone/fractal-facade@workspace:packages/facade"],
 
     "@rhi-zone/fractal-protocol-correlation": ["@rhi-zone/fractal-protocol-correlation@workspace:packages/protocol-correlation"],
-
-    "@rhi-zone/fractal-protocol-request-response": ["@rhi-zone/fractal-protocol-request-response@workspace:packages/protocol-request-response"],
 
     "@rhi-zone/fractal-schema": ["@rhi-zone/fractal-schema@workspace:packages/schema"],
 
