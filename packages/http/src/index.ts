@@ -21,6 +21,12 @@ export interface HttpRequestLike {
   /** Parsed request body (JSON) used as the leaf input. */
   readonly body: unknown
   readonly signal?: AbortSignal
+  /**
+   * Raw request headers, available to `CapGrant` implementations (e.g. for
+   * reading an Authorization token). Optional so simple test fixtures need not
+   * supply them; absent in tests that don't exercise grants.
+   */
+  readonly headers?: Headers
 }
 
 /** What the interpreter returns; a framework adapter writes this to the wire. */

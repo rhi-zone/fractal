@@ -3,14 +3,19 @@
   "version": "0.1.0-alpha.0",
   "description": "HTTP server interpreter",
   "type": "module",
-  "main": "./dist/http.umd.cjs",
+  "main": "./dist/http.cjs",
   "module": "./dist/http.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types":   "./dist/index.d.ts",
       "import":  "./dist/http.js",
-      "require": "./dist/http.umd.cjs"
+      "require": "./dist/http.cjs"
+    },
+    "./bun": {
+      "types":   "./dist/bun.d.ts",
+      "import":  "./dist/bun.js",
+      "require": "./dist/bun.cjs"
     }
   },
   "files": ["dist"],

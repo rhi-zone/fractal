@@ -1,11 +1,14 @@
 import { defineConfig } from 'vite'
+import { resolve } from 'path'
 
 export default defineConfig({
   build: {
     lib: {
-      entry: 'src/index.ts',
+      entry: {
+        http: resolve(__dirname, 'src/index.ts'),
+        bun:  resolve(__dirname, 'src/bun.ts'),
+      },
       name: 'FractalHttp',
-      fileName: 'http',
     },
     rollupOptions: {
       external: ['@rhi-zone/fractal-core'],
