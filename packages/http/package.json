@@ -12,10 +12,20 @@
       "import":  "./dist/http.js",
       "require": "./dist/http.cjs"
     },
+    "./web": {
+      "types":   "./dist/web.d.ts",
+      "import":  "./dist/web.js",
+      "require": "./dist/web.cjs"
+    },
     "./bun": {
       "types":   "./dist/bun.d.ts",
       "import":  "./dist/bun.js",
       "require": "./dist/bun.cjs"
+    },
+    "./node": {
+      "types":   "./dist/node.d.ts",
+      "import":  "./dist/node.js",
+      "require": "./dist/node.cjs"
     }
   },
   "files": ["dist"],

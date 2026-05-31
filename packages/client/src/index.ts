@@ -12,6 +12,16 @@ export type { Client, ClientOptions } from '@rhi-zone/fractal-core'
 
 import type { AnyNode, Branch, InputOf, OutputOf, ErrorOf, Result } from '@rhi-zone/fractal-core'
 
+/** Options accepted by `httpClient` and `httpClientWithHeaders`. */
+export interface HttpClientOptions {
+  /**
+   * The fetch implementation to use for requests. Defaults to `globalThis.fetch`.
+   * Inject a custom implementation to run the client in environments without a
+   * global `fetch`, or to mock requests in tests.
+   */
+  fetch?: typeof globalThis.fetch
+}
+
 /**
  * Build an HTTP client over a node tree. The Proxy mirrors the same shape as
  * `client()` but issues `fetch` calls following the HTTP interpreter contract:
@@ -25,11 +35,16 @@ import type { AnyNode, Branch, InputOf, OutputOf, ErrorOf, Result } from '@rhi-z
  * always sent. (The interpreter's `serve` reads `req.body` regardless of method.)
  *
  * `baseUrl` should be e.g. `http://127.0.0.1:3000` (no trailing slash).
+ *
+ * Pass `opts.fetch` to inject a custom fetch implementation; defaults to
+ * `globalThis.fetch` (available in Node 20+, Bun, Deno, browsers).
  */
 export const httpClient = <N extends AnyNode>(
   node: N,
   baseUrl: string,
+  opts?: HttpClientOptions,
 ): HttpClient<N> => {
+  const fetchFn = opts?.fetch ?? globalThis.fetch
   const build = (current: AnyNode, pathSoFar: string): unknown => {
     if (current.tag === 'branch') {
       const children = current.children as Record<string, AnyNode>
@@ -55,7 +70,7 @@ export const httpClient = <N extends AnyNode>(
     // Callable node: issue a POST to the accumulated path with the input as JSON body.
     return async (input: unknown): Promise<Result<unknown, unknown>> => {
       const url = `${baseUrl}${pathSoFar}`
-      const res = await fetch(url, {
+      const res = await fetchFn(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
@@ -70,15 +85,23 @@ export const httpClient = <N extends AnyNode>(
   return build(node, '') as HttpClient<N>
 }
 
+/** Options accepted by `httpClientWithHeaders`. */
+export interface HttpClientWithHeadersOptions extends HttpClientOptions {}
+
 /**
  * Build an HTTP client over a node tree, with per-request extra headers.
  * Identical to `httpClient` but each call accepts an optional `headers` record
  * that is merged into the request (useful for Authorization tokens in tests).
+ *
+ * Pass `opts.fetch` to inject a custom fetch implementation; defaults to
+ * `globalThis.fetch`.
  */
 export const httpClientWithHeaders = <N extends AnyNode>(
   node: N,
   baseUrl: string,
+  opts?: HttpClientWithHeadersOptions,
 ): HttpClientWithHeaders<N> => {
+  const fetchFn = opts?.fetch ?? globalThis.fetch
   const build = (current: AnyNode, pathSoFar: string): unknown => {
     if (current.tag === 'branch') {
       const children = current.children as Record<string, AnyNode>
@@ -103,7 +126,7 @@ export const httpClientWithHeaders = <N extends AnyNode>(
     }
     return async (input: unknown, extraHeaders?: Record<string, string>): Promise<Result<unknown, unknown>> => {
       const url = `${baseUrl}${pathSoFar}`
-      const res = await fetch(url, {
+      const res = await fetchFn(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...extraHeaders },
         body: JSON.stringify(input),
