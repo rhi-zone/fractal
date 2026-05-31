@@ -3,9 +3,12 @@
 // typed fetch client, then shuts the server down.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { serveBun, type BunServer } from '@rhi-zone/fractal-http/bun'
-import { httpClientWithHeaders } from '@rhi-zone/fractal-client'
-import type { CapGrant } from '@rhi-zone/fractal-http'
+import {
+  serveBun,
+  type BunServer,
+  httpClientWithHeaders,
+  type HttpCapGrant as CapGrant,
+} from '@rhi-zone/fractal-facade'
 import { tree } from './tree.ts'
 
 // ── auth grant ────────────────────────────────────────────────────────────

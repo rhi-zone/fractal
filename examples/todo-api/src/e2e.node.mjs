@@ -5,8 +5,8 @@
 // Run with:  node examples/todo-api/src/e2e.node.mjs
 // (from the fractal monorepo root, after `bun run build`)
 
-import { serveNode } from '../../../packages/http/dist/node.js'
-import { httpClientWithHeaders } from '../../../packages/client/dist/client.js'
+import { serveNode } from '../../../packages/channel-http/dist/node.js'
+import { httpClientWithHeaders } from '../../../packages/facade/dist/facade.js'
 import { tree } from './tree.node.mjs'
 
 // ── assertion helper ──────────────────────────────────────────────────────────

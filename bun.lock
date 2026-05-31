@@ -8,11 +8,93 @@
         "@typescript/native-preview": "latest",
       },
     },
-    "packages/client": {
-      "name": "@rhi-zone/fractal-client",
-      "version": "0.1.0-alpha.0",
+    "examples/todo-api": {
+      "name": "@rhi-zone/fractal-example-todo-api",
+      "version": "0.0.0",
       "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-facade": "workspace:*",
+      },
+      "devDependencies": {
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/channel-http": {
+      "name": "@rhi-zone/fractal-channel-http",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-codec-json": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
+      },
+      "devDependencies": {
+        "fast-check": "^4.5.3",
+        "vite": "^6.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/channel-stdio": {
+      "name": "@rhi-zone/fractal-channel-stdio",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-codec-json": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
+      },
+      "devDependencies": {
+        "fast-check": "^4.5.3",
+        "vite": "^6.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/channel-websocket": {
+      "name": "@rhi-zone/fractal-channel-websocket",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-codec-json": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
+      },
+      "devDependencies": {
+        "fast-check": "^4.5.3",
+        "vite": "^6.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/channel-worker": {
+      "name": "@rhi-zone/fractal-channel-worker",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
+      },
+      "devDependencies": {
+        "fast-check": "^4.5.3",
+        "vite": "^6.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/codec-json": {
+      "name": "@rhi-zone/fractal-codec-json",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-transport": "workspace:*",
+      },
+      "devDependencies": {
+        "fast-check": "^4.5.3",
+        "vite": "^6.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/codec-structured-clone": {
+      "name": "@rhi-zone/fractal-codec-structured-clone",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
         "fast-check": "^4.5.3",
@@ -33,13 +115,17 @@
       "name": "@rhi-zone/fractal-facade",
       "version": "0.1.0-alpha.0",
       "dependencies": {
-        "@rhi-zone/fractal-client": "workspace:*",
+        "@rhi-zone/fractal-channel-http": "workspace:*",
+        "@rhi-zone/fractal-channel-stdio": "workspace:*",
+        "@rhi-zone/fractal-channel-websocket": "workspace:*",
+        "@rhi-zone/fractal-channel-worker": "workspace:*",
+        "@rhi-zone/fractal-codec-json": "workspace:*",
+        "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
         "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-http": "workspace:*",
-        "@rhi-zone/fractal-ipc": "workspace:*",
-        "@rhi-zone/fractal-rpc": "workspace:*",
-        "@rhi-zone/fractal-rpc-dispatch": "workspace:*",
+        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
+        "@rhi-zone/fractal-protocol-request-response": "workspace:*",
         "@rhi-zone/fractal-schema": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
         "fast-check": "^4.5.3",
@@ -47,11 +133,12 @@
         "vitest": "^2.0.0",
       },
     },
-    "packages/http": {
-      "name": "@rhi-zone/fractal-http",
+    "packages/protocol-correlation": {
+      "name": "@rhi-zone/fractal-protocol-correlation",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
         "fast-check": "^4.5.3",
@@ -59,37 +146,11 @@
         "vitest": "^2.0.0",
       },
     },
-    "packages/ipc": {
-      "name": "@rhi-zone/fractal-ipc",
+    "packages/protocol-request-response": {
+      "name": "@rhi-zone/fractal-protocol-request-response",
       "version": "0.1.0-alpha.0",
       "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-rpc-dispatch": "workspace:*",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/rpc": {
-      "name": "@rhi-zone/fractal-rpc",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-rpc-dispatch": "workspace:*",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/rpc-dispatch": {
-      "name": "@rhi-zone/fractal-rpc-dispatch",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
         "fast-check": "^4.5.3",
@@ -99,6 +160,18 @@
     },
     "packages/schema": {
       "name": "@rhi-zone/fractal-schema",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-core": "workspace:*",
+      },
+      "devDependencies": {
+        "fast-check": "^4.5.3",
+        "vite": "^6.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/transport": {
+      "name": "@rhi-zone/fractal-transport",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
@@ -165,21 +238,31 @@
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
-    "@rhi-zone/fractal-client": ["@rhi-zone/fractal-client@workspace:packages/client"],
+    "@rhi-zone/fractal-channel-http": ["@rhi-zone/fractal-channel-http@workspace:packages/channel-http"],
+
+    "@rhi-zone/fractal-channel-stdio": ["@rhi-zone/fractal-channel-stdio@workspace:packages/channel-stdio"],
+
+    "@rhi-zone/fractal-channel-websocket": ["@rhi-zone/fractal-channel-websocket@workspace:packages/channel-websocket"],
+
+    "@rhi-zone/fractal-channel-worker": ["@rhi-zone/fractal-channel-worker@workspace:packages/channel-worker"],
+
+    "@rhi-zone/fractal-codec-json": ["@rhi-zone/fractal-codec-json@workspace:packages/codec-json"],
+
+    "@rhi-zone/fractal-codec-structured-clone": ["@rhi-zone/fractal-codec-structured-clone@workspace:packages/codec-structured-clone"],
 
     "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
 
+    "@rhi-zone/fractal-example-todo-api": ["@rhi-zone/fractal-example-todo-api@workspace:examples/todo-api"],
+
     "@rhi-zone/fractal-facade": ["@rhi-zone/fractal-facade@workspace:packages/facade"],
 
-    "@rhi-zone/fractal-http": ["@rhi-zone/fractal-http@workspace:packages/http"],
+    "@rhi-zone/fractal-protocol-correlation": ["@rhi-zone/fractal-protocol-correlation@workspace:packages/protocol-correlation"],
 
-    "@rhi-zone/fractal-ipc": ["@rhi-zone/fractal-ipc@workspace:packages/ipc"],
-
-    "@rhi-zone/fractal-rpc": ["@rhi-zone/fractal-rpc@workspace:packages/rpc"],
-
-    "@rhi-zone/fractal-rpc-dispatch": ["@rhi-zone/fractal-rpc-dispatch@workspace:packages/rpc-dispatch"],
+    "@rhi-zone/fractal-protocol-request-response": ["@rhi-zone/fractal-protocol-request-response@workspace:packages/protocol-request-response"],
 
     "@rhi-zone/fractal-schema": ["@rhi-zone/fractal-schema@workspace:packages/schema"],
+
+    "@rhi-zone/fractal-transport": ["@rhi-zone/fractal-transport@workspace:packages/transport"],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.60.4", "", { "os": "android", "cpu": "arm" }, "sha512-F5QXMSiFebS9hKZj02XhWLLnRpJ3B3AROP0tWbFBSj+6kCbg5m9j5JoHKd4mmSVy5mS/IMQloYgYxCuJC0fxEQ=="],
 

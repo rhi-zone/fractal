@@ -11,8 +11,7 @@
   },
   "dependencies": {
     "@rhi-zone/fractal-core":   "workspace:*",
-    "@rhi-zone/fractal-http":   "workspace:*",
-    "@rhi-zone/fractal-client": "workspace:*"
+    "@rhi-zone/fractal-facade": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^2.0.0"

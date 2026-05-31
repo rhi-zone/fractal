@@ -1,0 +1,54 @@
+{
+  "name": "@rhi-zone/fractal-channel-http",
+  "version": "0.1.0-alpha.0",
+  "description": "HTTP channel axis instance: request/response exchange + Web/Bun/Node server handlers + ready-made client",
+  "type": "module",
+  "main": "./dist/channel-http.cjs",
+  "module": "./dist/channel-http.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types":   "./dist/index.d.ts",
+      "import":  "./dist/channel-http.js",
+      "require": "./dist/channel-http.cjs"
+    },
+    "./web": {
+      "types":   "./dist/web.d.ts",
+      "import":  "./dist/web.js",
+      "require": "./dist/web.cjs"
+    },
+    "./client": {
+      "types":   "./dist/client.d.ts",
+      "import":  "./dist/client.js",
+      "require": "./dist/client.cjs"
+    },
+    "./bun": {
+      "types":   "./dist/bun.d.ts",
+      "import":  "./dist/bun.js",
+      "require": "./dist/bun.cjs"
+    },
+    "./node": {
+      "types":   "./dist/node.d.ts",
+      "import":  "./dist/node.js",
+      "require": "./dist/node.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "dev":        "vite build --watch",
+    "build":      "vite build && tsgo --emitDeclarationOnly",
+    "typecheck":  "tsgo --noEmit",
+    "test":       "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@rhi-zone/fractal-core":       "workspace:*",
+    "@rhi-zone/fractal-transport":  "workspace:*",
+    "@rhi-zone/fractal-codec-json": "workspace:*"
+  },
+  "devDependencies": {
+    "fast-check": "^4.5.3",
+    "vite":       "^6.0.0",
+    "vitest":     "^2.0.0"
+  }
+}
