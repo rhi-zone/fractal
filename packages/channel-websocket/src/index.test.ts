@@ -1,8 +1,11 @@
 // WebSocket adapter end-to-end ON BUN: the SAME tree shape as the HTTP example
-// (a unary leaf + a streamLeaf + an auth-gated leaf), served via `serveWsBun`,
-// consumed via `wsClient`. Proves: unary call, streamed values in order,
-// cancellation (consumer break → server generator stops), and meta (an auth
-// token threaded via the per-call meta slot rather than a header).
+// (a unary leaf + a streamLeaf + an auth-gated leaf), served via `serveWs` from
+// the preset and `wsClient` from the preset. Proves: unary call, streamed values
+// in order, cancellation (consumer break → server generator stops), and meta (an
+// auth token threaded via the per-call meta slot rather than a header).
+//
+// One test also exercises the bare `compose` one-liner directly to prove both
+// paths (preset sugar and raw compose) produce identical results.
 
 import { describe, it, expect } from 'vitest'
 import { ok, branch, leaf, streamLeaf, withAuth, type AnyNode } from '@rhi-zone/fractal-core'
@@ -10,15 +13,11 @@ import { clientOver, compose, attach, type CapGrant, type DispatcherOptions } fr
 import { jsonCodec } from '@rhi-zone/fractal-codec-json'
 import { correlation } from '@rhi-zone/fractal-protocol-correlation'
 import { wsServeBun, wsClientChannel, type WsServer } from './index.ts'
+import { wsClient, serveWs } from '@rhi-zone/fractal-preset-websocket'
 
-// SELF-COMPOSE call sites: NO preset. The channel package supplies only the pure
-// `wsClientChannel` / `wsServeBun`; the codec (JSON) + protocol (correlation)
-// are chosen here via the kernel assemblers. The server one-liner wires each
-// connection's pure Channel through `attach`.
-const serveWsBun = (tree: AnyNode, opts: { port: number } & DispatcherOptions) =>
-  wsServeBun((ch) => attach(tree, ch, jsonCodec, correlation, opts), { port: opts.port })
-const wsClient = <N extends AnyNode>(node: N, url: string) =>
-  clientOver(node, compose(wsClientChannel(url), jsonCodec, correlation))
+// Bare compose one-liners (kept here so both paths are exercised in tests):
+//   server: wsServeBun((ch) => attach(tree, ch, jsonCodec, correlation, opts), opts)
+//   client: clientOver(node, compose(wsClientChannel(url), jsonCodec, correlation))
 
 // Shared flags to observe server-side generator behaviour (cancellation).
 let generatorFinished = false
@@ -56,8 +55,8 @@ const authGrant: CapGrant = (req) => {
 const url = (s: WsServer) => `ws://127.0.0.1:${s.port}`
 
 describe('WebSocket adapter e2e (Bun)', () => {
-  it('unary call', async () => {
-    const server = serveWsBun(makeTree(), { port: 0, grants: { auth: authGrant } })
+  it('unary call — preset serveWs + wsClient', async () => {
+    const server = serveWs(makeTree(), { port: 0, grants: { auth: authGrant } })
     try {
       const api = wsClient(makeTree(), url(server))
       expect(await api.ping('x')).toEqual({ ok: true, value: 'pong:x' })
@@ -66,8 +65,19 @@ describe('WebSocket adapter e2e (Bun)', () => {
     }
   })
 
+  it('bare compose one-liner produces the same result as the preset', async () => {
+    // Exercises the raw compose path directly: no preset involved.
+    const server = wsServeBun((ch) => attach(makeTree(), ch, jsonCodec, correlation, { grants: { auth: authGrant } }), { port: 0 })
+    try {
+      const api = clientOver(makeTree(), compose(wsClientChannel(url(server)), jsonCodec, correlation))
+      expect(await api.ping('compose-check')).toEqual({ ok: true, value: 'pong:compose-check' })
+    } finally {
+      server.stop()
+    }
+  })
+
   it('streams several framed Results in order', async () => {
-    const server = serveWsBun(makeTree(), { port: 0, grants: { auth: authGrant } })
+    const server = serveWs(makeTree(), { port: 0, grants: { auth: authGrant } })
     try {
       const api = wsClient(makeTree(), url(server))
       const got: unknown[] = []
@@ -84,7 +94,7 @@ describe('WebSocket adapter e2e (Bun)', () => {
   })
 
   it('cancels the server generator when the consumer breaks mid-stream', async () => {
-    const server = serveWsBun(makeTree(), { port: 0, grants: { auth: authGrant } })
+    const server = serveWs(makeTree(), { port: 0, grants: { auth: authGrant } })
     try {
       const api = wsClient(makeTree(), url(server))
       const got: number[] = []
@@ -102,7 +112,7 @@ describe('WebSocket adapter e2e (Bun)', () => {
   })
 
   it('threads an auth token via per-call meta', async () => {
-    const server = serveWsBun(makeTree(), { port: 0, grants: { auth: authGrant } })
+    const server = serveWs(makeTree(), { port: 0, grants: { auth: authGrant } })
     try {
       const api = wsClient(makeTree(), url(server))
       expect(await api.secure(undefined, { authorization: 'Bearer bob' })).toEqual({
@@ -117,7 +127,7 @@ describe('WebSocket adapter e2e (Bun)', () => {
   })
 
   it('multiplexes concurrent calls over one connection', async () => {
-    const server = serveWsBun(makeTree(), { port: 0, grants: { auth: authGrant } })
+    const server = serveWs(makeTree(), { port: 0, grants: { auth: authGrant } })
     try {
       const api = wsClient(makeTree(), url(server))
       const [a, b, c] = await Promise.all([api.ping('a'), api.ping('b'), api.ping('c')])

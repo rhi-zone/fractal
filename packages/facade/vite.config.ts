@@ -23,6 +23,7 @@ export default defineConfig({
         '@rhi-zone/fractal-channel-worker',
         '@rhi-zone/fractal-channel-stdio',
         '@rhi-zone/fractal-schema',
+        '@rhi-zone/fractal-preset-websocket',
       ],
     },
   },

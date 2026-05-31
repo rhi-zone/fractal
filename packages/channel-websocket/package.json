@@ -28,6 +28,7 @@
     "@rhi-zone/fractal-core":                  "workspace:*",
     "@rhi-zone/fractal-codec-json":            "workspace:*",
     "@rhi-zone/fractal-protocol-correlation":  "workspace:*",
+    "@rhi-zone/fractal-preset-websocket":      "workspace:*",
     "fast-check": "^4.5.3",
     "vite":       "^6.0.0",
     "vitest":     "^2.0.0"

@@ -31,7 +31,8 @@
     "@rhi-zone/fractal-channel-websocket":       "workspace:*",
     "@rhi-zone/fractal-channel-worker":          "workspace:*",
     "@rhi-zone/fractal-channel-stdio":           "workspace:*",
-    "@rhi-zone/fractal-schema":                  "workspace:*"
+    "@rhi-zone/fractal-schema":                  "workspace:*",
+    "@rhi-zone/fractal-preset-websocket":        "workspace:*"
   },
   "devDependencies": {
     "fast-check": "^4.5.3",

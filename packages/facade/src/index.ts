@@ -135,6 +135,9 @@ export type { HttpTransportOptions } from '@rhi-zone/fractal-channel-http/client
 export { wsClientChannel, wsServerChannel, wsServeBun } from '@rhi-zone/fractal-channel-websocket'
 export type { WsClientOptions, WsServer, ServeWsOptions } from '@rhi-zone/fractal-channel-websocket'
 
+// WebSocket preset: convenience wsClient + serveWs (sugar over compose/attach — not the only way).
+export { wsClient, serveWs } from '@rhi-zone/fractal-preset-websocket'
+
 // worker_threads MessagePort: pure channel.
 export { portChannel } from '@rhi-zone/fractal-channel-worker'
 export type { MessagePortLike } from '@rhi-zone/fractal-channel-worker'
