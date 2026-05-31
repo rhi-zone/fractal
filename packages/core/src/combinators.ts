@@ -1,4 +1,4 @@
-import type { Handler } from './result.ts'
+import type { Handler, StreamHandler } from './result.ts'
 import { ok } from './result.ts'
 import type {
   AnyNode,
@@ -10,6 +10,7 @@ import type {
   NodeMeta,
   OutputOf,
   Seq,
+  StreamLeaf,
 } from './node.ts'
 
 /**
@@ -35,6 +36,15 @@ export interface Chainable<I, O, E> extends NodeMeta<I, O, E> {
 /** A constructed leaf is a reflectable Leaf node plus the chain surface. */
 export type LeafNode<I, O, E, Caps extends Record<string, unknown>> =
   Leaf<I, O, E, Caps> & Chainable<I, O, E>
+
+/**
+ * A constructed streaming leaf. It is a reflectable `StreamLeaf` plus the chain
+ * surface so it can sit as the TAIL of a chain (`unary.then(streamLeaf(...))`).
+ * Per the seq-non-tail rule it is not intended as a non-tail head; `ModeOf`
+ * only treats a seq as streaming via its `right`.
+ */
+export type StreamLeafNode<I, O, E, Caps extends Record<string, unknown>> =
+  StreamLeaf<I, O, E, Caps> & Chainable<I, O, E>
 
 /**
  * A constructed seq node, threaded and re-chainable. Input/output/error are
@@ -73,6 +83,18 @@ export const leaf = <I = unknown, O = unknown, E = never, Caps extends Record<st
   run: Handler<I, O, E, Caps>,
 ): LeafNode<I, O, E, Caps> =>
   chainable({ tag: 'leaf', run } as Leaf<I, O, E, Caps>) as LeafNode<I, O, E, Caps>
+
+/**
+ * PRIMITIVE 1b — streamLeaf. Like `leaf`, but `run` is an async generator (or
+ * any function returning an `AsyncIterable<Result<O,E>>`). Carries `mode:
+ * 'stream'` so the interpreter dispatches it as a stream; the phantom `__mode`
+ * lets `ModeOf` see it at the type level. With no type args it infers
+ * I=O=unknown, E=never, exactly like `leaf` (gradual typing).
+ */
+export const streamLeaf = <I = unknown, O = unknown, E = never, Caps extends Record<string, unknown> = Record<string, unknown>>(
+  gen: StreamHandler<I, O, E, Caps>,
+): StreamLeafNode<I, O, E, Caps> =>
+  chainable({ tag: 'leaf', mode: 'stream', run: gen } as unknown as StreamLeaf<I, O, E, Caps>) as StreamLeafNode<I, O, E, Caps>
 
 /**
  * PRIMITIVE 2 — branch. Pure structure; dispatch is key indexing by an

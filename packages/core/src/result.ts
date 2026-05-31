@@ -26,3 +26,15 @@ export type Handler<I, O, E, Caps extends Record<string, unknown>> = (
   input: I,
   ctx: Context<Caps>,
 ) => Result<O, E> | Promise<Result<O, E>>
+
+/**
+ * A streaming handler maps input + context to an async stream of Results.
+ * Each yielded element is a `Result<O, E>` — so a per-item error widens the
+ * SAME element type a capability widens (no separate stream error channel).
+ * Implemented as an async generator; the interpreter honors `ctx.signal` for
+ * cancellation by ceasing to pull from the iterator when aborted.
+ */
+export type StreamHandler<I, O, E, Caps extends Record<string, unknown>> = (
+  input: I,
+  ctx: Context<Caps>,
+) => AsyncIterable<Result<O, E>>

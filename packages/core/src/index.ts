@@ -4,13 +4,15 @@
 // Composition is core; structure is reflectable data; only `leaf` carries code.
 // The full tree is intentionally NOT JSON-serializable (closures live in leaves).
 
-export type { Result, Context, Handler } from './result.ts'
+export type { Result, Context, Handler, StreamHandler } from './result.ts'
 export { ok, err } from './result.ts'
 
 export type {
   Annotation,
   NodeMeta,
   Leaf,
+  StreamLeaf,
+  LeafMode,
   Branch,
   Annotated,
   Seq,
@@ -18,11 +20,13 @@ export type {
   InputOf,
   OutputOf,
   ErrorOf,
+  ModeOf,
   CapsOf,
 } from './node.ts'
 
 export {
   leaf,
+  streamLeaf,
   branch,
   annotate,
   capability,
@@ -33,6 +37,7 @@ export type {
   Chainable,
   Capability,
   LeafNode,
+  StreamLeafNode,
   BranchNode,
   SeqNode,
   AnnotatedNode,
@@ -53,8 +58,8 @@ export type {
   ValidationError,
 } from './presets.ts'
 
-export { evaluate } from './evaluate.ts'
+export { evaluate, evaluateStream } from './evaluate.ts'
 export type { Callable } from './evaluate.ts'
 
 export { client } from './client.ts'
-export type { Client, ClientOptions } from './client.ts'
+export type { Client, UClient, Meta, ClientOptions } from './client.ts'

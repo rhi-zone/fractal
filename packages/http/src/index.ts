@@ -8,7 +8,15 @@
 //   seq        → thread left.output into right.input (short-circuit on error)
 // and maps the resulting Result to an HTTP status.
 
-import type { AnyNode, Context, Result } from '@rhi-zone/fractal-core'
+import type { AnyNode, Context, Handler, Result } from '@rhi-zone/fractal-core'
+
+// This HTTP interpreter is UNARY-only in this step (streaming transport lands in
+// a later step). `AnyNode` now admits streaming leaves, so a leaf's `run` is the
+// union of the unary `Handler` and the stream handler. The interpreter only
+// services unary leaves; this cast pins `run` to the unary signature at the call
+// sites below. (A streaming leaf reaching here would mis-serialize; routing
+// streaming over HTTP is deferred to the transport step.)
+type UnaryRun = Handler<unknown, unknown, unknown, Record<string, unknown>>
 
 /** A function that produces the pre-opened handle for one capability `kind`. */
 export type CapGrant = (req: HttpRequestLike) => Record<string, unknown>
@@ -100,7 +108,7 @@ const walk = async (
     }
     case 'leaf': {
       const ctx: Context = req.signal ? { caps, signal: req.signal } : { caps }
-      return node.run(req.body, ctx)
+      return (node.run as UnaryRun)(req.body, ctx)
     }
   }
 }
@@ -111,7 +119,7 @@ const walk = async (
 const runFrom = async (node: AnyNode, input: unknown, ctx: Context): Promise<Result<unknown, unknown>> => {
   switch (node.tag) {
     case 'leaf':
-      return node.run(input, ctx)
+      return (node.run as UnaryRun)(input, ctx)
     case 'seq': {
       const left = await runFrom(node.left, input, ctx)
       if (!left.ok) return left

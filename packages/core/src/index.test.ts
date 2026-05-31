@@ -3,6 +3,7 @@ import {
   ok,
   err,
   leaf,
+  streamLeaf,
   branch,
   annotate,
   identity,
@@ -11,11 +12,17 @@ import {
   validated,
   client,
   evaluate,
+  evaluateStream,
   type Context,
   type ErrorOf,
   type InputOf,
   type OutputOf,
   type AnyNode,
+  type ModeOf,
+  type UClient,
+  type Client,
+  type Meta,
+  type Result,
 } from './index.ts'
 
 // ============================================================================
@@ -88,6 +95,78 @@ describe('type-level: gradual typing', () => {
     type _o = Expect<Equal<UOut, unknown>>
     type _e = Expect<Equal<UErr, never>>
     expect(u.tag).toBe('leaf')
+  })
+})
+
+// ============================================================================
+// TYPE-LEVEL ASSERTIONS — STREAMING
+// ============================================================================
+
+describe('type-level: streaming leaves + UClient derivation', () => {
+  it('(a) existing unary endpoints derive byte-identical Promise<Result<…>>', () => {
+    const u = leaf<string, number, { code: 'bad' }>((i) => ok(i.length))
+    type CU = Client<typeof u>
+    // The unary client method shape: (input, meta?) => Promise<Result<O,E>>.
+    type Expected = (input: string, meta?: Meta) => Promise<Result<number, { code: 'bad' }>>
+    type _eq = Expect<Equal<CU, Expected>>
+    // UClient and Client coincide for a unary node.
+    type _alias = Expect<Equal<UClient<typeof u>, Client<typeof u>>>
+    // A unary node is mode 'unary'.
+    type _m = Expect<Equal<ModeOf<typeof u>, 'unary'>>
+    expect(u.tag).toBe('leaf')
+  })
+
+  it('(b) a streamLeaf derives (input, meta?) => AsyncIterable<Result<O,E>>', () => {
+    const s = streamLeaf<number, string, { code: 'se' }>(async function* (i) {
+      yield ok(String(i))
+    })
+    type CS = UClient<typeof s>
+    type Expected = (input: number, meta?: Meta) => AsyncIterable<Result<string, { code: 'se' }>>
+    type _eq = Expect<Equal<CS, Expected>>
+    type _m = Expect<Equal<ModeOf<typeof s>, 'stream'>>
+    expect(s.mode).toBe('stream')
+  })
+
+  it('(c) stream composed under seq/annotated/capability stays streaming with the cap error in the per-item union', () => {
+    const setup = leaf<number, number>((i) => ok(i))
+    const producer = streamLeaf<number, string, { code: 'pe' }>(async function* (i) {
+      yield ok(String(i))
+    })
+    // seq: unary head .then streaming tail ⇒ the seq is streaming (tail rule).
+    const piped = setup.then(producer)
+    type _mseq = Expect<Equal<ModeOf<typeof piped>, 'stream'>>
+
+    // annotated over a stream stays streaming.
+    const tagged = annotate({ kind: 'doc', value: 'x' }, producer)
+    type _mann = Expect<Equal<ModeOf<typeof tagged>, 'stream'>>
+
+    // capability over a stream stays streaming AND widens the per-item error.
+    const authed = withAuth(producer)
+    type _mcap = Expect<Equal<ModeOf<typeof authed>, 'stream'>>
+    type CAuth = UClient<typeof authed>
+    // The yielded element type must include the capability's error.
+    type Elem = CAuth extends (input: any, meta?: Meta) => AsyncIterable<infer R> ? R : never
+    type _eItem = Expect<Extends<{ code: 'unauthorized' }, Elem extends Result<any, infer E> ? E : never>>
+    type _eItem2 = Expect<Extends<{ code: 'pe' }, Elem extends Result<any, infer E> ? E : never>>
+    expect(piped.tag).toBe('seq')
+  })
+
+  it('(d) treating a stream method result as a Promise is a type error; (e) meta? is optional', () => {
+    const s = streamLeaf<number, string>(async function* () {
+      yield ok('x')
+    })
+    const c = client(s, { ctx: { caps: {} } }) as UClient<typeof s>
+    // (e) meta? is optional — both call shapes type-check.
+    const it0 = c(1)
+    const it1 = c(1, { trace: 'abc' })
+    void it0
+    void it1
+    // (d) the result is an AsyncIterable, NOT a Promise. Awaiting/assigning to
+    // Promise must be a type error (load-bearing).
+    // @ts-expect-error — a stream method returns AsyncIterable, not Promise (load-bearing)
+    const asPromise: Promise<unknown> = c(1)
+    void asPromise
+    expect(true).toBe(true)
   })
 })
 
@@ -234,5 +313,85 @@ describe('node reflectability', () => {
     expect(childA.tag).toBe('annotated')
     expect(childA.annotation.kind).toBe('doc')
     expect(childA.child.tag).toBe('leaf')
+  })
+})
+
+// ============================================================================
+// RUNTIME: streaming leaves
+// ============================================================================
+
+describe('streaming leaf runtime', () => {
+  it('evaluateStream yields each Result of an async-generator leaf', async () => {
+    const s = streamLeaf<number, number, never>(async function* (n) {
+      for (let k = 0; k < n; k++) yield ok(k)
+    })
+    const got: Array<Result<number, never>> = []
+    for await (const r of evaluateStream(s, 3, { caps: {} })) {
+      got.push(r as Result<number, never>)
+    }
+    expect(got).toEqual([ok(0), ok(1), ok(2)])
+  })
+
+  it('a streaming client method returns an AsyncIterable of Results', async () => {
+    const s = streamLeaf<string, string>(async function* (prefix) {
+      yield ok(`${prefix}-a`)
+      yield ok(`${prefix}-b`)
+    })
+    const c = client(s, { ctx: { caps: {} } }) as UClient<typeof s>
+    const out: Array<Result<string, never>> = []
+    for await (const r of c('x')) out.push(r as Result<string, never>)
+    expect(out).toEqual([ok('x-a'), ok('x-b')])
+  })
+
+  it('stops yielding when the AbortSignal fires (cancellation)', async () => {
+    const ac = new AbortController()
+    let produced = 0
+    const s = streamLeaf<void, number, never>(async function* () {
+      for (let k = 0; k < 1000; k++) {
+        produced++
+        yield ok(k)
+      }
+    })
+    const seen: number[] = []
+    for await (const r of evaluateStream(s, undefined, { caps: {}, signal: ac.signal })) {
+      if (r.ok) seen.push(r.value as number)
+      if (seen.length === 3) ac.abort()
+    }
+    // The loop stops pulling after abort: we saw the 3 emitted before aborting,
+    // and the interpreter ceased iterating rather than draining all 1000.
+    expect(seen).toEqual([0, 1, 2])
+    expect(produced).toBeLessThan(1000)
+  })
+
+  it('a capability gate on a stream denies by yielding its error and stopping', async () => {
+    const producer = streamLeaf<string, string, never>(async function* (i) {
+      yield ok(`hi ${i}`)
+    })
+    const guarded = withAuth(producer)
+    const denied: Array<Result<string, unknown>> = []
+    for await (const r of evaluateStream(guarded, 'bob', { caps: { auth: { user: null } } })) {
+      denied.push(r as Result<string, unknown>)
+    }
+    expect(denied).toEqual([err({ code: 'unauthorized' })])
+
+    const allowed: Array<Result<string, unknown>> = []
+    for await (const r of evaluateStream(guarded, 'bob', { caps: { auth: { user: 'alice' } } })) {
+      allowed.push(r as Result<string, unknown>)
+    }
+    expect(allowed).toEqual([ok('hi bob')])
+  })
+
+  it('unary head .then streaming tail threads the head output into the stream', async () => {
+    const setup = leaf<number, number>((i) => ok(i + 10))
+    const producer = streamLeaf<number, number, never>(async function* (base) {
+      yield ok(base)
+      yield ok(base + 1)
+    })
+    const piped = setup.then(producer)
+    const out: number[] = []
+    for await (const r of evaluateStream(piped, 5, { caps: {} })) {
+      if (r.ok) out.push(r.value as number)
+    }
+    expect(out).toEqual([15, 16])
   })
 })
