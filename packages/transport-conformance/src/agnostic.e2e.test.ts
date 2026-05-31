@@ -7,31 +7,21 @@
 // path returns the same Results as the HTTP reference path.
 
 import { describe, it, expect } from 'vitest'
+import { ok, branch, leaf, streamLeaf } from '@rhi-zone/fractal-core'
 import {
-  ok,
-  branch,
-  leaf,
-  streamLeaf,
-  // kernel assemblers — the self-compose surface (NO presets):
   clientOver,
   compose,
   composeRequestResponse,
   attach,
-  // codecs + protocol:
-  jsonCodec,
-  structuredCloneCodec,
-  correlation,
-  // pure channels + medium server factories:
-  serveBun,
-  type BunServer,
-  httpExchange,
-  portChannel,
-  stdioChannel,
-  wsClientChannel,
-  wsServeBun,
-  type MessagePortLike,
-  type StdioEnds,
-} from './index.ts'
+} from '@rhi-zone/fractal-transport'
+import { jsonCodec } from '@rhi-zone/fractal-codec-json'
+import { structuredCloneCodec } from '@rhi-zone/fractal-codec-structured-clone'
+import { correlation } from '@rhi-zone/fractal-protocol-correlation'
+import { serveBun, type BunServer } from '@rhi-zone/fractal-channel-http/bun'
+import { httpExchange } from '@rhi-zone/fractal-channel-http/client'
+import { portChannel, type MessagePortLike } from '@rhi-zone/fractal-channel-worker'
+import { stdioChannel, type StdioEnds } from '@rhi-zone/fractal-channel-stdio'
+import { wsClientChannel, wsServeBun } from '@rhi-zone/fractal-channel-websocket'
 
 // node:stream's PassThrough loaded behind a variable specifier (no @types/node).
 const loadPassThrough = async (): Promise<new () => StdioEnds['in'] & StdioEnds['out']> => {

@@ -10,7 +10,7 @@ import { jsonCodec } from '@rhi-zone/fractal-codec-json'
 import type { AnyNode } from '@rhi-zone/fractal-core'
 import { serveBun, type BunServer } from './bun.ts'
 import { httpExchange } from './client.ts'
-import type { CapGrant } from './index.ts'
+import type { HttpCapGrant as CapGrant } from './index.ts'
 
 // SELF-COMPOSE: NO preset. `httpExchange` is the pure HTTP CHANNEL (request/
 // response medium); the codec + the request-response protocol form are wired

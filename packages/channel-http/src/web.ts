@@ -131,7 +131,7 @@ export const toWebHandler = (
   }
 }
 
-// Adapt the HTTP-flavoured CapGrants (`(req: HttpRequestLike) => handle`) to the
+// Adapt the HTTP-flavoured HttpCapGrants (`(req: HttpRequestLike) => handle`) to the
 // dispatch CapGrant shape. Structurally identical — the EncodedRequest we build
 // above carries the HTTP fields (`headers`/`segments`/`method`) the grant reads.
 const adaptGrants = (options: ServeOptions): Record<string, DispatchCapGrant> => {

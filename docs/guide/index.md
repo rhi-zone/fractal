@@ -25,10 +25,13 @@ This constraint is load-bearing: composability alone does not yield a small ment
 | Package | Role |
 |---------|------|
 | `@rhi-zone/fractal-core` | Inert-data node IR, capability contracts, Context, combinator surface |
-| `@rhi-zone/fractal-rpc-dispatch` | Shared dispatch utilities for rpc-style interpreters |
-| `@rhi-zone/fractal-http` | HTTP server interpreter |
-| `@rhi-zone/fractal-rpc` | RPC transport interpreter |
-| `@rhi-zone/fractal-ipc` | IPC transport interpreter |
-| `@rhi-zone/fractal-client` | Typed client-proxy interpreter |
+| `@rhi-zone/fractal-transport` | Transport kernel: interfaces, assemblers, dispatcher, clientOver |
+| `@rhi-zone/fractal-codec-json` | JSON codec axis instance |
+| `@rhi-zone/fractal-codec-structured-clone` | Structured-clone codec axis instance |
+| `@rhi-zone/fractal-protocol-correlation` | Correlation protocol axis instance (duplex) |
+| `@rhi-zone/fractal-channel-http` | HTTP channel axis: request/response exchange + server handlers |
+| `@rhi-zone/fractal-channel-websocket` | WebSocket channel axis: pure channel + Bun server factory |
+| `@rhi-zone/fractal-channel-worker` | worker_threads (MessagePort) channel axis |
+| `@rhi-zone/fractal-channel-stdio` | stdio (line-framed JSON) channel axis |
+| `@rhi-zone/fractal-preset-websocket` | WebSocket convenience preset (wsClient / serveWs) |
 | `@rhi-zone/fractal-schema` | OpenAPI/JSON Schema/doc generation (zero runtime deps) |
-| `@rhi-zone/fractal-facade` | Aggregator re-export |

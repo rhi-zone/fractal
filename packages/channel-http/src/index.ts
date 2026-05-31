@@ -32,10 +32,11 @@ import type { AnyNode, Result } from '@rhi-zone/fractal-core'
 
 /**
  * A function that produces the pre-opened handle for one capability `kind`,
- * given the HTTP request. Re-exported from rpc-dispatch's `CapGrant` but typed
- * over `HttpRequestLike` for adapter ergonomics (the structural shape matches).
+ * given the HTTP request. Distinct from the kernel's `CapGrant` (which receives
+ * a `DispatchRequest`): this variant is typed over `HttpRequestLike` so HTTP
+ * grant implementations can read headers, method, and segments directly.
  */
-export type CapGrant = (req: HttpRequestLike) => Record<string, unknown>
+export type HttpCapGrant = (req: HttpRequestLike) => Record<string, unknown>
 
 /** Minimal request shape the adapter reads — framework-agnostic. */
 export interface HttpRequestLike {
@@ -46,7 +47,7 @@ export interface HttpRequestLike {
   readonly body: unknown
   readonly signal?: AbortSignal
   /**
-   * Raw request headers, available to `CapGrant` implementations (e.g. for
+   * Raw request headers, available to `HttpCapGrant` implementations (e.g. for
    * reading an Authorization token) and used to thread per-call `meta`.
    */
   readonly headers?: Headers
@@ -61,7 +62,7 @@ export interface HttpResponseLike {
 /** Options: a registry mapping capability `kind` → handle grantor. */
 export interface ServeOptions {
   /** Grants keyed by capability kind. Only the matched capability's handle is injected. */
-  readonly grants?: Readonly<Record<string, CapGrant>>
+  readonly grants?: Readonly<Record<string, HttpCapGrant>>
   /** Map a domain error to an HTTP status. Defaults to 400; auth → 401, rate → 429. */
   readonly errorStatus?: (error: unknown) => number
 }
@@ -76,16 +77,15 @@ const defaultErrorStatus = (error: unknown): number => {
 }
 
 /**
- * Build the shared `Dispatcher` for a tree + grants. The HTTP `CapGrant` and the
- * dispatch `CapGrant` are structurally identical — both `(req) => handle` — so
- * the grants map passes through; the dispatcher hands each grant a
- * `DispatchRequest` whose fields (`signal`, decoded body via `meta`/`input`) the
- * grantor reads. We re-key the HTTP `headers` onto the dispatch request so
- * header-reading grants keep working.
+ * Build the shared `Dispatcher` for a tree + grants. Adapts each `HttpCapGrant`
+ * (typed over `HttpRequestLike`) to the kernel's `DispatchCapGrant` (typed over
+ * `DispatchRequest`). The `DispatchRequest` constructed below carries the HTTP
+ * fields (`segments`, `headers`, `body`, `method`) alongside the canonical
+ * dispatch fields, so header-reading grants keep working unchanged.
  */
 const buildDispatcher = (tree: AnyNode, options: ServeOptions) => {
   const grants = options.grants ?? {}
-  // Adapt each HTTP CapGrant to a dispatch CapGrant. The DispatchRequest we
+  // Adapt each HttpCapGrant to a DispatchCapGrant. The DispatchRequest we
   // construct in `serve`/`toWebHandler` carries the HTTP request fields the
   // grantor needs (it is the same object shape with `path` instead of
   // `segments`); we expose `segments`/`headers`/`body` on it too (see below).
@@ -100,7 +100,7 @@ const buildDispatcher = (tree: AnyNode, options: ServeOptions) => {
  * The DispatchRequest the HTTP adapter constructs. It carries the canonical
  * dispatch fields (`path`, `input`, `meta`, `signal`) PLUS the original HTTP
  * fields (`segments`, `body`, `headers`, `method`) so existing header-reading
- * `CapGrant`s — which were written against `HttpRequestLike` — keep working
+ * `HttpCapGrant`s — which were written against `HttpRequestLike` — keep working
  * unchanged. (`segments` === `path`; `body` === `input`.)
  */
 const toDispatchRequest = (req: HttpRequestLike, meta?: Meta): DispatchRequest =>

@@ -8,11 +8,14 @@ The node/combinator algebra is not yet defined. This page will be populated in t
 
 | Package | Status |
 |---------|--------|
-| `@rhi-zone/fractal-core` | Skeleton only |
-| `@rhi-zone/fractal-rpc-dispatch` | Skeleton only |
-| `@rhi-zone/fractal-http` | Skeleton only |
-| `@rhi-zone/fractal-rpc` | Skeleton only |
-| `@rhi-zone/fractal-ipc` | Skeleton only |
-| `@rhi-zone/fractal-client` | Skeleton only |
-| `@rhi-zone/fractal-schema` | Skeleton only |
-| `@rhi-zone/fractal-facade` | Skeleton only |
+| `@rhi-zone/fractal-core` | Built & green |
+| `@rhi-zone/fractal-transport` | Built & green |
+| `@rhi-zone/fractal-codec-json` | Built & green |
+| `@rhi-zone/fractal-codec-structured-clone` | Built & green |
+| `@rhi-zone/fractal-protocol-correlation` | Built & green |
+| `@rhi-zone/fractal-channel-http` | Built & green |
+| `@rhi-zone/fractal-channel-websocket` | Built & green |
+| `@rhi-zone/fractal-channel-worker` | Built & green |
+| `@rhi-zone/fractal-channel-stdio` | Built & green |
+| `@rhi-zone/fractal-preset-websocket` | Built & green |
+| `@rhi-zone/fractal-schema` | Placeholder only |

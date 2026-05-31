@@ -7,6 +7,8 @@ VitePress docs. **Entirely local — no remote, not pushed.**
 
 ### Package inventory (`packages/`)
 
+11 published packages + 1 private internal test package:
+
 | Package | Status |
 |---|---|
 | `core` (`@rhi-zone/fractal-core`) | Built & green |
@@ -19,8 +21,8 @@ VitePress docs. **Entirely local — no remote, not pushed.**
 | `channel-worker` | Built & green |
 | `channel-stdio` | Built & green |
 | `preset-websocket` | Built & green |
-| `facade` | Built & green (aggregator re-export) |
 | `schema` | **Placeholder only** |
+| `transport-conformance` (`@rhi-zone/fractal-transport-conformance`) | **Private, unpublished** — transport-agnosticism conformance tests only |
 
 ### Build tiers (manual, topological)
 
@@ -50,10 +52,8 @@ Holding fine at current dep-graph depth; revisit if it grows.
   and JSON-RPC protocol (type-verified to compose with zero core changes),
   runtime-agnostic (Bun + Node 20+)
 
-**`facade`:** Aggregator re-exporting the full transport surface (kernel +
-all axis packages). The `facade` comment documents the saved `compose(…)` one-liners
-for each medium — these ARE the presets; no separate preset package is needed except
-where friction is irreducible (ws server closure → `preset-websocket`).
+**`transport-conformance` (private):** Transport-agnosticism conformance tests
+(HTTP / WS / worker / stdio produce identical Results). Not published; devDeps only.
 
 **`schema`:** Placeholder file only.
 
@@ -84,7 +84,13 @@ where friction is irreducible (ws server closure → `preset-websocket`).
   caught and fixed one real gap (missing `serveExchange` assembler) before a
   preset was added.
 
-- **Naming: descriptive, no misnomers.** Retired: `rpc`, `ipc`, `rpc-dispatch`.
+- **Naming: descriptive, no misnomers.** Retired: `rpc`, `ipc`, `rpc-dispatch`, `facade`.
+
+- **CapGrant is not one type — it's two.** The kernel's `CapGrant` (`fractal-transport`)
+  takes a `DispatchRequest`; the HTTP adapter's `HttpCapGrant` (`fractal-channel-http`)
+  takes an `HttpRequestLike`. They share structural shape via the adapter casting trick in
+  `buildDispatcher`, but are semantically distinct. `HttpCapGrant` is now the canonical
+  name; the old `CapGrant` alias and `HttpCapGrant` re-export in facade are gone.
 
 - **Runtime floor: Node 20** (nixpkgs non-EOL).
 

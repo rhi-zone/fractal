@@ -12,8 +12,10 @@
       "name": "@rhi-zone/fractal-example-todo-api",
       "version": "0.0.0",
       "dependencies": {
+        "@rhi-zone/fractal-channel-http": "workspace:*",
+        "@rhi-zone/fractal-codec-json": "workspace:*",
         "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-facade": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
       },
       "devDependencies": {
         "vitest": "^2.0.0",
@@ -112,28 +114,6 @@
         "vitest": "^2.0.0",
       },
     },
-    "packages/facade": {
-      "name": "@rhi-zone/fractal-facade",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-channel-http": "workspace:*",
-        "@rhi-zone/fractal-channel-stdio": "workspace:*",
-        "@rhi-zone/fractal-channel-websocket": "workspace:*",
-        "@rhi-zone/fractal-channel-worker": "workspace:*",
-        "@rhi-zone/fractal-codec-json": "workspace:*",
-        "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-preset-websocket": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
-        "@rhi-zone/fractal-schema": "workspace:*",
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
     "packages/preset-websocket": {
       "name": "@rhi-zone/fractal-preset-websocket",
       "version": "0.1.0-alpha.0",
@@ -184,6 +164,21 @@
       "devDependencies": {
         "fast-check": "^4.5.3",
         "vite": "^6.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/transport-conformance": {
+      "name": "@rhi-zone/fractal-transport-conformance",
+      "devDependencies": {
+        "@rhi-zone/fractal-channel-http": "workspace:*",
+        "@rhi-zone/fractal-channel-stdio": "workspace:*",
+        "@rhi-zone/fractal-channel-websocket": "workspace:*",
+        "@rhi-zone/fractal-channel-worker": "workspace:*",
+        "@rhi-zone/fractal-codec-json": "workspace:*",
+        "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
+        "@rhi-zone/fractal-transport": "workspace:*",
         "vitest": "^2.0.0",
       },
     },
@@ -259,8 +254,6 @@
 
     "@rhi-zone/fractal-example-todo-api": ["@rhi-zone/fractal-example-todo-api@workspace:examples/todo-api"],
 
-    "@rhi-zone/fractal-facade": ["@rhi-zone/fractal-facade@workspace:packages/facade"],
-
     "@rhi-zone/fractal-preset-websocket": ["@rhi-zone/fractal-preset-websocket@workspace:packages/preset-websocket"],
 
     "@rhi-zone/fractal-protocol-correlation": ["@rhi-zone/fractal-protocol-correlation@workspace:packages/protocol-correlation"],
@@ -268,6 +261,8 @@
     "@rhi-zone/fractal-schema": ["@rhi-zone/fractal-schema@workspace:packages/schema"],
 
     "@rhi-zone/fractal-transport": ["@rhi-zone/fractal-transport@workspace:packages/transport"],
+
+    "@rhi-zone/fractal-transport-conformance": ["@rhi-zone/fractal-transport-conformance@workspace:packages/transport-conformance"],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.60.4", "", { "os": "android", "cpu": "arm" }, "sha512-F5QXMSiFebS9hKZj02XhWLLnRpJ3B3AROP0tWbFBSj+6kCbg5m9j5JoHKd4mmSVy5mS/IMQloYgYxCuJC0fxEQ=="],
 

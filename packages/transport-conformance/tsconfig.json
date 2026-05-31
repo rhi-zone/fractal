@@ -7,12 +7,10 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-    "declaration": true,
-    "declarationDir": "dist",
-    "outDir": "dist",
-    "rootDir": "src",
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "rootDir": "src"
   },
   "include": ["src"]
 }

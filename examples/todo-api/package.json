@@ -10,8 +10,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@rhi-zone/fractal-core":   "workspace:*",
-    "@rhi-zone/fractal-facade": "workspace:*"
+    "@rhi-zone/fractal-core":        "workspace:*",
+    "@rhi-zone/fractal-transport":   "workspace:*",
+    "@rhi-zone/fractal-channel-http": "workspace:*",
+    "@rhi-zone/fractal-codec-json":  "workspace:*"
   },
   "devDependencies": {
     "vitest": "^2.0.0"

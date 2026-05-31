@@ -3,15 +3,11 @@
 // typed fetch client, then shuts the server down.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import {
-  serveBun,
-  type BunServer,
-  clientOver,
-  composeRequestResponse,
-  httpExchange,
-  jsonCodec,
-  type HttpCapGrant as CapGrant,
-} from '@rhi-zone/fractal-facade'
+import { serveBun, type BunServer } from '@rhi-zone/fractal-channel-http/bun'
+import { clientOver, composeRequestResponse } from '@rhi-zone/fractal-transport'
+import { httpExchange } from '@rhi-zone/fractal-channel-http/client'
+import { jsonCodec } from '@rhi-zone/fractal-codec-json'
+import { type CapGrant } from '@rhi-zone/fractal-channel-http'
 import { tree } from './tree.ts'
 
 // SELF-COMPOSE HTTP client (NO preset): `httpExchange` is the pure HTTP CHANNEL;
