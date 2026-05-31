@@ -86,11 +86,14 @@ Holding fine at current dep-graph depth; revisit if it grows.
 
 - **Naming: descriptive, no misnomers.** Retired: `rpc`, `ipc`, `rpc-dispatch`, `facade`.
 
-- **CapGrant is not one type — it's two.** The kernel's `CapGrant` (`fractal-transport`)
-  takes a `DispatchRequest`; the HTTP adapter's `HttpCapGrant` (`fractal-channel-http`)
-  takes an `HttpRequestLike`. They share structural shape via the adapter casting trick in
-  `buildDispatcher`, but are semantically distinct. `HttpCapGrant` is now the canonical
-  name; the old `CapGrant` alias and `HttpCapGrant` re-export in facade are gone.
+- **CapGrant is ONE type, parameterized by the transport-native `Raw`.** `CapGrant<Raw>`
+  (`fractal-transport`) takes a `DispatchRequest<Raw>`, which carries a required `raw: Raw`
+  slot — the typed escape hatch for transport-native extras (HTTP headers/method, …).
+  Grants read native data via `req.raw`. `HttpCapGrant = CapGrant<HttpRequestLike>` is a
+  thin alias for discoverability at HTTP call sites. Each transport threads its native
+  request through `raw` (HTTP: the `HttpRequestLike`; WS/in-process/tests: `undefined`), so
+  the prior `as unknown as` adapter-casting trick in `buildDispatcher`/`adaptGrants`/
+  `serveExchange` — which smuggled HTTP fields onto a lied-about `DispatchRequest` — is gone.
 
 - **Runtime floor: Node 20** (nixpkgs non-EOL).
 

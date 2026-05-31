@@ -162,18 +162,19 @@ export const composeRequestResponse = <W>(exchange: Exchange<W>, codec: Codec<W>
 
 /**
  * A request whose body is still the encoded wire unit `W` (codec not yet
- * applied). Channels MAY attach their own extra fields (e.g. HTTP `headers`,
- * `segments`) — those flow through onto the {@link DispatchRequest} unchanged so
- * capability grants written against a channel's request shape keep working.
+ * applied). `Raw` is the channel's transport-native request object: it flows
+ * through onto the {@link DispatchRequest}'s `raw` slot so capability grants
+ * written against the channel's request shape can read native extras (HTTP
+ * headers, …) in a fully-typed way.
  */
-export interface EncodedRequest<W> {
+export interface EncodedRequest<W, Raw = unknown> {
   readonly path: readonly string[]
   /** The encoded request body; `serveExchange` decodes it via the codec. */
   readonly body: W
   readonly meta?: Meta
   readonly signal?: AbortSignal
-  /** Channel-specific extras passed through to grants (HTTP headers, …). */
-  readonly [extra: string]: unknown
+  /** The transport-native request, passed through to grants via `req.raw`. */
+  readonly raw: Raw
 }
 
 /**
@@ -195,22 +196,22 @@ export type EncodedOutcome<W> =
  *   unary  → decode body, dispatch, encode the ok-value or error payload.
  *   stream → decode body, dispatch, encode each framed `Result` as one unit.
  */
-export const serveExchange = <W>(
+export const serveExchange = <W, Raw = unknown>(
   tree: AnyNode,
   codec: Codec<W>,
-  options: DispatcherOptions = {},
-): ((req: EncodedRequest<W>) => Promise<EncodedOutcome<W>>) => {
-  const dispatch = dispatcher(tree, options)
-  return async (req: EncodedRequest<W>): Promise<EncodedOutcome<W>> => {
-    // Spread the channel's extra fields through to grants, then overwrite the
-    // canonical dispatch fields (decoding the body) so they take precedence.
-    const dreq = {
-      ...req,
+  options: DispatcherOptions<Raw> = {},
+): ((req: EncodedRequest<W, Raw>) => Promise<EncodedOutcome<W>>) => {
+  const dispatch = dispatcher<Raw>(tree, options)
+  return async (req: EncodedRequest<W, Raw>): Promise<EncodedOutcome<W>> => {
+    // Decode the body into the leaf input; carry the channel's native request
+    // through unchanged on the `raw` slot so grants can read native extras.
+    const dreq: DispatchRequest<Raw> = {
       path: req.path,
       input: codec.decode(req.body),
+      raw: req.raw,
       ...(req.meta !== undefined ? { meta: req.meta } : {}),
       ...(req.signal ? { signal: req.signal } : {}),
-    } as unknown as DispatchRequest
+    }
     const outcome: DispatchOutcome = await dispatch(dreq)
     if (outcome.kind === 'unary') {
       const result = outcome.result

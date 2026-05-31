@@ -45,7 +45,7 @@ describe('http interpreter: annotation grants only that capability handle + enfo
 
     // Grant injects the auth handle for kind 'auth' only.
     const withGrant = serve(tree, {
-      grants: { auth: (r) => ({ auth: { user: (r.body as { user?: string })?.user ?? null } }) },
+      grants: { auth: (r) => ({ auth: { user: (r.raw.body as { user?: string })?.user ?? null } }) },
     })
     const allowed = await withGrant(req({ segments: ['me'], body: { user: 'alice' } }))
     expect(allowed).toEqual({ status: 200, body: 'hello alice' })

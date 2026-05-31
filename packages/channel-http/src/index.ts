@@ -17,7 +17,7 @@
 
 import {
   dispatcher,
-  type CapGrant as DispatchCapGrant,
+  type CapGrant,
   type DispatchRequest,
   type DispatchOutcome,
   type Meta,
@@ -31,12 +31,12 @@ import type { AnyNode, Result } from '@rhi-zone/fractal-core'
 // as its `{ status, body }` body, so it needs no codec at all.
 
 /**
- * A function that produces the pre-opened handle for one capability `kind`,
- * given the HTTP request. Distinct from the kernel's `CapGrant` (which receives
- * a `DispatchRequest`): this variant is typed over `HttpRequestLike` so HTTP
- * grant implementations can read headers, method, and segments directly.
+ * A capability grant for the HTTP channel: the kernel's `CapGrant` with its
+ * transport-native `Raw` slot bound to {@link HttpRequestLike}, so grant
+ * implementations read headers/method/segments via `req.raw`. A thin alias over
+ * the one `CapGrant` type — kept for discoverability at HTTP call sites.
  */
-export type HttpCapGrant = (req: HttpRequestLike) => Record<string, unknown>
+export type HttpCapGrant = CapGrant<HttpRequestLike>
 
 /** Minimal request shape the adapter reads — framework-agnostic. */
 export interface HttpRequestLike {
@@ -77,44 +77,28 @@ const defaultErrorStatus = (error: unknown): number => {
 }
 
 /**
- * Build the shared `Dispatcher` for a tree + grants. Adapts each `HttpCapGrant`
- * (typed over `HttpRequestLike`) to the kernel's `DispatchCapGrant` (typed over
- * `DispatchRequest`). The `DispatchRequest` constructed below carries the HTTP
- * fields (`segments`, `headers`, `body`, `method`) alongside the canonical
- * dispatch fields, so header-reading grants keep working unchanged.
+ * Build the shared `Dispatcher` for a tree + grants. HTTP grants are the one
+ * `CapGrant` type with its `Raw` slot bound to {@link HttpRequestLike}, so they
+ * flow straight through to a `dispatcher<HttpRequestLike>` — no adaptation, no
+ * cast. The native HTTP request is threaded on the `DispatchRequest.raw` slot
+ * by {@link toDispatchRequest}; grants read headers/method/segments via `req.raw`.
  */
-const buildDispatcher = (tree: AnyNode, options: ServeOptions) => {
-  const grants = options.grants ?? {}
-  // Adapt each HttpCapGrant to a DispatchCapGrant. The DispatchRequest we
-  // construct in `serve`/`toWebHandler` carries the HTTP request fields the
-  // grantor needs (it is the same object shape with `path` instead of
-  // `segments`); we expose `segments`/`headers`/`body` on it too (see below).
-  const adapted: Record<string, DispatchCapGrant> = {}
-  for (const [kind, grant] of Object.entries(grants)) {
-    adapted[kind] = (req) => grant(req as unknown as HttpRequestLike)
-  }
-  return dispatcher(tree, { grants: adapted })
-}
+const buildDispatcher = (tree: AnyNode, options: ServeOptions) =>
+  dispatcher<HttpRequestLike>(tree, options.grants ? { grants: options.grants } : {})
 
 /**
- * The DispatchRequest the HTTP adapter constructs. It carries the canonical
- * dispatch fields (`path`, `input`, `meta`, `signal`) PLUS the original HTTP
- * fields (`segments`, `body`, `headers`, `method`) so existing header-reading
- * `HttpCapGrant`s — which were written against `HttpRequestLike` — keep working
- * unchanged. (`segments` === `path`; `body` === `input`.)
+ * The DispatchRequest the HTTP adapter constructs. The canonical dispatch
+ * fields (`path`, `input`, `meta`, `signal`) map from the HTTP request; the
+ * whole {@link HttpRequestLike} rides through on the typed `raw` slot, where
+ * header-reading grants read it as `req.raw`.
  */
-const toDispatchRequest = (req: HttpRequestLike, meta?: Meta): DispatchRequest =>
-  ({
-    path: req.segments,
-    input: req.body,
-    ...(meta !== undefined ? { meta } : {}),
-    ...(req.signal ? { signal: req.signal } : {}),
-    // HTTP fields retained for header-reading grants:
-    segments: req.segments,
-    body: req.body,
-    headers: req.headers,
-    method: req.method,
-  }) as DispatchRequest
+const toDispatchRequest = (req: HttpRequestLike, meta?: Meta): DispatchRequest<HttpRequestLike> => ({
+  path: req.segments,
+  input: req.body,
+  raw: req,
+  ...(meta !== undefined ? { meta } : {}),
+  ...(req.signal ? { signal: req.signal } : {}),
+})
 
 /**
  * Build a UNARY HTTP handler over a node tree. Returns a function from a parsed

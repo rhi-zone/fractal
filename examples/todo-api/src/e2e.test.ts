@@ -7,7 +7,7 @@ import { serveBun, type BunServer } from '@rhi-zone/fractal-channel-http/bun'
 import { clientOver, composeRequestResponse } from '@rhi-zone/fractal-transport'
 import { httpExchange } from '@rhi-zone/fractal-channel-http/client'
 import { jsonCodec } from '@rhi-zone/fractal-codec-json'
-import { type CapGrant } from '@rhi-zone/fractal-channel-http'
+import { type HttpCapGrant as CapGrant } from '@rhi-zone/fractal-channel-http'
 import { tree } from './tree.ts'
 
 // SELF-COMPOSE HTTP client (NO preset): `httpExchange` is the pure HTTP CHANNEL;
@@ -19,7 +19,7 @@ import { tree } from './tree.ts'
 // Reads Authorization header: "Bearer <username>" → { auth: { user: username } }
 // Absent or malformed token → { auth: { user: null } } → 401 from withAuth.
 const authGrant: CapGrant = (req) => {
-  const header = req.headers?.get('authorization') ?? ''
+  const header = req.raw.headers?.get('authorization') ?? ''
   const match = /^Bearer (.+)$/.exec(header)
   return { auth: { user: match !== null ? match[1] : null } }
 }

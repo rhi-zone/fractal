@@ -70,15 +70,19 @@ export interface Transport {
 
 // ── Server side: Dispatcher ───────────────────────────────────────────────────
 
-/** A function that produces the pre-opened handle(s) for one capability `kind`. */
-export type CapGrant = (req: DispatchRequest) => Record<string, unknown>
+/**
+ * A function that produces the pre-opened handle(s) for one capability `kind`.
+ * Generic over `Raw`, the transport-native request object the grant may read
+ * (via `req.raw`) for transport-specific data — HTTP headers, method, etc.
+ */
+export type CapGrant<Raw = unknown> = (req: DispatchRequest<Raw>) => Record<string, unknown>
 
 /**
  * The decoded request a {@link Dispatcher} consumes. An adapter decodes its
  * wire form (HTTP Request, IPC frame, …) into this shape; the dispatcher is
  * transport-agnostic.
  */
-export interface DispatchRequest {
+export interface DispatchRequest<Raw = unknown> {
   /** Branch-key path to the target node, already split (e.g. ['users', 'list']). */
   readonly path: readonly string[]
   /** Leaf input (decoded body). */
@@ -87,12 +91,20 @@ export interface DispatchRequest {
   readonly meta?: Meta
   /** Cancellation signal — the dispatcher threads it into Context and honors it. */
   readonly signal?: AbortSignal
+  /**
+   * The transport-native request object — the typed escape hatch for grants
+   * that need transport-specific data (HTTP headers/method, an IPC frame, …).
+   * `path`/`input`/`meta`/`signal` above are the canonical, transport-agnostic
+   * fields; `raw` carries ONLY native extras. Callers with no native request
+   * (in-process, tests) set `undefined`.
+   */
+  readonly raw: Raw
 }
 
 /** Options for {@link dispatcher}: capability grants keyed by capability kind. */
-export interface DispatcherOptions {
+export interface DispatcherOptions<Raw = unknown> {
   /** Grants keyed by capability kind. ONLY the matched capability's handle is injected. */
-  readonly grants?: Readonly<Record<string, CapGrant>>
+  readonly grants?: Readonly<Record<string, CapGrant<Raw>>>
 }
 
 /**
@@ -136,13 +148,13 @@ const isStreamMode = (node: AnyNode): boolean => {
  * evaluators re-enforce any annotation gates INSIDE the delegated subtree using
  * those same caps — behaviorally identical to walking annotations here.
  */
-export const dispatcher = (tree: AnyNode, options: DispatcherOptions = {}) => {
+export const dispatcher = <Raw = unknown>(tree: AnyNode, options: DispatcherOptions<Raw> = {}) => {
   const grants = options.grants ?? {}
 
   const descend = async (
     node: AnyNode,
     segments: readonly string[],
-    req: DispatchRequest,
+    req: DispatchRequest<Raw>,
     caps: Record<string, unknown>,
   ): Promise<DispatchOutcome> => {
     switch (node.tag) {
@@ -196,7 +208,7 @@ export const dispatcher = (tree: AnyNode, options: DispatcherOptions = {}) => {
    * Dispatch one decoded request. The returned outcome is `unary` (the single
    * Result) or `stream` (an AsyncIterable of Results); the adapter frames it.
    */
-  return (req: DispatchRequest): Promise<DispatchOutcome> => descend(tree, req.path, req, {})
+  return (req: DispatchRequest<Raw>): Promise<DispatchOutcome> => descend(tree, req.path, req, {})
 }
 
 // ── Client side: clientOver ───────────────────────────────────────────────────

@@ -26,7 +26,6 @@
 import type { AnyNode } from '@rhi-zone/fractal-core'
 import {
   serveExchange,
-  type CapGrant as DispatchCapGrant,
   type Codec,
   type EncodedRequest,
   type Meta,
@@ -66,7 +65,11 @@ export const toWebHandler = (
   options: WebHandlerOptions = {},
 ): ((request: Request) => Promise<Response>) => {
   const codec = options.codec ?? jsonCodec
-  const handle = serveExchange(tree, codec, { grants: adaptGrants(options) })
+  const handle = serveExchange<string, HttpRequestLike>(
+    tree,
+    codec,
+    options.grants ? { grants: options.grants } : {},
+  )
   const errorStatus = options.errorStatus ?? defaultErrorStatus
 
   return async (request: Request): Promise<Response> => {
@@ -78,15 +81,21 @@ export const toWebHandler = (
     const bodyText = await request.text()
 
     const meta = metaFromHeaders(request.headers)
-    const req: EncodedRequest<string> = {
+    // The transport-native HTTP request, threaded through to grants via `raw`
+    // (CapGrants read `headers`/`segments`/`method` off it).
+    const raw: HttpRequestLike = {
+      method: request.method,
+      segments,
+      body: bodyText,
+      headers: request.headers,
+      ...(request.signal ? { signal: request.signal } : {}),
+    }
+    const req: EncodedRequest<string, HttpRequestLike> = {
       path: segments,
       body: bodyText,
       meta,
+      raw,
       ...(request.signal ? { signal: request.signal } : {}),
-      // Grant-visible HTTP extras (CapGrants read `headers`/`segments`/`method`):
-      segments,
-      headers: request.headers,
-      method: request.method,
     }
     const outcome = await handle(req)
 
@@ -129,16 +138,4 @@ export const toWebHandler = (
       headers: { 'content-type': NDJSON_CONTENT_TYPE },
     })
   }
-}
-
-// Adapt the HTTP-flavoured HttpCapGrants (`(req: HttpRequestLike) => handle`) to the
-// dispatch CapGrant shape. Structurally identical — the EncodedRequest we build
-// above carries the HTTP fields (`headers`/`segments`/`method`) the grant reads.
-const adaptGrants = (options: ServeOptions): Record<string, DispatchCapGrant> => {
-  const grants = options.grants ?? {}
-  const adapted: Record<string, DispatchCapGrant> = {}
-  for (const [kind, grant] of Object.entries(grants)) {
-    adapted[kind] = (req) => grant(req as unknown as HttpRequestLike)
-  }
-  return adapted
 }

@@ -196,8 +196,8 @@ const correlationServer = (
 
   const onInvoke = async (msg: InvokeMessage) => {
     const req: DispatchRequest = msg.meta !== undefined
-      ? { path: msg.path, input: msg.input, meta: msg.meta }
-      : { path: msg.path, input: msg.input }
+      ? { path: msg.path, input: msg.input, meta: msg.meta, raw: undefined }
+      : { path: msg.path, input: msg.input, raw: undefined }
     const outcome = await dispatch(req)
     if (outcome.kind === 'unary') {
       send({ id: msg.id, ok: outcome.result })
@@ -213,8 +213,8 @@ const correlationServer = (
     const controller = new AbortController()
     inflight.set(msg.id, controller)
     const req: DispatchRequest = msg.meta !== undefined
-      ? { path: msg.path, input: msg.input, meta: msg.meta, signal: controller.signal }
-      : { path: msg.path, input: msg.input, signal: controller.signal }
+      ? { path: msg.path, input: msg.input, meta: msg.meta, signal: controller.signal, raw: undefined }
+      : { path: msg.path, input: msg.input, signal: controller.signal, raw: undefined }
     try {
       const outcome = await dispatch(req)
       if (outcome.kind === 'unary') {

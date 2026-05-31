@@ -13,6 +13,7 @@ import { dispatcher, clientOver, type Transport, type DispatchRequest } from './
 const req = (over: Partial<DispatchRequest>): DispatchRequest => ({
   path: [],
   input: undefined,
+  raw: undefined,
   ...over,
 })
 

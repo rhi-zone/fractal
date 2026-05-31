@@ -50,7 +50,7 @@ const makeTree = () =>
   })
 
 const authGrant: CapGrant = (req) => {
-  const header = req.headers?.get('authorization') ?? ''
+  const header = req.raw.headers?.get('authorization') ?? ''
   const m = /^Bearer (.+)$/.exec(header)
   return { auth: { user: m !== null ? m[1] : null } }
 }
