@@ -16,6 +16,7 @@
         "@rhi-zone/fractal-channel-http": "workspace:*",
         "@rhi-zone/fractal-codec-json": "workspace:*",
         "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-standard-schema": "workspace:*",
         "@rhi-zone/fractal-transport": "workspace:*",
         "@standard-schema/spec": "^1.1.0",
       },
