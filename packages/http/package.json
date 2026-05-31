@@ -1,0 +1,32 @@
+{
+  "name": "@rhi-zone/fractal-http",
+  "version": "0.1.0-alpha.0",
+  "description": "HTTP server interpreter",
+  "type": "module",
+  "main": "./dist/http.umd.cjs",
+  "module": "./dist/http.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types":   "./dist/index.d.ts",
+      "import":  "./dist/http.js",
+      "require": "./dist/http.umd.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "dev":        "vite build --watch",
+    "build":      "vite build && tsgo --emitDeclarationOnly",
+    "typecheck":  "tsgo --noEmit",
+    "test":       "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@rhi-zone/fractal-core": "workspace:*"
+  },
+  "devDependencies": {
+    "fast-check": "^4.5.3",
+    "vite":       "^6.0.0",
+    "vitest":     "^2.0.0"
+  }
+}

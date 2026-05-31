@@ -1,0 +1,25 @@
+# Build
+dist/
+
+# Nix
+result
+.direnv/
+
+# Node
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Normalize
+.normalize/*
+!.normalize/config.toml
+!.normalize/duplicate-functions-allow
+!.normalize/duplicate-types-allow
+!.normalize/hotspots-allow
+!.normalize/large-files-allow
+!.normalize/memory/
