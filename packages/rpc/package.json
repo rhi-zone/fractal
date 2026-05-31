@@ -26,6 +26,8 @@
     "@rhi-zone/fractal-rpc-dispatch": "workspace:*"
   },
   "devDependencies": {
+    "@rhi-zone/fractal-http": "workspace:*",
+    "@rhi-zone/fractal-ipc":  "workspace:*",
     "fast-check": "^4.5.3",
     "vite":       "^6.0.0",
     "vitest":     "^2.0.0"

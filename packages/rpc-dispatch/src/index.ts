@@ -245,3 +245,15 @@ export const clientOver = <N extends AnyNode>(node: N, transport: Transport): UC
 // past rpc-dispatch into core.
 export type { UClient, Meta }
 export type { InputOf, OutputOf, ErrorOf, ModeOf, Branch }
+
+// ── Duplex-channel transport (shared by rpc + ipc) ────────────────────────────
+// The persistent-bidirectional counterpart to the request/response Transport:
+// a transport-neutral `Channel` + correlation protocol, multiplexing many
+// concurrent calls over one connection. WS (rpc) and worker/stdio (ipc) wrap
+// their concrete transport as a `Channel` and share this.
+export {
+  channelTransport,
+  attachChannel,
+  type Channel,
+  type AttachOptions,
+} from './channel.ts'

@@ -4,7 +4,7 @@
   "type": "module",
   "workspaces": ["packages/*", "examples/*"],
   "scripts": {
-    "build":     "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-rpc-dispatch' build && bun run --filter '@rhi-zone/fractal-http' build && bun run --filter '@rhi-zone/fractal-client' build && bun run --filter '@rhi-zone/fractal-rpc' --filter '@rhi-zone/fractal-ipc' --filter '@rhi-zone/fractal-schema' --filter '@rhi-zone/fractal-facade' --filter '@rhi-zone/fractal-example-todo-api' build",
+    "build":     "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-rpc-dispatch' build && bun run --filter '@rhi-zone/fractal-http' build && bun run --filter '@rhi-zone/fractal-ipc' build && bun run --filter '@rhi-zone/fractal-client' build && bun run --filter '@rhi-zone/fractal-rpc' --filter '@rhi-zone/fractal-schema' --filter '@rhi-zone/fractal-facade' --filter '@rhi-zone/fractal-example-todo-api' build",
     "typecheck": "bun run --filter '*' typecheck",
     "test":      "bun run --filter '*' test",
     "dev":       "bun run --filter '!*example*' dev"
