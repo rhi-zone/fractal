@@ -246,14 +246,30 @@ export const clientOver = <N extends AnyNode>(node: N, transport: Transport): UC
 export type { UClient, Meta }
 export type { InputOf, OutputOf, ErrorOf, ModeOf, Branch }
 
-// ── Duplex-channel transport (shared by rpc + ipc) ────────────────────────────
-// The persistent-bidirectional counterpart to the request/response Transport:
-// a transport-neutral `Channel` + correlation protocol, multiplexing many
-// concurrent calls over one connection. WS (rpc) and worker/stdio (ipc) wrap
-// their concrete transport as a `Channel` and share this.
+// ── Transport axes: channel × codec × protocol ────────────────────────────────
+// A transport factors into three orthogonal, composable axes. `compose` (client)
+// and `attach` (server) assemble them into the `Transport`/dispatcher surface
+// above. Adapters pick one value per axis:
+//
+//   channel  (medium)   : Channel<W> — moves encoded wire units, owns framing
+//   codec    (encoding) : Codec<W>   — value ↔ wire unit (jsonCodec / structuredClone)
+//   protocol (semantics): Protocol   — call semantics (correlation / requestResponse)
+//
+// WS    = compose(wsChannel,    jsonCodec,            correlation)
+// stdio = compose(stdioChannel, jsonCodec,            correlation)
+// worker= compose(portChannel,  structuredCloneCodec, correlation)
+// http  = compose(httpChannel,  jsonCodec,            requestResponse)   (in http pkg)
+export type { Channel, MessageStream } from './channel.ts'
+export type { Codec } from './codec.ts'
+export { jsonCodec, structuredCloneCodec } from './codec.ts'
 export {
-  channelTransport,
-  attachChannel,
-  type Channel,
-  type AttachOptions,
-} from './channel.ts'
+  compose,
+  attach,
+  correlation,
+  composeRequestResponse,
+  type Protocol,
+  type Exchange,
+  type ExchangeResponse,
+} from './protocol.ts'
+/** @deprecated Options for the correlation server attach; alias of DispatcherOptions. */
+export type AttachOptions = DispatcherOptions

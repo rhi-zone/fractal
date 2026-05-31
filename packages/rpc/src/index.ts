@@ -2,10 +2,11 @@
 // WebSocket adapter over the unified duplex-channel transport (rpc-dispatch).
 //
 // WebSocket is a PERSISTENT DUPLEX connection, so this adapter does almost
-// nothing of its own: it wraps a WebSocket as a `Channel` (JSON.stringify on
-// send, JSON.parse on message) and hands it to the shared `channelTransport`
-// (client) / `attachChannel` (server). The correlation protocol, stream
-// multiplexing, and cancellation all live in rpc-dispatch.
+// nothing of its own: it wraps a WebSocket as a `Channel<string>` (the medium
+// moves text frames; it owns frame boundaries ONLY — encoding is the codec's
+// job) and composes it with `jsonCodec` + the `correlation` protocol via
+// `compose` (client) / `attach` (server). The correlation protocol, stream
+// multiplexing, cancellation, and JSON encoding all live in rpc-dispatch.
 //
 //   client → `wsClient(node, url)`           wraps a `WebSocket` (the global)
 //   server → `serveWsBun(tree, {grants})`    Bun's native Bun.serve websocket
@@ -16,13 +17,18 @@
 // wrap each connection with `wsServerChannel(ws)` + `attachChannel`. See below.
 
 import {
-  attachChannel,
-  channelTransport,
+  attach,
+  compose,
   clientOver,
-  type AttachOptions,
+  correlation,
+  jsonCodec,
   type Channel,
+  type DispatcherOptions,
 } from '@rhi-zone/fractal-rpc-dispatch'
 import type { AnyNode, UClient } from '@rhi-zone/fractal-core'
+
+/** Options for the WS server attach (capability grants). */
+type AttachOptions = DispatcherOptions
 
 // ── Minimal WebSocket shapes ─────────────────────────────────────────────────
 // We avoid lib.dom / @types — only the members used here are declared.
@@ -42,22 +48,23 @@ interface WebSocketCtor {
 
 // ── Channel wrappers ──────────────────────────────────────────────────────────
 
-/** Decode a WebSocket message payload (string | Buffer | ArrayBuffer) to JSON. */
-const parseData = (data: unknown): unknown => {
-  if (typeof data === 'string') return JSON.parse(data)
+/** Coerce a WebSocket message payload (string | Buffer | ArrayBuffer) to text. */
+const toText = (data: unknown): string => {
+  if (typeof data === 'string') return data
   // Bun/Node may deliver Buffer / ArrayBuffer / Uint8Array.
-  if (data instanceof Uint8Array) return JSON.parse(new TextDecoder().decode(data))
-  if (data instanceof ArrayBuffer) return JSON.parse(new TextDecoder().decode(new Uint8Array(data)))
-  return JSON.parse(String(data))
+  if (data instanceof Uint8Array) return new TextDecoder().decode(data)
+  if (data instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(data))
+  return String(data)
 }
 
 /**
- * Wrap a ws-like object as a {@link Channel}. JSON is the wire format. Outbound
+ * Wrap a ws-like object as a {@link Channel}<string>: it moves TEXT frames and
+ * owns frame boundaries only — value encoding is the codec's concern. Outbound
  * sends before the socket is OPEN are buffered and flushed on `open`, so a
  * client can `invoke` immediately after construction without awaiting the
  * handshake.
  */
-const wsChannel = (ws: WebSocketLike, isOpen: () => boolean): Channel => {
+const wsChannel = (ws: WebSocketLike, isOpen: () => boolean): Channel<string> => {
   const outbox: string[] = []
   let open = isOpen()
   const flush = () => {
@@ -66,13 +73,12 @@ const wsChannel = (ws: WebSocketLike, isOpen: () => boolean): Channel => {
   }
   if (!open && typeof ws.addEventListener === 'function') ws.addEventListener('open', flush)
   return {
-    send(msg) {
-      const frame = JSON.stringify(msg)
+    send(frame) {
       if (open) ws.send(frame)
       else outbox.push(frame)
     },
     onMessage(cb) {
-      ws.addEventListener('message', (ev) => cb(parseData(ev.data)))
+      ws.addEventListener('message', (ev) => cb(toText(ev.data)))
     },
     close() {
       ws.close()
@@ -81,12 +87,12 @@ const wsChannel = (ws: WebSocketLike, isOpen: () => boolean): Channel => {
 }
 
 /**
- * Wrap a server-side ws-like connection as a {@link Channel}. Accepts any object
- * with `send(string)`, `close()`, and `addEventListener('message', …)` — Node
- * users with the `ws` library can pass a `ws` connection here (BYO server — see
- * module header). Assumed already OPEN.
+ * Wrap a server-side ws-like connection as a {@link Channel}<string>. Accepts
+ * any object with `send(string)`, `close()`, and `addEventListener('message',
+ * …)` — Node users with the `ws` library can pass a `ws` connection here (BYO
+ * server — see module header). Assumed already OPEN.
  */
-export const wsServerChannel = (ws: WebSocketLike): Channel => wsChannel(ws, () => true)
+export const wsServerChannel = (ws: WebSocketLike): Channel<string> => wsChannel(ws, () => true)
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
@@ -114,7 +120,7 @@ export const wsClient = <N extends AnyNode>(
   const Ctor = opts?.WebSocket ?? WebSocket
   const ws = new Ctor(url)
   const channel = wsChannel(ws, () => ws.readyState === Ctor.OPEN)
-  return clientOver(node, channelTransport(channel))
+  return clientOver(node, compose(channel, jsonCodec, correlation))
 }
 
 // ── Server (Bun native) ───────────────────────────────────────────────────────
@@ -123,7 +129,7 @@ export const wsClient = <N extends AnyNode>(
 interface BunServerWebSocket {
   send(data: string): void
   close(): void
-  data: { detach?: () => void; onMessage?: (msg: unknown) => void }
+  data: { detach?: () => void; onMessage?: (frame: string) => void }
 }
 interface BunWebSocketHandlers {
   open(ws: BunServerWebSocket): void
@@ -178,20 +184,21 @@ export const serveWsBun = (tree: AnyNode, options: ServeWsOptions = {}): WsServe
     },
     websocket: {
       open(ws) {
-        // Build a Channel whose onMessage stores the callback on ws.data so the
-        // `message` handler can route inbound frames to it; detach on close.
-        const channel: Channel = {
-          send: (msg) => ws.send(JSON.stringify(msg)),
+        // Build a Channel<string> whose onMessage stores the callback on ws.data
+        // so the `message` handler can route inbound text frames to it; detach on
+        // close. Encoding is the codec's job — this channel moves text only.
+        const channel: Channel<string> = {
+          send: (frame) => ws.send(frame),
           onMessage: (cb) => {
             ws.data.onMessage = cb
           },
           close: () => ws.close(),
         }
-        ws.data.detach = attachChannel(tree, channel, options)
+        ws.data.detach = attach(tree, channel, jsonCodec, correlation, options)
       },
       message(ws, message) {
         const cb = ws.data.onMessage
-        if (cb) cb(parseData(message))
+        if (cb) cb(toText(message))
       },
       close(ws) {
         ws.data.detach?.()

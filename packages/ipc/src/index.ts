@@ -1,28 +1,36 @@
 // @rhi-zone/fractal-ipc
 // IPC adapters over the unified duplex-channel transport (rpc-dispatch).
 //
-// Two persistent-duplex transports, both wrapping their concrete channel as a
-// `Channel` and deferring all RPC logic (correlation, multiplexing, streaming,
-// cancellation) to rpc-dispatch's `channelTransport` / `attachChannel`:
+// Two persistent-duplex transports, both wrapping their concrete medium as a
+// `Channel` and composing it with a codec + the `correlation` protocol via
+// `compose` (client) / `attach` (server) — all RPC logic (correlation,
+// multiplexing, streaming, cancellation) and encoding live in rpc-dispatch:
 //
 //   worker_threads → a `MessagePort` (node:worker_threads, or a web
-//                    MessageChannel). Structured clone — NO JSON framing needed;
-//                    the message IS the object.
+//                    MessageChannel) as a `Channel<unknown>` + the IDENTITY
+//                    `structuredCloneCodec`: the medium clones the object, so the
+//                    message IS the wire unit — no JSON round-trip.
 //     client → `portClient(node, port)`        server → `servePort(tree, port, …)`
 //
 //   stdio          → a readable/writable pair (process.stdin/stdout, or any
-//                    Duplex). LINE-FRAMED JSON: one JSON object per '\n'-line.
-//                    This is the MCP / LSP-style transport.
+//                    Duplex) as a `Channel<string>` (it owns LINE framing only) +
+//                    `jsonCodec`. This is the MCP / LSP-style transport.
 //     client → `stdioClient(node, {in, out})`  server → `serveStdio(tree, {in,out}, …)`
 
 import {
-  attachChannel,
-  channelTransport,
+  attach,
+  compose,
   clientOver,
-  type AttachOptions,
+  correlation,
+  jsonCodec,
+  structuredCloneCodec,
   type Channel,
+  type DispatcherOptions,
 } from '@rhi-zone/fractal-rpc-dispatch'
 import type { AnyNode, UClient } from '@rhi-zone/fractal-core'
+
+/** Options for an IPC server attach (capability grants). */
+type AttachOptions = DispatcherOptions
 
 // ── worker_threads: MessagePort ───────────────────────────────────────────────
 
@@ -41,11 +49,13 @@ export interface MessagePortLike {
 }
 
 /**
- * Wrap a {@link MessagePortLike} as a {@link Channel}. The transport unit is the
- * structured-cloned message object itself — no JSON framing, so any
- * clone-transferable value (TypedArrays, Maps, …) inside a Result survives.
+ * Wrap a {@link MessagePortLike} as a {@link Channel}<unknown>: the medium moves
+ * whole objects and structured-clones them on transfer, so it owns "framing" by
+ * message boundary. Paired with the identity {@link structuredCloneCodec} (no
+ * JSON), any clone-transferable value (TypedArrays, Maps, …) inside a Result
+ * survives.
  */
-export const portChannel = (port: MessagePortLike): Channel => ({
+export const portChannel = (port: MessagePortLike): Channel<unknown> => ({
   send(msg) {
     port.postMessage(msg)
   },
@@ -62,16 +72,16 @@ export const portChannel = (port: MessagePortLike): Channel => ({
   },
 })
 
-/** Build a typed client over a {@link MessagePortLike}. */
+/** Build a typed client over a {@link MessagePortLike} (structured clone). */
 export const portClient = <N extends AnyNode>(node: N, port: MessagePortLike): UClient<N> =>
-  clientOver(node, channelTransport(portChannel(port)))
+  clientOver(node, compose(portChannel(port), structuredCloneCodec, correlation))
 
 /** Attach a node tree to a {@link MessagePortLike} as the server. Returns a detach fn. */
 export const servePort = (
   tree: AnyNode,
   port: MessagePortLike,
   options: AttachOptions = {},
-): (() => void) => attachChannel(tree, portChannel(port), options)
+): (() => void) => attach(tree, portChannel(port), structuredCloneCodec, correlation, options)
 
 // ── stdio: line-framed JSON over a readable/writable pair ─────────────────────
 
@@ -100,16 +110,17 @@ const toText = (chunk: unknown): string =>
       : String(chunk)
 
 /**
- * Wrap a readable/writable pair as a {@link Channel} with LINE-FRAMED JSON: each
- * message is `JSON.stringify(msg) + '\n'` on the wire; inbound bytes are split
- * on '\n' and each non-empty line is `JSON.parse`d. This is the MCP/LSP-style
- * transport — robust over pipes that chunk arbitrarily.
+ * Wrap a readable/writable pair as a {@link Channel}<string> that owns LINE
+ * framing ONLY: each outbound wire unit is written as `frame + '\n'`; inbound
+ * bytes are split on '\n' and each non-empty line is emitted as a string. Value
+ * encoding (JSON) is the codec's job — composed with {@link jsonCodec}, this is
+ * the MCP/LSP-style transport, robust over pipes that chunk arbitrarily.
  */
-export const stdioChannel = (ends: StdioEnds): Channel => {
+export const stdioChannel = (ends: StdioEnds): Channel<string> => {
   let buffer = ''
   return {
-    send(msg) {
-      ends.out.write(JSON.stringify(msg) + '\n')
+    send(frame) {
+      ends.out.write(frame + '\n')
     },
     onMessage(cb) {
       ends.in.on('data', (chunk) => {
@@ -118,7 +129,7 @@ export const stdioChannel = (ends: StdioEnds): Channel => {
         while ((nl = buffer.indexOf('\n')) !== -1) {
           const line = buffer.slice(0, nl)
           buffer = buffer.slice(nl + 1)
-          if (line.length > 0) cb(JSON.parse(line))
+          if (line.length > 0) cb(line)
         }
       })
     },
@@ -130,11 +141,11 @@ export const stdioChannel = (ends: StdioEnds): Channel => {
 
 /** Build a typed client over a stdio pair (line-framed JSON). */
 export const stdioClient = <N extends AnyNode>(node: N, ends: StdioEnds): UClient<N> =>
-  clientOver(node, channelTransport(stdioChannel(ends)))
+  clientOver(node, compose(stdioChannel(ends), jsonCodec, correlation))
 
 /** Attach a node tree to a stdio pair as the server. Returns a detach fn. */
 export const serveStdio = (
   tree: AnyNode,
   ends: StdioEnds,
   options: AttachOptions = {},
-): (() => void) => attachChannel(tree, stdioChannel(ends), options)
+): (() => void) => attach(tree, stdioChannel(ends), jsonCodec, correlation, options)

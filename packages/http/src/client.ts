@@ -1,17 +1,29 @@
 // @rhi-zone/fractal-http/client
-// The HTTP client adapter: an `httpTransport` (the client side of the unified
-// transport core) plus `httpClient = clientOver(node, httpTransport(...))`.
+// The HTTP client adapter, RE-EXPRESSED through the three transport axes:
 //
-// `httpTransport` mirrors the server adapter's wire contract exactly:
+//   httpTransport = composeRequestResponse(httpExchange(baseUrl), jsonCodec)
+//
+// HTTP is no longer a special-cased transport: it is `requestResponse` (the
+// one-shot protocol) × `jsonCodec` (the encoding) × an `httpExchange` (the
+// request/response medium — the CHANNEL axis for HTTP). The medium owns URL
+// addressing, HTTP status, and NDJSON medium-framing; the codec owns JSON; the
+// protocol owns the value↔Result mapping. The wire contract is byte-identical to
+// the prior hand-rolled transport:
 //   invoke → POST baseUrl + '/' + path.join('/'), JSON body = input,
 //            2xx → { ok: true, value }, else → { ok: false, error }
 //   stream → consume the response body as NDJSON, decoding one Result per line
-//            (the format web.ts emits for streaming leaves)
-//   meta?  → per-call request headers (this is how the old `httpClientWithHeaders`
-//            feature survives — header injection is now just the meta slot)
+//   meta?  → per-call request headers
 
-import { clientOver, type Transport, type Meta } from '@rhi-zone/fractal-rpc-dispatch'
-import type { AnyNode, Result, UClient } from '@rhi-zone/fractal-core'
+import {
+  clientOver,
+  composeRequestResponse,
+  jsonCodec,
+  type Exchange,
+  type ExchangeResponse,
+  type Meta,
+  type Transport,
+} from '@rhi-zone/fractal-rpc-dispatch'
+import type { AnyNode, UClient } from '@rhi-zone/fractal-core'
 
 /** Options accepted by `httpTransport` / `httpClient`. */
 export interface HttpTransportOptions {
@@ -34,42 +46,45 @@ const headersFromMeta = (meta?: Meta): Record<string, string> => {
 }
 
 /**
- * Build an HTTP {@link Transport} over `baseUrl` (e.g. `http://127.0.0.1:3000`,
- * no trailing slash). The presence of `stream` advertises that this transport
- * can carry streaming leaves.
+ * The HTTP CHANNEL axis: a request/response {@link Exchange} over `baseUrl`
+ * (e.g. `http://127.0.0.1:3000`, no trailing slash). It moves already-encoded
+ * (JSON string) wire bodies, owns URL addressing + HTTP status + NDJSON
+ * medium-framing, and knows nothing of Result shapes (that is the protocol's
+ * job). Wire unit `W = string` (matching {@link jsonCodec}).
  */
-export const httpTransport = (baseUrl: string, opts?: HttpTransportOptions): Transport => {
+export const httpExchange = (baseUrl: string, opts?: HttpTransportOptions): Exchange<string> => {
   const fetchFn = opts?.fetch ?? globalThis.fetch
-
   const urlFor = (path: readonly string[]): string => `${baseUrl}/${path.join('/')}`
 
   return {
-    async invoke(path, input, meta) {
+    async unary(path, body, meta): Promise<ExchangeResponse<string>> {
       const res = await fetchFn(urlFor(path), {
         method: 'POST',
         headers: headersFromMeta(meta),
-        body: JSON.stringify(input),
+        body,
       })
-      const json = (await res.json()) as unknown
-      return (res.ok
-        ? { ok: true, value: json }
-        : { ok: false, error: json }) as Result<unknown, unknown>
+      // Return the raw response text + the medium's success flag; the protocol
+      // decodes the body and maps ok-ness onto the Result.
+      return { ok: res.ok, body: await res.text() }
     },
 
-    async *stream(path, input, meta) {
+    async *stream(path, body, meta): AsyncIterable<string> {
       const res = await fetchFn(urlFor(path), {
         method: 'POST',
         headers: headersFromMeta(meta),
-        body: JSON.stringify(input),
+        body,
       })
       if (!res.ok || res.body === null) {
         // A non-2xx (or bodyless) streaming response is a single error Result —
-        // mirrors invoke's error decoding so callers see a uniform shape.
-        const json = (await res.json().catch(() => ({ code: 'stream_failed', status: res.status }))) as unknown
-        yield { ok: false, error: json } as Result<unknown, unknown>
+        // mirrors invoke's error decoding so callers see a uniform shape. Emit
+        // one encoded line whose decode yields `{ ok:false, error }`.
+        const errBody = (await res.json().catch(() => ({ code: 'stream_failed', status: res.status }))) as unknown
+        yield JSON.stringify({ ok: false, error: errBody })
         return
       }
-      // Decode NDJSON: split the byte stream into newline-delimited JSON Results.
+      // Decode NDJSON medium-framing: split the byte stream into newline-
+      // delimited units; each unit is one encoded `Result` line (the protocol's
+      // codec parses it). Framing is the medium's job; parsing is the codec's.
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -82,12 +97,12 @@ export const httpTransport = (baseUrl: string, opts?: HttpTransportOptions): Tra
           while ((nl = buffer.indexOf('\n')) !== -1) {
             const line = buffer.slice(0, nl)
             buffer = buffer.slice(nl + 1)
-            if (line.length > 0) yield JSON.parse(line) as Result<unknown, unknown>
+            if (line.length > 0) yield line
           }
         }
         // Flush any trailing line without a final newline.
         const tail = buffer.trim()
-        if (tail.length > 0) yield JSON.parse(tail) as Result<unknown, unknown>
+        if (tail.length > 0) yield tail
       } finally {
         // If the consumer stops early (break out of the for-await), cancel the
         // body so the server sees the disconnect and aborts its generator.
@@ -96,6 +111,14 @@ export const httpTransport = (baseUrl: string, opts?: HttpTransportOptions): Tra
     },
   }
 }
+
+/**
+ * Build an HTTP {@link Transport} over `baseUrl`. Sugar for
+ * `composeRequestResponse(httpExchange(baseUrl), jsonCodec)`. The presence of
+ * `stream` advertises that this transport can carry streaming leaves.
+ */
+export const httpTransport = (baseUrl: string, opts?: HttpTransportOptions): Transport =>
+  composeRequestResponse(httpExchange(baseUrl, opts), jsonCodec)
 
 /**
  * Build a typed HTTP client over a node tree: `clientOver(node, httpTransport)`.
