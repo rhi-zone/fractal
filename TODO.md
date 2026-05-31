@@ -21,13 +21,13 @@ VitePress docs. **Entirely local — no remote, not pushed.**
 | `channel-worker` | Built & green |
 | `channel-stdio` | Built & green |
 | `preset-websocket` | Built & green |
-| `schema` | **Placeholder only** |
+| `standard-schema` (`@rhi-zone/fractal-standard-schema`) | Built & green |
 | `transport-conformance` (`@rhi-zone/fractal-transport-conformance`) | **Private, unpublished** — transport-agnosticism conformance tests only |
 
 ### Build tiers (manual, topological)
 
 Root `build` script sequences manually: `core` → `transport` → codecs/protocol
-(parallel) → channels (parallel) → `preset-websocket` → `schema`/`facade`/examples.
+(parallel) → channels (parallel) → `preset-websocket` → `standard-schema`/examples.
 Holding fine at current dep-graph depth; revisit if it grows.
 
 ### What is built
@@ -55,7 +55,9 @@ Holding fine at current dep-graph depth; revisit if it grows.
 **`transport-conformance` (private):** Transport-agnosticism conformance tests
 (HTTP / WS / worker / stdio produce identical Results). Not published; devDeps only.
 
-**`schema`:** Placeholder file only.
+**`standard-schema` (`@rhi-zone/fractal-standard-schema`):** OpenAPI / JSON-Schema
+projection from the inert node tree. Exports `toOpenApi(tree, info)` and
+`toJsonSchema(node, opts)`. Built & green.
 
 ---
 
@@ -97,6 +99,10 @@ Holding fine at current dep-graph depth; revisit if it grows.
 
 - **Runtime floor: Node 20** (nixpkgs non-EOL).
 
+- **Intentional test-runner split.** `channel-http`, `channel-websocket`,
+  `transport-conformance`, and `todo-api` run `bun test` (via `bun:test` imports)
+  because they boot real Bun servers/streams; all other packages run `vitest run`.
+
 ---
 
 ## Remaining
@@ -112,10 +118,10 @@ holes).
 **NON-INVASIVE** — build a parallel proof; do NOT modify the app's working
 backend.
 
-### 2. `fractal-standard-schema` implementation
+### ~~2. `fractal-standard-schema` implementation~~ DONE
 
-Build the docs/OpenAPI/JSON-Schema interpreter over the inert node structure.
-Currently a one-line placeholder.
+`toOpenApi(tree, info)` and `toJsonSchema(node, opts)` are implemented and green.
+The package projects the inert node tree to OpenAPI / JSON Schema documents.
 
 ### 3. Reactivity-as-a-capability (deferred)
 
