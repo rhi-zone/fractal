@@ -16,7 +16,7 @@ Endpoints are plain data composed from a small set of primitives. Transports, va
 | `@rhi-zone/fractal-rpc` | RPC transport interpreter |
 | `@rhi-zone/fractal-ipc` | IPC transport interpreter |
 | `@rhi-zone/fractal-client` | Typed client-proxy interpreter |
-| `@rhi-zone/fractal-schema` | OpenAPI/JSON Schema/doc generation (zero runtime deps) |
+| `@rhi-zone/fractal-standard-schema` | OpenAPI/JSON Schema/doc generation (zero runtime deps) |
 | `@rhi-zone/fractal-facade` | Aggregator re-export |
 
 ## Development

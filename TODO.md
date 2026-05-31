@@ -112,7 +112,7 @@ holes).
 **NON-INVASIVE** — build a parallel proof; do NOT modify the app's working
 backend.
 
-### 2. `fractal-schema` implementation
+### 2. `fractal-standard-schema` implementation
 
 Build the docs/OpenAPI/JSON-Schema interpreter over the inert node structure.
 Currently a one-line placeholder.

@@ -34,4 +34,4 @@ This constraint is load-bearing: composability alone does not yield a small ment
 | `@rhi-zone/fractal-channel-worker` | worker_threads (MessagePort) channel axis |
 | `@rhi-zone/fractal-channel-stdio` | stdio (line-framed JSON) channel axis |
 | `@rhi-zone/fractal-preset-websocket` | WebSocket convenience preset (wsClient / serveWs) |
-| `@rhi-zone/fractal-schema` | OpenAPI/JSON Schema/doc generation (zero runtime deps) |
+| `@rhi-zone/fractal-standard-schema` | OpenAPI/JSON Schema/doc generation (zero runtime deps) |

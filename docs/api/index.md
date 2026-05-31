@@ -18,4 +18,4 @@ The node/combinator algebra is not yet defined. This page will be populated in t
 | `@rhi-zone/fractal-channel-worker` | Built & green |
 | `@rhi-zone/fractal-channel-stdio` | Built & green |
 | `@rhi-zone/fractal-preset-websocket` | Built & green |
-| `@rhi-zone/fractal-schema` | Placeholder only |
+| `@rhi-zone/fractal-standard-schema` | Placeholder only |
