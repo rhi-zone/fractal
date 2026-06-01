@@ -174,3 +174,4 @@ Seams are reserved and type-verified to compose. Build when actually needed:
 - Scaffolding plan + docs-sync detail: `~/.claude/plans/kind-snuggling-codd.md`
 - Commit history: `git log --oneline` in this repo
 - Ecosystem design principles: `~/git/rhizone/github-io/docs/decisions/throughlines.md`
+- Node algebra / optics direction: `docs/design/optics-direction.md`
