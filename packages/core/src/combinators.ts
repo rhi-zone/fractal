@@ -7,6 +7,7 @@ import type {
   ErrorOf,
   InputOf,
   Leaf,
+  Methods,
   NodeMeta,
   OutputOf,
   Seq,
@@ -64,6 +65,9 @@ export type AnnotatedNode<Child extends AnyNode, EAdd, ReqCaps extends Record<st
 /** A constructed branch node (branches are not chainable — they have no single I/O). */
 export type BranchNode<C extends Record<string, AnyNode>> = Branch<C>
 
+/** A constructed methods node (not chainable — it is a verb-keyed dispatch position). */
+export type MethodsNode<M extends Record<string, AnyNode>> = Methods<M>
+
 /** Attach the chain methods to a structural node object. ONE place builds chains. */
 const chainable = <N extends { readonly tag: string }>(node: N): N & Chainable<unknown, unknown, unknown> => {
   const self = node as N & Chainable<unknown, unknown, unknown>
@@ -105,6 +109,30 @@ export const streamLeaf = <I = unknown, O = unknown, E = never, Caps extends Rec
  */
 export const branch = <C extends Record<string, AnyNode>>(children: C): BranchNode<C> =>
   ({ tag: 'branch', children }) as BranchNode<C>
+
+/**
+ * PRIMITIVE 2b — methods. An HTTP-verb dispatch position. Pure structure (no
+ * code of its own); dispatch is verb selection performed by an interpreter. Like
+ * `branch` it groups named children, but the names are HTTP verbs and — UNLIKE
+ * `branch` — it does NOT consume a path segment: it sits at the SAME path
+ * position a single leaf would, and an interpreter selects by the request's HTTP
+ * method (case-insensitive), 405 if absent from the map.
+ *
+ * Verb keys are normalized to UPPERCASE so authoring (`GET`/`get`) and dispatch
+ * (case-insensitive method match) agree on one canonical key. `defaultVerb` (the
+ * verb a non-HTTP transport / in-process client uses) is 'POST' if present, else
+ * the first declared verb.
+ *
+ * LAW (verb totality): every key in `verbs` resolves to a handler subtree; an
+ * interpreter's verb dispatch is total over `Object.keys(verbs)`.
+ */
+export const methods = <M extends Record<string, AnyNode>>(verbs: M): MethodsNode<M> => {
+  const normalized: Record<string, AnyNode> = {}
+  for (const [verb, node] of Object.entries(verbs)) normalized[verb.toUpperCase()] = node
+  const keys = Object.keys(normalized)
+  const defaultVerb = (keys.includes('POST') ? 'POST' : keys[0]) as keyof M & string
+  return { tag: 'methods', verbs: normalized as M, defaultVerb } as MethodsNode<M>
+}
 
 /**
  * PRIMITIVE 3 — annotate / capability combinators. Type-PRESERVING wrapper that

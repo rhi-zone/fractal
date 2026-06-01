@@ -114,8 +114,8 @@ export interface ExchangeResponse<W> {
  *            mirroring NDJSON)
  */
 export interface Exchange<W = unknown> {
-  unary(path: readonly string[], body: W, meta?: Meta): Promise<ExchangeResponse<W>>
-  stream?(path: readonly string[], body: W, meta?: Meta): AsyncIterable<W>
+  unary(path: readonly string[], body: W, meta?: Meta, method?: string): Promise<ExchangeResponse<W>>
+  stream?(path: readonly string[], body: W, meta?: Meta, method?: string): AsyncIterable<W>
 }
 
 /**
@@ -132,16 +132,16 @@ export interface Exchange<W = unknown> {
  */
 export const composeRequestResponse = <W>(exchange: Exchange<W>, codec: Codec<W>): Transport => {
   const transport: Transport = {
-    async invoke(path, input, meta) {
-      const res = await exchange.unary(path, codec.encode(input), meta)
+    async invoke(path, input, meta, method) {
+      const res = await exchange.unary(path, codec.encode(input), meta, method)
       const value = codec.decode(res.body)
       return (res.ok ? { ok: true, value } : { ok: false, error: value }) as Result<unknown, unknown>
     },
   }
   if (exchange.stream) {
     const streamFn = exchange.stream.bind(exchange)
-    transport.stream = async function* (path, input, meta) {
-      for await (const unit of streamFn(path, codec.encode(input), meta)) {
+    transport.stream = async function* (path, input, meta, method) {
+      for await (const unit of streamFn(path, codec.encode(input), meta, method)) {
         yield codec.decode(unit) as Result<unknown, unknown>
       }
     }
@@ -172,6 +172,8 @@ export interface EncodedRequest<W, Raw = unknown> {
   /** The encoded request body; `serveExchange` decodes it via the codec. */
   readonly body: W
   readonly meta?: Meta
+  /** The request's HTTP method, threaded to the dispatcher for `methods` nodes. */
+  readonly method?: string
   readonly signal?: AbortSignal
   /** The transport-native request, passed through to grants via `req.raw`. */
   readonly raw: Raw
@@ -210,6 +212,7 @@ export const serveExchange = <W, Raw = unknown>(
       input: codec.decode(req.body),
       raw: req.raw,
       ...(req.meta !== undefined ? { meta: req.meta } : {}),
+      ...(req.method !== undefined ? { method: req.method } : {}),
       ...(req.signal ? { signal: req.signal } : {}),
     }
     const outcome: DispatchOutcome = await dispatch(dreq)

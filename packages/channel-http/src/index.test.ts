@@ -4,6 +4,7 @@ import {
   err,
   leaf,
   branch,
+  methods,
   withAuth,
   check,
 } from '@rhi-zone/fractal-core'
@@ -65,6 +66,41 @@ describe('http interpreter: seq validation stage maps error to status', () => {
     expect(await handler(req({ segments: ['double'], body: { n: 21 } }))).toEqual({ status: 200, body: 42 })
     const bad = await handler(req({ segments: ['double'], body: { n: 'x' } }))
     expect(bad.status).toBe(422)
+  })
+})
+
+describe('http interpreter: methods node dispatches by HTTP verb at one path', () => {
+  const tree = branch({
+    users: branch({
+      list: methods({
+        GET: leaf<unknown, string[]>(() => ok(['a', 'b'])),
+        POST: check<{ name: string }>((i) =>
+          typeof (i as { name?: unknown })?.name === 'string'
+            ? ok(i as { name: string })
+            : err({ code: 'invalid', message: 'name required' }),
+        ).then(leaf<{ name: string }, string>((b) => ok(`created ${b.name}`))),
+      }),
+    }),
+  })
+  const handler = serve(tree)
+
+  it('GET /users/list and POST /users/list both resolve, by verb', async () => {
+    const g = await handler(req({ method: 'GET', segments: ['users', 'list'] }))
+    expect(g).toEqual({ status: 200, body: ['a', 'b'] })
+    const p = await handler(req({ method: 'POST', segments: ['users', 'list'], body: { name: 'al' } }))
+    expect(p).toEqual({ status: 200, body: 'created al' })
+  })
+
+  it('405 Method Not Allowed on an unmapped verb', async () => {
+    const d = await handler(req({ method: 'DELETE', segments: ['users', 'list'] }))
+    expect(d.status).toBe(405)
+    expect((d.body as { code: string }).code).toBe('method_not_allowed')
+  })
+
+  it('a plain-leaf endpoint still serves POST (back-compat, no methods node)', async () => {
+    const plain = serve(branch({ ping: leaf(() => ok('pong')) }))
+    const r = await plain(req({ method: 'POST', segments: ['ping'] }))
+    expect(r).toEqual({ status: 200, body: 'pong' })
   })
 })
 

@@ -94,6 +94,7 @@ export const toWebHandler = (
       path: segments,
       body: bodyText,
       meta,
+      method: request.method,
       raw,
       ...(request.signal ? { signal: request.signal } : {}),
     }

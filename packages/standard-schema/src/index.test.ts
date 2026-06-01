@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import { branch, leaf, returns, validated, withAuth } from '@rhi-zone/fractal-core'
+import { branch, leaf, methods, returns, validated, withAuth } from '@rhi-zone/fractal-core'
 import { toJsonSchema, toOpenApi } from './index.ts'
 
 // A Standard-Schema fixture carrying the (draft 1.1) jsonSchema trait.
@@ -111,5 +111,32 @@ describe('toOpenApi', () => {
   it('produces a structurally valid document', () => {
     expect(doc.openapi).toBe('3.0.3')
     expect(doc.info).toEqual({ title: 'todo', version: '1.0.0' })
+  })
+})
+
+describe('toOpenApi: methods node → one path-item with multiple operations', () => {
+  const tree = branch({
+    users: branch({
+      list: methods({
+        GET: returns(numberSchema, leaf(() => ({ ok: true, value: 1 }))),
+        POST: returns(titleSchema, validated(titleSchema).then(leaf((x) => ({ ok: true, value: x })))),
+      }),
+    }),
+  })
+  const doc = toOpenApi(tree, { title: 'users', version: '1.0.0' })
+
+  it('projects a single path /users/list carrying both get and post operations', () => {
+    const item = doc.paths['/users/list']
+    expect(item?.get).toBeDefined()
+    expect(item?.post).toBeDefined()
+  })
+
+  it('each operation carries its own verb handler schemas', () => {
+    // GET output schema (numberSchema)
+    expect(doc.paths['/users/list']?.get?.responses['200']?.content?.['application/json']?.schema)
+      .toEqual({ type: 'number' })
+    // POST request body (titleSchema, from `validated`)
+    expect(doc.paths['/users/list']?.post?.requestBody?.content['application/json']?.schema)
+      .toEqual({ type: 'object', properties: { title: { type: 'string' } }, required: ['title'] })
   })
 })

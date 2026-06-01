@@ -73,6 +73,7 @@ const defaultErrorStatus = (error: unknown): number => {
   if (code === 'rate_limited') return 429
   if (code === 'invalid') return 422
   if (code === 'not_callable') return 404
+  if (code === 'method_not_allowed') return 405
   return 400
 }
 
@@ -96,6 +97,7 @@ const toDispatchRequest = (req: HttpRequestLike, meta?: Meta): DispatchRequest<H
   path: req.segments,
   input: req.body,
   raw: req,
+  method: req.method,
   ...(meta !== undefined ? { meta } : {}),
   ...(req.signal ? { signal: req.signal } : {}),
 })

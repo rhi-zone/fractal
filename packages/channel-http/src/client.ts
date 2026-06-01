@@ -65,24 +65,27 @@ export const httpExchange = (baseUrl: string, opts?: HttpTransportOptions): Exch
   const codec = opts?.codec ?? jsonCodec
   const urlFor = (path: readonly string[]): string => `${baseUrl}/${path.join('/')}`
 
+  // GET/HEAD carry no request body (fetch forbids it); for those verbs the
+  // encoded input is dropped. All other verbs send the encoded body as today.
+  const initFor = (method: string, body: string, meta?: Meta): RequestInit =>
+    method === 'GET' || method === 'HEAD'
+      ? { method, headers: headersFromMeta(meta) }
+      : { method, headers: headersFromMeta(meta), body }
+
   return {
-    async unary(path, body, meta): Promise<ExchangeResponse<string>> {
-      const res = await fetchFn(urlFor(path), {
-        method: 'POST',
-        headers: headersFromMeta(meta),
-        body,
-      })
+    async unary(path, body, meta, method): Promise<ExchangeResponse<string>> {
+      // The verb is the call name on the client (`.get`/`.post`); plain leaves
+      // pass no verb and keep the historical POST-only path.
+      const verb = (method ?? 'POST').toUpperCase()
+      const res = await fetchFn(urlFor(path), initFor(verb, body, meta))
       // Return the raw response text + the medium's success flag; the protocol
       // decodes the body and maps ok-ness onto the Result.
       return { ok: res.ok, body: await res.text() }
     },
 
-    async *stream(path, body, meta): AsyncIterable<string> {
-      const res = await fetchFn(urlFor(path), {
-        method: 'POST',
-        headers: headersFromMeta(meta),
-        body,
-      })
+    async *stream(path, body, meta, method): AsyncIterable<string> {
+      const verb = (method ?? 'POST').toUpperCase()
+      const res = await fetchFn(urlFor(path), initFor(verb, body, meta))
       if (!res.ok || res.body === null) {
         // A non-2xx (or bodyless) streaming response is a single error Result —
         // mirrors invoke's error decoding so callers see a uniform shape. The

@@ -200,7 +200,10 @@ const introspect = (node: AnyNode): Endpoint => {
         if (isStreamLeaf(n)) streaming = true
         return
       case 'branch':
-        // A nested branch under an endpoint is not part of this endpoint's I/O.
+      case 'methods':
+        // A nested branch / methods node under an endpoint is not part of this
+        // endpoint's I/O (a methods node is split into per-verb endpoints during
+        // routing, so it is not normally reached here).
         return
     }
   }
@@ -222,6 +225,13 @@ const introspect = (node: AnyNode): Endpoint => {
 interface RoutedEndpoint {
   readonly segments: readonly string[]
   readonly node: AnyNode
+  /**
+   * The HTTP verb this endpoint serves, when it sits under a `methods` node. When
+   * set, it OVERRIDES the per-node `introspect` method (a `methods` child carries
+   * no `kind:'http'` annotation — its verb is its key). Absent for plain
+   * endpoints, which default to POST (or their own `kind:'http'` override).
+   */
+  readonly verb?: string
 }
 
 const collectEndpoints = (
@@ -232,6 +242,15 @@ const collectEndpoints = (
   if (node.tag === 'branch') {
     for (const [key, child] of Object.entries(node.children)) {
       collectEndpoints(child as AnyNode, [...segments, key], out)
+    }
+    return
+  }
+  if (node.tag === 'methods') {
+    // A methods node sits at the SAME path P (no extra segment) and projects to
+    // one OpenAPI operation per verb at that path. Each verb's subtree is its own
+    // endpoint, carrying the verb as the operation method.
+    for (const [verb, child] of Object.entries(node.verbs)) {
+      out.push({ segments, node: child as AnyNode, verb: verb.toLowerCase() })
     }
     return
   }
@@ -258,8 +277,11 @@ export const toOpenApi = (tree: AnyNode, info: OpenApiInfo): OpenApiDocument => 
   const paths: Record<string, Record<string, Operation>> = {}
   const securitySchemes: Record<string, SecurityScheme> = {}
 
-  for (const { segments, node } of routed) {
+  for (const { segments, node, verb } of routed) {
     const ep = introspect(node)
+    // A `methods` child's verb (its key) OVERRIDES the per-node method; plain
+    // endpoints keep their introspected method (POST or a `kind:'http'` override).
+    const method = verb ?? ep.method
     const path = `/${segments.join('/')}`
 
     const responseSchema =
@@ -316,7 +338,7 @@ export const toOpenApi = (tree: AnyNode, info: OpenApiInfo): OpenApiDocument => 
     }
 
     const pathItem = (paths[path] ??= {})
-    pathItem[ep.method] = operation
+    pathItem[method] = operation
   }
 
   for (const w of warnings) warn(w)

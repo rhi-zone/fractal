@@ -1,5 +1,5 @@
 import type { Result, Context } from './result.ts'
-import type { AnyNode, Branch, InputOf, OutputOf, ErrorOf, ModeOf } from './node.ts'
+import type { AnyNode, Branch, Methods, InputOf, OutputOf, ErrorOf, ModeOf } from './node.ts'
 import { evaluate, evaluateStream } from './evaluate.ts'
 
 /**
@@ -16,6 +16,7 @@ const runtimeMode = (node: AnyNode): 'unary' | 'stream' => {
     case 'annotated':
       return runtimeMode(node.child)
     case 'branch':
+    case 'methods':
       return 'unary'
   }
 }
@@ -40,11 +41,13 @@ export type Meta = Record<string, unknown>
 export type UClient<N> =
   N extends Branch<infer C>
     ? { readonly [K in keyof C]: UClient<C[K]> }
-    : N extends AnyNode
-      ? ModeOf<N> extends 'stream'
-        ? (input: InputOf<N>, meta?: Meta) => AsyncIterable<Result<OutputOf<N>, ErrorOf<N>>>
-        : (input: InputOf<N>, meta?: Meta) => Promise<Result<OutputOf<N>, ErrorOf<N>>>
-      : never
+    : N extends Methods<infer M>
+      ? { readonly [K in keyof M & string as Lowercase<K>]: UClient<M[K]> }
+      : N extends AnyNode
+        ? ModeOf<N> extends 'stream'
+          ? (input: InputOf<N>, meta?: Meta) => AsyncIterable<Result<OutputOf<N>, ErrorOf<N>>>
+          : (input: InputOf<N>, meta?: Meta) => Promise<Result<OutputOf<N>, ErrorOf<N>>>
+        : never
 
 /**
  * Derive a typed client from a node tree. `Client` is the UNARY-shaped alias of
@@ -82,6 +85,29 @@ export const client = <N extends AnyNode>(node: N, options: ClientOptions<Record
           ownKeys: () => Object.keys(children),
           getOwnPropertyDescriptor: (_t, prop) =>
             typeof prop === 'string' && prop in children
+              ? { enumerable: true, configurable: true }
+              : undefined,
+        },
+      )
+    }
+    if (current.tag === 'methods') {
+      // A methods node exposes its verbs as LOWERCASED keys (`.get`, `.post`);
+      // each resolves to the verb's handler subtree. The runtime verb map is
+      // keyed by uppercase canonical verbs, so look up by the upper form.
+      const verbs = current.verbs as Record<string, AnyNode>
+      const lowerKeys = Object.keys(verbs).map((v) => v.toLowerCase())
+      return new Proxy(
+        {},
+        {
+          get: (_t, prop: string | symbol) => {
+            if (typeof prop !== 'string') return undefined
+            const child = verbs[prop.toUpperCase()]
+            return child === undefined ? undefined : build(child)
+          },
+          has: (_t, prop) => typeof prop === 'string' && prop.toUpperCase() in verbs,
+          ownKeys: () => lowerKeys,
+          getOwnPropertyDescriptor: (_t, prop) =>
+            typeof prop === 'string' && prop.toUpperCase() in verbs
               ? { enumerable: true, configurable: true }
               : undefined,
         },

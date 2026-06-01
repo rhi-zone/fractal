@@ -60,11 +60,13 @@ export interface Transport {
     path: readonly string[],
     input: unknown,
     meta?: Meta,
+    method?: string,
   ): Promise<Result<unknown, unknown>>
   stream?(
     path: readonly string[],
     input: unknown,
     meta?: Meta,
+    method?: string,
   ): AsyncIterable<Result<unknown, unknown>>
 }
 
@@ -89,6 +91,14 @@ export interface DispatchRequest<Raw = unknown> {
   readonly input: unknown
   /** Per-call metadata (decoded headers / envelope). */
   readonly meta?: Meta
+  /**
+   * The request's HTTP method (or any verb a channel carries), used by a
+   * `methods` node to select its verb handler (case-insensitive). Absent on
+   * non-HTTP transports (WS / worker / stdio / in-process): a `methods` node then
+   * falls back to its `defaultVerb`. NOT a path segment — a `methods` node sits at
+   * a single path position and dispatches on this, not on the URL.
+   */
+  readonly method?: string
   /** Cancellation signal — the dispatcher threads it into Context and honors it. */
   readonly signal?: AbortSignal
   /**
@@ -126,6 +136,7 @@ const isStreamMode = (node: AnyNode): boolean => {
     case 'annotated':
       return isStreamMode(node.child)
     case 'branch':
+    case 'methods':
       return false
   }
 }
@@ -172,6 +183,30 @@ export const dispatcher = <Raw = unknown>(tree: AnyNode, options: DispatcherOpti
           return { kind: 'unary', result: { ok: false, error: { code: 'not_callable', message: head } } }
         }
         return descend(child, rest, req, caps)
+      }
+      case 'methods': {
+        // A methods node does NOT consume a path segment: it sits at the current
+        // path position and selects its child by the request's HTTP method
+        // (case-insensitive). Absent method (non-HTTP transport) → defaultVerb.
+        const verbs = node.verbs as Record<string, AnyNode>
+        const requested = req.method?.toUpperCase()
+        const verb = requested ?? node.defaultVerb
+        const child = verbs[verb]
+        if (child === undefined) {
+          return {
+            kind: 'unary',
+            result: {
+              ok: false,
+              error: {
+                code: 'method_not_allowed',
+                message: `${verb} not allowed for /${segments.join('/')}`,
+                allow: Object.keys(verbs),
+              },
+            },
+          }
+        }
+        // Verb selected; descend into the handler at the SAME path position.
+        return descend(child, segments, req, caps)
       }
       case 'annotated': {
         const kind = node.annotation.kind
@@ -229,6 +264,24 @@ export const dispatcher = <Raw = unknown>(tree: AnyNode, options: DispatcherOpti
  * `UClient<N>` type.
  */
 export const clientOver = <N extends AnyNode>(node: N, transport: Transport): UClient<N> => {
+  // Build the callable for a node at `path`, optionally issuing a specific HTTP
+  // `verb` (set when the node sits under a `methods` parent; undefined for plain
+  // leaves, which keep the POST-only back-compat path).
+  const callableFor = (current: AnyNode, path: readonly string[], verb?: string): unknown => {
+    if (isStreamMode(current)) {
+      return (input: unknown, meta?: Meta): AsyncIterable<Result<unknown, unknown>> => {
+        if (typeof transport.stream !== 'function') {
+          throw new Error(
+            `transport cannot carry a stream: leaf /${path.join('/')} is streaming but the transport provides no stream()`,
+          )
+        }
+        return transport.stream(path, input, meta, verb)
+      }
+    }
+    return (input: unknown, meta?: Meta): Promise<Result<unknown, unknown>> =>
+      transport.invoke(path, input, meta, verb)
+  }
+
   const build = (current: AnyNode, path: readonly string[]): unknown => {
     if (current.tag === 'branch') {
       const children = current.children as Record<string, AnyNode>
@@ -249,18 +302,31 @@ export const clientOver = <N extends AnyNode>(node: N, transport: Transport): UC
         },
       )
     }
-    if (isStreamMode(current)) {
-      return (input: unknown, meta?: Meta): AsyncIterable<Result<unknown, unknown>> => {
-        if (typeof transport.stream !== 'function') {
-          throw new Error(
-            `transport cannot carry a stream: leaf /${path.join('/')} is streaming but the transport provides no stream()`,
-          )
-        }
-        return transport.stream(path, input, meta)
-      }
+    if (current.tag === 'methods') {
+      // A methods node exposes its verbs as LOWERCASED keys; each is a callable
+      // at the SAME path (no segment appended) that issues its verb. The runtime
+      // verb map is keyed by uppercase canonical verbs.
+      const verbs = current.verbs as Record<string, AnyNode>
+      const lowerKeys = Object.keys(verbs).map((v) => v.toLowerCase())
+      return new Proxy(
+        {},
+        {
+          get: (_t, prop: string | symbol) => {
+            if (typeof prop !== 'string') return undefined
+            const upper = prop.toUpperCase()
+            const child = verbs[upper]
+            return child === undefined ? undefined : callableFor(child, path, upper)
+          },
+          has: (_t, prop) => typeof prop === 'string' && prop.toUpperCase() in verbs,
+          ownKeys: () => lowerKeys,
+          getOwnPropertyDescriptor: (_t, prop) =>
+            typeof prop === 'string' && prop.toUpperCase() in verbs
+              ? { enumerable: true, configurable: true }
+              : undefined,
+        },
+      )
     }
-    return (input: unknown, meta?: Meta): Promise<Result<unknown, unknown>> =>
-      transport.invoke(path, input, meta)
+    return callableFor(current, path)
   }
   // ONE boundary cast: the dynamically-built structure conforms to UClient<N>.
   return build(node, []) as UClient<N>

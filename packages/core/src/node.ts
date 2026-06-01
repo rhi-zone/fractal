@@ -72,6 +72,38 @@ export interface Annotated<Child extends AnyNode, EAdd, ReqCaps extends Record<s
 }
 
 /**
+ * Methods — an HTTP-verb dispatch node. It sits at a PATH POSITION exactly like a
+ * leaf/seq (it does NOT consume a path segment, unlike `branch`), and holds a map
+ * of HTTP-verb → handler subtree. A dispatcher that descends by path to a Methods
+ * node selects the child whose key matches the request's HTTP method
+ * (case-insensitive); a method not in the map is 405 Method Not Allowed.
+ *
+ * Each verb's value is a FULL handler subtree, so it composes with `validated` /
+ * `returns` / capabilities exactly as a path leaf does. The node's phantom I/O/E
+ * is the UNION across its verbs (a Methods node has no single signature — the
+ * typed client surfaces each verb separately, see `UClient`).
+ *
+ * Unlike `Branch`, `Methods` is a CALLABLE position: non-HTTP transports that
+ * lack a method select the designated default verb (see `defaultVerb`).
+ */
+export interface Methods<M extends Record<string, AnyNode>>
+  extends NodeMeta<
+    { [K in keyof M]: InputOf<M[K]> }[keyof M],
+    { [K in keyof M]: OutputOf<M[K]> }[keyof M],
+    { [K in keyof M]: ErrorOf<M[K]> }[keyof M]
+  > {
+  readonly tag: 'methods'
+  /** Verb → handler subtree. Keys are uppercase HTTP verbs (e.g. 'GET', 'POST'). */
+  readonly verbs: M
+  /**
+   * The verb a non-HTTP transport (WS / worker / stdio) or an in-process client
+   * selects when no HTTP method is present. Defaults to 'POST' if present, else
+   * the first declared verb. Recorded so every interpreter agrees.
+   */
+  readonly defaultVerb: keyof M & string
+}
+
+/**
  * Seq — a type-CHANGING composition. left.output must equal right.input
  * (enforced at the .then/.pipe call site). Input is left's, output is right's,
  * error is the union of both.
@@ -92,6 +124,7 @@ export type AnyNode =
   | Leaf<any, any, any, any>
   | StreamLeaf<any, any, any, any>
   | Branch<any>
+  | Methods<any>
   | Annotated<any, any, any>
   | Seq<any, any>
 
@@ -109,6 +142,7 @@ export type CapsOf<N> =
   : N extends Annotated<infer Child, any, infer Req> ? CapsOf<Child> & Req
   : N extends Seq<infer L, infer R> ? CapsOf<L> & CapsOf<R>
   : N extends Branch<infer C> ? { [K in keyof C]: CapsOf<C[K]> }[keyof C]
+  : N extends Methods<infer M> ? { [K in keyof M]: CapsOf<M[K]> }[keyof M]
   : Record<string, unknown>
 
 /**

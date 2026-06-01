@@ -6,6 +6,7 @@ import {
   leaf,
   streamLeaf,
   branch,
+  methods,
   annotate,
   identity,
   withAuth,
@@ -273,6 +274,47 @@ describe('law: branch dispatch totality', () => {
     for (const key of Object.keys(tree.children)) {
       expect(typeof (c as Record<string, unknown>)[key]).toBe('function')
     }
+  })
+})
+
+describe('methods node: verb-keyed dispatch + in-process default verb', () => {
+  it('normalizes verb keys to uppercase and picks POST as the default verb', () => {
+    const node = methods({
+      get: leaf<unknown, string>(() => ok('r')),
+      post: leaf<unknown, string>(() => ok('w')),
+    })
+    expect(node.tag).toBe('methods')
+    expect(Object.keys(node.verbs).sort()).toEqual(['GET', 'POST'])
+    expect(node.defaultVerb).toBe('POST')
+  })
+
+  it('defaults to the first declared verb when POST is absent', () => {
+    const node = methods({
+      GET: leaf<unknown, string>(() => ok('r')),
+      PUT: leaf<unknown, string>(() => ok('p')),
+    })
+    expect(node.defaultVerb).toBe('GET')
+  })
+
+  it('in-process client exposes lowercased verb call names that run their handler', async () => {
+    const tree = branch({
+      list: methods({
+        GET: leaf<unknown, string[]>(() => ok(['a'])),
+        POST: leaf<{ name: string }, string>((b) => ok(`made ${b.name}`)),
+      }),
+    })
+    const c = client(tree, { ctx }) as UClient<typeof tree>
+    expect(await c.list.get(undefined)).toEqual(ok(['a']))
+    expect(await c.list.post({ name: 'z' })).toEqual(ok('made z'))
+  })
+
+  it('evaluate() on a methods node selects the default verb (no HTTP method in core Context)', async () => {
+    const node = methods({
+      GET: leaf<unknown, string>(() => ok('read')),
+      POST: leaf<{ v: number }, number>((b) => ok(b.v * 2)),
+    })
+    // defaultVerb is POST here.
+    expect(await evaluate(node, { v: 21 }, ctx)).toEqual(ok(42))
   })
 })
 

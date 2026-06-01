@@ -47,6 +47,14 @@ export const evaluate = async (
       }
       return evaluate(node.child, input, ctx)
     }
+    case 'methods': {
+      // No HTTP method in core's Context: select the designated default verb.
+      const child = node.verbs[node.defaultVerb]
+      if (child === undefined) {
+        return err({ code: 'not_callable', message: `methods node has no verb '${node.defaultVerb}'` })
+      }
+      return evaluate(child, input, ctx)
+    }
     case 'branch':
       return err({ code: 'not_callable', message: 'branch is not directly callable; select a child' })
   }
@@ -106,6 +114,15 @@ export async function* evaluateStream(
         }
       }
       yield* evaluateStream(node.child, input, ctx)
+      return
+    }
+    case 'methods': {
+      const child = node.verbs[node.defaultVerb]
+      if (child === undefined) {
+        yield err({ code: 'not_callable', message: `methods node has no verb '${node.defaultVerb}'` })
+        return
+      }
+      yield* evaluateStream(child, input, ctx)
       return
     }
     case 'branch':

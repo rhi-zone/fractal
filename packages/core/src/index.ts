@@ -14,6 +14,7 @@ export type {
   StreamLeaf,
   LeafMode,
   Branch,
+  Methods,
   Annotated,
   Seq,
   AnyNode,
@@ -28,6 +29,7 @@ export {
   leaf,
   streamLeaf,
   branch,
+  methods,
   annotate,
   capability,
   withCapability,
@@ -39,6 +41,7 @@ export type {
   LeafNode,
   StreamLeafNode,
   BranchNode,
+  MethodsNode,
   SeqNode,
   AnnotatedNode,
 } from './combinators.ts'

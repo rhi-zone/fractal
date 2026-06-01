@@ -5,6 +5,7 @@ import {
   leaf,
   streamLeaf,
   branch,
+  methods,
   withAuth,
   check,
 } from '@rhi-zone/fractal-core'
@@ -75,6 +76,64 @@ describe('dispatcher: generalized walk (branch path + grant + delegate to core)'
   })
 })
 
+describe('dispatcher: methods node — dispatch by HTTP method, NOT by path segment', () => {
+  const tree = branch({
+    users: branch({
+      list: methods({
+        GET: leaf<unknown, string[]>(() => ok(['a', 'b'])),
+        POST: check<{ name: string }>((i) =>
+          typeof (i as { name?: unknown })?.name === 'string'
+            ? ok(i as { name: string })
+            : err({ code: 'invalid', message: 'name required' }),
+        ).then(leaf<{ name: string }, string>((b) => ok(`created ${b.name}`))),
+      }),
+    }),
+  })
+  const dispatch = dispatcher(tree)
+
+  it('selects the GET handler at /users/list (no extra path segment consumed)', async () => {
+    const r = await dispatch(req({ path: ['users', 'list'], method: 'GET' }))
+    expect(r).toEqual({ kind: 'unary', result: { ok: true, value: ['a', 'b'] } })
+  })
+
+  it('selects the POST handler at the SAME path, composing the seq subtree', async () => {
+    const r = await dispatch(req({ path: ['users', 'list'], method: 'POST', input: { name: 'al' } }))
+    expect(r).toEqual({ kind: 'unary', result: { ok: true, value: 'created al' } })
+  })
+
+  it('matches the method case-insensitively', async () => {
+    const r = await dispatch(req({ path: ['users', 'list'], method: 'get' }))
+    expect(r).toEqual({ kind: 'unary', result: { ok: true, value: ['a', 'b'] } })
+  })
+
+  it('405s an unmapped verb, listing the allowed verbs', async () => {
+    const r = await dispatch(req({ path: ['users', 'list'], method: 'DELETE' }))
+    expect(r.kind).toBe('unary')
+    if (r.kind === 'unary' && !r.result.ok) {
+      const e = r.result.error as { code: string; allow: string[] }
+      expect(e.code).toBe('method_not_allowed')
+      expect(e.allow.sort()).toEqual(['GET', 'POST'])
+    }
+  })
+
+  it('falls back to defaultVerb (POST) when no method is present (non-HTTP transport)', async () => {
+    const r = await dispatch(req({ path: ['users', 'list'], input: { name: 'def' } }))
+    expect(r).toEqual({ kind: 'unary', result: { ok: true, value: 'created def' } })
+  })
+
+  it('defaultVerb is the first declared verb when POST is absent', async () => {
+    const t = branch({
+      thing: methods({
+        GET: leaf<unknown, string>(() => ok('read')),
+        PUT: leaf<unknown, string>(() => ok('replaced')),
+      }),
+    })
+    const d = dispatcher(t)
+    const r = await d(req({ path: ['thing'] }))
+    expect(r).toEqual({ kind: 'unary', result: { ok: true, value: 'read' } })
+  })
+})
+
 describe('clientOver: transport routing', () => {
   it('routes unary leaves through transport.invoke with the branch path + meta', async () => {
     const tree = branch({ users: branch({ get: leaf<{ id: number }, string>(() => ok('x')) }) })
@@ -108,6 +167,35 @@ describe('clientOver: transport routing', () => {
     const got: unknown[] = []
     for await (const r of client.count(2)) got.push(r)
     expect(got).toEqual([{ ok: true, value: 0 }, { ok: true, value: 10 }])
+  })
+
+  it('exposes verbs as lowercased call names that issue the right method, same path', async () => {
+    const tree = branch({
+      users: branch({
+        list: methods({
+          GET: leaf<{ q?: string }, string[]>(() => ok(['a'])),
+          POST: leaf<{ name: string }, string>(() => ok('made')),
+        }),
+      }),
+    })
+    const seen: { path: readonly string[]; input: unknown; method: unknown }[] = []
+    const transport: Transport = {
+      invoke: async (path, input, _meta, method) => {
+        seen.push({ path, input, method })
+        return method === 'GET' ? ok(['a']) : ok('made')
+      },
+    }
+    const client = clientOver(tree, transport)
+    // Typed: client.users.list.get / .post are both callable; types inferred per verb.
+    const g = await client.users.list.get({ q: 'x' })
+    const p = await client.users.list.post({ name: 'al' })
+    expect(g).toEqual({ ok: true, value: ['a'] })
+    expect(p).toEqual({ ok: true, value: 'made' })
+    // Same path for both verbs; no segment appended for the methods node.
+    expect(seen).toEqual([
+      { path: ['users', 'list'], input: { q: 'x' }, method: 'GET' },
+      { path: ['users', 'list'], input: { name: 'al' }, method: 'POST' },
+    ])
   })
 
   it('ERRORS EXPLICITLY when a stream leaf is called over a transport lacking stream()', () => {
