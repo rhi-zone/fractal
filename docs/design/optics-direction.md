@@ -2,7 +2,7 @@
 
 ## Status
 
-Exploratory design direction — not yet implemented. Captures a design conversation about the primitive set and composition model. Supersedes the ad-hoc accretion of per-feature node types (`branch`, then `methods`, then anticipated `param`/`query`). HEAD at time of writing is the `methods` combinator commit; this record argues that combinator should ultimately desugar to a general dispatch primitive, not stand as a bespoke node type.
+Exploratory design direction — not yet implemented. Captures a design conversation about the primitive set and composition model. Supersedes the ad-hoc accretion of per-feature node types (`branch`, then `methods`, then anticipated `param`/`query`). HEAD at time of writing is the `methods` combinator commit; this record argues that combinator should ultimately dissolve entirely — it has no correct desugaring into the agnostic dispatch primitive because verb-dispatch is not a tree-level concept. See the "Protocol agnosticism" section for the full correction.
 
 ---
 
@@ -52,7 +52,7 @@ Response-shaping (status/headers) is **not** a fourth category. It is attributio
 |---|---|---|
 | `leaf` | COMPUTE | Stream is the general case; unary = stream-of-one |
 | `seq` | COMPUTE | The unique type-changer; the Kleisli arrow |
-| `dispatch` | NAVIGATE | Match-and-bind a named request facet to a subtree — subsumes `branch`/`methods`/`param`/`query` as facet-descriptor configurations; open-capture vs closed-enum |
+| `dispatch` | NAVIGATE | Match-and-bind a named request facet to a subtree — subsumes `branch`/`param`/`query` as facet-descriptor configurations; open-capture vs closed-enum. Facets are structural (path segment, query key, header key, operation name); verb is explicitly excluded — it is HTTP-binding rendering, not a tree-level dispatch facet (supersedes the earlier "dispatch on facet verb" framing). `methods` is therefore not a facet configuration; it dissolves entirely. |
 | `annotate` | ATTRIBUTE | Open metadata/effect/binding channel: capabilities gated, schema inert, HTTP-binding inert |
 
 The floor is bounded by **reflectability**: primitives must stay inert, walkable data so projections derive from them. The only sanctioned opaque code is the leaf handler.
@@ -64,7 +64,7 @@ The floor is bounded by **reflectability**: primitives must stay inert, walkable
 The three-way categorisation is the optics algebra:
 
 - `seq` = optic composition
-- `branch` / `methods` / `param` = lens / prism / indexed-optic (focus a product field / match a sum case / capture an index)
+- `branch` / `param` = lens / prism / indexed-optic (focus a product field / match a sum case / capture an index). `methods` does not map here — it dissolves rather than desugars, because verb-dispatch is not a tree-level primitive (supersedes the earlier "dispatch on facet verb" framing).
 - `leaf` = the arrow at the focus
 - interpreters = profunctor instances
 
@@ -119,7 +119,7 @@ The ecosystem already splits client generation out to `@rhi-zone/normalize` (Ope
 
 This is the **falsifiable test** for any proposed primitive: if it needs a second composition mechanism to scale up (as server-less's mount-traits do, and as bespoke dispatch nodes did), it is not fractal.
 
-Surface sugar (`methods({ … })`, `branch({ … })`) is fine **provided** it desugars to the one facet-dispatch optic — sugar at the surface, one primitive underneath.
+Surface sugar (`branch({ … })`) is fine **provided** it desugars to the one name-dispatch optic — sugar at the surface, one primitive underneath. `methods({ … })` does not get this reprieve: because verb-dispatch is not a tree-level concept (it is binding-side rendering), `methods` has no correct desugaring into the agnostic primitive and dissolves rather than desugars.
 
 ---
 
@@ -130,18 +130,51 @@ Surface sugar (`methods({ … })`, `branch({ … })`) is fine **provided** it de
 - **Transport-agnostic handlers** — easy.
 - **Protocol-neutral description** — the tension. Pure neutrality forbids saying "this is a GET" and collapses HTTP to all-POST; embedding `method` pollutes the tree for stdio/worker.
 
-Resolution: `method` is **not** a primitive. The primitive is dispatch-on-a-named-abstract-facet; each protocol **binds** the abstract facet to its concrete wire feature. The tree says `dispatch on facet "verb"`; the HTTP binding says `facet "verb" ← req.method` (and bidirectionally, the client sets `req.method ← verb`); a worker binding leaves it unbound. `projection = interpret(tree, binding)`.
+Resolution: `method` is **not** a primitive, and neither is verb-dispatch. The earlier framing in this record — "the primitive is dispatch-on-a-named-abstract-facet; the tree says `dispatch on facet 'verb'`; the HTTP binding maps `facet 'verb' ← req.method`" — relocates *where* the verb is read from but leaves the verb vocabulary (GET/PUT/POST/DELETE/HEAD/OPTIONS) sitting in the dispatch keys. Branching on `{ GET: …, POST: … }` is still HTTP-specific. That framing is superseded (supersedes the earlier "dispatch on facet verb" framing).
+
+**Corrected resolution:** dispatch on operation **names**; the HTTP verb is binding-side rendering, never a tree key. The GET/PUT/POST/DELETE/HEAD/OPTIONS enumeration is irreducibly HTTP-specific and must not appear as dispatch keys in the agnostic tree.
+
+The agnostic tree has **named operations** — e.g. `todos: { list, create, remove }`. A name is meaningful on every protocol: CLI subcommand, MCP tool, RPC method, GraphQL field, in-process call. What looks like fundamental "branch by method" in REST (GET /todos = list vs POST /todos = create at one path) is actually two distinct named operations that the HTTP binding *collapses* onto one path, disambiguated by verb. Verb-branching is an HTTP **rendering** of name-branching, produced by the binding — not a primitive in the tree. This is precisely why the `methods` node was accretion: it smuggled a binding-level rendering into the IR.
+
+The verb enumeration lives in exactly one place: the HTTP binding's name→verb mapping table. It appears in no other projection. GraphQL independently corroborates the generalisation: query/mutation/subscription is the same read/write/stream distinction at a coarser grain; HTTP verbs are a finer read/write taxonomy. Both are renderings of named operations, neither is primitive.
+
+Projection table — same named tree, every surface:
+
+| Surface | list | create |
+|---|---|---|
+| HTTP | GET /todos | POST /todos |
+| Typed client | `client.todos.list()` | `client.todos.create(x)` |
+| CLI | `app todos list` | `app todos create --title` |
+| MCP | tool `todos_list` | tool `todos_create` |
+| GraphQL | query | mutation |
+| Worker/stdio | call by name | call by name |
+
+The verb vocabulary appears only in the HTTP column. Consequently, **`methods` dissolves completely** — there is no verb-dispatch node and no `method()` primitive. The tree needs only name-dispatch (branch over keys) plus `leaf` and the semantic tag described below as metadata; the HTTP binding performs verb rendering and same-path collapsing.
+
+### Verb inference sugar
+
+The HTTP binding needs a signal to choose GET vs POST. Two forms, both optional:
+
+1. **Naming convention** (server-less style): `list_* → GET`, `create_* → POST`, `remove_* → DELETE`, etc.
+2. **Protocol-neutral semantic tag** on the operation: `read | create | replace | update | remove | stream` (with optional `idempotent` / `safe` modifiers). The tag describes effect, not HTTP. Each binding maps it independently: HTTP `read → GET`, `create → POST`, `remove → DELETE`; GraphQL `read → query`, `stream → subscription`, else `mutation`; worker/MCP ignore it.
+
+HEAD and OPTIONS are not author concerns — the HTTP binding auto-derives them (HEAD from GET, OPTIONS from the allow-set). The author-facing operation vocabulary therefore shrinks to the semantic core.
+
+### Escape hatch
+
+For genuine HTTP-specificity (custom verbs, PROPFIND, deliberately-weird mappings): a per-operation annotation `http({ method, path })` read **only** by the HTTP binding, inert elsewhere. This is the tier-2 projection-scoped annotation already described below. Localised, honest non-agnosticism.
 
 ### Decisions
 
 - Preserve agnosticism in the **description**, not in handlers or bindings. No HTTP concept is ever a node or a hardcoded field; they enter only via bindings (dispatch/extraction) or projection-scoped annotations (hints such as status/content-type — e.g. the existing `kind: 'http'` annotation, inert to all other interpreters).
-- A route must be meaningful at the thinnest transport (input → output over a path); every richer facet (verb, headers, status, streaming) is an additive refinement that rich transports exploit and thin ones ignore via a **binding-declared default**. (This is the principled version of `methods()`'s `defaultVerb` — the default is data on the binding, not baked into interpreters.)
-- Three tiers for adding protocol-specific logic, each localising non-agnosticism: (1) abstract facet + binding (preferred); (2) projection-scoped annotation kind that only one binding reads; (3) explicit protocol-scoped subtree ("this branch only under HTTP").
+- Dispatch in the tree is **name-dispatch only**. Verb-dispatch is not a tree primitive; it is a derived rendering in the HTTP binding.
+- A route must be meaningful at the thinnest transport (input → output over a path); every richer facet (verb, headers, status, streaming) is an additive refinement that rich transports exploit and thin ones ignore. (This is the principled resolution of `methods()`'s `defaultVerb` — instead of a fallback baked into the node, the tree carries no verb at all; the binding renders it.)
+- Three tiers for adding protocol-specific logic, each localising non-agnosticism: (1) named operations + semantic tag, binding renders to protocol-specific vocabulary (preferred); (2) projection-scoped annotation kind that only one binding reads; (3) explicit protocol-scoped subtree ("this branch only under HTTP").
 - Bindings are **bidirectional, composable, first-class data** — not codegen — which is why this works for both server-side match and client-side build from one definition.
 
 ### Pragmatic scope
 
-Reserve the facet/binding seam now (so `method` is never a node), but ship with only the HTTP binding implemented. WS/stdio bindings do not need to be built to get the architecture right — only the tree must not hardcode HTTP.
+Reserve the name-dispatch / binding-renders-verb seam now (so neither `method` nor HTTP verb keys are ever nodes), but ship with only the HTTP binding implemented. WS/stdio bindings do not need to be built to get the architecture right — only the tree must not hardcode HTTP.
 
 ---
 
@@ -156,3 +189,5 @@ A concrete spike: express one `todo` endpoint as tagged concrete extractor-optic
 One endpoint answers all three.
 
 **Strategic fork to settle when fresh:** is fractal "server-less-for-TypeScript" (adopt the param-location decomposition, less novel) or the runtime-inert + direct-client-and-server + optics-composition bet (the differentiator)? This record assumes the latter.
+
+**Facet descriptor scope (settled):** the `dispatch` primitive's facet descriptor covers structural request facets — path-segment capture, query-key capture, header-key capture, and operation-name selection. Verb is **explicitly excluded** from tree-level facet dispatch; it is handled entirely by the HTTP binding's name→verb rendering table and is invisible to every other projection.
