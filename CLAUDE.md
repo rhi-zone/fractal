@@ -1,15 +1,5 @@
 # CLAUDE.md
 
-## Origin
-
-fractal is an HTTP/RPC/IPC API library where endpoints are plain data composed from a small set of primitives. Transports, validation, and static types are opt-in layers composed onto the core via combinators — not built into the core itself. Many interpreters walk one structure to produce artifacts: an HTTP server, a typed client proxy, an OpenAPI document, a test harness. End-to-end types are derived structurally from one definition.
-
-The library exists because , the ecosystem app this is built for, runs on Hono — an imperative route/middleware HTTP framework whose API surface is not a reflectable value. Routes and middleware are registered procedurally; the shape cannot be traversed, transformed, or shared across transports without rewriting. This forces per-surface re-description and hand-synced types. fractal makes the API an inert-data structure interpreted into multiple surfaces.
-
-**Design constraint (load-bearing):** The primitive set must be small and uniform, and composed presets must ship alongside the primitives. Composability alone does not yield a small mental model. A maximally-composable core without presets shifts assembly burden to the user — the failure mode visible in Effect. A deliberately tiny primitive set plus presets makes the common cases tractable without foreclosing the general case.
-
-The node/combinator algebra is not yet designed. This repository is skeleton and tooling only. The next phase defines the primitive set and composition model.
-
 <!-- BEGIN ECOSYSTEM RULES -->
 
 ## Ecosystem Design Principles

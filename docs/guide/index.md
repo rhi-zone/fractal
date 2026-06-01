@@ -10,7 +10,7 @@ The node/combinator algebra is not yet designed. This repository is tooling and 
 
 ## Motivation
 
-, the ecosystem app this library is built for, runs on Hono — an imperative route/middleware HTTP framework. Hono's API surface is not a reflectable value: routes and middleware are registered procedurally, so the API shape cannot be traversed, transformed, or shared across transports without rewriting. Per-surface re-description and hand-synced types are the result.
+Hono's API surface is not a reflectable value: routes and middleware are registered procedurally, so the API shape cannot be traversed, transformed, or shared across transports without rewriting. Per-surface re-description and hand-synced types are the result.
 
 fractal makes the API an inert-data structure that multiple interpreters walk to produce artifacts: an HTTP server, a typed client proxy, an OpenAPI document, a test harness. The structure is defined once; the surfaces are derived.
 
