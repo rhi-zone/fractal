@@ -95,7 +95,7 @@ Note: `Lens` and `Prism` share a common supertype in rainbow (`Optic = { view: A
 
 server-less does not model routing as a dispatch tree. An endpoint is a function whose parameters carry a `ParamLocation` descriptor (`Query`, `Path`, `Body`, `Header`). The HTTP verb is a naming convention (`create_* → POST`) with override; the route string is derived; response status is a separate `ErrorCode → status` mapping.
 
-fractal should adopt this decomposition, realised as **composable extractor-optics**: one optic per parameter, focusing the request to that argument; the location descriptor lives on the optic.
+fractal should adopt the **param-location decomposition**, realised as **composable extractor-optics**: one optic per parameter, focusing the request to that argument; the location descriptor lives on the optic. Note that server-less's naming-convention verb assignment is analogous to fractal's optional default sugar — fractal's primary mechanism is the explicit `op-name → (verb, path)` table, not the naming convention (see "Verb assignment" in "Protocol agnosticism" below).
 
 ### Transfer 2 — response shaping is a projection concern
 
@@ -149,14 +149,46 @@ Projection table — same named tree, every surface:
 | GraphQL | query | mutation |
 | Worker/stdio | call by name | call by name |
 
-The verb vocabulary appears only in the HTTP column. Consequently, **`methods` dissolves completely** — there is no verb-dispatch node and no `method()` primitive. The tree needs only name-dispatch (branch over keys) plus `leaf` and the semantic tag described below as metadata; the HTTP binding performs verb rendering and same-path collapsing.
+The verb vocabulary appears only in the HTTP column. Consequently, **`methods` dissolves completely** — there is no verb-dispatch node and no `method()` primitive. The tree needs only name-dispatch (branch over keys) plus `leaf`; the HTTP binding performs verb assignment (via an explicit `op-name → (verb, path)` table) and same-path collapsing. A semantic tag on an operation is optional metadata the binding may use as a default table entry (see "Verb assignment" below).
 
-### Verb inference sugar
+### Verb assignment: an explicit table, with optional default sugar
 
-The HTTP binding needs a signal to choose GET vs POST. Two forms, both optional:
+**Supersedes the earlier "Verb inference sugar" framing, which was explored and falsified.**
+
+The flaw in the inference/derivation approach: GET and DELETE at the same path (`/todos/{id}`) have identical request structure (path param, no body); PUT, PATCH, and POST all carry a body. No semantic-tag scheme, naming-convention scheme, or structural scheme (has-body? / has-path? / mutates?) can uniquely determine the verb — and none can represent the normal REST case of multiple operations sharing one path distinguished only by verb. Derivation/inference is therefore fundamentally insufficient as the mechanism.
+
+**The corrected mechanism: an explicit binding table.** The HTTP binding is an explicit table mapping each agnostic operation name to a `(verb, path)` pair:
+
+```
+op-name → (verb, path)
+```
+
+Multiple operations at the same endpoint is the **normal case**, not an edge case — it is simply multiple table rows sharing the same path with different verbs. The op name is the unique key (agnostic); `(verb, path)` is its HTTP rendering. There is no collision because names are unique.
+
+**Worked example.** Agnostic tree: `branch({ list, create, get, replace, patch, remove })`. HTTP binding table:
+
+| Op name | Verb   | Path          |
+|---------|--------|---------------|
+| list    | GET    | /todos        |
+| create  | POST   | /todos        |
+| get     | GET    | /todos/{id}   |
+| replace | PUT    | /todos/{id}   |
+| patch   | PATCH  | /todos/{id}   |
+| remove  | DELETE | /todos/{id}   |
+
+Two ops share `/todos` (GET + POST); four share `/todos/{id}` (GET / PUT / PATCH / DELETE). Everything falls out of the table:
+
+- **SERVE** — dispatcher matches incoming `(method, path)` → row → op-name → handler.
+- **OpenAPI** — group rows by path → one path item with N operations.
+- **CLIENT** — looks up an op-name's `(verb, path)` to form the request.
+- **CLI / MCP / GraphQL** — ignore the verb column, use the names.
+
+**Optional default sugar (not the mechanism).** Because filling every table row explicitly is verbose for conventional REST, two forms of *overridable default* can supply entries — but these are never the mechanism, and the explicit table always wins:
 
 1. **Naming convention** (server-less style): `list_* → GET`, `create_* → POST`, `remove_* → DELETE`, etc.
 2. **Protocol-neutral semantic tag** on the operation: `read | create | replace | update | remove | stream` (with optional `idempotent` / `safe` modifiers). The tag describes effect, not HTTP. Each binding maps it independently: HTTP `read → GET`, `create → POST`, `remove → DELETE`; GraphQL `read → query`, `stream → subscription`, else `mutation`; worker/MCP ignore it.
+
+Any inference must (a) be overridable per op and (b) permit N ops at one path. The explicit table entry always takes precedence. The subjectivity and ambiguity concerns raised against CRUD taxonomies apply only if inference is the mechanism; when inference is demoted to optional sugar over an always-present explicit table, they vanish.
 
 HEAD and OPTIONS are not author concerns — the HTTP binding auto-derives them (see "The full HTTP verb set: three classes" below for the full treatment).
 
@@ -170,7 +202,7 @@ The complete HTTP method set is the sharpest stress-test of the "dispatch on nam
 
 The partition has three classes:
 
-**Class 1 — Application-semantic verbs: named operation + semantic tag in the tree; HTTP verb rendered by the binding.**
+**Class 1 — Application-semantic verbs: named operation assigned a verb via the explicit binding table; semantic tag is optional sugar that may supply overridable table defaults.**
 
 All five verbs that carry application payload map directly onto the semantic tag set:
 
@@ -180,7 +212,7 @@ All five verbs that carry application payload map directly onto the semantic tag
 - `PATCH` → `update` (partial update; precise idempotency is a binding detail, not a tree concern)
 - `DELETE` → `remove` (idempotent)
 
-The semantic tag set is therefore `read | create | replace | update | remove | stream`. PUT and PATCH are not special cases — they were already captured by `replace` and `update`. The author never writes a verb; they write a named operation with a semantic tag, and the HTTP binding renders the appropriate verb. The same tag on another binding (GraphQL, worker, MCP) produces a protocol-appropriate rendering — `read → query`, `update → mutation`, and so on — because the tag describes effect, not HTTP.
+The semantic tag set is therefore `read | create | replace | update | remove | stream`. PUT and PATCH are not special cases — they were already captured by `replace` and `update`. The author assigns each op a verb via the HTTP binding table (the mechanism); a semantic tag on the operation can supply an overridable default table entry, and the same tag on another binding (GraphQL, worker, MCP) produces a protocol-appropriate rendering — `read → query`, `update → mutation`, and so on — because the tag describes effect, not HTTP. The tag is useful optional sugar; the explicit table is the source of truth.
 
 **Class 2 — Binding-derived protocol affordances: generated by the HTTP binding from operations already defined; never authored.**
 
@@ -198,14 +230,14 @@ These are not "verbs fractal does not support" in any interesting sense — they
 
 **Extension and WebDAV verbs** (PROPFIND, MKCOL, LOCK, COPY, MOVE, …): these are genuine application operations but do not fit the CRUD taxonomy. They belong in the existing escape hatch: a named operation with an explicit `http({ method, path })` annotation read only by the HTTP binding (named and agnostic in the tree; raw verb supplied by the one binding that cares).
 
-**Closure argument.** Every verb that is an application operation has either a semantic-tag home (class 1) or an explicit-override home via the escape hatch (extension verbs). Every verb without such a home (HEAD, OPTIONS, TRACE, CONNECT) is provably not an application operation — it is either a protocol affordance the binding generates automatically (class 2) or transport plumbing handled at the channel level or out of scope entirely (class 3). The verb zoo partitioning exactly into tree-tag / binding-generated / below-the-layer is evidence the layering is cut at the right joints.
+**Closure argument.** Every verb that is an application operation has either a home in the explicit `op-name → (verb, path)` binding table (class 1, with semantic tag as optional sugar) or an explicit-override home via the escape hatch (extension verbs). Every verb without such a home (HEAD, OPTIONS, TRACE, CONNECT) is provably not an application operation — it is either a protocol affordance the binding generates automatically (class 2) or transport plumbing handled at the channel level or out of scope entirely (class 3). The verb zoo partitioning exactly into table-assigned / binding-generated / below-the-layer is evidence the layering is cut at the right joints.
 
 ### Decisions
 
 - Preserve agnosticism in the **description**, not in handlers or bindings. No HTTP concept is ever a node or a hardcoded field; they enter only via bindings (dispatch/extraction) or projection-scoped annotations (hints such as status/content-type — e.g. the existing `kind: 'http'` annotation, inert to all other interpreters).
 - Dispatch in the tree is **name-dispatch only**. Verb-dispatch is not a tree primitive; it is a derived rendering in the HTTP binding.
 - A route must be meaningful at the thinnest transport (input → output over a path); every richer facet (verb, headers, status, streaming) is an additive refinement that rich transports exploit and thin ones ignore. (This is the principled resolution of `methods()`'s `defaultVerb` — instead of a fallback baked into the node, the tree carries no verb at all; the binding renders it.)
-- Three tiers for adding protocol-specific logic, each localising non-agnosticism: (1) named operations + semantic tag, binding renders to protocol-specific vocabulary (preferred); (2) projection-scoped annotation kind that only one binding reads; (3) explicit protocol-scoped subtree ("this branch only under HTTP").
+- Three tiers for adding protocol-specific logic, each localising non-agnosticism: (1) named operations + explicit `op-name → (verb, path)` binding table (preferred; semantic tag or naming convention may supply overridable defaults for the table, but the table is the mechanism); (2) projection-scoped annotation kind that only one binding reads; (3) explicit protocol-scoped subtree ("this branch only under HTTP").
 - Bindings are **bidirectional, composable, first-class data** — not codegen — which is why this works for both server-side match and client-side build from one definition.
 
 ### Pragmatic scope
