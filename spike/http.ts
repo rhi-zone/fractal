@@ -17,8 +17,9 @@
 //   - body(child): pulls the LAZY body handle; provides req.body: unknown to child.
 //     The body is a consume-once async thunk — it is NOT pre-read. A route that
 //     does not call body() never pulls the thunk (laziness proof).
-//   - validate(parse, inner): ASYNC — pulls the lazy body, parses/validates,
-//     passes the typed result to inner. Contrast with typed() which is sync/eager
+//   - validate(parse, inner): SYNC combinator → async per-request handler.
+//     Does NOT pull the body at composition time. The returned handler awaits
+//     parse(req.body) per request. Contrast with typed() which is sync/eager
 //     over params already in the bag.
 //   - serve(handler, req): run an HTTP request through a fully-discharged handler
 //
@@ -224,16 +225,16 @@ export function header<
 // req.params (the body is not a named string token; its type is the kit's and
 // ultimately the validate() layer's concern).
 //
-// validate(parse, inner) is ASYNC — it pulls the body via the thunk, parses/
-// validates it, and passes the typed result to inner. This is the correct bridge
-// from unknown → T for the body facet. Contrast with typed() which is SYNC and
-// operates on values already present in the params bag.
+// validate(parse, inner) is a SYNC combinator that returns an async per-request
+// handler. It does not pull the body itself — body() does. validate only refines
+// unknown → T inside the returned handler. Contrast with typed() which is SYNC
+// and operates on values already present in the params bag.
 //
-// The type-safe composition path:
+// The type-safe composition path (all synchronous at composition time):
 //   body(validate(parse, inner))
 // where:
-//   - body()     : HandlerWithBody<P, unknown, Res> → Handler<P, Res>
-//   - validate() : HandlerWithBody<P, T, Res>       → HandlerWithBody<P, unknown, Res>
+//   - body()     : HandlerWithBody<P, unknown, Res> → Handler<P, Res>   [sync combinator]
+//   - validate() : HandlerWithBody<P, T, Res>       → HandlerWithBody<P, unknown, Res>  [sync combinator, async handler]
 //   - inner      : HandlerWithBody<P, T, Res>
 // ---------------------------------------------------------------------------
 
@@ -282,35 +283,39 @@ export function body<P extends Record<string, unknown>, Res>(
 }
 
 /**
- * validate: ASYNC opt-in typed validation over the body facet.
+ * validate: SYNC combinator that returns an async per-request handler.
  *
- * Takes a parse function (unknown → T | throws), wraps a HandlerWithBody<P,T,Res>,
- * and returns a HandlerWithBody<P,unknown,Res>.
+ * Takes a parse function (unknown → T | Promise<T>), wraps a HandlerWithBody<P,T,Res>,
+ * and returns a HandlerWithBody<P,unknown,Res> — SYNCHRONOUSLY.
  *
- * This is ASYNC because it awaits the parse (accommodating async validators).
- * The body thunk has already been pulled by body() before validate() runs.
+ * Building the route tree is pure data construction and must be synchronous.
+ * validate() returns a closure immediately; no await at composition time.
+ * The async work happens PER REQUEST inside the returned handler: it awaits
+ * parse(req.body) (accommodating async validators) and forwards the typed result
+ * to inner. The body thunk has already been pulled by body() before validate()
+ * runs — validate only refines unknown → T, never reads the stream itself.
+ *
  * Throwing from parse propagates naturally — callers may catch at serve() or
  * wrap in a try/catch to map to a 400. Returning Pass on validation failure
  * is also valid and makes the route opt-out-able via upstream choice().
  *
  * Contrast with typed() (core): typed is SYNC and operates over params values
- * already in the bag. validate is ASYNC and operates over the body facet.
- * Both are opt-in; neither lives in the core; they are orthogonal.
+ * already in the bag. validate returns a SYNC combinator whose handler does
+ * async per-request work over the body facet. Both are opt-in; neither lives
+ * in the core; they are orthogonal.
  *
  * A Standard Schema validator slots in here:
  *   validate(v => schema.parse(v), inner)
  */
-export async function validate<
+export function validate<
   T,
   P extends Record<string, unknown> = Record<string, never>,
   Res = unknown,
 >(
   parse: (raw: unknown) => T | Promise<T>,
   inner: HandlerWithBody<P, T, Res>,
-): Promise<HandlerWithBody<P, unknown, Res>> {
-  // validate() returns a HandlerWithBody via Promise — callers await it once
-  // at composition time, not on every request. The returned HandlerWithBody
-  // is then the hot-path function.
+): HandlerWithBody<P, unknown, Res> {
+  // Synchronously return the per-request handler. No await here.
   return async (req) => {
     const parsed = await parse(req.body)
     const enriched: ReqWithBody<P, T> = { ...req, body: parsed }

@@ -184,8 +184,9 @@ const getTodoTypedField: Handler<Record<string, never>, Todo | null> = field(
 // is in the route chain. A route that does not include body() never pulls the
 // thunk — the read counter below proves this.
 //
-// validate() is ASYNC — it awaits parse() which may be an async validator.
-// This contrasts with typed() which is SYNC over already-present params values.
+// validate() is a SYNC combinator whose returned handler awaits parse() per
+// request (accommodating async validators). Contrast with typed() which is
+// SYNC and operates over already-present params values.
 //
 // Body counter: incremented each time the thunk fires. After serving a GET
 // (body-ignoring), counter remains 0. After POST (body(validate(...))), it fires.
@@ -217,10 +218,10 @@ const createTodoFromBodyLeaf: HandlerWithBody<
   return todo
 }
 
-// validate() is now async at the composition level — we await it once when
-// building the routing tree, not on every request.
+// validate() is a SYNC combinator — no await needed here. The route tree is
+// built synchronously; the returned handler does async work per request.
 const createTodoBodyHandler: Handler<Record<string, never>, Todo> = body(
-  await validate(parseCreateTodoBody, createTodoFromBodyLeaf),
+  validate(parseCreateTodoBody, createTodoFromBodyLeaf),
 )
 
 // ============================================================================
