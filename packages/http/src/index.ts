@@ -2,6 +2,9 @@
 //
 // HTTP kit built on @rhi-zone/fractal-core.
 //
+// Every combinator produces/consumes Node<P,Res> = { meta, handler }.
+// meta descriptors are rich enough for OpenAPI projection (future package).
+//
 // Provides:
 //   - path(table): dispatch on first path segment, consume it
 //   - methods(table): dispatch on req.method (with path-exhaustion guard)
@@ -10,12 +13,19 @@
 //   - header(name, child): captures HTTP header value → string
 //   - body(child): pulls the LAZY body handle
 //   - validate(parse, inner): SYNC combinator → async per-request handler
-//   - serve(handler, req): run an HTTP request through a fully-discharged handler
+//   - serve(node, req): run an HTTP request through a fully-discharged Node
 //
 // V=string pinning: param/query/header pin V=string via C extends Record<K,string>.
-// G1 safety: httpParam('x', leaf<{x:number}>) is a COMPILE ERROR.
+// G1 safety: param('x', leaf<{x:number}>(...)) is a COMPILE ERROR.
 
-import { type Pass, pass, type Handler, type Req, capture } from '@rhi-zone/fractal-core'
+import {
+  type Pass,
+  pass,
+  type Handler,
+  type Req,
+  type Node,
+  capture,
+} from '@rhi-zone/fractal-core'
 
 // ---------------------------------------------------------------------------
 // HTTP request fields (kit-internal shape)
@@ -32,23 +42,43 @@ type HttpFields = {
 type HttpReq<P extends Record<string, unknown>> = Req<P> & HttpFields
 
 // ---------------------------------------------------------------------------
+// HTTP-specific meta variants
+// ---------------------------------------------------------------------------
+
+export type PathMeta    = { kind: "path";    children: Record<string, import('@rhi-zone/fractal-core').Meta> }
+export type MethodsMeta = { kind: "methods"; verbs: Record<string, import('@rhi-zone/fractal-core').Meta> }
+export type ParamMeta   = { kind: "param";   name: string; in: "path"; schema: { type: "string" }; child: import('@rhi-zone/fractal-core').Meta }
+export type QueryMeta   = { kind: "query";   name: string; in: "query"; schema: { type: "string" }; child: import('@rhi-zone/fractal-core').Meta }
+export type HeaderMeta  = { kind: "header";  name: string; in: "header"; schema: { type: "string" }; child: import('@rhi-zone/fractal-core').Meta }
+export type BodyMeta    = { kind: "body";    child: import('@rhi-zone/fractal-core').Meta }
+export type ValidateMeta = { kind: "validate"; schema: unknown; child: import('@rhi-zone/fractal-core').Meta }
+
+// ---------------------------------------------------------------------------
 // HTTP kit combinators
 // ---------------------------------------------------------------------------
 
 /**
  * path: dispatch on the first segment of req.path, consume it.
  * Returns Pass if no segment or no match.
+ * meta: { kind: "path", children: { [seg]: child.meta } }
  */
 export function path<P extends Record<string, unknown>, Res>(
-  table: Record<string, Handler<P, Res>>,
-): Handler<P, Res> {
-  return async (req) => {
-    const httpReq = req as HttpReq<P>
-    const [seg, ...rest] = httpReq.path
-    if (seg === undefined) return pass
-    const h = table[seg]
-    if (h === undefined) return pass
-    return h({ ...req, path: rest })
+  table: Record<string, Node<P, Res>>,
+): Node<P, Res> {
+  const childMetas: Record<string, import('@rhi-zone/fractal-core').Meta> = {}
+  for (const [k, n] of Object.entries(table)) {
+    childMetas[k] = n.meta
+  }
+  return {
+    meta: { kind: "path", children: childMetas } satisfies PathMeta,
+    handler: async (req) => {
+      const httpReq = req as HttpReq<P>
+      const [seg, ...rest] = httpReq.path
+      if (seg === undefined) return pass
+      const n = table[seg]
+      if (n === undefined) return pass
+      return n.handler({ ...req, path: rest })
+    },
   }
 }
 
@@ -57,17 +87,25 @@ export function path<P extends Record<string, unknown>, Res>(
  * Returns Pass if no match OR if the path is not fully consumed (non-empty).
  * This makes methods a leaf-level combinator: it only fires when all path
  * segments have been consumed by enclosing path and param combinators.
+ * meta: { kind: "methods", verbs: { [VERB]: child.meta } }
  */
 export function methods<P extends Record<string, unknown>, Res>(
-  table: Record<string, Handler<P, Res>>,
-): Handler<P, Res> {
-  return async (req) => {
-    const httpReq = req as HttpReq<P>
-    // Only match at the leaf — pass through if path is not exhausted.
-    if (httpReq.path.length > 0) return pass
-    const h = table[httpReq.method]
-    if (h === undefined) return pass
-    return h(req)
+  table: Record<string, Node<P, Res>>,
+): Node<P, Res> {
+  const verbMetas: Record<string, import('@rhi-zone/fractal-core').Meta> = {}
+  for (const [k, n] of Object.entries(table)) {
+    verbMetas[k] = n.meta
+  }
+  return {
+    meta: { kind: "methods", verbs: verbMetas } satisfies MethodsMeta,
+    handler: async (req) => {
+      const httpReq = req as HttpReq<P>
+      // Only match at the leaf — pass through if path is not exhausted.
+      if (httpReq.path.length > 0) return pass
+      const n = table[httpReq.method]
+      if (n === undefined) return pass
+      return n.handler(req)
+    },
   }
 }
 
@@ -81,25 +119,31 @@ export function methods<P extends Record<string, unknown>, Res>(
  * V is pinned to string (path segments are text in HTTP).
  * C extends Record<K, string> enforces child expects string at K.
  *
- * G1 safety: param('x', leaf<{x:number}>) is a compile error because
+ * G1 safety: param('x', leaf<{x:number}>(...)) is a compile error because
  * {x:number} does not satisfy C extends Record<'x',string>.
  * Confirmed by the @ts-expect-error probe below.
+ *
+ * meta: { kind: "param", name, in: "path", schema: {type:"string"}, child: child.meta }
  */
 export function param<
   K extends string,
   C extends Record<K, string>,
   Res,
->(name: K, child: Handler<C, Res>): Handler<Omit<C, K>, Res> {
-  return async (req) => {
-    const httpReq = req as HttpReq<Omit<C, K>>
-    const [seg, ...rest] = httpReq.path
-    if (seg === undefined) return pass
-    const enriched = {
-      ...req,
-      path: rest,
-      params: { ...(req.params as object), [name]: seg } as unknown as C,
-    } as unknown as HttpReq<C>
-    return child(enriched)
+>(name: K, child: Node<C, Res>): Node<Omit<C, K>, Res> {
+  const childMeta = child.meta
+  return {
+    meta: { kind: "param", name, in: "path", schema: { type: "string" }, child: childMeta } satisfies ParamMeta,
+    handler: async (req) => {
+      const httpReq = req as HttpReq<Omit<C, K>>
+      const [seg, ...rest] = httpReq.path
+      if (seg === undefined) return pass
+      const enriched = {
+        ...req,
+        path: rest,
+        params: { ...(req.params as object), [name]: seg } as unknown as C,
+      } as unknown as HttpReq<C>
+      return child.handler(enriched)
+    },
   }
 }
 
@@ -113,20 +157,22 @@ export function param<
  */
 const _g1LeafWantsNumber = async (req: Req<{ x: number }>) => req.params.x
 // @ts-expect-error [G1: {x:number} does not satisfy C extends Record<'x',string> — compile error expected]
-export const _g1Probe = param("x", _g1LeafWantsNumber)
+export const _g1Probe = param("x", { meta: { kind: "leaf" }, handler: _g1LeafWantsNumber })
 
 /**
  * query: captures a URL query parameter as `name`, injects as string.
  *
  * Same Omit<C,K> algebra as param. V pinned to string.
  * Returns Pass if absent.
+ * meta: { kind: "query", name, in: "query", schema: {type:"string"}, child: child.meta }
  */
 export function query<
   K extends string,
   C extends Record<K, string>,
   Res,
->(name: K, child: Handler<C, Res>): Handler<Omit<C, K>, Res> {
-  return capture(
+>(name: K, child: Node<C, Res>): Node<Omit<C, K>, Res> {
+  const childMeta = child.meta
+  const captured = capture(
     name,
     (req) => {
       const httpReq = req as unknown as HttpReq<Omit<C, K>>
@@ -135,6 +181,10 @@ export function query<
     },
     child,
   )
+  return {
+    ...captured,
+    meta: { kind: "query", name, in: "query", schema: { type: "string" }, child: childMeta } satisfies QueryMeta,
+  }
 }
 
 /**
@@ -143,13 +193,15 @@ export function query<
  * Same Omit<C,K> algebra as param and query. V pinned to string.
  * Header names are lowercased on intake (HTTP/2 mandates lowercase).
  * Returns Pass if absent.
+ * meta: { kind: "header", name, in: "header", schema: {type:"string"}, child: child.meta }
  */
 export function header<
   K extends string,
   C extends Record<K, string>,
   Res,
->(name: K, child: Handler<C, Res>): Handler<Omit<C, K>, Res> {
-  return capture(
+>(name: K, child: Node<C, Res>): Node<Omit<C, K>, Res> {
+  const childMeta = child.meta
+  const captured = capture(
     name,
     (req) => {
       const httpReq = req as unknown as HttpReq<Omit<C, K>>
@@ -158,6 +210,10 @@ export function header<
     },
     child,
   )
+  return {
+    ...captured,
+    meta: { kind: "header", name, in: "header", schema: { type: "string" }, child: childMeta } satisfies HeaderMeta,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -188,18 +244,23 @@ export type HandlerWithBody<
  *
  * LAZINESS: the thunk is called only here. A route that does not include
  * body() in its chain never triggers the thunk.
+ *
+ * meta: { kind: "body", child: child.meta }
  */
 export function body<P extends Record<string, unknown>, Res>(
   child: HandlerWithBody<P, unknown, Res>,
-): Handler<P, Res> {
-  return async (req) => {
-    const httpReq = req as HttpReq<P>
-    const rawBody = httpReq.body !== undefined ? await httpReq.body() : undefined
-    const enriched: ReqWithBody<P, unknown> = {
-      ...req,
-      body: rawBody,
-    }
-    return child(enriched)
+): Node<P, Res> {
+  return {
+    meta: { kind: "body", child: { kind: "leaf" } } satisfies BodyMeta,
+    handler: async (req) => {
+      const httpReq = req as HttpReq<P>
+      const rawBody = httpReq.body !== undefined ? await httpReq.body() : undefined
+      const enriched: ReqWithBody<P, unknown> = {
+        ...req,
+        body: rawBody,
+      }
+      return child(enriched)
+    },
   }
 }
 
@@ -214,6 +275,9 @@ export function body<P extends Record<string, unknown>, Res>(
  *
  * A Standard Schema validator slots in here:
  *   validate(v => schema.parse(v), inner)
+ *
+ * Note: validate returns a HandlerWithBody (not a Node) so it can be
+ * composed into body(validate(parse, inner)).
  */
 export function validate<
   T,
@@ -254,13 +318,13 @@ export interface HttpResponse<T> {
 }
 
 /**
- * serve: run an HTTP request through a fully-discharged handler.
+ * serve: run an HTTP request through a fully-discharged Node.
  * Handles path splitting, query-string parsing, and maps Pass → 404.
  *
- * `h` must be Handler<{}> — any undischarged params are a compile error.
+ * `n` must be Node<{}> — any undischarged params are a compile error.
  */
 export async function serve<Res>(
-  h: Handler<Record<string, never>, Res>,
+  n: Node<Record<string, never>, Res>,
   req: HttpRequest,
 ): Promise<HttpResponse<Res>> {
   const [rawPath = "", rawQuery = ""] = req.url.split("?") as [string, string?]
@@ -290,11 +354,11 @@ export async function serve<Res>(
       ? { body: () => Promise.resolve(req.body) }
       : {}),
   }
-  const res = await h(httpReq)
+  const res = await n.handler(httpReq)
   if (res === pass) return { status: 404, body: null }
   return { status: 200, body: res as Res }
 }
 
 // Re-export core for consumers that only import fractal-http
-export type { Handler, Req, Pass } from '@rhi-zone/fractal-core'
+export type { Handler, Req, Pass, Node, Meta, NodeMiddleware } from '@rhi-zone/fractal-core'
 export { pass, leaf, typed, pipe, run, choice } from '@rhi-zone/fractal-core'

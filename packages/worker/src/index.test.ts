@@ -3,7 +3,7 @@
 // Tests porting the worker demo behaviors from spike/demo.ts:
 // typed-number capture without typed(), procedure dispatch, not-found.
 //
-// Run under bun test per the project convention for real-I/O capable packages.
+// All combinators now produce/consume Node<P,Res> = { meta, handler }.
 
 import { describe, it, expect } from 'bun:test'
 import {
@@ -14,6 +14,7 @@ import {
   typed,
   choice,
   pass,
+  type Node,
   type Handler,
   type WorkerCall,
   type WorkerCallResult,
@@ -41,31 +42,31 @@ type ApiResult = Todo | Todo[] | { error: string } | null
 // LEAVES
 // ============================================================================
 
-const listTodos: Handler<Record<string, never>, Todo[]> = leaf(async (_req) => [...STORE])
+const listTodos: Node<Record<string, never>, Todo[]> = leaf(async (_req) => [...STORE])
 
 // id arrives as string — typed bridges string → number
-const getTodoLeaf: Handler<{ id: number }, Todo | null> = leaf(async (req) =>
+const getTodoLeaf: Node<{ id: number }, Todo | null> = leaf(async (req) =>
   STORE.find((t) => t.id === req.params.id) ?? null,
 )
 
-const getTodo: Handler<{ id: string }, Todo | null> = typed<
+const getTodo: Node<{ id: string }, Todo | null> = typed<
   { id: number },
   { id: string },
   Todo | null
 >((raw) => ({ id: Number(raw['id']) }))(getTodoLeaf)
 
-const getTodoFromParams: Handler<Record<string, never>, Todo | null> = typed<
+const getTodoFromParams: Node<Record<string, never>, Todo | null> = typed<
   { id: string },
   Record<string, never>,
   Todo | null
 >((raw) => ({ id: String(raw['id'] ?? '') }))(getTodo)
 
 // Worker typed capture proof: id arrives as number, NO typed() needed
-const getTodoByTypedId: Handler<{ id: number }, Todo | null> = leaf(async (req) =>
+const getTodoByTypedId: Node<{ id: number }, Todo | null> = leaf(async (req) =>
   STORE.find((t) => t.id === req.params.id) ?? null,
 )
 
-const getTodoTypedField: Handler<Record<string, never>, Todo | null> = field(
+const getTodoTypedField: Node<Record<string, never>, Todo | null> = field(
   'id',
   (req) => {
     const v = (req.params as Record<string, unknown>)['id']
@@ -75,13 +76,13 @@ const getTodoTypedField: Handler<Record<string, never>, Todo | null> = field(
 )
 
 let nextId = 10
-const createTodo: Handler<{ title: string }, Todo> = leaf(async (req) => {
+const createTodo: Node<{ title: string }, Todo> = leaf(async (req) => {
   const todo: Todo = { id: nextId++, title: req.params.title, done: false }
   STORE.push(todo)
   return todo
 })
 
-const createTodoTyped: Handler<Record<string, never>, Todo> = typed<
+const createTodoTyped: Node<Record<string, never>, Todo> = typed<
   { title: string },
   Record<string, never>,
   Todo
@@ -91,10 +92,10 @@ const createTodoTyped: Handler<Record<string, never>, Todo> = typed<
 // WORKER ROUTING TREE
 // ============================================================================
 
-const workerApp: Handler<Record<string, never>, ApiResult> = procedure<Record<string, never>, ApiResult>({
+const workerApp: Node<Record<string, never>, ApiResult> = procedure<Record<string, never>, ApiResult>({
   'todos.list': listTodos,
   'todos.get': getTodoFromParams,
-  'todos.get.typed': getTodoTypedField as Handler<Record<string, never>, ApiResult>,
+  'todos.get.typed': getTodoTypedField as Node<Record<string, never>, ApiResult>,
   'todos.create': createTodoTyped,
 })
 
@@ -174,12 +175,33 @@ describe('typed capture (string params)', () => {
 })
 
 describe('choice in worker context', () => {
-  it('choice tries handlers in order', async () => {
-    const h1: Handler<Record<string, never>, string> = async (_req) => pass
-    const h2: Handler<Record<string, never>, string> = async (_req) => 'matched'
-    const combined = choice(h1, h2)
+  it('choice tries nodes in order', async () => {
+    const n1: Node<Record<string, never>, string> = { meta: { kind: 'leaf' }, handler: async (_req) => pass }
+    const n2: Node<Record<string, never>, string> = { meta: { kind: 'leaf' }, handler: async (_req) => 'matched' }
+    const combined = choice(n1, n2)
     const r = await dispatch<string>(combined, { procedure: 'anything' })
     expect(r.ok).toBe(true)
     expect(r.result).toBe('matched')
   })
 })
+
+describe('Node meta descriptors', () => {
+  it('leaf has kind:leaf meta', () => {
+    const n = leaf<Record<string, never>, string>(async () => 'x')
+    expect(n.meta).toEqual({ kind: 'leaf' })
+  })
+
+  it('procedure has kind:procedure meta with procedures map', () => {
+    expect(workerApp.meta).toMatchObject({ kind: 'procedure' })
+    const meta = workerApp.meta as unknown as { procedures: Record<string, unknown> }
+    expect(Object.keys(meta.procedures)).toContain('todos.list')
+  })
+
+  it('field has kind:field meta with name', () => {
+    expect(getTodoTypedField.meta).toMatchObject({ kind: 'field', name: 'id' })
+  })
+})
+
+// Ensure Handler is still exported for direct use
+const _handlerCheck: Handler<Record<string, never>, string> = async (_req) => 'ok'
+void _handlerCheck

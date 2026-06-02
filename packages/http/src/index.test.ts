@@ -4,8 +4,8 @@
 // param+typed, query, header, lazy body counter, validation accept/reject,
 // nested discharge, 404, G1 @ts-expect-error.
 //
-// These tests run under bun test (real I/O capable) per the project convention
-// for packages that boot real I/O. Pure type/unit tests use describe/it from bun:test.
+// All combinators now produce/consume Node<P,Res> = { meta, handler }.
+// Tests call serve(node, ...) and node.handler(...) directly.
 
 import { describe, it, expect } from 'bun:test'
 import {
@@ -21,6 +21,7 @@ import {
   typed,
   choice,
   pass,
+  type Node,
   type Handler,
   type HandlerWithBody,
   type Req,
@@ -48,24 +49,24 @@ type ApiResult = Todo | Todo[] | { error: string } | null
 // LEAVES
 // ============================================================================
 
-const listTodos: Handler<Record<string, never>, Todo[]> = leaf(async (_req) => [...STORE])
+const listTodos: Node<Record<string, never>, Todo[]> = leaf(async (_req) => [...STORE])
 
-const listTodosWithLimit: Handler<{ limit: string }, Todo[]> = leaf(async (req) => {
+const listTodosWithLimit: Node<{ limit: string }, Todo[]> = leaf(async (req) => {
   const n = Number(req.params.limit)
   return STORE.slice(0, Number.isFinite(n) && n > 0 ? n : STORE.length)
 })
 
-const getTodoLeaf: Handler<{ id: number }, Todo | null> = leaf(async (req) =>
+const getTodoLeaf: Node<{ id: number }, Todo | null> = leaf(async (req) =>
   STORE.find((t) => t.id === req.params.id) ?? null,
 )
 
-const getTodo: Handler<{ id: string }, Todo | null> = typed<
+const getTodo: Node<{ id: string }, Todo | null> = typed<
   { id: number },
   { id: string },
   Todo | null
 >((raw) => ({ id: Number(raw['id']) }))(getTodoLeaf)
 
-const listTodosForTenant: Handler<{ 'x-tenant': string }, Todo[]> = leaf(async (req) => {
+const listTodosForTenant: Node<{ 'x-tenant': string }, Todo[]> = leaf(async (req) => {
   const tenant = req.params['x-tenant']
   return STORE.map((t) => ({ ...t, title: `[tenant:${tenant}] ${t.title}` }))
 })
@@ -91,7 +92,7 @@ const createTodoFromBodyLeaf: HandlerWithBody<Record<string, never>, CreateTodoI
     return todo
   }
 
-const createTodoBodyHandler: Handler<Record<string, never>, Todo> = body(
+const createTodoBodyHandler: Node<Record<string, never>, Todo> = body(
   validate(parseCreateTodoBody, createTodoFromBodyLeaf),
 )
 
@@ -99,7 +100,7 @@ const createTodoBodyHandler: Handler<Record<string, never>, Todo> = body(
 // HTTP ROUTING TREE
 // ============================================================================
 
-const httpApp: Handler<Record<string, never>, ApiResult> = path<Record<string, never>, ApiResult>({
+const httpApp: Node<Record<string, never>, ApiResult> = path<Record<string, never>, ApiResult>({
   todos: choice<Record<string, never>, ApiResult>(
     // /todos?limit=N
     query(
@@ -114,7 +115,7 @@ const httpApp: Handler<Record<string, never>, ApiResult> = path<Record<string, n
     // Exact /todos — method dispatch
     methods<Record<string, never>, ApiResult>({
       GET: listTodos,
-      POST: createTodoBodyHandler as Handler<Record<string, never>, ApiResult>,
+      POST: createTodoBodyHandler as Node<Record<string, never>, ApiResult>,
     }),
     // /todos/:id
     param(
@@ -130,7 +131,7 @@ const httpApp: Handler<Record<string, never>, ApiResult> = path<Record<string, n
 
 const _g1LeafWantsNumber = async (req: Req<{ x: number }>) => req.params.x
 // @ts-expect-error [G1: {x:number} does not satisfy C extends Record<'x',string>]
-const _g1Probe = param('x', _g1LeafWantsNumber)
+const _g1Probe = param('x', { meta: { kind: 'leaf' as const }, handler: _g1LeafWantsNumber })
 void _g1Probe
 
 // ============================================================================
@@ -195,7 +196,7 @@ describe('body laziness', () => {
         return Promise.resolve({ title: 'ShouldNotRead' })
       },
     }
-    const res = await httpApp(httpReqFields)
+    const res = await httpApp.handler(httpReqFields)
     expect(thunkPulled).toBe(false)
     expect(res).not.toBe(pass)
   })
@@ -213,7 +214,7 @@ describe('body laziness', () => {
         return Promise.resolve({ title: 'LazyBodyTodo' })
       },
     }
-    await httpApp(httpReqFields)
+    await httpApp.handler(httpReqFields)
     expect(thunkPulled).toBe(true)
   })
 })
@@ -267,3 +268,48 @@ describe('404 — pass-through', () => {
     expect(r.status).toBe(404)
   })
 })
+
+describe('Node meta descriptors', () => {
+  it('leaf has kind:leaf meta', () => {
+    const n = leaf<Record<string, never>, string>(async () => 'x')
+    expect(n.meta).toEqual({ kind: 'leaf' })
+  })
+
+  it('path has kind:path meta with children', () => {
+    const n = path({ foo: leaf<Record<string, never>, string>(async () => 'foo') })
+    expect(n.meta).toMatchObject({ kind: 'path' })
+    expect((n.meta as { children: unknown }).children).toHaveProperty('foo')
+  })
+
+  it('methods has kind:methods meta with verbs', () => {
+    const n = methods({ GET: leaf<Record<string, never>, string>(async () => 'ok') })
+    expect(n.meta).toMatchObject({ kind: 'methods' })
+    expect((n.meta as unknown as { verbs: unknown }).verbs).toHaveProperty('GET')
+  })
+
+  it('param has kind:param meta with in:path', () => {
+    const inner = leaf<{ id: string }, string>(async (req) => req.params.id)
+    const n = param('id', inner)
+    expect(n.meta).toMatchObject({ kind: 'param', name: 'id', in: 'path' })
+  })
+
+  it('query has kind:query meta with in:query', () => {
+    const inner = leaf<{ limit: string }, string>(async (req) => req.params.limit)
+    const n = query('limit', inner)
+    expect(n.meta).toMatchObject({ kind: 'query', name: 'limit', in: 'query' })
+  })
+
+  it('header has kind:header meta with in:header', () => {
+    const inner = leaf<{ 'x-tenant': string }, string>(async (req) => req.params['x-tenant'])
+    const n = header('x-tenant', inner)
+    expect(n.meta).toMatchObject({ kind: 'header', name: 'x-tenant', in: 'header' })
+  })
+
+  it('httpApp root meta is kind:path', () => {
+    expect(httpApp.meta).toMatchObject({ kind: 'path' })
+  })
+})
+
+// Ensure Handler is still exported for direct use
+const _handlerCheck: Handler<Record<string, never>, string> = async (_req) => 'ok'
+void _handlerCheck

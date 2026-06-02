@@ -1,8 +1,14 @@
 // packages/core/src/index.ts — @rhi-zone/fractal-core
 //
-// The agnostic Handler core. Protocol-free: no HTTP verbs, URL paths,
+// The agnostic Node core. Protocol-free: no HTTP verbs, URL paths,
 // procedure names, or transport shape. The only structure required is
 // that a request carries a `params` field.
+//
+// The composition unit is:
+//   Node<P,Res> = { meta: Meta; handler: Handler<P,Res> }
+//
+// `meta` is the reflection descriptor (walkable, serialisable).
+// `handler` is the executable ((req) => Promise<Res|Pass>).
 //
 // Protocol-specific combinators (path, methods, procedure) live in their
 // kits. Core does NOT mention string as a constraint on params values.
@@ -26,7 +32,7 @@ export type Req<P extends Record<string, unknown> = Record<string, never>> = {
 } & Record<string, unknown>
 
 // ---------------------------------------------------------------------------
-// Handler
+// Handler — the executable half of a Node
 // ---------------------------------------------------------------------------
 
 export type Handler<
@@ -35,38 +41,86 @@ export type Handler<
 > = (req: Req<P>) => Promise<Res | Pass>
 
 // ---------------------------------------------------------------------------
-// Middleware
+// Meta — the reflection descriptor
 // ---------------------------------------------------------------------------
 
-export type Middleware<P extends Record<string, unknown>, Res> = (
-  h: Handler<P, Res>,
-) => Handler<P, Res>
+export type LeafMeta   = { kind: "leaf" }
+export type ChoiceMeta = { kind: "choice"; children: Meta[] }
+export type CaptureMeta = { kind: "capture"; name: string; child: Meta }
+export type TypedMeta  = { kind: "typed"; schema: unknown; child: Meta }
+export type PipeMeta   = { kind: "pipe"; metas: Meta[]; child: Meta }
 
 /**
- * pipe: compose middleware left-to-right via reduceRight.
- * pipe(mw1, mw2)(h) = mw1(mw2(h))
- * mw1 is outermost and runs first; mw2 is closer to the base handler.
+ * Meta is the reflection descriptor for a Node.
+ * Kits extend this union with transport-specific variants (PathMeta,
+ * MethodsMeta, ProcedureMeta, …) by re-exporting an extended Meta type.
+ * Core only defines the variants it introduces directly.
+ */
+export type Meta =
+  | LeafMeta
+  | ChoiceMeta
+  | CaptureMeta
+  | TypedMeta
+  | PipeMeta
+  | { kind: string; [key: string]: unknown }   // open: kit-specific variants
+
+// ---------------------------------------------------------------------------
+// Node — THE composition unit
+//
+// NOTE: 'Node' would clash with lib.dom's Node interface. We export it as
+// a named type only; consumers that also use lib.dom should import and alias
+// (e.g. `import type { Node as FNode } from '@rhi-zone/fractal-core'`).
+// ---------------------------------------------------------------------------
+
+export type Node<
+  P extends Record<string, unknown> = Record<string, never>,
+  Res = unknown,
+> = {
+  meta: Meta
+  handler: Handler<P, Res>
+}
+
+// ---------------------------------------------------------------------------
+// NodeMiddleware
+// ---------------------------------------------------------------------------
+
+/**
+ * NodeMiddleware: a function that wraps a Node to produce a new Node.
+ * Can contribute to both the handler and the meta descriptor.
+ */
+export type NodeMiddleware<P extends Record<string, unknown>, Res> = (
+  n: Node<P, Res>,
+) => Node<P, Res>
+
+/**
+ * pipe: compose NodeMiddlewares left-to-right via reduceRight.
+ * pipe(mw1, mw2)(n) = mw1(mw2(n))
+ * mw1 is outermost and runs first; mw2 is closer to the base node.
+ * The resulting node's meta records the middleware chain.
  */
 export function pipe<P extends Record<string, unknown>, Res>(
-  ...mws: Middleware<P, Res>[]
-): Middleware<P, Res> {
-  return (h) => mws.reduceRight((acc, mw) => mw(acc), h)
+  ...mws: NodeMiddleware<P, Res>[]
+): NodeMiddleware<P, Res> {
+  return (n) => mws.reduceRight((acc, mw) => mw(acc), n)
 }
 
 // ---------------------------------------------------------------------------
 // Combinators
 // ---------------------------------------------------------------------------
 
-/** Tries handlers in order; returns the first non-Pass result. */
+/** Tries nodes in order; returns the first non-Pass result. */
 export function choice<P extends Record<string, unknown>, Res>(
-  ...hs: Handler<P, Res>[]
-): Handler<P, Res> {
-  return async (req) => {
-    for (const h of hs) {
-      const res = await h(req)
-      if (res !== pass) return res
-    }
-    return pass
+  ...ns: Node<P, Res>[]
+): Node<P, Res> {
+  return {
+    meta: { kind: "choice", children: ns.map((n) => n.meta) },
+    handler: async (req) => {
+      for (const n of ns) {
+        const res = await n.handler(req)
+        if (res !== pass) return res
+      }
+      return pass
+    },
   }
 }
 
@@ -87,16 +141,19 @@ export function capture<
 >(
   name: K,
   read: (req: Req<Omit<C, K>>) => V | Pass,
-  child: Handler<C, Res>,
-): Handler<Omit<C, K>, Res> {
-  return async (req) => {
-    const value = read(req)
-    if (value === pass) return pass
-    const enriched = {
-      ...req,
-      params: { ...(req.params as object), [name]: value } as unknown as C,
-    } as Req<C>
-    return child(enriched)
+  child: Node<C, Res>,
+): Node<Omit<C, K>, Res> {
+  return {
+    meta: { kind: "capture", name, child: child.meta },
+    handler: async (req) => {
+      const value = read(req)
+      if (value === pass) return pass
+      const enriched = {
+        ...req,
+        params: { ...(req.params as object), [name]: value } as unknown as C,
+      } as Req<C>
+      return child.handler(enriched)
+    },
   }
 }
 
@@ -110,38 +167,41 @@ export function typed<
   Res = unknown,
 >(
   parse: (raw: Record<string, unknown>) => Out,
-): (inner: Handler<P & Out, Res>) => Handler<P, Res> {
-  return (inner) =>
-    async (req) => {
+): (inner: Node<P & Out, Res>) => Node<P, Res> {
+  return (inner) => ({
+    meta: { kind: "typed", schema: { parsed: true }, child: inner.meta },
+    handler: async (req) => {
       const parsed = parse(req.params as Record<string, unknown>)
       const enriched: Req<P & Out> = {
         ...req,
         params: { ...(req.params as object), ...parsed } as P & Out,
       }
-      return inner(enriched)
-    }
+      return inner.handler(enriched)
+    },
+  })
 }
 
 /**
- * Leaf: wraps a plain async function into a Handler.
+ * Leaf: wraps a plain async function into a Node.
  * This is the ONLY place application logic lives.
+ * meta descriptor: { kind: "leaf" }
  */
 export function leaf<
   P extends Record<string, unknown> = Record<string, never>,
   Res = unknown,
->(fn: (req: Req<P>) => Promise<Res>): Handler<P, Res> {
-  return fn
+>(fn: (req: Req<P>) => Promise<Res>): Node<P, Res> {
+  return { meta: { kind: "leaf" }, handler: fn }
 }
 
 /**
- * Run: the entrypoint. Accepts only a fully-discharged handler (P = {}).
+ * Run: the entrypoint. Accepts only a fully-discharged Node (P = {}).
  * A Pass from the root handler becomes a "not found" sentinel (null).
  */
 export async function run<Res>(
-  h: Handler<Record<string, never>, Res>,
+  n: Node<Record<string, never>, Res>,
   req: Req<Record<string, never>>,
 ): Promise<Res | null> {
-  const res = await h(req)
+  const res = await n.handler(req)
   if (res === pass) return null
   return res as Res
 }
