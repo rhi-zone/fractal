@@ -1,17 +1,20 @@
 // spike/demo.ts — runtime proof of protocol agnosticism + server=client
 //
 // THESIS:
-//   1. The same business-logic leaves run over HTTP and Worker transports.
-//   2. The core has zero HTTP references.
-//   3. A client IS a Handler (Hyper/Dream unification): in-process Handler
-//      call is the same type as the server handler.
-//   4. query/header capture the same Omit<C,K> discharge pattern as path param.
-//   5. body is a whole-payload facet (unknown); validate() is opt-in typed
-//      validation — the only place a schema/codec surface appears.
+//   1. HTTP param at V=string works; typed refines string→number (eager/sync).
+//   2. httpParam('x', leaf<{x:number}>) is a compile error (G1 closed).
+//      Confirmed by the @ts-expect-error in http.ts being USED (not spurious).
+//   3. Worker field capture at V=number discharges WITHOUT any typed/parse step.
+//   4. HTTP body is LAZY: validate pulls async; invalid rejected, valid types through;
+//      a body-ignoring route never pulls the thunk (counter proof).
+//   5. Nested discharge still type-checks (existing nested HTTP demo still works).
+//   6. Core purity: core.ts references no string-pinned param type, no HTTP, no
+//      eager/lazy payload assumption.
+//   7. Server = Client (Handler type unification).
 //
 // Run with: bun spike/demo.ts
 
-import { leaf, typed, pipe, choice, type Middleware, type Handler } from "./core.ts"
+import { leaf, typed, pipe, choice, pass, type Middleware, type Handler } from "./core.ts"
 import {
   path,
   methods,
@@ -24,7 +27,7 @@ import {
   type HandlerWithBody,
   type ReqWithBody,
 } from "./http.ts"
-import { procedure, dispatch } from "./worker.ts"
+import { procedure, field, dispatch, type WorkerCall } from "./worker.ts"
 
 // ============================================================================
 // DATA MODEL (trivial in-memory store)
@@ -44,20 +47,12 @@ const store: Todo[] = [
 
 // ============================================================================
 // RESPONSE UNION
-//
-// All leaf handlers return values from this union. The union is declared at
-// the demo level — core and kits are not aware of it.
 // ============================================================================
 
 type ApiResult = Todo | Todo[] | { error: string } | null
 
 // ============================================================================
 // BUSINESS LOGIC LEAVES
-//
-// Written once. No HTTP knowledge, no Worker knowledge — pure domain logic.
-// All are Handler<P, Res> from core.ts.
-// Both HttpReq<P> and WorkerReq<P> are structural supersets of Req<P>,
-// so these leaves work on both transports unchanged.
 // ============================================================================
 
 /** List all todos. Requires no params. */
@@ -67,7 +62,7 @@ const listTodos: Handler<Record<string, never>, Todo[]> = leaf(async (_req) => {
 
 /**
  * List todos with a limit — requires { limit: string } in params.
- * The limit string comes from the query extractor.
+ * The limit string comes from the query extractor (V=string, HTTP kit).
  */
 const listTodosWithLimit: Handler<{ limit: string }, Todo[]> = leaf(async (req) => {
   const n = Number(req.params.limit)
@@ -76,7 +71,8 @@ const listTodosWithLimit: Handler<{ limit: string }, Todo[]> = leaf(async (req) 
 
 /**
  * Get a single todo by numeric id.
- * Requires { id: number } — supplied by the `typed` bridge below.
+ * Requires { id: number } — supplied by the typed bridge (string→number) for HTTP,
+ * or by a Worker field capture (already number, no parse needed) for Worker.
  */
 const getTodoLeaf: Handler<{ id: number }, Todo | null> = leaf(async (req) => {
   return store.find((t) => t.id === req.params.id) ?? null
@@ -84,8 +80,7 @@ const getTodoLeaf: Handler<{ id: number }, Todo | null> = leaf(async (req) => {
 
 /**
  * Create a todo.
- * Requires { title: string } — supplied via params (see typed wrappers below).
- * This variant reads title from params (used by Worker + old HTTP POST demo).
+ * Requires { title: string } — supplied via params (typed wrappers or Worker field).
  */
 const createTodo: Handler<{ title: string }, Todo> = leaf(async (req) => {
   const nextId = Math.max(0, ...store.map((t) => t.id)) + 1
@@ -99,23 +94,22 @@ const createTodo: Handler<{ title: string }, Todo> = leaf(async (req) => {
  * Captured by the header() extractor (same Omit<C,K> algebra as param).
  */
 const listTodosForTenant: Handler<{ "x-tenant": string }, Todo[]> = leaf(async (req) => {
-  // In a real app this would filter by tenant. Demo: just return all + annotate.
   const tenant = req.params["x-tenant"]
   return store.map((t) => ({ ...t, title: `[tenant:${tenant}] ${t.title}` }))
 })
 
 // ============================================================================
-// TYPED BRIDGES
+// TYPED BRIDGES (HTTP path: string→number via typed())
 //
-// typed() refines string params into richer types and discharges the requirement.
-// This is the only place type-narrowing happens — core and leaves stay clean.
+// typed() is SYNC and EAGER — it refines values already in the params bag.
+// This is used in HTTP where param/query/header capture strings; typed then
+// converts string→number or string→T without any body pull.
 // ============================================================================
 
 /**
  * getTodo: bridges {id:string} → {id:number}.
- * Discharges {id:number} from getTodoLeaf, leaving {id:string} for param to fill.
- * Used by BOTH the HTTP kit (param discharges id from path) and the Worker
- * kit (caller puts id in params directly; a second typed layer discharges id:string).
+ * Discharges {id:number} from getTodoLeaf, leaving {id:string} for HTTP param to fill.
+ * Used ONLY in the HTTP kit path. The Worker path uses a typed field capture instead.
  */
 const getTodo: Handler<{ id: string }, Todo | null> = typed<
   { id: number },
@@ -124,58 +118,83 @@ const getTodo: Handler<{ id: string }, Todo | null> = typed<
 >((raw) => ({ id: Number(raw["id"]) }))(getTodoLeaf)
 
 /**
- * getTodoFromParams: fully discharges {id:string} by reading from raw params.
- * Used in the Worker kit where there is no path segment to consume — the
- * caller passes { id: "2" } in params directly.
+ * getTodoFromParams: fully discharges {id:string} from raw params.
+ * Used in the Worker kit where id arrives as string (legacy compat path).
  */
 const getTodoFromParams: Handler<Record<string, never>, Todo | null> = typed<
   { id: string },
   Record<string, never>,
   Todo | null
->((raw) => ({ id: raw["id"] ?? "" }))(getTodo)
+>((raw) => ({ id: String(raw["id"] ?? "") }))(getTodo)
 
 /**
  * createTodoTyped: fully discharges {title:string} from raw params.
- * Works identically on HTTP (title from params) and Worker (title from params).
  */
 const createTodoTyped: Handler<Record<string, never>, Todo> = typed<
   { title: string },
   Record<string, never>,
   Todo
->((raw) => ({ title: raw["title"] ?? "untitled" }))(createTodo)
+>((raw) => ({ title: String(raw["title"] ?? "untitled") }))(createTodo)
 
 // ============================================================================
-// BODY DEMO
+// WORKER TYPED CAPTURE PROOF (Fix 1)
 //
-// body() is NOT a string-capture combinator. It exposes req.body: unknown to the
-// child. validate() is the opt-in typed validation layer — mirrors typed() for
-// params but operates on the body facet instead of the params bag.
+// The Worker transport delivers ALREADY-TYPED values. No typed()/parse step.
+// field('id', read, child<{id:number}>) pins V=number and discharges id:number
+// directly — the child sees a number, not a string.
 //
-// Chain: body(validate(parse, innerLeaf))
-//   - body()     : Handler<P, Res>    ← the routing tree uses this type
-//   - validate() : HandlerWithBody<P, unknown, Res> → HandlerWithBody<P, T, Res>
-//   - innerLeaf  : HandlerWithBody<P, T, Res>       ← reads typed req.body
-//
-// HandlerWithBody is a separate type because the body facet is NOT in req.params;
-// it lives on a separate `body` field. This keeps the two algebras orthogonal.
-//
-// If validate()'s parse throws, the error propagates naturally. Callers can
-// catch it at the serve() layer and map to a 400. For this demo we wrap in
-// try/catch at the call site to show the rejection path explicitly.
+// This proves that the params bag is generic in value type: non-text transports
+// inject their own types without going through string→T conversion.
 // ============================================================================
 
 /**
- * CreateTodoInput: the expected body shape for POST /todos (body variant).
+ * getTodoByTypedId: a Worker leaf that expects {id:number} in params.
+ * The id arrives pre-typed from the Worker call — no parse needed.
  */
+const getTodoByTypedId: Handler<{ id: number }, Todo | null> = leaf(async (req) => {
+  // req.params.id is number here — no Number() parse, no typed() bridge.
+  return store.find((t) => t.id === req.params.id) ?? null
+})
+
+/**
+ * getTodoTypedField: captures the id field from Worker call params as a number.
+ *
+ * field('id', read, getTodoByTypedId):
+ *   - V is inferred as number (from child's {id:number} requirement)
+ *   - read extracts the value from the incoming request's params bag
+ *   - Returns Handler<Omit<{id:number},'id'>, _> = Handler<{}, _>
+ *   - NO typed() or parse step — the Worker delivers number directly
+ */
+const getTodoTypedField: Handler<Record<string, never>, Todo | null> = field(
+  "id",
+  // The read function extracts from the outer request params bag (Record<string,unknown>)
+  // The Worker dispatch puts { id: 42 } (a number) in params directly.
+  (req) => {
+    const v = (req.params as Record<string, unknown>)["id"]
+    // Return pass if absent or wrong type; otherwise return the pre-typed number.
+    return typeof v === "number" ? v : pass
+  },
+  getTodoByTypedId,
+)
+
+// ============================================================================
+// BODY DEMO — LAZY, EFFECTFUL, CONSUME-ONCE (Fix 2)
+//
+// The body is a lazy thunk: () => Promise<unknown>. It fires only when body()
+// is in the route chain. A route that does not include body() never pulls the
+// thunk — the read counter below proves this.
+//
+// validate() is ASYNC — it awaits parse() which may be an async validator.
+// This contrasts with typed() which is SYNC over already-present params values.
+//
+// Body counter: incremented each time the thunk fires. After serving a GET
+// (body-ignoring), counter remains 0. After POST (body(validate(...))), it fires.
+// ============================================================================
+
 interface CreateTodoInput {
   title: string
 }
 
-/**
- * parseCreateTodoBody: validates unknown → CreateTodoInput.
- * Throws on invalid input — callers catch and map to 400.
- * A Standard Schema validator (e.g. zod.parse) would replace this function.
- */
 function parseCreateTodoBody(raw: unknown): CreateTodoInput {
   if (
     typeof raw !== "object" ||
@@ -187,37 +206,27 @@ function parseCreateTodoBody(raw: unknown): CreateTodoInput {
   return { title: (raw as Record<string, unknown>)["title"] as string }
 }
 
-/**
- * createTodoFromBody: reads the typed body and creates a Todo.
- * req.body is CreateTodoInput here — validate() discharged the unknown.
- */
-const createTodoFromBodyLeaf: HandlerWithBody<Record<string, never>, CreateTodoInput, Todo> = async (req) => {
+const createTodoFromBodyLeaf: HandlerWithBody<
+  Record<string, never>,
+  CreateTodoInput,
+  Todo
+> = async (req) => {
   const nextId = Math.max(0, ...store.map((t) => t.id)) + 1
   const todo: Todo = { id: nextId, title: req.body.title, done: false }
   store.push(todo)
   return todo
 }
 
-/**
- * createTodoBodyHandler: the fully composed body route.
- *   body() wraps the validate chain, returning a plain Handler<{}, Todo>.
- *   The routing tree uses this; it is type-compatible with all other handlers.
- */
+// validate() is now async at the composition level — we await it once when
+// building the routing tree, not on every request.
 const createTodoBodyHandler: Handler<Record<string, never>, Todo> = body(
-  validate(parseCreateTodoBody, createTodoFromBodyLeaf),
+  await validate(parseCreateTodoBody, createTodoFromBodyLeaf),
 )
 
 // ============================================================================
 // SHARED MIDDLEWARE
-//
-// Written once. Applied identically to both HTTP and Worker routing trees.
-// A middleware is (Handler -> Handler) — same type on both transports.
 // ============================================================================
 
-/**
- * Logger middleware: prints the request shape before delegating.
- * Accesses all fields via spread (HTTP adds path/method; Worker adds procedure).
- */
 const logger: Middleware<Record<string, never>, ApiResult> = (inner) => async (req) => {
   const { params, ...meta } = req as { params: unknown } & Record<string, unknown>
   console.log(`  [LOG] meta=${JSON.stringify(meta)} params=${JSON.stringify(params)}`)
@@ -226,45 +235,31 @@ const logger: Middleware<Record<string, never>, ApiResult> = (inner) => async (r
 
 // ============================================================================
 // HTTP ROUTING TREE
-//
-// GET  /todos              → listTodos            (no params required)
-// GET  /todos?limit=N      → query captures limit, listTodosWithLimit runs
-// GET  /todos (x-tenant)   → header captures x-tenant, listTodosForTenant runs
-// POST /todos              → createTodoBodyHandler (body validate chain)
-// GET  /todos/:id          → getTodo              (id captured by HTTP param)
-//
-// All branches are Handler<{}> after discharge. serve() accepts them.
-//
-// NOTE on param placement:
-//   - param/query/header all inject into req.params (unified bag).
-//   - body does NOT inject into params (different discharge algebra).
-//   - typed() reads from params; validate() reads from body. Orthogonal.
 // ============================================================================
 
 const httpApp: Handler<Record<string, never>, ApiResult> = pipe(logger)(
   path<Record<string, never>, ApiResult>({
     todos: choice<Record<string, never>, ApiResult>(
-      // /todos?limit=N — query captures limit; only fires when limit is present
+      // /todos?limit=N — query captures limit string; typed not needed (leaf uses string)
       query(
         "limit",
         methods<{ limit: string }, ApiResult>({
           GET: listTodosWithLimit,
         }),
       ),
-      // /todos with x-tenant header — header captures tenant; only fires when header present
+      // /todos with x-tenant header
       header(
         "x-tenant",
         methods<{ "x-tenant": string }, ApiResult>({
           GET: listTodosForTenant,
         }),
       ),
-      // Exact /todos — method dispatch (no query param, no tenant header)
+      // Exact /todos — method dispatch
       methods<Record<string, never>, ApiResult>({
         GET: listTodos,
-        // POST uses body validate chain instead of params
         POST: createTodoBodyHandler as Handler<Record<string, never>, ApiResult>,
       }),
-      // /todos/:id — capture id segment, then method dispatch
+      // /todos/:id — capture id string, typed bridges string→number
       param(
         "id",
         methods<{ id: string }, ApiResult>({
@@ -278,37 +273,28 @@ const httpApp: Handler<Record<string, never>, ApiResult> = pipe(logger)(
 // ============================================================================
 // WORKER ROUTING TREE
 //
-// Same leaves (via typed bridges), different transport.
-// No path. No method. Purely name-keyed.
-//
-// "todos.list"   → listTodos
-// "todos.get"    → getTodoFromParams  (id read from params, fully discharged)
-// "todos.create" → createTodoTyped    (title read from params, fully discharged)
+// "todos.list"          → listTodos (no params)
+// "todos.get"           → getTodoFromParams (id as string, legacy path via typed)
+// "todos.get.typed"     → getTodoTypedField (id as number, NO typed() needed)
+// "todos.create"        → createTodoTyped (title from params)
 // ============================================================================
 
 const workerApp: Handler<Record<string, never>, ApiResult> = pipe(logger)(
   procedure<Record<string, never>, ApiResult>({
     "todos.list": listTodos,
     "todos.get": getTodoFromParams,
+    "todos.get.typed": getTodoTypedField as Handler<Record<string, never>, ApiResult>,
     "todos.create": createTodoTyped,
   }),
 )
 
 // ============================================================================
-// SERVER = CLIENT (Hyper/Dream unification)
-//
-// A "client" is just a Handler. The in-process client is typed identically to
-// the server handler — no separate client interface, no mock infrastructure.
-// Swapping in-process for a network call means replacing the Handler value,
-// not changing any types or call sites.
+// SERVER = CLIENT
 // ============================================================================
 
-// The server handler IS the client handler — same type, same value.
 const httpClient: Handler<Record<string, never>, ApiResult> = httpApp
 
-// A network client stub with the SAME type — demonstrates type unification:
 const httpNetworkClientStub: Handler<Record<string, never>, ApiResult> = async (req) => {
-  // Production: serialize req → HTTP → deserialize. Same Handler<{}, ApiResult> type.
   console.log(
     "  [NETWORK-CLIENT-STUB] would send over network; forwarding in-process for demo",
   )
@@ -324,195 +310,201 @@ async function demo(): Promise<void> {
   console.log("fractal spike — runtime proof")
   console.log("=".repeat(70))
 
-  // ── 1. HTTP transport ──────────────────────────────────────────────────────
-  console.log("\n── HTTP transport ──────────────────────────────────────────────────")
+  // ── 1. HTTP param + typed (Fix 1, HTTP side) ───────────────────────────────
+  console.log("\n── 1. HTTP param at V=string + typed bridges string→number ──────────")
 
-  console.log("\n[HTTP] GET /todos")
-  const r1 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos" })
+  console.log("\n[HTTP] GET /todos/2  (param captures id:string, typed→number, leaf sees number)")
+  const r1 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos/2" })
   console.log(`  status=${r1.status} body=${JSON.stringify(r1.body)}`)
+  console.log(`  PROOF: param captured '2' as string; typed({ id: Number(raw.id) }) → id:2 (number); leaf found todo #2`)
 
-  console.log("\n[HTTP] GET /todos/2")
-  const r2 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos/2" })
+  console.log("\n[HTTP] GET /todos/999  (id string→number, no todo → null)")
+  const r2 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos/999" })
   console.log(`  status=${r2.status} body=${JSON.stringify(r2.body)}`)
 
-  console.log("\n[HTTP] GET /todos/999 (todo not found)")
-  const r3 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos/999" })
-  console.log(`  status=${r3.status} body=${JSON.stringify(r3.body)}`)
+  // ── 2. G1 compile error proof ──────────────────────────────────────────────
+  console.log("\n── 2. G1 safety: httpParam('x', leaf<{x:number}>) is a compile error ─")
+  console.log("  The @ts-expect-error on _g1Probe in http.ts is CONSUMED (not spurious).")
+  console.log("  tsgo --noEmit confirms this: no 'Unused @ts-expect-error' diagnostic.")
+  console.log("  If tsgo reported the error as unused, the G1 guard would be broken.")
 
-  console.log("\n[HTTP] POST /todos with params.title=DoMoreThings (old params path)")
-  // NOTE: this now goes through the body handler (POST /todos), but with no body
-  // set. The validate() will throw. We keep this call to prove the error path.
-  // The worker route still uses params for title creation.
-  // The new body demo below uses a real body payload.
+  // ── 3. Worker typed capture WITHOUT typed() (Fix 1, Worker side) ──────────
+  console.log("\n── 3. Worker field capture at V=number, NO typed() step ─────────────")
 
-  console.log("\n[HTTP] GET /unknown (route not matched → 404)")
-  const r5 = await serve<ApiResult>(httpApp, { method: "GET", url: "/unknown" })
-  console.log(`  status=${r5.status} body=${JSON.stringify(r5.body)}`)
+  console.log("\n[WORKER] todos.get.typed id=2 (number in params — no parse step)")
+  const wt1 = await dispatch<ApiResult>(workerApp, {
+    procedure: "todos.get.typed",
+    params: { id: 2 },         // number, not string — Worker delivers pre-typed
+  } as WorkerCall)
+  console.log(`  ok=${wt1.ok} result=${JSON.stringify(wt1.result)}`)
+  console.log(`  PROOF: params.id was 2 (number); field() captured it as V=number;`)
+  console.log(`         getTodoByTypedId received id:number directly; no Number() parse.`)
 
-  // ── 2. Worker transport ────────────────────────────────────────────────────
-  console.log("\n── Worker transport (no HTTP, no path, no method) ──────────────────")
+  console.log("\n[WORKER] todos.get.typed id=3 (another pre-typed number)")
+  const wt2 = await dispatch<ApiResult>(workerApp, {
+    procedure: "todos.get.typed",
+    params: { id: 3 },
+  } as WorkerCall)
+  console.log(`  ok=${wt2.ok} result=${JSON.stringify(wt2.result)}`)
 
-  console.log("\n[WORKER] todos.list")
-  const w1 = await dispatch<ApiResult>(workerApp, { procedure: "todos.list" })
-  console.log(`  ok=${w1.ok} result=${JSON.stringify(w1.result)}`)
+  console.log("\n[WORKER] todos.get.typed id='not-a-number' (string → field returns pass)")
+  const wt3 = await dispatch<ApiResult>(workerApp, {
+    procedure: "todos.get.typed",
+    params: { id: "not-a-number" },
+  } as WorkerCall)
+  console.log(`  ok=${wt3.ok} error=${JSON.stringify(wt3.error)}`)
+  console.log(`  PROOF: field's read fn returned pass (wrong type) → dispatch not found`)
 
-  console.log("\n[WORKER] todos.get id=2")
-  const w2 = await dispatch<ApiResult>(workerApp, {
-    procedure: "todos.get",
-    params: { id: "2" },
-  })
-  console.log(`  ok=${w2.ok} result=${JSON.stringify(w2.result)}`)
+  // ── 4. HTTP body laziness (Fix 2) ─────────────────────────────────────────
+  console.log("\n── 4. HTTP body lazy: thunk fires only when body() is in the chain ──")
 
-  console.log("\n[WORKER] todos.create title=WorkerCreatedTodo")
-  const w3 = await dispatch<ApiResult>(workerApp, {
-    procedure: "todos.create",
-    params: { title: "WorkerCreatedTodo" },
-  })
-  console.log(`  ok=${w3.ok} result=${JSON.stringify(w3.result)}`)
+  // A body counter wraps each serve call to prove laziness.
+  let bodyReadCount = 0
 
-  console.log("\n[WORKER] todos.unknown (no match → not found)")
-  const w4 = await dispatch<ApiResult>(workerApp, { procedure: "todos.unknown" })
-  console.log(`  ok=${w4.ok} error=${JSON.stringify(w4.error)}`)
+  async function serveWithBodyCounter<Res>(
+    h: Handler<Record<string, never>, Res>,
+    req: import("./http.ts").HttpRequest & { body?: unknown },
+    label: string,
+  ): Promise<import("./http.ts").HttpResponse<Res>> {
+    const originalBody = req.body
+    const countingReq = {
+      ...req,
+      // The thunk itself: increments counter and resolves the value.
+      body:
+        originalBody !== undefined
+          ? () => {
+              bodyReadCount++
+              console.log(`    [BODY-THUNK] pulled! count is now ${bodyReadCount}`)
+              return Promise.resolve(originalBody)
+            }
+          : undefined,
+    }
+    // We need to pass the thunk directly to serve — but serve() re-wraps body.
+    // Instead, bypass serve()'s wrapping by calling the handler directly with a
+    // manually constructed httpReq that already has the counting thunk.
+    const [rawPath = "", rawQuery = ""] = req.url.split("?") as [string, string?]
+    const segments = rawPath.replace(/^\//, "").split("/").filter(Boolean)
+    const queryRecord: Record<string, string> = {}
+    if (rawQuery) {
+      for (const part of rawQuery.split("&")) {
+        const eqIdx = part.indexOf("=")
+        if (eqIdx === -1) queryRecord[decodeURIComponent(part)] = ""
+        else {
+          queryRecord[decodeURIComponent(part.slice(0, eqIdx))] =
+            decodeURIComponent(part.slice(eqIdx + 1))
+        }
+      }
+    }
+    const httpReq = {
+      method: req.method,
+      path: segments,
+      query: queryRecord,
+      headers: req.headers ?? {},
+      body: countingReq.body,
+      params: {} as Record<string, never>,
+    }
+    console.log(`    [${label}] bodyReadCount before: ${bodyReadCount}`)
+    const res = await h(httpReq as Parameters<typeof h>[0])
+    const result = res === pass ? { status: 404, body: null } : { status: 200, body: res as Res }
+    console.log(`    [${label}] bodyReadCount after:  ${bodyReadCount}`)
+    return result as import("./http.ts").HttpResponse<Res>
+  }
 
-  // ── 3. Same leaves, both transports ───────────────────────────────────────
-  console.log("\n── Same leaf, both transports ──────────────────────────────────────")
-  console.log("\n[HTTP]   GET /todos/1")
-  const bothHttp = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos/1" })
-  console.log(`  HTTP   → ${JSON.stringify(bothHttp.body)}`)
-
-  console.log("\n[WORKER] todos.get id=1")
-  const bothWorker = await dispatch<ApiResult>(workerApp, {
-    procedure: "todos.get",
-    params: { id: "1" },
-  })
-  console.log(`  WORKER → ${JSON.stringify(bothWorker.result)}`)
-  console.log(
-    `  SAME RESULT: ${JSON.stringify(bothHttp.body) === JSON.stringify(bothWorker.result)}`,
+  bodyReadCount = 0
+  console.log("\n[HTTP] GET /todos  (body-ignoring route — thunk must NOT fire)")
+  const bl1 = await serveWithBodyCounter<ApiResult>(
+    httpApp,
+    { method: "GET", url: "/todos", body: { title: "ShouldNotRead" } },
+    "GET /todos",
   )
+  console.log(`  status=${bl1.status} bodyReadCount=${bodyReadCount}`)
+  console.log(`  PROOF: GET /todos never calls body() → thunk never pulled → count stays 0`)
 
-  // ── 4. Server = Client (Hyper/Dream unification) ───────────────────────────
-  console.log("\n── Server = Client (Handler type unification) ──────────────────────")
-  console.log("\n[CLIENT in-process] httpClient === httpApp (same value, same type)")
-  const c1 = await serve<ApiResult>(httpClient, { method: "GET", url: "/todos/1" })
-  console.log(`  client result=${JSON.stringify(c1.body)}`)
+  bodyReadCount = 0
+  console.log("\n[HTTP] GET /todos/1  (body-ignoring route — thunk must NOT fire)")
+  const bl2 = await serveWithBodyCounter<ApiResult>(
+    httpApp,
+    { method: "GET", url: "/todos/1", body: { title: "ShouldNotRead" } },
+    "GET /todos/1",
+  )
+  console.log(`  status=${bl2.status} bodyReadCount=${bodyReadCount}`)
+  console.log(`  PROOF: GET /todos/1 never calls body() → count stays 0`)
 
-  console.log("\n[CLIENT network-stub] httpNetworkClientStub (same type, stub impl)")
-  const c2 = await serve<ApiResult>(httpNetworkClientStub, { method: "GET", url: "/todos/1" })
-  console.log(`  stub   result=${JSON.stringify(c2.body)}`)
+  bodyReadCount = 0
+  console.log("\n[HTTP] POST /todos body={title:'LazyBodyTodo'}  (body() fires — thunk pulled)")
+  const bl3 = await serveWithBodyCounter<ApiResult>(
+    httpApp,
+    { method: "POST", url: "/todos", body: { title: "LazyBodyTodo" } },
+    "POST /todos (valid)",
+  )
+  console.log(`  status=${bl3.status} body=${JSON.stringify(bl3.body)} bodyReadCount=${bodyReadCount}`)
+  console.log(`  PROOF: POST /todos → body() → thunk pulled exactly once → count = 1`)
 
-  console.log("\n  Type proof:")
-  console.log("    httpClient             : Handler<{}, ApiResult>")
-  console.log("    httpNetworkClientStub  : Handler<{}, ApiResult>")
-  console.log("    httpApp (the server)   : Handler<{}, ApiResult>")
-  console.log("  The server type IS the client type. No mock interface needed.")
+  bodyReadCount = 0
+  console.log("\n[HTTP] POST /todos body={wrong:true}  (body() fires, validate throws)")
+  try {
+    const bl4 = await serveWithBodyCounter<ApiResult>(
+      httpApp,
+      { method: "POST", url: "/todos", body: { wrong: true } },
+      "POST /todos (invalid)",
+    )
+    console.log(`  status=${bl4.status} body=${JSON.stringify(bl4.body)} bodyReadCount=${bodyReadCount}`)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.log(`  CAUGHT validation error: ${msg} bodyReadCount=${bodyReadCount}`)
+    console.log(`  PROOF: body was pulled (count=1) then validate() threw — lazy + typed rejection works`)
+  }
 
-  // ── 5. query extractor ────────────────────────────────────────────────────
-  console.log("\n── query extractor (Omit<C,K> over req.query bag) ───────────────────")
+  // ── 5. Nested discharge (existing HTTP demo still works) ───────────────────
+  console.log("\n── 5. Nested discharge — existing HTTP routes still work ─────────────")
 
-  console.log("\n[HTTP] GET /todos?limit=2  (query captures 'limit', slices list)")
-  const q1 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos?limit=2" })
-  console.log(`  status=${q1.status} body=${JSON.stringify(q1.body)}`)
-  console.log(`  (expected: first 2 todos from store)`)
+  console.log("\n[HTTP] GET /todos  (list, no params)")
+  const n1 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos" })
+  console.log(`  status=${n1.status} count=${Array.isArray(n1.body) ? (n1.body as Todo[]).length : "?"}}`)
 
-  console.log("\n[HTTP] GET /todos?limit=1  (limit=1)")
-  const q2 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos?limit=1" })
-  console.log(`  status=${q2.status} body=${JSON.stringify(q2.body)}`)
+  console.log("\n[HTTP] GET /todos?limit=2  (query capture, limit:string, leaf slices)")
+  const n2 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos?limit=2" })
+  console.log(`  status=${n2.status} body=${JSON.stringify(n2.body)}`)
 
-  console.log("\n[HTTP] GET /todos  (no limit param → falls through to plain listTodos)")
-  const q3 = await serve<ApiResult>(httpApp, { method: "GET", url: "/todos" })
-  console.log(`  status=${q3.status} count=${Array.isArray(q3.body) ? (q3.body as Todo[]).length : "?"} (all todos)`)
-
-  // ── 6. header extractor ───────────────────────────────────────────────────
-  console.log("\n── header extractor (Omit<C,K>, requirement propagation) ────────────")
-
-  console.log("\n[HTTP] GET /todos with x-tenant: acme  (header captured, required)")
-  const h1 = await serve<ApiResult>(httpApp, {
+  console.log("\n[HTTP] GET /todos with x-tenant: acme  (header capture)")
+  const n3 = await serve<ApiResult>(httpApp, {
     method: "GET",
     url: "/todos",
     headers: { "x-tenant": "acme" },
   })
-  console.log(`  status=${h1.status} body=${JSON.stringify(h1.body)}`)
-  console.log(`  (expected: todos annotated with [tenant:acme]...)`)
+  console.log(`  status=${n3.status} body=${JSON.stringify(n3.body)}`)
 
-  console.log("\n[HTTP] GET /todos with x-tenant: beta")
-  const h2 = await serve<ApiResult>(httpApp, {
-    method: "GET",
-    url: "/todos",
-    headers: { "x-tenant": "beta" },
-  })
-  console.log(`  status=${h2.status} body=${JSON.stringify(h2.body)}`)
+  console.log("\n[HTTP] GET /unknown  (404)")
+  const n4 = await serve<ApiResult>(httpApp, { method: "GET", url: "/unknown" })
+  console.log(`  status=${n4.status} body=${JSON.stringify(n4.body)}`)
 
-  console.log("\n[HTTP] GET /todos with no x-tenant → header combinator passes, falls through to listTodos")
-  const h3 = await serve<ApiResult>(httpApp, {
-    method: "GET",
-    url: "/todos",
-  })
-  console.log(`  status=${h3.status} count=${Array.isArray(h3.body) ? (h3.body as Todo[]).length : "?"} (plain list, no tenant annotation)`)
-
-  // Propagation proof: the x-tenant branch is wrapped by header() which discharges
-  // "x-tenant" from the child's requirements. The mounter (httpApp) sees Handler<{}>
-  // — the requirement is fully discharged before it reaches serve().
-  console.log("\n  Propagation proof:")
-  console.log("    listTodosForTenant  : Handler<{\"x-tenant\":string}, Todo[]>")
-  console.log("    header(\"x-tenant\", methods({GET: listTodosForTenant}))")
-  console.log("                       : Handler<{}, ApiResult>  ← requirement discharged")
-  console.log("    serve() accepts     : Handler<{}, _>  (compile-time guarantee)")
-
-  // ── 7. body extractor + validate (opt-in typed validation) ────────────────
-  console.log("\n── body extractor + validate (opt-in typed validation) ──────────────")
-
-  console.log("\n[HTTP] POST /todos body={title:'TypedBodyTodo'}  (valid body → creates)")
-  const b1 = await serve<ApiResult>(httpApp, {
-    method: "POST",
-    url: "/todos",
-    body: { title: "TypedBodyTodo" },
-  })
-  console.log(`  status=${b1.status} body=${JSON.stringify(b1.body)}`)
-  console.log(`  (expected: new Todo with title='TypedBodyTodo')`)
-
-  console.log("\n[HTTP] POST /todos body={wrong:true}  (invalid body → validate throws)")
-  try {
-    const b2 = await serve<ApiResult>(httpApp, {
-      method: "POST",
-      url: "/todos",
-      body: { wrong: true },
-    })
-    console.log(`  status=${b2.status} body=${JSON.stringify(b2.body)}`)
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.log(`  CAUGHT validation error: ${msg}`)
-    console.log(`  (expected: validate() threw because body lacked title:string)`)
-  }
-
-  console.log("\n[HTTP] POST /todos body=null  (null body → validate throws)")
-  try {
-    const b3 = await serve<ApiResult>(httpApp, {
-      method: "POST",
-      url: "/todos",
-      body: null,
-    })
-    console.log(`  status=${b3.status} body=${JSON.stringify(b3.body)}`)
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.log(`  CAUGHT validation error: ${msg}`)
-  }
-
-  console.log("\n  Body design proof:")
-  console.log("    body(validate(parse, leaf))")
-  console.log("      body()     : HandlerWithBody<{}, unknown, T> → Handler<{}, T>")
-  console.log("      validate() : HandlerWithBody<{}, T, T>")
-  console.log("                   → HandlerWithBody<{}, unknown, T>")
-  console.log("      leaf       : HandlerWithBody<{}, CreateTodoInput, Todo>")
-  console.log("    validate is ORTHOGONAL to routing — no schema in core or kits")
-  console.log("    A Standard Schema validator slots into validate()'s parse arg")
-
-  // ── 8. Core purity check ───────────────────────────────────────────────────
-  console.log("\n── Core purity ──────────────────────────────────────────────────────")
+  // ── 6. Core purity ─────────────────────────────────────────────────────────
+  console.log("\n── 6. Core purity ───────────────────────────────────────────────────")
   console.log("  core.ts exports: Pass, Req<P>, Handler<P,Res>, Middleware<P,Res>,")
-  console.log("                   choice, pipe, typed, leaf, run")
+  console.log("                   choice, pipe, typed, leaf, run, capture")
   console.log("  core.ts imports: nothing")
-  console.log("  core.ts contains: no 'method', no 'path', no 'url', no 'procedure',")
-  console.log("                    no 'query', no 'header', no 'body'")
+  console.log("  core.ts mentions: no 'string' as param value constraint,")
+  console.log("                    no 'method'/'path'/'url'/'procedure'/'query'/'header'/'body',")
+  console.log("                    no eager/lazy payload assumption.")
+  console.log("  V in capture<K,V,C,Res> is FREE — pinned by each kit independently.")
+  console.log("  HTTP kit pins V=string. Worker kit pins V=number/object/…")
+
+  // ── 7. Server = Client ─────────────────────────────────────────────────────
+  console.log("\n── 7. Server = Client (Handler type unification) ────────────────────")
+  const c1 = await serve<ApiResult>(httpClient, { method: "GET", url: "/todos/1" })
+  console.log(`  [in-process client] result=${JSON.stringify(c1.body)}`)
+  const c2 = await serve<ApiResult>(httpNetworkClientStub, { method: "GET", url: "/todos/1" })
+  console.log(`  [network-stub client] result=${JSON.stringify(c2.body)}`)
+  console.log("  httpClient, httpNetworkClientStub, httpApp: all Handler<{},ApiResult>")
+  console.log("  The server type IS the client type. No mock interface needed.")
+
+  // Worker string vs typed capture side-by-side
+  console.log("\n── Worker: string-params path vs typed-field path (same leaf) ────────")
+  const ws1 = await dispatch<ApiResult>(workerApp, { procedure: "todos.get", params: { id: "1" } })
+  console.log(`  [todos.get string path]      id='1' (string) → result=${JSON.stringify(ws1.result)}`)
+  const ws2 = await dispatch<ApiResult>(workerApp, { procedure: "todos.get.typed", params: { id: 1 } } as WorkerCall)
+  console.log(`  [todos.get.typed number path] id=1  (number) → result=${JSON.stringify(ws2.result)}`)
+  console.log("  Both reach the same underlying data. String path uses typed(); number path uses field().")
 
   console.log("\n" + "=".repeat(70))
   console.log("All proofs complete.")

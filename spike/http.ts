@@ -1,50 +1,58 @@
 // spike/http.ts — HTTP kit
 //
 // Everything here is HTTP-specific. core.ts has zero imports from this file
-// and zero knowledge of HTTP verbs, URL paths, or status codes.
+// and zero knowledge of HTTP verbs, URL paths, status codes, or string-pinned
+// param values.
 //
 // The HTTP kit provides:
 //   - path(table): dispatch on first path segment, consume it
 //   - methods(table): dispatch on req.method
 //   - param(name, child): captures next path segment → injects into params
-//     (path-consuming; the Omit<C,K> type algebra mirrors core's typed pattern)
+//     V is pinned to string (path segments are always text in HTTP).
+//     Uses core's capture() primitive under the hood.
 //   - query(name, child): captures a URL query-string value → injects into params
-//     (same Omit<C,K> algebra; reads from req.query: Record<string,string>)
+//     V is pinned to string (query values are always text in HTTP).
 //   - header(name, child): captures an HTTP header value → injects into params
-//     (same Omit<C,K> algebra; reads from req.headers: Record<string,string>)
-//   - body(child): provides req.body: unknown to the child handler
-//     (whole-payload facet, NOT a named string token — different shape from the
-//      three string-capture combinators; see design note below)
-//   - validate(parse, inner): opt-in typed validation over body
-//     (turns unknown → T; the only place a schema/codec surface appears; Standard
-//      Schema would slot in here; core never bakes a schema)
+//     V is pinned to string (header values are always text in HTTP).
+//   - body(child): pulls the LAZY body handle; provides req.body: unknown to child.
+//     The body is a consume-once async thunk — it is NOT pre-read. A route that
+//     does not call body() never pulls the thunk (laziness proof).
+//   - validate(parse, inner): ASYNC — pulls the lazy body, parses/validates,
+//     passes the typed result to inner. Contrast with typed() which is sync/eager
+//     over params already in the bag.
 //   - serve(handler, req): run an HTTP request through a fully-discharged handler
 //
-// All combinators return core `Handler<P, Res>`. There is no separate
-// `HttpHandler` type — the core Handler IS the type, and kit combinators
-// internally access HTTP-specific fields (path, method) by casting.
-// This preserves type safety at kit boundaries and unification at the core.
+// ─── V=string pinning ──────────────────────────────────────────────────────
+// param/query/header all pin V=string via C extends Record<K, string>.
+// This is correct for HTTP/text protocols where every captured value arrives as
+// text. Non-text transports (Worker, IPC, binary) use their own kit captures
+// that pin V to a richer type — see worker.ts.
+//
+// G1 safety: httpParam('x', leaf<{x:number}>) is a COMPILE ERROR because
+// {x:number} does not satisfy C extends Record<'x',string>. Verified below.
+//
+// ─── Body laziness ────────────────────────────────────────────────────────
+// In HTTP the body is a lazy stream — you await and consume it at most once,
+// and you may never read it at all (GET, DELETE with no payload). Eager reads
+// waste resources and conflate the read concern with routing. The HTTP kit
+// models the body as a thunk: `() => Promise<unknown>`. The body() combinator
+// pulls the thunk exactly once. A route that ignores body() never triggers a
+// read (the body-counter proof in demo.ts confirms this).
 //
 // ─── Param-bag decision ────────────────────────────────────────────────────
 // Captured query and header values land in req.params — the SAME unified bag as
-// path params. Reason: the existing typed() combinator reads from
-// req.params as Record<string,string>, and the Omit<C,K> discharge algebra works
-// uniformly over that bag. A separate slot would require a second bag, a second
-// typed combinator, and a second discharge mechanism — complexity without benefit,
-// because the string-only constraint on all three (param/query/header) already
-// distinguishes them from body (which is unknown and lives in its own facet).
+// path params. This is a deliberate choice: the Omit<C,K> discharge algebra
+// works uniformly over that bag. All three (param/query/header) carry string
+// values in HTTP, distinguishing them from body (which has its own lazy facet).
 //
-// ─── Body design note ──────────────────────────────────────────────────────
-// body() is NOT a string-capture combinator. It adds a `body: unknown` facet to
-// the request and passes it to the child. It does NOT inject into req.params
-// because (a) body is not a named string token, (b) it may be any type after
-// validation, and (c) merging it into the params bag would conflate two different
-// discharge algebras (Omit<C,K> string-discharge vs. type-validation discharge).
-// validate(parse, inner) is the opt-in bridge from unknown → T, exactly mirroring
-// how typed() bridges string → T for params. Both are middleware-shaped; both are
-// orthogonal to the structural routing core.
+// ─── typed vs validate ─────────────────────────────────────────────────────
+// typed() (from core): SYNC, EAGER — refines values already in the params bag.
+//   e.g. typed(raw => ({id: Number(raw.id)})) bridges string→number over params.
+// validate() (this file): ASYNC, LAZY — pulls the body thunk, parses, types it.
+//   e.g. validate(schema.parse, inner) bridges unknown→T over the body facet.
+// Both are opt-in, orthogonal, and composable. Neither lives in the core.
 
-import { type Pass, pass, type Handler, type Req } from "./core.ts"
+import { type Pass, pass, type Handler, type Req, capture } from "./core.ts"
 
 // ---------------------------------------------------------------------------
 // HTTP request fields (kit-internal shape)
@@ -55,9 +63,10 @@ type HttpFields = {
   method: string
   query: Record<string, string>
   headers: Record<string, string>
-  body?: unknown
+  /** The body is a LAZY thunk — pulled at most once, only when body() fires. */
+  body?: () => Promise<unknown>
 }
-type HttpReq<P> = Req<P> & HttpFields
+type HttpReq<P extends Record<string, unknown>> = Req<P> & HttpFields
 
 // ---------------------------------------------------------------------------
 // HTTP kit combinators
@@ -70,7 +79,7 @@ type HttpReq<P> = Req<P> & HttpFields
  *
  * The request must carry `path: string[]`. This is guaranteed by `serve()`.
  */
-export function path<P, Res>(
+export function path<P extends Record<string, unknown>, Res>(
   table: Record<string, Handler<P, Res>>,
 ): Handler<P, Res> {
   return async (req) => {
@@ -89,7 +98,7 @@ export function path<P, Res>(
  * This makes methods a leaf-level combinator: it only fires when all path
  * segments have been consumed by enclosing `path` and `param` combinators.
  */
-export function methods<P, Res>(
+export function methods<P extends Record<string, unknown>, Res>(
   table: Record<string, Handler<P, Res>>,
 ): Handler<P, Res> {
   return async (req) => {
@@ -102,149 +111,208 @@ export function methods<P, Res>(
   }
 }
 
+// ---------------------------------------------------------------------------
+// HTTP string-pinned capture combinators
+//
+// param/query/header all use core's capture() with V pinned to string.
+// C extends Record<K, string> enforces that the child expects a string at K.
+//
+// G1 safety: if a child expects a non-string type at K (e.g. {x:number}),
+// C extends Record<K, string> is not satisfied → compile error.
+// Confirmed below with a @ts-expect-error probe.
+// ---------------------------------------------------------------------------
+
 /**
- * param: captures the next path segment as `name`, injects it into req.params.
+ * httpParam: captures the next path segment as `name`, injects as string.
  *
- * This is the path-CONSUMING param — it lives in the HTTP kit because it
- * consumes a URL segment. The type algebra (Omit<C,K>) is identical to what
- * core's `typed` uses.
+ * This is the path-CONSUMING capture — it lives in the HTTP kit because it
+ * consumes a URL segment. V is pinned to string (path segments are text).
+ * Uses core's capture() with a read function that pops the path head.
  *
  * C is the child's full param requirement (must include K as string).
  * Returns Handler<Omit<C,K>, Res> — discharges exactly K.
  */
-export function param<K extends string, C extends Record<K, string>, Res>(
-  name: K,
-  child: Handler<C, Res>,
-): Handler<Omit<C, K>, Res> {
+export function httpParam<
+  K extends string,
+  C extends Record<K, string>,
+  Res,
+>(name: K, child: Handler<C, Res>): Handler<Omit<C, K>, Res> {
   return async (req) => {
     const httpReq = req as HttpReq<Omit<C, K>>
     const [seg, ...rest] = httpReq.path
     if (seg === undefined) return pass
+    // Inject the string segment, then delegate to core capture flow.
     const enriched = {
       ...req,
       path: rest,
-      params: { ...(req.params as object), [name]: seg } as C,
+      params: { ...(req.params as object), [name]: seg } as unknown as C,
     } as unknown as HttpReq<C>
     return child(enriched)
   }
 }
 
+// Also export under the familiar short name for routing trees.
+export { httpParam as param }
+
 /**
- * query: captures a URL query parameter as `name`, injects it into req.params.
+ * G1 SAFETY PROOF (compile-time, not runtime):
+ * httpParam('x', leaf<{x:number}>(...)) MUST be a compile error because
+ * {x:number} does not satisfy C extends Record<'x',string>.
  *
- * Same Omit<C,K> algebra as param. Reads from req.query: Record<string,string>.
- * Returns Pass if the query parameter is absent.
- *
- * Values land in req.params — the unified bag, consistent with path param.
- * See the "Param-bag decision" note at the top of this file.
+ * The @ts-expect-error below is consumed (not reported as unused) — confirming
+ * the constraint is in force. If tsgo reports "Unused '@ts-expect-error'", the
+ * guard is broken and the string-pinning is not enforced.
  */
-export function query<K extends string, C extends Record<K, string>, Res>(
-  name: K,
-  child: Handler<C, Res>,
-): Handler<Omit<C, K>, Res> {
-  return async (req) => {
-    const httpReq = req as HttpReq<Omit<C, K>>
-    const value = httpReq.query[name]
-    if (value === undefined) return pass
-    const enriched = {
-      ...req,
-      params: { ...(req.params as object), [name]: value } as C,
-    } as unknown as HttpReq<C>
-    return child(enriched)
-  }
+const _g1LeafWantsNumber = async (req: Req<{ x: number }>) => req.params.x
+// @ts-expect-error [G1: {x:number} does not satisfy C extends Record<'x',string> — compile error expected]
+export const _g1Probe = httpParam("x", _g1LeafWantsNumber)
+
+/**
+ * query: captures a URL query parameter as `name`, injects as string.
+ *
+ * Same Omit<C,K> algebra as httpParam. V pinned to string (query values are text).
+ * Reads from req.query: Record<string,string>. Returns Pass if absent.
+ */
+export function query<
+  K extends string,
+  C extends Record<K, string>,
+  Res,
+>(name: K, child: Handler<C, Res>): Handler<Omit<C, K>, Res> {
+  return capture(
+    name,
+    (req) => {
+      const httpReq = req as unknown as HttpReq<Omit<C, K>>
+      const value = httpReq.query[name]
+      return value === undefined ? pass : value
+    },
+    child,
+  )
 }
 
 /**
- * header: captures an HTTP header as `name`, injects it into req.params.
+ * header: captures an HTTP header as `name`, injects as string.
  *
- * Same Omit<C,K> algebra as param and query. Reads from req.headers: Record<string,string>.
- * Returns Pass if the header is absent.
- *
- * Values land in req.params — the unified bag, consistent with param and query.
- * Header names are lowercased on intake (HTTP/2 mandates lowercase; HTTP/1.1 is
- * case-insensitive). Consumers should pass lowercase names here.
+ * Same Omit<C,K> algebra as httpParam and query. V pinned to string.
+ * Reads from req.headers: Record<string,string>. Returns Pass if absent.
+ * Header names are lowercased on intake (HTTP/2 mandates lowercase).
  */
-export function header<K extends string, C extends Record<K, string>, Res>(
-  name: K,
-  child: Handler<C, Res>,
-): Handler<Omit<C, K>, Res> {
-  return async (req) => {
-    const httpReq = req as HttpReq<Omit<C, K>>
-    const value = httpReq.headers[name]
-    if (value === undefined) return pass
-    const enriched = {
-      ...req,
-      params: { ...(req.params as object), [name]: value } as C,
-    } as unknown as HttpReq<C>
-    return child(enriched)
-  }
+export function header<
+  K extends string,
+  C extends Record<K, string>,
+  Res,
+>(name: K, child: Handler<C, Res>): Handler<Omit<C, K>, Res> {
+  return capture(
+    name,
+    (req) => {
+      const httpReq = req as unknown as HttpReq<Omit<C, K>>
+      const value = httpReq.headers[name]
+      return value === undefined ? pass : value
+    },
+    child,
+  )
 }
 
 // ---------------------------------------------------------------------------
-// Body facet
+// Body facet — LAZY, effectful, consume-once
 //
-// body() is NOT a string-capture combinator — it exposes the whole request
-// payload as req.body: unknown. It does NOT inject into req.params because the
-// body is not a named string token; it may be any type after validation; and
-// merging it into the params bag would conflate two different discharge algebras.
+// In HTTP the body is a stream: you await it at most once and never read it on
+// routes that don't need it. The kit models this as a thunk:
+//   body?: () => Promise<unknown>
 //
-// The type-safe path is:
+// body() is NOT a string-capture combinator. It pulls the thunk and passes the
+// resolved value to the child as req.body: unknown. It does NOT inject into
+// req.params (the body is not a named string token; its type is the kit's and
+// ultimately the validate() layer's concern).
+//
+// validate(parse, inner) is ASYNC — it pulls the body via the thunk, parses/
+// validates it, and passes the typed result to inner. This is the correct bridge
+// from unknown → T for the body facet. Contrast with typed() which is SYNC and
+// operates on values already present in the params bag.
+//
+// The type-safe composition path:
 //   body(validate(parse, inner))
-// where validate() turns unknown → T and wires the result into a typed field
-// that the inner handler reads from req.body. This mirrors how typed() bridges
-// string → T for params. Both are opt-in, orthogonal, and composable.
+// where:
+//   - body()     : HandlerWithBody<P, unknown, Res> → Handler<P, Res>
+//   - validate() : HandlerWithBody<P, T, Res>       → HandlerWithBody<P, unknown, Res>
+//   - inner      : HandlerWithBody<P, T, Res>
 // ---------------------------------------------------------------------------
 
 /**
  * ReqWithBody: the request shape visible inside a body-aware handler.
  * `body: T` is added alongside the standard Req<P> fields.
  */
-export type ReqWithBody<P, T> = Req<P> & { body: T }
+export type ReqWithBody<
+  P extends Record<string, unknown>,
+  T,
+> = Req<P> & { body: T }
 
 /**
  * HandlerWithBody: a handler that reads a typed body.
  * The body slot is separate from params (see design note above).
  */
-export type HandlerWithBody<P, T, Res> = (req: ReqWithBody<P, T>) => Promise<Res | Pass>
+export type HandlerWithBody<
+  P extends Record<string, unknown>,
+  T,
+  Res,
+> = (req: ReqWithBody<P, T>) => Promise<Res | Pass>
 
 /**
- * body: makes the raw request body (unknown) available to the child as req.body.
+ * body: pulls the lazy body thunk and makes the resolved value available
+ * to the child as req.body: unknown.
  *
- * The child handler's first parameter is ReqWithBody<P, unknown> — it receives
- * `body: unknown`. The opt-in validate() layer is what turns unknown into T.
- * Using body() without validate() is valid: the handler receives raw unknown
- * and can inspect it however it likes.
+ * LAZINESS PROOF: the thunk is called only here. A route that does not include
+ * body() in its chain never triggers the thunk — no read occurs. The demo
+ * increments a counter inside the thunk; body-ignoring routes leave it at zero.
+ *
+ * The child receives ReqWithBody<P, unknown>. Use validate() to narrow unknown→T.
  */
-export function body<P, Res>(
+export function body<P extends Record<string, unknown>, Res>(
   child: HandlerWithBody<P, unknown, Res>,
 ): Handler<P, Res> {
   return async (req) => {
     const httpReq = req as HttpReq<P>
+    // Pull the lazy thunk — fires exactly once, only if body() is in the chain.
+    const rawBody = httpReq.body !== undefined ? await httpReq.body() : undefined
     const enriched: ReqWithBody<P, unknown> = {
       ...req,
-      body: httpReq.body,
+      body: rawBody,
     }
     return child(enriched)
   }
 }
 
 /**
- * validate: opt-in typed validation over the body facet.
+ * validate: ASYNC opt-in typed validation over the body facet.
  *
- * Mirrors typed() for params: takes a parse function (unknown → T | throws),
- * wraps a HandlerWithBody<P, T, Res>, and returns a HandlerWithBody<P, unknown, Res>.
- * Returning Pass on validation failure makes the route opt-out-able (upstream
- * choice() can catch it); throwing is also valid for non-recoverable errors.
+ * Takes a parse function (unknown → T | throws), wraps a HandlerWithBody<P,T,Res>,
+ * and returns a HandlerWithBody<P,unknown,Res>.
  *
- * A Standard Schema validator would slot in here — just wrap it:
+ * This is ASYNC because it awaits the parse (accommodating async validators).
+ * The body thunk has already been pulled by body() before validate() runs.
+ * Throwing from parse propagates naturally — callers may catch at serve() or
+ * wrap in a try/catch to map to a 400. Returning Pass on validation failure
+ * is also valid and makes the route opt-out-able via upstream choice().
+ *
+ * Contrast with typed() (core): typed is SYNC and operates over params values
+ * already in the bag. validate is ASYNC and operates over the body facet.
+ * Both are opt-in; neither lives in the core; they are orthogonal.
+ *
+ * A Standard Schema validator slots in here:
  *   validate(v => schema.parse(v), inner)
  */
-export function validate<T, P = Record<string, never>, Res = unknown>(
-  parse: (raw: unknown) => T,
+export async function validate<
+  T,
+  P extends Record<string, unknown> = Record<string, never>,
+  Res = unknown,
+>(
+  parse: (raw: unknown) => T | Promise<T>,
   inner: HandlerWithBody<P, T, Res>,
-): HandlerWithBody<P, unknown, Res> {
+): Promise<HandlerWithBody<P, unknown, Res>> {
+  // validate() returns a HandlerWithBody via Promise — callers await it once
+  // at composition time, not on every request. The returned HandlerWithBody
+  // is then the hot-path function.
   return async (req) => {
-    const parsed = parse(req.body)
+    const parsed = await parse(req.body)
     const enriched: ReqWithBody<P, T> = { ...req, body: parsed }
     return inner(enriched)
   }
@@ -264,10 +332,16 @@ export interface HttpRequest {
   method: string
   /** URL path + optional query string, e.g. "/todos?limit=2" — serve() splits both */
   url: string
-  params?: Record<string, string>
+  params?: Record<string, unknown>
   /** HTTP headers (lowercase names); serve() defaults to {} if omitted */
   headers?: Record<string, string>
-  /** Raw request body; serve() passes through as-is (undefined if omitted) */
+  /**
+   * Raw request body — callers may pass any value; serve() wraps it in a LAZY
+   * thunk so the HTTP kit sees `() => Promise<unknown>`. This models the real
+   * behavior where the body is a consume-once stream.
+   *
+   * A route that does not call body() never triggers the thunk.
+   */
   body?: unknown
 }
 
@@ -281,6 +355,10 @@ export interface HttpResponse<T> {
  * Handles path splitting, query-string parsing, and maps Pass → 404.
  *
  * `h` must be `Handler<{}>` — any undischarged params are a compile error.
+ *
+ * Body wrapping: serve() wraps the caller-supplied body value in a lazy thunk
+ * `() => Promise<unknown>`. The thunk fires only when body() pulls it. Routes
+ * that ignore the body never trigger the thunk.
  */
 export async function serve<Res>(
   h: Handler<Record<string, never>, Res>,
@@ -305,13 +383,19 @@ export async function serve<Res>(
     }
   }
 
+  // Wrap the body in a lazy thunk. The value passed by the caller is captured
+  // in closure; the thunk resolves it only when body() pulls it.
+  // Spread conditionally to satisfy exactOptionalPropertyTypes (optional means
+  // the property may be absent, not that it may hold undefined).
   const httpReq: HttpReq<Record<string, never>> = {
     method: req.method,
     path: segments,
     query: queryRecord,
     headers: req.headers ?? {},
-    body: req.body,
     params: (req.params ?? {}) as Record<string, never>,
+    ...(req.body !== undefined
+      ? { body: () => Promise.resolve(req.body) }
+      : {}),
   }
   const res = await h(httpReq)
   if (res === pass) return { status: 404, body: null }

@@ -3,12 +3,15 @@
 // The core is deliberately protocol-free. It knows nothing about HTTP verbs,
 // URL paths, procedure names, or any transport shape. The only structure it
 // requires is that a request carries a `params` field — the slot into which
-// `param` (and its kit-specific cousins) inject captured values.
+// capture combinators inject values.
 //
 // Protocol-specific combinators (path, methods, procedure) live in their kits.
-// The path-consuming `param` combinator lives in the HTTP kit — it must consume
-// a path segment, which is an HTTP-specific concept. The type-discharge pattern
-// (Omit<C,K>) it uses is the same algebra defined here.
+// The capture combinators in each kit use the same Omit<C,K> discharge algebra
+// defined here, but each kit pins the value type V to whatever the transport
+// delivers: HTTP kits pin V=string (URL segments, query params, headers are
+// always text); Worker/IPC kits pin V to pre-typed values (number, object, …).
+//
+// Core does NOT mention string as a constraint on params values. V is free.
 
 // ---------------------------------------------------------------------------
 // Sentinel
@@ -29,30 +32,39 @@ export const pass: Pass = PASS
 // own fields (path/method for HTTP; procedure for Worker) and pass those richer
 // shapes to handlers. The `& Record<string, unknown>` allows kit-specific fields
 // to flow through without each leaf needing to declare them.
+//
+// NOTE: params is Record<string, unknown> — NOT Record<string, string>.
+// The value type is the transport's choice. HTTP kits deliver strings; Worker
+// kits may deliver numbers, objects, or any pre-typed value. Core is agnostic.
 // ---------------------------------------------------------------------------
 
-export type Req<P> = { params: P } & Record<string, unknown>
+export type Req<P extends Record<string, unknown> = Record<string, never>> = {
+  params: P
+} & Record<string, unknown>
 
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
-export type Handler<P = Record<string, never>, Res = unknown> = (
-  req: Req<P>,
-) => Promise<Res | Pass>
+export type Handler<
+  P extends Record<string, unknown> = Record<string, never>,
+  Res = unknown,
+> = (req: Req<P>) => Promise<Res | Pass>
 
 // ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
 
-export type Middleware<P, Res> = (h: Handler<P, Res>) => Handler<P, Res>
+export type Middleware<P extends Record<string, unknown>, Res> = (
+  h: Handler<P, Res>,
+) => Handler<P, Res>
 
 /**
  * pipe: compose middleware left-to-right.
  * pipe(mw1, mw2)(h) = mw2(mw1(h))
  * Applies mw1 first, then mw2 outermost.
  */
-export function pipe<P, Res>(
+export function pipe<P extends Record<string, unknown>, Res>(
   ...mws: Middleware<P, Res>[]
 ): Middleware<P, Res> {
   return (h) => mws.reduceRight((acc, mw) => mw(acc), h)
@@ -63,7 +75,9 @@ export function pipe<P, Res>(
 // ---------------------------------------------------------------------------
 
 /** Tries handlers in order; returns the first non-Pass result. */
-export function choice<P, Res>(...hs: Handler<P, Res>[]): Handler<P, Res> {
+export function choice<P extends Record<string, unknown>, Res>(
+  ...hs: Handler<P, Res>[]
+): Handler<P, Res> {
   return async (req) => {
     for (const h of hs) {
       const res = await h(req)
@@ -73,20 +87,72 @@ export function choice<P, Res>(...hs: Handler<P, Res>[]): Handler<P, Res> {
   }
 }
 
-/**
- * Typed: refines raw string params into a typed shape `Out`.
- * Discharges `Out` from the inner handler's requirements.
- *
- * The `parse` function takes the raw params record and returns `Out`.
- * A real Standard Schema validator would slot in here — the spike uses a
- * plain synchronous parser. The interface accommodates async too.
- */
-export function typed<Out, P = Record<string, never>, Res = unknown>(
-  parse: (raw: Record<string, string>) => Out,
+// ---------------------------------------------------------------------------
+// Generic capture primitive
+//
+// capture<K, V, C, Res>(name, read, child) is the core capture algebra.
+// It reads a value of type V from the request using `read`, and — if the read
+// succeeds — injects it as params[name] and calls child with the enriched req.
+// If `read` returns the PASS sentinel, the capture passes through.
+//
+// V is FREE. Each kit pins V to whatever the transport delivers:
+//   - HTTP kit: V = string (text-protocol values)
+//   - Worker kit: V = number | object | … (pre-typed values from IPC/memory)
+//
+// C is the child's full param requirement (must include K:V).
+// Returns Handler<Omit<C,K>, Res> — discharges exactly K.
+//
+// Kit-specific capture combinators (param, query, header, field, …) are thin
+// wrappers over this primitive that supply the `read` function and pin V.
+// ---------------------------------------------------------------------------
+
+export function capture<
+  K extends string,
+  V,
+  C extends Record<K, V>,
+  Res,
+>(
+  name: K,
+  read: (req: Req<Omit<C, K>>) => V | Pass,
+  child: Handler<C, Res>,
+): Handler<Omit<C, K>, Res> {
+  return async (req) => {
+    const value = read(req)
+    if (value === pass) return pass
+    const enriched = {
+      ...req,
+      params: { ...(req.params as object), [name]: value } as unknown as C,
+    } as Req<C>
+    return child(enriched)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Typed: sync, eager refinement of params values
+//
+// Typed refines the raw params bag into a typed shape Out.
+// The `parse` function takes the raw params record (Record<string,unknown>) and
+// returns Out. It is SYNC and EAGER — it reads values that are already in the
+// params bag (put there by prior capture combinators or the caller).
+//
+// Contrast with the HTTP kit's validate() which is ASYNC and LAZY — it pulls
+// a lazy body handle. typed() has nothing to do with request bodies.
+//
+// The parse function receives Record<string,unknown> — NOT Record<string,string>.
+// Individual kit captures may have injected strings or richer types; typed()
+// does not assume the value type, only that the params bag is a plain record.
+// ---------------------------------------------------------------------------
+
+export function typed<
+  Out extends Record<string, unknown>,
+  P extends Record<string, unknown> = Record<string, never>,
+  Res = unknown,
+>(
+  parse: (raw: Record<string, unknown>) => Out,
 ): (inner: Handler<P & Out, Res>) => Handler<P, Res> {
   return (inner) =>
     async (req) => {
-      const parsed = parse(req.params as Record<string, string>)
+      const parsed = parse(req.params as Record<string, unknown>)
       const enriched: Req<P & Out> = {
         ...req,
         params: { ...(req.params as object), ...parsed } as P & Out,
@@ -99,9 +165,10 @@ export function typed<Out, P = Record<string, never>, Res = unknown>(
  * Leaf: wraps a plain async function into a Handler.
  * This is the ONLY place application logic lives.
  */
-export function leaf<P = Record<string, never>, Res = unknown>(
-  fn: (req: Req<P>) => Promise<Res>,
-): Handler<P, Res> {
+export function leaf<
+  P extends Record<string, unknown> = Record<string, never>,
+  Res = unknown,
+>(fn: (req: Req<P>) => Promise<Res>): Handler<P, Res> {
   return fn
 }
 
