@@ -2,23 +2,14 @@
   "name": "@rhi-zone/fractal-example-todo-api",
   "version": "0.0.0",
   "private": true,
-  "description": "End-to-end example: Bun server + fetch client transport",
+  "description": "Example todo API using fractal-core + fractal-http",
   "type": "module",
   "scripts": {
     "typecheck":  "tsgo --noEmit",
-    "test":       "bun test",
-    "test:watch": "vitest",
-    "openapi":    "bun run src/generate-openapi.ts"
+    "test":       "bun test"
   },
   "dependencies": {
-    "@standard-schema/spec":         "^1.1.0",
-    "@rhi-zone/fractal-core":            "workspace:*",
-    "@rhi-zone/fractal-standard-schema": "workspace:*",
-    "@rhi-zone/fractal-transport":   "workspace:*",
-    "@rhi-zone/fractal-channel-http": "workspace:*",
-    "@rhi-zone/fractal-codec-json":  "workspace:*"
-  },
-  "devDependencies": {
-    "vitest": "^2.0.0"
+    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-http":  "workspace:*"
   }
 }

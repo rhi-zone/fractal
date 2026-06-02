@@ -1,0 +1,30 @@
+{
+  "name": "@rhi-zone/fractal-worker",
+  "version": "0.1.0-alpha.0",
+  "description": "Worker / in-process kit for fractal — procedure, field, dispatch",
+  "type": "module",
+  "main": "./dist/worker.umd.cjs",
+  "module": "./dist/worker.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types":   "./dist/index.d.ts",
+      "import":  "./dist/worker.js",
+      "require": "./dist/worker.umd.cjs"
+    }
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@rhi-zone/fractal-core": "workspace:*"
+  },
+  "scripts": {
+    "dev":        "vite build --watch",
+    "build":      "vite build && tsgo --emitDeclarationOnly",
+    "typecheck":  "tsgo --noEmit",
+    "test":       "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "devDependencies": {
+    "vite":   "^6.0.0"
+  }
+}

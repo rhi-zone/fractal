@@ -1,107 +1,79 @@
 # fractal — TODO
 
-## State (verified against repo, 2026-05-31)
+## State (verified against repo, 2026-06-02)
 
-Bun-workspaces monorepo, `@rhi-zone` scope, vite + tsgo + vitest, normalize,
+Bun-workspaces monorepo, `@rhi-zone` scope, vite + tsgo + vitest/bun-test, normalize,
 VitePress docs. **Entirely local — no remote, not pushed.**
 
-### Package inventory (`packages/`)
+### Package inventory (`packages/` + `examples/`)
 
-11 published packages + 1 private internal test package:
+3 published packages + 1 private example:
 
 | Package | Status |
 |---|---|
-| `core` (`@rhi-zone/fractal-core`) | Built & green |
-| `transport` (`@rhi-zone/fractal-transport`) | Built & green |
-| `codec-json` | Built & green |
-| `codec-structured-clone` | Built & green |
-| `protocol-correlation` | Built & green |
-| `channel-http` | Built & green |
-| `channel-websocket` | Built & green |
-| `channel-worker` | Built & green |
-| `channel-stdio` | Built & green |
-| `preset-websocket` | Built & green |
-| `standard-schema` (`@rhi-zone/fractal-standard-schema`) | Built & green |
-| `transport-conformance` (`@rhi-zone/fractal-transport-conformance`) | **Private, unpublished** — transport-agnosticism conformance tests only |
+| `core` (`@rhi-zone/fractal-core`) | Handler model — Built & green |
+| `http` (`@rhi-zone/fractal-http`) | HTTP kit — Built & green |
+| `worker` (`@rhi-zone/fractal-worker`) | Worker/in-process kit — Built & green |
+| `examples/todo-api` (`@rhi-zone/fractal-example-todo-api`) | Private example — green |
 
-### Build tiers (manual, topological)
+**Retired (deleted):** `transport`, `codec-json`, `codec-structured-clone`,
+`protocol-correlation`, `channel-http`, `channel-websocket`, `channel-worker`,
+`channel-stdio`, `preset-websocket`, `transport-conformance`, `standard-schema`.
+These packages implemented the transport × codec × channel architecture and
+the node-IR-based OpenAPI/JSON-Schema projection. All superseded by the Handler model.
 
-Root `build` script sequences manually: `core` → `transport` → codecs/protocol
-(parallel) → channels (parallel) → `preset-websocket` → `standard-schema`/examples.
-Holding fine at current dep-graph depth; revisit if it grows.
+### Build ordering
+
+Root `build` script: `core` first (downstream dep), then `http` + `worker` in parallel.
 
 ### What is built
 
-**Node algebra (`fractal-core`):**
-- 4 primitives: leaf, branch, annotate (capabilities), seq (`.then`/`.pipe` chain)
-- Streaming leaves via `AsyncIterable` with cancellation
-- `UClient` typed-client derivation
-- Self-describing capabilities (each carries its own injected error + required handle)
-- Gradual typing: untyped → unknown
-- Laws property-tested via a deterministic sampler (fast-check not yet installed)
+**Handler core (`fractal-core`):**
+- `Pass`/`pass` sentinel (unique symbol)
+- `Req<P>`, `Handler<P,Res>`, `Middleware<P,Res>`
+- `choice`, `pipe`, `capture` (generic in V), `typed` (sync, eager params refinement), `leaf`, `run`
+- Full compile-time param-discharge algebra (tests A–I from spike/routing.ts)
 
-**Transport layer (`fractal-transport` + per-axis packages):**
-- Kernel: interfaces + `compose` / `attach` / `composeRequestResponse` /
-  `serveExchange` + dispatcher + `clientOver`
-- Codecs: `codec-json`, `codec-structured-clone`
-- Protocol: `protocol-correlation` (duplex correlation)
-- Channels: `channel-websocket`, `channel-worker`, `channel-stdio`, `channel-http`
-- Preset: `preset-websocket` (`serveWs` / `wsClient` convenience over bare `compose`)
-- Proven: transport-agnosticism (identical Results over HTTP/WS/worker/stdio),
-  full streaming + cancel + per-call meta, reserved seams for Cap'n Proto codec
-  and JSON-RPC protocol (type-verified to compose with zero core changes),
-  runtime-agnostic (Bun + Node 20+)
+**HTTP kit (`fractal-http`):**
+- `path` (segment dispatch, consumes segment)
+- `methods` (verb dispatch, path-exhaustion guard)
+- `param`, `query`, `header` (V=string captures, Omit<C,K> discharge)
+- `body` (lazy thunk handle), `validate` (sync combinator / async per-request handler)
+- `serve` (HttpRequest → HttpResponse, Pass → 404)
+- G1 safety: `param('x', leaf<{x:number}>)` is a compile error (verified)
 
-**`transport-conformance` (private):** Transport-agnosticism conformance tests
-(HTTP / WS / worker / stdio produce identical Results). Not published; devDeps only.
+**Worker kit (`fractal-worker`):**
+- `procedure` (dispatch by procedure name)
+- `field` (generic V, eager already-typed value — no parse step)
+- `dispatch` (WorkerCall → WorkerCallResult, Pass → not-found)
 
-**`standard-schema` (`@rhi-zone/fractal-standard-schema`):** OpenAPI / JSON-Schema
-projection from the inert node tree. Exports `toOpenApi(tree, info)` and
-`toJsonSchema(node, opts)`. Built & green.
+**Intentional test-runner split.** `fractal-http`, `fractal-worker`, and `todo-api`
+run `bun test` (via `bun:test` imports). `fractal-core` runs `vitest run`.
 
 ---
 
 ## Decisions (record to avoid losing context)
 
-- **Composition is core; structure is reflectable; HANDLERS ARE CODE.** Deliberate
-  recorded exception to the ecosystem principle "prefer data over code at every
-  seam" — data at the composition seam, code at the leaf. No serializable
-  handlers, no decl/impl registry.
+- **The Handler model is the architecture.** Protocol-specific combinators (path,
+  methods, param, procedure, field) live in per-transport kits over the abstract
+  core. The core knows nothing about HTTP verbs, URL paths, or procedure names.
 
-- **Capabilities = type-PRESERVING cross-cutting effects** (auth, rate-limiting,
-  logging). Each carries its own injected error + required handle; NO central
-  error map. `seq` = type-CHANGING transforms (input validation lives here, not
-  in capabilities).
+- **V is free in core captures; kits pin it.** HTTP kit pins V=string (text protocol).
+  Worker kit delivers pre-typed values directly (V=number, V=object, …).
 
-- **Transport factors into channel × codec × protocol.** HTTP/WS/worker/stdio
-  are channel instances. Two channel families — duplex (correlation) vs
-  request-response — verified IRREDUCIBLE via a prototype spike; deliberately
-  kept, not a wart.
+- **Body is lazy in HTTP.** The body is a consume-once thunk. `body()` pulls it;
+  routes without `body()` never trigger a read.
 
-- **Streaming = `AsyncIterable`, fully implemented.** Not a carveout or future
-  plan.
+- **`validate` is a sync combinator / async handler.** Building the route tree is
+  synchronous; validate() returns immediately and does async work per-request.
 
-- **Presets only where friction is irreducible.** Principle: "if writing a preset
-  yourself is hard, that's a combinator-power issue — fix the combinator." This
-  caught and fixed one real gap (missing `serveExchange` assembler) before a
-  preset was added.
+- **`typed` is sync and eager over params.** Distinct from `validate` (which is
+  async and operates on the body facet). Both are opt-in; neither lives in core.
 
-- **Naming: descriptive, no misnomers.** Retired: `rpc`, `ipc`, `rpc-dispatch`, `facade`.
-
-- **CapGrant is ONE type, parameterized by the transport-native `Raw`.** `CapGrant<Raw>`
-  (`fractal-transport`) takes a `DispatchRequest<Raw>`, which carries a required `raw: Raw`
-  slot — the typed escape hatch for transport-native extras (HTTP headers/method, …).
-  Grants read native data via `req.raw`. `HttpCapGrant = CapGrant<HttpRequestLike>` is a
-  thin alias for discoverability at HTTP call sites. Each transport threads its native
-  request through `raw` (HTTP: the `HttpRequestLike`; WS/in-process/tests: `undefined`), so
-  the prior `as unknown as` adapter-casting trick in `buildDispatcher`/`adaptGrants`/
-  `serveExchange` — which smuggled HTTP fields onto a lied-about `DispatchRequest` — is gone.
+- **`methods` has the path-exhaustion guard.** Only fires when `path` is empty —
+  prevents false matches at non-leaf positions.
 
 - **Runtime floor: Node 20** (nixpkgs non-EOL).
-
-- **Intentional test-runner split.** `channel-http`, `channel-websocket`,
-  `transport-conformance`, and `todo-api` run `bun test` (via `bun:test` imports)
-  because they boot real Bun servers/streams; all other packages run `vitest run`.
 
 ---
 
@@ -112,48 +84,33 @@ projection from the inert node tree. Exports `toOpenApi(tree, info)` and
 Port one small, representative slice of **the reference consumer app (private)**
 to fractal end-to-end: a few real endpoints with auth + input validation + a
 real use-case call. Compare against its current imperative HTTP route/middleware
-framework backend. Surface gaps (missing capabilities, ergonomic friction, type
-holes).
+framework backend. Surface gaps (missing capabilities, ergonomic friction, type holes).
 
-**NON-INVASIVE** — build a parallel proof; do NOT modify the app's working
-backend.
+**NON-INVASIVE** — build a parallel proof; do NOT modify the app's working backend.
 
-### ~~2. `fractal-standard-schema` implementation~~ DONE
+### 2. OpenAPI projection for the Handler model
 
-`toOpenApi(tree, info)` and `toJsonSchema(node, opts)` are implemented and green.
-The package projects the inert node tree to OpenAPI / JSON Schema documents.
+The new `path`/`methods`/`param` tree is walkable data. A future
+`toOpenApi(handler, info)` projection is structurally possible. This supersedes
+the deleted `standard-schema` package (which projected from the old node IR).
+Standard Schema validator integration into `validate` is also a natural future item.
 
 ### 3. Reactivity-as-a-capability (deferred)
 
 Design and build on the streaming substrate: live queries, invalidation, binding
 to the reactive client library. Requires a reactive client lib to exist first.
 
-### 4. Wire real fast-check property tests
+### 4. Node WebSocket and additional transport kits
 
-The deterministic sampler is the current stand-in. Once `fast-check` is
-installed, port the existing property test scaffolding.
+A WebSocket kit (analogous to the HTTP kit but over WS frames) and/or MCP/CLI kits.
+Build when actually needed.
 
 ### 5. Build ordering
 
 If the dep graph grows significantly, replace the manual tier script with a
 full topological build. Holding fine now.
 
-### 6. Node WebSocket server adapter
-
-`channel-websocket` server side is Bun-native today. Document the BYO-`ws`
-path (`wsServerChannel`) or provide a Node adapter.
-
-### 7. Streaming-through-seq
-
-Stream as a non-tail operand / map-over-stream. Reserved, not built.
-
-### 8. Additional codecs and protocols
-
-Seams are reserved and type-verified to compose. Build when actually needed:
-- Codecs: Cap'n Proto, Protobuf, MessagePack
-- Protocols: JSON-RPC, dbus
-
-### 9. PUBLISH (after dogfood passes)
+### 6. PUBLISH (after dogfood passes)
 
 - Create `github.com/rhi-zone/fractal`, push, set pages/topics/homepage.
 - Ecosystem docs-sync in `~/git/rhizone/github-io` — 7 touchpoints:
@@ -171,7 +128,7 @@ Seams are reserved and type-verified to compose. Build when actually needed:
 
 ## Pointers
 
-- Scaffolding plan + docs-sync detail: `~/.claude/plans/kind-snuggling-codd.md`
 - Commit history: `git log --oneline` in this repo
+- Handler model design: `docs/design/handler-model.md`
 - Ecosystem design principles: `~/git/rhizone/github-io/docs/decisions/throughlines.md`
-- Node algebra / optics direction: `docs/design/optics-direction.md`
+- Node algebra / optics direction (superseded): `docs/design/optics-direction.md`

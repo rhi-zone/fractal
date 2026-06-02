@@ -1,0 +1,30 @@
+{
+  "name": "@rhi-zone/fractal-http",
+  "version": "0.1.0-alpha.0",
+  "description": "HTTP kit for fractal — path, methods, param, query, header, body, validate, serve",
+  "type": "module",
+  "main": "./dist/http.umd.cjs",
+  "module": "./dist/http.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types":   "./dist/index.d.ts",
+      "import":  "./dist/http.js",
+      "require": "./dist/http.umd.cjs"
+    }
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@rhi-zone/fractal-core": "workspace:*"
+  },
+  "scripts": {
+    "dev":        "vite build --watch",
+    "build":      "vite build && tsgo --emitDeclarationOnly",
+    "typecheck":  "tsgo --noEmit",
+    "test":       "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "devDependencies": {
+    "vite":   "^6.0.0"
+  }
+}

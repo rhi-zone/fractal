@@ -13,180 +13,36 @@
       "name": "@rhi-zone/fractal-example-todo-api",
       "version": "0.0.0",
       "dependencies": {
-        "@rhi-zone/fractal-channel-http": "workspace:*",
-        "@rhi-zone/fractal-codec-json": "workspace:*",
         "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-standard-schema": "workspace:*",
-        "@rhi-zone/fractal-transport": "workspace:*",
-        "@standard-schema/spec": "^1.1.0",
-      },
-      "devDependencies": {
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/channel-http": {
-      "name": "@rhi-zone/fractal-channel-http",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-codec-json": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/channel-stdio": {
-      "name": "@rhi-zone/fractal-channel-stdio",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "@rhi-zone/fractal-codec-json": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/channel-websocket": {
-      "name": "@rhi-zone/fractal-channel-websocket",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "@rhi-zone/fractal-codec-json": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-preset-websocket": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/channel-worker": {
-      "name": "@rhi-zone/fractal-channel-worker",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/codec-json": {
-      "name": "@rhi-zone/fractal-codec-json",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/codec-structured-clone": {
-      "name": "@rhi-zone/fractal-codec-structured-clone",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
+        "@rhi-zone/fractal-http": "workspace:*",
       },
     },
     "packages/core": {
       "name": "@rhi-zone/fractal-core",
       "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@standard-schema/spec": "^1.1.0",
-      },
       "devDependencies": {
-        "fast-check": "^4.5.3",
         "vite": "^6.0.0",
         "vitest": "^2.0.0",
       },
     },
-    "packages/preset-websocket": {
-      "name": "@rhi-zone/fractal-preset-websocket",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-channel-websocket": "workspace:*",
-        "@rhi-zone/fractal-codec-json": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/protocol-correlation": {
-      "name": "@rhi-zone/fractal-protocol-correlation",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-transport": "workspace:*",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/standard-schema": {
-      "name": "@rhi-zone/fractal-standard-schema",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@standard-schema/spec": "^1.1.0",
-      },
-      "devDependencies": {
-        "fast-check": "^4.5.3",
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/transport": {
-      "name": "@rhi-zone/fractal-transport",
+    "packages/http": {
+      "name": "@rhi-zone/fractal-http",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
       },
       "devDependencies": {
-        "fast-check": "^4.5.3",
         "vite": "^6.0.0",
-        "vitest": "^2.0.0",
       },
     },
-    "packages/transport-conformance": {
-      "name": "@rhi-zone/fractal-transport-conformance",
-      "devDependencies": {
-        "@rhi-zone/fractal-channel-http": "workspace:*",
-        "@rhi-zone/fractal-channel-stdio": "workspace:*",
-        "@rhi-zone/fractal-channel-websocket": "workspace:*",
-        "@rhi-zone/fractal-channel-worker": "workspace:*",
-        "@rhi-zone/fractal-codec-json": "workspace:*",
-        "@rhi-zone/fractal-codec-structured-clone": "workspace:*",
+    "packages/worker": {
+      "name": "@rhi-zone/fractal-worker",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-protocol-correlation": "workspace:*",
-        "@rhi-zone/fractal-transport": "workspace:*",
-        "vitest": "^2.0.0",
+      },
+      "devDependencies": {
+        "vite": "^6.0.0",
       },
     },
   },
@@ -245,31 +101,13 @@
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
-    "@rhi-zone/fractal-channel-http": ["@rhi-zone/fractal-channel-http@workspace:packages/channel-http"],
-
-    "@rhi-zone/fractal-channel-stdio": ["@rhi-zone/fractal-channel-stdio@workspace:packages/channel-stdio"],
-
-    "@rhi-zone/fractal-channel-websocket": ["@rhi-zone/fractal-channel-websocket@workspace:packages/channel-websocket"],
-
-    "@rhi-zone/fractal-channel-worker": ["@rhi-zone/fractal-channel-worker@workspace:packages/channel-worker"],
-
-    "@rhi-zone/fractal-codec-json": ["@rhi-zone/fractal-codec-json@workspace:packages/codec-json"],
-
-    "@rhi-zone/fractal-codec-structured-clone": ["@rhi-zone/fractal-codec-structured-clone@workspace:packages/codec-structured-clone"],
-
     "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
 
     "@rhi-zone/fractal-example-todo-api": ["@rhi-zone/fractal-example-todo-api@workspace:examples/todo-api"],
 
-    "@rhi-zone/fractal-preset-websocket": ["@rhi-zone/fractal-preset-websocket@workspace:packages/preset-websocket"],
+    "@rhi-zone/fractal-http": ["@rhi-zone/fractal-http@workspace:packages/http"],
 
-    "@rhi-zone/fractal-protocol-correlation": ["@rhi-zone/fractal-protocol-correlation@workspace:packages/protocol-correlation"],
-
-    "@rhi-zone/fractal-standard-schema": ["@rhi-zone/fractal-standard-schema@workspace:packages/standard-schema"],
-
-    "@rhi-zone/fractal-transport": ["@rhi-zone/fractal-transport@workspace:packages/transport"],
-
-    "@rhi-zone/fractal-transport-conformance": ["@rhi-zone/fractal-transport-conformance@workspace:packages/transport-conformance"],
+    "@rhi-zone/fractal-worker": ["@rhi-zone/fractal-worker@workspace:packages/worker"],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.60.4", "", { "os": "android", "cpu": "arm" }, "sha512-F5QXMSiFebS9hKZj02XhWLLnRpJ3B3AROP0tWbFBSj+6kCbg5m9j5JoHKd4mmSVy5mS/IMQloYgYxCuJC0fxEQ=="],
 
@@ -320,8 +158,6 @@
     "@rollup/rollup-win32-x64-gnu": ["@rollup/rollup-win32-x64-gnu@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-DRS4G7mi9lJxqEDezIkKCaUIKCrLUUDCUaCsTPCi/rtqaC6D/jjwslMQyiDU50Ka0JKpeXeRBFBAXwArY52vBw=="],
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-QVTUovf40zgTqlFVrKA1uXMVvU2QWEFWfAH8Wdc48IxLvrJMQVMBRjuQyUpzZCDkakImib9eVazbWlC6ksWtJw=="],
-
-    "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 
@@ -379,8 +215,6 @@
 
     "expect-type": ["expect-type@1.3.0", "", {}, "sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA=="],
 
-    "fast-check": ["fast-check@4.8.0", "", { "dependencies": { "pure-rand": "^8.0.0" } }, "sha512-GOJ158CUMnN6cSahsv4+ExARvIDuzzinFjkp0E9WtiBa5zcVeLozVkWaE4IzFcc+Y48Wp1EDlUZsXRyAztQcSg=="],
-
     "fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" }, "optionalPeers": ["picomatch"] }, "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg=="],
 
     "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
@@ -402,8 +236,6 @@
     "picomatch": ["picomatch@4.0.4", "", {}, "sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A=="],
 
     "postcss": ["postcss@8.5.15", "", { "dependencies": { "nanoid": "^3.3.12", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A=="],
-
-    "pure-rand": ["pure-rand@8.4.0", "", {}, "sha512-IoM8YF/jY0hiugFo/wOWqfmarlE6J0wc6fDK1PhftMk7MGhVZl88sZimmqBBFomLOCSmcCCpsfj7wXASCpvK9A=="],
 
     "rollup": ["rollup@4.60.4", "", { "dependencies": { "@types/estree": "1.0.8" }, "optionalDependencies": { "@rollup/rollup-android-arm-eabi": "4.60.4", "@rollup/rollup-android-arm64": "4.60.4", "@rollup/rollup-darwin-arm64": "4.60.4", "@rollup/rollup-darwin-x64": "4.60.4", "@rollup/rollup-freebsd-arm64": "4.60.4", "@rollup/rollup-freebsd-x64": "4.60.4", "@rollup/rollup-linux-arm-gnueabihf": "4.60.4", "@rollup/rollup-linux-arm-musleabihf": "4.60.4", "@rollup/rollup-linux-arm64-gnu": "4.60.4", "@rollup/rollup-linux-arm64-musl": "4.60.4", "@rollup/rollup-linux-loong64-gnu": "4.60.4", "@rollup/rollup-linux-loong64-musl": "4.60.4", "@rollup/rollup-linux-ppc64-gnu": "4.60.4", "@rollup/rollup-linux-ppc64-musl": "4.60.4", "@rollup/rollup-linux-riscv64-gnu": "4.60.4", "@rollup/rollup-linux-riscv64-musl": "4.60.4", "@rollup/rollup-linux-s390x-gnu": "4.60.4", "@rollup/rollup-linux-x64-gnu": "4.60.4", "@rollup/rollup-linux-x64-musl": "4.60.4", "@rollup/rollup-openbsd-x64": "4.60.4", "@rollup/rollup-openharmony-arm64": "4.60.4", "@rollup/rollup-win32-arm64-msvc": "4.60.4", "@rollup/rollup-win32-ia32-msvc": "4.60.4", "@rollup/rollup-win32-x64-gnu": "4.60.4", "@rollup/rollup-win32-x64-msvc": "4.60.4", "fsevents": "~2.3.2" }, "bin": { "rollup": "dist/bin/rollup" } }, "sha512-WHeFSbZYsPu3+bLoNRUuAO+wavNlocOPf3wSHTP7hcFKVnJeWsYlCDbr3mTS14FCizf9ccIxXA8sGL8zKeQN3g=="],
 
