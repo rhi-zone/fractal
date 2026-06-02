@@ -593,6 +593,97 @@ export async function serve<Res>(
   return { status: 200, body: res as Res }
 }
 
+// ---------------------------------------------------------------------------
+// listen: boots a real Bun HTTP server from a fully-discharged Node.
+//
+// Translates each incoming web Request → fractal HttpReq, calls node.handler,
+// and translates the result Res (or Pass → 404) back into a web Response (JSON).
+//
+// Usage:
+//   const server = await listen(app, { port: 0 })  // port 0 = ephemeral
+//   console.log(server.port)                        // actual port assigned
+//   server.stop()                                   // graceful shutdown
+// ---------------------------------------------------------------------------
+
+export interface ListenOptions {
+  /** Port to bind. 0 = let the OS pick an ephemeral port. */
+  port?: number
+  /** Hostname to bind (default: "localhost"). */
+  hostname?: string
+}
+
+export interface ListenServer {
+  /** The actual port the server is listening on (useful when port=0). */
+  port: number
+  /** Stop the server and close all open connections. */
+  stop(closeActiveConnections?: boolean): void
+}
+
+/**
+ * listen: boot a real Bun HTTP server backed by a fully-discharged Node.
+ *
+ * Translates web Request → fractal HttpReq (path segments, method, query,
+ * headers, lazy body thunk), calls node.handler, maps Pass → 404, and
+ * returns the JSON-serialised result with status 200.
+ *
+ * `node` must be Node<{}> — any undischarged params are a compile error.
+ */
+export function listen<Res>(
+  node: Node<Record<string, never>, Res>,
+  options: ListenOptions = {},
+): ListenServer {
+  const server = Bun.serve({
+    port: options.port ?? 0,
+    hostname: options.hostname ?? 'localhost',
+    async fetch(webReq: Request): Promise<Response> {
+      // Parse URL
+      const url = new URL(webReq.url)
+      const segments = url.pathname.replace(/^\//, '').split('/').filter(Boolean)
+
+      // Parse query string
+      const queryRecord: Record<string, string> = {}
+      for (const [k, v] of url.searchParams.entries()) {
+        queryRecord[k] = v
+      }
+
+      // Collect headers (HTTP/2 mandates lowercase; Bun already lowercases)
+      const headersRecord: Record<string, string> = {}
+      webReq.headers.forEach((value, key) => {
+        headersRecord[key.toLowerCase()] = value
+      })
+
+      // Lazy body thunk — pulled at most once, only when body() combinator fires
+      const bodyThunk: (() => Promise<unknown>) | undefined =
+        webReq.method !== 'GET' && webReq.method !== 'HEAD'
+          ? () => webReq.json() as Promise<unknown>
+          : undefined
+
+      const httpReq: HttpReq<Record<string, never>> = {
+        method: webReq.method,
+        path: segments,
+        query: queryRecord,
+        headers: headersRecord,
+        params: {} as Record<string, never>,
+        ...(bodyThunk !== undefined ? { body: bodyThunk } : {}),
+      }
+
+      const res = await node.handler(httpReq)
+      if (res === pass) {
+        return new Response(null, { status: 404 })
+      }
+      return new Response(JSON.stringify(res), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    },
+  })
+
+  return {
+    get port(): number { return server.port ?? 0 },
+    stop(closeActiveConnections?: boolean) { server.stop(closeActiveConnections) },
+  }
+}
+
 // Re-export core for consumers that only import fractal-http
 export type { Handler, Req, Pass, Node, Meta, NodeMiddleware, StandardSchemaV1, StandardJSONSchemaV1 } from '@rhi-zone/fractal-core'
 export { pass, leaf, typed, pipe, run, choice, resolveSchema } from '@rhi-zone/fractal-core'

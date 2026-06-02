@@ -212,6 +212,17 @@ function serve<Res>(
 
 Splits path, parses query string, wraps the body in a lazy thunk, calls `n.handler(httpReq)`, maps `Pass` → `{ status: 404, body: null }`.
 
+### `listen`
+
+```ts
+function listen<Res>(
+  node: Node<Record<string, never>, Res>,
+  options?: { port?: number; hostname?: string },
+): ListenServer   // { port: number; stop(closeActiveConnections?: boolean): void }
+```
+
+Boots a real Bun HTTP server backed by a fully-discharged Node. Translates each incoming web `Request` → fractal `HttpReq` (path segments, method, query string, headers, lazy body thunk via `webReq.json()`), calls `node.handler`, and maps `Pass` → 404, results → JSON with status 200. `port: 0` lets the OS pick an ephemeral port (the actual port is available via `server.port`). Designed for e2e testing and production serving alike.
+
 ---
 
 ## Worker kit combinators (`@rhi-zone/fractal-worker`)
@@ -380,7 +391,7 @@ interface Transport {
 ```
 
 - **`inProcess(node)`** — assembles a `Req` and calls `node.handler(req)` directly. No network. The default when `transport` is omitted from `client(node)`. This is Hyper unification: the client and server are one value.
-- **`http(baseUrl)`** — serializes `{method, path, body}` into a `fetch` call. Same derived type; different runtime.
+- **`http(baseUrl)`** — serializes `{method, path, body}` into a `fetch` call. Same derived type; different runtime. **E2E verified** against a real `listen()`-served instance (see `examples/todo-api/src/app.e2e.test.ts`): 21 assertions confirm that `serve(app, req)` (in-process) and `fetch()` against a live Bun server started via `listen(app, {port:0})` produce identical JSON for GET/POST/by-id and that auth guards (withSecurity) fire identically on both paths.
 
 ### Structural constraint
 
