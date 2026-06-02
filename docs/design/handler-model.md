@@ -92,7 +92,7 @@ function typed<Out extends Record<string, unknown>, P extends Record<string, unk
 ```
 
 **Sync, eager** refinement of values already in the params bag. Discharges `Out` from inner's requirements.
-meta: `{ kind: "typed", schema: { parsed: true }, child: inner.meta }`
+meta: `{ kind: "typed", schema: <JSON-Schema from StandardJSONSchemaV1 trait or {}>, child: inner.meta }`
 
 Contrast with `validate()` in the HTTP kit which is **async, lazy** over the body facet.
 
@@ -159,7 +159,7 @@ meta: `{ kind: "body", child: { kind: "leaf" } }`
 
 ### `validate`
 
-**Sync combinator** that returns an async per-request handler (`HandlerWithBody`). Takes `parse: (unknown) => T | Promise<T>`, wraps a `HandlerWithBody<P,T,Res>`, returns a `HandlerWithBody<P,unknown,Res>` — synchronously. No await at composition time; async work happens per-request. Composes into `body(validate(parse, inner))`. A Standard Schema validator slots in here: `validate(v => schema.parse(v), inner)`.
+**Sync combinator** that returns an async per-request handler (`HandlerWithBody`). Accepts either a `StandardSchemaV1` or a raw parse function `(unknown) => T | Promise<T>`. Wraps a `HandlerWithBody<P,T,Res>` and returns a `HandlerWithBody<P,unknown,Res>` — synchronously. No await at composition time; async work happens per-request. Composes into `body(validate(schema, inner))`. When a `StandardSchemaV1` with the `jsonSchema` trait is passed, the input schema flows into `ValidateMeta.schema` and is emitted as the OpenAPI `requestBody` schema by `toOpenApi`.
 
 ### `serve`
 
@@ -241,6 +241,7 @@ Meta variants produced by each combinator:
 | `body` | `"body"` | `child` |
 | `procedure` | `"procedure"` | `procedures: Record<name, Meta>` |
 | `field` | `"field"` | `name, child` |
+| `withSecurity` (NodeMiddleware) | `"security"` | `schemes: Array<Record<string,string[]>>, child` |
 
 **OpenAPI projection** from `Meta` is implemented in `@rhi-zone/fractal-openapi`. The `toOpenApi(node, info)` function walks `node.meta` to produce a full OpenAPI 3.0 document. `toJsonSchema(node, opts?)` produces a JSON-Schema fragment. Standard Schema (`@standard-schema/spec`) feeds both validation and the emitted schemas — `TypedMeta.schema` and `ValidateMeta.schema` carry JSON-Schema objects derived from `schema['~standard'].jsonSchema?.output?.({ target: 'openapi-3.0' })`; if the trait is absent or throws, `{}` is stored (graceful degradation). The proof of concept `walk()` function lives in `spike/node-reflect.ts`.
 
@@ -287,6 +288,10 @@ Standard Schema (`@standard-schema/spec@^1.1.0`) feeds both validation and proje
 - `validate(schema, inner)` — same validate/jsonSchema pattern; stores schema in `ValidateMeta.schema`; `body(validate(...))` picks up the schema into `BodyMeta.child`.
 - Both accept either a `StandardSchemaV1` or a raw parse function for backward compatibility.
 - If the `jsonSchema` trait is absent or throws, `{}` is stored — graceful degradation. The leaf node and path/methods/param walker nodes are unaffected.
+
+`NodeMiddleware` (the `Node → Node` pattern) feeds operation-level metadata:
+
+- A `withSecurity(schemes, enforce)` middleware emits `{ kind: "security", schemes, child: inner.meta }` and enforces at request time. The walker accumulates `schemes` into `ctx.security` and emits them on the operation's `security` field.
 
 ---
 

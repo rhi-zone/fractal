@@ -1,37 +1,72 @@
 # Introduction
 
-fractal is an HTTP/RPC/IPC API library where endpoints are plain data composed from a small set of primitives. Transports, validation, and static types are opt-in layers composed onto the core via combinators — not built into it.
+fractal is an HTTP/RPC/IPC API library where endpoints are plain data composed from a small set of primitives. Transports, validation, and static types are opt-in layers composed via combinators — not built into the core.
 
 ## Status
 
-::: info Status: Idea / Skeleton
-The node/combinator algebra is not yet designed. This repository is tooling and skeleton only. The next phase defines the primitive set and composition model.
+::: info Status: Early / In Development
+Core packages are built and green. The example demonstrates the projection payoff. Not yet published.
 :::
 
 ## Motivation
 
 Hono's API surface is not a reflectable value: routes and middleware are registered procedurally, so the API shape cannot be traversed, transformed, or shared across transports without rewriting. Per-surface re-description and hand-synced types are the result.
 
-fractal makes the API an inert-data structure that multiple interpreters walk to produce artifacts: an HTTP server, a typed client proxy, an OpenAPI document, a test harness. The structure is defined once; the surfaces are derived.
+fractal makes the API an inert-data structure that multiple interpreters walk to produce artifacts: an HTTP server, an OpenAPI document, a test harness. The structure is defined once; the surfaces are derived.
 
 ## Design Constraint
 
 The primitive set must be small and uniform. Composed presets ship alongside the primitives.
 
-This constraint is load-bearing: composability alone does not yield a small mental model. A maximally-composable core without presets shifts assembly burden to the user — the failure mode visible in Effect. A deliberately tiny primitive set plus presets makes the common cases simple without foreclosing the general case.
+This constraint is load-bearing: composability alone does not yield a small mental model. A maximally-composable core without presets shifts assembly burden to the user. A deliberately tiny primitive set plus presets makes the common cases simple without foreclosing the general case.
 
 ## Packages
 
 | Package | Role |
 |---------|------|
-| `@rhi-zone/fractal-core` | Inert-data node IR, capability contracts, Context, combinator surface |
-| `@rhi-zone/fractal-transport` | Transport kernel: interfaces, assemblers, dispatcher, clientOver |
-| `@rhi-zone/fractal-codec-json` | JSON codec axis instance |
-| `@rhi-zone/fractal-codec-structured-clone` | Structured-clone codec axis instance |
-| `@rhi-zone/fractal-protocol-correlation` | Correlation protocol axis instance (duplex) |
-| `@rhi-zone/fractal-channel-http` | HTTP channel axis: request/response exchange + server handlers |
-| `@rhi-zone/fractal-channel-websocket` | WebSocket channel axis: pure channel + Bun server factory |
-| `@rhi-zone/fractal-channel-worker` | worker_threads (MessagePort) channel axis |
-| `@rhi-zone/fractal-channel-stdio` | stdio (line-framed JSON) channel axis |
-| `@rhi-zone/fractal-preset-websocket` | WebSocket convenience preset (wsClient / serveWs) |
-| `@rhi-zone/fractal-standard-schema` | OpenAPI/JSON Schema/doc generation (zero runtime deps) |
+| `@rhi-zone/fractal-core` | `Node<P,Res>`, `Handler`, `Req`, `Pass`, `choice`, `pipe`, `capture`, `typed`, `leaf`, `run`, `resolveSchema`, Standard Schema types |
+| `@rhi-zone/fractal-http` | HTTP kit: `path`, `methods`, `param`, `query`, `header`, `body`, `validate`, `serve` |
+| `@rhi-zone/fractal-worker` | Worker/in-process kit: `procedure`, `field`, `dispatch` |
+| `@rhi-zone/fractal-openapi` | OpenAPI 3.0 / JSON-Schema projection: `toOpenApi`, `toJsonSchema` |
+
+## Quick Start
+
+```ts
+import { path, methods, param, body, validate, serve, leaf } from '@rhi-zone/fractal-http'
+
+const app = path({
+  todos: methods({
+    GET: leaf(async () => todos),
+    POST: body(validate(todoSchema, async (req) => create(req.body))),
+  }),
+})
+
+// Serve an HTTP request
+const response = await serve(app, { method: 'GET', url: '/todos' })
+
+// Project to OpenAPI — same node, no re-description
+import { toOpenApi } from '@rhi-zone/fractal-openapi'
+const doc = toOpenApi(app, { title: 'Todos API', version: '1.0.0' })
+```
+
+`validate` accepts a `StandardSchemaV1` — validation and the emitted OpenAPI schema both come from the same object. No hand-rolling schemas twice.
+
+## Protocol-agnostic core
+
+The core (`fractal-core`) knows nothing about HTTP verbs, URL paths, or procedure names. Protocol-specific combinators live in per-protocol kits that consume and produce the same `Node<P,Res>` type:
+
+- **HTTP kit** (`fractal-http`): `methods`, `path`, `param`, `query`, `header`, `body`, `validate`, `serve`
+- **Worker kit** (`fractal-worker`): `procedure`, `field`, `dispatch`
+
+`NodeMiddleware = (n: Node<P,Res>) => Node<P,Res>` is the extension point for cross-cutting concerns: an auth middleware wraps a node, contributes a security descriptor to `meta`, and enforces at request time. Business logic and core combinators transfer unchanged across kits.
+
+## Reflection built in
+
+Every `Node` carries a `meta: Meta` descriptor built during route construction. After construction:
+
+```ts
+import { toOpenApi } from '@rhi-zone/fractal-openapi'
+const doc = toOpenApi(app, { title: 'My API', version: '1.0.0' })
+// doc.paths has every route, parameter, requestBody schema, and security requirement
+// derived from the same node tree that runs requests
+```

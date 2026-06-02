@@ -61,11 +61,12 @@ describe('GET /todos/:id', () => {
   })
 })
 
-describe('POST /todos with body', () => {
-  it('creates a new todo and returns it', async () => {
+describe('POST /todos with body — StandardSchemaV1 validation', () => {
+  it('creates a new todo when body is valid and bearer token present', async () => {
     const r = await serve<ApiResult>(app, {
       method: 'POST',
       url: '/todos',
+      headers: { authorization: 'Bearer secret' },
       body: { title: 'New from test' },
     })
     expect(r.status).toBe(200)
@@ -73,14 +74,36 @@ describe('POST /todos with body', () => {
     expect(typeof (r.body as Todo).id).toBe('number')
   })
 
-  it('throws on invalid body', async () => {
+  it('throws on invalid body (StandardSchemaV1 validate rejects)', async () => {
     await expect(
       serve<ApiResult>(app, {
         method: 'POST',
         url: '/todos',
+        headers: { authorization: 'Bearer secret' },
         body: { wrong: 42 },
       }),
-    ).rejects.toThrow('invalid body')
+    ).rejects.toThrow('expected {title:string}')
+  })
+
+  it('returns 404 when Authorization header is missing (withSecurity guard)', async () => {
+    const r = await serve<ApiResult>(app, {
+      method: 'POST',
+      url: '/todos',
+      body: { title: 'Should not be created' },
+    })
+    expect(r.status).toBe(404)
+    expect(r.body).toBeNull()
+  })
+
+  it('returns 404 when Authorization header is malformed', async () => {
+    const r = await serve<ApiResult>(app, {
+      method: 'POST',
+      url: '/todos',
+      headers: { authorization: 'Basic abc123' },
+      body: { title: 'Should not be created' },
+    })
+    expect(r.status).toBe(404)
+    expect(r.body).toBeNull()
   })
 })
 

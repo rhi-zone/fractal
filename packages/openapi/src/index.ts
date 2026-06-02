@@ -61,6 +61,14 @@ export interface OpenApiOperation {
   responses: Record<string, { description: string }>
 }
 
+export type SecurityMetaScheme = Record<string, string[]>
+
+/**
+ * SecurityMeta: emitted by `withSecurity` NodeMiddleware.
+ * The `schemes` array is appended to the OpenAPI `security` field on the operation.
+ */
+export type SecurityMeta = { kind: "security"; schemes: SecurityMetaScheme[]; child: import('@rhi-zone/fractal-core').Meta }
+
 export type OpenApiPathItem = {
   [method: string]: OpenApiOperation
 }
@@ -251,6 +259,15 @@ function walk(meta: Meta, ctx: WalkCtx): OpenApiPaths {
     case 'pipe': {
       // pipe: walk the wrapped child
       return walk(childOf(meta), ctx)
+    }
+
+    case 'security': {
+      // security middleware: add schemes to ctx.security, walk child
+      const schemes = (m['schemes'] as SecurityMetaScheme[] | undefined) ?? []
+      return walk(childOf(meta), {
+        ...ctx,
+        security: [...ctx.security, ...schemes],
+      })
     }
 
     case 'procedure':

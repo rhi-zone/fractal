@@ -1,23 +1,21 @@
 # fractal
 
-HTTP/RPC/IPC API library with composition via combinators
+HTTP/RPC/IPC API library where endpoints are plain data composed from a small set of primitives.
 
 **https://docs.rhi.zone/fractal/**
 
-Endpoints are plain data composed from a small set of primitives. Transports, validation, and static types are opt-in layers composed onto the core via combinators — not built into it. The API structure is an inert-data tree: traversable, reflectable, and walked by multiple interpreters to produce an HTTP server, a typed client proxy, an OpenAPI document, or a test harness from one definition.
+The composition unit is `Node<P,Res> = { meta, handler }`. `meta` is the reflection descriptor — walkable, serialisable — built during route construction. `handler` is the executable. Transports, validation, and static types are opt-in layers composed via combinators; they are not in the core.
+
+Multiple interpreters walk one `Node` tree to produce an HTTP server, an OpenAPI document, or a test harness from one definition.
 
 ## Packages
 
 | Package | Role |
 |---------|------|
-| `@rhi-zone/fractal-core` | Inert-data node IR, capability contracts, Context, combinator surface |
-| `@rhi-zone/fractal-rpc-dispatch` | Shared dispatch utilities for rpc-style interpreters |
-| `@rhi-zone/fractal-http` | HTTP server interpreter |
-| `@rhi-zone/fractal-rpc` | RPC transport interpreter |
-| `@rhi-zone/fractal-ipc` | IPC transport interpreter |
-| `@rhi-zone/fractal-client` | Typed client-proxy interpreter |
-| `@rhi-zone/fractal-standard-schema` | OpenAPI/JSON Schema/doc generation (zero runtime deps) |
-| `@rhi-zone/fractal-facade` | Aggregator re-export |
+| `@rhi-zone/fractal-core` | `Node<P,Res>`, `Handler`, `Req`, `Pass`, `choice`, `pipe`, `capture`, `typed`, `leaf`, `run`, `resolveSchema`, Standard Schema types |
+| `@rhi-zone/fractal-http` | HTTP kit: `path`, `methods`, `param`, `query`, `header`, `body`, `validate`, `serve` |
+| `@rhi-zone/fractal-worker` | Worker/in-process kit: `procedure`, `field`, `dispatch` |
+| `@rhi-zone/fractal-openapi` | OpenAPI 3.0 / JSON-Schema projection: `toOpenApi`, `toJsonSchema` |
 
 ## Development
 
