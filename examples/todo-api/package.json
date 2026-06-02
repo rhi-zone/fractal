@@ -7,11 +7,13 @@
   "scripts": {
     "typecheck":        "tsgo --noEmit",
     "test":             "bun test",
-    "generate-openapi": "bun run src/generate-openapi.ts"
+    "generate-openapi": "bun run src/generate-openapi.ts",
+    "client-demo":      "bun run src/client-demo.ts"
   },
   "dependencies": {
     "@rhi-zone/fractal-core":    "workspace:*",
     "@rhi-zone/fractal-http":    "workspace:*",
-    "@rhi-zone/fractal-openapi": "workspace:*"
+    "@rhi-zone/fractal-openapi": "workspace:*",
+    "@rhi-zone/fractal-client":  "workspace:*"
   }
 }

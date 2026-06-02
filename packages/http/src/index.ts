@@ -90,7 +90,10 @@ export type HeaderMeta  = { kind: "header";  name: string; in: "header"; schema:
 
 export type BodyMeta<T = unknown, ChildMeta extends Meta = Meta> = {
   kind: "body"
-  _bodyType?: T
+  /** Phantom type carrier for the body type T — used by ClientOf<N> derivation.
+   *  Value is always `undefined` at runtime; presence in the type enables
+   *  `BodyMeta<infer T, any>` conditional-type matching. */
+  readonly _bodyType: T
   child: ChildMeta
 }
 
@@ -327,14 +330,14 @@ export type HandlerWithBody<
  *
  * meta: { kind: "body", child: validate.meta | { kind: "leaf" } }
  */
-export function body<P extends Record<string, unknown>, Res>(
-  child: HandlerWithBody<P, unknown, Res>,
-): Node<P, Res> {
+export function body<T, P extends Record<string, unknown>, Res>(
+  child: HandlerWithBody<P, T, Res>,
+): Node<P, Res, BodyMeta<T>> {
   const childMeta: Meta =
-    (child as Partial<ValidatedHandler<P, unknown, Res>>).validatedMeta ?? { kind: 'leaf' }
+    (child as Partial<ValidatedHandler<P, T, Res>>).validatedMeta ?? { kind: 'leaf' }
 
   return {
-    meta: { kind: "body", child: childMeta } satisfies BodyMeta,
+    meta: { kind: "body", _bodyType: undefined as unknown as T, child: childMeta } satisfies BodyMeta<T>,
     handler: async (req) => {
       const httpReq = req as HttpReq<P>
       const rawBody = httpReq.body !== undefined ? await httpReq.body() : undefined
@@ -342,7 +345,7 @@ export function body<P extends Record<string, unknown>, Res>(
         ...req,
         body: rawBody,
       }
-      return child(enriched)
+      return child(enriched as ReqWithBody<P, T>)
     },
   }
 }
@@ -354,12 +357,16 @@ export function body<P extends Record<string, unknown>, Res>(
 /**
  * ValidatedHandler: a HandlerWithBody with an optional `validatedMeta`
  * property so that `body()` can pick up the schema for OpenAPI projection.
+ *
+ * NOTE: The handler function signature is HandlerWithBody<P, T, Res> (typed T,
+ * not unknown) — this preserves the body type T in BodyMeta<T> for typed-client
+ * derivation. body() casts internally when calling the handler after thunk pull.
  */
 export type ValidatedHandler<
   P extends Record<string, unknown>,
   T,
   Res,
-> = HandlerWithBody<P, unknown, Res> & { validatedMeta?: ValidateMeta }
+> = HandlerWithBody<P, T, Res> & { validatedMeta?: ValidateMeta }
 
 /**
  * validate: SYNC combinator that returns an async per-request handler.

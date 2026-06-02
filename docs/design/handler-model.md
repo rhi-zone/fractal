@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented in `packages/core` + `packages/http` + `packages/worker`, verified by build + typecheck + test. Supersedes the bare-`Handler` model documented previously. OpenAPI projection from `.meta` is enabled (not yet built as a package).
+Implemented in `packages/core` + `packages/http` + `packages/worker` + `packages/client`, verified by build + typecheck + test. Supersedes the bare-`Handler` model documented previously. OpenAPI projection and typed client derivation from `.meta` are both implemented.
 
 ---
 
@@ -14,6 +14,7 @@ Implemented in `packages/core` + `packages/http` + `packages/worker`, verified b
 | `@rhi-zone/fractal-http` | `path<T>`, `methods<T>` (path-exhaustion guard; both generic over literal table type), `param`/`query`/`header` (V=string, via core `capture`), `body` (lazy thunk handle), `validate` (sync combinator / async per-request handler, accepts `StandardSchemaV1`), `route(collection?, {children?,param?})` (both-and; type-precise for client derivation), `serve`, HTTP `Req` shape; HTTP-specific meta types (`PathMeta<T>`, `MethodsMeta<T>`, `ParamMeta<K,M>`, `BodyMeta`, `ValidateMeta`, `RouteMeta`) |
 | `@rhi-zone/fractal-worker` | `procedure`, `field` (generic V, eager already-typed value), `dispatch`, worker `Req` shape; worker-specific meta types (`ProcedureMeta`, `FieldMeta`) |
 | `@rhi-zone/fractal-openapi` | `toOpenApi(node, info): OpenApiDocument`, `toJsonSchema(node, opts?): JsonSchemaFragment` — walk `.meta` to produce OpenAPI 3.0 or JSON-Schema; handles `route` kind |
+| `@rhi-zone/fractal-client` | `client(node, transport?)` → typed `ClientOf<typeof node>` proxy; `inProcess(node)` transport (Hyper unification: invokes `node.handler` directly, no network); `http(baseUrl)` transport (serializes to `fetch`). `Transport` interface for custom transports. |
 
 ---
 
@@ -332,6 +333,63 @@ Standard Schema (`@standard-schema/spec@^1.1.0`) feeds both validation and proje
 `NodeMiddleware` (the `Node → Node` pattern) feeds operation-level metadata:
 
 - A `withSecurity(schemes, enforce)` middleware emits `{ kind: "security", schemes, child: inner.meta }` and enforces at request time. The walker accumulates `schemes` into `ctx.security` and emits them on the operation's `security` field.
+
+---
+
+## Typed client (`@rhi-zone/fractal-client`)
+
+The typed client is derived structurally from a `Node` tree — the same value that serves is the source of truth for both the server surface and the client surface.
+
+```ts
+import { client, http } from '@rhi-zone/fractal-client'
+
+// In-process transport (Hyper unification: client IS the server handler)
+const c = client(app)
+const todos = await c.todos.GET()                // → Promise<Todo[]>
+const todo  = await c.todos.POST({ title: 'x' }) // → Promise<Todo>
+const byId  = await c.todos('1').GET()           // → Promise<Todo | null>
+
+// HTTP transport — same type, real network call
+const remote = client(app, http('https://api.example.com'))
+const todos2 = await remote.todos.GET()          // same type, over the wire
+```
+
+### How `ClientOf<N>` is derived
+
+`ClientOf<typeof node>` walks the `M` type parameter of each `Node<P,Res,M>`:
+
+| Meta kind | Client surface |
+|---|---|
+| `LeafMeta` | `() => Promise<Res>` |
+| `BodyMeta<T>` | `(body: T) => Promise<Res>` |
+| `MethodsMeta<Verbs>` | `{ [verb]: ClientOfVerbNode<Verbs[verb]> }` |
+| `PathMeta<Children>` | `{ [seg]: ClientOf<Children[seg]> }` |
+| `ParamMeta<K,ChildMeta>` | `(value: string) => ClientOfMeta<ChildMeta>` |
+| `RouteMeta<Collection,Children,ParamK,ParamChild>` | callable-object hybrid: `((value: string) => ClientOf<ParamChild>) & CollectionPart & ChildrenPart` |
+
+The `RouteMeta` case produces the callable-object hybrid for `route()` nodes: `client.todos` is simultaneously callable (`client.todos('1')` → item sub-client) AND has collection verb props (`.GET()`, `.POST(body)`) AND exact-child props.
+
+### Transports
+
+The `Transport` interface decouples type derivation from invocation:
+
+```ts
+interface Transport {
+  call(desc: { method: string; path: string[]; params: Record<string,string>; body?: unknown }): Promise<unknown>
+}
+```
+
+- **`inProcess(node)`** — assembles a `Req` and calls `node.handler(req)` directly. No network. The default when `transport` is omitted from `client(node)`. This is Hyper unification: the client and server are one value.
+- **`http(baseUrl)`** — serializes `{method, path, body}` into a `fetch` call. Same derived type; different runtime.
+
+### Structural constraint
+
+`ClientOf<N>` requires the tree to use `path`, `methods`, `param`, and `route` combinators. `choice()` is opaque to the typed client (branches collapse into `ChoiceMeta` with no literal keys). Use `route()` for collection+param routing; `choice()` is still appropriate inside a `collection` node for query/header variants.
+
+**One definition → HTTP server + OpenAPI + typed client.** The same `Node` tree, walked three ways:
+- `serve(node, req)` → HTTP response
+- `toOpenApi(node, info)` → OpenAPI 3.0 document
+- `client(node)` → typed callable proxy
 
 ---
 

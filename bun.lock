@@ -13,9 +13,22 @@
       "name": "@rhi-zone/fractal-example-todo-api",
       "version": "0.0.0",
       "dependencies": {
+        "@rhi-zone/fractal-client": "workspace:*",
         "@rhi-zone/fractal-core": "workspace:*",
         "@rhi-zone/fractal-http": "workspace:*",
         "@rhi-zone/fractal-openapi": "workspace:*",
+      },
+    },
+    "packages/client": {
+      "name": "@rhi-zone/fractal-client",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-http": "workspace:*",
+      },
+      "devDependencies": {
+        "vite": "^6.0.0",
+        "vitest": "^2.0.0",
       },
     },
     "packages/core": {
@@ -118,6 +131,8 @@
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
+
+    "@rhi-zone/fractal-client": ["@rhi-zone/fractal-client@workspace:packages/client"],
 
     "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
 
