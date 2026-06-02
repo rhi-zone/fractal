@@ -1,3 +1,5 @@
+> **Superseded by [handler-model.md](./handler-model.md).** Retained for the reasoning history (semiring framing, matcher insight, the names-not-verbs / tree×binding exploration). The concrete, compiler-verified core is the `Handler<P>` model in handler-model.md.
+
 # Design direction: compositional optics for the node algebra
 
 ## Status
