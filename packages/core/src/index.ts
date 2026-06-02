@@ -14,6 +14,8 @@
 // kits. Core does NOT mention string as a constraint on params values.
 // V is free; each kit pins it to whatever the transport delivers.
 
+import type { StandardSchemaV1, StandardJSONSchemaV1 } from '@standard-schema/spec'
+
 // ---------------------------------------------------------------------------
 // Sentinel
 // ---------------------------------------------------------------------------
@@ -47,8 +49,39 @@ export type Handler<
 export type LeafMeta   = { kind: "leaf" }
 export type ChoiceMeta = { kind: "choice"; children: Meta[] }
 export type CaptureMeta = { kind: "capture"; name: string; child: Meta }
-export type TypedMeta  = { kind: "typed"; schema: unknown; child: Meta }
+export type TypedMeta  = { kind: "typed"; schema: Record<string, unknown>; child: Meta }
 export type PipeMeta   = { kind: "pipe"; metas: Meta[]; child: Meta }
+
+// ---------------------------------------------------------------------------
+// Standard Schema helpers
+// ---------------------------------------------------------------------------
+
+/** Re-export for consumers that import only fractal-core */
+export type { StandardSchemaV1, StandardJSONSchemaV1 } from '@standard-schema/spec'
+
+/**
+ * resolveSchema: extract a JSON-Schema object from a StandardJSONSchemaV1 trait.
+ * Returns `{}` (empty object) and logs a warning if the trait is absent or throws.
+ * Target is always 'openapi-3.0' for projection use.
+ */
+export function resolveSchema(
+  schema: StandardSchemaV1 | (StandardSchemaV1 & StandardJSONSchemaV1),
+  mode: 'input' | 'output' = 'output',
+): Record<string, unknown> {
+  const ss = (schema as Partial<StandardJSONSchemaV1>)['~standard']
+  if (!ss || typeof (ss as Partial<StandardJSONSchemaV1.Props>).jsonSchema === 'undefined') {
+    return {}
+  }
+  const converter = (ss as StandardJSONSchemaV1.Props).jsonSchema
+  try {
+    return mode === 'input'
+      ? converter.input({ target: 'openapi-3.0' })
+      : converter.output({ target: 'openapi-3.0' })
+  } catch {
+    console.warn('[fractal-core] resolveSchema: jsonSchema conversion threw; degrading to {}')
+    return {}
+  }
+}
 
 /**
  * Meta is the reflection descriptor for a Node.
@@ -159,6 +192,14 @@ export function capture<
 
 // ---------------------------------------------------------------------------
 // Typed: sync, eager refinement of params values
+//
+// Accepts either:
+//   - a raw parse function: (raw: Record<string, unknown>) => Out
+//   - a StandardSchemaV1: schema['~standard'].validate is called; must be SYNC
+//     (typed is a sync combinator — it does not await at composition or at
+//     request time for the params path). If the schema validate returns a
+//     Promise, it is awaited but this is a degraded usage; prefer sync schemas
+//     in the params path.
 // ---------------------------------------------------------------------------
 
 export function typed<
@@ -166,12 +207,36 @@ export function typed<
   P extends Record<string, unknown> = Record<string, never>,
   Res = unknown,
 >(
-  parse: (raw: Record<string, unknown>) => Out,
+  schemaOrParse: StandardSchemaV1<Record<string, unknown>, Out> | ((raw: Record<string, unknown>) => Out),
 ): (inner: Node<P & Out, Res>) => Node<P, Res> {
+  // Determine whether we have a StandardSchemaV1 or a raw parse fn
+  const isStdSchema = (
+    typeof schemaOrParse === 'object' &&
+    schemaOrParse !== null &&
+    '~standard' in schemaOrParse
+  )
+
+  // Extract JSON-Schema for meta (best-effort; `{}` if unavailable)
+  const jsonSchema: Record<string, unknown> = isStdSchema
+    ? resolveSchema(schemaOrParse as StandardSchemaV1, 'output')
+    : {}
+
+  const parse = isStdSchema
+    ? async (raw: Record<string, unknown>): Promise<Out> => {
+        const result = await (schemaOrParse as StandardSchemaV1<Record<string, unknown>, Out>)['~standard'].validate(raw)
+        if (result.issues) {
+          throw new Error(
+            `[fractal-core] typed: validation failed — ${result.issues.map((i) => i.message).join(', ')}`,
+          )
+        }
+        return result.value
+      }
+    : (raw: Record<string, unknown>) => Promise.resolve((schemaOrParse as (raw: Record<string, unknown>) => Out)(raw))
+
   return (inner) => ({
-    meta: { kind: "typed", schema: { parsed: true }, child: inner.meta },
+    meta: { kind: "typed", schema: jsonSchema, child: inner.meta },
     handler: async (req) => {
-      const parsed = parse(req.params as Record<string, unknown>)
+      const parsed = await parse(req.params as Record<string, unknown>)
       const enriched: Req<P & Out> = {
         ...req,
         params: { ...(req.params as object), ...parsed } as P & Out,

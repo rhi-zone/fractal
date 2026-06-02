@@ -10,9 +10,10 @@ Implemented in `packages/core` + `packages/http` + `packages/worker`, verified b
 
 | Package | Contents |
 |---|---|
-| `@rhi-zone/fractal-core` | `Pass`/`pass`, `Req<P>`, `Handler<P,Res>`, `Meta`, `Node<P,Res>`, `NodeMiddleware`, `choice`, `pipe`, `capture` (generic in V), `typed` (sync combinator), `leaf`, `run` |
-| `@rhi-zone/fractal-http` | `path`, `methods` (with path-exhaustion guard), `param`/`query`/`header` (V=string, via core `capture`), `body` (lazy thunk handle), `validate` (sync combinator / async per-request handler), `serve`, HTTP `Req` shape; HTTP-specific meta types (`PathMeta`, `MethodsMeta`, `ParamMeta`, `QueryMeta`, `HeaderMeta`, `BodyMeta`) |
+| `@rhi-zone/fractal-core` | `Pass`/`pass`, `Req<P>`, `Handler<P,Res>`, `Meta`, `Node<P,Res>`, `NodeMiddleware`, `choice`, `pipe`, `capture` (generic in V), `typed` (sync combinator, accepts `StandardSchemaV1`), `leaf`, `run`, `resolveSchema` |
+| `@rhi-zone/fractal-http` | `path`, `methods` (with path-exhaustion guard), `param`/`query`/`header` (V=string, via core `capture`), `body` (lazy thunk handle), `validate` (sync combinator / async per-request handler, accepts `StandardSchemaV1`), `serve`, HTTP `Req` shape; HTTP-specific meta types (`PathMeta`, `MethodsMeta`, `ParamMeta`, `QueryMeta`, `HeaderMeta`, `BodyMeta`, `ValidateMeta`) |
 | `@rhi-zone/fractal-worker` | `procedure`, `field` (generic V, eager already-typed value), `dispatch`, worker `Req` shape; worker-specific meta types (`ProcedureMeta`, `FieldMeta`) |
+| `@rhi-zone/fractal-openapi` | `toOpenApi(node, info): OpenApiDocument`, `toJsonSchema(node, opts?): JsonSchemaFragment` — walk `.meta` to produce OpenAPI 3.0 or JSON-Schema |
 
 ---
 
@@ -241,7 +242,7 @@ Meta variants produced by each combinator:
 | `procedure` | `"procedure"` | `procedures: Record<name, Meta>` |
 | `field` | `"field"` | `name, child` |
 
-**OpenAPI projection** from `Meta` is structurally enabled: a future `toOpenApi(node, info)` package can walk `node.meta` to produce a full spec. The proof of concept `walk()` function lives in `spike/node-reflect.ts`. Not yet published as a package.
+**OpenAPI projection** from `Meta` is implemented in `@rhi-zone/fractal-openapi`. The `toOpenApi(node, info)` function walks `node.meta` to produce a full OpenAPI 3.0 document. `toJsonSchema(node, opts?)` produces a JSON-Schema fragment. Standard Schema (`@standard-schema/spec`) feeds both validation and the emitted schemas — `TypedMeta.schema` and `ValidateMeta.schema` carry JSON-Schema objects derived from `schema['~standard'].jsonSchema?.output?.({ target: 'openapi-3.0' })`; if the trait is absent or throws, `{}` is stored (graceful degradation). The proof of concept `walk()` function lives in `spike/node-reflect.ts`.
 
 ---
 
@@ -265,7 +266,31 @@ What transfers across protocols: `Node` + `NodeMiddleware` + business logic. The
 
 ---
 
+---
+
+## Projection
+
+`@rhi-zone/fractal-openapi` walks the `.meta` tree to produce OpenAPI 3.0 or JSON-Schema:
+
+```ts
+import { toOpenApi, toJsonSchema } from '@rhi-zone/fractal-openapi'
+
+const doc = toOpenApi(app, { title: 'My API', version: '1.0.0' })
+// doc.paths: { "/todos": { get: {...}, post: {...} }, "/todos/{id}": { get: {...} } }
+
+const frag = toJsonSchema(app)
+```
+
+Standard Schema (`@standard-schema/spec@^1.1.0`) feeds both validation and projection:
+
+- `typed(schema)(inner)` — calls `schema['~standard'].validate` per request; stores `schema['~standard'].jsonSchema?.output?.({ target: 'openapi-3.0' })` in `TypedMeta.schema`.
+- `validate(schema, inner)` — same validate/jsonSchema pattern; stores schema in `ValidateMeta.schema`; `body(validate(...))` picks up the schema into `BodyMeta.child`.
+- Both accept either a `StandardSchemaV1` or a raw parse function for backward compatibility.
+- If the `jsonSchema` trait is absent or throws, `{}` is stored — graceful degradation. The leaf node and path/methods/param walker nodes are unaffected.
+
+---
+
 ## Future items
 
-- **OpenAPI projection package**: `walk(node.meta, info)` → full OpenAPI 3.1 spec. Structurally enabled by `node.meta`. The proof of concept lives in `spike/node-reflect.ts`.
-- **Standard Schema validator integration** into `validate`: slots in via `validate(schema['~standard'].validate, inner)`. Integration point documented; not yet a package.
+- **MCP/CLI kits**: procedure/subcommand dispatch analogous to worker kit.
+- **Reactive capabilities**: live queries, invalidation, binding to reactive client library.

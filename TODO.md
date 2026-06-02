@@ -7,14 +7,15 @@ VitePress docs. **Entirely local — no remote, not pushed.**
 
 ### Package inventory (`packages/` + `examples/`)
 
-3 published packages + 1 private example:
+4 published packages + 1 private example:
 
 | Package | Status |
 |---|---|
-| `core` (`@rhi-zone/fractal-core`) | Handler model — Built & green |
-| `http` (`@rhi-zone/fractal-http`) | HTTP kit — Built & green |
+| `core` (`@rhi-zone/fractal-core`) | Handler model — Built & green. `typed` accepts `StandardSchemaV1`. |
+| `http` (`@rhi-zone/fractal-http`) | HTTP kit — Built & green. `validate` accepts `StandardSchemaV1`. |
 | `worker` (`@rhi-zone/fractal-worker`) | Worker/in-process kit — Built & green |
-| `examples/todo-api` (`@rhi-zone/fractal-example-todo-api`) | Private example — green |
+| `openapi` (`@rhi-zone/fractal-openapi`) | OpenAPI/JSON-Schema projection — Built & green. Multi-surface projection re-earned. |
+| `examples/todo-api` (`@rhi-zone/fractal-example-todo-api`) | Private example — green. Has `generate-openapi` script. |
 
 **Retired (deleted):** `transport`, `codec-json`, `codec-structured-clone`,
 `protocol-correlation`, `channel-http`, `channel-websocket`, `channel-worker`,
@@ -24,7 +25,7 @@ the node-IR-based OpenAPI/JSON-Schema projection. All superseded by the Handler 
 
 ### Build ordering
 
-Root `build` script: `core` first (downstream dep), then `http` + `worker` in parallel.
+Root `build` script: `core` first (downstream dep), then `http` + `worker` + `openapi` in parallel.
 
 ### What is built
 
@@ -88,12 +89,12 @@ framework backend. Surface gaps (missing capabilities, ergonomic friction, type 
 
 **NON-INVASIVE** — build a parallel proof; do NOT modify the app's working backend.
 
-### 2. OpenAPI projection for the Handler model
+### 2. OpenAPI projection for the Handler model — DONE
 
-The new `path`/`methods`/`param` tree is walkable data. A future
-`toOpenApi(handler, info)` projection is structurally possible. This supersedes
-the deleted `standard-schema` package (which projected from the old node IR).
-Standard Schema validator integration into `validate` is also a natural future item.
+`@rhi-zone/fractal-openapi` ships `toOpenApi(node, info)` and `toJsonSchema(node)`.
+`typed` and `validate` accept `StandardSchemaV1`; schemas flow into both validation
+and the emitted OpenAPI/JSON-Schema via the `jsonSchema` trait. Graceful degradation
+to `{}` when the trait is absent or throws.
 
 ### 3. Reactivity-as-a-capability (deferred)
 

@@ -15,11 +15,15 @@
       "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
         "@rhi-zone/fractal-http": "workspace:*",
+        "@rhi-zone/fractal-openapi": "workspace:*",
       },
     },
     "packages/core": {
       "name": "@rhi-zone/fractal-core",
       "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@standard-schema/spec": "^1.1.0",
+      },
       "devDependencies": {
         "vite": "^6.0.0",
         "vitest": "^2.0.0",
@@ -30,9 +34,23 @@
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
+        "@standard-schema/spec": "^1.1.0",
       },
       "devDependencies": {
         "vite": "^6.0.0",
+      },
+    },
+    "packages/openapi": {
+      "name": "@rhi-zone/fractal-openapi",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-http": "workspace:*",
+        "@standard-schema/spec": "^1.1.0",
+      },
+      "devDependencies": {
+        "vite": "^6.0.0",
+        "vitest": "^2.0.0",
       },
     },
     "packages/worker": {
@@ -107,6 +125,8 @@
 
     "@rhi-zone/fractal-http": ["@rhi-zone/fractal-http@workspace:packages/http"],
 
+    "@rhi-zone/fractal-openapi": ["@rhi-zone/fractal-openapi@workspace:packages/openapi"],
+
     "@rhi-zone/fractal-worker": ["@rhi-zone/fractal-worker@workspace:packages/worker"],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.60.4", "", { "os": "android", "cpu": "arm" }, "sha512-F5QXMSiFebS9hKZj02XhWLLnRpJ3B3AROP0tWbFBSj+6kCbg5m9j5JoHKd4mmSVy5mS/IMQloYgYxCuJC0fxEQ=="],
@@ -158,6 +178,8 @@
     "@rollup/rollup-win32-x64-gnu": ["@rollup/rollup-win32-x64-gnu@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-DRS4G7mi9lJxqEDezIkKCaUIKCrLUUDCUaCsTPCi/rtqaC6D/jjwslMQyiDU50Ka0JKpeXeRBFBAXwArY52vBw=="],
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-QVTUovf40zgTqlFVrKA1uXMVvU2QWEFWfAH8Wdc48IxLvrJMQVMBRjuQyUpzZCDkakImib9eVazbWlC6ksWtJw=="],
+
+    "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 

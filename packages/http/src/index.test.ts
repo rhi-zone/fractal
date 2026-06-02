@@ -243,6 +243,74 @@ describe('validate', () => {
   })
 })
 
+describe('validate with StandardSchemaV1 fixture', () => {
+  // Hand-rolled StandardSchemaV1 fixture — no real validator dep
+  const testSchema = {
+    '~standard': {
+      version: 1 as const,
+      vendor: 'test',
+      validate(value: unknown) {
+        if (
+          typeof value === 'object' &&
+          value !== null &&
+          typeof (value as Record<string, unknown>)['title'] === 'string'
+        ) {
+          return { value: { title: (value as Record<string, unknown>)['title'] as string } }
+        }
+        return { issues: [{ message: 'expected {title:string}' }] }
+      },
+      jsonSchema: {
+        input: (_opts: { target: string }) => ({ type: 'object', properties: { title: { type: 'string' } }, required: ['title'] }),
+        output: (_opts: { target: string }) => ({ type: 'object', properties: { title: { type: 'string' } }, required: ['title'] }),
+      },
+    },
+  }
+
+  const stdSchemaApp = path<Record<string, never>, ApiResult>({
+    items: methods<Record<string, never>, ApiResult>({
+      POST: body(
+        validate(
+          testSchema,
+          async (req) => ({ id: 99, title: req.body.title, done: false }),
+        ),
+      ) as unknown as typeof createTodoBodyHandler,
+    }),
+  })
+
+  it('accepts valid body', async () => {
+    const r = await serve<ApiResult>(stdSchemaApp, {
+      method: 'POST',
+      url: '/items',
+      body: { title: 'StdSchema todo' },
+    })
+    expect(r.status).toBe(200)
+    expect((r.body as Todo).title).toBe('StdSchema todo')
+  })
+
+  it('rejects invalid body with schema error', async () => {
+    await expect(
+      serve<ApiResult>(stdSchemaApp, {
+        method: 'POST',
+        url: '/items',
+        body: { wrong: 42 },
+      }),
+    ).rejects.toThrow('expected {title:string}')
+  })
+
+  it('body meta carries validate meta with schema', () => {
+    const handler = body(
+      validate(testSchema, async (req) => ({ id: 1, title: req.body.title, done: false })),
+    )
+    expect(handler.meta).toMatchObject({ kind: 'body' })
+    const childMeta = (handler.meta as { child: unknown }).child as Record<string, unknown>
+    expect(childMeta.kind).toBe('validate')
+    expect(childMeta.schema).toMatchObject({
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    })
+  })
+})
+
 describe('nested discharge', () => {
   it('GET /todos returns 200', async () => {
     const r = await serve<ApiResult>(httpApp, { method: 'GET', url: '/todos' })

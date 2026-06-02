@@ -282,7 +282,7 @@ describe('capture', () => {
 })
 
 describe('typed', () => {
-  it('parses params and enriches the request', async () => {
+  it('parses params and enriches the request (raw parse fn)', async () => {
     const inner = leaf<{ id: number }, number>(async (req) => req.params.id)
     const n = typed<{ id: number }, Record<string, never>, number>(
       (raw) => ({ id: Number(raw['id']) }),
@@ -290,6 +290,59 @@ describe('typed', () => {
     expect(n.meta).toMatchObject({ kind: 'typed' })
     const result = await n.handler({ params: { id: '7' } as unknown as Record<string, never> })
     expect(result).toBe(7)
+  })
+
+  it('parses params and enriches the request (StandardSchemaV1 fixture)', async () => {
+    // Hand-rolled StandardSchemaV1 fixture — no real validator dep
+    const testSchema = {
+      '~standard': {
+        version: 1 as const,
+        vendor: 'test',
+        validate(value: unknown) {
+          if (
+            typeof value === 'object' &&
+            value !== null &&
+            typeof (value as Record<string, unknown>)['id'] === 'string'
+          ) {
+            return { value: { id: Number((value as Record<string, unknown>)['id']) } }
+          }
+          return { issues: [{ message: 'expected {id:string}' }] }
+        },
+        jsonSchema: {
+          input: (_opts: { target: string }) => ({ type: 'object', properties: { id: { type: 'string' } } }),
+          output: (_opts: { target: string }) => ({ type: 'object', properties: { id: { type: 'number' } } }),
+        },
+      },
+    }
+
+    const inner = leaf<{ id: number }, number>(async (req) => req.params.id)
+    const n = typed<{ id: number }, Record<string, never>, number>(testSchema)(inner)
+    expect(n.meta).toMatchObject({ kind: 'typed' })
+    // schema should be the output JSON-Schema from the fixture
+    expect((n.meta as { schema: unknown }).schema).toMatchObject({
+      type: 'object',
+      properties: { id: { type: 'number' } },
+    })
+    const result = await n.handler({ params: { id: '7' } as unknown as Record<string, never> })
+    expect(result).toBe(7)
+  })
+
+  it('throws on invalid input with StandardSchemaV1', async () => {
+    type IdOut = { id: number }
+    const failSchema: import('./index.ts').StandardSchemaV1<Record<string, unknown>, IdOut> = {
+      '~standard': {
+        version: 1 as const,
+        vendor: 'test',
+        validate(_value: unknown): import('./index.ts').StandardSchemaV1.Result<IdOut> {
+          return { issues: [{ message: 'always fails' }] }
+        },
+      },
+    }
+    const inner = leaf<IdOut, number>(async (req) => req.params.id)
+    const n = typed<IdOut, Record<string, never>, number>(failSchema)(inner)
+    await expect(
+      n.handler({ params: {} as Record<string, never> }),
+    ).rejects.toThrow('always fails')
   })
 })
 

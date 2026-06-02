@@ -5,11 +5,13 @@
   "description": "Example todo API using fractal-core + fractal-http",
   "type": "module",
   "scripts": {
-    "typecheck":  "tsgo --noEmit",
-    "test":       "bun test"
+    "typecheck":        "tsgo --noEmit",
+    "test":             "bun test",
+    "generate-openapi": "bun run src/generate-openapi.ts"
   },
   "dependencies": {
-    "@rhi-zone/fractal-core": "workspace:*",
-    "@rhi-zone/fractal-http":  "workspace:*"
+    "@rhi-zone/fractal-core":    "workspace:*",
+    "@rhi-zone/fractal-http":    "workspace:*",
+    "@rhi-zone/fractal-openapi": "workspace:*"
   }
 }

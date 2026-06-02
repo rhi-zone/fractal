@@ -25,7 +25,9 @@ import {
   type Req,
   type Node,
   capture,
+  resolveSchema,
 } from '@rhi-zone/fractal-core'
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 
 // ---------------------------------------------------------------------------
 // HTTP request fields (kit-internal shape)
@@ -51,7 +53,7 @@ export type ParamMeta   = { kind: "param";   name: string; in: "path"; schema: {
 export type QueryMeta   = { kind: "query";   name: string; in: "query"; schema: { type: "string" }; child: import('@rhi-zone/fractal-core').Meta }
 export type HeaderMeta  = { kind: "header";  name: string; in: "header"; schema: { type: "string" }; child: import('@rhi-zone/fractal-core').Meta }
 export type BodyMeta    = { kind: "body";    child: import('@rhi-zone/fractal-core').Meta }
-export type ValidateMeta = { kind: "validate"; schema: unknown; child: import('@rhi-zone/fractal-core').Meta }
+export type ValidateMeta = { kind: "validate"; schema: Record<string, unknown>; child: import('@rhi-zone/fractal-core').Meta }
 
 // ---------------------------------------------------------------------------
 // HTTP kit combinators
@@ -245,13 +247,19 @@ export type HandlerWithBody<
  * LAZINESS: the thunk is called only here. A route that does not include
  * body() in its chain never triggers the thunk.
  *
- * meta: { kind: "body", child: child.meta }
+ * If `child` is a ValidatedHandler (from `validate()`), the schema from the
+ * validator is embedded in the meta descriptor for OpenAPI projection.
+ *
+ * meta: { kind: "body", child: validate.meta | { kind: "leaf" } }
  */
 export function body<P extends Record<string, unknown>, Res>(
   child: HandlerWithBody<P, unknown, Res>,
 ): Node<P, Res> {
+  const childMeta: import('@rhi-zone/fractal-core').Meta =
+    (child as Partial<ValidatedHandler<P, unknown, Res>>).validatedMeta ?? { kind: 'leaf' }
+
   return {
-    meta: { kind: "body", child: { kind: "leaf" } } satisfies BodyMeta,
+    meta: { kind: "body", child: childMeta } satisfies BodyMeta,
     handler: async (req) => {
       const httpReq = req as HttpReq<P>
       const rawBody = httpReq.body !== undefined ? await httpReq.body() : undefined
@@ -264,34 +272,77 @@ export function body<P extends Record<string, unknown>, Res>(
   }
 }
 
+// ---------------------------------------------------------------------------
+// ValidatedHandler — a HandlerWithBody annotated with a schema meta
+// ---------------------------------------------------------------------------
+
+/**
+ * ValidatedHandler: a HandlerWithBody with an optional `validatedMeta`
+ * property so that `body()` can pick up the schema for OpenAPI projection.
+ */
+export type ValidatedHandler<
+  P extends Record<string, unknown>,
+  T,
+  Res,
+> = HandlerWithBody<P, unknown, Res> & { validatedMeta?: ValidateMeta }
+
 /**
  * validate: SYNC combinator that returns an async per-request handler.
  *
- * Takes a parse function (unknown → T | Promise<T>), wraps a HandlerWithBody<P,T,Res>,
- * and returns a HandlerWithBody<P,unknown,Res> — SYNCHRONOUSLY.
+ * Accepts either:
+ *   - a raw parse function: (raw: unknown) => T | Promise<T>
+ *   - a StandardSchemaV1<unknown, T>: uses schema['~standard'].validate
+ *
+ * Returns a ValidatedHandler (a HandlerWithBody with an optional `.validatedMeta`)
+ * so that `body()` can embed the schema in its meta descriptor.
  *
  * The async work happens PER REQUEST inside the returned handler. Building
  * the route tree is pure data construction and is synchronous.
- *
- * A Standard Schema validator slots in here:
- *   validate(v => schema.parse(v), inner)
- *
- * Note: validate returns a HandlerWithBody (not a Node) so it can be
- * composed into body(validate(parse, inner)).
  */
 export function validate<
   T,
   P extends Record<string, unknown> = Record<string, never>,
   Res = unknown,
 >(
-  parse: (raw: unknown) => T | Promise<T>,
+  schemaOrParse: StandardSchemaV1<unknown, T> | ((raw: unknown) => T | Promise<T>),
   inner: HandlerWithBody<P, T, Res>,
-): HandlerWithBody<P, unknown, Res> {
-  return async (req) => {
-    const parsed = await parse(req.body)
+): ValidatedHandler<P, T, Res> {
+  const isStdSchema = (
+    typeof schemaOrParse === 'object' &&
+    schemaOrParse !== null &&
+    '~standard' in schemaOrParse
+  )
+
+  // Extract JSON-Schema for meta (best-effort; `{}` if unavailable)
+  const jsonSchema: Record<string, unknown> = isStdSchema
+    ? resolveSchema(schemaOrParse as StandardSchemaV1, 'input')
+    : {}
+
+  const parseFn = isStdSchema
+    ? async (raw: unknown): Promise<T> => {
+        const result = await (schemaOrParse as StandardSchemaV1<unknown, T>)['~standard'].validate(raw)
+        if (result.issues) {
+          throw new Error(
+            `[fractal-http] validate: validation failed — ${result.issues.map((i) => i.message).join(', ')}`,
+          )
+        }
+        return result.value
+      }
+    : (raw: unknown) => Promise.resolve((schemaOrParse as (raw: unknown) => T | Promise<T>)(raw))
+
+  const handler: ValidatedHandler<P, T, Res> = async (req) => {
+    const parsed = await parseFn(req.body)
     const enriched: ReqWithBody<P, T> = { ...req, body: parsed }
     return inner(enriched)
   }
+
+  handler.validatedMeta = {
+    kind: 'validate',
+    schema: jsonSchema,
+    child: { kind: 'leaf' },
+  } satisfies ValidateMeta
+
+  return handler
 }
 
 // ---------------------------------------------------------------------------
@@ -360,5 +411,5 @@ export async function serve<Res>(
 }
 
 // Re-export core for consumers that only import fractal-http
-export type { Handler, Req, Pass, Node, Meta, NodeMiddleware } from '@rhi-zone/fractal-core'
-export { pass, leaf, typed, pipe, run, choice } from '@rhi-zone/fractal-core'
+export type { Handler, Req, Pass, Node, Meta, NodeMiddleware, StandardSchemaV1, StandardJSONSchemaV1 } from '@rhi-zone/fractal-core'
+export { pass, leaf, typed, pipe, run, choice, resolveSchema } from '@rhi-zone/fractal-core'
