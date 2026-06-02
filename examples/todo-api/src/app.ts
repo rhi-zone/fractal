@@ -2,22 +2,24 @@
 // A real example: a few routes using path/param/methods/body+validate/header.
 // Served via the http kit. No external deps beyond the fractal packages.
 //
-// The composition unit is Node<P,Res> = { meta, handler }.
+// The composition unit is Node<P,Res,M> = { meta: M; handler }.
 // app.meta is walkable — toOpenApi(app, info) projects it to OpenAPI 3.0.
 //
 // Demonstrates:
 //   - StandardSchemaV1 with jsonSchema trait → real requestBody schema in OpenAPI
 //   - NodeMiddleware (withSecurity) contributing a security descriptor to meta
 //     and enforcing at request time — the same node runs both
+//   - route() both-and combinator: collection at /todos (GET/POST) and param
+//     fallthrough at /todos/{id} (GET) in ONE node — no choice() for routing
 
 import {
   path,
   methods,
-  param,
   query,
   header,
   body,
   validate,
+  route,
   choice,
   leaf,
   typed,
@@ -163,19 +165,44 @@ const createHandler: Node<Record<string, never>, ApiResult> = requireBearerAuth(
 )
 
 // ── routing tree ──────────────────────────────────────────────────────────────
+//
+// route() both-and combinator:
+//   collection = choice(query-limit, header-tenant, methods(GET/POST))
+//     → handles /todos (GET, POST) at path-exhausted
+//   param = { name: 'id', child: methods({ GET: getById }) }
+//     → handles /todos/{id} (GET) via param fallthrough
+//
+// The collection uses choice() internally for the query/header variants.
+// choice() is fine here — it's inside the collection node, not at the routing
+// level. The route() combinator itself carries precise meta for client derivation.
 
-export const app: Node<Record<string, never>, ApiResult> = path<Record<string, never>, ApiResult>({
-  todos: choice<Record<string, never>, ApiResult>(
-    // GET /todos?limit=N
-    query('limit', methods<{ limit: string }, ApiResult>({ GET: listWithLimit })),
-    // GET /todos with x-tenant header
-    header('x-tenant', methods<{ 'x-tenant': string }, ApiResult>({ GET: listForTenant })),
-    // GET /todos or POST /todos (POST requires bearer auth)
-    methods<Record<string, never>, ApiResult>({
-      GET: listAll,
-      POST: createHandler,
-    }),
-    // GET /todos/:id
-    param('id', methods<{ id: string }, ApiResult>({ GET: getById })),
-  ),
-})
+const todosCollection = choice(
+  // GET /todos?limit=N
+  query('limit', methods({ GET: listWithLimit })),
+  // GET /todos with x-tenant header
+  header('x-tenant', methods({ GET: listForTenant })),
+  // GET /todos or POST /todos (POST requires bearer auth)
+  methods({
+    GET: listAll,
+    POST: createHandler,
+  }),
+) as unknown as Node<Record<string, never>, ApiResult>
+
+const todosItemNode = methods({
+  GET: getById as unknown as Node<Record<string, never>, ApiResult>,
+}) as unknown as Node<Record<string, never>, ApiResult>
+
+// todosRoute: both-and — collection at /todos, param fallthrough at /todos/{id}
+const todosRoute = route(
+  todosCollection,
+  {
+    param: {
+      name: 'id' as const,
+      child: todosItemNode,
+    },
+  },
+)
+
+export const app: Node<Record<string, never>, ApiResult> = path({
+  todos: todosRoute,
+}) as unknown as Node<Record<string, never>, ApiResult>

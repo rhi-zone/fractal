@@ -10,10 +10,10 @@ Implemented in `packages/core` + `packages/http` + `packages/worker`, verified b
 
 | Package | Contents |
 |---|---|
-| `@rhi-zone/fractal-core` | `Pass`/`pass`, `Req<P>`, `Handler<P,Res>`, `Meta`, `Node<P,Res>`, `NodeMiddleware`, `choice`, `pipe`, `capture` (generic in V), `typed` (sync combinator, accepts `StandardSchemaV1`), `leaf`, `run`, `resolveSchema` |
-| `@rhi-zone/fractal-http` | `path`, `methods` (with path-exhaustion guard), `param`/`query`/`header` (V=string, via core `capture`), `body` (lazy thunk handle), `validate` (sync combinator / async per-request handler, accepts `StandardSchemaV1`), `serve`, HTTP `Req` shape; HTTP-specific meta types (`PathMeta`, `MethodsMeta`, `ParamMeta`, `QueryMeta`, `HeaderMeta`, `BodyMeta`, `ValidateMeta`) |
+| `@rhi-zone/fractal-core` | `Pass`/`pass`, `Req<P>`, `Handler<P,Res>`, `Meta`, `Node<P,Res,M>` (3rd param M = precise meta), `NodeMiddleware`, `choice` (general alternation, opaque to typed client), `pipe`, `capture` (generic in V), `typed` (sync combinator, accepts `StandardSchemaV1`), `leaf`, `run`, `resolveSchema` |
+| `@rhi-zone/fractal-http` | `path<T>`, `methods<T>` (path-exhaustion guard; both generic over literal table type), `param`/`query`/`header` (V=string, via core `capture`), `body` (lazy thunk handle), `validate` (sync combinator / async per-request handler, accepts `StandardSchemaV1`), `route(collection?, {children?,param?})` (both-and; type-precise for client derivation), `serve`, HTTP `Req` shape; HTTP-specific meta types (`PathMeta<T>`, `MethodsMeta<T>`, `ParamMeta<K,M>`, `BodyMeta`, `ValidateMeta`, `RouteMeta`) |
 | `@rhi-zone/fractal-worker` | `procedure`, `field` (generic V, eager already-typed value), `dispatch`, worker `Req` shape; worker-specific meta types (`ProcedureMeta`, `FieldMeta`) |
-| `@rhi-zone/fractal-openapi` | `toOpenApi(node, info): OpenApiDocument`, `toJsonSchema(node, opts?): JsonSchemaFragment` — walk `.meta` to produce OpenAPI 3.0 or JSON-Schema |
+| `@rhi-zone/fractal-openapi` | `toOpenApi(node, info): OpenApiDocument`, `toJsonSchema(node, opts?): JsonSchemaFragment` — walk `.meta` to produce OpenAPI 3.0 or JSON-Schema; handles `route` kind |
 
 ---
 
@@ -23,9 +23,13 @@ Implemented in `packages/core` + `packages/http` + `packages/worker`, verified b
 type Handler<P extends Record<string, unknown> = Record<string, never>, Res = unknown> =
   (req: Req<P>) => Promise<Res | Pass>
 
-type Node<P extends Record<string, unknown> = Record<string, never>, Res = unknown> = {
-  meta: Meta    // reflection descriptor — walkable, serialisable
-  handler: Handler<P, Res>  // the executable
+type Node<
+  P extends Record<string, unknown> = Record<string, never>,
+  Res = unknown,
+  M extends Meta = Meta,   // ← 3rd param: the precise meta type (default: wide Meta)
+> = {
+  meta: M                  // precise meta type, not just Meta
+  handler: Handler<P, Res>
 }
 ```
 
@@ -33,6 +37,8 @@ type Node<P extends Record<string, unknown> = Record<string, never>, Res = unkno
 
 - `meta` carries the descriptor tree: `{ kind: "leaf" }`, `{ kind: "choice", children: Meta[] }`, `{ kind: "param", name, in: "path", schema, child }`, etc. The tree is walkable for reflection, code generation, or documentation (e.g. OpenAPI).
 - `handler` is the side-effecting function. Swapping out a `handler` (e.g. replacing an in-process leaf with a network call) does not require changing the tree structure.
+
+**The 3rd type parameter `M`** preserves the precise meta type of a node. It defaults to the wide `Meta` union so existing `Node<P,Res>` usages compile unchanged. When combinators are generic over their table type `T`, `M` carries literal key names and child meta types — enabling typed-client derivation from the tree structure at the type level. Example: `path({todos: methods({GET: leaf(...)})})` returns `Node<{}, unknown, PathMeta<{todos: Node<{}, unknown, MethodsMeta<{GET: Node<{}, Todo[], LeafMeta>}>>}>>` — the full route structure is reified in the type.
 
 `P` is the set of params the handler **requires** from above. Default `Record<string,never>` = needs nothing. `Pass` means "not me — try the next handler." Every combinator is `Node`:
 
@@ -123,29 +129,62 @@ Accepts only a fully-discharged Node (P = {}). A Node with any remaining param r
 
 ### `path`
 
-Dispatches on the first segment of `req.path`, consumes it, passes the tail to the matched child. Returns `Pass` if no segment or no match.
-meta: `{ kind: "path", children: { [seg]: child.meta } }`
+```ts
+function path<T extends Record<string, NodeShape>>(table: T): Node<{}, unknown, PathMeta<T>>
+```
+
+Dispatches on the first segment of `req.path`, consumes it, passes the tail to the matched child. Returns `Pass` if no segment or no match. `T` is inferred from the table so literal segment keys and child meta types are preserved — enabling typed-client derivation.
+meta: `{ kind: "path", children: T }` (full child nodes stored, not just metas; walker extracts `.meta`)
 
 ### `methods`
 
 ```ts
-function methods<P, Res>(table: Record<string, Node<P, Res>>): Node<P, Res>
+function methods<T extends Record<string, NodeShape>>(table: T): Node<{}, unknown, MethodsMeta<T>>
 ```
 
-Dispatches on `req.method`. **Path-exhaustion guard**: returns `Pass` if `req.path` is non-empty — `methods` only fires when all path segments have been consumed by enclosing `path` and `param` combinators.
-meta: `{ kind: "methods", verbs: { [VERB]: child.meta } }`
+Dispatches on `req.method`. **Path-exhaustion guard**: returns `Pass` if `req.path` is non-empty — `methods` only fires when all path segments have been consumed by enclosing `path`, `param`, or `route` combinators. `T` is inferred so literal verb keys and child meta types survive.
+meta: `{ kind: "methods", verbs: T }` (full child nodes stored)
+
+### `route` — both-and combinator
+
+```ts
+function route<Collection, Children, ParamK, ParamChild>(
+  collection: Collection,           // a methods(...) node, handles path-exhausted case
+  options?: {
+    children?: Children             // exact-segment child map
+    param?: { name: ParamK; child: ParamChild }  // named param fallthrough
+  }
+): Node<{}, unknown, RouteMeta<Collection, Children, ParamK, ParamChild>>
+```
+
+The structured routing combinator. A single node that handles collection + exact children + param fallthrough **without `choice()`**, so the typed client can derive a callable-object hybrid surface.
+
+**Dispatch order** (first match wins):
+1. Path exhausted (`req.path.length === 0`) → delegate to `collection`
+2. Exact segment match (`req.path[0]` in `children`) → delegate to matching child
+3. No exact match, param slot present → inject segment as `params[name]`, delegate to `param.child`
+4. None of the above → `Pass`
+
+`RouteMeta<Collection, Children, ParamK, ParamChild>` preserves:
+- `collection`: the collection node (carries collection verb types)
+- `children`: literal exact-child map (carries child meta types)
+- `param`: `{ name: ParamK; child: ParamChild }` (carries param key name + child meta)
+
+The typed client (forthcoming) derives a callable-object hybrid: `client.todos(id)` (param callable) intersected with `{ GET(), POST(body) }` (collection verbs) intersected with exact children.
+
+`choice()` stays the **general alternation primitive** — its branches collapse into `ChoiceMeta<children: Meta[]>` and literal keys are NOT preserved. Use `choice()` when composing branches that don't need typed-client traversal (e.g., query/header variants inside a collection). Use `route()` for the structural collection+param routing that the typed client must traverse.
 
 ### `param`
 
 ```ts
-function param<K extends string, C extends Record<K, string>, Res>(
+function param<K extends string, C extends Record<K, string>, Res, M extends Meta>(
   name: K,
-  child: Node<C, Res>,
-): Node<Omit<C, K>, Res>
+  child: Node<C, Res, M>,
+): Node<Omit<C, K>, Res, ParamMeta<K, M>>
 ```
 
-Captures the next path segment as the string-typed param `name`. V is pinned to `string` via `C extends Record<K, string>`. A child wanting `{ x: number }` cannot be `param`-captured directly — G1 safety: `param('x', leaf<{x:number}>(...))` is a compile error, verified by `@ts-expect-error` in `packages/http/src/index.ts`.
-meta: `{ kind: "param", name, in: "path", schema: { type: "string" }, child: child.meta }`
+Captures the next path segment as the string-typed param `name`. V is pinned to `string` via `C extends Record<K, string>`. Generic over `M` (child meta) so `ParamMeta<K, M>` preserves the child's precise meta type for typed-client derivation. A child wanting `{ x: number }` cannot be `param`-captured directly — G1 safety: `param('x', leaf<{x:number}>(...))` is a compile error, verified by `@ts-expect-error` in `packages/http/src/index.ts`.
+meta: `{ kind: "param", name, in: "path", schema: { type: "string" }, child: child.meta }` (`child` is a raw Meta, not a full node)
 
 ### `query` / `header`
 
@@ -230,18 +269,19 @@ Meta variants produced by each combinator:
 | Combinator | meta.kind | extra fields |
 |---|---|---|
 | `leaf` | `"leaf"` | — |
-| `choice` | `"choice"` | `children: Meta[]` |
+| `choice` | `"choice"` | `children: Meta[]` (opaque to typed client) |
 | `capture` | `"capture"` | `name, child` |
 | `typed` | `"typed"` | `schema, child` |
-| `path` | `"path"` | `children: Record<seg, Meta>` |
-| `methods` | `"methods"` | `verbs: Record<verb, Meta>` |
-| `param` | `"param"` | `name, in: "path", schema, child` |
-| `query` | `"query"` | `name, in: "query", schema, child` |
-| `header` | `"header"` | `name, in: "header", schema, child` |
-| `body` | `"body"` | `child` |
+| `path` | `"path"` | `children: Record<seg, NodeShape>` (full nodes; literal keys preserved) |
+| `methods` | `"methods"` | `verbs: Record<verb, NodeShape>` (full nodes; literal keys preserved) |
+| `param` | `"param"` | `name, in: "path", schema, child: Meta` |
+| `query` | `"query"` | `name, in: "query", schema, child: Meta` |
+| `header` | `"header"` | `name, in: "header", schema, child: Meta` |
+| `body` | `"body"` | `child: Meta` |
+| `route` | `"route"` | `collection: NodeShape\|undefined, children: Record<seg, NodeShape>, param: {name,child:NodeShape}\|undefined` |
 | `procedure` | `"procedure"` | `procedures: Record<name, Meta>` |
-| `field` | `"field"` | `name, child` |
-| `withSecurity` (NodeMiddleware) | `"security"` | `schemes: Array<Record<string,string[]>>, child` |
+| `field` | `"field"` | `name, child: Meta` |
+| `withSecurity` (NodeMiddleware) | `"security"` | `schemes: Array<Record<string,string[]>>, child: Meta` |
 
 **OpenAPI projection** from `Meta` is implemented in `@rhi-zone/fractal-openapi`. The `toOpenApi(node, info)` function walks `node.meta` to produce a full OpenAPI 3.0 document. `toJsonSchema(node, opts?)` produces a JSON-Schema fragment. Standard Schema (`@standard-schema/spec`) feeds both validation and the emitted schemas — `TypedMeta.schema` and `ValidateMeta.schema` carry JSON-Schema objects derived from `schema['~standard'].jsonSchema?.output?.({ target: 'openapi-3.0' })`; if the trait is absent or throws, `{}` is stored (graceful degradation). The proof of concept `walk()` function lives in `spike/node-reflect.ts`.
 

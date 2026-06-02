@@ -2,8 +2,9 @@
 //
 // HTTP kit built on @rhi-zone/fractal-core.
 //
-// Every combinator produces/consumes Node<P,Res> = { meta, handler }.
-// meta descriptors are rich enough for OpenAPI projection (future package).
+// Every combinator produces/consumes Node<P,Res,M> = { meta: M; handler }.
+// meta descriptors are rich enough for OpenAPI projection and typed-client
+// derivation (see packages/openapi, and the upcoming client package).
 //
 // Provides:
 //   - path(table): dispatch on first path segment, consume it
@@ -13,10 +14,16 @@
 //   - header(name, child): captures HTTP header value → string
 //   - body(child): pulls the LAZY body handle
 //   - validate(parse, inner): SYNC combinator → async per-request handler
+//   - route(collection?, opts): both-and combinator: collection at path-exhausted,
+//     exact children, param fallthrough — carries TRouteMeta for client derivation
 //   - serve(node, req): run an HTTP request through a fully-discharged Node
 //
 // V=string pinning: param/query/header pin V=string via C extends Record<K,string>.
 // G1 safety: param('x', leaf<{x:number}>(...)) is a COMPILE ERROR.
+//
+// choice() stays the general alternation primitive. Its branches collapse —
+// literal keys are NOT preserved in the meta type, making it opaque to the
+// typed client (like pred to OpenAPI). Use route() for structured routing.
 
 import {
   type Pass,
@@ -24,6 +31,7 @@ import {
   type Handler,
   type Req,
   type Node,
+  type Meta,
   capture,
   resolveSchema,
 } from '@rhi-zone/fractal-core'
@@ -44,16 +52,79 @@ type HttpFields = {
 type HttpReq<P extends Record<string, unknown>> = Req<P> & HttpFields
 
 // ---------------------------------------------------------------------------
-// HTTP-specific meta variants
+// NodeShape: the open shape used in table constraints.
+// Loose on P, Res, M — combinators only need to call handler.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface NodeShape extends Node<any, any, any> {}
+
+// ---------------------------------------------------------------------------
+// HTTP-specific meta variants — tightened to carry literal table types
+//
+// PathMeta<Children>, MethodsMeta<Verbs>, ParamMeta<K,M>, BodyMeta<T,M>
+// preserve literal keys + child meta types for typed-client derivation.
+// The wide-union aliases (PathMeta, MethodsMeta, etc.) export the narrowed
+// generic forms; existing code using `meta.children` or `meta.verbs` as
+// Record<string,Meta> continues to work via the open-record constraint.
 // ---------------------------------------------------------------------------
 
-export type PathMeta    = { kind: "path";    children: Record<string, import('@rhi-zone/fractal-core').Meta> }
-export type MethodsMeta = { kind: "methods"; verbs: Record<string, import('@rhi-zone/fractal-core').Meta> }
-export type ParamMeta   = { kind: "param";   name: string; in: "path"; schema: { type: "string" }; child: import('@rhi-zone/fractal-core').Meta }
-export type QueryMeta   = { kind: "query";   name: string; in: "query"; schema: { type: "string" }; child: import('@rhi-zone/fractal-core').Meta }
-export type HeaderMeta  = { kind: "header";  name: string; in: "header"; schema: { type: "string" }; child: import('@rhi-zone/fractal-core').Meta }
-export type BodyMeta    = { kind: "body";    child: import('@rhi-zone/fractal-core').Meta }
-export type ValidateMeta = { kind: "validate"; schema: Record<string, unknown>; child: import('@rhi-zone/fractal-core').Meta }
+export type PathMeta<Children extends Record<string, NodeShape> = Record<string, NodeShape>> = {
+  kind: "path"
+  children: Children
+}
+
+export type MethodsMeta<Verbs extends Record<string, NodeShape> = Record<string, NodeShape>> = {
+  kind: "methods"
+  verbs: Verbs
+}
+
+export type ParamMeta<K extends string = string, ChildMeta extends Meta = Meta> = {
+  kind: "param"
+  name: K
+  in: "path"
+  schema: { type: "string" }
+  child: ChildMeta
+}
+
+export type QueryMeta   = { kind: "query";   name: string; in: "query"; schema: { type: "string" }; child: Meta }
+export type HeaderMeta  = { kind: "header";  name: string; in: "header"; schema: { type: "string" }; child: Meta }
+
+export type BodyMeta<T = unknown, ChildMeta extends Meta = Meta> = {
+  kind: "body"
+  _bodyType?: T
+  child: ChildMeta
+}
+
+export type ValidateMeta = { kind: "validate"; schema: Record<string, unknown>; child: Meta }
+
+// ---------------------------------------------------------------------------
+// TRouteMeta — the both-and route combinator's meta type.
+//
+// Carries all three slots: collection, exact children, param fallthrough.
+// Each slot's type is preserved literally for typed-client derivation.
+//
+// ParamSpec<K, Child>: the param slot — a named param key and its child node.
+//
+// Circular-ref note: The recursive Meta union uses `any` inside TRouteMeta
+// to avoid TS2456 circular-alias errors (same pattern as spike/path-bothand.ts).
+// ---------------------------------------------------------------------------
+
+export type ParamSpec<K extends string = string, Child extends NodeShape = NodeShape> = {
+  name: K
+  child: Child
+}
+
+export type RouteMeta<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Collection extends NodeShape | undefined = any,
+  Children extends Record<string, NodeShape> = Record<string, NodeShape>,
+  ParamK extends string = string,
+  ParamChild extends NodeShape = NodeShape,
+> = {
+  kind: "route"
+  collection: Collection
+  children: Children
+  param: ParamSpec<ParamK, ParamChild> | undefined
+}
 
 // ---------------------------------------------------------------------------
 // HTTP kit combinators
@@ -62,24 +133,24 @@ export type ValidateMeta = { kind: "validate"; schema: Record<string, unknown>; 
 /**
  * path: dispatch on the first segment of req.path, consume it.
  * Returns Pass if no segment or no match.
- * meta: { kind: "path", children: { [seg]: child.meta } }
+ * Generic over the literal table type T so child keys + child meta types
+ * are preserved for typed-client derivation.
+ * meta: { kind: "path", children: { [seg]: childNode } }
  */
-export function path<P extends Record<string, unknown>, Res>(
-  table: Record<string, Node<P, Res>>,
-): Node<P, Res> {
-  const childMetas: Record<string, import('@rhi-zone/fractal-core').Meta> = {}
-  for (const [k, n] of Object.entries(table)) {
-    childMetas[k] = n.meta
-  }
+export function path<
+  T extends Record<string, NodeShape>,
+>(table: T): Node<Record<string, never>, unknown, PathMeta<T>> {
   return {
-    meta: { kind: "path", children: childMetas } satisfies PathMeta,
+    meta: { kind: "path", children: table } satisfies PathMeta<T>,
     handler: async (req) => {
-      const httpReq = req as HttpReq<P>
+      const httpReq = req as HttpReq<Record<string, never>>
       const [seg, ...rest] = httpReq.path
       if (seg === undefined) return pass
-      const n = table[seg]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n = table[seg] as NodeShape | undefined
       if (n === undefined) return pass
-      return n.handler({ ...req, path: rest })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return n.handler({ ...req, path: rest } as Req<any>)
     },
   }
 }
@@ -89,24 +160,24 @@ export function path<P extends Record<string, unknown>, Res>(
  * Returns Pass if no match OR if the path is not fully consumed (non-empty).
  * This makes methods a leaf-level combinator: it only fires when all path
  * segments have been consumed by enclosing path and param combinators.
- * meta: { kind: "methods", verbs: { [VERB]: child.meta } }
+ * Generic over the literal table type T so verb keys + child meta types
+ * are preserved for typed-client derivation.
+ * meta: { kind: "methods", verbs: { [VERB]: childNode } }
  */
-export function methods<P extends Record<string, unknown>, Res>(
-  table: Record<string, Node<P, Res>>,
-): Node<P, Res> {
-  const verbMetas: Record<string, import('@rhi-zone/fractal-core').Meta> = {}
-  for (const [k, n] of Object.entries(table)) {
-    verbMetas[k] = n.meta
-  }
+export function methods<
+  T extends Record<string, NodeShape>,
+>(table: T): Node<Record<string, never>, unknown, MethodsMeta<T>> {
   return {
-    meta: { kind: "methods", verbs: verbMetas } satisfies MethodsMeta,
+    meta: { kind: "methods", verbs: table } satisfies MethodsMeta<T>,
     handler: async (req) => {
-      const httpReq = req as HttpReq<P>
+      const httpReq = req as HttpReq<Record<string, never>>
       // Only match at the leaf — pass through if path is not exhausted.
       if (httpReq.path.length > 0) return pass
-      const n = table[httpReq.method]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n = table[httpReq.method] as NodeShape | undefined
       if (n === undefined) return pass
-      return n.handler(req)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return n.handler(req as Req<any>)
     },
   }
 }
@@ -125,16 +196,20 @@ export function methods<P extends Record<string, unknown>, Res>(
  * {x:number} does not satisfy C extends Record<'x',string>.
  * Confirmed by the @ts-expect-error probe below.
  *
+ * Generic over M (child meta) so the child's precise meta type is preserved
+ * in ParamMeta<K, M> for typed-client derivation.
+ *
  * meta: { kind: "param", name, in: "path", schema: {type:"string"}, child: child.meta }
  */
 export function param<
   K extends string,
   C extends Record<K, string>,
   Res,
->(name: K, child: Node<C, Res>): Node<Omit<C, K>, Res> {
+  M extends Meta = Meta,
+>(name: K, child: Node<C, Res, M>): Node<Omit<C, K>, Res, ParamMeta<K, M>> {
   const childMeta = child.meta
   return {
-    meta: { kind: "param", name, in: "path", schema: { type: "string" }, child: childMeta } satisfies ParamMeta,
+    meta: { kind: "param", name, in: "path", schema: { type: "string" }, child: childMeta } satisfies ParamMeta<K, M>,
     handler: async (req) => {
       const httpReq = req as HttpReq<Omit<C, K>>
       const [seg, ...rest] = httpReq.path
@@ -255,7 +330,7 @@ export type HandlerWithBody<
 export function body<P extends Record<string, unknown>, Res>(
   child: HandlerWithBody<P, unknown, Res>,
 ): Node<P, Res> {
-  const childMeta: import('@rhi-zone/fractal-core').Meta =
+  const childMeta: Meta =
     (child as Partial<ValidatedHandler<P, unknown, Res>>).validatedMeta ?? { kind: 'leaf' }
 
   return {
@@ -343,6 +418,107 @@ export function validate<
   } satisfies ValidateMeta
 
   return handler
+}
+
+// ---------------------------------------------------------------------------
+// route() — the both-and combinator
+//
+// route(collection?, { children?, param? })
+//
+// A single node that handles:
+//   - path exhausted → delegate to collection (a methods node)
+//   - exact segment match → delegate to matching child
+//   - no exact match → delegate to param child (captures segment as named param)
+//   - no param child → Pass
+//
+// Dispatch order: path-exhausted → collection; exact child; param fallthrough; Pass.
+//
+// TRouteMeta carries all three slots with precise types, enabling the typed client
+// to derive a callable-object hybrid surface (callable for param, properties for
+// collection verbs and exact children).
+//
+// choice() stays the general alternation primitive (opaque to the typed client).
+// route() is the structured routing combinator (transparent to the typed client).
+// ---------------------------------------------------------------------------
+
+type RouteOptions<
+  Children extends Record<string, NodeShape>,
+  ParamK extends string,
+  ParamChild extends NodeShape,
+> = {
+  children?: Children
+  param?: ParamSpec<ParamK, ParamChild>
+}
+
+// Overload 1: collection present
+export function route<
+  Collection extends NodeShape,
+  Children extends Record<string, NodeShape> = Record<never, never>,
+  ParamK extends string = never,
+  ParamChild extends NodeShape = never,
+>(
+  collection: Collection,
+  options?: RouteOptions<Children, ParamK, ParamChild>,
+): Node<Record<string, never>, unknown, RouteMeta<Collection, Children, ParamK, ParamChild>>
+
+// Overload 2: no collection (explicit undefined)
+export function route<
+  Children extends Record<string, NodeShape>,
+  ParamK extends string = never,
+  ParamChild extends NodeShape = never,
+>(
+  collection: undefined,
+  options: RouteOptions<Children, ParamK, ParamChild>,
+): Node<Record<string, never>, unknown, RouteMeta<undefined, Children, ParamK, ParamChild>>
+
+// Implementation
+export function route(
+  collection: NodeShape | undefined,
+  options: RouteOptions<Record<string, NodeShape>, string, NodeShape> = {},
+): Node<Record<string, never>, unknown, RouteMeta> {
+  const children = options.children ?? {} as Record<string, NodeShape>
+  const paramSpec = options.param
+
+  const meta: RouteMeta = {
+    kind: "route",
+    collection,
+    children,
+    param: paramSpec,
+  }
+
+  const handler: Handler<Record<string, never>, unknown> = async (req) => {
+    const httpReq = req as HttpReq<Record<string, never>>
+    const [seg, ...rest] = httpReq.path
+
+    // Path exhausted → collection
+    if (seg === undefined) {
+      if (collection === undefined) return pass
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return collection.handler({ ...req, path: [] } as Req<any>)
+    }
+
+    // Exact child match
+    const exactChild = children[seg] as NodeShape | undefined
+    if (exactChild !== undefined) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return exactChild.handler({ ...req, path: rest } as Req<any>)
+    }
+
+    // Param fallthrough
+    if (paramSpec !== undefined) {
+      const enriched = {
+        ...req,
+        path: rest,
+        params: { ...(req.params as object), [paramSpec.name]: seg },
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return paramSpec.child.handler(enriched as Req<any>)
+    }
+
+    return pass
+  }
+
+  return { meta, handler }
 }
 
 // ---------------------------------------------------------------------------

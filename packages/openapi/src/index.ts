@@ -12,9 +12,14 @@
 //
 // Meta kinds handled:
 //   leaf, choice, path, methods, param, query, header, body, validate, typed,
-//   capture, pipe  →  honoured
+//   capture, pipe, route  →  honoured
 //   procedure, field  →  skipped (worker-kit; warn + skip)
 //   unknown kind     →  warn + skip
+//
+// route: both-and combinator (fractal-http). Emits:
+//   - collection ops at the current prefix (path-exhausted case)
+//   - exact-child ops at prefix/seg for each child
+//   - param ops at prefix/{name} for the param fallthrough child
 //
 // Standard Schema JSON-Schema trait: schemas on TypedMeta/ValidateMeta carry
 // the JSON-Schema extracted by resolveSchema() (packages/core). If absent the
@@ -124,6 +129,25 @@ function childOf(meta: Meta): Meta {
   return (asR(meta)['child'] as Meta)
 }
 
+/**
+ * metaOf: extract a Meta from either a raw Meta object OR a Node object (which
+ * has a `.meta` field). Required because the tightened path/methods/route
+ * combinators store full Node objects in their table fields (children, verbs,
+ * param.child) to enable typed-client derivation, while the walker only needs
+ * the meta.
+ */
+function metaOf(value: unknown): Meta {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'meta' in value &&
+    typeof (value as Record<string, unknown>)['meta'] === 'object'
+  ) {
+    return (value as Record<string, unknown>)['meta'] as Meta
+  }
+  return value as Meta
+}
+
 function walk(meta: Meta, ctx: WalkCtx): OpenApiPaths {
   const m = asR(meta)
   switch (meta.kind) {
@@ -141,24 +165,24 @@ function walk(meta: Meta, ctx: WalkCtx): OpenApiPaths {
 
     case 'choice': {
       const merged: OpenApiPaths = {}
-      for (const child of m['children'] as Meta[]) {
-        mergePaths(merged, walk(child, ctx))
+      for (const child of m['children'] as unknown[]) {
+        mergePaths(merged, walk(metaOf(child), ctx))
       }
       return merged
     }
 
     case 'path': {
       const merged: OpenApiPaths = {}
-      for (const [seg, child] of Object.entries(m['children'] as Record<string, Meta>)) {
-        mergePaths(merged, walk(child, { ...ctx, prefix: `${ctx.prefix}/${seg}` }))
+      for (const [seg, child] of Object.entries(m['children'] as Record<string, unknown>)) {
+        mergePaths(merged, walk(metaOf(child), { ...ctx, prefix: `${ctx.prefix}/${seg}` }))
       }
       return merged
     }
 
     case 'methods': {
       const merged: OpenApiPaths = {}
-      for (const [verb, child] of Object.entries(m['verbs'] as Record<string, Meta>)) {
-        mergePaths(merged, walk(child, { ...ctx, method: verb.toLowerCase() }))
+      for (const [verb, child] of Object.entries(m['verbs'] as Record<string, unknown>)) {
+        mergePaths(merged, walk(metaOf(child), { ...ctx, method: verb.toLowerCase() }))
       }
       return merged
     }
@@ -268,6 +292,45 @@ function walk(meta: Meta, ctx: WalkCtx): OpenApiPaths {
         ...ctx,
         security: [...ctx.security, ...schemes],
       })
+    }
+
+    case 'route': {
+      // both-and combinator (fractal-http route()).
+      // Emits:
+      //   - collection ops at the current prefix (path-exhausted case)
+      //   - exact-child ops at prefix/seg for each child
+      //   - param ops at prefix/{name} for the param fallthrough child
+      const merged: OpenApiPaths = {}
+
+      // Collection: walk at current prefix (path exhausted case)
+      const collection = m['collection'] as { meta: Meta } | undefined
+      if (collection !== undefined) {
+        mergePaths(merged, walk(collection.meta, ctx))
+      }
+
+      // Exact children: walk each at prefix/seg
+      const routeChildren = (m['children'] as Record<string, { meta: Meta }> | undefined) ?? {}
+      for (const [seg, child] of Object.entries(routeChildren)) {
+        mergePaths(merged, walk(child.meta, { ...ctx, prefix: `${ctx.prefix}/${seg}` }))
+      }
+
+      // Param fallthrough: walk at prefix/{name} with the param added to ctx
+      const paramSpec = m['param'] as { name: string; child: { meta: Meta } } | undefined
+      if (paramSpec !== undefined) {
+        const newParam: OpenApiParameter = {
+          name: paramSpec.name,
+          in: 'path',
+          required: true,
+          schema: { type: 'string' },
+        }
+        mergePaths(merged, walk(paramSpec.child.meta, {
+          ...ctx,
+          prefix: `${ctx.prefix}/{${paramSpec.name}}`,
+          params: [...ctx.params, newParam],
+        }))
+      }
+
+      return merged
     }
 
     case 'procedure':

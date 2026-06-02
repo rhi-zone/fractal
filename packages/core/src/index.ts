@@ -5,7 +5,11 @@
 // that a request carries a `params` field.
 //
 // The composition unit is:
-//   Node<P,Res> = { meta: Meta; handler: Handler<P,Res> }
+//   Node<P,Res,M extends Meta = Meta> = { meta: M; handler: Handler<P,Res> }
+//
+// The third type parameter M carries the precise meta type of the node,
+// enabling typed-client derivation from the tree structure. It defaults to
+// the wide `Meta` union so existing Node<P,Res> usages compile unchanged.
 //
 // `meta` is the reflection descriptor (walkable, serialisable).
 // `handler` is the executable ((req) => Promise<Res|Pass>).
@@ -108,8 +112,9 @@ export type Meta =
 export type Node<
   P extends Record<string, unknown> = Record<string, never>,
   Res = unknown,
+  M extends Meta = Meta,
 > = {
-  meta: Meta
+  meta: M
   handler: Handler<P, Res>
 }
 
@@ -120,9 +125,10 @@ export type Node<
 /**
  * NodeMiddleware: a function that wraps a Node to produce a new Node.
  * Can contribute to both the handler and the meta descriptor.
+ * M defaults to Meta (wide) so existing middleware compiles without annotation.
  */
-export type NodeMiddleware<P extends Record<string, unknown>, Res> = (
-  n: Node<P, Res>,
+export type NodeMiddleware<P extends Record<string, unknown>, Res, M extends Meta = Meta> = (
+  n: Node<P, Res, M>,
 ) => Node<P, Res>
 
 /**
@@ -141,10 +147,16 @@ export function pipe<P extends Record<string, unknown>, Res>(
 // Combinators
 // ---------------------------------------------------------------------------
 
-/** Tries nodes in order; returns the first non-Pass result. */
+/** Tries nodes in order; returns the first non-Pass result.
+ * choice() is the general alternation primitive. Its branches are collapsed —
+ * literal keys from each branch are NOT preserved in the meta type. This makes
+ * choice() opaque to the typed client (just as pred is opaque to OpenAPI).
+ * Use `route()` (in fractal-http) for collection+children+param routing that
+ * must be traversable by the typed client.
+ */
 export function choice<P extends Record<string, unknown>, Res>(
   ...ns: Node<P, Res>[]
-): Node<P, Res> {
+): Node<P, Res, ChoiceMeta> {
   return {
     meta: { kind: "choice", children: ns.map((n) => n.meta) },
     handler: async (req) => {
@@ -171,11 +183,12 @@ export function capture<
   V,
   C extends Record<K, V>,
   Res,
+  M extends Meta = Meta,
 >(
   name: K,
   read: (req: Req<Omit<C, K>>) => V | Pass,
-  child: Node<C, Res>,
-): Node<Omit<C, K>, Res> {
+  child: Node<C, Res, M>,
+): Node<Omit<C, K>, Res, CaptureMeta> {
   return {
     meta: { kind: "capture", name, child: child.meta },
     handler: async (req) => {
@@ -208,7 +221,7 @@ export function typed<
   Res = unknown,
 >(
   schemaOrParse: StandardSchemaV1<Record<string, unknown>, Out> | ((raw: Record<string, unknown>) => Out),
-): (inner: Node<P & Out, Res>) => Node<P, Res> {
+): <M extends Meta>(inner: Node<P & Out, Res, M>) => Node<P, Res, TypedMeta> {
   // Determine whether we have a StandardSchemaV1 or a raw parse fn
   const isStdSchema = (
     typeof schemaOrParse === 'object' &&
@@ -250,11 +263,12 @@ export function typed<
  * Leaf: wraps a plain async function into a Node.
  * This is the ONLY place application logic lives.
  * meta descriptor: { kind: "leaf" }
+ * Returns Node<P, Res, LeafMeta> so the precise meta type is preserved.
  */
 export function leaf<
   P extends Record<string, unknown> = Record<string, never>,
   Res = unknown,
->(fn: (req: Req<P>) => Promise<Res>): Node<P, Res> {
+>(fn: (req: Req<P>) => Promise<Res>): Node<P, Res, LeafMeta> {
   return { meta: { kind: "leaf" }, handler: fn }
 }
 

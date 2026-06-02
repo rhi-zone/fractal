@@ -16,6 +16,7 @@ import {
   header,
   body,
   validate,
+  route,
   serve,
   leaf,
   typed,
@@ -98,32 +99,37 @@ const createTodoBodyHandler: Node<Record<string, never>, Todo> = body(
 
 // ============================================================================
 // HTTP ROUTING TREE
+//
+// path/methods now take a single type param T (the literal table type) and
+// return Node<{}, unknown, PathMeta<T>/MethodsMeta<T>>. The <P,Res> annotation
+// is removed; types flow structurally from the leaf nodes. Cast to
+// Node<{},ApiResult> for serve() which needs a concrete Res type.
 // ============================================================================
 
-const httpApp: Node<Record<string, never>, ApiResult> = path<Record<string, never>, ApiResult>({
-  todos: choice<Record<string, never>, ApiResult>(
+const httpApp = path({
+  todos: choice(
     // /todos?limit=N
     query(
       'limit',
-      methods<{ limit: string }, ApiResult>({ GET: listTodosWithLimit }),
+      methods({ GET: listTodosWithLimit }),
     ),
     // /todos with x-tenant header
     header(
       'x-tenant',
-      methods<{ 'x-tenant': string }, ApiResult>({ GET: listTodosForTenant }),
+      methods({ GET: listTodosForTenant }),
     ),
     // Exact /todos — method dispatch
-    methods<Record<string, never>, ApiResult>({
+    methods({
       GET: listTodos,
-      POST: createTodoBodyHandler as Node<Record<string, never>, ApiResult>,
+      POST: createTodoBodyHandler as unknown as Node<Record<string, never>, ApiResult>,
     }),
     // /todos/:id
     param(
       'id',
-      methods<{ id: string }, ApiResult>({ GET: getTodo }),
+      methods({ GET: getTodo }),
     ),
   ),
-})
+}) as unknown as Node<Record<string, never>, ApiResult>
 
 // ============================================================================
 // TYPE-LEVEL ASSERTION: G1 — param with number-typed child is a compile error
@@ -131,8 +137,8 @@ const httpApp: Node<Record<string, never>, ApiResult> = path<Record<string, neve
 
 const _g1LeafWantsNumber = async (req: Req<{ x: number }>) => req.params.x
 // @ts-expect-error [G1: {x:number} does not satisfy C extends Record<'x',string>]
-const _g1Probe = param('x', { meta: { kind: 'leaf' as const }, handler: _g1LeafWantsNumber })
-void _g1Probe
+export const _g1ProbeTest = param('x', { meta: { kind: 'leaf' as const }, handler: _g1LeafWantsNumber })
+void _g1ProbeTest
 
 // ============================================================================
 // TESTS
@@ -266,16 +272,16 @@ describe('validate with StandardSchemaV1 fixture', () => {
     },
   }
 
-  const stdSchemaApp = path<Record<string, never>, ApiResult>({
-    items: methods<Record<string, never>, ApiResult>({
+  const stdSchemaApp = path({
+    items: methods({
       POST: body(
         validate(
           testSchema,
           async (req) => ({ id: 99, title: req.body.title, done: false }),
         ),
-      ) as unknown as typeof createTodoBodyHandler,
+      ),
     }),
-  })
+  }) as unknown as Node<Record<string, never>, ApiResult>
 
   it('accepts valid body', async () => {
     const r = await serve<ApiResult>(stdSchemaApp, {
@@ -375,6 +381,61 @@ describe('Node meta descriptors', () => {
 
   it('httpApp root meta is kind:path', () => {
     expect(httpApp.meta).toMatchObject({ kind: 'path' })
+  })
+})
+
+describe('route() both-and combinator', () => {
+  // Build: /items (GET list, POST create) + /items/{id} (GET single)
+  // via route() — no choice() at the routing level
+  const routeApp = path({
+    items: route(
+      methods({
+        GET: leaf<Record<string, never>, string[]>(async () => ['a', 'b']),
+        POST: leaf<Record<string, never>, string>(async () => 'created'),
+      }),
+      {
+        param: {
+          name: 'id' as const,
+          child: methods({
+            GET: leaf<{ id: string }, string>(async (req) => `item:${req.params.id}`),
+          }),
+        },
+      },
+    ),
+  }) as unknown as Node<Record<string, never>, unknown>
+
+  it('GET /items returns collection (path exhausted → collection)', async () => {
+    const r = await serve(routeApp, { method: 'GET', url: '/items' })
+    expect(r.status).toBe(200)
+    expect(r.body).toEqual(['a', 'b'])
+  })
+
+  it('POST /items returns created (collection POST)', async () => {
+    const r = await serve(routeApp, { method: 'POST', url: '/items' })
+    expect(r.status).toBe(200)
+    expect(r.body).toBe('created')
+  })
+
+  it('GET /items/42 returns param-dispatched result', async () => {
+    const r = await serve(routeApp, { method: 'GET', url: '/items/42' })
+    expect(r.status).toBe(200)
+    expect(r.body).toBe('item:42')
+  })
+
+  it('GET /items/unknown returns item (param fallthrough)', async () => {
+    const r = await serve(routeApp, { method: 'GET', url: '/items/xyz' })
+    expect(r.status).toBe(200)
+    expect(r.body).toBe('item:xyz')
+  })
+
+  it('GET /items/42/extra returns 404 (methods guard: path not exhausted)', async () => {
+    const r = await serve(routeApp, { method: 'GET', url: '/items/42/extra' })
+    expect(r.status).toBe(404)
+  })
+
+  it('route meta has kind:route', () => {
+    const todosNode = (routeApp.meta as unknown as { children: Record<string, unknown> }).children['items'] as { meta: { kind: string } }
+    expect(todosNode.meta.kind).toBe('route')
   })
 })
 
