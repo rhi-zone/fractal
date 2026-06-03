@@ -10,5 +10,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["node-reflect.ts", "typed-client.ts", "path-bothand.ts"]
+  "include": ["node-reflect.ts", "typed-client.ts", "path-bothand.ts", "framework.ts"]
 }
