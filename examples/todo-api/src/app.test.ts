@@ -96,6 +96,36 @@ describe("binary endpoint", () => {
   })
 })
 
+describe("Result→Response rendering (user-side error policy)", () => {
+  it("plain value → 200 application/json (count)", async () => {
+    const res = await hit("GET", "/count")
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-type")).toBe("application/json")
+    expect(typeof (await res.json()).total).toBe("number")
+  })
+
+  it("Outcome ok → 200 with the value rendered as JSON", async () => {
+    const created = await (await hit("POST", "/todos", { body: { title: "ship" } })).json()
+    const res = await hit("POST", `/todos/${created.id}/mark-done`)
+    expect(res.status).toBe(200)
+    expect((await res.json()).done).toBe(true)
+  })
+
+  it("Outcome error TODO_NOT_FOUND → 404 (user policy)", async () => {
+    const res = await hit("POST", "/todos/does-not-exist/mark-done")
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toBe("TODO_NOT_FOUND")
+  })
+
+  it("Outcome error ALREADY_DONE → 409 (user policy)", async () => {
+    const created = await (await hit("POST", "/todos", { body: { title: "twice" } })).json()
+    await hit("POST", `/todos/${created.id}/mark-done`)
+    const res = await hit("POST", `/todos/${created.id}/mark-done`)
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBe("ALREADY_DONE")
+  })
+})
+
 describe("404", () => {
   it("unmatched route", async () => {
     const res = await hit("GET", "/missing")

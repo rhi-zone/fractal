@@ -15,14 +15,19 @@
 
 import {
   binary,
+  err,
   httpRouter,
   json,
+  ok,
+  respond,
   sse,
   toHandler,
   withValidation,
+  type ErrorPolicy,
   type HttpCtx,
   type HttpMiddleware,
   type NoVars,
+  type Outcome,
   type StandardSchema,
   type WithVars,
 } from "@rhi-zone/fractal-http"
@@ -80,6 +85,38 @@ async function setDone(args: { id: string; done: boolean }): Promise<Todo | null
   if (todo === undefined) return null
   todo.done = args.done
   return todo
+}
+
+// ---------------------------------------------------------------------------
+// Domain Result + USER-SIDE error policy
+//
+// This is the sample `switch (result.error.code)` pattern expressed against
+// the framework's GENERAL Outcome + ErrorPolicy mechanism. The error codes and
+// the code→status table live HERE, in the app — the framework knows none of it.
+// ---------------------------------------------------------------------------
+
+/** A domain error with a discriminating `code`, exactly like sample. */
+type TodoError =
+  | { code: "TODO_NOT_FOUND"; id: string }
+  | { code: "ALREADY_DONE"; id: string }
+
+/** The user's error→status policy. The framework hardcodes none of this. */
+const todoErrorPolicy: ErrorPolicy<TodoError> = (e) => {
+  switch (e.code) {
+    case "TODO_NOT_FOUND":
+      return { status: 404, body: { error: e.code, id: e.id } }
+    case "ALREADY_DONE":
+      return { status: 409, body: { error: e.code, id: e.id } }
+  }
+}
+
+/** A library function returning a domain Result (not a Response). */
+async function markDone(args: { id: string }): Promise<Outcome<Todo, TodoError>> {
+  const todo = todos.find((t) => t.id === args.id)
+  if (todo === undefined) return err({ code: "TODO_NOT_FOUND", id: args.id })
+  if (todo.done) return err({ code: "ALREADY_DONE", id: args.id })
+  todo.done = true
+  return ok(todo)
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +180,23 @@ export const app = httpRouter<NoVars>()
         },
       },
     }),
+  )
+  // Result→Response: handler returns a domain Outcome; respond() applies the
+  // USER-SIDE policy (TODO_NOT_FOUND→404, ALREADY_DONE→409). ok → 200 JSON.
+  .route(
+    "POST",
+    "/todos/:id/mark-done",
+    respond(
+      (ctx) => markDone({ id: ctx.params["id"] ?? "" }),
+      todoErrorPolicy,
+    ),
+  )
+  // Plain value → JSON: handler returns a non-Response value; the default JSON
+  // renderer (via respond) turns it into 200 application/json.
+  .route(
+    "GET",
+    "/count",
+    respond(() => ({ total: todos.length }), todoErrorPolicy),
   )
   // Raw query read — no capture combinator
   .route("GET", "/search", async (ctx) => {

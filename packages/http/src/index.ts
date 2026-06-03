@@ -145,6 +145,114 @@ export function withValidation<Args, Result, V extends StandardSchema<unknown, A
 }
 
 // ============================================================================
+// Result → Response rendering  (the general mechanism — no app-specific map)
+//
+// A handler may return any of three things; `render` turns each into a Response:
+//
+//   1. a Response        — used as-is (incl. sse()/binary()). Passthrough.
+//   2. an Outcome<Ok,Err> — tagged result. `ok` → 200 via the renderer;
+//                           `error` → Response via the USER-SUPPLIED policy.
+//   3. any plain value    — rendered to 200 via the renderer (default: JSON).
+//
+// The framework supplies the MECHANISM only. The error-code→status table is the
+// user's: it arrives as an `ErrorPolicy` passed to `respond(...)` (per route) or
+// bound once via `withPolicy(policy)` for an app/router-level default (a route
+// may still pass its own policy to override). The framework hardcodes no codes.
+// This is distinct from withValidation's framework-level 400 (a malformed
+// *request*), which never consults the domain error policy — see withValidation.
+// ============================================================================
+
+/** A tagged result: success carries `value`, failure carries `error`. The
+ *  rendering layer renders `ok` via the renderer and `error` via the policy. */
+export type Outcome<Ok, Err> =
+  | { readonly ok: true; readonly value: Ok }
+  | { readonly ok: false; readonly error: Err }
+
+/** Construct a success outcome. */
+export function ok<Ok>(value: Ok): Outcome<Ok, never> {
+  return { ok: true, value }
+}
+
+/** Construct a failure outcome. */
+export function err<Err>(error: Err): Outcome<never, Err> {
+  return { ok: false, error }
+}
+
+/** Renders a plain (non-Response, non-Outcome) value to a Response. The default
+ *  is JSON at 200. Swap it to change the default content-type / serializer. */
+export type Renderer = (value: unknown) => Response
+
+/** The default renderer: JSON at 200. */
+export const jsonRenderer: Renderer = (value) => json(value)
+
+/** A user-supplied policy mapping a domain error to a Response. It may return a
+ *  Response directly or a `{ status, body }` pair (body rendered via the
+ *  renderer; default status body is the error itself when `body` is omitted). */
+export type ErrorPolicy<Err> = (
+  error: Err,
+) => Response | { status: number; body?: unknown }
+
+function isResponse(v: unknown): v is Response {
+  return v instanceof Response
+}
+
+function isOutcome(v: unknown): v is Outcome<unknown, unknown> {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    "ok" in v &&
+    typeof (v as { ok: unknown }).ok === "boolean" &&
+    (((v as { ok: boolean }).ok && "value" in v) ||
+      (!(v as { ok: boolean }).ok && "error" in v))
+  )
+}
+
+/** The general rendering step. A Response passes through; an Outcome renders
+ *  via renderer (ok) or policy (error); any other value renders via renderer. */
+export function render<Err>(
+  value: unknown,
+  policy: ErrorPolicy<Err>,
+  renderer: Renderer = jsonRenderer,
+): Response {
+  if (isResponse(value)) return value
+  if (isOutcome(value)) {
+    if (value.ok) return renderer(value.value)
+    const out = policy(value.error as Err)
+    if (isResponse(out)) return out
+    const body = "body" in out ? out.body : value.error
+    return new Response(JSON.stringify(body), {
+      status: out.status,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+  return renderer(value)
+}
+
+/** Wrap a handler whose return type is `Response | Outcome<Ok,Err> | Value`
+ *  into a Response-returning handler, applying `render`. The policy's `Err` is
+ *  inferred from / linked to the handler's Outcome error type — no cast needed
+ *  at the call site. `renderer` defaults to JSON. */
+export function respond<Ctx, Ok, Err, Value>(
+  handler: (ctx: Ctx) => Response | Outcome<Ok, Err> | Value | Promise<Response | Outcome<Ok, Err> | Value>,
+  policy: ErrorPolicy<Err>,
+  renderer: Renderer = jsonRenderer,
+): (ctx: Ctx) => Promise<Response> {
+  return async (ctx: Ctx) => render(await handler(ctx), policy, renderer)
+}
+
+/** App/router-level default: bind a policy (and optional renderer) once, get a
+ *  `respond`-shaped wrapper to reuse across routes. Each route may still call
+ *  the standalone `respond` with its own policy to override per-route. */
+export function withPolicy<Err>(
+  policy: ErrorPolicy<Err>,
+  renderer: Renderer = jsonRenderer,
+): <Ctx, Ok, Value>(
+  handler: (ctx: Ctx) => Response | Outcome<Ok, Err> | Value | Promise<Response | Outcome<Ok, Err> | Value>,
+) => (ctx: Ctx) => Promise<Response> {
+  return (handler) => respond(handler, policy, renderer)
+}
+
+// ============================================================================
 // Response helpers
 // ============================================================================
 

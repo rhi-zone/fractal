@@ -2,13 +2,21 @@
 import { describe, expect, it } from "bun:test"
 import {
   binary,
+  err,
   httpRouter,
   json,
+  ok,
+  render,
+  respond,
   sse,
+  text,
   toHandler,
   withValidation,
+  type ErrorPolicy,
   type HttpMiddleware,
   type NoVars,
+  type Outcome,
+  type Renderer,
   type StandardSchema,
   type WithVars,
 } from "./index.ts"
@@ -134,6 +142,74 @@ describe("raw query", () => {
   it("reads ctx.query directly", async () => {
     const res = await hit("GET", "/search?q=fractal&limit=10")
     expect(await res.json()).toEqual({ q: "fractal", raw: true })
+  })
+})
+
+describe("render — the general Result→Response mechanism", () => {
+  // A throwaway domain error + user-side policy, defined HERE (not framework).
+  type E = { code: "NOPE" } | { code: "CONFLICT" }
+  const policy: ErrorPolicy<E> = (e) =>
+    e.code === "NOPE" ? { status: 404 } : { status: 409, body: { conflict: true } }
+
+  it("Response passes through unchanged", () => {
+    const r = text("hi", 201)
+    expect(render(r, policy)).toBe(r)
+  })
+
+  it("plain value → 200 JSON via default renderer", async () => {
+    const res = render({ a: 1 }, policy)
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-type")).toBe("application/json")
+    expect(await res.json()).toEqual({ a: 1 })
+  })
+
+  it("Outcome ok → 200 with value as JSON", async () => {
+    const res = render(ok({ x: 2 }), policy)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ x: 2 })
+  })
+
+  it("Outcome error → status from user policy; body defaults to the error", async () => {
+    const res = render(err<E>({ code: "NOPE" }), policy)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ code: "NOPE" })
+  })
+
+  it("Outcome error → policy may supply an explicit body", async () => {
+    const res = render(err<E>({ code: "CONFLICT" }), policy)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ conflict: true })
+  })
+
+  it("renderer is swappable (non-JSON default)", async () => {
+    const textRenderer: Renderer = (v) => text(String(v), 200)
+    const res = render("plain", policy, textRenderer)
+    expect(res.headers.get("content-type")).toBe("text/plain")
+    expect(await res.text()).toBe("plain")
+  })
+})
+
+describe("respond — wraps a handler; policy Err links to the Outcome", () => {
+  type E = { code: "MISSING"; id: string }
+  const policy: ErrorPolicy<E> = (e) => ({ status: 404, body: { error: e.code, id: e.id } })
+
+  const find = async (id: string): Promise<Outcome<{ id: string }, E>> =>
+    id === "1" ? ok({ id }) : err({ code: "MISSING", id })
+
+  const r = httpRouter<NoVars>()
+    .route("GET", "/item/:id", respond((ctx) => find(ctx.params["id"] ?? ""), policy))
+  const h = toHandler(r)
+
+  it("ok → 200", async () => {
+    const res = await h(new Request(`${BASE}/item/1`))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: "1" })
+  })
+
+  it("error → 404 via user policy", async () => {
+    const res = await h(new Request(`${BASE}/item/9`))
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: "MISSING", id: "9" })
   })
 })
 
