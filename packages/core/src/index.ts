@@ -1,286 +1,352 @@
 // packages/core/src/index.ts — @rhi-zone/fractal-core
 //
-// The agnostic Node core. Protocol-free: no HTTP verbs, URL paths,
-// procedure names, or transport shape. The only structure required is
-// that a request carries a `params` field.
+// Library-first framework core. Surface- AND runtime-agnostic:
+//   - no HTTP (no WHATWG Request/Response, no URL)
+//   - no runtime (no Bun, no Node)
 //
-// The composition unit is:
-//   Node<P,Res,M extends Meta = Meta> = { meta: M; handler: Handler<P,Res> }
+// What lives here:
+//   - Handler<T,U>            the fundamental arrow + composition
+//   - Node<T,U>              the { meta, handler } composition unit
+//   - StandardSchema         a Standard-Schema-shaped interface (types only)
+//   - the router             interface + factory threading typed context
+//                            (the proven linchpin encoding — interfaces, NoVars,
+//                            NO classes-with-private-fields)
 //
-// The third type parameter M carries the precise meta type of the node,
-// enabling typed-client derivation from the tree structure. It defaults to
-// the wide `Meta` union so existing Node<P,Res> usages compile unchanged.
-//
-// `meta` is the reflection descriptor (walkable, serialisable).
-// `handler` is the executable ((req) => Promise<Res|Pass>).
-//
-// Protocol-specific combinators (path, methods, procedure) live in their
-// kits. Core does NOT mention string as a constraint on params values.
-// V is free; each kit pins it to whatever the transport delivers.
+// LINCHPIN (load-bearing, from spike/linchpins.ts): the router is a plain
+// interface + factory function. No class with private fields — private fields
+// force generic invariance, which forces casts at mount. The structural
+// interface keeps Router<Vars> covariant enough that mount() threads the
+// enriched context with ZERO casts.
 
-import type { StandardSchemaV1, StandardJSONSchemaV1 } from '@standard-schema/spec'
+// ============================================================================
+// Handler — the fundamental arrow
+// ============================================================================
 
-// ---------------------------------------------------------------------------
-// Sentinel
-// ---------------------------------------------------------------------------
+/** The composition unit at its most primitive: a (possibly async) function. */
+export type Handler<T, U> = (t: T) => U | Promise<U>
 
-const PASS = Symbol("fractal.Pass")
-/** Pass = "not me, try the next handler". */
-export type Pass = typeof PASS
-export const pass: Pass = PASS
+/** Compose two handlers: run `a`, feed its result to `b`. */
+export function compose<A, B, C>(
+  a: Handler<A, B>,
+  b: Handler<B, C>,
+): Handler<A, C> {
+  return async (input: A) => b(await a(input))
+}
 
-// ---------------------------------------------------------------------------
-// Core request type
-// ---------------------------------------------------------------------------
+// ============================================================================
+// Node — { meta, handler }
+// ============================================================================
 
-export type Req<P extends Record<string, unknown> = Record<string, never>> = {
-  params: P
-} & Record<string, unknown>
+/** A node pairs reflectable metadata with an executable handler. */
+export interface Node<T, U, M = unknown> {
+  readonly meta: M
+  readonly handler: Handler<T, U>
+}
 
-// ---------------------------------------------------------------------------
-// Handler — the executable half of a Node
-// ---------------------------------------------------------------------------
+/** Construct a node from meta + handler. */
+export function node<T, U, M>(meta: M, handler: Handler<T, U>): Node<T, U, M> {
+  return { meta, handler }
+}
 
-export type Handler<
-  P extends Record<string, unknown> = Record<string, never>,
-  Res = unknown,
-> = (req: Req<P>) => Promise<Res | Pass>
+// ============================================================================
+// StandardSchema — Standard-Schema-shaped interface (types only)
+// ============================================================================
 
-// ---------------------------------------------------------------------------
-// Meta — the reflection descriptor
-// ---------------------------------------------------------------------------
-
-export type LeafMeta   = { kind: "leaf" }
-export type ChoiceMeta = { kind: "choice"; children: Meta[] }
-export type CaptureMeta = { kind: "capture"; name: string; child: Meta }
-export type TypedMeta  = { kind: "typed"; schema: Record<string, unknown>; child: Meta }
-export type PipeMeta   = { kind: "pipe"; metas: Meta[]; child: Meta }
-
-// ---------------------------------------------------------------------------
-// Standard Schema helpers
-// ---------------------------------------------------------------------------
-
-/** Re-export for consumers that import only fractal-core */
-export type { StandardSchemaV1, StandardJSONSchemaV1 } from '@standard-schema/spec'
-
-/**
- * resolveSchema: extract a JSON-Schema object from a StandardJSONSchemaV1 trait.
- * Returns `{}` (empty object) and logs a warning if the trait is absent or throws.
- * Target is always 'openapi-3.0' for projection use.
- */
-export function resolveSchema(
-  schema: StandardSchemaV1 | (StandardSchemaV1 & StandardJSONSchemaV1),
-  mode: 'input' | 'output' = 'output',
-): Record<string, unknown> {
-  const ss = (schema as Partial<StandardJSONSchemaV1>)['~standard']
-  if (!ss || typeof (ss as Partial<StandardJSONSchemaV1.Props>).jsonSchema === 'undefined') {
-    return {}
-  }
-  const converter = (ss as StandardJSONSchemaV1.Props).jsonSchema
-  try {
-    return mode === 'input'
-      ? converter.input({ target: 'openapi-3.0' })
-      : converter.output({ target: 'openapi-3.0' })
-  } catch {
-    console.warn('[fractal-core] resolveSchema: jsonSchema conversion threw; degrading to {}')
-    return {}
+/** A minimal Standard-Schema-shaped interface. Types only — no runtime. */
+export interface StandardSchema<In, Out = In> {
+  readonly "~standard": {
+    readonly version: 1
+    validate(
+      value: unknown,
+    ):
+      | { readonly value: Out; readonly issues?: undefined }
+      | { readonly issues: ReadonlyArray<{ readonly message: string }>; readonly value?: undefined }
+    readonly _in?: In
   }
 }
 
-/**
- * Meta is the reflection descriptor for a Node.
- * Kits extend this union with transport-specific variants (PathMeta,
- * MethodsMeta, ProcedureMeta, …) by re-exporting an extended Meta type.
- * Core only defines the variants it introduces directly.
- */
-export type Meta =
-  | LeafMeta
-  | ChoiceMeta
-  | CaptureMeta
-  | TypedMeta
-  | PipeMeta
-  | { kind: string; [key: string]: unknown }   // open: kit-specific variants
+/** Extract the output type of a StandardSchema. */
+export type InferOutput<S> = S extends StandardSchema<unknown, infer Out> ? Out : never
+
+// ============================================================================
+// NoVars — the base "no specific vars required" context
+// ============================================================================
+
+// Record<never, never> (≡ {}) rather than Record<string, never>:
+// Record<string, never> & Extra requires every key to be never, breaking the
+// intersection. Record<never, never> means "no required vars" and intersects
+// cleanly with any Record<string, unknown> extension.
+export type NoVars = Record<never, never>
+
+// ============================================================================
+// Routing context — the surface-agnostic substrate the router dispatches over
+// ============================================================================
+
+/** The minimal context the core router needs to dispatch.
+ *
+ *  A surface (HTTP, CLI, …) extends this with its own fields (query, headers,
+ *  body, …) and supplies the concrete ctx at the toHandler boundary. The core
+ *  router only reads `method`, `segments`, `params`, and threads `vars`.
+ *
+ *  `Vars` is the typed context map middleware contributes; handlers read it
+ *  with the precise type, no cast. */
+export interface RoutingCtx<Vars extends Record<string, unknown> = NoVars> {
+  readonly method: string
+  readonly segments: string[]
+  readonly params: Record<string, string>
+  readonly vars: Vars
+}
+
+/** A handler bound to a routing context carrying `Vars`. */
+export type RouteHandler<Ctx extends RoutingCtx, Result> = Handler<Ctx, Result>
+
+/** Middleware: receives the current ctx and a `next` that expects the ctx
+ *  enriched with `Extra`. It contributes `Extra` to vars then calls next.
+ *  The enriched context's handlers see `Vars & Extra` statically. */
+export type Middleware<
+  Ctx extends RoutingCtx,
+  Vars extends Record<string, unknown>,
+  Extra extends Record<string, unknown>,
+  Result,
+> = (
+  ctx: WithVars<Ctx, Vars>,
+  next: (ctx: WithVars<Ctx, Vars & Extra>) => Promise<Result>,
+) => Promise<Result>
+
+/** Re-parameterise a routing context's `vars` slot. */
+export type WithVars<Ctx extends RoutingCtx, Vars extends Record<string, unknown>> =
+  Omit<Ctx, "vars"> & { readonly vars: Vars }
 
 // ---------------------------------------------------------------------------
-// Node — THE composition unit
-//
-// NOTE: 'Node' would clash with lib.dom's Node interface. We export it as
-// a named type only; consumers that also use lib.dom should import and alias
-// (e.g. `import type { Node as FNode } from '@rhi-zone/fractal-core'`).
+// Entries (erased to base Vars after registration)
 // ---------------------------------------------------------------------------
 
-export type Node<
-  P extends Record<string, unknown> = Record<string, never>,
-  Res = unknown,
-  M extends Meta = Meta,
-> = {
-  meta: M
-  handler: Handler<P, Res>
+interface RouteEntry<Ctx extends RoutingCtx, Result> {
+  readonly method: string
+  readonly pattern: RegExp
+  readonly paramNames: string[]
+  readonly meta: unknown
+  readonly handler: (ctx: Ctx) => Promise<Result>
+}
+
+interface MountEntry<Ctx extends RoutingCtx, Result> {
+  readonly prefix: string
+  readonly meta: unknown
+  readonly dispatch: (ctx: Ctx) => Promise<Result | null>
+}
+
+/** The Router VALUE — interface, no private fields, structurally typed.
+ *
+ *  `Ctx`    the concrete routing context type (e.g. HttpCtx).
+ *  `In`     the vars a caller must supply at `dispatch` (the router's input).
+ *  `Cur`    the vars currently visible to handlers registered via `route` —
+ *           widened by each `use()`. Starts equal to `In`.
+ *  `Result` the handler return type (e.g. Response).
+ *
+ *  `use()` widens `Cur` (handlers see more), never `In` (callers supply the
+ *  same base) — the middleware fills the gap at runtime. */
+export interface Router<
+  Ctx extends RoutingCtx,
+  In extends Record<string, unknown>,
+  Cur extends Record<string, unknown>,
+  Result,
+> {
+  /** Register a handler for method + pattern. Returns this for chaining. */
+  route(
+    method: string,
+    pattern: string,
+    handler: (ctx: WithVars<Ctx, Cur>) => Promise<Result>,
+    meta?: unknown,
+  ): Router<Ctx, In, Cur, Result>
+
+  /** Register a pre-built node ({ meta, handler }) for method + pattern. */
+  routeNode(
+    method: string,
+    pattern: string,
+    n: Node<WithVars<Ctx, Cur>, Result>,
+  ): Router<Ctx, In, Cur, Result>
+
+  /** Attach middleware applied to every route registered AFTER this call,
+   *  widening the visible Vars by `Extra`. Subsequent handlers see
+   *  `Cur & Extra` — no cast. Dispatch input (`In`) is unchanged. */
+  use<Extra extends Record<string, unknown>>(
+    mw: Middleware<Ctx, Cur, Extra, Result>,
+  ): Router<Ctx, In, Cur & Extra, Result>
+
+  /** Mount a sub-router under a prefix, threading `Extra` via middleware.
+   *  The sub-router's input vars are `Cur & Extra` statically — ZERO casts at
+   *  the call site (Router is structural; no private fields). */
+  mount<Extra extends Record<string, unknown>>(
+    prefix: string,
+    mw: Middleware<Ctx, Cur, Extra, Result>,
+    subRouter: Router<Ctx, Cur & Extra, Cur & Extra, Result>,
+  ): Router<Ctx, In, Cur, Result>
+
+  /** Mount a sub-router under a prefix with no added context. */
+  mountPlain(
+    prefix: string,
+    subRouter: Router<Ctx, Cur, Cur, Result>,
+  ): Router<Ctx, In, Cur, Result>
+
+  /** The reflection descriptors of registered routes + mounts. */
+  readonly meta: ReadonlyArray<unknown>
+
+  /** Dispatch a request through this router. Returns null on no match. */
+  dispatch(ctx: WithVars<Ctx, In>): Promise<Result | null>
 }
 
 // ---------------------------------------------------------------------------
-// NodeMiddleware
+// parsePattern — "/admin/:id" → { re, paramNames }
 // ---------------------------------------------------------------------------
 
-/**
- * NodeMiddleware: a function that wraps a Node to produce a new Node.
- * Can contribute to both the handler and the meta descriptor.
- * M defaults to Meta (wide) so existing middleware compiles without annotation.
- */
-export type NodeMiddleware<P extends Record<string, unknown>, Res, M extends Meta = Meta> = (
-  n: Node<P, Res, M>,
-) => Node<P, Res>
-
-/**
- * pipe: compose NodeMiddlewares left-to-right via reduceRight.
- * pipe(mw1, mw2)(n) = mw1(mw2(n))
- * mw1 is outermost and runs first; mw2 is closer to the base node.
- * The resulting node's meta records the middleware chain.
- */
-export function pipe<P extends Record<string, unknown>, Res>(
-  ...mws: NodeMiddleware<P, Res>[]
-): NodeMiddleware<P, Res> {
-  return (n) => mws.reduceRight((acc, mw) => mw(acc), n)
-}
-
-// ---------------------------------------------------------------------------
-// Combinators
-// ---------------------------------------------------------------------------
-
-/** Tries nodes in order; returns the first non-Pass result.
- * choice() is the general alternation primitive. Its branches are collapsed —
- * literal keys from each branch are NOT preserved in the meta type. This makes
- * choice() opaque to the typed client (just as pred is opaque to OpenAPI).
- * Use `route()` (in fractal-http) for collection+children+param routing that
- * must be traversable by the typed client.
- */
-export function choice<P extends Record<string, unknown>, Res>(
-  ...ns: Node<P, Res>[]
-): Node<P, Res, ChoiceMeta> {
-  return {
-    meta: { kind: "choice", children: ns.map((n) => n.meta) },
-    handler: async (req) => {
-      for (const n of ns) {
-        const res = await n.handler(req)
-        if (res !== pass) return res
-      }
-      return pass
-    },
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Generic capture primitive
-//
-// capture<K, V, C, Res>(name, read, child) is the core capture algebra.
-// V is FREE. Each kit pins V to whatever the transport delivers:
-//   - HTTP kit: V = string (text-protocol values)
-//   - Worker kit: V = number | object | … (pre-typed values from IPC/memory)
-// ---------------------------------------------------------------------------
-
-export function capture<
-  K extends string,
-  V,
-  C extends Record<K, V>,
-  Res,
-  M extends Meta = Meta,
->(
-  name: K,
-  read: (req: Req<Omit<C, K>>) => V | Pass,
-  child: Node<C, Res, M>,
-): Node<Omit<C, K>, Res, CaptureMeta> {
-  return {
-    meta: { kind: "capture", name, child: child.meta },
-    handler: async (req) => {
-      const value = read(req)
-      if (value === pass) return pass
-      const enriched = {
-        ...req,
-        params: { ...(req.params as object), [name]: value } as unknown as C,
-      } as Req<C>
-      return child.handler(enriched)
-    },
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Typed: sync, eager refinement of params values
-//
-// Accepts either:
-//   - a raw parse function: (raw: Record<string, unknown>) => Out
-//   - a StandardSchemaV1: schema['~standard'].validate is called; must be SYNC
-//     (typed is a sync combinator — it does not await at composition or at
-//     request time for the params path). If the schema validate returns a
-//     Promise, it is awaited but this is a degraded usage; prefer sync schemas
-//     in the params path.
-// ---------------------------------------------------------------------------
-
-export function typed<
-  Out extends Record<string, unknown>,
-  P extends Record<string, unknown> = Record<string, never>,
-  Res = unknown,
->(
-  schemaOrParse: StandardSchemaV1<Record<string, unknown>, Out> | ((raw: Record<string, unknown>) => Out),
-): <M extends Meta>(inner: Node<P & Out, Res, M>) => Node<P, Res, TypedMeta> {
-  // Determine whether we have a StandardSchemaV1 or a raw parse fn
-  const isStdSchema = (
-    typeof schemaOrParse === 'object' &&
-    schemaOrParse !== null &&
-    '~standard' in schemaOrParse
-  )
-
-  // Extract JSON-Schema for meta (best-effort; `{}` if unavailable)
-  const jsonSchema: Record<string, unknown> = isStdSchema
-    ? resolveSchema(schemaOrParse as StandardSchemaV1, 'output')
-    : {}
-
-  const parse = isStdSchema
-    ? async (raw: Record<string, unknown>): Promise<Out> => {
-        const result = await (schemaOrParse as StandardSchemaV1<Record<string, unknown>, Out>)['~standard'].validate(raw)
-        if (result.issues) {
-          throw new Error(
-            `[fractal-core] typed: validation failed — ${result.issues.map((i) => i.message).join(', ')}`,
-          )
-        }
-        return result.value
-      }
-    : (raw: Record<string, unknown>) => Promise.resolve((schemaOrParse as (raw: Record<string, unknown>) => Out)(raw))
-
-  return (inner) => ({
-    meta: { kind: "typed", schema: jsonSchema, child: inner.meta },
-    handler: async (req) => {
-      const parsed = await parse(req.params as Record<string, unknown>)
-      const enriched: Req<P & Out> = {
-        ...req,
-        params: { ...(req.params as object), ...parsed } as P & Out,
-      }
-      return inner.handler(enriched)
-    },
+function parsePattern(pattern: string): { re: RegExp; paramNames: string[] } {
+  const paramNames: string[] = []
+  const reStr = pattern.replace(/:([^/]+)/g, (_m, name: string) => {
+    paramNames.push(name)
+    return "([^/]+)"
   })
+  return { re: new RegExp(`^${reStr}$`), paramNames }
 }
 
-/**
- * Leaf: wraps a plain async function into a Node.
- * This is the ONLY place application logic lives.
- * meta descriptor: { kind: "leaf" }
- * Returns Node<P, Res, LeafMeta> so the precise meta type is preserved.
- */
-export function leaf<
-  P extends Record<string, unknown> = Record<string, never>,
-  Res = unknown,
->(fn: (req: Req<P>) => Promise<Res>): Node<P, Res, LeafMeta> {
-  return { meta: { kind: "leaf" }, handler: fn }
+function stripSlashes(prefix: string): string {
+  return prefix.replace(/^\//, "").replace(/\/$/, "")
 }
 
-/**
- * Run: the entrypoint. Accepts only a fully-discharged Node (P = {}).
- * A Pass from the root handler becomes a "not found" sentinel (null).
- */
-export async function run<Res>(
-  n: Node<Record<string, never>, Res>,
-  req: Req<Record<string, never>>,
-): Promise<Res | null> {
-  const res = await n.handler(req)
-  if (res === pass) return null
-  return res as Res
+// ---------------------------------------------------------------------------
+// createRouter — factory; NO class, NO private fields.
+//
+// `use` widens the return type to Router<Ctx, Vars & Extra, Result> while
+// returning the SAME underlying mutable arrays (structurally typed). The
+// pending-middleware stack is applied to handlers registered after the call.
+// ---------------------------------------------------------------------------
+
+type AnyMw = (
+  ctx: RoutingCtx<Record<string, unknown>>,
+  next: (ctx: RoutingCtx<Record<string, unknown>>) => Promise<unknown>,
+) => Promise<unknown>
+
+export function createRouter<
+  Ctx extends RoutingCtx,
+  Vars extends Record<string, unknown> = NoVars,
+  Result = unknown,
+>(): Router<Ctx, Vars, Vars, Result> {
+  const routes: Array<RouteEntry<RoutingCtx, Result>> = []
+  const mounts: Array<MountEntry<RoutingCtx, Result>> = []
+  const pending: AnyMw[] = []
+
+  // Wrap a final handler in the currently-accumulated middleware stack.
+  const wrap = (
+    stack: AnyMw[],
+    final: (ctx: RoutingCtx) => Promise<Result | null>,
+  ): ((ctx: RoutingCtx) => Promise<Result | null>) => {
+    return stack.reduceRight<(ctx: RoutingCtx) => Promise<Result | null>>(
+      (next, mw) => (ctx) =>
+        mw(
+          ctx as RoutingCtx<Record<string, unknown>>,
+          (enriched) => next(enriched) as Promise<unknown>,
+        ) as Promise<Result | null>,
+      final,
+    )
+  }
+
+  async function dispatchRoutes(ctx: RoutingCtx): Promise<Result | null> {
+    const path = "/" + ctx.segments.join("/")
+    for (const entry of routes) {
+      if (entry.method !== ctx.method && entry.method !== "*") continue
+      const m = entry.pattern.exec(path)
+      if (m === null) continue
+      const params: Record<string, string> = { ...ctx.params }
+      entry.paramNames.forEach((name, i) => { params[name] = m[i + 1] ?? "" })
+      const routeCtx = { ...ctx, params } as RoutingCtx
+      return entry.handler(routeCtx)
+    }
+    for (const mount of mounts) {
+      const result = await mount.dispatch(ctx)
+      if (result !== null) return result
+    }
+    return null
+  }
+
+  const router: Router<Ctx, Vars, Vars, Result> = {
+    route(method, pattern, handler, meta) {
+      const { re, paramNames } = parsePattern(pattern)
+      const stack = [...pending]
+      const wrapped = wrap(stack, handler as (ctx: RoutingCtx) => Promise<Result | null>)
+      routes.push({
+        method: method.toUpperCase(),
+        pattern: re,
+        paramNames,
+        meta: meta ?? { kind: "route", method: method.toUpperCase(), pattern },
+        handler: (ctx) => wrapped(ctx) as Promise<Result>,
+      })
+      return router
+    },
+
+    routeNode(method, pattern, n) {
+      return router.route(method, pattern, n.handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, n.meta)
+    },
+
+    use<Extra extends Record<string, unknown>>(mw: Middleware<Ctx, Vars, Extra, Result>) {
+      pending.push(mw as unknown as AnyMw)
+      return router as unknown as Router<Ctx, Vars, Vars & Extra, Result>
+    },
+
+    mount<Extra extends Record<string, unknown>>(
+      prefix: string,
+      mw: Middleware<Ctx, Vars, Extra, Result>,
+      subRouter: Router<Ctx, Vars & Extra, Vars & Extra, Result>,
+    ) {
+      const stripped = stripSlashes(prefix)
+      const dispatch = async (ctx: RoutingCtx): Promise<Result | null> => {
+        const [head, ...tail] = ctx.segments
+        if (head !== stripped) return null
+        const subCtx = { ...ctx, segments: tail } as WithVars<Ctx, Vars>
+        return mw(subCtx, (enriched) =>
+          subRouter.dispatch(enriched).then((r) => r ?? notFoundResult()),
+        )
+      }
+      mounts.push({
+        prefix: stripped,
+        meta: { kind: "mount", prefix: stripped, child: subRouter.meta },
+        dispatch: dispatch as (ctx: RoutingCtx) => Promise<Result | null>,
+      })
+      return router
+    },
+
+    mountPlain(prefix, subRouter) {
+      const stripped = stripSlashes(prefix)
+      const dispatch = async (ctx: RoutingCtx): Promise<Result | null> => {
+        const [head, ...tail] = ctx.segments
+        if (head !== stripped) return null
+        const subCtx = { ...ctx, segments: tail } as WithVars<Ctx, Vars>
+        return subRouter.dispatch(subCtx)
+      }
+      mounts.push({
+        prefix: stripped,
+        meta: { kind: "mount", prefix: stripped, child: subRouter.meta },
+        dispatch: dispatch as (ctx: RoutingCtx) => Promise<Result | null>,
+      })
+      return router
+    },
+
+    get meta() {
+      return [...routes.map((r) => r.meta), ...mounts.map((m) => m.meta)]
+    },
+
+    dispatch(ctx) {
+      return dispatchRoutes(ctx as RoutingCtx)
+    },
+  }
+
+  return router
+}
+
+// `notFoundResult` is a hole the surface fills: the core has no Response type.
+// A mount's middleware must call `next` and receive *something* when the
+// sub-router passes (returns null). We return null-as-Result; the surface's
+// toHandler maps a top-level null to its own 404. The middleware contract is
+// "next always resolves a Result", so we coerce null → Result here; the only
+// observable null is the top-level one in toHandler.
+function notFoundResult<Result>(): Result {
+  return null as Result
 }

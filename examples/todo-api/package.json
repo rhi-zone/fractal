@@ -2,18 +2,14 @@
   "name": "@rhi-zone/fractal-example-todo-api",
   "version": "0.0.0",
   "private": true,
-  "description": "Example todo API using fractal-core + fractal-http",
+  "description": "Example todo API on the library-first fractal framework",
   "type": "module",
   "scripts": {
-    "typecheck":        "tsgo --noEmit",
-    "test":             "bun test",
-    "generate-openapi": "bun run src/generate-openapi.ts",
-    "client-demo":      "bun run src/client-demo.ts"
+    "typecheck": "tsgo --noEmit",
+    "test":      "bun test"
   },
   "dependencies": {
-    "@rhi-zone/fractal-core":    "workspace:*",
-    "@rhi-zone/fractal-http":    "workspace:*",
-    "@rhi-zone/fractal-openapi": "workspace:*",
-    "@rhi-zone/fractal-client":  "workspace:*"
+    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-http": "workspace:*"
   }
 }

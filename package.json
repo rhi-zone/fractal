@@ -4,10 +4,10 @@
   "type": "module",
   "workspaces": ["packages/*", "examples/*"],
   "scripts": {
-    "build":      "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-http' --filter '@rhi-zone/fractal-worker' --filter '@rhi-zone/fractal-openapi' build && bun run --filter '@rhi-zone/fractal-client' build",
+    "build":      "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-http' build",
     "typecheck":  "bun run --filter '*' typecheck",
     "test":       "bun run --filter '*' test",
-    "dev":        "bun run --filter '!*example*' dev"
+    "dev":        "bun run --filter '@rhi-zone/fractal-core' --filter '@rhi-zone/fractal-http' dev"
   },
   "devDependencies": {
     "@typescript/native-preview": "latest",

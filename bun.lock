@@ -13,22 +13,8 @@
       "name": "@rhi-zone/fractal-example-todo-api",
       "version": "0.0.0",
       "dependencies": {
-        "@rhi-zone/fractal-client": "workspace:*",
         "@rhi-zone/fractal-core": "workspace:*",
         "@rhi-zone/fractal-http": "workspace:*",
-        "@rhi-zone/fractal-openapi": "workspace:*",
-      },
-    },
-    "packages/client": {
-      "name": "@rhi-zone/fractal-client",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-http": "workspace:*",
-      },
-      "devDependencies": {
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
       },
     },
     "packages/core": {
@@ -48,29 +34,6 @@
       "dependencies": {
         "@rhi-zone/fractal-core": "workspace:*",
         "@standard-schema/spec": "^1.1.0",
-      },
-      "devDependencies": {
-        "vite": "^6.0.0",
-      },
-    },
-    "packages/openapi": {
-      "name": "@rhi-zone/fractal-openapi",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
-        "@rhi-zone/fractal-http": "workspace:*",
-        "@standard-schema/spec": "^1.1.0",
-      },
-      "devDependencies": {
-        "vite": "^6.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/worker": {
-      "name": "@rhi-zone/fractal-worker",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
       },
       "devDependencies": {
         "vite": "^6.0.0",
@@ -132,17 +95,11 @@
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
-    "@rhi-zone/fractal-client": ["@rhi-zone/fractal-client@workspace:packages/client"],
-
     "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
 
     "@rhi-zone/fractal-example-todo-api": ["@rhi-zone/fractal-example-todo-api@workspace:examples/todo-api"],
 
     "@rhi-zone/fractal-http": ["@rhi-zone/fractal-http@workspace:packages/http"],
-
-    "@rhi-zone/fractal-openapi": ["@rhi-zone/fractal-openapi@workspace:packages/openapi"],
-
-    "@rhi-zone/fractal-worker": ["@rhi-zone/fractal-worker@workspace:packages/worker"],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.60.4", "", { "os": "android", "cpu": "arm" }, "sha512-F5QXMSiFebS9hKZj02XhWLLnRpJ3B3AROP0tWbFBSj+6kCbg5m9j5JoHKd4mmSVy5mS/IMQloYgYxCuJC0fxEQ=="],
 

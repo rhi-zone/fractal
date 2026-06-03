@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-core",
   "version": "0.1.0-alpha.0",
-  "description": "Agnostic Handler core — Pass, Req<P>, Handler<P,Res>, choice, pipe, capture, typed, leaf, run",
+  "description": "Library-first framework core — Handler, Node, typed-context Router (use/route/mount), StandardSchema",
   "type": "module",
   "main": "./dist/core.umd.cjs",
   "module": "./dist/core.js",

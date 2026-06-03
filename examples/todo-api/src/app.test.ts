@@ -1,121 +1,104 @@
 // examples/todo-api/src/app.test.ts
-// Integration tests for the todo-api example using the http kit's serve().
-// Runs under bun test (real I/O capable runtime).
+//
+// In-process tests: toHandler(app)(new Request(...)) — no socket needed.
+// Covers auth 200/403, validation 200/400, SSE chunks, raw query.
 
-import { describe, it, expect, beforeEach } from 'bun:test'
-import { serve } from '@rhi-zone/fractal-http'
-import { app, store, type Todo, type ApiResult } from './app.ts'
+import { describe, it, expect } from "bun:test"
+import { handle } from "./app.ts"
 
-// Reset store before each test to avoid cross-test pollution
-beforeEach(() => {
-  store.length = 0
-  store.push(
-    { id: 1, title: 'Todo one', done: false },
-    { id: 2, title: 'Todo two', done: false },
-    { id: 3, title: 'Todo three', done: false },
-  )
-})
+const BASE = "http://localhost"
 
-describe('GET /todos', () => {
-  it('returns all todos', async () => {
-    const r = await serve<ApiResult>(app, { method: 'GET', url: '/todos' })
-    expect(r.status).toBe(200)
-    expect(Array.isArray(r.body)).toBe(true)
-    expect((r.body as Todo[]).length).toBe(3)
+async function hit(
+  method: string,
+  path: string,
+  opts: { body?: unknown; headers?: Record<string, string> } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = { ...opts.headers }
+  const init: RequestInit = { method, headers }
+  if (opts.body !== undefined) {
+    headers["content-type"] = "application/json"
+    init.body = JSON.stringify(opts.body)
+  }
+  return handle(new Request(`${BASE}${path}`, init))
+}
+
+describe("auth middleware (typed context)", () => {
+  it("200 with x-user; handler reads ctx.vars.user (no cast)", async () => {
+    const res = await hit("GET", "/admin/me", { headers: { "x-user": "alice@example.com" } })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ user: { id: "u-1", email: "alice@example.com" } })
+  })
+
+  it("403 without x-user", async () => {
+    const res = await hit("GET", "/admin/me")
+    expect(res.status).toBe(403)
+    expect((await res.json()).error).toBe("Forbidden")
+  })
+
+  it("admin/stats reads typed user email", async () => {
+    const res = await hit("GET", "/admin/stats", { headers: { "x-user": "bob@x.io" } })
+    expect(res.status).toBe(200)
+    expect((await res.json()).requestedBy).toBe("bob@x.io")
   })
 })
 
-describe('GET /todos?limit=N', () => {
-  it('returns at most N todos', async () => {
-    const r = await serve<ApiResult>(app, { method: 'GET', url: '/todos?limit=2' })
-    expect(r.status).toBe(200)
-    expect((r.body as Todo[]).length).toBe(2)
+describe("withValidation (library fn → node)", () => {
+  it("200 on valid create", async () => {
+    const res = await hit("POST", "/todos", { body: { title: "buy milk" } })
+    expect(res.status).toBe(200)
+    const todo = await res.json()
+    expect(todo.title).toBe("buy milk")
+    expect(todo.done).toBe(false)
+  })
+
+  it("400 on invalid create (missing title)", async () => {
+    const res = await hit("POST", "/todos", { body: {} })
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe("Validation failed")
+  })
+
+  it("400 on wrong-typed body", async () => {
+    const res = await hit("POST", "/todos/done", { body: { id: "1", done: "yes" } })
+    expect(res.status).toBe(400)
+  })
+
+  it("toggle done after create", async () => {
+    const created = await (await hit("POST", "/todos", { body: { title: "task" } })).json()
+    const res = await hit("POST", "/todos/done", { body: { id: created.id, done: true } })
+    expect(res.status).toBe(200)
+    expect((await res.json()).done).toBe(true)
   })
 })
 
-describe('GET /todos with x-tenant header', () => {
-  it('prefixes titles with tenant name', async () => {
-    const r = await serve<ApiResult>(app, {
-      method: 'GET',
-      url: '/todos',
-      headers: { 'x-tenant': 'acme' },
-    })
-    expect(r.status).toBe(200)
-    const todos = r.body as Todo[]
-    expect(todos[0]?.title).toMatch(/^\[acme\]/)
+describe("SSE endpoint", () => {
+  it("returns text/event-stream with chunks", async () => {
+    const res = await hit("GET", "/events")
+    expect(res.headers.get("content-type")).toBe("text/event-stream")
+    const body = await res.text()
+    expect(body).toContain("event: connected")
+    expect(body).toContain("event: status")
+    expect(body).toContain("event: done")
   })
 })
 
-describe('GET /todos/:id', () => {
-  it('returns the todo with the given id', async () => {
-    const r = await serve<ApiResult>(app, { method: 'GET', url: '/todos/2' })
-    expect(r.status).toBe(200)
-    expect((r.body as Todo).id).toBe(2)
-    expect((r.body as Todo).title).toBe('Todo two')
-  })
-
-  it('returns null for an unknown id', async () => {
-    const r = await serve<ApiResult>(app, { method: 'GET', url: '/todos/999' })
-    expect(r.status).toBe(200)
-    expect(r.body).toBeNull()
+describe("raw query", () => {
+  it("reads ctx.query directly", async () => {
+    const res = await hit("GET", "/search?q=fractal&limit=10")
+    expect(await res.json()).toEqual({ q: "fractal", limit: "10", raw: true })
   })
 })
 
-describe('POST /todos with body — StandardSchemaV1 validation', () => {
-  it('creates a new todo when body is valid and bearer token present', async () => {
-    const r = await serve<ApiResult>(app, {
-      method: 'POST',
-      url: '/todos',
-      headers: { authorization: 'Bearer secret' },
-      body: { title: 'New from test' },
-    })
-    expect(r.status).toBe(200)
-    expect((r.body as Todo).title).toBe('New from test')
-    expect(typeof (r.body as Todo).id).toBe('number')
-  })
-
-  it('throws on invalid body (StandardSchemaV1 validate rejects)', async () => {
-    await expect(
-      serve<ApiResult>(app, {
-        method: 'POST',
-        url: '/todos',
-        headers: { authorization: 'Bearer secret' },
-        body: { wrong: 42 },
-      }),
-    ).rejects.toThrow('expected {title:string}')
-  })
-
-  it('returns 404 when Authorization header is missing (withSecurity guard)', async () => {
-    const r = await serve<ApiResult>(app, {
-      method: 'POST',
-      url: '/todos',
-      body: { title: 'Should not be created' },
-    })
-    expect(r.status).toBe(404)
-    expect(r.body).toBeNull()
-  })
-
-  it('returns 404 when Authorization header is malformed', async () => {
-    const r = await serve<ApiResult>(app, {
-      method: 'POST',
-      url: '/todos',
-      headers: { authorization: 'Basic abc123' },
-      body: { title: 'Should not be created' },
-    })
-    expect(r.status).toBe(404)
-    expect(r.body).toBeNull()
+describe("binary endpoint", () => {
+  it("returns image bytes", async () => {
+    const res = await hit("GET", "/favicon")
+    expect(res.headers.get("content-type")).toBe("image/png")
+    expect(new Uint8Array(await res.arrayBuffer()).length).toBe(4)
   })
 })
 
-describe('404 — unknown routes', () => {
-  it('returns 404 for unknown top-level path', async () => {
-    const r = await serve<ApiResult>(app, { method: 'GET', url: '/unknown' })
-    expect(r.status).toBe(404)
-    expect(r.body).toBeNull()
-  })
-
-  it('returns 404 when path is not fully consumed (methods guard)', async () => {
-    const r = await serve<ApiResult>(app, { method: 'GET', url: '/todos/1/extra' })
-    expect(r.status).toBe(404)
+describe("404", () => {
+  it("unmatched route", async () => {
+    const res = await hit("GET", "/missing")
+    expect(res.status).toBe(404)
   })
 })

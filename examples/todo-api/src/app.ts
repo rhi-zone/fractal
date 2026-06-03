@@ -1,208 +1,169 @@
 // examples/todo-api/src/app.ts
-// A real example: a few routes using path/param/methods/body+validate/header.
-// Served via the http kit. No external deps beyond the fractal packages.
 //
-// The composition unit is Node<P,Res,M> = { meta: M; handler }.
-// app.meta is walkable — toOpenApi(app, info) projects it to OpenAPI 3.0.
+// A small but real example on the library-first framework.
 //
-// Demonstrates:
-//   - StandardSchemaV1 with jsonSchema trait → real requestBody schema in OpenAPI
-//   - NodeMiddleware (withSecurity) contributing a security descriptor to meta
-//     and enforcing at request time — the same node runs both
-//   - route() both-and combinator: collection at /todos (GET/POST) and param
-//     fallthrough at /todos/{id} (GET) in ONE node — no choice() for routing
+// Exercises:
+//   - a CRUD-ish resource via library functions wrapped with withValidation
+//   - an /admin mount with auth middleware adding typed context
+//     (the handler reads ctx.vars.user with NO cast)
+//   - a validated body route (200 on success, 400 on bad input)
+//   - an SSE endpoint (text/event-stream)
+//   - a raw req.query read
+//
+// Everything is plain data composed from the framework primitives. The app is
+// a Router value; toHandler(app) turns it into a WHATWG (Request)=>Response.
 
 import {
-  path,
-  methods,
-  query,
-  header,
-  body,
-  validate,
-  route,
-  choice,
-  leaf,
-  typed,
-  pass,
-  type Node,
-  type NodeMiddleware,
-  type HandlerWithBody,
-} from '@rhi-zone/fractal-http'
-import type { StandardSchemaV1, StandardJSONSchemaV1 } from '@rhi-zone/fractal-core'
+  binary,
+  httpRouter,
+  json,
+  sse,
+  toHandler,
+  withValidation,
+  type HttpCtx,
+  type HttpMiddleware,
+  type NoVars,
+  type StandardSchema,
+  type WithVars,
+} from "@rhi-zone/fractal-http"
 
-// ── domain ────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// A tiny object-schema fixture (StandardSchema-shaped; no external dep)
+// ---------------------------------------------------------------------------
+
+function schema<const F extends Record<string, "string" | "number">>(
+  fields: F,
+): StandardSchema<unknown, { [K in keyof F]: F[K] extends "string" ? string : number }> {
+  type Out = { [K in keyof F]: F[K] extends "string" ? string : number }
+  return {
+    "~standard": {
+      version: 1,
+      validate(value: unknown) {
+        if (typeof value !== "object" || value === null) {
+          return { issues: [{ message: "expected an object" }] }
+        }
+        const obj = value as Record<string, unknown>
+        const out: Record<string, unknown> = {}
+        for (const [k, t] of Object.entries(fields)) {
+          if (typeof obj[k] !== t) return { issues: [{ message: `field "${k}" must be a ${t}` }] }
+          out[k] = obj[k]
+        }
+        return { value: out as Out }
+      },
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Domain — an in-memory todo store and plain library functions
+// ---------------------------------------------------------------------------
 
 export interface Todo {
-  id: number
+  id: string
   title: string
   done: boolean
 }
 
-let nextId = 1
-export const store: Todo[] = [
-  { id: nextId++, title: 'fractal todo example', done: false },
-]
+const todos: Todo[] = []
+let seq = 1
 
-export type ApiResult = Todo | Todo[] | { error: string } | null
-
-// ── inline StandardSchemaV1 for CreateInput ───────────────────────────────────
-//
-// No validator library dependency. Implements both:
-//   '~standard'.validate          — called at request time by validate()
-//   '~standard'.jsonSchema        — optional JSON-Schema trait; toOpenApi uses it
-//     .input({ target })          — schema for the incoming payload (used for requestBody)
-//     .output({ target })         — schema for the validated value
-
-interface CreateInput { title: string }
-
-const createInputSchema: StandardSchemaV1<unknown, CreateInput> & StandardJSONSchemaV1<unknown, CreateInput> = {
-  '~standard': {
-    version: 1 as const,
-    vendor: 'fractal-example',
-    validate(value: unknown): StandardSchemaV1.Result<CreateInput> {
-      if (
-        typeof value === 'object' &&
-        value !== null &&
-        typeof (value as Record<string, unknown>)['title'] === 'string'
-      ) {
-        return { value: { title: (value as Record<string, unknown>)['title'] as string } }
-      }
-      return { issues: [{ message: `expected {title:string}, got ${JSON.stringify(value)}` }] }
-    },
-    jsonSchema: {
-      input: (_opts) => ({
-        type: 'object',
-        properties: { title: { type: 'string' } },
-        required: ['title'],
-      }),
-      output: (_opts) => ({
-        type: 'object',
-        properties: { title: { type: 'string' } },
-        required: ['title'],
-      }),
-    },
-  },
-}
-
-// ── withSecurity: NodeMiddleware that contributes a security descriptor ────────
-//
-// Wraps a Node to:
-//   1. emit meta { kind: "security", schemes, child: inner.meta } — picked up by toOpenApi
-//   2. enforce at request time by calling enforce(req); if it throws or returns Pass, pass
-//
-// This is the documented Node→Node + meta-merge pattern.
-// The "security" meta kind is handled by @rhi-zone/fractal-openapi's walker.
-
-type SecurityScheme = Record<string, string[]>
-
-function withSecurity<P extends Record<string, unknown>, Res>(
-  schemes: SecurityScheme[],
-  enforce: (req: { headers?: Record<string, string> }) => void,
-): NodeMiddleware<P, Res> {
-  return (inner) => ({
-    meta: { kind: 'security', schemes, child: inner.meta },
-    handler: async (req) => {
-      const httpReq = req as unknown as { headers?: Record<string, string> }
-      try {
-        enforce(httpReq)
-      } catch {
-        return pass
-      }
-      return inner.handler(req)
-    },
-  })
-}
-
-// bearerAuth: check for Authorization: Bearer <token>
-// Returns pass (→ 404) on missing/invalid token.
-const requireBearerAuth = withSecurity<Record<string, never>, ApiResult>(
-  [{ bearerAuth: [] }],
-  (req) => {
-    const auth = req.headers?.['authorization'] ?? ''
-    if (!auth.startsWith('Bearer ')) {
-      throw new Error('missing or invalid Authorization header')
-    }
-  },
-)
-
-// ── leaves ────────────────────────────────────────────────────────────────────
-
-const listAll: Node<Record<string, never>, Todo[]> = leaf(async (_req) => [...store])
-
-const listWithLimit: Node<{ limit: string }, Todo[]> = leaf(async (req) => {
-  const n = Number(req.params.limit)
-  return store.slice(0, Number.isFinite(n) && n > 0 ? n : store.length)
-})
-
-const getByIdLeaf: Node<{ id: number }, Todo | null> = leaf(async (req) =>
-  store.find((t) => t.id === req.params.id) ?? null,
-)
-
-// Bridge string → number
-const getById: Node<{ id: string }, Todo | null> = typed<
-  { id: number },
-  { id: string },
-  Todo | null
->((raw) => ({ id: Number(raw['id']) }))(getByIdLeaf)
-
-// Tenant-scoped list (header capture)
-const listForTenant: Node<{ 'x-tenant': string }, Todo[]> = leaf(async (req) => {
-  const tenant = req.params['x-tenant']
-  return store.map((t) => ({ ...t, title: `[${tenant}] ${t.title}` }))
-})
-
-// Body-based create: uses the inline StandardSchemaV1 with jsonSchema trait.
-// validate(createInputSchema, ...) → schema flows into OpenAPI requestBody.
-// requireBearerAuth wraps the node → "security" meta → OpenAPI security entry.
-const createLeaf: HandlerWithBody<Record<string, never>, CreateInput, Todo> = async (req) => {
-  const todo: Todo = { id: nextId++, title: req.body.title, done: false }
-  store.push(todo)
+// Library functions — pure-ish business logic, surface-agnostic. These are the
+// values withValidation wraps; the validator's output type is checked ≡ Args.
+async function createTodo(args: { title: string }): Promise<Todo> {
+  const todo: Todo = { id: String(seq++), title: args.title, done: false }
+  todos.push(todo)
   return todo
 }
 
-const createHandler: Node<Record<string, never>, ApiResult> = requireBearerAuth(
-  body(validate(createInputSchema, createLeaf)) as Node<Record<string, never>, ApiResult>,
-)
+async function setDone(args: { id: string; done: boolean }): Promise<Todo | null> {
+  const todo = todos.find((t) => t.id === args.id)
+  if (todo === undefined) return null
+  todo.done = args.done
+  return todo
+}
 
-// ── routing tree ──────────────────────────────────────────────────────────────
-//
-// route() both-and combinator:
-//   collection = choice(query-limit, header-tenant, methods(GET/POST))
-//     → handles /todos (GET, POST) at path-exhausted
-//   param = { name: 'id', child: methods({ GET: getById }) }
-//     → handles /todos/{id} (GET) via param fallthrough
-//
-// The collection uses choice() internally for the query/header variants.
-// choice() is fine here — it's inside the collection node, not at the routing
-// level. The route() combinator itself carries precise meta for client derivation.
+// ---------------------------------------------------------------------------
+// Auth middleware — adds typed `user` to ctx.vars
+// ---------------------------------------------------------------------------
 
-const todosCollection = choice(
-  // GET /todos?limit=N
-  query('limit', methods({ GET: listWithLimit })),
-  // GET /todos with x-tenant header
-  header('x-tenant', methods({ GET: listForTenant })),
-  // GET /todos or POST /todos (POST requires bearer auth)
-  methods({
-    GET: listAll,
-    POST: createHandler,
-  }),
-) as unknown as Node<Record<string, never>, ApiResult>
+export interface AuthVars extends Record<string, unknown> {
+  user: { id: string; email: string }
+}
 
-const todosItemNode = methods({
-  GET: getById as unknown as Node<Record<string, never>, ApiResult>,
-}) as unknown as Node<Record<string, never>, ApiResult>
+const auth: HttpMiddleware<NoVars, AuthVars> = async (ctx, next) => {
+  const email = ctx.headers.get("x-user")
+  if (email === null) return json({ error: "Forbidden" }, 403)
+  const enriched: WithVars<HttpCtx, NoVars & AuthVars> = {
+    ...ctx,
+    vars: { user: { id: "u-1", email } },
+  }
+  return next(enriched)
+}
 
-// todosRoute: both-and — collection at /todos, param fallthrough at /todos/{id}
-const todosRoute = route(
-  todosCollection,
-  {
-    param: {
-      name: 'id' as const,
-      child: todosItemNode,
-    },
-  },
-)
+// ---------------------------------------------------------------------------
+// /admin sub-router — handlers read ctx.vars.user with ZERO casts
+// ---------------------------------------------------------------------------
 
-export const app: Node<Record<string, never>, ApiResult> = path({
-  todos: todosRoute,
-}) as unknown as Node<Record<string, never>, ApiResult>
+const admin = httpRouter<NoVars & AuthVars>()
+  .route("GET", "/me", async (ctx) =>
+    // No cast: ctx.vars.user is typed { id: string; email: string }
+    json({ user: ctx.vars.user }),
+  )
+  .route("GET", "/stats", async (ctx) =>
+    json({ requestedBy: ctx.vars.user.email, total: todos.length }),
+  )
+
+// ---------------------------------------------------------------------------
+// Root app
+// ---------------------------------------------------------------------------
+
+export const app = httpRouter<NoVars>()
+  // List todos
+  .route("GET", "/todos", async () => json(todos))
+  // Create todo via a library function wrapped with withValidation (200 / 400)
+  .routeNode("POST", "/todos", withValidation(createTodo, schema({ title: "string" })))
+  // Update done flag — validated body (200 / 400; 404 if id unknown)
+  .routeNode(
+    "POST",
+    "/todos/done",
+    withValidation(async (args: { id: string; done: boolean }) => {
+      const updated = await setDone(args)
+      return updated ?? { error: "not found" }
+    }, {
+      "~standard": {
+        version: 1,
+        validate(value: unknown) {
+          if (typeof value !== "object" || value === null) {
+            return { issues: [{ message: "expected an object" }] }
+          }
+          const obj = value as Record<string, unknown>
+          if (typeof obj["id"] !== "string") return { issues: [{ message: "id must be a string" }] }
+          if (typeof obj["done"] !== "boolean") return { issues: [{ message: "done must be a boolean" }] }
+          return { value: { id: obj["id"], done: obj["done"] } }
+        },
+      },
+    }),
+  )
+  // Raw query read — no capture combinator
+  .route("GET", "/search", async (ctx) => {
+    const q = ctx.query.get("q")
+    const limit = ctx.query.get("limit")
+    return json({ q, limit, raw: true })
+  })
+  // SSE endpoint — ordinary text/event-stream Response
+  .route("GET", "/events", async () =>
+    sse((emit) => {
+      emit("connected", { ts: 0 })
+      emit("status", { active: true })
+      emit("done", { count: todos.length })
+    }),
+  )
+  // Binary endpoint — ordinary Response with a byte body
+  .route("GET", "/favicon", async () =>
+    binary(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "image/png"),
+  )
+  // /admin behind auth middleware, declared ONCE at the mount
+  .mount("/admin", auth, admin)
+
+/** WHATWG fetch handler for the app. Run in-process with new Request(...). */
+export const handle = toHandler(app)

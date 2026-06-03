@@ -1,16 +1,18 @@
 {
   "name": "@rhi-zone/fractal-http",
   "version": "0.1.0-alpha.0",
-  "description": "HTTP kit for fractal — path, methods, param, query, header, body, validate, serve",
+  "description": "HTTP surface for fractal — HttpCtx, toHandler (WHATWG), withValidation, sse/binary, runtime adapters",
   "type": "module",
-  "main": "./dist/http.umd.cjs",
-  "module": "./dist/http.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types":   "./dist/index.d.ts",
-      "import":  "./dist/http.js",
-      "require": "./dist/http.umd.cjs"
+      "types":  "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./adapter": {
+      "types":  "./dist/adapter.d.ts",
+      "import": "./dist/adapter.js"
     }
   },
   "files": ["dist"],
