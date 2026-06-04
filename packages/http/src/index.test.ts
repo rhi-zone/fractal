@@ -2,6 +2,7 @@
 import { describe, expect, it } from "bun:test"
 import {
   binary,
+  created,
   err,
   httpRouter,
   json,
@@ -16,6 +17,7 @@ import {
   type HttpMiddleware,
   type NoVars,
   type Outcome,
+  type PathParams,
   type Renderer,
   type StandardSchema,
   type WithVars,
@@ -217,5 +219,152 @@ describe("404", () => {
   it("unmatched route", async () => {
     const res = await hit("GET", "/nope")
     expect(res.status).toBe(404)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 405 + Allow on method-mismatch; auto-HEAD from GET
+// ---------------------------------------------------------------------------
+
+describe("hello-world — the smallest working app", () => {
+  it("one router + one verb + toHandler", async () => {
+    // The whole app, no validators / policies / mounts needed.
+    const handle = toHandler(httpRouter<NoVars>().get("/", async () => text("hi")))
+    const res = await handle(new Request(`${BASE}/`))
+    expect(await res.text()).toBe("hi")
+  })
+})
+
+describe("405 + Allow on method mismatch (a clean win over Hono/Elysia)", () => {
+  const r = httpRouter<NoVars>()
+    .get("/things/:id", async (ctx) => json({ id: ctx.params.id }))
+    .post("/things", async () => json({ ok: true }))
+    .put("/things/:id", async () => json({ ok: true }))
+  const h = toHandler(r)
+
+  it("405 not 404 when path matches but method doesn't", async () => {
+    const res = await h(new Request(`${BASE}/things/1`, { method: "DELETE" }))
+    expect(res.status).toBe(405)
+  })
+  it("Allow header lists the registered methods (incl. synthesized HEAD)", async () => {
+    const res = await h(new Request(`${BASE}/things/1`, { method: "DELETE" }))
+    const allow = (res.headers.get("Allow") ?? "").split(", ").sort()
+    expect(allow).toEqual(["GET", "HEAD", "PUT"])
+  })
+  it("genuinely unmatched path is still 404", async () => {
+    const res = await h(new Request(`${BASE}/absent`, { method: "DELETE" }))
+    expect(res.status).toBe(404)
+  })
+})
+
+describe("auto-HEAD synthesized from GET", () => {
+  const r = httpRouter<NoVars>()
+    .get("/page", async () => json({ hello: "world" }))
+  const h = toHandler(r)
+
+  it("HEAD runs the GET handler, returns its status + headers, empty body", async () => {
+    const res = await h(new Request(`${BASE}/page`, { method: "HEAD" }))
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-type")).toBe("application/json")
+    expect(await res.text()).toBe("")
+  })
+
+  it("explicit HEAD route takes precedence over synthesis", async () => {
+    const r2 = httpRouter<NoVars>()
+      .get("/p", async () => json({ from: "get" }))
+      .head("/p", async () => new Response(null, { status: 204, headers: { "X-Head": "explicit" } }))
+    const res = await toHandler(r2)(new Request(`${BASE}/p`, { method: "HEAD" }))
+    expect(res.status).toBe(204)
+    expect(res.headers.get("X-Head")).toBe("explicit")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Typed path params — verb sugar narrows ctx.params from the pattern string
+// ---------------------------------------------------------------------------
+
+describe("typed path params (type-level + runtime)", () => {
+  it("ctx.params.id is typed string for /users/:id (no ?? '' noise)", async () => {
+    const r = httpRouter<NoVars>().get("/users/:id", async (ctx) => {
+      // Type-level probe: ctx.params is { readonly id: string }. If params were
+      // Record<string,string> under noUncheckedIndexedAccess this would be
+      // string|undefined and the assignment below would error.
+      const id: string = ctx.params.id
+      return json({ id })
+    })
+    const res = await toHandler(r)(new Request(`${BASE}/users/42`))
+    expect(await res.json()).toEqual({ id: "42" })
+  })
+
+  it("multiple params accumulate", async () => {
+    const r = httpRouter<NoVars>().get("/u/:uid/books/:bid", async (ctx) => {
+      const uid: string = ctx.params.uid
+      const bid: string = ctx.params.bid
+      return json({ uid, bid })
+    })
+    const res = await toHandler(r)(new Request(`${BASE}/u/7/books/9`))
+    expect(await res.json()).toEqual({ uid: "7", bid: "9" })
+  })
+})
+
+// A pure type-level assertion (no runtime) — fails to compile if params typing
+// regresses. Exercised by tsgo, not the test runner.
+type _AssertEq<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+const _paramsProbe: _AssertEq<PathParams<"/users/:id">, { readonly id: string }> = true
+const _multiProbe: _AssertEq<
+  PathParams<"/u/:uid/books/:bid">,
+  { readonly uid: string; readonly bid: string }
+> = true
+const _noParamProbe: _AssertEq<PathParams<"/static">, Record<never, never>> = true
+void _paramsProbe
+void _multiProbe
+void _noParamProbe
+
+// ---------------------------------------------------------------------------
+// Status-aware withValidation — 201 (and other statuses) now expressible
+// ---------------------------------------------------------------------------
+
+describe("withValidation is status-aware (201 create)", () => {
+  const r = httpRouter<NoVars>().routeNode(
+    "POST",
+    "/users",
+    withValidation(
+      async (args: { name: string }) => created({ id: "u-9", name: args.name }),
+      schema({ name: "string" }),
+    ),
+  )
+  const h = toHandler(r)
+
+  it("201 + body when fn returns created(value)", async () => {
+    const res = await h(new Request(`${BASE}/users`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Grace" }),
+    }))
+    expect(res.status).toBe(201)
+    expect(await res.json()).toEqual({ id: "u-9", name: "Grace" })
+  })
+
+  it("400 on invalid body still wins (validation sugar preserved)", async () => {
+    const res = await h(new Request(`${BASE}/users`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    }))
+    expect(res.status).toBe(400)
+  })
+
+  it("a plain return still renders 200 (back-compat)", async () => {
+    const r2 = httpRouter<NoVars>().routeNode(
+      "POST",
+      "/p",
+      withValidation(async (a: { name: string }) => ({ ok: a.name }), schema({ name: "string" })),
+    )
+    const res = await toHandler(r2)(new Request(`${BASE}/p`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "x" }),
+    }))
+    expect(res.status).toBe(200)
   })
 })

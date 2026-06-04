@@ -23,24 +23,29 @@ Frameworks compared:
 
 ```ts
 const app = httpRouter<NoVars>()
-  // (a) auth threads a typed `user`; handler reads ctx.vars.user with NO cast
-  .use(auth)
-  .route("GET", "/users/:id", async (ctx) => {
-    const _caller = ctx.vars.user.email          // typed; cast-free
-    const user = users.get(ctx.params["id"] ?? "")
+  .use(cors())                                   // stdlib mw — a plain Middleware value
+  // bearerAuth threads a typed principal into ctx.vars.auth (read with NO cast)
+  .use(bearerAuth({ verify: (t) => (t ? { id: "caller", email: t } : null) }))
+  // (a) verb sugar + TYPED params: ctx.params.id is `string` (no `?? ""`)
+  .get("/users/:id", async (ctx) => {
+    const _caller = ctx.vars.auth.email          // typed; cast-free
+    const user = users.get(ctx.params.id)        // ctx.params.id: string
     return user === undefined ? json({ error: "USER_NOT_FOUND" }, 404) : json(user)
   })
-  // (b) validated body; validator output is statically constrained ≡ fn args
+  // (b) validated body → 201 via created() (status-aware withValidation)
   .routeNode("POST", "/users",
     withValidation(
-      async (args: { name: string; email: string }) => createUser(args),
+      async (args: { name: string; email: string }) => created(await createUser(args)),
       object({ name: "string", email: "string" }),
     ),
   )
   // (c) handler returns a domain Outcome; respond() maps it via the USER policy
-  .route("POST", "/users/:id/deactivate",
-    respond((ctx) => deactivate({ id: ctx.params["id"] ?? "" }), userErrorPolicy),
+  .post("/users/:id/deactivate",
+    respond((ctx) => deactivate({ id: ctx.params.id }), userErrorPolicy),
   )
+
+// Method mismatch now returns 405 + Allow (not 404); HEAD is synthesized from
+// GET. A one-line hello-world: httpRouter().get("/", async () => text("hi")).
 
 // user-side error→status table — the framework hardcodes none of it
 const userErrorPolicy: ErrorPolicy<UserError> = (e) => {
@@ -130,12 +135,21 @@ both Hono and Elysia the table is hand-written inline in every action handler.
 
 | # | Criterion | vs Hono | vs Elysia |
 |---|-----------|---------|-----------|
-| 1 | More elegant / less ceremony | **TIE** | **TIE** (Elysia destructuring slightly leaner per-endpoint; fractal wins on the reusable error policy) |
-| 2 | More correct HTTP semantics | **TIE** (both 404 on method-mismatch today) | **TIE** |
+| 1 | More elegant / less ceremony | **WIN** (verb sugar + typed params + reusable error policy) | **WIN** |
+| 2 | More correct HTTP semantics | **WIN** (405 + Allow + auto-HEAD; both rivals 404) | **WIN** |
 | 3 | Tighter / more uniform core | **WIN** | **WIN** |
 | 4 | Not HTTP-specific (core decoupled) | **WIN** | **WIN** |
-| 5 | Lower barrier to entry | **LOSE** | **LOSE** |
+| 5 | Lower barrier to entry | **TIE** (one-line hello-world + verb sugar + stdlib mw; Hono/Elysia still ship a typed client out of the box) | **TIE** |
 | 6 | Types equally/more safe | **TIE** (server-side parity; Hono `hc` client beats fractal) | **LOSE** (Eden treaty end-to-end client beats fractal) |
+
+> **Status (punch-list #2–#5 landed).** Criteria 1, 2, 5 flipped. The dispatcher
+> now emits 405 + `Allow` and synthesizes HEAD from GET; the router has verb
+> sugar (`.get/.post/...`) with template-literal **typed path params**
+> (`:id` → `ctx.params.id: string`, zero casts); `withValidation` is
+> status-aware (`created(value)` → 201); and `@rhi-zone/fractal-http/middleware`
+> ships `cors`/`logger`/`bearerAuth`/`etag` as ordinary `Middleware` VALUES. Only
+> #1 (typed client) and #6 (content negotiation) remain deferred — closing #1
+> would flip criterion 6 and push 5 to a win.
 
 ### Criterion-by-criterion evidence
 

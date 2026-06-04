@@ -20,7 +20,8 @@ async function hit(
   return handle(new Request(`${BASE}${path}`, init))
 }
 
-const AUTH = { "x-user": "caller@x.io" }
+// bearerAuth: a Bearer token whose value the demo verify() treats as the email.
+const AUTH = { authorization: "Bearer caller@x.io" }
 
 describe("(a) GET /users/:id behind auth", () => {
   it("401 without auth", async () => {
@@ -38,16 +39,16 @@ describe("(a) GET /users/:id behind auth", () => {
   })
 })
 
-describe("(b) POST /users validated body", () => {
-  it("200 on valid (NOTE: withValidation cannot emit 201 today)", async () => {
+describe("(b) POST /users validated body → 201 (the gap, now closed)", () => {
+  it("201 on valid, via created() through withValidation", async () => {
     const res = await hit("POST", "/users", {
       headers: AUTH,
       body: { name: "Grace", email: "grace@x.io" },
     })
-    expect(res.status).toBe(200) // <- the 201 gap, recorded honestly
+    expect(res.status).toBe(201) // <- status-aware validation
     expect((await res.json()).name).toBe("Grace")
   })
-  it("400 on invalid body", async () => {
+  it("400 on invalid body (validation sugar preserved)", async () => {
     const res = await hit("POST", "/users", { headers: AUTH, body: { name: "x" } })
     expect(res.status).toBe(400)
   })
@@ -80,9 +81,30 @@ describe("(c) POST /users/:id/deactivate → Outcome policy", () => {
   })
 })
 
-describe("405 probe: method mismatch on a matched path", () => {
-  it("CURRENT fractal behavior: falls through to 404 (not 405)", async () => {
+describe("405 + Allow on method mismatch (criterion-2 win)", () => {
+  it("DELETE on a GET path → 405 (not 404), with an Allow header", async () => {
     const res = await hit("DELETE", "/users/1", { headers: AUTH })
-    expect(res.status).toBe(404) // documents the criterion-2 gap
+    expect(res.status).toBe(405)
+    expect(res.headers.get("Allow")).toContain("GET")
+  })
+  it("genuinely unmatched path is still 404", async () => {
+    const res = await hit("DELETE", "/absent", { headers: AUTH })
+    expect(res.status).toBe(404)
+  })
+})
+
+describe("auto-HEAD synthesized from GET", () => {
+  it("HEAD /users/1 returns 200 + headers, empty body", async () => {
+    const res = await hit("HEAD", "/users/1", { headers: AUTH })
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-type")).toBe("application/json")
+    expect(await res.text()).toBe("")
+  })
+})
+
+describe("CORS stdlib middleware (plain value via .use)", () => {
+  it("adds Access-Control-Allow-Origin", async () => {
+    const res = await hit("GET", "/users/1", { headers: AUTH })
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
   })
 })

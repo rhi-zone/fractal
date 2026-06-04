@@ -100,6 +100,34 @@ export interface RoutingCtx<Vars extends Record<string, unknown> = NoVars> {
 /** A handler bound to a routing context carrying `Vars`. */
 export type RouteHandler<Ctx extends RoutingCtx, Result> = Handler<Ctx, Result>
 
+// ---------------------------------------------------------------------------
+// Dispatch outcome — distinguishes "no path matched" from "method mismatch"
+// ---------------------------------------------------------------------------
+
+/** Core sentinel: a path matched but no entry matched the method. Carries the
+ *  methods registered at that path so the surface can emit 405 + `Allow`.
+ *
+ *  Deliberately NOT an HTTP type — the core stays surface-agnostic. The HTTP
+ *  surface maps this to a 405 Response; a CLI surface could map it differently. */
+export interface MethodMismatch {
+  readonly kind: "method-mismatch"
+  readonly allow: string[]
+}
+
+/** What a router's `dispatch` resolves to:
+ *   - `Result`         a handler matched and produced a value
+ *   - `null`           no path matched (the surface renders its 404)
+ *   - `MethodMismatch` a path matched but not the method (surface → 405 + Allow) */
+export type Dispatched<Result> = Result | null | MethodMismatch
+
+export function isMethodMismatch(v: unknown): v is MethodMismatch {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    (v as { kind?: unknown }).kind === "method-mismatch"
+  )
+}
+
 /** Middleware: receives the current ctx and a `next` that expects the ctx
  *  enriched with `Extra`. It contributes `Extra` to vars then calls next.
  *  The enriched context's handlers see `Vars & Extra` statically. */
@@ -118,6 +146,34 @@ export type WithVars<Ctx extends RoutingCtx, Vars extends Record<string, unknown
   Omit<Ctx, "vars"> & { readonly vars: Vars }
 
 // ---------------------------------------------------------------------------
+// Typed path params — parse the pattern STRING at the type level
+//
+// "/users/:id"            -> { id: string }
+// "/users/:id/books/:bid" -> { id: string; bid: string }
+// "/users"                -> {} (Record<never, never>)
+//
+// A `:name` segment runs until the next "/". Multiple params accumulate. No
+// casts: the verb-sugar methods narrow ctx.params to PathParams<P>.
+// ---------------------------------------------------------------------------
+
+/** Extract the union of `:param` names from a route pattern string. */
+export type PathParamNames<P extends string> =
+  P extends `${infer _Head}:${infer Rest}`
+    ? Rest extends `${infer Name}/${infer Tail}`
+      ? Name | PathParamNames<`/${Tail}`>
+      : Rest
+    : never
+
+/** A typed params record for a route pattern: `{ [name]: string }`, or `{}`. */
+export type PathParams<P extends string> = {
+  readonly [K in PathParamNames<P>]: string
+}
+
+/** A routing context whose `params` is narrowed to the pattern's typed params. */
+export type WithParams<Ctx extends RoutingCtx, P extends string> =
+  Omit<Ctx, "params"> & { readonly params: PathParams<P> }
+
+// ---------------------------------------------------------------------------
 // Entries (erased to base Vars after registration)
 // ---------------------------------------------------------------------------
 
@@ -132,7 +188,7 @@ interface RouteEntry<Ctx extends RoutingCtx, Result> {
 interface MountEntry<Ctx extends RoutingCtx, Result> {
   readonly prefix: string
   readonly meta: unknown
-  readonly dispatch: (ctx: Ctx) => Promise<Result | null>
+  readonly dispatch: (ctx: Ctx) => Promise<Dispatched<Result>>
 }
 
 /** The Router VALUE — interface, no private fields, structurally typed.
@@ -166,6 +222,44 @@ export interface Router<
     n: Node<WithVars<Ctx, Cur>, Result>,
   ): Router<Ctx, In, Cur, Result>
 
+  // -- verb sugar — thin wrappers over `route` that ALSO type ctx.params from
+  //    the pattern string (`:id` → params.id: string). Desugar to `.route`.
+  get<P extends string>(
+    pattern: P,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    meta?: unknown,
+  ): Router<Ctx, In, Cur, Result>
+  post<P extends string>(
+    pattern: P,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    meta?: unknown,
+  ): Router<Ctx, In, Cur, Result>
+  put<P extends string>(
+    pattern: P,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    meta?: unknown,
+  ): Router<Ctx, In, Cur, Result>
+  patch<P extends string>(
+    pattern: P,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    meta?: unknown,
+  ): Router<Ctx, In, Cur, Result>
+  delete<P extends string>(
+    pattern: P,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    meta?: unknown,
+  ): Router<Ctx, In, Cur, Result>
+  head<P extends string>(
+    pattern: P,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    meta?: unknown,
+  ): Router<Ctx, In, Cur, Result>
+  options<P extends string>(
+    pattern: P,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    meta?: unknown,
+  ): Router<Ctx, In, Cur, Result>
+
   /** Attach middleware applied to every route registered AFTER this call,
    *  widening the visible Vars by `Extra`. Subsequent handlers see
    *  `Cur & Extra` — no cast. Dispatch input (`In`) is unchanged. */
@@ -191,8 +285,10 @@ export interface Router<
   /** The reflection descriptors of registered routes + mounts. */
   readonly meta: ReadonlyArray<unknown>
 
-  /** Dispatch a request through this router. Returns null on no match. */
-  dispatch(ctx: WithVars<Ctx, In>): Promise<Result | null>
+  /** Dispatch a request through this router. Resolves to the handler's `Result`,
+   *  `null` (no path matched → surface 404), or a `MethodMismatch` (a path
+   *  matched but not the method → surface 405 + `Allow`). */
+  dispatch(ctx: WithVars<Ctx, In>): Promise<Dispatched<Result>>
 }
 
 // ---------------------------------------------------------------------------
@@ -249,20 +345,54 @@ export function createRouter<
     )
   }
 
-  async function dispatchRoutes(ctx: RoutingCtx): Promise<Result | null> {
+  // Run a single entry against a path, threading captured params into ctx.
+  const runEntry = (
+    entry: RouteEntry<RoutingCtx, Result>,
+    ctx: RoutingCtx,
+    m: RegExpExecArray,
+  ): Promise<Result> => {
+    const params: Record<string, string> = { ...ctx.params }
+    entry.paramNames.forEach((name, i) => { params[name] = m[i + 1] ?? "" })
+    const routeCtx = { ...ctx, params } as RoutingCtx
+    return entry.handler(routeCtx)
+  }
+
+  async function dispatchRoutes(ctx: RoutingCtx): Promise<Dispatched<Result>> {
     const path = "/" + ctx.segments.join("/")
+    // Methods registered at this exact path (drives 405 + Allow, and HEAD/GET).
+    const pathMethods = new Set<string>()
+    let headFallback: { entry: RouteEntry<RoutingCtx, Result>; m: RegExpExecArray } | undefined
+
     for (const entry of routes) {
-      if (entry.method !== ctx.method && entry.method !== "*") continue
       const m = entry.pattern.exec(path)
       if (m === null) continue
-      const params: Record<string, string> = { ...ctx.params }
-      entry.paramNames.forEach((name, i) => { params[name] = m[i + 1] ?? "" })
-      const routeCtx = { ...ctx, params } as RoutingCtx
-      return entry.handler(routeCtx)
+      // The path matched. Record the registered method for Allow/HEAD synthesis.
+      if (entry.method !== "*") pathMethods.add(entry.method)
+      if (entry.method === ctx.method || entry.method === "*") {
+        return runEntry(entry, ctx, m)
+      }
+      // Auto-HEAD: remember the first GET as a fallback for a HEAD request.
+      if (ctx.method === "HEAD" && entry.method === "GET" && headFallback === undefined) {
+        headFallback = { entry, m }
+      }
     }
+
+    // No explicit HEAD route, but a GET matched: synthesize HEAD from GET.
+    if (headFallback !== undefined) {
+      return runEntry(headFallback.entry, ctx, headFallback.m)
+    }
+
     for (const mount of mounts) {
       const result = await mount.dispatch(ctx)
       if (result !== null) return result
+    }
+
+    // A path matched but no method did → 405 (surface emits Allow). When HEAD is
+    // requestable via GET, advertise it in Allow too.
+    if (pathMethods.size > 0) {
+      const allow = new Set(pathMethods)
+      if (allow.has("GET")) allow.add("HEAD")
+      return { kind: "method-mismatch", allow: [...allow] }
     }
     return null
   }
@@ -286,6 +416,33 @@ export function createRouter<
       return router.route(method, pattern, n.handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, n.meta)
     },
 
+    // Verb sugar — desugar to `route`. The handler's ctx.params is narrowed to
+    // PathParams<P> at the type level; at RUNTIME params is the same
+    // Record<string,string> route() supplies, so the verb handler is sound to
+    // run as a route handler. The single cast here erases only the params
+    // narrowing (a structural view), not user-facing inference.
+    get(pattern, handler, meta) {
+      return router.route("GET", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+    },
+    post(pattern, handler, meta) {
+      return router.route("POST", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+    },
+    put(pattern, handler, meta) {
+      return router.route("PUT", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+    },
+    patch(pattern, handler, meta) {
+      return router.route("PATCH", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+    },
+    delete(pattern, handler, meta) {
+      return router.route("DELETE", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+    },
+    head(pattern, handler, meta) {
+      return router.route("HEAD", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+    },
+    options(pattern, handler, meta) {
+      return router.route("OPTIONS", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+    },
+
     use<Extra extends Record<string, unknown>>(mw: Middleware<Ctx, Vars, Extra, Result>) {
       pending.push(mw as unknown as AnyMw)
       return router as unknown as Router<Ctx, Vars, Vars & Extra, Result>
@@ -297,25 +454,28 @@ export function createRouter<
       subRouter: Router<Ctx, Vars & Extra, Vars & Extra, Result>,
     ) {
       const stripped = stripSlashes(prefix)
-      const dispatch = async (ctx: RoutingCtx): Promise<Result | null> => {
+      const dispatch = async (ctx: RoutingCtx): Promise<Dispatched<Result>> => {
         const [head, ...tail] = ctx.segments
         if (head !== stripped) return null
         const subCtx = { ...ctx, segments: tail } as WithVars<Ctx, Vars>
+        // The middleware contract is "next resolves a Result". A sub-dispatch
+        // that produces null / MethodMismatch is carried THROUGH next as the
+        // Result, then unwrapped on the way out so the surface sees it.
         return mw(subCtx, (enriched) =>
-          subRouter.dispatch(enriched).then((r) => r ?? notFoundResult()),
+          subRouter.dispatch(enriched).then((r) => (r ?? notFoundResult()) as Result),
         )
       }
       mounts.push({
         prefix: stripped,
         meta: { kind: "mount", prefix: stripped, child: subRouter.meta },
-        dispatch: dispatch as (ctx: RoutingCtx) => Promise<Result | null>,
+        dispatch: dispatch as (ctx: RoutingCtx) => Promise<Dispatched<Result>>,
       })
       return router
     },
 
     mountPlain(prefix, subRouter) {
       const stripped = stripSlashes(prefix)
-      const dispatch = async (ctx: RoutingCtx): Promise<Result | null> => {
+      const dispatch = async (ctx: RoutingCtx): Promise<Dispatched<Result>> => {
         const [head, ...tail] = ctx.segments
         if (head !== stripped) return null
         const subCtx = { ...ctx, segments: tail } as WithVars<Ctx, Vars>
@@ -324,7 +484,7 @@ export function createRouter<
       mounts.push({
         prefix: stripped,
         meta: { kind: "mount", prefix: stripped, child: subRouter.meta },
-        dispatch: dispatch as (ctx: RoutingCtx) => Promise<Result | null>,
+        dispatch: dispatch as (ctx: RoutingCtx) => Promise<Dispatched<Result>>,
       })
       return router
     },

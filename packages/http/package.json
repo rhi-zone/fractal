@@ -13,6 +13,10 @@
     "./adapter": {
       "types":  "./dist/adapter.d.ts",
       "import": "./dist/adapter.js"
+    },
+    "./middleware": {
+      "types":  "./dist/middleware.d.ts",
+      "import": "./dist/middleware.js"
     }
   },
   "files": ["dist"],

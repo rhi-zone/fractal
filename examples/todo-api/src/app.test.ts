@@ -43,9 +43,9 @@ describe("auth middleware (typed context)", () => {
 })
 
 describe("withValidation (library fn → node)", () => {
-  it("200 on valid create", async () => {
+  it("201 on valid create (status-aware withValidation)", async () => {
     const res = await hit("POST", "/todos", { body: { title: "buy milk" } })
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(201)
     const todo = await res.json()
     expect(todo.title).toBe("buy milk")
     expect(todo.done).toBe(false)

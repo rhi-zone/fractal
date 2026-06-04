@@ -15,6 +15,7 @@
 
 import {
   binary,
+  created,
   err,
   httpRouter,
   json,
@@ -142,13 +143,9 @@ const auth: HttpMiddleware<NoVars, AuthVars> = async (ctx, next) => {
 // ---------------------------------------------------------------------------
 
 const admin = httpRouter<NoVars & AuthVars>()
-  .route("GET", "/me", async (ctx) =>
-    // No cast: ctx.vars.user is typed { id: string; email: string }
-    json({ user: ctx.vars.user }),
-  )
-  .route("GET", "/stats", async (ctx) =>
-    json({ requestedBy: ctx.vars.user.email, total: todos.length }),
-  )
+  // No cast: ctx.vars.user is typed { id: string; email: string }
+  .get("/me", async (ctx) => json({ user: ctx.vars.user }))
+  .get("/stats", async (ctx) => json({ requestedBy: ctx.vars.user.email, total: todos.length }))
 
 // ---------------------------------------------------------------------------
 // Root app
@@ -156,9 +153,9 @@ const admin = httpRouter<NoVars & AuthVars>()
 
 export const app = httpRouter<NoVars>()
   // List todos
-  .route("GET", "/todos", async () => json(todos))
-  // Create todo via a library function wrapped with withValidation (200 / 400)
-  .routeNode("POST", "/todos", withValidation(createTodo, schema({ title: "string" })))
+  .get("/todos", async () => json(todos))
+  // Create todo via a library function wrapped with withValidation → 201.
+  .routeNode("POST", "/todos", withValidation(async (args: { title: string }) => created(await createTodo(args)), schema({ title: "string" })))
   // Update done flag — validated body (200 / 400; 404 if id unknown)
   .routeNode(
     "POST",
@@ -183,29 +180,19 @@ export const app = httpRouter<NoVars>()
   )
   // Result→Response: handler returns a domain Outcome; respond() applies the
   // USER-SIDE policy (TODO_NOT_FOUND→404, ALREADY_DONE→409). ok → 200 JSON.
-  .route(
-    "POST",
-    "/todos/:id/mark-done",
-    respond(
-      (ctx) => markDone({ id: ctx.params["id"] ?? "" }),
-      todoErrorPolicy,
-    ),
-  )
+  // ctx.params.id is typed `string` from the pattern — no `?? ""` noise.
+  .post("/todos/:id/mark-done", respond((ctx) => markDone({ id: ctx.params.id }), todoErrorPolicy))
   // Plain value → JSON: handler returns a non-Response value; the default JSON
   // renderer (via respond) turns it into 200 application/json.
-  .route(
-    "GET",
-    "/count",
-    respond(() => ({ total: todos.length }), todoErrorPolicy),
-  )
+  .get("/count", respond(() => ({ total: todos.length }), todoErrorPolicy))
   // Raw query read — no capture combinator
-  .route("GET", "/search", async (ctx) => {
+  .get("/search", async (ctx) => {
     const q = ctx.query.get("q")
     const limit = ctx.query.get("limit")
     return json({ q, limit, raw: true })
   })
   // SSE endpoint — ordinary text/event-stream Response
-  .route("GET", "/events", async () =>
+  .get("/events", async () =>
     sse((emit) => {
       emit("connected", { ts: 0 })
       emit("status", { active: true })
@@ -213,7 +200,7 @@ export const app = httpRouter<NoVars>()
     }),
   )
   // Binary endpoint — ordinary Response with a byte body
-  .route("GET", "/favicon", async () =>
+  .get("/favicon", async () =>
     binary(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "image/png"),
   )
   // /admin behind auth middleware, declared ONCE at the mount

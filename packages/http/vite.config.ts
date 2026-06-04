@@ -6,6 +6,7 @@ export default defineConfig({
       entry: {
         index: 'src/index.ts',
         adapter: 'src/adapter.ts',
+        middleware: 'src/middleware.ts',
       },
       formats: ['es'],
     },

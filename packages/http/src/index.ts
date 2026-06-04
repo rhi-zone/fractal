@@ -15,6 +15,7 @@
 
 import {
   createRouter,
+  isMethodMismatch,
   type InferOutput,
   type Middleware,
   type NoVars,
@@ -105,7 +106,30 @@ export function toHandler(router: HttpRouter<NoVars, NoVars>): (req: Request) =>
     }
 
     const result = await router.dispatch(ctx)
-    return result ?? notFound()
+
+    // No path matched → 404.
+    if (result === null) return notFound()
+
+    // A path matched but not the method → 405 + Allow (a clean correctness win
+    // both Hono and Elysia decline to make). The core hands us the allowed
+    // methods as a surface-agnostic sentinel; we render it as HTTP here.
+    if (isMethodMismatch(result)) {
+      return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+        status: 405,
+        headers: {
+          "Content-Type": "application/json",
+          Allow: result.allow.join(", "),
+        },
+      })
+    }
+
+    // Auto-HEAD: the core synthesised HEAD by running the matching GET. Per RFC,
+    // a HEAD response carries the GET headers but an EMPTY body.
+    if (ctx.method === "HEAD") {
+      return new Response(null, { status: result.status, headers: result.headers })
+    }
+
+    return result
   }
 }
 
@@ -118,16 +142,57 @@ export function toHandler(router: HttpRouter<NoVars, NoVars>): (req: Request) =>
 // the wrong shape is a COMPILE error — no manual annotation, no cast.
 // ============================================================================
 
+/** A status-tagged success value. A validated fn may return one of these to set
+ *  a non-200 status (e.g. `{ status: 201, value: user }` for a create) WITHOUT
+ *  dropping the validation sugar or the typed body. */
+export interface Status<Value> {
+  readonly status: number
+  readonly value: Value
+}
+
+/** Construct a status-tagged value, e.g. `created(user)` for a 201 create. */
+export function status<Value>(code: number, value: Value): Status<Value> {
+  return { status: code, value }
+}
+
+/** 201 Created — the common case for a validated POST. */
+export function created<Value>(value: Value): Status<Value> {
+  return { status: 201, value }
+}
+
+/** What a validated handler may return: a plain value (→ 200 JSON), a
+ *  `Status<Value>` (→ that status + value as JSON), or a `Response` (used
+ *  as-is, incl. sse()/binary()). All flow through `renderValidated`. */
+export type ValidatedResult<Value> = Value | Status<Value> | Response
+
+function isStatus(v: unknown): v is Status<unknown> {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    "status" in v &&
+    typeof (v as { status: unknown }).status === "number" &&
+    "value" in v
+  )
+}
+
+/** Render a validated handler's result to a Response: Response passthrough,
+ *  Status → json(value, status), else json(value, 200). */
+function renderValidated(out: unknown): Response {
+  if (isResponse(out)) return out
+  if (isStatus(out)) return json(out.value, out.status)
+  return json(out)
+}
+
 /** A node produced by withValidation: a Response handler plus meta carrying
  *  the validator and the underlying library function (for reflection). */
 export interface ValidatedNode<Args, Result> extends Node<
   HttpCtx,
   Response,
-  { readonly kind: "validate"; readonly validator: StandardSchema<unknown, Args>; readonly fn: (args: Args) => Promise<Result> }
+  { readonly kind: "validate"; readonly validator: StandardSchema<unknown, Args>; readonly fn: (args: Args) => Promise<ValidatedResult<Result>> }
 > {}
 
 export function withValidation<Args, Result, V extends StandardSchema<unknown, Args>>(
-  fn: (args: Args) => Result | Promise<Result>,
+  fn: (args: Args) => ValidatedResult<Result> | Promise<ValidatedResult<Result>>,
   validator: V & (InferOutput<V> extends Args ? unknown : never),
 ): ValidatedNode<Args, Result> {
   const wrapped = validator as StandardSchema<unknown, Args>
@@ -139,7 +204,7 @@ export function withValidation<Args, Result, V extends StandardSchema<unknown, A
       if (result.issues !== undefined) {
         return json({ error: "Validation failed", issues: result.issues }, 400)
       }
-      return json(await fn(result.value))
+      return renderValidated(await fn(result.value))
     },
   }
 }
@@ -308,13 +373,20 @@ export function sse(
   })
 }
 
+export { isMethodMismatch } from "@rhi-zone/fractal-core"
+
 export type {
+  Dispatched,
   InferOutput,
+  MethodMismatch,
   Middleware,
   NoVars,
   Node,
+  PathParamNames,
+  PathParams,
   Router,
   RoutingCtx,
   StandardSchema,
+  WithParams,
   WithVars,
 } from "@rhi-zone/fractal-core"

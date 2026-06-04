@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest"
 import {
   compose,
   createRouter,
+  isMethodMismatch,
   node,
   type Handler,
   type Middleware,
   type NoVars,
+  type PathParams,
   type RoutingCtx,
   type StandardSchema,
   type WithVars,
@@ -94,6 +96,41 @@ describe("router — use() widens visible vars", () => {
 
   it("handler registered after use() sees added vars", async () => {
     expect(await r.dispatch(ctx("GET", "/g", {}))).toBe("hi")
+  })
+})
+
+describe("dispatch — method-mismatch sentinel vs no-match null", () => {
+  const r = createRouter<TestCtx, NoVars, string>()
+    .route("GET", "/users/:id", async (c) => `get:${c.params["id"]}`)
+    .route("PUT", "/users/:id", async () => "put")
+
+  it("path matched, method didn't → MethodMismatch carrying allowed methods", async () => {
+    const result = await r.dispatch(ctx("DELETE", "/users/1", {}))
+    expect(isMethodMismatch(result)).toBe(true)
+    if (isMethodMismatch(result)) {
+      expect(result.allow.sort()).toEqual(["GET", "HEAD", "PUT"])
+    }
+  })
+
+  it("genuinely unmatched path → null", async () => {
+    expect(await r.dispatch(ctx("DELETE", "/absent", {}))).toBeNull()
+  })
+
+  it("auto-HEAD: HEAD with no HEAD route runs the GET handler", async () => {
+    expect(await r.dispatch(ctx("HEAD", "/users/9", {}))).toBe("get:9")
+  })
+})
+
+describe("PathParams — type-level pattern parsing (no casts)", () => {
+  type Eq<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+  it("single, multi, and zero params parse to the right record", () => {
+    const single: Eq<PathParams<"/users/:id">, { readonly id: string }> = true
+    const multi: Eq<
+      PathParams<"/u/:uid/books/:bid">,
+      { readonly uid: string; readonly bid: string }
+    > = true
+    const none: Eq<PathParams<"/static">, Record<never, never>> = true
+    expect([single, multi, none]).toEqual([true, true, true])
   })
 })
 
