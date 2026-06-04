@@ -1,0 +1,22 @@
+A-10	ok=true	err=0	types=9578	inst=26683	memK=32124	checkMs=7	totalMs=30	wallMs=59
+A-100	ok=true	err=0	types=17986	inst=58184	memK=36804	checkMs=16	totalMs=39	wallMs=70
+A-300	ok=true	err=0	types=65645	inst=215120	memK=59360	checkMs=58	totalMs=81	wallMs=113
+A-600	ok=true	err=0	types=212137	inst=675556	memK=119209	checkMs=164	totalMs=187	wallMs=229
+A-900	ok=true	err=0	types=448645	inst=1406020	memK=214880	checkMs=371	totalMs=394	wallMs=432
+B-10	ok=true	err=0	types=4991	inst=9902	memK=28795	checkMs=5	totalMs=28	wallMs=54
+B-100	ok=true	err=0	types=6731	inst=12422	memK=30443	checkMs=6	totalMs=28	wallMs=57
+B-300	ok=true	err=0	types=10598	inst=18018	memK=34493	checkMs=18	totalMs=40	wallMs=68
+B-600	ok=true	err=0	types=16398	inst=26418	memK=40367	checkMs=45	totalMs=69	wallMs=98
+B-900	ok=true	err=0	types=22198	inst=34818	memK=49868	checkMs=92	totalMs=114	wallMs=142
+C1-10	ok=true	err=0	types=5917	inst=12728	memK=29718	checkMs=7	totalMs=31	wallMs=60
+C1-100	ok=true	err=0	types=7596	inst=15516	memK=31209	checkMs=7	totalMs=30	wallMs=60
+C1-300	ok=true	err=0	types=11264	inst=20694	memK=34448	checkMs=11	totalMs=35	wallMs=67
+C1-600	ok=true	err=0	types=16762	inst=28750	memK=39043	checkMs=19	totalMs=42	wallMs=74
+C1-900	ok=true	err=0	types=22264	inst=36794	memK=43909	checkMs=30	totalMs=55	wallMs=84
+C2-10	ok=true	err=0	types=6144	inst=13764	memK=29970	checkMs=4	totalMs=27	wallMs=56
+C2-100	ok=true	err=0	types=11267	inst=38008	memK=35048	checkMs=17	totalMs=40	wallMs=68
+C2-300	ok=true	err=0	types=22643	inst=91940	memK=46692	checkMs=43	totalMs=66	wallMs=102
+C2-600	ok=true	err=0	types=39685	inst=172724	memK=63968	checkMs=103	totalMs=125	wallMs=161
+C2-900	ok=true	err=0	types=56743	inst=253540	memK=79790	checkMs=170	totalMs=193	wallMs=233
+
+wrote logs/results.csv and logs/table.md
