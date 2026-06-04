@@ -174,6 +174,81 @@ export type WithParams<Ctx extends RoutingCtx, P extends string> =
   Omit<Ctx, "params"> & { readonly params: PathParams<P> }
 
 // ---------------------------------------------------------------------------
+// Route accumulation — the router TYPE carries each registered route as a
+// descriptor so a client can be derived from the same value that serves.
+//
+// Each `.route`/`.get`/... appends a `RouteSpec` to the router's `Routes` tuple.
+// `.mount` prefixes the sub-router's accumulated specs and concatenates them.
+// This is the crux: routes must accumulate IN THE TYPE, cast-free, for ClientOf.
+// ---------------------------------------------------------------------------
+
+/** A single registered route, captured at the type level. */
+export interface RouteSpec {
+  /** The HTTP-ish method, uppercased ("GET", "POST", ...). */
+  readonly method: string
+  /** The literal route pattern, e.g. "/users/:id". */
+  readonly pattern: string
+  /** Typed path params parsed from the pattern. */
+  readonly params: Record<string, string>
+  /** The request input (validated body) — `never` when the route has none. */
+  readonly input: unknown
+  /** The handler's domain output (body type recovered from its return). */
+  readonly output: unknown
+}
+
+/** Build a `RouteSpec` from its parts (keeps the verb signatures terse). */
+export interface RouteOf<M extends string, P extends string, Input, Output> {
+  readonly method: M
+  readonly pattern: P
+  readonly params: PathParams<P>
+  readonly input: Input
+  readonly output: Output
+}
+
+/** Extract the accumulated route tuple from a Router type. */
+export type RoutesOf<R> =
+  R extends Router<infer _C, infer _I, infer _Cur, infer _Res, infer Routes> ? Routes : never
+
+/** Recover a node's declared input (validated body). A node may carry a phantom
+ *  `__input` in its meta (set by `withValidation`); absent → `never`. */
+export type NodeInput<N> = N extends { readonly meta: { readonly __input?: infer I } }
+  ? [I] extends [undefined] ? never : I
+  : never
+
+/** Recover a node's declared domain output. A node may carry a phantom
+ *  `__output` in its meta; absent → fall back to the handler's return type. */
+export type NodeOutput<N> = N extends { readonly meta: { readonly __output?: infer O } }
+  ? [O] extends [undefined]
+    ? N extends { readonly handler: (...a: never[]) => infer R } ? Awaited<R> : unknown
+    : O
+  : N extends { readonly handler: (...a: never[]) => infer R } ? Awaited<R> : unknown
+
+/** Prefix every spec's pattern in `Subs` with `Prefix` (for `.mount`). */
+export type PrefixRoutes<Prefix extends string, Subs extends readonly RouteSpec[]> = {
+  readonly [I in keyof Subs]: Subs[I] extends RouteSpec
+    ? {
+        readonly method: Subs[I]["method"]
+        readonly pattern: JoinPath<Prefix, Subs[I]["pattern"]>
+        readonly params: Subs[I]["params"]
+        readonly input: Subs[I]["input"]
+        readonly output: Subs[I]["output"]
+      }
+    : never
+}
+
+/** Join a mount prefix to a sub-pattern, normalising slashes:
+ *  ("/admin", "/me") -> "/admin/me"; ("/admin", "/") -> "/admin". */
+export type JoinPath<Prefix extends string, Sub extends string> =
+  TrimSlash<Prefix> extends infer Pfx extends string
+    ? TrimSlash<Sub> extends infer Sfx extends string
+      ? Sfx extends "" ? `/${Pfx}` : `/${Pfx}/${Sfx}`
+      : never
+    : never
+
+type TrimSlash<S extends string> =
+  S extends `/${infer R}` ? TrimSlash<R> : S extends `${infer R}/` ? TrimSlash<R> : S
+
+// ---------------------------------------------------------------------------
 // Entries (erased to base Vars after registration)
 // ---------------------------------------------------------------------------
 
@@ -206,84 +281,93 @@ export interface Router<
   In extends Record<string, unknown>,
   Cur extends Record<string, unknown>,
   Result,
+  Routes extends readonly RouteSpec[] = readonly [],
 > {
-  /** Register a handler for method + pattern. Returns this for chaining. */
-  route(
-    method: string,
-    pattern: string,
-    handler: (ctx: WithVars<Ctx, Cur>) => Promise<Result>,
+  /** Register a handler for method + pattern. Returns this for chaining.
+   *  Accumulates `{ method, pattern, params, output }` in the router's type. */
+  route<P extends string, M extends string, R extends Result>(
+    method: M,
+    pattern: P,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<R>,
     meta?: unknown,
-  ): Router<Ctx, In, Cur, Result>
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<Uppercase<M>, P, never, Awaited<R>>]>
 
-  /** Register a pre-built node ({ meta, handler }) for method + pattern. */
-  routeNode(
-    method: string,
-    pattern: string,
-    n: Node<WithVars<Ctx, Cur>, Result>,
-  ): Router<Ctx, In, Cur, Result>
+  /** Register a pre-built node ({ meta, handler }) for method + pattern.
+   *  Recovers the node's typed input/output (e.g. from `withValidation`). */
+  routeNode<P extends string, M extends string, N extends Node<WithParams<WithVars<Ctx, Cur>, P>, Result, unknown>>(
+    method: M,
+    pattern: P,
+    n: N,
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<Uppercase<M>, P, NodeInput<N>, NodeOutput<N>>]>
 
   // -- verb sugar — thin wrappers over `route` that ALSO type ctx.params from
   //    the pattern string (`:id` → params.id: string). Desugar to `.route`.
-  get<P extends string>(
+  get<P extends string, R extends Result>(
     pattern: P,
-    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<R>,
     meta?: unknown,
-  ): Router<Ctx, In, Cur, Result>
-  post<P extends string>(
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<"GET", P, never, Awaited<R>>]>
+  post<P extends string, R extends Result>(
     pattern: P,
-    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<R>,
     meta?: unknown,
-  ): Router<Ctx, In, Cur, Result>
-  put<P extends string>(
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<"POST", P, never, Awaited<R>>]>
+  put<P extends string, R extends Result>(
     pattern: P,
-    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<R>,
     meta?: unknown,
-  ): Router<Ctx, In, Cur, Result>
-  patch<P extends string>(
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<"PUT", P, never, Awaited<R>>]>
+  patch<P extends string, R extends Result>(
     pattern: P,
-    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<R>,
     meta?: unknown,
-  ): Router<Ctx, In, Cur, Result>
-  delete<P extends string>(
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<"PATCH", P, never, Awaited<R>>]>
+  delete<P extends string, R extends Result>(
     pattern: P,
-    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<R>,
     meta?: unknown,
-  ): Router<Ctx, In, Cur, Result>
-  head<P extends string>(
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<"DELETE", P, never, Awaited<R>>]>
+  head<P extends string, R extends Result>(
     pattern: P,
-    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<R>,
     meta?: unknown,
-  ): Router<Ctx, In, Cur, Result>
-  options<P extends string>(
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<"HEAD", P, never, Awaited<R>>]>
+  options<P extends string, R extends Result>(
     pattern: P,
-    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<Result>,
+    handler: (ctx: WithParams<WithVars<Ctx, Cur>, P>) => Promise<R>,
     meta?: unknown,
-  ): Router<Ctx, In, Cur, Result>
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, RouteOf<"OPTIONS", P, never, Awaited<R>>]>
 
   /** Attach middleware applied to every route registered AFTER this call,
    *  widening the visible Vars by `Extra`. Subsequent handlers see
    *  `Cur & Extra` — no cast. Dispatch input (`In`) is unchanged. */
   use<Extra extends Record<string, unknown>>(
     mw: Middleware<Ctx, Cur, Extra, Result>,
-  ): Router<Ctx, In, Cur & Extra, Result>
+  ): Router<Ctx, In, Cur & Extra, Result, Routes>
 
   /** Mount a sub-router under a prefix, threading `Extra` via middleware.
    *  The sub-router's input vars are `Cur & Extra` statically — ZERO casts at
-   *  the call site (Router is structural; no private fields). */
-  mount<Extra extends Record<string, unknown>>(
-    prefix: string,
+   *  the call site (Router is structural; no private fields). The sub-router's
+   *  accumulated routes are prefixed and merged into this router's type. */
+  mount<Extra extends Record<string, unknown>, P extends string, Subs extends readonly RouteSpec[]>(
+    prefix: P,
     mw: Middleware<Ctx, Cur, Extra, Result>,
-    subRouter: Router<Ctx, Cur & Extra, Cur & Extra, Result>,
-  ): Router<Ctx, In, Cur, Result>
+    subRouter: Router<Ctx, Cur & Extra, Cur & Extra, Result, Subs>,
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, ...PrefixRoutes<P, Subs>]>
 
   /** Mount a sub-router under a prefix with no added context. */
-  mountPlain(
-    prefix: string,
-    subRouter: Router<Ctx, Cur, Cur, Result>,
-  ): Router<Ctx, In, Cur, Result>
+  mountPlain<P extends string, Subs extends readonly RouteSpec[]>(
+    prefix: P,
+    subRouter: Router<Ctx, Cur, Cur, Result, Subs>,
+  ): Router<Ctx, In, Cur, Result, readonly [...Routes, ...PrefixRoutes<P, Subs>]>
 
   /** The reflection descriptors of registered routes + mounts. */
   readonly meta: ReadonlyArray<unknown>
+
+  /** Phantom carrier for the accumulated route tuple (type-level only; the
+   *  runtime value is `undefined`). Lets `RoutesOf<typeof app>` and the client
+   *  derivation read the accumulated specs without a separate type alias. */
+  readonly __routes?: Routes
 
   /** Dispatch a request through this router. Resolves to the handler's `Result`,
    *  `null` (no path matched → surface 404), or a `MethodMismatch` (a path
@@ -325,7 +409,7 @@ export function createRouter<
   Ctx extends RoutingCtx,
   Vars extends Record<string, unknown> = NoVars,
   Result = unknown,
->(): Router<Ctx, Vars, Vars, Result> {
+>(): Router<Ctx, Vars, Vars, Result, readonly []> {
   const routes: Array<RouteEntry<RoutingCtx, Result>> = []
   const mounts: Array<MountEntry<RoutingCtx, Result>> = []
   const pending: AnyMw[] = []
@@ -397,7 +481,30 @@ export function createRouter<
     return null
   }
 
-  const router: Router<Ctx, Vars, Vars, Result> = {
+  // The IMPLEMENTATION is described by a non-accumulating, loosely-typed shape:
+  // every builder method returns the same mutable `router`. The accumulation
+  // lives entirely in the PUBLIC `Router` interface; the factory casts to it
+  // once at `return` (localized internal `as`, like `use`/`mount` already did).
+  // This keeps the public ClientOf/route-accumulation typing cast-free while the
+  // runtime stays a single shared object.
+  interface RouterImpl {
+    route(method: string, pattern: string, handler: (ctx: RoutingCtx) => Promise<Result>, meta?: unknown): RouterImpl
+    routeNode(method: string, pattern: string, n: Node<RoutingCtx, Result>): RouterImpl
+    get(pattern: string, handler: (ctx: RoutingCtx) => Promise<Result>, meta?: unknown): RouterImpl
+    post(pattern: string, handler: (ctx: RoutingCtx) => Promise<Result>, meta?: unknown): RouterImpl
+    put(pattern: string, handler: (ctx: RoutingCtx) => Promise<Result>, meta?: unknown): RouterImpl
+    patch(pattern: string, handler: (ctx: RoutingCtx) => Promise<Result>, meta?: unknown): RouterImpl
+    delete(pattern: string, handler: (ctx: RoutingCtx) => Promise<Result>, meta?: unknown): RouterImpl
+    head(pattern: string, handler: (ctx: RoutingCtx) => Promise<Result>, meta?: unknown): RouterImpl
+    options(pattern: string, handler: (ctx: RoutingCtx) => Promise<Result>, meta?: unknown): RouterImpl
+    use(mw: AnyMw): RouterImpl
+    mount(prefix: string, mw: AnyMw, subRouter: Router<Ctx, Record<string, unknown>, Record<string, unknown>, Result, readonly RouteSpec[]>): RouterImpl
+    mountPlain(prefix: string, subRouter: Router<Ctx, Record<string, unknown>, Record<string, unknown>, Result, readonly RouteSpec[]>): RouterImpl
+    readonly meta: ReadonlyArray<unknown>
+    dispatch(ctx: RoutingCtx): Promise<Dispatched<Result>>
+  }
+
+  const router: RouterImpl = {
     route(method, pattern, handler, meta) {
       const { re, paramNames } = parsePattern(pattern)
       const stack = [...pending]
@@ -413,7 +520,7 @@ export function createRouter<
     },
 
     routeNode(method, pattern, n) {
-      return router.route(method, pattern, n.handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, n.meta)
+      return router.route(method, pattern, n.handler as (ctx: RoutingCtx) => Promise<Result>, n.meta)
     },
 
     // Verb sugar — desugar to `route`. The handler's ctx.params is narrowed to
@@ -422,48 +529,44 @@ export function createRouter<
     // run as a route handler. The single cast here erases only the params
     // narrowing (a structural view), not user-facing inference.
     get(pattern, handler, meta) {
-      return router.route("GET", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+      return router.route("GET", pattern, handler, meta)
     },
     post(pattern, handler, meta) {
-      return router.route("POST", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+      return router.route("POST", pattern, handler, meta)
     },
     put(pattern, handler, meta) {
-      return router.route("PUT", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+      return router.route("PUT", pattern, handler, meta)
     },
     patch(pattern, handler, meta) {
-      return router.route("PATCH", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+      return router.route("PATCH", pattern, handler, meta)
     },
     delete(pattern, handler, meta) {
-      return router.route("DELETE", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+      return router.route("DELETE", pattern, handler, meta)
     },
     head(pattern, handler, meta) {
-      return router.route("HEAD", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+      return router.route("HEAD", pattern, handler, meta)
     },
     options(pattern, handler, meta) {
-      return router.route("OPTIONS", pattern, handler as (ctx: WithVars<Ctx, Vars>) => Promise<Result>, meta)
+      return router.route("OPTIONS", pattern, handler, meta)
     },
 
-    use<Extra extends Record<string, unknown>>(mw: Middleware<Ctx, Vars, Extra, Result>) {
-      pending.push(mw as unknown as AnyMw)
-      return router as unknown as Router<Ctx, Vars, Vars & Extra, Result>
+    use(mw) {
+      pending.push(mw)
+      return router
     },
 
-    mount<Extra extends Record<string, unknown>>(
-      prefix: string,
-      mw: Middleware<Ctx, Vars, Extra, Result>,
-      subRouter: Router<Ctx, Vars & Extra, Vars & Extra, Result>,
-    ) {
+    mount(prefix, mw, subRouter) {
       const stripped = stripSlashes(prefix)
       const dispatch = async (ctx: RoutingCtx): Promise<Dispatched<Result>> => {
         const [head, ...tail] = ctx.segments
         if (head !== stripped) return null
-        const subCtx = { ...ctx, segments: tail } as WithVars<Ctx, Vars>
+        const subCtx = { ...ctx, segments: tail } as RoutingCtx<Record<string, unknown>>
         // The middleware contract is "next resolves a Result". A sub-dispatch
         // that produces null / MethodMismatch is carried THROUGH next as the
         // Result, then unwrapped on the way out so the surface sees it.
         return mw(subCtx, (enriched) =>
-          subRouter.dispatch(enriched).then((r) => (r ?? notFoundResult()) as Result),
-        )
+          subRouter.dispatch(enriched as WithVars<Ctx, Record<string, unknown>>).then((r) => (r ?? notFoundResult()) as Result),
+        ) as Promise<Dispatched<Result>>
       }
       mounts.push({
         prefix: stripped,
@@ -478,7 +581,7 @@ export function createRouter<
       const dispatch = async (ctx: RoutingCtx): Promise<Dispatched<Result>> => {
         const [head, ...tail] = ctx.segments
         if (head !== stripped) return null
-        const subCtx = { ...ctx, segments: tail } as WithVars<Ctx, Vars>
+        const subCtx = { ...ctx, segments: tail } as WithVars<Ctx, Record<string, unknown>>
         return subRouter.dispatch(subCtx)
       }
       mounts.push({
@@ -498,7 +601,8 @@ export function createRouter<
     },
   }
 
-  return router
+  // Single localized cast from the loose impl to the accumulating public type.
+  return router as unknown as Router<Ctx, Vars, Vars, Result, readonly []>
 }
 
 // `notFoundResult` is a hole the surface fills: the core has no Response type.

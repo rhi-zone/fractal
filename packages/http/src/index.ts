@@ -20,6 +20,7 @@ import {
   type Middleware,
   type NoVars,
   type Node,
+  type RouteSpec,
   type Router,
   type RoutingCtx,
   type StandardSchema,
@@ -55,16 +56,18 @@ export type HttpMiddleware<
   Extra extends Record<string, unknown>,
 > = Middleware<HttpCtx, Vars, Extra, Response>
 
-/** A router specialised to HttpCtx / Response. */
+/** A router specialised to HttpCtx / Response. The `Routes` param carries the
+ *  accumulated route specs (for the typed client); it defaults to empty. */
 export type HttpRouter<
   In extends Record<string, unknown> = NoVars,
   Cur extends Record<string, unknown> = In,
-> = Router<HttpCtx, In, Cur, Response>
+  Routes extends readonly RouteSpec[] = readonly [],
+> = Router<HttpCtx, In, Cur, Response, Routes>
 
 /** Create an HTTP router. */
 export function httpRouter<
   Vars extends Record<string, unknown> = NoVars,
->(): HttpRouter<Vars, Vars> {
+>(): HttpRouter<Vars, Vars, readonly []> {
   return createRouter<HttpCtx, Vars, Response>()
 }
 
@@ -72,7 +75,9 @@ export function httpRouter<
 // toHandler — Router → (Request) => Promise<Response>  (WHATWG)
 // ============================================================================
 
-export function toHandler(router: HttpRouter<NoVars, NoVars>): (req: Request) => Promise<Response> {
+export function toHandler(
+  router: HttpRouter<NoVars, NoVars, readonly RouteSpec[]>,
+): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url)
     const segments = url.pathname.replace(/^\//, "").split("/").filter(Boolean)
@@ -188,7 +193,16 @@ function renderValidated(out: unknown): Response {
 export interface ValidatedNode<Args, Result> extends Node<
   HttpCtx,
   Response,
-  { readonly kind: "validate"; readonly validator: StandardSchema<unknown, Args>; readonly fn: (args: Args) => Promise<ValidatedResult<Result>> }
+  {
+    readonly kind: "validate"
+    readonly validator: StandardSchema<unknown, Args>
+    readonly fn: (args: Args) => Promise<ValidatedResult<Result>>
+    // Phantoms (type-level only) so the router's route accumulation can recover
+    // the validated body type (input) and the handler's domain value (output)
+    // for the typed client — without re-running inference over the Response.
+    readonly __input?: Args
+    readonly __output?: Result
+  }
 > {}
 
 export function withValidation<Args, Result, V extends StandardSchema<unknown, Args>>(
@@ -301,8 +315,12 @@ export function respond<Ctx, Ok, Err, Value>(
   handler: (ctx: Ctx) => Response | Outcome<Ok, Err> | Value | Promise<Response | Outcome<Ok, Err> | Value>,
   policy: ErrorPolicy<Err>,
   renderer: Renderer = jsonRenderer,
-): (ctx: Ctx) => Promise<Response> {
-  return async (ctx: Ctx) => render(await handler(ctx), policy, renderer)
+): (ctx: Ctx) => Promise<TypedResponse<Ok | Exclude<Value, Response | Outcome<unknown, unknown>>>> {
+  // The success body is the Outcome's `Ok` or a plain `Value` (a raw Response
+  // contributes no static body). We phantom-type the result so the typed client
+  // recovers that domain type, NOT the opaque Response. Runtime is unchanged.
+  return async (ctx: Ctx) =>
+    render(await handler(ctx), policy, renderer) as TypedResponse<Ok | Exclude<Value, Response | Outcome<unknown, unknown>>>
 }
 
 /** App/router-level default: bind a policy (and optional renderer) once, get a
@@ -313,7 +331,7 @@ export function withPolicy<Err>(
   renderer: Renderer = jsonRenderer,
 ): <Ctx, Ok, Value>(
   handler: (ctx: Ctx) => Response | Outcome<Ok, Err> | Value | Promise<Response | Outcome<Ok, Err> | Value>,
-) => (ctx: Ctx) => Promise<Response> {
+) => (ctx: Ctx) => Promise<TypedResponse<Ok | Exclude<Value, Response | Outcome<unknown, unknown>>>> {
   return (handler) => respond(handler, policy, renderer)
 }
 
@@ -321,15 +339,24 @@ export function withPolicy<Err>(
 // Response helpers
 // ============================================================================
 
-export function json(value: unknown, status = 200): Response {
+/** A `Response` that carries the body's static type as a phantom — the lever the
+ *  typed client uses to recover a `GET`/`POST` handler's domain output type
+ *  (Hono's `c.json` does the same). At runtime it IS a plain Response; the
+ *  `__body` phantom never exists as a value. A `TypedResponse<T>` is assignable
+ *  wherever a `Response` is expected, so dispatch and rendering are unaffected. */
+export interface TypedResponse<T> extends Response {
+  readonly __body?: T
+}
+
+export function json<T>(value: T, status = 200): TypedResponse<T> {
   return new Response(JSON.stringify(value), {
     status,
     headers: { "Content-Type": "application/json" },
-  })
+  }) as TypedResponse<T>
 }
 
-export function text(value: string, status = 200): Response {
-  return new Response(value, { status, headers: { "Content-Type": "text/plain" } })
+export function text(value: string, status = 200): TypedResponse<string> {
+  return new Response(value, { status, headers: { "Content-Type": "text/plain" } }) as TypedResponse<string>
 }
 
 export function notFound(): Response {
@@ -378,13 +405,20 @@ export { isMethodMismatch } from "@rhi-zone/fractal-core"
 export type {
   Dispatched,
   InferOutput,
+  JoinPath,
   MethodMismatch,
   Middleware,
   NoVars,
   Node,
+  NodeInput,
+  NodeOutput,
   PathParamNames,
   PathParams,
+  PrefixRoutes,
+  RouteOf,
+  RouteSpec,
   Router,
+  RoutesOf,
   RoutingCtx,
   StandardSchema,
   WithParams,
