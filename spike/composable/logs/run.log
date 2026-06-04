@@ -1,0 +1,12 @@
+D-10	ok=true	err=0	types=4716	inst=6154	memK=28730	checkMs=5	totalMs=28	wallMs=58
+D-100	ok=true	err=0	types=7277	inst=17232	memK=32180	checkMs=14	totalMs=36	wallMs=66
+D-300	ok=true	err=0	types=12982	inst=41707	memK=40268	checkMs=31	totalMs=55	wallMs=87
+D-600	ok=true	err=0	types=21528	inst=78421	memK=51973	checkMs=58	totalMs=81	wallMs=117
+D-900	ok=true	err=0	types=30082	inst=115207	memK=63601	checkMs=89	totalMs=112	wallMs=147
+E-10	ok=true	err=0	types=3137	inst=3249	memK=27696	checkMs=3	totalMs=26	wallMs=55
+E-100	ok=true	err=0	types=5162	inst=8694	memK=31365	checkMs=12	totalMs=35	wallMs=65
+E-300	ok=true	err=0	types=9662	inst=20791	memK=41147	checkMs=67	totalMs=91	wallMs=121
+E-600	ok=true	err=0	types=16412	inst=38941	memK=61635	checkMs=239	totalMs=261	wallMs=297
+E-900	ok=true	err=0	types=23162	inst=57091	memK=86384	checkMs=513	totalMs=536	wallMs=573
+
+wrote logs/results.csv and logs/table.md

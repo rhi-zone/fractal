@@ -1,0 +1,15 @@
+GET /users/1 -> 200 {"id":"1","name":"Ada"}
+GET /users/999 -> 404 {"error":"USER_NOT_FOUND"}
+POST /users -> 201 {"id":"2","name":"Bob"}
+POST /users (bad body) -> 422
+POST /users/1/deactivate -> 200 {"ok":true,"id":"1"}
+DELETE /users/1 (method mismatch) -> 405 Allow=GET
+GET /nope -> 404
+GET /v1/users/1 (mounted) -> 200 {"id":"1","name":"Ada"}
+client GET /users/{id} -> {"id":"1","name":"Ada"}
+client POST deactivate -> {"ok":true,"id":"1"}
+client POST /users -> {"id":"3","name":"Cleo"}
+PARITY client==dispatch: true
+openapi paths: ["/users/{id}","/users","/users/{id}/deactivate"]
+openapi /users/{id}.get params: [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}]
+openapi /users.post requestBody present: true
