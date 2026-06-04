@@ -1,0 +1,14 @@
+I-10	ok=true	err=0	types=4777	inst=7265	memK=29196	checkMs=4	totalMs=27	wallMs=54
+I-100	ok=true	err=0	types=7706	inst=25593	memK=33481	checkMs=13	totalMs=34	wallMs=64
+I-300	ok=true	err=0	types=14206	inst=66042	memK=43262	checkMs=34	totalMs=55	wallMs=86
+I-600	ok=true	err=0	types=23948	inst=126732	memK=57651	checkMs=67	totalMs=89	wallMs=123
+I-900	ok=true	err=0	types=33706	inst=187542	memK=71684	checkMs=101	totalMs=125	wallMs=161
+J-10	ok=true	err=0	types=3451	inst=3750	memK=27996	checkMs=3	totalMs=25	wallMs=54
+J-100	ok=true	err=0	types=5881	inst=11040	memK=33017	checkMs=22	totalMs=45	wallMs=74
+J-300	ok=true	err=0	types=11280	inst=27237	memK=52208	checkMs=158	totalMs=180	wallMs=205
+J-600	ok=true	err=0	types=19380	inst=51537	memK=103883	checkMs=655	totalMs=678	wallMs=717
+J-900	ok=true	err=0	types=27480	inst=75837	memK=170142	checkMs=1529	totalMs=1551	wallMs=1590
+STOCK tsc I-600	ok=true	err=0	wallMs=664
+STOCK tsc I-900	ok=true	err=0	wallMs=805
+
+wrote logs/results.csv and logs/table.md

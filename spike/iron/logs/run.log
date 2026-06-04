@@ -1,0 +1,90 @@
+=== 1. dispatch the 3 endpoints (server-side) ===
+(a) GET /users/1 -> 200 {"id":"1","name":"Ada"}
+PASS  (a) 200 + user
+(a') GET /users/999 -> 404 {"error":"USER_NOT_FOUND"}
+PASS  (a') 404 unknown user
+(b) POST /users -> 201 {"id":"caller","name":"Grace"}
+PASS  (b) 201 created
+(c) POST /users/1/deactivate -> 200 {"id":"1","name":"Ada"}
+PASS  (c) 200 deactivate existing
+(c') POST /users/999/deactivate -> 404 {"error":"USER_NOT_FOUND","id":"999"}
+PASS  (c') 404 deactivate missing
+405 probe: DELETE /users/1 -> 405 Allow=GET, HEAD, OPTIONS
+PASS  405 + Allow on method mismatch
+auto-HEAD: HEAD /users/1 -> 200 bodyLen=0
+PASS  auto-HEAD: 200 + empty body
+
+=== 2. in-process typed client + parity assert ===
+client /users/{id}.get({id:1}) -> {"id":"1","name":"Ada"}
+PASS  client === server parity
+
+=== 3. OpenAPI projection (walks .meta) ===
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "sample",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/users/{id}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/users": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}/deactivate": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+PASS  openapi has /users/{id} GET
+PASS  openapi has /users POST requestBody
+PASS  openapi has /users/{id}/deactivate POST

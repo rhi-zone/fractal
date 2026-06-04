@@ -4,13 +4,14 @@
   "type": "module",
   "workspaces": ["packages/*", "examples/*"],
   "scripts": {
-    "build":      "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-http' build && bun run --filter '@rhi-zone/fractal-client' build",
-    "typecheck":  "bun run --filter '*' typecheck",
-    "test":       "bun run --filter '*' test",
-    "dev":        "bun run --filter '@rhi-zone/fractal-core' --filter '@rhi-zone/fractal-http' --filter '@rhi-zone/fractal-client' dev"
+    "build": "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-http' build && bun run --filter '@rhi-zone/fractal-client' build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
+    "dev": "bun run --filter '@rhi-zone/fractal-core' --filter '@rhi-zone/fractal-http' --filter '@rhi-zone/fractal-client' dev"
   },
   "devDependencies": {
     "@typescript/native-preview": "latest",
-    "bun-types": "^1.3.14"
+    "bun-types": "^1.3.14",
+    "typescript": "^6.0.3"
   }
 }
