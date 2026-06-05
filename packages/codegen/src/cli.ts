@@ -15,7 +15,7 @@
 // <dir>/server.ts.
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Reflected } from "@rhi-zone/fractal-core";
 import { toOpenApi } from "@rhi-zone/fractal-openapi";
@@ -54,6 +54,9 @@ function parseArgs(argv: readonly string[]): CliArgs {
     ...(flags["client-factory"]
       ? { clientFactoryName: flags["client-factory"] }
       : {}),
+    ...(flags["app-import"] ? { appImport: flags["app-import"] } : {}),
+    ...(flags["app-export"] ? { appExport: flags["app-export"] } : {}),
+    ...(flags["gen-union"] ? { genUnionName: flags["gen-union"] } : {}),
   };
   return {
     module,
@@ -65,10 +68,24 @@ function parseArgs(argv: readonly string[]): CliArgs {
   };
 }
 
-export async function run(argv: readonly string[]): Promise<void> {
-  const args = parseArgs(argv);
+/** Normalize an OS path into a POSIX module specifier with a leading "./" (so it
+ *  is a valid relative `import` specifier on any platform). */
+function toSpecifier(p: string): string {
+  const posix = p.split("\\").join("/");
+  return posix.startsWith(".") ? posix : `./${posix}`;
+}
+
+/** Import the app, project the doc, generate, and write client.ts/server.ts (with
+ *  the embedded drift guard). Returns the path count. Shared by one-shot `run` and
+ *  `watch` so both emit byte-identical output. `import(...)` with a cache-busting
+ *  query so `watch` re-imports the MUTATED source, not a cached module. */
+export async function generateToDir(
+  args: CliArgs,
+  bust = false,
+): Promise<{ clientPath: string; serverPath: string; paths: number }> {
   const modPath = resolve(process.cwd(), args.module);
-  const mod = (await import(pathToFileURL(modPath).href)) as Record<string, unknown>;
+  const href = pathToFileURL(modPath).href + (bust ? `?t=${Date.now()}` : "");
+  const mod = (await import(href)) as Record<string, unknown>;
   const app = mod[args.exportName];
   if (app === undefined) {
     throw new Error(
@@ -80,25 +97,88 @@ export async function run(argv: readonly string[]): Promise<void> {
     title: args.title,
     version: args.version,
   });
-  const generated = generate(doc, args.opts);
 
   const outDir = resolve(process.cwd(), args.out);
   mkdirSync(outDir, { recursive: true });
+
+  // Compute the SOURCE app's import specifier RELATIVE to the output dir, for the
+  // drift guard's `import type` (unless explicitly overridden). The generated
+  // client.ts sits in <outDir>; the source app is <modPath>. A relative specifier
+  // keeps the guard correct regardless of where codegen runs.
+  const appImport = args.opts.appImport ?? toSpecifier(relative(outDir, modPath));
+  const appExport = args.opts.appExport ?? args.exportName;
+  const generated = generate(doc, { ...args.opts, appImport, appExport });
+
   const clientPath = resolve(outDir, "client.ts");
   const serverPath = resolve(outDir, "server.ts");
   mkdirSync(dirname(clientPath), { recursive: true });
   writeFileSync(clientPath, generated.client);
   writeFileSync(serverPath, generated.server);
+  return { clientPath, serverPath, paths: Object.keys(doc.paths).length };
+}
+
+export async function run(argv: readonly string[]): Promise<void> {
+  const args = parseArgs(argv);
+  const { clientPath, serverPath, paths } = await generateToDir(args);
   process.stdout.write(
     `generated:\n  ${clientPath}\n  ${serverPath}\n` +
-      `from "${args.module}" export "${args.exportName}" ` +
-      `(${Object.keys(doc.paths).length} paths)\n`,
+      `from "${args.module}" export "${args.exportName}" (${paths} paths)\n`,
   );
 }
 
-// Invoked directly (bun/node run): parse process.argv and go.
+/** `fractal-codegen watch <app-module> --out <dir> [...]` — regenerate on source
+ *  change. Watches the source module's DIRECTORY (bun/Node `fs.watch`, recursive),
+ *  debounces a burst of fs events into one regeneration, and re-imports the
+ *  mutated module (cache-busted). Keep it simple + robust: log each regen, never
+ *  crash the loop on a transient compile/import error (report and keep watching). */
+export async function watch(argv: readonly string[]): Promise<void> {
+  const args = parseArgs(argv);
+  const modPath = resolve(process.cwd(), args.module);
+  const watchDir = dirname(modPath);
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let running = false;
+  const regen = async (): Promise<void> => {
+    if (running) return; // coalesce; a trailing event re-triggers below
+    running = true;
+    try {
+      const { paths } = await generateToDir(args, /* bust */ true);
+      process.stdout.write(`[fractal watch] regenerated (${paths} paths) ${new Date().toISOString()}\n`);
+    } catch (e: unknown) {
+      process.stderr.write(`[fractal watch] regen failed: ${String(e)}\n`);
+    } finally {
+      running = false;
+    }
+  };
+
+  await regen(); // initial generation
+  process.stdout.write(`[fractal watch] watching ${watchDir} (Ctrl-C to stop)\n`);
+
+  const { watch: fsWatch } = await import("node:fs");
+  fsWatch(watchDir, { recursive: true }, (_event, filename) => {
+    // Ignore our own output writes (the generated dir under outDir) to avoid a loop.
+    const outDir = resolve(process.cwd(), args.out);
+    if (filename !== null && resolve(watchDir, filename).startsWith(outDir)) return;
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => void regen(), 120); // debounce
+  });
+
+  // Keep the process alive.
+  await new Promise<never>(() => {});
+}
+
+// Invoked directly (bun/node run): parse process.argv and go. A leading
+// `generate` / `watch` subcommand selects the mode (default: generate).
 if (import.meta.main === true || process.argv[1]?.endsWith("cli.ts")) {
-  run(process.argv.slice(2)).catch((e: unknown) => {
+  const argv = process.argv.slice(2);
+  const [sub, ...rest] = argv;
+  const go =
+    sub === "watch"
+      ? watch(rest)
+      : sub === "generate"
+        ? run(rest)
+        : run(argv); // no subcommand → one-shot generate
+  go.catch((e: unknown) => {
     process.stderr.write(`fractal-codegen: ${String(e)}\n`);
     process.exit(1);
   });

@@ -186,6 +186,25 @@ describe("generate — typed client source", () => {
     expect(client).toContain("id: string;");
   });
 
+  it("emits the static drift guard (GenUnion + AssertExact) keyed to the source app", () => {
+    const { client } = generate(doc, { appImport: "../app.ts", appExport: "app" });
+    // The route-entry union — one `RouteEntry<"VERB /path", …>` per route.
+    expect(client).toContain("export type GenUnion =");
+    expect(client).toContain('RouteEntry<"GET /todos"');
+    expect(client).toContain('RouteEntry<"POST /todos/{id}/done"');
+    // The guard imports the SOURCE app type (import type only) + the substrate,
+    // and asserts the derived union equals the generated one.
+    expect(client).toContain('import type { app } from "../app.ts";');
+    expect(client).toContain("RouteUnion,");
+    expect(client).toContain("export const _drift: Assert<");
+    expect(client).toContain("AssertExact<RouteUnion<typeof app>, GenUnion>");
+    // Validated-body routes carry a concrete body in the union; returns-only
+    // routes carry the concrete response (mirroring the `.meta` `__io` phantom).
+    expect(client).toContain('RouteEntry<"POST /todos", {}, {');
+    // Linear: a UNION, never a keyed object materialization (the O(N^2) trap).
+    expect(client).not.toContain("UnionToObj");
+  });
+
   it("types responses concretely from `returns(...)` output schema (not unknown)", () => {
     const { client } = generate(doc);
     // GET /todos/{id} declared `returns(..., todoSchema)` → a concrete Todo shape,

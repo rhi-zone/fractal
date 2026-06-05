@@ -622,3 +622,20 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
 }
 export type InferOutput<S> =
   S extends StandardSchemaV1<unknown, infer O> ? O : never;
+
+// ============================================================================
+// Drift-guard substrate — TYPES ONLY. The sound exact-equality assertion
+// (`Equals`/`AssertExact`/`Assert`) and the LINEAR route-entry-union derivation
+// (`RouteEntry`/`RouteUnion`) that @rhi-zone/fractal-codegen emits a static guard
+// against. Lives here because it reads core's `.meta` types; re-exported so the
+// generated client can `import type { Assert, AssertExact, RouteUnion, RouteEntry }
+// from "@rhi-zone/fractal-core"`. See ./drift.ts for the linearity invariant.
+// ============================================================================
+
+export type {
+  Assert,
+  AssertExact,
+  Equals,
+  RouteEntry,
+  RouteUnion,
+} from "./drift.ts";

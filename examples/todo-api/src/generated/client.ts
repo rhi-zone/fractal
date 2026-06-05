@@ -5,6 +5,13 @@
 import type { Transport } from "@rhi-zone/fractal-client";
 import { inProcess } from "@rhi-zone/fractal-client";
 import type { Handler } from "@rhi-zone/fractal-core";
+import type {
+  Assert,
+  AssertExact,
+  RouteEntry,
+  RouteUnion,
+} from "@rhi-zone/fractal-core";
+import type { app } from "../app.ts";
 
 export interface ApiClient {
   "/todos": {
@@ -51,6 +58,44 @@ export interface ApiClient {
     get: () => Promise<unknown>;
   };
 }
+
+
+// The generated route-entry UNION — one `RouteEntry` per route (concrete types,
+// mirroring `RouteUnion<typeof app>`). A union, NEVER merged into a keyed object
+// (that merge is the O(N^2) trap that crashes stock tsc at scale).
+export type GenUnion =
+  | RouteEntry<"GET /todos", {}, never, {
+    id: string;
+    title: string;
+    done: boolean;
+  }[]>
+  | RouteEntry<"POST /todos", {}, {
+    title: string;
+  }, unknown>
+  | RouteEntry<"POST /todos/{id}/done", {
+    id: string;
+  }, {
+    done: boolean;
+  }, unknown>
+  | RouteEntry<"GET /todos/{id}", {
+    id: string;
+  }, never, {
+    id: string;
+    title: string;
+    done: boolean;
+  }>
+  | RouteEntry<"GET /health", {}, never, unknown>
+  | RouteEntry<"GET /events", {}, never, unknown>
+  | RouteEntry<"GET /favicon", {}, never, unknown>;
+
+// STATIC DRIFT GUARD: re-derive the route-entry union from the SOURCE app's
+// inert `.meta` and assert it equals the generated union above. Any drift —
+// added/removed/renamed route, or a changed param/body/response shape — that is
+// not reflected here makes this assignment fail to typecheck with a `__drift__`
+// error. Regenerate to fix. (import type only — no runtime import, no cycle.)
+export const _drift: Assert<
+  AssertExact<RouteUnion<typeof app>, GenUnion>
+> = true;
 
 const PATHS: Record<string, readonly string[]> = {
   "/todos": ["get", "post"],

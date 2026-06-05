@@ -10,5 +10,5 @@
     "allowImportingTsExtensions": true,
     "types": ["bun-types"]
   },
-  "include": ["out/generated-client.ts", "out/generated-usage.ts"]
+  "include": ["out/generated-app.ts", "out/generated-client.ts", "out/generated-usage.ts"]
 }

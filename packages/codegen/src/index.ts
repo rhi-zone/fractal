@@ -176,6 +176,15 @@ function clientSource(doc: OpenApiDocument, opts: Required<GenerateOptions>): st
     `import type { Transport } from "${opts.clientImport}";`,
     `import { inProcess } from "${opts.clientImport}";`,
     `import type { Handler } from "${opts.coreImport}";`,
+    // Drift-guard substrate (TYPES ONLY) + the SOURCE app's type (import type only —
+    // generated depends on source, no runtime import, no cycle).
+    `import type {`,
+    `  Assert,`,
+    `  AssertExact,`,
+    `  RouteEntry,`,
+    `  RouteUnion,`,
+    `} from "${opts.coreImport}";`,
+    `import type { ${opts.appExport} } from "${opts.appImport}";`,
     "",
   );
 
@@ -196,6 +205,19 @@ function clientSource(doc: OpenApiDocument, opts: Required<GenerateOptions>): st
   out.push(`export interface ${opts.clientTypeName} {`);
   out.push(members.join("\n"));
   out.push("}", "");
+
+  // The STATIC DRIFT GUARD — a union of concrete `RouteEntry`s (the same per-route
+  // data the interface carries, in union form) plus a single `AssertExact` that
+  // statically asserts it equals `RouteUnion<typeof app>` re-derived from the
+  // SOURCE app's inert `.meta`. If the source gains/loses/renames a route or
+  // changes a param/body/response shape WITHOUT regenerating, the derived union
+  // differs and `_drift = true` fails to typecheck (a `__drift__` error). The
+  // import is `import type` only — generated depends on source, never the reverse;
+  // no runtime import, no cycle. Linear (union-vs-union, never materialized into a
+  // keyed object — that is the O(N²) trap). See @rhi-zone/fractal-core/drift.ts.
+  out.push(driftGuard(doc, opts));
+
+  out.push("");
 
   // The runtime builder — walks the SAME doc shape the type describes, building a
   // path→verb→fn surface that dispatches through the given Transport (defaults to
@@ -246,6 +268,66 @@ function callSig(op: Operation): string {
   if (body !== undefined) fields.push(`body: ${body}`);
   if (fields.length === 0) return `() => Promise<${ret}>`;
   return `(args: { ${fields.join("; ")} }) => Promise<${ret}>`;
+}
+
+// ============================================================================
+// The static DRIFT GUARD. Emits a `GenUnion` — a union of concrete
+// `RouteEntry<"VERB /path", params, body, response>` (one per route, the same
+// data the ApiClient interface carries) — and a single `AssertExact` against
+// `RouteUnion<typeof app>` re-derived from the source `.meta`.
+//
+// The per-route projection MUST mirror what `RouteUnion` derives from `.meta`
+// (NOT the raw OpenAPI doc), or the guard would false-positive on a clean app:
+//   - `params`  = the path-param object (`{}` if none).
+//   - `body`    = the request-body type if present, else `never` (the validated
+//                 INPUT phantom `i` is `never` when no `validated` handler).
+//   - `response`= `unknown` when the route HAS a request body (a validated
+//                 handler's output phantom `o` is `unknown` — `validated` types
+//                 input only), else the 200 response type if present, else
+//                 `unknown`. This matches core's `MethodsIO`: the ValidatedHandler
+//                 arm is matched before ReturnsHandler, so a validated+returns
+//                 route derives `o: unknown`.
+// ============================================================================
+
+/** The drift guard block: `GenUnion` + the `_drift` assertion. */
+function driftGuard(doc: OpenApiDocument, opts: Required<GenerateOptions>): string {
+  const members: string[] = [];
+  for (const path of Object.keys(doc.paths)) {
+    const item = doc.paths[path]!;
+    for (const verb of VERBS) {
+      const op = item[verb];
+      if (op === undefined) continue;
+      const key = `${verb.toUpperCase()} ${path}`;
+      const params = paramsType(op) ?? "{}";
+      const body = bodyType(op) ?? "never";
+      // A request body ⇒ a validated handler ⇒ derived `o` is `unknown`.
+      const response = bodyType(op) !== undefined ? "unknown" : returnType(op);
+      members.push(
+        `  | RouteEntry<${JSON.stringify(key)}, ${params}, ${body}, ${response}>`,
+      );
+    }
+  }
+  const union =
+    members.length > 0
+      ? `export type ${opts.genUnionName} =\n${members.join("\n")};`
+      : `export type ${opts.genUnionName} = never;`;
+
+  return [
+    "",
+    "// The generated route-entry UNION — one `RouteEntry` per route (concrete types,",
+    "// mirroring `RouteUnion<typeof app>`). A union, NEVER merged into a keyed object",
+    "// (that merge is the O(N^2) trap that crashes stock tsc at scale).",
+    union,
+    "",
+    "// STATIC DRIFT GUARD: re-derive the route-entry union from the SOURCE app's",
+    "// inert `.meta` and assert it equals the generated union above. Any drift —",
+    "// added/removed/renamed route, or a changed param/body/response shape — that is",
+    "// not reflected here makes this assignment fail to typecheck with a `__drift__`",
+    "// error. Regenerate to fix. (import type only — no runtime import, no cycle.)",
+    `export const _drift: Assert<`,
+    `  AssertExact<RouteUnion<typeof ${opts.appExport}>, ${opts.genUnionName}>`,
+    `> = true;`,
+  ].join("\n");
 }
 
 /** A literal table of path → enabled verbs, for the runtime builder. */
@@ -316,6 +398,16 @@ export interface GenerateOptions {
   readonly clientTypeName?: string;
   /** Name of the generated client factory function. */
   readonly clientFactoryName?: string;
+  /** Import specifier for the SOURCE app module (where `typeof app` lives), used
+   *  by the static drift guard's `import type`. Relative to the OUTPUT file, e.g.
+   *  `"../app.ts"`. The guard re-derives `RouteUnion<typeof app>` from the
+   *  source's `.meta` and asserts it equals the generated union — so generated
+   *  code self-verifies against source. */
+  readonly appImport?: string;
+  /** Named export of the source app in `appImport` (the root combinator). */
+  readonly appExport?: string;
+  /** Name of the generated route-entry union type (the guard's generated side). */
+  readonly genUnionName?: string;
 }
 
 const DEFAULTS: Required<GenerateOptions> = {
@@ -323,6 +415,9 @@ const DEFAULTS: Required<GenerateOptions> = {
   coreImport: "@rhi-zone/fractal-core",
   clientTypeName: "ApiClient",
   clientFactoryName: "createClient",
+  appImport: "../app.ts",
+  appExport: "app",
+  genUnionName: "GenUnion",
 };
 
 /** The result of codegen: two plain `.ts` source strings (data over code). */

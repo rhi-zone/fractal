@@ -44,12 +44,36 @@ const routeCount = Object.values(doc.paths).reduce(
   0,
 );
 
-const { client } = generate(doc);
-
 const outDir = resolve(here, "out");
 mkdirSync(outDir, { recursive: true });
 
-// 1. the GENERATED concrete-types client.
+// Emit the client WITH the embedded drift guard, importing a real SOURCE app
+// module we also write below — so tsc must instantiate `RouteUnion<typeof app>`
+// over the full N-route `.meta` AND the `AssertExact` against the generated union.
+// This is the scale test of the LINEAR guard on the real `generate()` path.
+const { client } = generate(doc, {
+  appImport: "./generated-app.ts",
+  appExport: "app",
+});
+
+// 0. the SOURCE app whose TYPE carries `.meta` (the guard's derived side reads it).
+const appLines: string[] = [
+  `import { choice, methods, param, path } from "@rhi-zone/fractal-core";`,
+  `import { json } from "@rhi-zone/fractal-http";`,
+  `export const app = path({`,
+];
+for (let i = 0; i < N; i++) {
+  appLines.push(`  res${i}: choice(`);
+  appLines.push(`    methods({ GET: () => json([]), POST: () => json({}) }),`);
+  appLines.push(
+    `    param("id", methods({ GET: (req: Request & { params: { id: string } }) => json(req.params.id) })),`,
+  );
+  appLines.push(`  ),`);
+}
+appLines.push(`});`);
+writeFileSync(resolve(outDir, "generated-app.ts"), appLines.join("\n") + "\n");
+
+// 1. the GENERATED concrete-types client (with the guard block).
 writeFileSync(resolve(outDir, "generated-client.ts"), client);
 
 // 2. a sample USAGE that probes a few of the generated types (forces tsc to
