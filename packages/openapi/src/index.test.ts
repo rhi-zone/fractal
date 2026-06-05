@@ -195,6 +195,30 @@ describe("toOpenApi — path parameters", () => {
       { name: "id", in: "path", required: true, schema: { type: "string" } },
     ]);
   });
+
+  it("a codec'd param resolves its schema (not just string)", () => {
+    // `param(name, codec, inner)` stamps the codec as an inert reflectable schema
+    // sidecar (mirrors validated's __schema); toOpenApi resolves it via the ladder.
+    const intCodec = {
+      "~standard": {
+        version: 1 as const,
+        vendor: "openapi-test",
+        jsonSchema: {
+          input: () => ({ type: "integer" }),
+          output: () => ({ type: "integer" }),
+        },
+        validate: (v: unknown) => ({ value: Number(v) }),
+      },
+    } as unknown as StandardSchemaV1<string, number>;
+    const codecApp = path({
+      items: param("id", intCodec, methods({ GET: () => status(200) })),
+    });
+    const doc = toOpenApi(codecApp, info);
+    const op = doc.paths["/items/{id}"]!.get as Operation;
+    expect(op.parameters).toEqual([
+      { name: "id", in: "path", required: true, schema: { type: "integer" } },
+    ]);
+  });
 });
 
 describe("toOpenApi — returns output schema", () => {

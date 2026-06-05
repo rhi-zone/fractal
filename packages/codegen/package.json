@@ -1,0 +1,38 @@
+{
+  "name": "@rhi-zone/fractal-codegen",
+  "version": "0.1.0-alpha.0",
+  "description": "Generate plain TypeScript (typed client + typed server handler signatures) from the OpenAPI doc toOpenApi projects — concrete types, zero type-level computation",
+  "type": "module",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "fractal-codegen": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types":  "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types":  "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-openapi": "workspace:*"
+  },
+  "scripts": {
+    "dev":        "vite build --watch",
+    "build":      "vite build && tsgo --emitDeclarationOnly",
+    "typecheck":  "tsgo --noEmit && tsgo --noEmit --project test/fixtures/tsconfig.json && tsc --noEmit --project test/fixtures/tsconfig.json",
+    "test":       "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "devDependencies": {
+    "@rhi-zone/fractal-client": "workspace:*",
+    "@rhi-zone/fractal-http": "workspace:*",
+    "vite": "^6.0.0"
+  }
+}

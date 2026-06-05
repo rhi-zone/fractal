@@ -220,6 +220,12 @@ export interface ParamMeta<N extends string, T, R> {
   readonly tag: "param";
   readonly name: N;
   readonly rest: R; // the inner handler's meta (what follows the dynamic segment)
+  /** Inert, REFLECTABLE schema for the dynamic segment when `param(name, codec,
+   *  inner)` carried a codec. Same inert-sidecar pattern as `validated`'s
+   *  `__schema`: a real runtime value (the Standard Schema / plain JSON-Schema
+   *  object) read only by the OpenAPI projection, never on the dispatch path. A
+   *  bare `param(name, inner)` records no schema (the segment is a raw string). */
+  readonly schema?: unknown;
   readonly __t?: T; // phantom decoded param type
 }
 /** Inert, REFLECTABLE schema references for one verb. Unlike the phantom `__io`
@@ -418,10 +424,19 @@ export function param(
   arg3?: Reflected<unknown, Record<string, string>>,
 ): Reflected<ParamMeta<string, unknown, unknown>, Record<string, string>> {
   const inner = (arg3 ?? arg2) as Reflected<unknown, Record<string, string>>;
+  // When the 3-arg `param(name, codec, inner)` overload was used, `arg2` is the
+  // codec — stamp it as an inert reflectable schema so the OpenAPI projection can
+  // resolve a typed param schema (the same inert-sidecar pattern as `validated`).
+  const codec = arg3 !== undefined ? arg2 : undefined;
   const h = paramRT(name, inner);
   return withMeta<ParamMeta<string, unknown, unknown>, Record<string, string>>(
     h as Handler<Record<string, string>>,
-    { tag: "param", name, rest: inner.meta },
+    {
+      tag: "param",
+      name,
+      rest: inner.meta,
+      ...(codec !== undefined ? { schema: codec } : {}),
+    },
   );
 }
 

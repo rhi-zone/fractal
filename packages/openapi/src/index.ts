@@ -253,11 +253,20 @@ function build(
     }
     case "param": {
       const pm = m as ParamMeta<string, unknown, unknown>;
-      // A bare param has no carried codec, so its value is a raw string segment.
-      // (The `param(name, codec, inner)` overload carries a codec at the TYPE
-      // level only; the runtime meta records just the name — so the default
-      // schema is `{ type: "string" }`, the honest projection of a URL segment.)
-      const param: AccumParam = { name: pm.name, schema: { type: "string" } };
+      // A bare param carries no codec → a raw string URL segment (`{type:"string"}`).
+      // The `param(name, codec, inner)` overload stamps the codec as an inert
+      // reflectable `schema` sidecar (mirrors `validated`'s `__schema`); resolve it
+      // through the trait → plain → degrade ladder so a codec'd param is typed.
+      const param: AccumParam = {
+        name: pm.name,
+        schema:
+          pm.schema !== undefined
+            ? resolveSchema(pm.schema, "input", {
+                warn: (w) => warnings.push(w),
+                at: `param ${pm.name} @ ${renderPath(state.segments)}`,
+              })
+            : { type: "string" },
+      };
       build(
         pm.rest,
         {

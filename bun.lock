@@ -29,6 +29,22 @@
         "vite": "^6.0.0",
       },
     },
+    "packages/codegen": {
+      "name": "@rhi-zone/fractal-codegen",
+      "version": "0.1.0-alpha.0",
+      "bin": {
+        "fractal-codegen": "./dist/cli.js",
+      },
+      "dependencies": {
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-openapi": "workspace:*",
+      },
+      "devDependencies": {
+        "@rhi-zone/fractal-client": "workspace:*",
+        "@rhi-zone/fractal-http": "workspace:*",
+        "vite": "^6.0.0",
+      },
+    },
     "packages/core": {
       "name": "@rhi-zone/fractal-core",
       "version": "0.1.0-alpha.0",
@@ -112,6 +128,8 @@
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
 
     "@rhi-zone/fractal-client": ["@rhi-zone/fractal-client@workspace:packages/client"],
+
+    "@rhi-zone/fractal-codegen": ["@rhi-zone/fractal-codegen@workspace:packages/codegen"],
 
     "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
 
