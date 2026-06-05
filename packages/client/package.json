@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-client",
   "version": "0.1.0-alpha.0",
-  "description": "Typed client derived from a fractal router — end-to-end inference, in-process + http transports",
+  "description": "Typed client derived from an app's inert .meta — end-to-end inference, in-process + http transports",
   "type": "module",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,8 +13,7 @@
   },
   "files": ["dist"],
   "dependencies": {
-    "@rhi-zone/fractal-core": "workspace:*",
-    "@rhi-zone/fractal-http": "workspace:*"
+    "@rhi-zone/fractal-core": "workspace:*"
   },
   "scripts": {
     "dev":        "vite build --watch",

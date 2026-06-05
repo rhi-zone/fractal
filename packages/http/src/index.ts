@@ -1,376 +1,64 @@
 // packages/http/src/index.ts — @rhi-zone/fractal-http
 //
-// HTTP surface for the library-first framework core.
-//
-// Provides:
-//   - HttpCtx<Vars>        a routing context over a WHATWG Request
-//   - httpRouter()         a Router specialised to HttpCtx / Response
-//   - toHandler(router)    Router → (Request) => Promise<Response>  (WHATWG)
-//   - withValidation       library-fn → node (validate → fn → render)
-//   - json / text / sse / binary  Response helpers
+// The WHATWG/runtime adapter kit for the handler algebra in
+// @rhi-zone/fractal-core. Provides:
+//   - toFetch(app)                  Handler<{}> → (Request) => Promise<Response>
+//   - json / text / notFound / binary / sse / status helpers   response builders
+//   - validated(schema, fn)         Standard Schema body validation
+//   - returns<O>(handler)           output-type annotation for the typed client
 //
 // Runtime-agnostic: this module imports NO Bun and NO Node. The only runtime
 // touch lives in ./adapter (serveBun / serveNode), which this file does not
 // import. Streaming (SSE) and binary are ordinary Response bodies.
 
 import {
-  createRouter,
-  isMethodMismatch,
+  withParams,
+  type Handler,
   type InferOutput,
-  type Middleware,
-  type NoVars,
-  type Node,
-  type RouteSpec,
-  type Router,
-  type RoutingCtx,
-  type StandardSchema,
-} from "@rhi-zone/fractal-core"
+  type ReturnsHandler,
+  type StandardSchemaV1,
+  type ValidatedHandler,
+} from "@rhi-zone/fractal-core";
 
 // ============================================================================
-// HttpCtx — the HTTP routing context
+// Response builders — plain functions returning real Response objects
 // ============================================================================
 
-/** The HTTP layer's request context.
- *
- *  - method:   HTTP verb (uppercase)
- *  - segments: remaining path segments (consumed by router dispatch)
- *  - params:   path params captured by router (e.g. { id: "42" })
- *  - query:    raw query-string accessor (URLSearchParams) — possibly-undefined
- *  - headers:  raw header accessor (Headers) — possibly-undefined
- *  - body:     lazy body thunk (pulled at most once)
- *  - request:  the underlying WHATWG Request (escape hatch)
- *  - vars:     typed context variables set by middleware
- *
- *  Query and headers are RAW by default — no capture combinator. */
-export interface HttpCtx<Vars extends Record<string, unknown> = NoVars>
-  extends RoutingCtx<Vars> {
-  readonly query: URLSearchParams
-  readonly headers: Headers
-  readonly body: () => Promise<unknown>
-  readonly request: Request
-}
-
-/** Middleware specialised to the HTTP context, returning Response. */
-export type HttpMiddleware<
-  Vars extends Record<string, unknown>,
-  Extra extends Record<string, unknown>,
-> = Middleware<HttpCtx, Vars, Extra, Response>
-
-/** A router specialised to HttpCtx / Response. The `Routes` param carries the
- *  accumulated route specs (for the typed client); it defaults to empty. */
-export type HttpRouter<
-  In extends Record<string, unknown> = NoVars,
-  Cur extends Record<string, unknown> = In,
-  Routes extends readonly RouteSpec[] = readonly [],
-> = Router<HttpCtx, In, Cur, Response, Routes>
-
-/** Create an HTTP router. */
-export function httpRouter<
-  Vars extends Record<string, unknown> = NoVars,
->(): HttpRouter<Vars, Vars, readonly []> {
-  return createRouter<HttpCtx, Vars, Response>()
-}
-
-// ============================================================================
-// toHandler — Router → (Request) => Promise<Response>  (WHATWG)
-// ============================================================================
-
-export function toHandler(
-  router: HttpRouter<NoVars, NoVars, readonly RouteSpec[]>,
-): (req: Request) => Promise<Response> {
-  return async (req: Request): Promise<Response> => {
-    const url = new URL(req.url)
-    const segments = url.pathname.replace(/^\//, "").split("/").filter(Boolean)
-
-    // Lazy body thunk — pulled at most once, only if a handler calls body().
-    let bodyCache: unknown
-    let bodyCalled = false
-    const body = async (): Promise<unknown> => {
-      if (bodyCalled) return bodyCache
-      bodyCalled = true
-      const ct = req.headers.get("content-type") ?? ""
-      if (ct.includes("application/json")) {
-        bodyCache = await req.json().catch(() => null)
-      } else if (ct.startsWith("text/")) {
-        bodyCache = await req.text()
-      } else {
-        bodyCache = await req.arrayBuffer()
-      }
-      return bodyCache
-    }
-
-    const ctx: HttpCtx<NoVars> = {
-      method: req.method.toUpperCase(),
-      segments,
-      params: {},
-      query: url.searchParams,
-      headers: req.headers,
-      body,
-      request: req,
-      vars: {},
-    }
-
-    const result = await router.dispatch(ctx)
-
-    // No path matched → 404.
-    if (result === null) return notFound()
-
-    // A path matched but not the method → 405 + Allow (a clean correctness win
-    // both Hono and Elysia decline to make). The core hands us the allowed
-    // methods as a surface-agnostic sentinel; we render it as HTTP here.
-    if (isMethodMismatch(result)) {
-      return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
-        status: 405,
-        headers: {
-          "Content-Type": "application/json",
-          Allow: result.allow.join(", "),
-        },
-      })
-    }
-
-    // Auto-HEAD: the core synthesised HEAD by running the matching GET. Per RFC,
-    // a HEAD response carries the GET headers but an EMPTY body.
-    if (ctx.method === "HEAD") {
-      return new Response(null, { status: result.status, headers: result.headers })
-    }
-
-    return result
+export function json(value: unknown, init?: ResponseInit): Response {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
+  return new Response(JSON.stringify(value), { ...init, headers });
 }
 
-// ============================================================================
-// withValidation — library function → node  (validate → fn → render)
-//
-// LINCHPIN 2 (from spike/linchpins.ts): `Args` is inferred from `fn`; the
-// validator's output is statically constrained to equal `Args` via
-// `& (InferOutput<V> extends Args ? unknown : never)`. A validator producing
-// the wrong shape is a COMPILE error — no manual annotation, no cast.
-// ============================================================================
-
-/** A status-tagged success value. A validated fn may return one of these to set
- *  a non-200 status (e.g. `{ status: 201, value: user }` for a create) WITHOUT
- *  dropping the validation sugar or the typed body. */
-export interface Status<Value> {
-  readonly status: number
-  readonly value: Value
-}
-
-/** Construct a status-tagged value, e.g. `created(user)` for a 201 create. */
-export function status<Value>(code: number, value: Value): Status<Value> {
-  return { status: code, value }
-}
-
-/** 201 Created — the common case for a validated POST. */
-export function created<Value>(value: Value): Status<Value> {
-  return { status: 201, value }
-}
-
-/** What a validated handler may return: a plain value (→ 200 JSON), a
- *  `Status<Value>` (→ that status + value as JSON), or a `Response` (used
- *  as-is, incl. sse()/binary()). All flow through `renderValidated`. */
-export type ValidatedResult<Value> = Value | Status<Value> | Response
-
-function isStatus(v: unknown): v is Status<unknown> {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    "status" in v &&
-    typeof (v as { status: unknown }).status === "number" &&
-    "value" in v
-  )
-}
-
-/** Render a validated handler's result to a Response: Response passthrough,
- *  Status → json(value, status), else json(value, 200). */
-function renderValidated(out: unknown): Response {
-  if (isResponse(out)) return out
-  if (isStatus(out)) return json(out.value, out.status)
-  return json(out)
-}
-
-/** A node produced by withValidation: a Response handler plus meta carrying
- *  the validator and the underlying library function (for reflection). */
-export interface ValidatedNode<Args, Result> extends Node<
-  HttpCtx,
-  Response,
-  {
-    readonly kind: "validate"
-    readonly validator: StandardSchema<unknown, Args>
-    readonly fn: (args: Args) => Promise<ValidatedResult<Result>>
-    // Phantoms (type-level only) so the router's route accumulation can recover
-    // the validated body type (input) and the handler's domain value (output)
-    // for the typed client — without re-running inference over the Response.
-    readonly __input?: Args
-    readonly __output?: Result
+export function text(body: string, init?: ResponseInit): Response {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "text/plain; charset=utf-8");
   }
-> {}
-
-export function withValidation<Args, Result, V extends StandardSchema<unknown, Args>>(
-  fn: (args: Args) => ValidatedResult<Result> | Promise<ValidatedResult<Result>>,
-  validator: V & (InferOutput<V> extends Args ? unknown : never),
-): ValidatedNode<Args, Result> {
-  const wrapped = validator as StandardSchema<unknown, Args>
-  return {
-    meta: { kind: "validate", validator: wrapped, fn: async (a) => fn(a) },
-    handler: async (ctx: HttpCtx) => {
-      const raw = await ctx.body()
-      const result = wrapped["~standard"].validate(raw)
-      if (result.issues !== undefined) {
-        return json({ error: "Validation failed", issues: result.issues }, 400)
-      }
-      return renderValidated(await fn(result.value))
-    },
-  }
+  return new Response(body, { ...init, headers });
 }
 
-// ============================================================================
-// Result → Response rendering  (the general mechanism — no app-specific map)
-//
-// A handler may return any of three things; `render` turns each into a Response:
-//
-//   1. a Response        — used as-is (incl. sse()/binary()). Passthrough.
-//   2. an Outcome<Ok,Err> — tagged result. `ok` → 200 via the renderer;
-//                           `error` → Response via the USER-SUPPLIED policy.
-//   3. any plain value    — rendered to 200 via the renderer (default: JSON).
-//
-// The framework supplies the MECHANISM only. The error-code→status table is the
-// user's: it arrives as an `ErrorPolicy` passed to `respond(...)` (per route) or
-// bound once via `withPolicy(policy)` for an app/router-level default (a route
-// may still pass its own policy to override). The framework hardcodes no codes.
-// This is distinct from withValidation's framework-level 400 (a malformed
-// *request*), which never consults the domain error policy — see withValidation.
-// ============================================================================
-
-/** A tagged result: success carries `value`, failure carries `error`. The
- *  rendering layer renders `ok` via the renderer and `error` via the policy. */
-export type Outcome<Ok, Err> =
-  | { readonly ok: true; readonly value: Ok }
-  | { readonly ok: false; readonly error: Err }
-
-/** Construct a success outcome. */
-export function ok<Ok>(value: Ok): Outcome<Ok, never> {
-  return { ok: true, value }
+export function notFound(body = "Not Found"): Response {
+  return new Response(body, { status: 404 });
 }
 
-/** Construct a failure outcome. */
-export function err<Err>(error: Err): Outcome<never, Err> {
-  return { ok: false, error }
-}
-
-/** Renders a plain (non-Response, non-Outcome) value to a Response. The default
- *  is JSON at 200. Swap it to change the default content-type / serializer. */
-export type Renderer = (value: unknown) => Response
-
-/** The default renderer: JSON at 200. */
-export const jsonRenderer: Renderer = (value) => json(value)
-
-/** A user-supplied policy mapping a domain error to a Response. It may return a
- *  Response directly or a `{ status, body }` pair (body rendered via the
- *  renderer; default status body is the error itself when `body` is omitted). */
-export type ErrorPolicy<Err> = (
-  error: Err,
-) => Response | { status: number; body?: unknown }
-
-function isResponse(v: unknown): v is Response {
-  return v instanceof Response
-}
-
-function isOutcome(v: unknown): v is Outcome<unknown, unknown> {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    "ok" in v &&
-    typeof (v as { ok: unknown }).ok === "boolean" &&
-    (((v as { ok: boolean }).ok && "value" in v) ||
-      (!(v as { ok: boolean }).ok && "error" in v))
-  )
-}
-
-/** The general rendering step. A Response passes through; an Outcome renders
- *  via renderer (ok) or policy (error); any other value renders via renderer. */
-export function render<Err>(
-  value: unknown,
-  policy: ErrorPolicy<Err>,
-  renderer: Renderer = jsonRenderer,
-): Response {
-  if (isResponse(value)) return value
-  if (isOutcome(value)) {
-    if (value.ok) return renderer(value.value)
-    const out = policy(value.error as Err)
-    if (isResponse(out)) return out
-    const body = "body" in out ? out.body : value.error
-    return new Response(JSON.stringify(body), {
-      status: out.status,
-      headers: { "Content-Type": "application/json" },
-    })
-  }
-  return renderer(value)
-}
-
-/** Wrap a handler whose return type is `Response | Outcome<Ok,Err> | Value`
- *  into a Response-returning handler, applying `render`. The policy's `Err` is
- *  inferred from / linked to the handler's Outcome error type — no cast needed
- *  at the call site. `renderer` defaults to JSON. */
-export function respond<Ctx, Ok, Err, Value>(
-  handler: (ctx: Ctx) => Response | Outcome<Ok, Err> | Value | Promise<Response | Outcome<Ok, Err> | Value>,
-  policy: ErrorPolicy<Err>,
-  renderer: Renderer = jsonRenderer,
-): (ctx: Ctx) => Promise<TypedResponse<Ok | Exclude<Value, Response | Outcome<unknown, unknown>>>> {
-  // The success body is the Outcome's `Ok` or a plain `Value` (a raw Response
-  // contributes no static body). We phantom-type the result so the typed client
-  // recovers that domain type, NOT the opaque Response. Runtime is unchanged.
-  return async (ctx: Ctx) =>
-    render(await handler(ctx), policy, renderer) as TypedResponse<Ok | Exclude<Value, Response | Outcome<unknown, unknown>>>
-}
-
-/** App/router-level default: bind a policy (and optional renderer) once, get a
- *  `respond`-shaped wrapper to reuse across routes. Each route may still call
- *  the standalone `respond` with its own policy to override per-route. */
-export function withPolicy<Err>(
-  policy: ErrorPolicy<Err>,
-  renderer: Renderer = jsonRenderer,
-): <Ctx, Ok, Value>(
-  handler: (ctx: Ctx) => Response | Outcome<Ok, Err> | Value | Promise<Response | Outcome<Ok, Err> | Value>,
-) => (ctx: Ctx) => Promise<TypedResponse<Ok | Exclude<Value, Response | Outcome<unknown, unknown>>>> {
-  return (handler) => respond(handler, policy, renderer)
-}
-
-// ============================================================================
-// Response helpers
-// ============================================================================
-
-/** A `Response` that carries the body's static type as a phantom — the lever the
- *  typed client uses to recover a `GET`/`POST` handler's domain output type
- *  (Hono's `c.json` does the same). At runtime it IS a plain Response; the
- *  `__body` phantom never exists as a value. A `TypedResponse<T>` is assignable
- *  wherever a `Response` is expected, so dispatch and rendering are unaffected. */
-export interface TypedResponse<T> extends Response {
-  readonly __body?: T
-}
-
-export function json<T>(value: T, status = 200): TypedResponse<T> {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  }) as TypedResponse<T>
-}
-
-export function text(value: string, status = 200): TypedResponse<string> {
-  return new Response(value, { status, headers: { "Content-Type": "text/plain" } }) as TypedResponse<string>
-}
-
-export function notFound(): Response {
-  return json({ error: "Not Found" }, 404)
-}
-
-/** Binary response — body is any Uint8Array / Blob / ArrayBuffer. Ordinary
- *  Response; the framework carries it unchanged. */
+/** Binary response — body is any Uint8Array / ArrayBuffer / Blob. */
 export function binary(
   body: Uint8Array | ArrayBuffer | Blob,
   contentType = "application/octet-stream",
-  status = 200,
+  init?: ResponseInit,
 ): Response {
-  return new Response(body as BodyInit, { status, headers: { "Content-Type": contentType } })
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", contentType);
+  return new Response(body as BodyInit, { ...init, headers });
+}
+
+/** Convenience status-only helper: `status(201, body, init)` sets the code. */
+export function status(code: number, body?: unknown, init?: ResponseInit): Response {
+  if (body === undefined) return new Response(null, { ...init, status: code });
+  return json(body, { ...init, status: code });
 }
 
 /** Server-Sent-Events response — a text/event-stream ReadableStream body.
@@ -378,49 +66,97 @@ export function binary(
 export function sse(
   produce: (emit: (event: string, data: unknown) => void) => void | Promise<void>,
 ): Response {
-  const encoder = new TextEncoder()
+  const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const emit = (event: string, data: unknown): void => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
-      }
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+        );
+      };
       try {
-        await produce(emit)
+        await produce(emit);
       } finally {
-        controller.close()
+        controller.close();
       }
     },
-  })
+  });
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     },
-  })
+  });
 }
 
-export { isMethodMismatch } from "@rhi-zone/fractal-core"
+// ============================================================================
+// The one adapter — toFetch
+// ============================================================================
 
-export type {
-  Dispatched,
-  InferOutput,
-  JoinPath,
-  MethodMismatch,
-  Middleware,
-  NoVars,
-  Node,
-  NodeInput,
-  NodeOutput,
-  PathParamNames,
-  PathParams,
-  PrefixRoutes,
-  RouteOf,
-  RouteSpec,
-  Router,
-  RoutesOf,
-  RoutingCtx,
-  StandardSchema,
-  WithParams,
-  WithVars,
-} from "@rhi-zone/fractal-core"
+/** Run `app`; a final `undefined` becomes a 404. Runtime-agnostic. The root only
+ *  accepts a FULLY-DISCHARGED `Handler<{}>`: an app that reads `req.params.id`
+ *  without a `param("id", …)` discharging it is `Handler<{id:string}>` and FAILS
+ *  to compile here. Initializes `params` to `{}` for the root. */
+export function toFetch(app: Handler<{}>): (req: Request) => Promise<Response> {
+  return async (req) => (await app(withParams(req, {}))) ?? notFound();
+}
+
+// ============================================================================
+// Validation — ORTHOGONAL, opt-in. `validated(schema, fn)` wraps a body-consuming
+// handler: it validates `await req.json()` against a Standard Schema, renders 400
+// on failure, and attaches the input type to a phantom so the client's request
+// body is typed. Stays a plain core `Handler` at runtime.
+// ============================================================================
+
+/**
+ * `validated(schema, fn)` — orthogonal body validation. Returns a plain core
+ * `Handler` (so it slots straight into a `methods` table). On a request it:
+ *   1. reads `await req.json()`,
+ *   2. validates it against `schema` (Standard Schema),
+ *   3. on issues → `400` JSON `{ error, issues }`,
+ *   4. on success → calls `fn(value, req)` with the *typed* validated value.
+ * The input type `InferOutput<schema>` is carried as a phantom so the typed
+ * client requires a correctly-shaped `body`. `O` (optional) annotates the
+ * response body type for client return typing.
+ */
+export function validated<
+  S extends StandardSchemaV1<unknown, unknown>,
+  O = unknown,
+>(
+  schema: S,
+  fn: (
+    value: InferOutput<S>,
+    req: Request,
+  ) => Response | undefined | Promise<Response | undefined>,
+): ValidatedHandler<InferOutput<S>, O> {
+  const h: Handler = async (req) => {
+    let raw: unknown;
+    try {
+      raw = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "INVALID_JSON" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const r = await schema["~standard"].validate(raw);
+    if ("issues" in r && r.issues !== undefined) {
+      return new Response(
+        JSON.stringify({ error: "VALIDATION", issues: r.issues }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return fn((r as { value: InferOutput<S> }).value, req);
+  };
+  return h as ValidatedHandler<InferOutput<S>, O>;
+}
+
+/** `returns<O>(handler)` — annotate a non-validated handler's output type so the
+ *  client return is typed, without forcing a body. Identity at runtime. */
+export function returns<O>(h: Handler): ReturnsHandler<O> {
+  return h as ReturnsHandler<O>;
+}
+
+// Re-export the schema types so HTTP consumers have a single import surface.
+export type { InferOutput, StandardSchemaV1 } from "@rhi-zone/fractal-core";

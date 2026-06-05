@@ -1,210 +1,157 @@
 // examples/todo-api/src/app.ts
 //
-// A small but real example on the library-first framework.
+// A small but real example on the handler-model framework. The ONLY framework
+// type is `Handler`; the app is a tree built from `path` / `methods` / `param` /
+// `choice`, with `validated` on a body route. `toFetch(app)` turns it into a
+// WHATWG (Request) => Promise<Response>.
 //
 // Exercises:
-//   - a CRUD-ish resource via library functions wrapped with withValidation
-//   - an /admin mount with auth middleware adding typed context
-//     (the handler reads ctx.vars.user with NO cast)
-//   - a validated body route (200 on success, 400 on bad input)
-//   - an SSE endpoint (text/event-stream)
-//   - a raw req.query read
-//
-// Everything is plain data composed from the framework primitives. The app is
-// a Router value; toHandler(app) turns it into a WHATWG (Request)=>Response.
+//   - a CRUD-ish /todos resource: GET (list), POST (validated create → 201)
+//   - a dynamic /todos/{id} route: GET one (404 if unknown)
+//   - POST /todos/{id}/done — typed param + validated body
+//   - GET /health — a second top-level resource
+//   - an SSE endpoint and a binary endpoint (ordinary Responses)
 
 import {
+  choice,
+  methods,
+  param,
+  paramValue,
+  path,
+  type StandardSchemaV1,
+} from "@rhi-zone/fractal-core";
+import {
   binary,
-  created,
-  err,
-  httpRouter,
   json,
-  ok,
-  respond,
   sse,
-  toHandler,
-  withValidation,
-  type ErrorPolicy,
-  type HttpCtx,
-  type HttpMiddleware,
-  type NoVars,
-  type Outcome,
-  type StandardSchema,
-  type WithVars,
-} from "@rhi-zone/fractal-http"
+  status,
+  text,
+  toFetch,
+  validated,
+} from "@rhi-zone/fractal-http";
 
 // ---------------------------------------------------------------------------
 // A tiny object-schema fixture (StandardSchema-shaped; no external dep)
 // ---------------------------------------------------------------------------
 
-function schema<const F extends Record<string, "string" | "number">>(
+function schema<const F extends Record<string, "string" | "boolean">>(
   fields: F,
-): StandardSchema<unknown, { [K in keyof F]: F[K] extends "string" ? string : number }> {
-  type Out = { [K in keyof F]: F[K] extends "string" ? string : number }
+): StandardSchemaV1<
+  unknown,
+  { [K in keyof F]: F[K] extends "string" ? string : boolean }
+> {
+  type Out = { [K in keyof F]: F[K] extends "string" ? string : boolean };
   return {
     "~standard": {
       version: 1,
+      vendor: "todo-fixture",
       validate(value: unknown) {
         if (typeof value !== "object" || value === null) {
-          return { issues: [{ message: "expected an object" }] }
+          return { issues: [{ message: "expected an object" }] };
         }
-        const obj = value as Record<string, unknown>
-        const out: Record<string, unknown> = {}
+        const obj = value as Record<string, unknown>;
+        const out: Record<string, unknown> = {};
         for (const [k, t] of Object.entries(fields)) {
-          if (typeof obj[k] !== t) return { issues: [{ message: `field "${k}" must be a ${t}` }] }
-          out[k] = obj[k]
+          if (typeof obj[k] !== t) {
+            return { issues: [{ message: `field "${k}" must be a ${t}` }] };
+          }
+          out[k] = obj[k];
         }
-        return { value: out as Out }
+        return { value: out as Out };
       },
     },
-  }
+  };
 }
 
+const createSchema = schema({ title: "string" });
+const doneSchema = schema({ done: "boolean" });
+
 // ---------------------------------------------------------------------------
-// Domain — an in-memory todo store and plain library functions
+// Domain — an in-memory todo store
 // ---------------------------------------------------------------------------
 
 export interface Todo {
-  id: string
-  title: string
-  done: boolean
+  id: string;
+  title: string;
+  done: boolean;
 }
 
-const todos: Todo[] = []
-let seq = 1
-
-// Library functions — pure-ish business logic, surface-agnostic. These are the
-// values withValidation wraps; the validator's output type is checked ≡ Args.
-async function createTodo(args: { title: string }): Promise<Todo> {
-  const todo: Todo = { id: String(seq++), title: args.title, done: false }
-  todos.push(todo)
-  return todo
-}
-
-async function setDone(args: { id: string; done: boolean }): Promise<Todo | null> {
-  const todo = todos.find((t) => t.id === args.id)
-  if (todo === undefined) return null
-  todo.done = args.done
-  return todo
-}
+const todos: Todo[] = [];
+let seq = 1;
 
 // ---------------------------------------------------------------------------
-// Domain Result + USER-SIDE error policy
-//
-// This is the sample `switch (result.error.code)` pattern expressed against
-// the framework's GENERAL Outcome + ErrorPolicy mechanism. The error codes and
-// the code→status table live HERE, in the app — the framework knows none of it.
+// The app tree — plain combinators. Every leaf is a `methods` table; the id is
+// read directly off the Request (where `param` bound it) via `paramValue`.
 // ---------------------------------------------------------------------------
 
-/** A domain error with a discriminating `code`, exactly like sample. */
-type TodoError =
-  | { code: "TODO_NOT_FOUND"; id: string }
-  | { code: "ALREADY_DONE"; id: string }
+// GET /todos  +  POST /todos (validated create → 201)
+const todosCollection = methods({
+  GET: () => json(todos),
+  POST: validated<typeof createSchema, Todo>(createSchema, (value) => {
+    const todo: Todo = { id: String(seq++), title: value.title, done: false };
+    todos.push(todo);
+    return status(201, todo);
+  }),
+});
 
-/** The user's error→status policy. The framework hardcodes none of this. */
-const todoErrorPolicy: ErrorPolicy<TodoError> = (e) => {
-  switch (e.code) {
-    case "TODO_NOT_FOUND":
-      return { status: 404, body: { error: e.code, id: e.id } }
-    case "ALREADY_DONE":
-      return { status: 409, body: { error: e.code, id: e.id } }
-  }
-}
-
-/** A library function returning a domain Result (not a Response). */
-async function markDone(args: { id: string }): Promise<Outcome<Todo, TodoError>> {
-  const todo = todos.find((t) => t.id === args.id)
-  if (todo === undefined) return err({ code: "TODO_NOT_FOUND", id: args.id })
-  if (todo.done) return err({ code: "ALREADY_DONE", id: args.id })
-  todo.done = true
-  return ok(todo)
-}
-
-// ---------------------------------------------------------------------------
-// Auth middleware — adds typed `user` to ctx.vars
-// ---------------------------------------------------------------------------
-
-export interface AuthVars extends Record<string, unknown> {
-  user: { id: string; email: string }
-}
-
-const auth: HttpMiddleware<NoVars, AuthVars> = async (ctx, next) => {
-  const email = ctx.headers.get("x-user")
-  if (email === null) return json({ error: "Forbidden" }, 403)
-  const enriched: WithVars<HttpCtx, NoVars & AuthVars> = {
-    ...ctx,
-    vars: { user: { id: "u-1", email } },
-  }
-  return next(enriched)
-}
-
-// ---------------------------------------------------------------------------
-// /admin sub-router — handlers read ctx.vars.user with ZERO casts
-// ---------------------------------------------------------------------------
-
-const admin = httpRouter<NoVars & AuthVars>()
-  // No cast: ctx.vars.user is typed { id: string; email: string }
-  .get("/me", async (ctx) => json({ user: ctx.vars.user }))
-  .get("/stats", async (ctx) => json({ requestedBy: ctx.vars.user.email, total: todos.length }))
-
-// ---------------------------------------------------------------------------
-// Root app
-// ---------------------------------------------------------------------------
-
-export const app = httpRouter<NoVars>()
-  // List todos
-  .get("/todos", async () => json(todos))
-  // Create todo via a library function wrapped with withValidation → 201.
-  .routeNode("POST", "/todos", withValidation(async (args: { title: string }) => created(await createTodo(args)), schema({ title: "string" })))
-  // Update done flag — validated body (200 / 400; 404 if id unknown)
-  .routeNode(
-    "POST",
-    "/todos/done",
-    withValidation(async (args: { id: string; done: boolean }) => {
-      const updated = await setDone(args)
-      return updated ?? { error: "not found" }
-    }, {
-      "~standard": {
-        version: 1,
-        validate(value: unknown) {
-          if (typeof value !== "object" || value === null) {
-            return { issues: [{ message: "expected an object" }] }
+// /todos/{id}/done — POST a validated { done } body for a typed param id.
+const todoDone = param(
+  "id",
+  path({
+    done: methods({
+      POST: validated<typeof doneSchema, Todo | { error: string }>(
+        doneSchema,
+        (value, req) => {
+          const id = paramValue(req, "id");
+          const todo = todos.find((t) => t.id === id);
+          if (todo === undefined) {
+            return json({ error: "TODO_NOT_FOUND", id }, { status: 404 });
           }
-          const obj = value as Record<string, unknown>
-          if (typeof obj["id"] !== "string") return { issues: [{ message: "id must be a string" }] }
-          if (typeof obj["done"] !== "boolean") return { issues: [{ message: "done must be a boolean" }] }
-          return { value: { id: obj["id"], done: obj["done"] } }
+          todo.done = value.done;
+          return json(todo);
         },
-      },
+      ),
     }),
-  )
-  // Result→Response: handler returns a domain Outcome; respond() applies the
-  // USER-SIDE policy (TODO_NOT_FOUND→404, ALREADY_DONE→409). ok → 200 JSON.
-  // ctx.params.id is typed `string` from the pattern — no `?? ""` noise.
-  .post("/todos/:id/mark-done", respond((ctx) => markDone({ id: ctx.params.id }), todoErrorPolicy))
-  // Plain value → JSON: handler returns a non-Response value; the default JSON
-  // renderer (via respond) turns it into 200 application/json.
-  .get("/count", respond(() => ({ total: todos.length }), todoErrorPolicy))
-  // Raw query read — no capture combinator
-  .get("/search", async (ctx) => {
-    const q = ctx.query.get("q")
-    const limit = ctx.query.get("limit")
-    return json({ q, limit, raw: true })
-  })
-  // SSE endpoint — ordinary text/event-stream Response
-  .get("/events", async () =>
+  }),
+);
+
+// /todos/{id} — GET one (404 if unknown).
+const todoItem = param(
+  "id",
+  methods({
+    GET: (req) => {
+      const id = paramValue(req, "id");
+      const todo = todos.find((t) => t.id === id);
+      return todo
+        ? json(todo)
+        : json({ error: "TODO_NOT_FOUND", id }, { status: 404 });
+    },
+  }),
+);
+
+// /todos : the collection, then /{id}/done, then /{id}. `choice` tries each in
+// order; the first non-undefined wins.
+const todosResource = choice(todosCollection, todoDone, todoItem);
+
+// SSE + binary endpoints — ordinary Responses.
+const events = methods({
+  GET: () =>
     sse((emit) => {
-      emit("connected", { ts: 0 })
-      emit("status", { active: true })
-      emit("done", { count: todos.length })
+      emit("connected", { ts: 0 });
+      emit("count", { total: todos.length });
+      emit("done", {});
     }),
-  )
-  // Binary endpoint — ordinary Response with a byte body
-  .get("/favicon", async () =>
-    binary(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "image/png"),
-  )
-  // /admin behind auth middleware, declared ONCE at the mount
-  .mount("/admin", auth, admin)
+});
+const favicon = methods({
+  GET: () => binary(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "image/png"),
+});
+
+export const app = path({
+  todos: todosResource,
+  health: methods({ GET: () => text("ok") }),
+  events,
+  favicon,
+});
 
 /** WHATWG fetch handler for the app. Run in-process with new Request(...). */
-export const handle = toHandler(app)
+export const handle = toFetch(app);

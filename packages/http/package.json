@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-http",
   "version": "0.1.0-alpha.0",
-  "description": "HTTP surface for fractal — HttpCtx, toHandler (WHATWG), withValidation, sse/binary, runtime adapters",
+  "description": "WHATWG/runtime adapter kit for fractal — toFetch, response builders, validated, serveBun/serveNode",
   "type": "module",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,16 +13,11 @@
     "./adapter": {
       "types":  "./dist/adapter.d.ts",
       "import": "./dist/adapter.js"
-    },
-    "./middleware": {
-      "types":  "./dist/middleware.d.ts",
-      "import": "./dist/middleware.js"
     }
   },
   "files": ["dist"],
   "dependencies": {
-    "@rhi-zone/fractal-core": "workspace:*",
-    "@standard-schema/spec": "^1.1.0"
+    "@rhi-zone/fractal-core": "workspace:*"
   },
   "scripts": {
     "dev":        "vite build --watch",

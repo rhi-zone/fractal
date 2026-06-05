@@ -1,152 +1,200 @@
-// packages/core/src/index.test.ts — @rhi-zone/fractal-core
-import { describe, expect, it } from "vitest"
+// packages/core/src/index.test.ts — the algebra, end to end. Builds an app from
+// path/methods/choice/param, runs real Requests through it, and asserts status +
+// body. Plus type-level proofs of the Handler<P> discharge model, and an
+// ENFORCEMENT test that fails if a Route/Segment/Router/Node type is declared in
+// any package's source (the iron rule).
+
+import { describe, expect, it } from "bun:test";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import {
-  compose,
-  createRouter,
-  isMethodMismatch,
-  node,
+  choice,
+  methods,
+  param,
+  paramValue,
+  path,
+  segments,
+  rest,
   type Handler,
-  type Middleware,
-  type NoVars,
-  type PathParams,
-  type RoutingCtx,
-  type StandardSchema,
-  type WithVars,
-} from "./index.ts"
+} from "./index.ts";
 
-// A minimal concrete routing context for tests (no HTTP, no runtime).
-interface TestCtx<Vars extends Record<string, unknown> = NoVars> extends RoutingCtx<Vars> {
-  readonly tag: "test"
+// --- a small worked app, composed entirely from the combinators -------------
+const users = [
+  { id: "1", name: "ada" },
+  { id: "2", name: "alan" },
+];
+
+function json(value: unknown, init?: ResponseInit): Response {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  return new Response(JSON.stringify(value), { ...init, headers });
 }
 
-function ctx<Vars extends Record<string, unknown>>(
-  method: string,
-  path: string,
-  vars: Vars,
-): TestCtx<Vars> {
-  return {
-    tag: "test",
-    method: method.toUpperCase(),
-    segments: path.replace(/^\//, "").split("/").filter(Boolean),
-    params: {},
-    vars,
+const usersCollection = methods({
+  GET: () => json(users),
+  POST: () => json({ created: true }, { status: 201 }),
+});
+
+const userItem = param(
+  "id",
+  methods({
+    GET: (req) => {
+      const id = paramValue(req, "id");
+      const user = users.find((u) => u.id === id);
+      return user ? json(user) : json({ error: "no such user" }, { status: 404 });
+    },
+  }),
+);
+
+const usersResource = choice(usersCollection, userItem);
+const health = methods({ GET: () => new Response("ok") });
+const app = path({ users: usersResource, health });
+
+// root adapter, inlined (toFetch lives in @rhi-zone/fractal-http).
+const fetch = async (req: Request): Promise<Response> => {
+  (req as Request & { params: {} }).params = {};
+  return (
+    (await (app as Handler<{}>)(req as Request & { params: {} })) ??
+    new Response("Not Found", { status: 404 })
+  );
+};
+const BASE = "http://x";
+const hit = (p: string, method = "GET") => fetch(new Request(BASE + p, { method }));
+
+describe("path/methods/choice/param dispatch", () => {
+  it("GET /users -> collection", async () => {
+    const res = await hit("/users");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as unknown[]).length).toBe(2);
+  });
+
+  it("POST /users -> 201", async () => {
+    const res = await hit("/users", "POST");
+    expect(res.status).toBe(201);
+  });
+
+  it("GET /users/1 -> item (param route, id read off the Request)", async () => {
+    const res = await hit("/users/1");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { name: string }).name).toBe("ada");
+  });
+
+  it("GET /health -> ok", async () => {
+    expect(await (await hit("/health")).text()).toBe("ok");
+  });
+
+  it("unknown path -> 404", async () => {
+    expect((await hit("/nope")).status).toBe(404);
+  });
+
+  it("known path wrong verb -> 405 + Allow", async () => {
+    const res = await hit("/users", "DELETE");
+    expect(res.status).toBe(405);
+    const allow = res.headers.get("Allow") ?? "";
+    expect(allow.includes("GET") && allow.includes("POST")).toBe(true);
+  });
+
+  it("auto-HEAD mirrors GET with empty body", async () => {
+    const res = await hit("/users", "HEAD");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("");
+  });
+
+  it("OPTIONS -> 204 + Allow", async () => {
+    const res = await hit("/users", "OPTIONS");
+    expect(res.status).toBe(204);
+  });
+
+  it("segments / rest helpers advance the URL", async () => {
+    const r = new Request("http://x/a/b/c");
+    expect(segments(r)).toEqual(["a", "b", "c"]);
+    (r as Request & { params: {} }).params = {};
+    expect(segments(rest(r as Request & { params: {} }))).toEqual(["b", "c"]);
+  });
+});
+
+// ============================================================================
+// TYPE-LEVEL proofs (compile-time only). A plain web handler IS a Handler; a
+// typed param read is checked; an undischarged param does NOT type as a root.
+// ============================================================================
+function _typeProofs() {
+  // a PLAIN web handler is assignable to Handler / Handler<{}> / Handler<{id}>.
+  const list = (_req: Request): Response => json([]);
+  const _p0: Handler = list;
+  const _p1: Handler<{}> = list;
+  const _p2: Handler<{ id: string }> = list;
+  void _p0;
+  void _p1;
+  void _p2;
+
+  // typed param read: req.params.id is string; a typo is a compile error.
+  const user: Handler<{ id: string }> = (req) => json(req.params.id);
+  const _userTypo: Handler<{ id: string }> = (req) =>
+    // @ts-expect-error — `idd` is not a key of params; typed read catches it.
+    json(req.params.idd);
+  void user;
+  void _userTypo;
+
+  // compositional DISCHARGE: param("id", inner) discharges {id} → {}.
+  const inner = methods<{ id: string }>({
+    GET: (req) => json(req.params.id),
+  });
+  const _discharged: Handler<{}> = param("id", inner);
+  void _discharged;
+
+  // a methods table value must be a Handler — a non-handler is rejected.
+  const _guard = methods({
+    // @ts-expect-error — a string is not a Handler.
+    GET: "not a handler",
+  });
+  void _guard;
+}
+void _typeProofs;
+
+// ============================================================================
+// ENFORCEMENT — the IRON RULE. Scan every package's tracked SOURCE for a
+// declaration of a forbidden framework type (Route / Segment / Router / Node /
+// Ctx / RoutingCtx). The ONLY framework type is `Handler`. A planted
+// `type Route = …` MUST make this test fail.
+// ============================================================================
+describe("iron rule: no Route/Segment/Router/Node type declarations", () => {
+  // package src roots, relative to this file (packages/core/src).
+  const PKG_SRC = [
+    join(import.meta.dir, "..", "..", "core", "src"),
+    join(import.meta.dir, "..", "..", "http", "src"),
+    join(import.meta.dir, "..", "..", "client", "src"),
+  ];
+
+  // a declaration of a forbidden NAME as a type/interface/class/enum. Exact
+  // identifier following the keyword, word-boundaried — so `ParamMeta`,
+  // `MethodsMeta`, etc. are NOT matched; only an EXACT forbidden identifier.
+  const FORBIDDEN = ["Route", "Segment", "Router", "Node", "Ctx", "RoutingCtx"];
+  const decl = new RegExp(
+    `\\b(?:type|interface|class|enum)\\s+(${FORBIDDEN.join("|")})\\b`,
+  );
+
+  function srcFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) return srcFiles(full);
+      if (!e.name.endsWith(".ts")) return [];
+      if (e.name.endsWith(".test.ts")) return []; // skip the scanner / tests
+      return [full];
+    });
   }
-}
 
-describe("compose", () => {
-  it("threads output of a into b", async () => {
-    const a: Handler<number, string> = (n) => String(n + 1)
-    const b: Handler<string, string> = (s) => `<${s}>`
-    const f = compose(a, b)
-    expect(await f(1)).toBe("<2>")
-  })
-})
-
-describe("node", () => {
-  it("pairs meta with handler", async () => {
-    const n = node({ kind: "leaf" }, (n: number) => n * 2)
-    expect(n.meta).toEqual({ kind: "leaf" })
-    expect(await n.handler(21)).toBe(42)
-  })
-})
-
-interface AuthVars extends Record<string, unknown> {
-  user: { id: string }
-}
-
-describe("router — typed context through mount (linchpin, zero casts)", () => {
-  const authMw: Middleware<TestCtx, NoVars, AuthVars, string> = async (c, next) => {
-    const enriched: WithVars<TestCtx, NoVars & AuthVars> = {
-      ...c,
-      vars: { user: { id: "u-1" } },
+  for (const root of PKG_SRC) {
+    for (const file of srcFiles(root)) {
+      const label = file.split("/packages/")[1] ?? file;
+      it(`no forbidden type declaration in ${label}`, () => {
+        const src = readFileSync(file, "utf8");
+        for (const line of src.split("\n")) {
+          // strip line comments so doc text mentioning the names is allowed.
+          const code = line.replace(/\/\/.*$/, "");
+          const m = decl.exec(code);
+          expect(m === null ? null : `${m[1]} :: ${line.trim()}`).toBeNull();
+        }
+      });
     }
-    return next(enriched)
   }
-
-  const admin = createRouter<TestCtx, NoVars & AuthVars, string>()
-    .route("GET", "/me", async (c) => {
-      // ZERO casts — c.vars typed as AuthVars
-      return `user:${c.vars.user.id}`
-    })
-
-  const app = createRouter<TestCtx, NoVars, string>()
-    .route("GET", "/ping", async () => "pong")
-    .mount("/admin", authMw, admin)
-
-  it("public route", async () => {
-    expect(await app.dispatch(ctx("GET", "/ping", {}))).toBe("pong")
-  })
-
-  it("mounted route reads typed vars set by middleware", async () => {
-    expect(await app.dispatch(ctx("GET", "/admin/me", {}))).toBe("user:u-1")
-  })
-
-  it("no match returns null", async () => {
-    expect(await app.dispatch(ctx("GET", "/nope", {}))).toBeNull()
-  })
-})
-
-describe("router — use() widens visible vars", () => {
-  const greetMw: Middleware<TestCtx, NoVars, { greeting: string }, string> = async (c, next) =>
-    next({ ...c, vars: { greeting: "hi" } })
-
-  const r = createRouter<TestCtx, NoVars, string>()
-    .use(greetMw)
-    .route("GET", "/g", async (c) => c.vars.greeting)
-
-  it("handler registered after use() sees added vars", async () => {
-    expect(await r.dispatch(ctx("GET", "/g", {}))).toBe("hi")
-  })
-})
-
-describe("dispatch — method-mismatch sentinel vs no-match null", () => {
-  const r = createRouter<TestCtx, NoVars, string>()
-    .route("GET", "/users/:id", async (c) => `get:${c.params["id"]}`)
-    .route("PUT", "/users/:id", async () => "put")
-
-  it("path matched, method didn't → MethodMismatch carrying allowed methods", async () => {
-    const result = await r.dispatch(ctx("DELETE", "/users/1", {}))
-    expect(isMethodMismatch(result)).toBe(true)
-    if (isMethodMismatch(result)) {
-      expect(result.allow.sort()).toEqual(["GET", "HEAD", "PUT"])
-    }
-  })
-
-  it("genuinely unmatched path → null", async () => {
-    expect(await r.dispatch(ctx("DELETE", "/absent", {}))).toBeNull()
-  })
-
-  it("auto-HEAD: HEAD with no HEAD route runs the GET handler", async () => {
-    expect(await r.dispatch(ctx("HEAD", "/users/9", {}))).toBe("get:9")
-  })
-})
-
-describe("PathParams — type-level pattern parsing (no casts)", () => {
-  type Eq<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
-  it("single, multi, and zero params parse to the right record", () => {
-    const single: Eq<PathParams<"/users/:id">, { readonly id: string }> = true
-    const multi: Eq<
-      PathParams<"/u/:uid/books/:bid">,
-      { readonly uid: string; readonly bid: string }
-    > = true
-    const none: Eq<PathParams<"/static">, Record<never, never>> = true
-    expect([single, multi, none]).toEqual([true, true, true])
-  })
-})
-
-describe("StandardSchema", () => {
-  it("is a structural interface usable as a value shape", () => {
-    const s: StandardSchema<unknown, { n: number }> = {
-      "~standard": {
-        version: 1,
-        validate: (v) =>
-          typeof v === "object" && v !== null && typeof (v as { n?: unknown }).n === "number"
-            ? { value: v as { n: number } }
-            : { issues: [{ message: "bad" }] },
-      },
-    }
-    const r = s["~standard"].validate({ n: 5 })
-    expect(r.issues).toBeUndefined()
-    expect(r.value).toEqual({ n: 5 })
-  })
-})
+});

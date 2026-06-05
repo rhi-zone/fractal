@@ -7,7 +7,7 @@ export default defineConfig({
       formats: ['es'],
     },
     rollupOptions: {
-      external: ['@rhi-zone/fractal-core', '@rhi-zone/fractal-http'],
+      external: ['@rhi-zone/fractal-core'],
     },
   },
 })

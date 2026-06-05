@@ -1,270 +1,273 @@
 // packages/client/src/index.ts — @rhi-zone/fractal-client
 //
-// A TYPED CLIENT derived from a fractal router — end-to-end inference from one
-// server definition, matching/beating Eden `treaty` and Hono `hc`.
+// The typed client, derived FLAT from `.meta`.
 //
-// THE CRUX (lives in @rhi-zone/fractal-core): the router TYPE accumulates each
-// registered route as a `RouteSpec { method, pattern, params, input, output }`.
-// This file walks that accumulated tuple at the type level to produce a typed
-// callable surface, and at runtime serialises each call into either an
-// in-process dispatch (Hyper unification — same handler, no network) or a
-// `fetch` (HTTP transport). Both share the SAME derived `ClientOf` type.
+// `Client<App>` walks the app's `.meta` DATA tree and produces a path-keyed
+// callable surface:  client["/users/{id}"].get({ params })  /  .post({ body }).
 //
-// CALL ERGONOMICS (chosen — beats Eden's segment chaining on conciseness):
+// SCALE MOVE: the dominant fan-out — a `path(record)` of N resources or a
+// `choice(...)` of N endpoints — is handled by a SINGLE flat mapped type over
+// the record's KEYS / the alt UNION, NOT an N-deep recursive instantiation chain.
+// Recursion depth = path NESTING depth (~2-4), never route COUNT. This is what
+// keeps tsc at ~linear and stops the TS2589 / quadratic blow-up that sinks Hono
+// `hc` / Eden treaty.
 //
-//   client["/users/:id"].get({ params: { id: "1" } })   -> Promise<User>
-//   client["/users"].post({ body: { name, email } })     -> Promise<User>
-//   client["/users"].get()                               -> Promise<User[]>
-//
-// One indexed access by the LITERAL pattern, then the lowercase method, then a
-// single typed args object ({ params?, body? }) whose keys appear only when the
-// route actually has params / a validated body. Output is the handler's domain
-// value (recovered via fractal-http's phantom-typed `json<T>` / `withValidation`
-// `__output`), NOT the opaque `Response`.
+// No Route/Router/Node type is referenced — only `Handler` (for the app) and the
+// DATA-descriptor meta shapes from @rhi-zone/fractal-core.
 
-import { isMethodMismatch } from "@rhi-zone/fractal-core"
-import type { RouteSpec, RoutesOf, Router, RoutingCtx } from "@rhi-zone/fractal-core"
+import type {
+  ChoiceMeta,
+  Handler,
+  MethodsMeta,
+  ParamMeta,
+  PathMeta,
+  PrefixMeta,
+  Reflected,
+} from "@rhi-zone/fractal-core";
 
 // ============================================================================
-// ClientOf<Router> — the derived typed surface
+// TYPE-LEVEL walk → a flat record of { "/path" : { method : sig } }.
+//
+//  - MethodsMeta  → one entry at the accumulated key, one prop per verb.
+//  - PathMeta     → FLAT map over the record's keys (NOT recursive in N); each
+//                   key appends a literal segment and walks its inner meta.
+//  - PrefixMeta   → append the literal prefix, walk inner.
+//  - ParamMeta    → append "/{name}", record the param type, walk inner.
+//  - ChoiceMeta   → FLAT map over the alt UNION (Alts[number]); merge entries.
 // ============================================================================
 
-/** Does this spec carry typed path params? */
-type HasParams<Spec extends RouteSpec> =
-  keyof Spec["params"] extends never ? false : true
+type NormKey<K extends string> = K extends "" ? "/" : K;
 
-/** Does this spec carry a validated body (input ≠ never)? */
-type HasInput<Spec extends RouteSpec> =
-  [Spec["input"]] extends [never] ? false : true
+// the params accumulated along the path so far (a small record threaded down).
+type Walk<Meta, Pre extends string, P> =
+  Meta extends MethodsMeta<infer Verbs, infer IO>
+    ? MethodsEntry<Pre, Verbs, IO, P>
+    : Meta extends PathMeta<infer R>
+      ? FlatPath<R, Pre, P>
+      : Meta extends PrefixMeta<infer Pfx, infer Rest>
+        ? Walk<Rest, `${Pre}/${Pfx}`, P>
+        : Meta extends ParamMeta<infer N, infer T, infer Rest>
+          ? Walk<Rest, `${Pre}/{${N}}`, P & { readonly [K in N]: T }>
+          : Meta extends ChoiceMeta<infer Alts>
+            ? FlatChoice<Alts[number], Pre, P>
+            : Record<never, never>;
 
-/** The single args object a call accepts — `params` and/or `body` appear only
- *  when the route actually has them. Empty when neither (call takes no args). */
-type CallArgs<Spec extends RouteSpec> =
-  (HasParams<Spec> extends true ? { params: Spec["params"] } : Record<never, never>)
-  & (HasInput<Spec> extends true ? { body: Spec["input"] } : Record<never, never>)
+// one endpoint (a methods node) → { "/key": { verb: sig } }.
+type MethodsEntry<
+  Pre extends string,
+  Verbs extends string,
+  IO extends Record<string, { i: unknown; o: unknown }>,
+  P,
+> = {
+  readonly [Key in Pre as NormKey<Key>]: VerbRec<Verbs, IO, P>;
+};
 
-/** Recover the DOMAIN body type from a route's captured output. HTTP handlers
- *  return a phantom-typed `Response` (`fractal-http`'s `json<T>` / `text`), which
- *  carries the body type in a `__body` phantom; we unwrap it here so the client
- *  surfaces `T`, not the opaque `Response`. A union of typed responses (e.g.
- *  `json(user) | json(null)`) distributes to the union of bodies. A handler that
- *  returns a non-typed value (or a node's recovered `__output`) passes through. */
-type BodyOf<O> =
-  [O] extends [never] ? never
-  : O extends { readonly __body?: infer T }
-    ? [T] extends [undefined] ? O : T
-    : O
+// FLAT map over a path record's KEYS — ONE mapped-type pass with `as` key-
+// remapping, NOT an N-way union+intersection. This is the load-bearing scale
+// decision: the dominant shape — a `path` of N resources, each a `methods` leaf
+// or a `param→methods` route — maps 1 record key → 1 structural key in a single
+// mapped type, exactly like a flat route table. We compute each entry's KEY and
+// VALUE locally (EntryKey/EntryVal) so the pass never forms a length-N
+// intersection (which is what makes UnionToIntersection-of-N quadratic).
+//
+// Nested children (a `path`/`choice` UNDER a key, which split one key into many)
+// are the only case that recurses+intersects — and nesting DEPTH, not route
+// COUNT, bounds that. A flat app pays zero intersection cost.
+type FlatPath<R extends Record<string, unknown>, Pre extends string, P> = {
+  readonly [K in keyof R & string as EntryKey<R[K], `${Pre}/${K}`>]: EntryVal<
+    R[K],
+    P
+  >;
+} & NestedPath<R, Pre, P>;
 
-/** The call signature for one route: typed args in, typed domain output out. */
-type CallSig<Spec extends RouteSpec> =
-  keyof CallArgs<Spec> extends never
-    ? () => Promise<BodyOf<Spec["output"]>>
-    : (args: CallArgs<Spec>) => Promise<BodyOf<Spec["output"]>>
-
-/** Every distinct literal pattern in the accumulated routes. */
-type Patterns<Routes extends readonly RouteSpec[]> = Routes[number]["pattern"]
-
-/** The typed client surface for a tuple of accumulated routes. */
-export type ClientOfRoutes<Routes extends readonly RouteSpec[]> = {
-  readonly [P in Patterns<Routes>]: {
-    readonly [Spec in Extract<Routes[number], { pattern: P }> as Lowercase<Spec["method"]>]:
-      CallSig<Spec>
-  }
-}
-
-/** The typed client surface derived from a Router type. */
-export type ClientOf<R> = ClientOfRoutes<RoutesOf<R>>
-
-// ============================================================================
-// Transport — the runtime mechanism (same ClientOf type, different execution)
-// ============================================================================
-
-/** A serialised call the transport executes: a method + interpolated path +
- *  optional JSON body. The transport returns the parsed domain value. */
-export interface TransportCall {
-  readonly method: string
-  /** The interpolated path, e.g. "/users/1" (params already substituted). */
-  readonly path: string
-  /** Path segments of `path` (router dispatch consumes these). */
-  readonly segments: string[]
-  /** The route's path params, e.g. { id: "1" }. */
-  readonly params: Record<string, string>
-  /** The request body (already a value; serialised by the transport). */
-  readonly body?: unknown
-}
-
-/** A transport runs a serialised call and resolves the parsed domain value. */
-export interface Transport {
-  call(desc: TransportCall): Promise<unknown>
-}
-
-// Any HTTP-shaped router (HttpCtx / Response) with any accumulated routes.
-type AnyHttpRouter = Router<
-  AnyHttpCtx,
-  Record<string, unknown>,
-  Record<string, unknown>,
-  Response,
-  readonly RouteSpec[]
+// the structural key a single record entry contributes (leaf/param fast path).
+type EntryKey<Child, Pre extends string> = Child extends MethodsMeta<
+  string,
+  Record<string, { i: unknown; o: unknown }>
 >
+  ? NormKey<Pre>
+  : Child extends ParamMeta<
+        infer N,
+        unknown,
+        MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
+      >
+    ? NormKey<`${Pre}/{${N}}`>
+    : never; // nested → handled by NestedPath, excluded from the fast map
 
-interface AnyHttpCtx extends RoutingCtx<Record<string, unknown>> {
-  readonly query: URLSearchParams
-  readonly headers: Headers
-  readonly body: () => Promise<unknown>
-  readonly request: Request
+// the value (the per-verb sig record) for a leaf/param entry.
+type EntryVal<Child, P> = Child extends MethodsMeta<infer Verbs, infer IO>
+  ? VerbRec<Verbs, IO, P>
+  : Child extends ParamMeta<
+        infer N,
+        infer T,
+        MethodsMeta<infer Verbs, infer IO>
+      >
+    ? VerbRec<Verbs, IO, P & { readonly [K in N]: T }>
+    : never;
+
+// the only entries that need the slow recurse+intersect path: a record key whose
+// child is itself a `path`/`choice`/`prefix`/`param→non-methods` (splits 1→many).
+type NestedPath<R extends Record<string, unknown>, Pre extends string, P> =
+  UnionToIntersection<
+    {
+      readonly [K in keyof R & string]: R[K] extends
+        | MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
+        | ParamMeta<
+            string,
+            unknown,
+            MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
+          >
+        ? never // leaf/param fast-path handled above
+        : Walk<R[K], `${Pre}/${K}`, P>;
+    }[keyof R & string]
+  >;
+
+// FLAT map over the choice alt UNION — one mapped-type pass over `Alts[number]`,
+// keyed by each alt. THE load-bearing move: a choice of N endpoints is a single
+// distribution over the union, NOT an N-deep recursive fold (which trips TS2589).
+type FlatChoice<Alt, Pre extends string, P> = UnionToIntersection<
+  Alt extends unknown ? Walk<Alt, Pre, P> : never
+>;
+
+// per-verb signature record for one endpoint.
+type VerbRec<
+  Verbs extends string,
+  IO extends Record<string, { i: unknown; o: unknown }>,
+  P,
+> = {
+  readonly [V in Verbs as Lowercase<V>]: Sig<
+    P,
+    V extends keyof IO ? IO[V]["i"] : never,
+    V extends keyof IO ? IO[V]["o"] : unknown
+  >;
+};
+
+// ---- call signature for one endpoint ---------------------------------------
+type HasKeys<T> = keyof T extends never ? false : true;
+type Args<P, I> = (HasKeys<P> extends true
+  ? { readonly params: P }
+  : Record<never, never>) &
+  ([I] extends [never] ? Record<never, never> : { readonly body: I });
+type Sig<P, I, O> = keyof Args<P, I> extends never
+  ? () => Promise<Awaited<O>>
+  : (args: Args<P, I>) => Promise<Awaited<O>>;
+
+type UnionToIntersection<U> = (
+  U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void
+  ? I
+  : never;
+
+/** The typed client surface, derived by walking the app's `.meta` tree. */
+export type Client<App> = App extends Reflected<infer M>
+  ? Walk<M, "", Record<never, never>>
+  : never;
+
+// ============================================================================
+// RUNTIME — mirror the type walk over the meta DATA, building the surface. Each
+// leaf method builds a Request and dispatches through the SAME app handler
+// (in-process transport): server-identical results, one code path, no network.
+// ============================================================================
+
+/** A transport: given a synthesized Request, return a Response. The in-process
+ *  one just calls the app handler in memory. Swap for a fetch-based one to hit a
+ *  remote server with the identical typed surface. */
+export type Transport = (req: Request) => Promise<Response>;
+
+/** In-process transport: run the SAME app handler in memory; a final `undefined`
+ *  becomes a 404 (mirrors `toFetch`). */
+export function inProcess(app: Handler<{}>): Transport {
+  return async (req) => {
+    // initialize the root params to `{}` (mirrors `toFetch`) — the app is the
+    // fully-discharged root, so it carries no outstanding param obligation.
+    (req as Request & { params: {} }).params = {};
+    return (
+      (await app(req as Request & { params: {} })) ??
+      new Response("Not Found", { status: 404 })
+    );
+  };
 }
 
-// ============================================================================
-// inProcess — Hyper unification: invoke the SAME handler in memory, no network
-// ============================================================================
-
-/** Build a transport that dispatches each call through the router IN-PROCESS —
- *  the exact same handler the server runs, no fetch, no serialisation over a
- *  socket. The handler returns a Response; we parse its body to the domain
- *  value so the client sees server-identical results with the derived type. */
-export function inProcess(router: AnyHttpRouter): Transport {
-  return {
-    async call(desc) {
-      const url = `http://in-process${desc.path}`
-      const reqInit: RequestInit = { method: desc.method }
-      if (desc.body !== undefined) {
-        reqInit.body = JSON.stringify(desc.body)
-        reqInit.headers = { "content-type": "application/json" }
-      }
-      const request = new Request(url, reqInit)
-
-      let bodyCache: unknown
-      let bodyCalled = false
-      const ctx: AnyHttpCtx = {
-        method: desc.method.toUpperCase(),
-        segments: desc.segments,
-        params: desc.params,
-        query: new URL(url).searchParams,
-        headers: request.headers,
-        body: async () => {
-          if (bodyCalled) return bodyCache
-          bodyCalled = true
-          bodyCache = desc.body
-          return bodyCache
-        },
-        request,
-        vars: {},
-      }
-
-      const result = await router.dispatch(ctx)
-      if (result === null) throw new ClientError(404, `no route matched ${desc.method} ${desc.path}`)
-      if (isMethodMismatch(result)) {
-        throw new ClientError(405, `method ${desc.method} not allowed on ${desc.path}`)
-      }
-      return parseResponse(result)
-    },
-  }
+/** HTTP transport: issue a real `fetch` to `baseUrl + path`. Same `Client` type
+ *  as `inProcess`, only execution differs. */
+export function http(baseUrl: string, fetchImpl: typeof fetch = fetch): Transport {
+  const base = baseUrl.replace(/\/$/, "");
+  return async (req) => {
+    const path = new URL(req.url).pathname + new URL(req.url).search;
+    return fetchImpl(`${base}${path}`, req);
+  };
 }
 
-// ============================================================================
-// http — serialise the call into a fetch, parse the response
-// ============================================================================
-
-/** Build a transport that issues a real `fetch` to `baseUrl + path`, sending the
- *  body as JSON and parsing the response. Same `ClientOf` type as `inProcess`. */
-export function http(
-  baseUrl: string,
-  fetchImpl: typeof fetch = fetch,
-): Transport {
-  const base = baseUrl.replace(/\/$/, "")
-  return {
-    async call(desc) {
-      const init: RequestInit = { method: desc.method }
-      if (desc.body !== undefined) {
-        init.body = JSON.stringify(desc.body)
-        init.headers = { "content-type": "application/json" }
-      }
-      const res = await fetchImpl(`${base}${desc.path}`, init)
-      if (!res.ok) {
-        throw new ClientError(res.status, `request failed: ${desc.method} ${desc.path}`, await safeParse(res))
-      }
-      return parseResponse(res)
-    },
-  }
+/** Build the typed client. `transport` defaults to in-process over `app`. */
+export function client<App extends Reflected<unknown>>(
+  app: App,
+  transport: Transport = inProcess(app),
+): Client<App> {
+  const surface: Record<string, Record<string, unknown>> = {};
+  build((app as { meta: unknown }).meta, "", surface, transport);
+  return surface as Client<App>;
 }
 
-// ============================================================================
-// client — wrap a router (+ transport) in the typed proxy surface
-// ============================================================================
-
-/** Derive a typed client from a router. With no transport, defaults to the
- *  in-process transport (the router itself runs the handlers). Pass `http(url)`
- *  (or any `Transport`) to target a real server. The returned value has the
- *  fully-derived `ClientOf<typeof router>` type. */
-export function client<R extends AnyHttpRouter>(
-  router: R,
-  transport: Transport = inProcess(router),
-): ClientOf<R> {
-  // Proxy over patterns: client["/users/:id"] -> { get, post, ... }.
-  // Each method is a function taking { params?, body? } and serialising the call.
-  const patternProxy = new Proxy(Object.create(null) as Record<string, unknown>, {
-    get(_t, pattern: string | symbol) {
-      if (typeof pattern === "symbol") return undefined
-      return new Proxy(Object.create(null) as Record<string, unknown>, {
-        get(_t2, method: string | symbol) {
-          if (typeof method === "symbol") return undefined
-          return (args?: { params?: Record<string, string>; body?: unknown }) => {
-            const params = args?.params ?? {}
-            const path = interpolate(pattern, params)
-            const segments = path.replace(/^\//, "").split("/").filter(Boolean)
-            return transport.call({
-              method: method.toUpperCase(),
-              path,
-              segments,
-              params,
-              body: args?.body,
-            })
+function build(
+  meta: unknown,
+  pre: string,
+  surface: Record<string, Record<string, unknown>>,
+  transport: Transport,
+): void {
+  if (typeof meta !== "object" || meta === null) return;
+  const m = meta as { tag?: string };
+  switch (m.tag) {
+    case "methods": {
+      const mm = meta as MethodsMeta<string, never>;
+      const key = pre === "" ? "/" : pre;
+      const bucket = (surface[key] ??= {});
+      for (const verb of mm.verbs) {
+        bucket[verb.toLowerCase()] = async (args?: {
+          params?: Record<string, string>;
+          body?: unknown;
+        }) => {
+          const p = fillPath(key, args?.params ?? {});
+          const init: RequestInit = { method: verb };
+          if (args?.body !== undefined) {
+            init.body = JSON.stringify(args.body);
+            init.headers = { "Content-Type": "application/json" };
           }
-        },
-      })
-    },
-  })
-  return patternProxy as ClientOf<R>
-}
-
-// ============================================================================
-// Errors + helpers
-// ============================================================================
-
-/** A failed client call — carries the HTTP status and (when available) the
- *  parsed error body the server returned. */
-export class ClientError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly body?: unknown,
-  ) {
-    super(message)
-    this.name = "ClientError"
+          const res = await transport(new Request(`http://local${p}`, init));
+          // 204/empty bodies (e.g. auto-HEAD) → undefined; else parse JSON/text.
+          const ct = res.headers.get("Content-Type") ?? "";
+          if (res.status === 204) return undefined;
+          return ct.includes("application/json") ? res.json() : res.text();
+        };
+      }
+      return;
+    }
+    case "path": {
+      const pm = meta as PathMeta<Record<string, unknown>>;
+      for (const k of Object.keys(pm.routes)) {
+        build(pm.routes[k], `${pre}/${k}`, surface, transport);
+      }
+      return;
+    }
+    case "prefix": {
+      const pm = meta as PrefixMeta<string, unknown>;
+      build(pm.rest, `${pre}/${pm.pre}`, surface, transport);
+      return;
+    }
+    case "param": {
+      const pm = meta as ParamMeta<string, unknown, unknown>;
+      build(pm.rest, `${pre}/{${pm.name}}`, surface, transport);
+      return;
+    }
+    case "choice": {
+      for (const alt of (meta as ChoiceMeta<readonly unknown[]>).alts) {
+        build(alt, pre, surface, transport);
+      }
+      return;
+    }
   }
 }
 
-/** Substitute `:name` segments in a pattern with the given params. */
-function interpolate(pattern: string, params: Record<string, string>): string {
-  return pattern.replace(/:([^/]+)/g, (_m, name: string) => {
-    const v = params[name]
-    if (v === undefined) throw new ClientError(0, `missing path param ":${name}" for ${pattern}`)
-    return encodeURIComponent(v)
-  })
-}
-
-/** Parse a Response body to its domain value (JSON when so typed, else text). */
-async function parseResponse(res: Response): Promise<unknown> {
-  const ct = res.headers.get("content-type") ?? ""
-  if (ct.includes("application/json")) return res.json()
-  if (ct.startsWith("text/")) return res.text()
-  return res.arrayBuffer()
-}
-
-async function safeParse(res: Response): Promise<unknown> {
-  try {
-    return await parseResponse(res)
-  } catch {
-    return undefined
-  }
+// substitute {name} placeholders in the structural key with concrete params.
+function fillPath(key: string, params: Record<string, string>): string {
+  return key.replace(/\{([^}]+)\}/g, (_, n: string) => params[n] ?? "");
 }

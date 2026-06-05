@@ -1,208 +1,141 @@
 // packages/client/src/index.test.ts — @rhi-zone/fractal-client
 //
-// End-to-end proof of the typed client derived from a fractal router:
-//   - route accumulation infers (the crux)
-//   - ClientOf<typeof app> derives the right call surface (type probe below)
-//   - inProcess transport returns server-IDENTICAL results
-//   - http transport round-trips through toHandler via a mock fetch
-//   - @ts-expect-error negatives (wrong body / missing param / unknown route)
+// The typed client derived FLAT from `.meta`. Builds a meta-app from the core
+// combinators, derives a typed client, and runs real requests through the
+// in-process transport. Type-level assertions prove body/param typing and that
+// wrong calls do not compile.
 
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it } from "bun:test";
 import {
-  created,
-  httpRouter,
-  json,
-  toHandler,
-  withValidation,
-  type NoVars,
-  type StandardSchema,
-} from "@rhi-zone/fractal-http"
-import { client, http, inProcess, type ClientOf } from "./index.ts"
+  choice,
+  methods,
+  param,
+  paramValue,
+  path,
+  type StandardSchemaV1,
+} from "@rhi-zone/fractal-core";
+import { json, text, toFetch, validated } from "@rhi-zone/fractal-http";
+import { client, inProcess } from "./index.ts";
 
-// ---------------------------------------------------------------------------
-// A tiny StandardSchema validator (no external dep) — same as the example.
-// ---------------------------------------------------------------------------
-
-function object<const F extends Record<string, "string">>(
-  fields: F,
-): StandardSchema<unknown, { [K in keyof F]: string }> {
-  type Out = { [K in keyof F]: string }
-  return {
-    "~standard": {
-      version: 1,
-      validate(value: unknown) {
-        if (typeof value !== "object" || value === null) return { issues: [{ message: "expected object" }] }
-        const obj = value as Record<string, unknown>
-        const out: Record<string, unknown> = {}
-        for (const k of Object.keys(fields)) {
-          if (typeof obj[k] !== "string") return { issues: [{ message: `field "${k}" must be a string` }] }
-          out[k] = obj[k]
-        }
-        return { value: out as Out }
-      },
+// --- a hand-rolled Standard Schema fixture ----------------------------------
+interface NewUser {
+  readonly name: string;
+}
+const newUserSchema: StandardSchemaV1<unknown, NewUser> = {
+  "~standard": {
+    version: 1,
+    vendor: "test-fixture",
+    validate(v) {
+      if (
+        typeof v !== "object" ||
+        v === null ||
+        typeof (v as NewUser).name !== "string"
+      ) {
+        return { issues: [{ message: "name must be a string" }] };
+      }
+      return { value: { name: (v as NewUser).name } };
     },
-  }
+  },
+};
+
+const users = [
+  { id: "1", name: "ada" },
+  { id: "2", name: "alan" },
+];
+
+const usersCollection = methods({
+  GET: () => json(users),
+  POST: validated<typeof newUserSchema, { created: true; name: string }>(
+    newUserSchema,
+    (value) => json({ created: true, name: value.name }, { status: 201 }),
+  ),
+});
+
+const userItem = param(
+  "id",
+  methods({
+    GET: (req) => {
+      const id = paramValue(req, "id");
+      const user = users.find((u) => u.id === id);
+      return user ? json(user) : json({ error: "no such user" }, { status: 404 });
+    },
+  }),
+);
+
+const appMeta = path({
+  users: choice(usersCollection, userItem),
+  health: methods({ GET: () => text("ok") }),
+});
+
+describe("typed client over the meta-app — in-process", () => {
+  const api = client(appMeta);
+
+  it("GET /users -> 2 users", async () => {
+    const list = (await api["/users"].get()) as typeof users;
+    expect(Array.isArray(list) && list.length === 2).toBe(true);
+  });
+
+  it("POST /users with typed validated body -> created", async () => {
+    const created = await api["/users"].post({ body: { name: "lin" } });
+    expect((created as { name: string }).name).toBe("lin");
+  });
+
+  it("GET /users/{id} with typed params -> item", async () => {
+    const item = await api["/users/{id}"].get({ params: { id: "1" } });
+    expect((item as { name: string }).name).toBe("ada");
+  });
+
+  it("GET /health -> ok", async () => {
+    expect(await api["/health"].get()).toBe("ok");
+  });
+
+  it("in-process equals a direct toFetch round-trip", async () => {
+    const handle = toFetch(appMeta);
+    const direct = await (await handle(new Request("http://x/users"))).json();
+    const viaClient = await api["/users"].get();
+    expect(viaClient).toEqual(direct);
+  });
+
+  it("client over an explicit inProcess transport works", async () => {
+    const api2 = client(appMeta, inProcess(appMeta));
+    expect(await api2["/health"].get()).toBe("ok");
+  });
+});
+
+// ============================================================================
+// TYPE-LEVEL assertions — prove the client surface is REAL, not `any`.
+// `satisfies` for positives, `@ts-expect-error` for negatives. A non-firing
+// negative is TS2578 (unused @ts-expect-error) → the typecheck fails.
+// ============================================================================
+async function _typeChecks() {
+  const api = client(appMeta);
+
+  // (1) request body type is inferred FROM the validator (NewUser).
+  const created = await api["/users"].post({ body: { name: "x" } });
+  created satisfies { created: true; name: string };
+
+  // @ts-expect-error — body must match the validator's output (name: string).
+  await api["/users"].post({ body: { wrong: 1 } });
+
+  // @ts-expect-error — body is REQUIRED on the validated POST.
+  await api["/users"].post();
+
+  // (2) path params are typed: id is a string, and required.
+  const item = await api["/users/{id}"].get({ params: { id: "1" } });
+  item satisfies unknown;
+
+  // @ts-expect-error — params required for a {id} route.
+  await api["/users/{id}"].get();
+
+  // @ts-expect-error — wrong param key.
+  await api["/users/{id}"].get({ params: { wrong: "1" } });
+
+  // (3) unknown route key is a compile error.
+  // @ts-expect-error — "/nope" is not a route in the app.
+  await api["/nope"].get();
+
+  // (4) GET takes no body arg.
+  // @ts-expect-error — GET has no body.
+  await api["/health"].get({ body: {} });
 }
-
-// ---------------------------------------------------------------------------
-// The app — GET /users/:id (typed param, typed output via json<User>) and
-// POST /users (validated body → typed output via withValidation).
-// ---------------------------------------------------------------------------
-
-interface User {
-  id: string
-  name: string
-  email: string
-}
-
-function makeApp() {
-  const users = new Map<string, User>([
-    ["1", { id: "1", name: "Ada", email: "ada@x.io" }],
-  ])
-  let seq = 2
-
-  const app = httpRouter<NoVars>()
-    .get("/users", async () => json<User[]>([...users.values()]))
-    .get("/users/:id", async (ctx) => {
-      const id: string = ctx.params.id // typed string, no cast
-      const user = users.get(id)
-      return json<User | null>(user ?? null)
-    })
-    .routeNode(
-      "POST",
-      "/users",
-      withValidation(
-        async (args: { name: string; email: string }) => {
-          const user: User = { id: String(seq++), name: args.name, email: args.email }
-          users.set(user.id, user)
-          return created(user) // status-aware 201; Result (output type) = User
-        },
-        object({ name: "string", email: "string" }),
-      ),
-    )
-
-  return app
-}
-
-// ============================================================================
-// TYPE PROBE — the derived client surface
-//
-// type _ should expand to roughly:
-// {
-//   "/users":     { get: () => Promise<User[]>;          post: (a: { body: { name: string; email: string } }) => Promise<User> }
-//   "/users/:id": { get: (a: { params: { id: string } }) => Promise<User | null> }
-// }
-// ============================================================================
-
-type App = ReturnType<typeof makeApp>
-type _ = ClientOf<App>
-
-// Static assertions (compile-time) — these are exercised by typecheck.
-function _staticPositives(c: ClientOf<App>) {
-  const a: Promise<User[]> = c["/users"].get()
-  const b: Promise<User | null> = c["/users/:id"].get({ params: { id: "1" } })
-  const d: Promise<User> = c["/users"].post({ body: { name: "Grace", email: "g@x.io" } })
-  return [a, b, d]
-}
-
-function _staticNegatives(c: ClientOf<App>) {
-  // @ts-expect-error wrong body type (name must be string)
-  c["/users"].post({ body: { name: 42, email: "x" } })
-  // @ts-expect-error missing required path param
-  c["/users/:id"].get({})
-  // @ts-expect-error method does not exist on this route
-  c["/users/:id"].post({ params: { id: "1" }, body: { name: "x", email: "y" } })
-  // @ts-expect-error pattern does not exist
-  c["/nope"].get()
-  // @ts-expect-error missing the params arg entirely
-  c["/users/:id"].get()
-}
-
-// ============================================================================
-// RUNTIME — in-process transport: server-identical results
-// ============================================================================
-
-describe("inProcess transport — Hyper unification", () => {
-  it("GET /users returns the seeded list", async () => {
-    const c = client(makeApp())
-    const list = await c["/users"].get()
-    expect(list).toEqual([{ id: "1", name: "Ada", email: "ada@x.io" }])
-  })
-
-  it("GET /users/:id with a typed param returns the user", async () => {
-    const c = client(makeApp())
-    const user = await c["/users/:id"].get({ params: { id: "1" } })
-    expect(user).toEqual({ id: "1", name: "Ada", email: "ada@x.io" })
-  })
-
-  it("GET /users/:id unknown id returns null (server-identical)", async () => {
-    const c = client(makeApp())
-    const user = await c["/users/:id"].get({ params: { id: "999" } })
-    expect(user).toBeNull()
-  })
-
-  it("POST /users with a typed body creates and returns the user", async () => {
-    const app = makeApp()
-    const c = client(app)
-    const created = await c["/users"].post({ body: { name: "Grace", email: "g@x.io" } })
-    expect(created.name).toBe("Grace")
-    // server-identical: the same router now serves the new user back in-process.
-    const back = await c["/users/:id"].get({ params: { id: created.id } })
-    expect(back).toEqual(created)
-  })
-
-  it("in-process result equals a direct toHandler round-trip (server-identical)", async () => {
-    const app = makeApp()
-    const handle = toHandler(app)
-    const direct = await (await handle(new Request("http://x/users/1"))).json()
-    const viaClient = await client(app)["/users/:id"].get({ params: { id: "1" } })
-    expect(viaClient).toEqual(direct)
-  })
-})
-
-// ============================================================================
-// RUNTIME — http transport: serialise to fetch, parse the response.
-// We back the mock fetch with the SAME toHandler the server uses, proving the
-// produced { method, path, body } is a real, correct HTTP request.
-// ============================================================================
-
-describe("http transport — fetch round-trip through toHandler", () => {
-  function servedFetch(app: ReturnType<typeof makeApp>): typeof fetch {
-    const handle = toHandler(app)
-    return ((input: string | URL | Request, init?: RequestInit) =>
-      handle(new Request(input, init))) as unknown as typeof fetch
-  }
-
-  it("GET /users/:id interpolates the param into the path and parses the body", async () => {
-    const app = makeApp()
-    const c = client(app, http("http://api.test", servedFetch(app)))
-    const user = await c["/users/:id"].get({ params: { id: "1" } })
-    expect(user).toEqual({ id: "1", name: "Ada", email: "ada@x.io" })
-  })
-
-  it("POST /users sends the JSON body and returns the created user", async () => {
-    const app = makeApp()
-    const c = client(app, http("http://api.test", servedFetch(app)))
-    const created = await c["/users"].post({ body: { name: "Lin", email: "lin@x.io" } })
-    expect(created.name).toBe("Lin")
-  })
-
-  it("the produced request is exactly method + interpolated path + JSON body", async () => {
-    const seen: { method?: string; url?: string; body?: string } = {}
-    const spyFetch = (async (input: string | URL | Request, init?: RequestInit) => {
-      const req = new Request(input, init)
-      seen.method = req.method
-      seen.url = req.url
-      if (init?.body) seen.body = String(init.body)
-      return new Response(JSON.stringify({ id: "9", name: "Z", email: "z@x.io" }), {
-        headers: { "content-type": "application/json" },
-      })
-    }) as unknown as typeof fetch
-
-    const c = client(makeApp(), http("http://api.test", spyFetch))
-    await c["/users"].post({ body: { name: "Z", email: "z@x.io" } })
-    expect(seen.method).toBe("POST")
-    expect(seen.url).toBe("http://api.test/users")
-    expect(seen.body).toBe(JSON.stringify({ name: "Z", email: "z@x.io" }))
-  })
-})
+void _typeChecks;
