@@ -6,6 +6,10 @@
 //   - json / text / notFound / binary / sse / status helpers   response builders
 //   - validated(schema, fn)         Standard Schema body validation (input type)
 //   - returns(handler, outSchema)   output schema → typed client return type
+//   - logger / cors / errorBoundary OBSERVING middleware (Handler<R> → Handler<R>)
+//                                   — wrappers that change no ctx and add no
+//                                   discharge; they PRESERVE the inner `.meta` so
+//                                   every projection still sees through them.
 //
 // Runtime-agnostic: this module imports NO Bun and NO Node. The only runtime
 // touch lives in ./adapter (serveBun / serveNode), which this file does not
@@ -15,7 +19,7 @@ import {
   patternMatches,
   routeTable,
   segments,
-  withParams,
+  withCtx,
   type Handler,
   type InferOutput,
   type MetaRoute,
@@ -104,8 +108,10 @@ export function sse(
 /**
  * Run `app`; turn a final `undefined` into the correct HTTP-correctness
  * response. Runtime-agnostic. The root only accepts a FULLY-DISCHARGED
- * `Handler<{}>`: an app that reads `req.params.id` without a `param("id", …)`
- * discharging it is `Handler<{id:string}>` and FAILS to compile here.
+ * `Handler<{}>`: an app that reads `req.ctx.id` (a path param) without a
+ * `param("id", …)` discharging it — or `req.ctx.user` without a `withAuth`/
+ * `provide` — is `Handler<{id:string}>` / `Handler<{user:…}>` and FAILS to
+ * compile here. Both PATH-PARAM and VAR obligations are discharged uniformly.
  *
  * HTTP correctness is a PROJECTION from `.meta`, NOT something dispatch emits
  * (see the dispatch-vs-projection boundary in @rhi-zone/fractal-core). Dispatch
@@ -131,7 +137,7 @@ export function sse(
 export function toFetch(app: Handler<{}>): (req: Request) => Promise<Response> {
   const table = routeTable((app as Partial<Reflected<unknown>>).meta);
   return async (req) => {
-    const direct = await app(withParams(req, {}));
+    const direct = await app(withCtx(req, {}));
     if (direct !== undefined) return direct;
 
     // Dispatch passed — project the correct correctness response from .meta.
@@ -144,7 +150,7 @@ export function toFetch(app: Handler<{}>): (req: Request) => Promise<Response> {
 
     if (method === "HEAD" && verbs.has("GET")) {
       // Re-run dispatch with the method swapped to GET, strip the body.
-      const getReq = withParams(
+      const getReq = withCtx(
         new Request(req.url, { ...req, method: "GET" }),
         {},
       );
@@ -250,7 +256,7 @@ export function validated<S extends StandardSchemaV1<unknown, unknown>>(
  *  runtime. If a Standard Schema (or plain JSON-Schema-shaped object) is passed,
  *  it is stamped as an inert reflectable `__schema.output` carrier so the OpenAPI
  *  projection can emit a typed success response. */
-export function returns<O, H extends Handler = Handler>(
+export function returns<O, H extends Handler<never> = Handler>(
   h: H,
   schema?: StandardSchemaV1<unknown, O> | object,
 ): H & ReturnsHandler<O> {
@@ -270,6 +276,109 @@ export function returns<O, H extends Handler = Handler>(
   // body). Returning a bare `ReturnsHandler<O>` would erase the `validated` brand
   // and the guard would see `body: never` for a route that DOES take a body.
   return h as H & ReturnsHandler<O>;
+}
+
+// ============================================================================
+// OBSERVING MIDDLEWARE — plain `Handler<R> → Handler<R>` wrappers. Unlike
+// `param`/`provide` (which DISCHARGE a ctx key), these change NO ctx and add NO
+// obligation: a `logger`/`cors`/`errorBoundary` wrapping a `Handler<R>` is still a
+// `Handler<R>`. They are pure runtime concerns, so they live here, not in core.
+//
+// META-PRESERVING (load-bearing): a wrapper returns a NEW function, which would
+// DROP the inner handler's `.meta` sidecar — and then `toFetch`/`toOpenApi`/the
+// drift walk/codegen would see no routes. So each re-bolts the inner's `.meta`
+// onto the wrapper (when present) via `keepMeta`, keeping the route tree visible
+// to every projection. The wrappers are transparent to dispatch otherwise.
+// ============================================================================
+
+/** Re-bolt `inner`'s `.meta` (if any) onto a wrapper handler, so an observing
+ *  wrapper stays a `Reflected` handler the projections can still walk. Returns the
+ *  wrapper retyped as the inner handler's exact type `H` (an observing wrapper does
+ *  not change the handler's ctx obligation, so the type is preserved verbatim). */
+function keepMeta<H extends Handler<never>>(inner: H, wrapper: Handler<never>): H {
+  const meta = (inner as Partial<Reflected<unknown>>).meta;
+  if (meta !== undefined) {
+    (wrapper as unknown as { meta: unknown }).meta = meta;
+  }
+  return wrapper as unknown as H;
+}
+
+/** `logger(inner)` — log `METHOD /path -> status` for each handled request (a
+ *  pass / `undefined` is logged as `(pass)`). Observing only: same ctx, same
+ *  response. `log` defaults to `console.log`; pass your own sink to redirect. */
+export function logger<H extends Handler<never>>(
+  inner: H,
+  log: (line: string) => void = (l) => console.log(l),
+): H {
+  return keepMeta<H>(inner, async (req) => {
+    const res = await inner(req);
+    const { pathname } = new URL(req.url);
+    log(`${req.method} ${pathname} -> ${res ? res.status : "(pass)"}`);
+    return res;
+  });
+}
+
+/** CORS options — the subset most apps need. All optional; sensible defaults. */
+export interface CorsOptions {
+  /** `Access-Control-Allow-Origin` (default `"*"`). */
+  readonly origin?: string;
+  /** Methods advertised on preflight (default `GET, POST, PUT, PATCH, DELETE, OPTIONS`). */
+  readonly methods?: readonly Method[];
+  /** Allowed request headers on preflight (default `"Content-Type, Authorization"`). */
+  readonly headers?: string;
+}
+
+/** `cors(options)(inner)` — add CORS headers to the response and answer
+ *  `OPTIONS` preflight with a 204 + the CORS headers. Observing only (no ctx
+ *  change): the inner handler runs unchanged; this only decorates the Response. */
+export function cors(options: CorsOptions = {}) {
+  const origin = options.origin ?? "*";
+  const methods = (options.methods ?? [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+  ]).join(", ");
+  const headers = options.headers ?? "Content-Type, Authorization";
+  const corsHeaders: Record<string, string> = {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": methods,
+    "Access-Control-Allow-Headers": headers,
+  };
+  return <H extends Handler<never>>(inner: H): H =>
+    keepMeta<H>(inner, async (req) => {
+      if (req.method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: corsHeaders });
+      }
+      const res = await inner(req);
+      if (res === undefined) return undefined;
+      const merged = new Headers(res.headers);
+      for (const [k, v] of Object.entries(corsHeaders)) merged.set(k, v);
+      return new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers: merged,
+      });
+    });
+}
+
+/** `errorBoundary(render)(inner)` — catch a thrown error in `inner` and turn it
+ *  into a Response via `render` (default: a 500 JSON `{ error }`). Observing only:
+ *  no ctx change; a normal response / pass flows through untouched. */
+export function errorBoundary(
+  render: (err: unknown, req: Request) => Response = (err) =>
+    json({ error: "INTERNAL", message: String(err) }, { status: 500 }),
+) {
+  return <H extends Handler<never>>(inner: H): H =>
+    keepMeta<H>(inner, async (req) => {
+      try {
+        return await inner(req);
+      } catch (err) {
+        return render(err, req);
+      }
+    });
 }
 
 // Re-export the schema types so HTTP consumers have a single import surface.

@@ -11,6 +11,7 @@ import {
   param,
   paramValue,
   path,
+  withAuth,
   type Handler,
   type StandardSchemaV1,
 } from "@rhi-zone/fractal-core";
@@ -19,7 +20,10 @@ import {
 } from "@rhi-zone/fractal-openapi";
 import {
   binary,
+  cors,
+  errorBoundary,
   json,
+  logger,
   notFound,
   returns,
   sse,
@@ -286,11 +290,26 @@ describe("validated body validation", () => {
 // type-level: an UNDISCHARGED param app is NOT a Handler<{}> root.
 function _typeGuard() {
   const leaky = methods({
-    GET: (req: Request & { params: { id: string } }) => json(req.params.id),
+    GET: (req: Request & { ctx: { id: string } }) => json(req.ctx.id),
   });
   // @ts-expect-error — undischarged {id} param is not a Handler<{}> root.
   toFetch(leaky);
   toFetch(param("id", leaky)); // discharged → compiles
+
+  // type-level: an UNDISCHARGED VAR (req.ctx.user, no withAuth/provide) is also
+  // NOT a Handler<{}> root — the SAME discharge invariant covers path params AND
+  // injected vars uniformly.
+  const needsUser = methods({
+    GET: (req: Request & { ctx: { user: { id: string } } }) => json(req.ctx.user.id),
+  });
+  // @ts-expect-error — undischarged {user} var is not a Handler<{}> root.
+  toFetch(needsUser);
+  toFetch(
+    withAuth(
+      (): { id: string } | Response => ({ id: "1" }),
+      needsUser,
+    ),
+  ); // discharged → compiles
 }
 void _typeGuard;
 
@@ -413,7 +432,7 @@ describe("validated + returns __schema merge", () => {
         method: "POST",
         body: JSON.stringify({ name: "ada" }),
         headers: { "Content-Type": "application/json" },
-      }) as Request & { params: {} },
+      }) as Request & { ctx: {} },
     );
     expect(good?.status).toBe(200);
     // Bad body → 400
@@ -422,8 +441,59 @@ describe("validated + returns __schema merge", () => {
         method: "POST",
         body: JSON.stringify(42),
         headers: { "Content-Type": "application/json" },
-      }) as Request & { params: {} },
+      }) as Request & { ctx: {} },
     );
     expect(bad?.status).toBe(400);
+  });
+});
+
+// ===========================================================================
+// OBSERVING MIDDLEWARE — logger / cors / errorBoundary. Pure Handler<R> →
+// Handler<R> wrappers: no ctx change, no discharge, and META is PRESERVED so the
+// projections still see the routes through the wrapper.
+// ===========================================================================
+describe("observing middleware (logger / cors / errorBoundary)", () => {
+  it("logger logs METHOD /path -> status and passes the response through", async () => {
+    const lines: string[] = [];
+    const wrapped = logger(
+      path({ ping: methods({ GET: () => text("pong") }) }),
+      (l) => lines.push(l),
+    );
+    const fetch = toFetch(wrapped as Handler<{}>);
+    const res = await fetch(new Request("http://x/ping"));
+    expect(await res.text()).toBe("pong");
+    expect(lines.some((l) => l.includes("GET /ping -> 200"))).toBe(true);
+  });
+
+  it("logger PRESERVES .meta so toFetch projects 405/Allow through it", async () => {
+    const wrapped = logger(path({ ping: methods({ GET: () => text("p") }) }), () => {});
+    const fetch = toFetch(wrapped as Handler<{}>);
+    const res = await fetch(new Request("http://x/ping", { method: "DELETE" }));
+    expect(res.status).toBe(405); // requires .meta to have survived the wrapper
+  });
+
+  it("cors adds CORS headers to the response and answers preflight with 204", async () => {
+    const wrapped = cors({ origin: "https://app.example" })(
+      path({ data: methods({ GET: () => json({ ok: true }) }) }),
+    );
+    const fetch = toFetch(wrapped as Handler<{}>);
+    const get = await fetch(new Request("http://x/data"));
+    expect(get.headers.get("Access-Control-Allow-Origin")).toBe("https://app.example");
+    const pre = await fetch(new Request("http://x/data", { method: "OPTIONS" }));
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("Access-Control-Allow-Methods")).toContain("GET");
+  });
+
+  it("errorBoundary turns a thrown error into a 500 (default render)", async () => {
+    const boom = methods({
+      GET: () => {
+        throw new Error("kaboom");
+      },
+    });
+    const wrapped = errorBoundary()(path({ boom }) as Handler<{}>);
+    const fetch = toFetch(wrapped as Handler<{}>);
+    const res = await fetch(new Request("http://x/boom"));
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { error: string }).error).toBe("INTERNAL");
   });
 });

@@ -9,7 +9,7 @@
 // scaled poorly and inference-leaked on `methods({ GET: … })`. Here we emit
 // CONCRETE interfaces — a flat record of path → verb → call signature — so tsc
 // pays near-zero instantiation cost no matter how many routes, and a handler's
-// `req.params` is typed from a generated alias with no inference contortion.
+// `req.ctx` is typed from a generated alias with no inference contortion.
 //
 // INPUT is the `OpenApiDocument` `toOpenApi(app, info)` already produces. The doc
 // carries resolved JSON Schema for bodies/responses and (with the param-codec
@@ -345,8 +345,8 @@ function pathsTable(doc: OpenApiDocument): string {
 // ============================================================================
 // Output 2 — typed SERVER handler-signature aliases. For each path+verb, emit a
 // `Handler<P>` alias whose `P` is the concrete path-param object. A user writes
-//   const getTodoById: GetTodoById = (req) => json(req.params.id);
-// → `req.params.id` is typed, a typo is a compile error, and the value drops into
+//   const getTodoById: GetTodoById = (req) => json(req.ctx.id);
+// → `req.ctx.id` is typed, a typo is a compile error, and the value drops into
 // `methods({ GET: getTodoById })` cleanly (it's a plain `Handler`). No inference.
 // ============================================================================
 

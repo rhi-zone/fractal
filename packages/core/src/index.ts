@@ -3,15 +3,24 @@
 // The routing ALGEBRA. The ONLY framework type is the handler, and it is
 // literally the web standard:
 //
-//   Handler<P> = (req: Request & { params: P }) =>
+//   Handler<R> = (req: Request & { ctx: R }) =>
 //                  Response | undefined | Promise<Response | undefined>
 //
 // `Request`/`Response` are the ambient WHATWG globals (no runtime dep — this
 // package imports no Bun and no Node). `undefined` means "not mine — pass to the
 // next handler". Combinators are PLAIN FUNCTIONS returning a Handler. "How much
 // path is consumed" lives in the Request's own URL: descending rewrites the URL
-// (advances past consumed segments), so there is no ctx object, no Router type,
-// no side channel.
+// (advances past consumed segments), so there is no routing-ctx object, no Router
+// type, no dispatch side channel.
+//
+// ONE context bag — `req.ctx` — carries BOTH captured path params AND
+// middleware-injected vars (e.g. an authenticated `user`). `R` is the set of keys
+// a handler REQUIRES present on `req.ctx`. Two discharge mechanisms fill it:
+//   - `param(name, inner)` discharges a PATH-PARAM key (an API-surface key — it
+//     appears in the OpenAPI path + the generated client's call args), and
+//   - `provide(key, produce, inner)` discharges a VAR key (a server-internal key —
+//     NOT a path param, NOT API surface; invisible to client + OpenAPI params).
+// The TYPE `R` reads both alike; only the PROJECTIONS split them by meta source.
 //
 // There is NO Route / Segment / Router / Node / Ctx / RoutingCtx type. `.meta`
 // is an INERT reflection sidecar bolted onto the handler function, read only by
@@ -24,24 +33,26 @@
 // Handler — the one framework type
 // ============================================================================
 
-// `Handler<P>` is parameterized by its captured path params. The params ride as
-// a TYPED FIELD on the standard `Request` (itty-router-style runtime, typed).
-// `P` defaults to `{}` so a paramless handler is just `Handler`. Because
-// `Request & { params: P }` is a SUBtype of `Request`, a plain
+// `Handler<R>` is parameterized by the context-bag keys it REQUIRES. The bag
+// rides as a TYPED FIELD `ctx` on the standard `Request` (itty-router-style
+// runtime, typed) and holds BOTH captured path params AND middleware-injected
+// vars. `R` defaults to `{}` so a ctx-free handler is just `Handler`. Because
+// `Request & { ctx: R }` is a SUBtype of `Request`, a plain
 // `(req: Request) => Response` is contravariantly assignable to `Handler` AND to
-// any `Handler<P>` — a plain web handler IS a Handler.
-export type Handler<P = {}> = (
-  req: Request & { params: P },
+// any `Handler<R>` — a plain web handler IS a Handler.
+export type Handler<R = {}> = (
+  req: Request & { ctx: R },
 ) => Response | undefined | Promise<Response | undefined>;
 
-/** The runtime carrier: a real `Request` with a `params` own-property. */
-export type ReqWithParams<P> = Request & { params: P };
+/** The runtime carrier: a real `Request` with a `ctx` own-property (the one bag
+ *  holding path params + injected vars). */
+export type ReqWithCtx<R> = Request & { ctx: R };
 
-/** Attach (or re-attach) a `params` own-property to a Request, in place. Returns
+/** Attach (or re-attach) a `ctx` own-property to a Request, in place. Returns
  *  the SAME Request, retyped — it stays a real Request (json()/headers/method). */
-export function withParams<P>(req: Request, params: P): ReqWithParams<P> {
-  (req as ReqWithParams<P>).params = params;
-  return req as ReqWithParams<P>;
+export function withCtx<R>(req: Request, ctx: R): ReqWithCtx<R> {
+  (req as ReqWithCtx<R>).ctx = ctx;
+  return req as ReqWithCtx<R>;
 }
 
 // Closed verb union: a typo like "GETT" is a COMPILE ERROR in the bare `methods`.
@@ -64,13 +75,13 @@ export function segments(req: Request): string[] {
 }
 
 /** Clone `req` with its pathname replaced by `segs` (method/headers/body kept).
- *  `new Request(url, req)` drops custom own-properties, so we re-attach `params`
+ *  `new Request(url, req)` drops custom own-properties, so we re-attach `ctx`
  *  (carried from the source Request, defaulting to `{}`) to keep it a typed Req. */
-function withSegments<P>(req: Request, segs: string[]): ReqWithParams<P> {
+function withSegments<R>(req: Request, segs: string[]): ReqWithCtx<R> {
   const url = new URL(req.url);
   url.pathname = "/" + segs.join("/");
-  const params = (req as Partial<ReqWithParams<P>>).params ?? ({} as P);
-  return withParams(new Request(url, req), params);
+  const ctx = (req as Partial<ReqWithCtx<R>>).ctx ?? ({} as R);
+  return withCtx(new Request(url, req), ctx);
 }
 
 /**
@@ -81,7 +92,7 @@ function withSegments<P>(req: Request, segs: string[]): ReqWithParams<P> {
  * no value, takes no pattern, and reads nothing — it only advances the URL,
  * while the id is still read directly off the Request.
  */
-export function rest<P>(req: ReqWithParams<P>): ReqWithParams<P> {
+export function rest<R>(req: ReqWithCtx<R>): ReqWithCtx<R> {
   return withSegments(req, segments(req).slice(1));
 }
 
@@ -95,28 +106,28 @@ export function rest<P>(req: ReqWithParams<P>): ReqWithParams<P> {
  * segment names. If the first remaining segment is a key, call that handler
  * with a Request advanced past that segment; otherwise return undefined.
  */
-function pathRT<P = {}>(routes: Record<string, Handler<P>>): Handler<P> {
+function pathRT<R = {}>(routes: Record<string, Handler<R>>): Handler<R> {
   return (req) => {
     const segs = segments(req);
     const head = segs[0];
     if (head === undefined) return undefined;
     const next = routes[head];
     if (next === undefined) return undefined;
-    return next(withSegments<P>(req, segs.slice(1)));
+    return next(withSegments<R>(req, segs.slice(1)));
   };
 }
 
 /**
  * Capture a dynamic path segment as a TYPED param and DISCHARGE it. `param(name,
- * child)` reads the first remaining segment, binds it into `req.params[name]`,
+ * child)` reads the first remaining segment, binds it into `req.ctx[name]`,
  * advances the URL past it, and delegates to `child`. The child is parameterized
- * by `Q` (its full captured-param object, which must include `name`); the result
+ * by `Q` (its full required-ctx object, which must include `name`); the result
  * is `Handler<Omit<Q, name>>` — the captured key is removed from the obligation.
  *
- * The signature infers the child's WHOLE param object `Q` and removes `K` via
- * `Omit` (rather than `Handler<P & Record<K,string>> -> Handler<P>`, which fails
- * inference: TS cannot split a `P & Record<K,string>` intersection back into `P`,
- * so it binds `P` to the whole thing and discharges nothing). `Omit` is the
+ * The signature infers the child's WHOLE ctx object `Q` and removes `K` via
+ * `Omit` (rather than `Handler<R & Record<K,string>> -> Handler<R>`, which fails
+ * inference: TS cannot split a `R & Record<K,string>` intersection back into `R`,
+ * so it binds `R` to the whole thing and discharges nothing). `Omit` is the
  * minimal fix and composes: `param("id", param("postId", gc))` discharges both.
  */
 function paramRT<K extends string, Q extends Record<K, string>>(
@@ -126,10 +137,10 @@ function paramRT<K extends string, Q extends Record<K, string>>(
   return (req) => {
     const value = segments(req)[0];
     if (value === undefined) return undefined;
-    // bind the captured value into params, then advance the URL past the segment.
-    const bound = { ...(req.params as object), [name]: value } as Q;
+    // bind the captured value into ctx, then advance the URL past the segment.
+    const bound = { ...(req.ctx as object), [name]: value } as Q;
     const advanced = withSegments<Q>(req, segments(req).slice(1));
-    advanced.params = bound;
+    advanced.ctx = bound;
     return child(advanced);
   };
 }
@@ -150,9 +161,9 @@ function paramRT<K extends string, Q extends Record<K, string>>(
  * 404) are a PROJECTION computed from `.meta` in `toFetch` — see the
  * dispatch-vs-projection boundary note at the head of the COMBINATORS section.
  */
-function methodsRT<P = {}>(
-  table: Partial<Record<Method, Handler<P>>>,
-): Handler<P> {
+function methodsRT<R = {}>(
+  table: Partial<Record<Method, Handler<R>>>,
+): Handler<R> {
   return (req) => {
     if (segments(req).length > 0) return undefined; // path not fully consumed
     const direct = table[req.method as Method];
@@ -162,7 +173,7 @@ function methodsRT<P = {}>(
 }
 
 /** Try each handler in order; first non-undefined wins; else undefined. */
-function choiceRT<P = {}>(...handlers: Handler<P>[]): Handler<P> {
+function choiceRT<R = {}>(...handlers: Handler<R>[]): Handler<R> {
   return async (req) => {
     for (const h of handlers) {
       const res = await h(req);
@@ -181,13 +192,13 @@ function choiceRT<P = {}>(...handlers: Handler<P>[]): Handler<P> {
 // DATA (segments, verbs, dynamic positions, input/output phantoms).
 // ============================================================================
 
-export type Reflected<M, P = {}> = Handler<P> & { readonly meta: M };
+export type Reflected<M, R = {}> = Handler<R> & { readonly meta: M };
 
 /** Attach `meta` to an existing bare Handler, producing a Reflected handler. The
- *  handler IS the bare handler; `meta` is a bolted-on property. `P` is the
- *  handler's captured-param obligation, threaded so `param` can discharge it. */
-function withMeta<M, P = {}>(h: Handler<P>, meta: M): Reflected<M, P> {
-  const r = h as Reflected<M, P> & { meta: M };
+ *  handler IS the bare handler; `meta` is a bolted-on property. `R` is the
+ *  handler's required-ctx obligation, threaded so `param`/`provide` can discharge it. */
+function withMeta<M, R = {}>(h: Handler<R>, meta: M): Reflected<M, R> {
+  const r = h as Reflected<M, R> & { meta: M };
   (r as { meta: M }).meta = meta;
   return r;
 }
@@ -214,6 +225,23 @@ export interface ParamMeta<N extends string, T, R> {
    *  object) read only by the OpenAPI projection, never on the dispatch path. A
    *  bare `param(name, inner)` records no schema (the segment is a raw string). */
   readonly schema?: unknown;
+}
+/** A context-producing middleware marker: `provide(key, produce, inner)` injects
+ *  a VAR key into `req.ctx` (e.g. an authenticated `user`). Unlike `ParamMeta`,
+ *  this key is SERVER-INTERNAL — NOT a path param, NOT API surface. The
+ *  projections (OpenAPI params, client call args, the drift `RouteUnion`) walk
+ *  THROUGH `rest` without contributing the key, so adding `provide`/`withAuth` to
+ *  a route never changes its generated client signature. `K` is the injected key
+ *  name (a pure type parameter, recovered from the construction site like
+ *  `ParamMeta`'s `T`); `rest` is the inner handler's meta. `security`, when set,
+ *  is an inert reflectable hint a (future) OpenAPI security projection could read
+ *  — present so `withAuth` can mark a route as authenticated without a second meta
+ *  tag; ignored by every current projection. */
+export interface ProvideMeta<K extends string, R> {
+  readonly tag: "provide";
+  readonly key: K;
+  readonly rest: R; // the inner handler's meta (the key is invisible to projections)
+  readonly security?: unknown;
 }
 /** Inert, REFLECTABLE schema references for one verb. Unlike the type-only `IO`
  *  param (no runtime presence), these are real runtime values — the Standard Schema (or
@@ -281,7 +309,7 @@ export type ValidatedHandler<I> = Handler & {
 export type ReturnsHandler<O> = Handler & { readonly [RETURNS]: O };
 
 // Collapse a UNION into an INTERSECTION (the dual of `keyof`-distribution). Used
-// to fold each verb-handler's param obligation into the methods node's combined
+// to fold each verb-handler's ctx obligation into the methods node's combined
 // obligation: a route that needs `{id}` AND one that needs `{slug}` ⇒ the node
 // needs `{id} & {slug}`.
 type UnionToIntersection<U> = (
@@ -290,24 +318,24 @@ type UnionToIntersection<U> = (
   ? I
   : never;
 
-// EXTRACT the combined param obligation `P` from a methods table's handlers,
-// rather than taking `P` as an explicit type-arg. Each handler is structurally
-// `(req: Request & { params: P_k }) => …`; we `infer P_k` off each and intersect.
+// EXTRACT the combined ctx obligation `R` from a methods table's handlers,
+// rather than taking `R` as an explicit type-arg. Each handler is structurally
+// `(req: Request & { ctx: R_k }) => …`; we `infer R_k` off each and intersect.
 //
-// NB: `P` sits CONTRAVARIANTLY inside `Request & { params: P }`, so `infer P`
-// there only resolves to a real obligation when the handler DECLARES its param
-// type (`(req: Request & { params: { id: string } }) => …`). A bare inline arrow
-// (`req => req.params.id`) has its `req` contextually typed by the table bound, so
-// `req.params` is `any` and the inferred `P_k` collapses to `any`/`unknown` — the
+// NB: `R` sits CONTRAVARIANTLY inside `Request & { ctx: R }`, so `infer R`
+// there only resolves to a real obligation when the handler DECLARES its ctx
+// type (`(req: Request & { ctx: { id: string } }) => …`). A bare inline arrow
+// (`req => req.ctx.id`) has its `req` contextually typed by the table bound, so
+// `req.ctx` is `any` and the inferred `R_k` collapses to `any`/`unknown` — the
 // obligation can't be recovered from an unstated type. This is the documented
-// residual (see spike/methods-fix): declare the handler's param type to propagate
-// an obligation without an explicit type-arg. A no-param handler infers `unknown`,
+// residual (see spike/methods-fix): declare the handler's ctx type to propagate
+// an obligation without an explicit type-arg. A no-ctx handler infers `unknown`,
 // which `UnionToIntersection` leaves as `unknown` — assignable past `toFetch`'s
-// `Handler<{}>` (a no-param app stays sound).
-type ParamsOf<T> = UnionToIntersection<
+// `Handler<{}>` (a no-ctx app stays sound).
+type CtxOf<T> = UnionToIntersection<
   {
-    [K in keyof T]: T[K] extends (req: Request & { params: infer P }) => unknown
-      ? P
+    [K in keyof T]: T[K] extends (req: Request & { ctx: infer R }) => unknown
+      ? R
       : never;
   }[keyof T]
 >;
@@ -357,14 +385,14 @@ type MethodsIO<T> = {
  *  `const T` is the SOLE inference site (no explicit `P` type-arg to defeat it),
  *  so `.meta.verbs` is the LITERAL union of the table's keys (`"GET" | "POST"`),
  *  never the full `Method` set — the OpenAPI projection and drift guard read the
- *  real verb set. The param obligation `P` is EXTRACTED from the handlers via
- *  `ParamsOf<T>` (a handler that declares `{ params: { id: string } }` propagates
- *  that obligation), then discharged downstream by `param`/`toFetch`. */
+ *  real verb set. The ctx obligation `R` is EXTRACTED from the handlers via
+ *  `CtxOf<T>` (a handler that declares `{ ctx: { id: string } }` propagates that
+ *  obligation), then discharged downstream by `param`/`provide`/`toFetch`. */
 export function methods<
   const T extends Partial<Record<Method, Handler<never>>>,
 >(
   table: T,
-): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, ParamsOf<T>> {
+): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, CtxOf<T>> {
   const verbs = Object.keys(table) as Extract<keyof T, string>[];
   // Harvest REFLECTABLE schema refs that `validated`/`returns` stamped onto each
   // verb's handler (inert `__schema` carrier). Only present when a handler was
@@ -377,8 +405,8 @@ export function methods<
   const hasSchemas = Object.keys(schemas).length > 0;
   return withMeta<
     MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>,
-    ParamsOf<T>
-  >(methodsRT(table as unknown as Partial<Record<Method, Handler<ParamsOf<T>>>>), {
+    CtxOf<T>
+  >(methodsRT(table as unknown as Partial<Record<Method, Handler<CtxOf<T>>>>), {
     tag: "methods",
     verbs,
     ...(hasSchemas ? { schemas } : {}),
@@ -449,9 +477,10 @@ export function choice<
 /**
  * `param(name, inner)` — a DYNAMIC segment. The runtime reads the id directly
  * off the Request; this combinator advances the URL past the segment, binds the
- * captured value into `req.params[name]`, and records the position + decoded
- * type in `.meta` so the typed client can require a `params` arg. It DISCHARGES
- * the obligation: `inner: Reflected<M, Q>` (Q includes `name`) → the result is
+ * captured value into `req.ctx[name]`, and records the position + decoded type in
+ * `.meta` (as a `ParamMeta` — a PATH-PARAM / API-surface key) so the typed client
+ * can require a `params` call arg. It DISCHARGES the obligation: `inner:
+ * Reflected<M, Q>` (Q includes `name`) → the result is
  * `Reflected<…, Omit<Q, name>>`. Composes: `param("id", param("postId", gc))`
  * discharges both.
  *
@@ -497,11 +526,132 @@ export function param(
 }
 
 /** Read a dynamic segment value off the Request, where `param(name, …)` bound it
- *  into `req.params`. Keeps "params are read off the Request" literally true
- *  after `param` advanced past the segment. Convenience over `req.params[name]`. */
+ *  into `req.ctx`. Keeps "params are read off the Request" literally true after
+ *  `param` advanced past the segment. Convenience over `req.ctx[name]`. */
 export function paramValue(req: Request, name: string): string | undefined {
-  const params = (req as Partial<{ params: Record<string, string> }>).params;
-  return params?.[name] ?? undefined;
+  const ctx = (req as Partial<{ ctx: Record<string, string> }>).ctx;
+  return ctx?.[name] ?? undefined;
+}
+
+// ============================================================================
+// CONTEXT-PRODUCING MIDDLEWARE — `provide` / `withAuth`. The SAME discharge shape
+// as `param`, but for a SERVER-INTERNAL var rather than a path param. `provide`
+// runs a producer; a `Response` short-circuits (auth 401), `undefined` passes,
+// and a value is injected at `req.ctx[key]` for the inner handler — which TYPES
+// the key away (its `R` no longer requires it). The injected key is a VAR in
+// `.meta` (a `ProvideMeta`), so every projection (OpenAPI params, the generated
+// client's call args, the drift `RouteUnion`) walks THROUGH it without surfacing
+// it: adding `withAuth` to a route never changes its client signature.
+// ============================================================================
+
+/** What a `provide` producer returns: a VALUE `V` (inject it), a `Response`
+ *  (short-circuit — e.g. a 401), or `undefined` (pass — not handled here). */
+export type Produced<V> = V | Response | undefined;
+
+/** Bare `provide` runtime (meta-free). Clones the request with a FRESH ctx object
+ *  (key injected) so a shared request flowing through `choice` never bleeds the
+ *  var across alts — the same non-mutation discipline `param` uses for its bound
+ *  segment. The clone keeps it a real Request (method/headers/body/URL). */
+function provideRT<K extends string, Q extends Record<K, unknown>>(
+  key: K,
+  produce: (
+    req: ReqWithCtx<Omit<Q, K>>,
+  ) => Produced<Q[K]> | Promise<Produced<Q[K]>>,
+  inner: Handler<Q>,
+): Handler<Omit<Q, K>> {
+  return async (req) => {
+    const produced = await produce(req);
+    if (produced === undefined) return undefined; // pass — not handled here
+    if (produced instanceof Response) return produced; // short-circuit (e.g. 401)
+    // inject the value into a FRESH ctx on a cloned request (no shared mutation).
+    const next = withCtx<Q>(new Request(req.url, req), {
+      ...(req.ctx as object),
+      [key]: produced,
+    } as Q);
+    return inner(next);
+  };
+}
+
+/**
+ * `provide(key, produce, inner)` — a context-producing middleware that DISCHARGES
+ * a VAR key. It runs `produce(req)`; a returned VALUE is injected at
+ * `req.ctx[key]` (and the inner handler reads it TYPED), a returned `Response`
+ * short-circuits (e.g. an auth 401), and `undefined` passes.
+ *
+ * Like `param` it DISCHARGES via the `Omit<Q, K>` inference trick: it infers the
+ * inner handler's WHOLE required-ctx `Q` (which includes the injected key `K`) and
+ * returns `Reflected<…, Omit<Q, K>>` — the key is removed from the obligation. (A
+ * `Reflected<M, R & Record<K,V>> -> Reflected<…, R>` signature would fail to infer
+ * `R`, exactly as documented on `param`.) The injected value type is `Q[K]` —
+ * pinned by the INNER handler's required ctx, not by the producer (so a producer
+ * that returns a `Response` to reject does not collapse the value type). It emits
+ * a `ProvideMeta` VAR marker — server-internal, invisible to every projection's
+ * path-param view.
+ */
+export function provide<
+  const K extends string,
+  M,
+  Q extends Record<K, unknown>,
+>(
+  key: K,
+  produce: (
+    req: ReqWithCtx<Omit<Q, K>>,
+  ) => Produced<Q[K]> | Promise<Produced<Q[K]>>,
+  inner: Reflected<M, Q>,
+): Reflected<ProvideMeta<K, M>, Omit<Q, K>> {
+  return withMeta<ProvideMeta<K, M>, Omit<Q, K>>(
+    provideRT<K, Q>(key, produce, inner),
+    { tag: "provide", key, rest: inner.meta },
+  );
+}
+
+// An authenticated principal producer: a `provide` producer specialized to
+// auth — given the request, return the principal `U` (authenticated) or a
+// `Response` (e.g. a 401 to reject). The return is spelled `Produced<U>` (which is
+// `U | Response | undefined`) rather than the literal `U | Response` so this
+// internal alias does not read as a rival handler-shaped type: the iron-rule
+// scanner (which keys off the literal `Response` token in a `(req: Request) => …`
+// return) must see exactly one handler-shaped type, the canonical `Handler`.
+type Authenticate<U> = (req: Request) => Produced<U> | Promise<Produced<U>>;
+
+/**
+ * `withAuth(authenticate, inner)` — a thin specialization of `provide` that
+ * injects an authenticated principal at `req.ctx.user` (or a custom `key`). It is
+ * built ON `provide`, so it shares the exact discharge + VAR-meta semantics: the
+ * `user` key is server-internal (never a client call arg / OpenAPI param), and
+ * `inner`'s required ctx no longer needs `user`. A `Response` from `authenticate`
+ * short-circuits (the 401). The default key is `"user"`.
+ */
+export function withAuth<U, M, Q extends { user: U }>(
+  authenticate: Authenticate<U>,
+  inner: Reflected<M, Q>,
+): Reflected<ProvideMeta<"user", M>, Omit<Q, "user">>;
+export function withAuth<const K extends string, U, M, Q extends Record<K, U>>(
+  key: K,
+  authenticate: Authenticate<U>,
+  inner: Reflected<M, Q>,
+): Reflected<ProvideMeta<K, M>, Omit<Q, K>>;
+export function withAuth(
+  arg1: string | Authenticate<unknown>,
+  arg2: Authenticate<unknown> | Reflected<unknown, Record<string, unknown>>,
+  arg3?: Reflected<unknown, Record<string, unknown>>,
+): Reflected<ProvideMeta<string, unknown>, Record<string, unknown>> {
+  const key = typeof arg1 === "string" ? arg1 : "user";
+  const authenticate = (typeof arg1 === "string" ? arg2 : arg1) as Authenticate<
+    unknown
+  >;
+  const inner = (arg3 ?? arg2) as Reflected<unknown, Record<string, unknown>>;
+  const r = provide<string, unknown, Record<string, unknown>>(
+    key,
+    authenticate,
+    inner,
+  );
+  // Mark the route authenticated via the inert `security` hint (read by no
+  // current projection; present for a future OpenAPI security-scheme emission).
+  return withMeta<ProvideMeta<string, unknown>, Record<string, unknown>>(r, {
+    ...r.meta,
+    security: { scheme: key },
+  });
 }
 
 // ============================================================================
@@ -570,6 +720,14 @@ function walkMeta(
     case "param": {
       const pm = meta as ParamMeta<string, unknown, unknown>;
       walkMeta(pm.rest, [...pattern, { kind: "param", name: pm.name }], out);
+      return;
+    }
+    case "provide": {
+      // A VAR injector contributes NO pattern segment — it is server-internal.
+      // Walk straight THROUGH to the inner meta so the route table (and the 405/
+      // Allow projection it feeds) is identical with or without the middleware.
+      const pm = meta as ProvideMeta<string, unknown>;
+      walkMeta(pm.rest, pattern, out);
       return;
     }
     case "choice": {

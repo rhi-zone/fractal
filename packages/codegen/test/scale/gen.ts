@@ -30,8 +30,8 @@ for (let i = 0; i < N; i++) {
     param(
       "id",
       methods({
-        GET: (req: Request & { params: { id: string } }) =>
-          json(req.params.id),
+        GET: (req: Request & { ctx: { id: string } }) =>
+          json(req.ctx.id),
       }),
     ),
   ) as Reflected<unknown>;
@@ -66,7 +66,7 @@ for (let i = 0; i < N; i++) {
   appLines.push(`  res${i}: choice(`);
   appLines.push(`    methods({ GET: () => json([]), POST: () => json({}) }),`);
   appLines.push(
-    `    param("id", methods({ GET: (req: Request & { params: { id: string } }) => json(req.params.id) })),`,
+    `    param("id", methods({ GET: (req: Request & { ctx: { id: string } }) => json(req.ctx.id) })),`,
   );
   appLines.push(`  ),`);
 }

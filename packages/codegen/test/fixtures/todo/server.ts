@@ -20,6 +20,9 @@ export type GetTodosId = Handler<{
     id: string;
   }>;
 
+/** Handler signature for `GET /me`. */
+export type GetMe = Handler<{}>;
+
 /** Handler signature for `GET /health`. */
 export type GetHealth = Handler<{}>;
 

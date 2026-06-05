@@ -62,22 +62,42 @@ export async function clientNegatives(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// SERVER — a handler annotated with a generated alias has typed req.params, stays
+// CLIENT — the PROJECTION SPLIT. GET /me is an AUTHENTICATED route (`withAuth`):
+// its `user` ctx key is a VAR, server-injected — NOT a path param. So the
+// generated client call for /me takes NO arguments (no `user`, no params); auth
+// rides the request server-side. This is the load-bearing proof that a var does
+// not leak into the client contract.
+// ---------------------------------------------------------------------------
+export async function authedRouteHasNoUserArg(): Promise<void> {
+  // POSITIVE: GET /me is called with NO arguments — the signature is `() => …`.
+  const me = await client["/me"].get();
+  void me;
+}
+
+export async function authedRouteNegatives(): Promise<void> {
+  // @ts-expect-error — /me takes NO call args: there is no `user` (server-injected).
+  await client["/me"].get({ user: { id: "1", name: "a" } });
+  // @ts-expect-error — and no `params` either (the var is not a path param).
+  await client["/me"].get({ params: { user: "1" } });
+}
+
+// ---------------------------------------------------------------------------
+// SERVER — a handler annotated with a generated alias has typed req.ctx, stays
 // a plain Handler value, and drops into `methods({...})` cleanly.
 // ---------------------------------------------------------------------------
-const getTodoById: GetTodosId = (req) => json(req.params.id); // req.params.id: string
-const markDone: PostTodosIdDone = (req) => json(req.params.id);
+const getTodoById: GetTodosId = (req) => json(req.ctx.id); // req.ctx.id: string
+const markDone: PostTodosIdDone = (req) => json(req.ctx.id);
 
 // The generated alias carries the param obligation `{ id: string }`; `methods`
 // EXTRACTS that obligation from the handler value (no explicit type-arg, which
 // would erase the literal verb set), and the enclosing `param("id", …)`
 // discharges it. (Annotating the value with the alias is the ergonomics fix —
-// `req.params.id` is typed with no inference contortion, and the value stays a
-// plain `Handler` whose declared param type `methods` reads back out.)
+// `req.ctx.id` is typed with no inference contortion, and the value stays a
+// plain `Handler` whose declared ctx type `methods` reads back out.)
 export const todoItemRoute = methods({ GET: getTodoById });
 export const todoDoneRoute = methods({ POST: markDone });
 
 // SERVER — negative: a typo on a generated-typed param is a compile error.
 export const badHandler: GetTodosId = (req) =>
   // @ts-expect-error — `idd` is not a key of the generated param type.
-  json(req.params.idd);
+  json(req.ctx.idd);

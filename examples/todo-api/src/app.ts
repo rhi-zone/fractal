@@ -18,11 +18,14 @@ import {
   param,
   paramValue,
   path,
+  withAuth,
   type StandardSchemaV1,
 } from "@rhi-zone/fractal-core";
 import {
   binary,
+  cors,
   json,
+  logger,
   returns,
   sse,
   status,
@@ -181,6 +184,42 @@ const todoItem = param(
 // order; the first non-undefined wins.
 const todosResource = choice(todosCollection, todoDone, todoItem);
 
+// ---------------------------------------------------------------------------
+// AUTHENTICATED route — dogfoods `withAuth` (a ctx-discharge middleware). The
+// handler reads `req.ctx.user` TYPED; `withAuth` injects it (or 401s). CRITICAL:
+// `user` is a VAR, not a path param — it is INVISIBLE to the generated client's
+// call args and to the OpenAPI `parameters`. So GET /me's generated client
+// signature is `() => Promise<...>` — NO `user` argument — while the server alias
+// / handler sees `req.ctx.user` fully typed. Adding `withAuth` changed NO other
+// route's generated output.
+// ---------------------------------------------------------------------------
+
+export interface User {
+  id: string;
+  name: string;
+}
+
+/** A toy authenticator: `Authorization: Bearer <name>` → a User; else a 401. The
+ *  return is `User | Response` — the `provide`/`withAuth` discharge protocol. */
+function authenticate(req: Request): User | Response {
+  const auth = req.headers.get("authorization") ?? "";
+  const m = /^Bearer (.+)$/.exec(auth);
+  if (m === null) return json({ error: "UNAUTHORIZED" }, { status: 401 });
+  return { id: m[1]!, name: m[1]! };
+}
+
+// GET /me — the authenticated principal. `withAuth` discharges the `user` ctx key;
+// the inner handler's declared `{ ctx: { user: User } }` is read back typed.
+const me = withAuth(
+  authenticate,
+  methods({
+    GET: returns(
+      (req: Request & { ctx: { user: User } }) => json(req.ctx.user),
+      schema({ id: "string", name: "string" }),
+    ),
+  }),
+);
+
 // SSE + binary endpoints — ordinary Responses.
 const events = methods({
   GET: () =>
@@ -194,12 +233,20 @@ const favicon = methods({
   GET: () => binary(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "image/png"),
 });
 
+// The ROUTE TREE — the source of truth the codegen + drift guard project from.
+// `app` is the bare tree (no observing wrappers) so the generated client/server +
+// drift guard read its `.meta` directly. `me` (the authed route) sits alongside
+// the others; its `user` ctx key never reaches the client signature.
 export const app = path({
   todos: todosResource,
+  me,
   health: methods({ GET: () => text("ok") }),
   events,
   favicon,
 });
 
-/** WHATWG fetch handler for the app. Run in-process with new Request(...). */
-export const handle = toFetch(app);
+/** WHATWG fetch handler for the app, wrapped in OBSERVING middleware: `logger`
+ *  prints `METHOD /path -> status`, `cors` adds CORS headers + answers preflight.
+ *  Both PRESERVE `.meta`, so wrapping changes neither dispatch routing nor the
+ *  projections — they are transparent decorators around the same `app`. */
+export const handle = toFetch(logger(cors()(app)));

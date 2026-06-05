@@ -17,7 +17,7 @@ model is **retired** — all packages that implemented it are deleted.
 ## Shape
 
 ```
-@rhi-zone/fractal-core       Handler<P>, combinators, .meta types, drift-guard substrate
+@rhi-zone/fractal-core       Handler<R>, combinators, .meta types, drift-guard substrate
 @rhi-zone/fractal-http       toFetch, response builders, validated, returns, ./adapter
 @rhi-zone/fractal-openapi    toOpenApi — projects an OpenAPI 3.x doc from .meta
 @rhi-zone/fractal-codegen    generate — emits typed client.ts + server.ts from the doc
@@ -31,35 +31,47 @@ Core imports nothing — no `Request`/`Response`, no Bun, no Node (verified:
 `@rhi-zone/fractal-http`, which also imports nothing from Bun or Node (`./adapter`
 is the sole runtime touch and is not imported by `index.ts`).
 
-Note: `Handler<P>` takes a `Request & { params: P }` argument — WHATWG `Request` is
+Note: `Handler<R>` takes a `Request & { ctx: R }` argument — WHATWG `Request` is
 in the type. The framework is **runtime-agnostic** (runs on Bun, Node, any WHATWG
 environment) but is HTTP/fetch-surface-specific by design.
 
 ---
 
-## `Handler<P>` — the one framework type
+## `Handler<R>` — the one framework type
 
 ```ts
-type Handler<P = {}> = (req: Request & { params: P }) =>
+type Handler<R = {}> = (req: Request & { ctx: R }) =>
   Response | undefined | Promise<Response | undefined>
 ```
 
 A handler is a plain function from a typed request to an optional Response.
 `undefined` means "not mine — pass to the next handler". A plain
-`(req: Request) => Response` is contravariantly assignable to `Handler<P>` for any
-`P` — a vanilla web handler IS a `Handler`.
+`(req: Request) => Response` is contravariantly assignable to `Handler<R>` for any
+`R` — a vanilla web handler IS a `Handler`.
 
-`P` captures the dynamic path params the handler requires. `param("id", inner)`
-discharges the `id` key from `P`, advancing the URL past the segment and binding the
-value into `req.params.id`. `toFetch` requires `Handler<{}>` (all params discharged)
-as the root — an undischarged param is a compile error at the `toFetch` call site.
+`R` is the set of keys the handler requires present on ONE context bag `req.ctx`,
+which carries BOTH captured path params AND middleware-injected vars. Two discharge
+mechanisms fill it, same shape:
+- `param("id", inner)` discharges a PATH-PARAM key (API-surface — it appears in the
+  OpenAPI path + the generated client's call args), binding the segment into
+  `req.ctx.id`;
+- `provide("user", produce, inner)` / `withAuth(authenticate, inner)` discharge a
+  VAR key (server-internal — NOT a path param, NOT API surface), injecting the
+  produced value into `req.ctx.user` (a `Response` from the producer short-circuits,
+  e.g. an auth 401).
+
+`toFetch` requires `Handler<{}>` (all keys — params AND vars — discharged) as the
+root: an undischarged path param OR an undischarged var is a compile error at the
+`toFetch` call site. The TYPE `R` reads both alike; only the PROJECTIONS split them
+by meta source — so adding `withAuth` to a route never changes its generated client
+signature.
 
 ---
 
 ## Combinators — plain functions returning `Handler`
 
-All combinators live in `@rhi-zone/fractal-core` and return a `Reflected<M, P>` (a
-`Handler<P>` with an inert `.meta` sidecar). The runtime behavior is pure
+All combinators live in `@rhi-zone/fractal-core` and return a `Reflected<M, R>` (a
+`Handler<R>` with an inert `.meta` sidecar). The runtime behavior is pure
 `(req) => Response | undefined`; `.meta` is never read on the dispatch path.
 
 | Combinator | Runtime behavior | Meta tag |
@@ -67,8 +79,16 @@ All combinators live in `@rhi-zone/fractal-core` and return a `Reflected<M, P>` 
 | `methods(table)` | Dispatch by verb when path is fully consumed; pass on verb miss | `"methods"` |
 | `path(record)` | Dispatch on next literal path segment; pass if absent | `"path"` |
 | `mount(prefix, inner)` | Alias for single-key `path` | `"path"` (desugars) |
-| `param(name, inner)` | Read next segment, bind into `req.params[name]`, advance URL | `"param"` |
+| `param(name, inner)` | Read next segment, bind into `req.ctx[name]`, advance URL (PATH-PARAM) | `"param"` |
+| `provide(key, produce, inner)` | Run producer; Response short-circuits, value injects into `req.ctx[key]` (VAR) | `"provide"` |
+| `withAuth(authenticate, inner)` | `provide` specialized to `user` (auth principal or 401) | `"provide"` |
 | `choice(...alts)` | Try each alt in order; first non-undefined wins | `"choice"` |
+
+The `"provide"` meta is walked THROUGH by every projection (OpenAPI params, the
+generated client's call args, the drift `RouteUnion`) without surfacing its key —
+the VAR-vs-PATH-PARAM split that keeps a var off the client contract. (Observing
+middleware — `logger` / `cors` / `errorBoundary` in `@rhi-zone/fractal-http` — are
+plain `Handler<R> → Handler<R>` wrappers that change no ctx and PRESERVE `.meta`.)
 
 `methods` PASSES on a verb miss (returns `undefined`) — it never emits 405.
 HTTP correctness (405 + Allow, auto-HEAD, OPTIONS, 404 vs 405) is a **projection**

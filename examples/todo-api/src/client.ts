@@ -55,5 +55,12 @@ export async function demo(): Promise<void> {
     body: { done: true },
   });
 
-  console.log("created:", created, "list:", list, "one:", one, "done:", done);
+  // GET /me — an AUTHENTICATED route. The `user` is injected SERVER-SIDE by
+  // `withAuth`, so the client call takes NO `user` argument (and no params) —
+  // `() => Promise<{ id; name }>`. Auth travels via the request (a Bearer token
+  // over the HTTP transport); the in-process transport here would 401, which is
+  // the correct behaviour for an unauthenticated call.
+  const me = await local["/me"].get();
+
+  console.log("created:", created, "list:", list, "one:", one, "done:", done, "me:", me);
 }

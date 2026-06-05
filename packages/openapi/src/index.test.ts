@@ -12,6 +12,7 @@ import {
   methods,
   param,
   path,
+  withAuth,
   type StandardSchemaV1,
 } from "@rhi-zone/fractal-core";
 import { json, returns, status, validated } from "@rhi-zone/fractal-http";
@@ -292,5 +293,59 @@ describe("toOpenApi — degradation keeps the document valid", () => {
     expect(op.requestBody?.content["application/json"]?.schema).toEqual({});
     expect(document.openapi).toMatch(/^3\./);
     expect(warnings.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// provide / withAuth — VAR injectors are TRANSPARENT to the projection. An authed
+// route projects the SAME operation (same path, same parameters) as the plain
+// route: the injected `user` key is server-internal, never an OpenAPI parameter.
+// ---------------------------------------------------------------------------
+
+describe("toOpenApi — provide/withAuth are transparent (no extra parameter)", () => {
+  interface User { id: string }
+
+  const plain = path({
+    me: methods({ GET: () => json({ ok: true }) }),
+  });
+  const authed = path({
+    me: withAuth(
+      (): User | Response => ({ id: "u1" }),
+      methods({
+        GET: (req: Request & { ctx: { user: User } }) => json(req.ctx.user),
+      }),
+    ),
+  });
+
+  it("the authed route projects the SAME path + operation as the plain one", () => {
+    const a = toOpenApi(authed, info);
+    const p = toOpenApi(plain, info);
+    expect(Object.keys(a.paths)).toEqual(["/me"]);
+    expect(a.paths["/me"]).toEqual(p.paths["/me"]);
+  });
+
+  it("the authed route's GET operation has NO `user` (or any) parameter", () => {
+    const a = toOpenApi(authed, info);
+    const op = a.paths["/me"]!.get!;
+    // No parameters at all — the var is invisible; a path param would still show.
+    expect(op.parameters).toBeUndefined();
+  });
+
+  it("a path param UNDER withAuth still projects as a path parameter", () => {
+    const withParam = path({
+      thing: withAuth(
+        (): User | Response => ({ id: "u1" }),
+        param(
+          "id",
+          methods({
+            GET: (req: Request & { ctx: { id: string; user: User } }) =>
+              json({ id: req.ctx.id }),
+          }),
+        ),
+      ),
+    });
+    const doc = toOpenApi(withParam, info);
+    const op = doc.paths["/thing/{id}"]!.get!;
+    expect(op.parameters?.map((p) => p.name)).toEqual(["id"]);
   });
 });

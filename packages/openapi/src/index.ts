@@ -11,7 +11,9 @@
 // accumulating path segments, then at each `methods` node emit one operation per
 // declared verb. `choice` BRANCHES — every alt is its own set of endpoints, never
 // collapsed. `param` turns the URL into the OpenAPI `/{id}` form and contributes
-// a path parameter.
+// a path parameter. `provide`/`withAuth` (a `ProvideMeta` VAR injector) is walked
+// THROUGH transparently — its injected key is server-internal, never a path
+// parameter — so authenticating a route does not alter its projected operation.
 //
 // Schemas (request body / response) ride the REFLECTABLE `MethodsMeta.schemas`
 // carrier that @rhi-zone/fractal-http's `validated`/`returns` stamp onto a route
@@ -26,6 +28,7 @@ import type {
   MethodsMeta,
   ParamMeta,
   PathMeta,
+  ProvideMeta,
   Reflected,
   SchemaRef,
 } from "@rhi-zone/fractal-core";
@@ -194,6 +197,7 @@ type AnyMeta =
   | MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
   | PathMeta<Record<string, unknown>>
   | ParamMeta<string, unknown, unknown>
+  | ProvideMeta<string, unknown>
   | ChoiceMeta<readonly unknown[]>;
 
 /** A path parameter accumulated while descending through `param` nodes. The
@@ -264,6 +268,14 @@ function build(
         paths,
         warnings,
       );
+      return;
+    }
+    case "provide": {
+      // A VAR injector (provide/withAuth) contributes NO path + NO path-param —
+      // the injected key is server-internal, not API surface. Walk THROUGH to the
+      // inner meta with the SAME state so the projected operations (and their
+      // `parameters`) are identical with or without the middleware.
+      build((m as ProvideMeta<string, unknown>).rest, state, paths, warnings);
       return;
     }
     case "choice": {

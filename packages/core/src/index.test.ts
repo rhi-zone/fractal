@@ -14,8 +14,11 @@ import {
   param,
   paramValue,
   path,
+  provide,
   segments,
   rest,
+  routeTable,
+  withAuth,
   type Handler,
 } from "./index.ts";
 
@@ -53,9 +56,9 @@ const app = path({ users: usersResource, health });
 
 // root adapter, inlined (toFetch lives in @rhi-zone/fractal-http).
 const fetch = async (req: Request): Promise<Response> => {
-  (req as Request & { params: {} }).params = {};
+  (req as Request & { ctx: {} }).ctx = {};
   return (
-    (await (app as Handler<{}>)(req as Request & { params: {} })) ??
+    (await (app as Handler<{}>)(req as Request & { ctx: {} })) ??
     new Response("Not Found", { status: 404 })
   );
 };
@@ -110,9 +113,9 @@ describe("path/methods/choice/param dispatch", () => {
   it("a verb explicitly in the table IS served directly by methods", async () => {
     const m = methods({ OPTIONS: () => new Response("custom-opts") });
     const req = new Request("http://x/", { method: "OPTIONS" }) as Request & {
-      params: {};
+      ctx: {};
     };
-    req.params = {};
+    req.ctx = {};
     const direct = await (m as Handler<{}>)(req);
     expect(await direct!.text()).toBe("custom-opts");
   });
@@ -120,14 +123,139 @@ describe("path/methods/choice/param dispatch", () => {
   it("segments / rest helpers advance the URL", async () => {
     const r = new Request("http://x/a/b/c");
     expect(segments(r)).toEqual(["a", "b", "c"]);
-    (r as Request & { params: {} }).params = {};
-    expect(segments(rest(r as Request & { params: {} }))).toEqual(["b", "c"]);
+    (r as Request & { ctx: {} }).ctx = {};
+    expect(segments(rest(r as Request & { ctx: {} }))).toEqual(["b", "c"]);
+  });
+});
+
+// ============================================================================
+// provide / withAuth — context-producing middleware (ctx-discharge). Value is
+// injected & readable typed; an auth-fail Response short-circuits; the injected
+// var does NOT bleed across `choice` alts (fresh-ctx clone); and the VAR meta is
+// invisible to the route table (no extra pattern / no path-param).
+// ============================================================================
+interface User {
+  readonly id: string;
+}
+
+describe("provide / withAuth — ctx-discharge middleware", () => {
+  const reqWithCtx = (url: string, init?: RequestInit) => {
+    const r = new Request(url, init) as Request & { ctx: {} };
+    r.ctx = {};
+    return r;
+  };
+
+  it("provide injects a value that the inner handler reads typed", async () => {
+    const h = provide(
+      "tenant",
+      () => "acme",
+      methods({
+        GET: (req: Request & { ctx: { tenant: string } }) =>
+          json({ tenant: req.ctx.tenant }),
+      }),
+    ) as Handler<{}>;
+    const res = await h(reqWithCtx("http://x/"));
+    expect(res?.status).toBe(200);
+    expect((await res!.json()) as { tenant: string }).toEqual({ tenant: "acme" });
+  });
+
+  it("provide returning a Response short-circuits (auth 401)", async () => {
+    let innerRan = false;
+    const h = provide(
+      "user",
+      () => new Response("nope", { status: 401 }),
+      methods({
+        GET: (req: Request & { ctx: { user: User } }) => {
+          innerRan = true;
+          return json(req.ctx.user);
+        },
+      }),
+    ) as Handler<{}>;
+    const res = await h(reqWithCtx("http://x/"));
+    expect(res?.status).toBe(401);
+    expect(innerRan).toBe(false);
+  });
+
+  it("provide returning undefined passes (not handled here)", async () => {
+    const h = provide(
+      "user",
+      () => undefined,
+      methods({
+        GET: (req: Request & { ctx: { user: User } }) => json(req.ctx.user),
+      }),
+    ) as Handler<{}>;
+    expect(await h(reqWithCtx("http://x/"))).toBeUndefined();
+  });
+
+  it("withAuth injects req.ctx.user typed and short-circuits on a Response", async () => {
+    const authed = withAuth(
+      (req): User | Response =>
+        req.headers.get("authorization") === "Bearer ok"
+          ? { id: "u1" }
+          : new Response("unauthorized", { status: 401 }),
+      methods({
+        GET: (req: Request & { ctx: { user: User } }) => json(req.ctx.user),
+      }),
+    ) as Handler<{}>;
+
+    const ok = await authed(reqWithCtx("http://x/", { headers: { authorization: "Bearer ok" } }));
+    expect(ok?.status).toBe(200);
+    expect((await ok!.json()) as User).toEqual({ id: "u1" });
+
+    const bad = await authed(reqWithCtx("http://x/"));
+    expect(bad?.status).toBe(401);
+  });
+
+  it("clone non-bleed under choice: a var injected in one alt does not leak to the next", async () => {
+    // First alt provides `tag` then PASSES (its methods table has no matching verb
+    // for the request), so `choice` falls to the second alt — which must see a ctx
+    // WITHOUT `tag` (the provide cloned the request rather than mutating it).
+    let secondSawTag: unknown = "UNSET";
+    const first = provide(
+      "tag",
+      () => "leak",
+      // GET-only; the request below is a POST, so this inner PASSES (undefined).
+      methods({ GET: () => json({}) }),
+    );
+    const second = methods({
+      POST: (req) => {
+        secondSawTag = (req.ctx as Record<string, unknown>)["tag"];
+        return json({ ok: true });
+      },
+    });
+    const app = choice(first, second) as Handler<{}>;
+    const res = await app(reqWithCtx("http://x/", { method: "POST" }));
+    expect(res?.status).toBe(200);
+    // The second alt's ctx must be the ORIGINAL `{}` — provide cloned, not mutated.
+    expect(secondSawTag).toBeUndefined();
+  });
+
+  it("VAR meta is invisible to the route table (no extra pattern, no path-param)", () => {
+    const plain = path({
+      thing: methods({ GET: () => json({}) }),
+    });
+    const authed = path({
+      thing: withAuth(
+        (): User => ({ id: "x" }),
+        methods({
+          GET: (req: Request & { ctx: { user: User } }) => json(req.ctx.user),
+        }),
+      ),
+    });
+    // The flattened route tables must be IDENTICAL (same pattern, same verbs) —
+    // the provide var contributes nothing to the path-param / pattern view.
+    const norm = (h: { meta: unknown }) =>
+      routeTable(h.meta).map((r) => ({
+        pattern: r.pattern,
+        verbs: [...r.verbs].sort(),
+      }));
+    expect(norm(authed)).toEqual(norm(plain));
   });
 });
 
 // ============================================================================
 // TYPE-LEVEL proofs (compile-time only). A plain web handler IS a Handler; a
-// typed param read is checked; an undischarged param does NOT type as a root.
+// typed ctx read is checked; an undischarged param/var does NOT type as a root.
 // ============================================================================
 function _typeProofs() {
   // a PLAIN web handler is assignable to Handler / Handler<{}> / Handler<{id}>.
@@ -139,22 +267,55 @@ function _typeProofs() {
   void _p1;
   void _p2;
 
-  // typed param read: req.params.id is string; a typo is a compile error.
-  const user: Handler<{ id: string }> = (req) => json(req.params.id);
+  // typed ctx read: req.ctx.id is string; a typo is a compile error.
+  const user: Handler<{ id: string }> = (req) => json(req.ctx.id);
   const _userTypo: Handler<{ id: string }> = (req) =>
-    // @ts-expect-error — `idd` is not a key of params; typed read catches it.
-    json(req.params.idd);
+    // @ts-expect-error — `idd` is not a key of ctx; typed read catches it.
+    json(req.ctx.idd);
   void user;
   void _userTypo;
 
   // compositional DISCHARGE: param("id", inner) discharges {id} → {}.
-  // The {id} obligation is now EXTRACTED from the handler's declared param type
+  // The {id} obligation is now EXTRACTED from the handler's declared ctx type
   // (no explicit `methods<{id:string}>` type-arg — that would erase the verbs).
   const inner = methods({
-    GET: (req: Request & { params: { id: string } }) => json(req.params.id),
+    GET: (req: Request & { ctx: { id: string } }) => json(req.ctx.id),
   });
   const _discharged: Handler<{}> = param("id", inner);
   void _discharged;
+
+  // DISCHARGE via provide: a handler requiring `{ user }` becomes `Handler<{}>`
+  // once wrapped — the var obligation is typed away.
+  const needsUser = methods({
+    GET: (req: Request & { ctx: { user: User } }) => json(req.ctx.user.id),
+  });
+  const _provideDischarged: Handler<{}> = provide(
+    "user",
+    (): User => ({ id: "1" }),
+    needsUser,
+  );
+  void _provideDischarged;
+  const _authDischarged: Handler<{}> = withAuth(
+    (): User | Response => ({ id: "1" }),
+    needsUser,
+  );
+  void _authDischarged;
+
+  // ORDER both ways: param + withAuth compose, discharging BOTH keys.
+  const needsBoth = methods({
+    GET: (req: Request & { ctx: { id: string; user: User } }) =>
+      json({ id: req.ctx.id, user: req.ctx.user }),
+  });
+  const _pa: Handler<{}> = param(
+    "id",
+    withAuth((): User | Response => ({ id: "1" }), needsBoth),
+  );
+  const _ap: Handler<{}> = withAuth(
+    (): User | Response => ({ id: "1" }),
+    param("id", needsBoth),
+  );
+  void _pa;
+  void _ap;
 
   // a methods table value must be a Handler — a non-handler is rejected.
   const _guard = methods({

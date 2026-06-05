@@ -48,6 +48,12 @@ export interface ApiClient {
     done: boolean;
   }>;
   };
+  "/me": {
+    get: () => Promise<{
+    id: string;
+    name: string;
+  }>;
+  };
   "/health": {
     get: () => Promise<unknown>;
   };
@@ -84,6 +90,10 @@ export type GenUnion =
     title: string;
     done: boolean;
   }>
+  | RouteEntry<"GET /me", {}, never, {
+    id: string;
+    name: string;
+  }>
   | RouteEntry<"GET /health", {}, never, unknown>
   | RouteEntry<"GET /events", {}, never, unknown>
   | RouteEntry<"GET /favicon", {}, never, unknown>;
@@ -101,6 +111,7 @@ const PATHS: Record<string, readonly string[]> = {
   "/todos": ["get", "post"],
   "/todos/{id}/done": ["post"],
   "/todos/{id}": ["get"],
+  "/me": ["get"],
   "/health": ["get"],
   "/events": ["get"],
   "/favicon": ["get"]

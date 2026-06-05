@@ -92,6 +92,41 @@ describe("http correctness", () => {
   });
 });
 
+describe("authenticated route (GET /me via withAuth)", () => {
+  it("401 without an Authorization header (withAuth short-circuits)", async () => {
+    const res = await hit("GET", "/me");
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("UNAUTHORIZED");
+  });
+
+  it("200 + the injected user when authenticated (ctx.user read server-side)", async () => {
+    const res = await hit("GET", "/me", { headers: { authorization: "Bearer ada" } });
+    expect(res.status).toBe(200);
+    const user = await res.json();
+    expect(user).toEqual({ id: "ada", name: "ada" });
+  });
+
+  it("auth runs BEFORE routing: an unauthenticated wrong-verb request 401s", async () => {
+    // `withAuth` wraps the whole /me subtree, so `authenticate` runs ahead of the
+    // methods table — an unauthenticated DELETE short-circuits to 401 (not 405).
+    const res = await hit("DELETE", "/me");
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("observing middleware (cors wrapper on the root)", () => {
+  it("adds CORS headers to a normal response", async () => {
+    const res = await hit("GET", "/health");
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+  });
+
+  it("answers OPTIONS preflight with 204", async () => {
+    const res = await hit("OPTIONS", "/todos");
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Methods")).toContain("GET");
+  });
+});
+
 describe("SSE + binary endpoints", () => {
   it("GET /events -> text/event-stream with chunks", async () => {
     const res = await hit("GET", "/events");

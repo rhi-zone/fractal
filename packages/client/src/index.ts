@@ -33,11 +33,11 @@ export type Transport = (req: Request) => Promise<Response>;
  *  becomes a 404 (mirrors `toFetch`). */
 export function inProcess(app: Handler<{}>): Transport {
   return async (req) => {
-    // initialize the root params to `{}` (mirrors `toFetch`) — the app is the
-    // fully-discharged root, so it carries no outstanding param obligation.
-    (req as Request & { params: {} }).params = {};
+    // initialize the root ctx to `{}` (mirrors `toFetch`) — the app is the
+    // fully-discharged root, so it carries no outstanding ctx obligation.
+    (req as Request & { ctx: {} }).ctx = {};
     return (
-      (await app(req as Request & { params: {} })) ??
+      (await app(req as Request & { ctx: {} })) ??
       new Response("Not Found", { status: 404 })
     );
   };

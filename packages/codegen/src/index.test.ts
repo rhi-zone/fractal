@@ -19,6 +19,7 @@ import {
   param,
   paramValue,
   path,
+  withAuth,
   type Reflected,
   type StandardSchemaV1,
 } from "@rhi-zone/fractal-core";
@@ -72,6 +73,8 @@ const createSchema = schema({ title: "string" });
 const doneSchema = schema({ done: "boolean" });
 // Output schema for a Todo — drives the TYPED client RESPONSE via `returns(...)`.
 const todoSchema = schema({ id: "string", title: "string", done: "boolean" });
+// Output schema for the authed /me principal (a VAR injected by withAuth).
+const userSchema = schema({ id: "string" });
 
 interface Todo {
   id: string;
@@ -118,8 +121,21 @@ function makeApp(): Reflected<unknown> {
       }, todoSchema),
     }),
   );
+  // An AUTHENTICATED route: `withAuth` injects `user` as a VAR (server-internal).
+  // The generated client for /me must NOT include `user` in its call args.
+  interface User { id: string }
+  const me = withAuth(
+    (): User | Response => ({ id: "u1" }),
+    methods({
+      GET: returns(
+        (req: Request & { ctx: { user: User } }) => json(req.ctx.user),
+        userSchema,
+      ),
+    }),
+  );
   return path({
     todos: choice(collection, todoDone, todoItem),
+    me,
     health: methods({ GET: () => text("ok") }),
   }) as Reflected<unknown>;
 }
@@ -184,6 +200,21 @@ describe("generate — typed client source", () => {
   it("types path params concretely", () => {
     const { client } = generate(doc);
     expect(client).toContain("id: string;");
+  });
+
+  it("PROJECTION SPLIT: an authed route's client call has NO `user` var arg", () => {
+    const { client } = generate(doc);
+    // /me is present and its GET takes NO call args — the `user` VAR (injected by
+    // withAuth) is server-internal, never a client arg.
+    expect(client).toContain('"/me": {');
+    // The /me block: extract it and assert no `user` / no `params` in the call sig.
+    const meBlock = client.slice(client.indexOf('"/me": {'), client.indexOf('"/me": {') + 200);
+    expect(meBlock).toContain("get: () => Promise<");
+    expect(meBlock).not.toContain("user");
+    expect(meBlock).not.toContain("params");
+    // The drift union mirrors it: GET /me has `{}` params (NOT `{ user }`).
+    expect(client).toContain('RouteEntry<"GET /me", {},');
+    expect(client).not.toContain("user:");
   });
 
   it("emits the static drift guard (GenUnion + AssertExact) keyed to the source app", () => {

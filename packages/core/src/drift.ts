@@ -30,6 +30,7 @@ import type {
   MethodsMeta,
   ParamMeta,
   PathMeta,
+  ProvideMeta,
 } from "./index.ts";
 
 // ============================================================================
@@ -118,9 +119,15 @@ type WalkUnion<M, Pfx extends string, P> =
       ? { [K in keyof R]: WalkUnion<R[K], `${Pfx}/${K & string}`, P> }[keyof R]
       : M extends ParamMeta<infer N, infer T, infer Rest>
         ? WalkUnion<Rest, `${Pfx}/{${N & string}}`, P & { [K in N & string]: T }>
-        : M extends ChoiceMeta<infer Alts>
-          ? WalkUnionAlts<Alts, Pfx, P>
-          : never;
+        : M extends ProvideMeta<infer _K, infer Rest>
+          ? // A VAR injector adds NO path segment and NO path-param: walk THROUGH
+            // to the inner meta with the SAME prefix + param accumulator. This is
+            // what keeps an authed route's `RouteEntry` (and so its generated
+            // client contract) identical with or without the middleware.
+            WalkUnion<Rest, Pfx, P>
+          : M extends ChoiceMeta<infer Alts>
+            ? WalkUnionAlts<Alts, Pfx, P>
+            : never;
 
 type WalkUnionAlts<Alts, Pfx extends string, P> = Alts extends readonly [
   infer Head,
