@@ -191,8 +191,8 @@ function choiceRT<P = {}>(...handlers: Handler<P>[]): Handler<P> {
 // ============================================================================
 // `.meta` — the INERT reflection sidecar. A Handler that ALSO carries reflection
 // DATA. The runtime arrow is the exact bare Handler; `meta` is a bolted-on
-// property, read only by type-level projections (Client<App>) and the runtime
-// client walker — never by the dispatch path. `M = undefined` for a handler with
+// property, read only by projections (e.g. `toOpenApi`, which @rhi-zone/fractal-
+// codegen turns into a typed client) — never by the dispatch path. `M = undefined` for a handler with
 // no reflection need. `M` is NOT a Route/Router/Node/Ctx hierarchy: it describes
 // DATA (segments, verbs, dynamic positions, input/output phantoms).
 // ============================================================================

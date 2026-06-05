@@ -1,36 +1,42 @@
 // examples/todo-api/src/client.ts
 //
-// Demo of the TYPED CLIENT derived from the example `app` (src/app.ts).
+// Demo of the TYPED CLIENT for the example `app` (src/app.ts).
 //
-// One server definition (`app`) yields a fully-typed client surface, derived
-// flat from the app's inert `.meta`: path params, validated bodies, and outputs
-// are all inferred from the SAME tree that serves. ZERO hand-written client types.
+// CODE-FIRST: the handler tree (`app`) is truth; `@rhi-zone/fractal-codegen`
+// projects an OpenAPI doc from it and emits a PLAIN `.ts` typed client —
+// `src/generated/client.ts` (the `ApiClient` interface + `createClient` factory).
+// Regenerate with:
 //
-// `client(app)` defaults to the IN-PROCESS transport (the same handler runs, no
-// network). Swap in `http(baseUrl)` to target a real server over `fetch` — the
-// derived TYPE is identical, only execution differs.
+//   bun ../../packages/codegen/src/cli.ts ./src/app.ts \
+//     --out ./src/generated --title "Todo API" --version "1.0.0"
+//
+// `createClient(app)` defaults to the IN-PROCESS transport (the same handler runs,
+// no network). Swap in `http(baseUrl)` to target a real server over `fetch` — the
+// generated TYPE is identical, only execution differs. ZERO type-level walk: tsc
+// pays near-zero instantiation cost regardless of route count.
 
-import { client, http, type Client } from "@rhi-zone/fractal-client";
+import { http } from "@rhi-zone/fractal-client";
 import { app } from "./app.ts";
+import { createClient, type ApiClient } from "./generated/client.ts";
 
-// The derived client surface — a type probe. `AppClient` expands (abbreviated):
+// The generated client surface — a concrete interface (see ./generated/client.ts):
 // {
 //   "/todos":            { get: () => Promise<...>; post: (a:{body:{title}}) => ... }
 //   "/todos/{id}":       { get: (a:{params:{id:string}}) => Promise<...> }
 //   "/todos/{id}/done":  { post: (a:{params:{id:string}; body:{done:boolean}}) => ... }
-//   "/health":           { get: () => Promise<string> }
+//   "/health":           { get: () => Promise<unknown> }
 //   ...
 // }
-export type AppClient = Client<typeof app>;
+export type AppClient = ApiClient;
 
 // In-process client (default transport).
-export const local = client(app);
+export const local = createClient(app);
 
-// HTTP client — same Client type, fetch transport. (baseUrl is illustrative.)
-export const remote: AppClient = client(app, http("http://localhost:3000"));
+// HTTP client — same ApiClient type, fetch transport. (baseUrl is illustrative.)
+export const remote: ApiClient = createClient(app, http("http://localhost:3000"));
 
 // ---------------------------------------------------------------------------
-// Typed call sites — every shape below is inferred from `app`, no annotations.
+// Typed call sites — every shape below is checked against the generated interface.
 // ---------------------------------------------------------------------------
 
 export async function demo(): Promise<void> {

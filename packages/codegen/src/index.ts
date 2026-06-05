@@ -4,9 +4,9 @@
 // package projects PLAIN TypeScript from that doc — a typed client and typed
 // server handler-signature aliases — with ZERO type-level computation.
 //
-// This is the whole point: the existing in-TS `Client<App>` type
-// (@rhi-zone/fractal-client) walks `.meta` with conditional/mapped types, which
-// scales poorly and inference-leaks on `methods({ GET: … })`. Here we emit
+// This is the whole point: the RETIRED in-TS `Client<App>` type (formerly in
+// @rhi-zone/fractal-client) walked `.meta` with conditional/mapped types, which
+// scaled poorly and inference-leaked on `methods({ GET: … })`. Here we emit
 // CONCRETE interfaces — a flat record of path → verb → call signature — so tsc
 // pays near-zero instantiation cost no matter how many routes, and a handler's
 // `req.params` is typed from a generated alias with no inference contortion.

@@ -12,5 +12,8 @@
     "@rhi-zone/fractal-client": "workspace:*",
     "@rhi-zone/fractal-core": "workspace:*",
     "@rhi-zone/fractal-http": "workspace:*"
+  },
+  "devDependencies": {
+    "@rhi-zone/fractal-codegen": "workspace:*"
   }
 }

@@ -3,11 +3,11 @@
 // The OpenAPI 3.x projection, derived FLAT from an app's inert `.meta`.
 //
 // CODE-FIRST: the handler tree is the source of truth; the OpenAPI document is a
-// GENERATED projection, never hand-rolled. `toOpenApi(app, info)` walks the same
-// `.meta` DATA tree the typed client walks (@rhi-zone/fractal-client) and emits a
-// valid OpenAPI 3.0 document.
+// GENERATED projection, never hand-rolled. `toOpenApi(app, info)` walks the app's
+// `.meta` DATA tree and emits a valid OpenAPI 3.0 document — which
+// @rhi-zone/fractal-codegen in turn turns into a typed client + server signatures.
 //
-// The walk mirrors the client's runtime `build`: descend `path`/`prefix`/`param`
+// The walk descends `path`/`prefix`/`param`
 // accumulating path segments, then at each `methods` node emit one operation per
 // declared verb. `choice` BRANCHES — every alt is its own set of endpoints, never
 // collapsed. `param` turns the URL into the OpenAPI `/{id}` form and contributes
