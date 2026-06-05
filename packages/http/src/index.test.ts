@@ -159,8 +159,8 @@ describe("validated body validation", () => {
 
 // type-level: an UNDISCHARGED param app is NOT a Handler<{}> root.
 function _typeGuard() {
-  const leaky = methods<{ id: string }>({
-    GET: (req) => json(req.params.id),
+  const leaky = methods({
+    GET: (req: Request & { params: { id: string } }) => json(req.params.id),
   });
   // @ts-expect-error — undischarged {id} param is not a Handler<{}> root.
   toFetch(leaky);

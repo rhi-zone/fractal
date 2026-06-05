@@ -136,8 +136,10 @@ function _typeProofs() {
   void _userTypo;
 
   // compositional DISCHARGE: param("id", inner) discharges {id} → {}.
-  const inner = methods<{ id: string }>({
-    GET: (req) => json(req.params.id),
+  // The {id} obligation is now EXTRACTED from the handler's declared param type
+  // (no explicit `methods<{id:string}>` type-arg — that would erase the verbs).
+  const inner = methods({
+    GET: (req: Request & { params: { id: string } }) => json(req.params.id),
   });
   const _discharged: Handler<{}> = param("id", inner);
   void _discharged;

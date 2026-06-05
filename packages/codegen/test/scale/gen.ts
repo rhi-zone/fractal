@@ -29,7 +29,10 @@ for (let i = 0; i < N; i++) {
     methods({ GET: () => json([]), POST: () => json({}) }),
     param(
       "id",
-      methods<{ id: string }>({ GET: (req) => json(req.params.id) }),
+      methods({
+        GET: (req: Request & { params: { id: string } }) =>
+          json(req.params.id),
+      }),
     ),
   ) as Reflected<unknown>;
 }

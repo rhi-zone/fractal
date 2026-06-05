@@ -48,12 +48,14 @@ export async function clientNegatives(): Promise<void> {
 const getTodoById: GetTodosId = (req) => json(req.params.id); // req.params.id: string
 const markDone: PostTodosIdDone = (req) => json(req.params.id);
 
-// The generated alias carries the param obligation `{ id: string }`; the enclosing
-// `param("id", …)` discharges it, so `methods` is parameterized by that same `P`.
-// (Annotating the value with the alias is the ergonomics fix — `req.params.id` is
-// typed with no inference contortion, and the value stays a plain `Handler`.)
-export const todoItemRoute = methods<{ id: string }>({ GET: getTodoById });
-export const todoDoneRoute = methods<{ id: string }>({ POST: markDone });
+// The generated alias carries the param obligation `{ id: string }`; `methods`
+// EXTRACTS that obligation from the handler value (no explicit type-arg, which
+// would erase the literal verb set), and the enclosing `param("id", …)`
+// discharges it. (Annotating the value with the alias is the ergonomics fix —
+// `req.params.id` is typed with no inference contortion, and the value stays a
+// plain `Handler` whose declared param type `methods` reads back out.)
+export const todoItemRoute = methods({ GET: getTodoById });
+export const todoDoneRoute = methods({ POST: markDone });
 
 // SERVER — negative: a typo on a generated-typed param is a compile error.
 export const badHandler: GetTodosId = (req) =>

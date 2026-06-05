@@ -290,6 +290,38 @@ export type ValidatedHandler<I, O> = Handler & {
 };
 export type ReturnsHandler<O> = Handler & { readonly [RETURNS]: O };
 
+// Collapse a UNION into an INTERSECTION (the dual of `keyof`-distribution). Used
+// to fold each verb-handler's param obligation into the methods node's combined
+// obligation: a route that needs `{id}` AND one that needs `{slug}` ⇒ the node
+// needs `{id} & {slug}`.
+type UnionToIntersection<U> = (
+  U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void
+  ? I
+  : never;
+
+// EXTRACT the combined param obligation `P` from a methods table's handlers,
+// rather than taking `P` as an explicit type-arg. Each handler is structurally
+// `(req: Request & { params: P_k }) => …`; we `infer P_k` off each and intersect.
+//
+// NB: `P` sits CONTRAVARIANTLY inside `Request & { params: P }`, so `infer P`
+// there only resolves to a real obligation when the handler DECLARES its param
+// type (`(req: Request & { params: { id: string } }) => …`). A bare inline arrow
+// (`req => req.params.id`) has its `req` contextually typed by the table bound, so
+// `req.params` is `any` and the inferred `P_k` collapses to `any`/`unknown` — the
+// obligation can't be recovered from an unstated type. This is the documented
+// residual (see spike/methods-fix): declare the handler's param type to propagate
+// an obligation without an explicit type-arg. A no-param handler infers `unknown`,
+// which `UnionToIntersection` leaves as `unknown` — assignable past `toFetch`'s
+// `Handler<{}>` (a no-param app stays sound).
+type ParamsOf<T> = UnionToIntersection<
+  {
+    [K in keyof T]: T[K] extends (req: Request & { params: infer P }) => unknown
+      ? P
+      : never;
+  }[keyof T]
+>;
+
 // Per-verb input/output from the handlers in a methods table. A handler may be
 // a plain `Handler` (output unknown) or a `Validated<I,O>`-tagged handler whose
 // phantom carries the typed body I and output O. Extracted in a single pass over
@@ -311,15 +343,19 @@ type MethodsIO<T> = {
 // combinators: a typed client is derived from the meta they attach.
 // ============================================================================
 
-/** `methods(table)` — method dispatch with an inert verb-set meta. */
+/** `methods(table)` — method dispatch with an inert verb-set meta.
+ *
+ *  `const T` is the SOLE inference site (no explicit `P` type-arg to defeat it),
+ *  so `.meta.verbs` is the LITERAL union of the table's keys (`"GET" | "POST"`),
+ *  never the full `Method` set — the OpenAPI projection and drift guard read the
+ *  real verb set. The param obligation `P` is EXTRACTED from the handlers via
+ *  `ParamsOf<T>` (a handler that declares `{ params: { id: string } }` propagates
+ *  that obligation), then discharged downstream by `param`/`toFetch`. */
 export function methods<
-  P = {},
-  const T extends Partial<Record<Method, Handler<P>>> = Partial<
-    Record<Method, Handler<P>>
-  >,
+  const T extends Partial<Record<Method, Handler<never>>>,
 >(
   table: T,
-): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P> {
+): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, ParamsOf<T>> {
   const verbs = Object.keys(table) as Extract<keyof T, string>[];
   // Harvest REFLECTABLE schema refs that `validated`/`returns` stamped onto each
   // verb's handler (inert `__schema` carrier). Only present when a handler was
@@ -330,10 +366,14 @@ export function methods<
     if (ref !== undefined) schemas[v] = ref;
   }
   const hasSchemas = Object.keys(schemas).length > 0;
-  return withMeta<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P>(
-    methodsRT<P>(table),
-    { tag: "methods", verbs, ...(hasSchemas ? { schemas } : {}) },
-  );
+  return withMeta<
+    MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>,
+    ParamsOf<T>
+  >(methodsRT(table as unknown as Partial<Record<Method, Handler<ParamsOf<T>>>>), {
+    tag: "methods",
+    verbs,
+    ...(hasSchemas ? { schemas } : {}),
+  });
 }
 
 /** `path(record)` — segment dispatch with an inert record-of-meta. */
