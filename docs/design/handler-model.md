@@ -2,206 +2,163 @@
 
 ## Status
 
-Implemented in `packages/core` (`@rhi-zone/fractal-core`) and `packages/http`
-(`@rhi-zone/fractal-http`), verified by typecheck + test + build. This document
-describes the CURRENT model.
+Implemented across five packages: `@rhi-zone/fractal-core`, `@rhi-zone/fractal-http`,
+`@rhi-zone/fractal-openapi`, `@rhi-zone/fractal-client`, and `@rhi-zone/fractal-codegen`.
+Verified by typecheck + test + build (100 tests pass). This document describes the
+CURRENT model.
 
-It **supersedes** the earlier dispatch-`Node` / projection design (the
-`Pass`/`choice`/`path`/`methods`/`route` combinator algebra, `toOpenApi`,
-`ClientOf<N>`, the in-process/HTTP `Transport` proxy). That model — and any
-`optics-direction.md` / dispatch-Node content referencing it — is **retired**.
-The `worker` / `openapi` / `client` packages are not part of this model; they
-are **deferred** as possible future adapters / meta-walkers (see Retired &
-deferred), not forbidden.
+It **supersedes** the earlier builder-Router / dispatch-Node design (the
+`httpRouter`/`RoutingCtx`/`Node<T,U,M>`/`bearerAuth`/`withValidation`/`respond`/
+`Outcome`/`ErrorPolicy` model, and any content in this file referencing it). That
+model is **retired** — all packages that implemented it are deleted.
 
 ---
 
 ## Shape
 
-Two packages. The split is the load-bearing invariant: **core is surface- and
-runtime-agnostic**, http is the WHATWG surface.
-
-| Package | Contents |
-|---|---|
-| `@rhi-zone/fractal-core` | `Handler<T,U>`, `compose`, `Node<T,U,M>` + `node`, `StandardSchema` / `InferOutput` (types only), `NoVars`, `RoutingCtx`, `Middleware` / `WithVars`, the `Router` interface + `createRouter` factory. **No `Request`/`Response`, no `URL`, no Bun/Node.** |
-| `@rhi-zone/fractal-http` | `HttpCtx`, `httpRouter`, `toHandler` (Router → WHATWG `(Request)=>Response`), `withValidation`, the `Result→Response` rendering layer (`render`/`respond`/`Outcome`/`ErrorPolicy`/`Renderer`), the `json`/`text`/`binary`/`sse`/`notFound` helpers, and `./adapter` (`serveBun`/`serveNode`). |
-
----
-
-## `Handler` — the fundamental arrow
-
-```ts
-type Handler<T, U> = (t: T) => U | Promise<U>
+```
+@rhi-zone/fractal-core       Handler<P>, combinators, .meta types, drift-guard substrate
+@rhi-zone/fractal-http       toFetch, response builders, validated, returns, ./adapter
+@rhi-zone/fractal-openapi    toOpenApi — projects an OpenAPI 3.x doc from .meta
+@rhi-zone/fractal-codegen    generate — emits typed client.ts + server.ts from the doc
+                             fractal watch — dev-loop file watcher (regenerate on save)
+@rhi-zone/fractal-client     typed HTTP client factory (consumes generated client.ts)
 ```
 
-A handler is a plain (possibly async) function `T => U`. `compose(a, b)` runs
-`a`, feeds its result to `b`. There is no embedded DSL and no closure-hidden
-control structure — the handler is just a function; the *structure* lives in the
-`Node` meta and the `Router`.
+The load-bearing split: **core is surface-agnostic**; http is the WHATWG surface.
+Core imports nothing — no `Request`/`Response`, no Bun, no Node (verified:
+`packages/core/src/index.ts` has no external imports). `Request`/`Response` enter at
+`@rhi-zone/fractal-http`, which also imports nothing from Bun or Node (`./adapter`
+is the sole runtime touch and is not imported by `index.ts`).
 
-## `Node` — `{ meta, handler }`
+Note: `Handler<P>` takes a `Request & { params: P }` argument — WHATWG `Request` is
+in the type. The framework is **runtime-agnostic** (runs on Bun, Node, any WHATWG
+environment) but is HTTP/fetch-surface-specific by design.
+
+---
+
+## `Handler<P>` — the one framework type
 
 ```ts
-interface Node<T, U, M = unknown> { readonly meta: M; readonly handler: Handler<T, U> }
+type Handler<P = {}> = (req: Request & { params: P }) =>
+  Response | undefined | Promise<Response | undefined>
 ```
 
-A `Node` pairs reflectable `meta` with an executable `handler`. `meta` is inert
-data describing the node (for reflection / future meta-walkers); `handler` is
-the callable. `withValidation` produces a `Node` carrying its validator + the
-underlying library function in `meta`.
+A handler is a plain function from a typed request to an optional Response.
+`undefined` means "not mine — pass to the next handler". A plain
+`(req: Request) => Response` is contravariantly assignable to `Handler<P>` for any
+`P` — a vanilla web handler IS a `Handler`.
+
+`P` captures the dynamic path params the handler requires. `param("id", inner)`
+discharges the `id` key from `P`, advancing the URL past the segment and binding the
+value into `req.params.id`. `toFetch` requires `Handler<{}>` (all params discharged)
+as the root — an undischarged param is a compile error at the `toFetch` call site.
 
 ---
 
-## The router — interface + factory (NOT a class)
+## Combinators — plain functions returning `Handler`
 
-`createRouter()` returns a value implementing the `Router` interface. It exposes
-`route` / `routeNode` / `use` / `mount` / `mountPlain`, a `meta` reflection
-array, and `dispatch`.
+All combinators live in `@rhi-zone/fractal-core` and return a `Reflected<M, P>` (a
+`Handler<P>` with an inert `.meta` sidecar). The runtime behavior is pure
+`(req) => Response | undefined`; `.meta` is never read on the dispatch path.
 
-### Why an interface + factory, not a class — the class-invariance trap
+| Combinator | Runtime behavior | Meta tag |
+|---|---|---|
+| `methods(table)` | Dispatch by verb when path is fully consumed; pass on verb miss | `"methods"` |
+| `path(record)` | Dispatch on next literal path segment; pass if absent | `"path"` |
+| `mount(prefix, inner)` | Alias for single-key `path` | `"path"` (desugars) |
+| `param(name, inner)` | Read next segment, bind into `req.params[name]`, advance URL | `"param"` |
+| `choice(...alts)` | Try each alt in order; first non-undefined wins | `"choice"` |
 
-A class with a private field (e.g. `#routes`) makes the class generic
-**invariant** in its type parameters. Invariance means `Router<A>` is not
-assignable to `Router<B>` even when `A`/`B` would otherwise be compatible —
-which forces casts at every `mount`, defeating the typed-context threading. A
-plain `interface` + factory keeps the type **structural**: `Router<Ctx, In, Cur,
-Result>` threads enriched context through `mount` with **zero casts** at the
-call site. (Proven in `spike/linchpins.ts`; this is LINCHPIN 1.)
+`methods` PASSES on a verb miss (returns `undefined`) — it never emits 405.
+HTTP correctness (405 + Allow, auto-HEAD, OPTIONS, 404 vs 405) is a **projection**
+computed by `toFetch` from `.meta` after dispatch returns `undefined`. This makes
+correctness compositional: `Allow` is the union of verbs across every branch
+matching the request path, including cross-`choice` and cross-`mount` cases.
 
-### Typed context threading — `NoVars` and the `In`/`Cur` two-slot encoding
+---
+
+## HTTP correctness projection — `toFetch`
+
+`toFetch(app: Handler<{}>): (req: Request) => Promise<Response>` is the WHATWG
+entry point. It wraps the handler to:
+
+1. Dispatch the request through the combinator tree.
+2. If dispatch returns `undefined`, walk `.meta` via `routeTable` to check whether
+   any route matches the path but not the verb.
+   - Path matched, verb not in Allow set → **405** + `Allow` header (union of all
+     matching routes' verbs, plus HEAD if GET present, plus OPTIONS).
+   - No path match → **404**.
+3. If dispatch returns a Response, pass it through.
+4. HEAD: re-run as GET, strip the body.
+5. OPTIONS: 204 + Allow (without dispatching).
+
+---
+
+## Body validation — `validated` and `returns`
 
 ```ts
-interface Router<Ctx extends RoutingCtx, In, Cur, Result> { … }
+// @rhi-zone/fractal-http
+validated(schema: StandardSchemaV1, fn: (value, req) => Response | undefined): ValidatedHandler<I>
+returns(handler: Handler, outSchema): ReturnsHandler<O>
 ```
 
-- **`In`** — the vars a caller must supply at `dispatch` (the router's *input*).
-- **`Cur`** — the vars currently visible to handlers registered via `route`,
-  *widened* by each `use()`. Starts equal to `In`.
+`validated(schema, fn)` parses the request body as JSON, validates it against
+`schema`, and calls `fn` with the typed value. On failure: `400 VALIDATION`. On
+malformed JSON: `400 INVALID_JSON`. The schema's output type is the `fn` argument
+type — a schema producing the wrong shape is a compile error.
 
-`use(mw)` widens `Cur` → `Cur & Extra` (handlers registered after the call see
-the enriched vars, **no cast**) but leaves `In` unchanged — the middleware fills
-the gap at runtime. `mount(prefix, mw, sub)` requires `sub`'s input vars to be
-`Cur & Extra` *statically*; because `Router` is structural, the sub-router slots
-in with zero casts.
-
-`NoVars = Record<never, never>` is the base "no required vars" context.
-`Record<never, never>` (≡ `{}`), **not** `Record<string, never>`: the latter
-requires every key to be `never`, which breaks intersection with any concrete
-vars extension; `Record<never, never>` intersects cleanly with any
-`Record<string, unknown>`.
-
-`Middleware<Ctx, Vars, Extra, Result>` receives the current ctx and a `next`
-that expects the ctx enriched with `Extra`; `WithVars<Ctx, Vars>` re-parameterises
-the `vars` slot. The core router reads only `method` / `segments` / `params` and
-threads `vars`; a surface supplies the concrete `Ctx` at the `toHandler` boundary.
+`returns(handler, outSchema)` stamps an inert `__schema.output` onto the handler.
+The OpenAPI projection and codegen read this as the response schema; it does NOT
+affect runtime dispatch. `validated` + `returns` can be composed in either order;
+the second call merges into `__schema` rather than overwriting (verified:
+`packages/http/src/index.test.ts`, "validated + returns __schema merge" suite).
 
 ---
 
-## `withValidation` — library function → node
+## OpenAPI + codegen pipeline
 
-```ts
-function withValidation<Args, Result, V extends StandardSchema<unknown, Args>>(
-  fn: (args: Args) => Result | Promise<Result>,
-  validator: V & (InferOutput<V> extends Args ? unknown : never),
-): ValidatedNode<Args, Result>
+```
+app (Reflected<M>)
+  → toOpenApi(app, info)        @rhi-zone/fractal-openapi
+  → generate(doc, opts)         @rhi-zone/fractal-codegen
+  → client.ts + server.ts
 ```
 
-`Args` is inferred from `fn`; the validator's **output is statically constrained
-to equal `Args`** via `& (InferOutput<V> extends Args ? unknown : never)`. A
-validator producing the wrong shape is a **compile error** — no manual
-annotation, no cast. (LINCHPIN 2, `spike/linchpins.ts`.)
+`toOpenApi` walks `.meta` to project an OpenAPI 3.x document. `generate` emits:
+- `client.ts` — typed API client factory + `GenUnion` + `AssertExact` drift guard.
+- `server.ts` — per-route `Handler<P>` type aliases (e.g. `GetTodosId = Handler<{id: string}>`).
 
-At request time it pulls the lazy body, validates, and on failure returns a
-**framework-level 400** (`{ error: "Validation failed", issues }`). This 400 is a
-malformed-*request* signal and is **deliberately separate** from the domain error
-policy below — validation failure never consults `ErrorPolicy`.
+The drift guard embedded in `client.ts` is `AssertExact<RouteUnion<typeof app>, GenUnion>`,
+which is a `tsc` error if the app's route structure diverges from the generated union.
+Verified: `packages/codegen/test/drift.test.ts` — planted drift (added route, changed
+body shape) fails on both tsgo and stock tsc with a `__drift__` identifier in the error.
 
----
-
-## `Result → Response` rendering (general mechanism, user-supplied policy)
-
-A handler may return one of three things; the http layer turns each into a
-`Response`. The framework supplies the **mechanism only** — it hardcodes no
-error-code→status table.
-
-1. **`Response` passthrough** — a returned `Response` (incl. `sse()` / `binary()`)
-   is used as-is.
-2. **Plain value → JSON** — any non-Response, non-Outcome value is rendered to
-   `200 application/json` by a **swappable `Renderer`** (`(value) => Response`;
-   default `jsonRenderer`). Swap it to change the default content-type/serializer.
-3. **`Outcome<Ok, Err>` → Response** — a tagged result
-   `{ ok: true; value } | { ok: false; error }`. `ok` renders the value via the
-   renderer (200); `error` is mapped by a **user-supplied** `ErrorPolicy<Err>`
-   `(err) => Response | { status; body? }`.
-
-```ts
-type Outcome<Ok, Err> = { ok: true; value: Ok } | { ok: false; error: Err }
-type Renderer = (value: unknown) => Response
-type ErrorPolicy<Err> = (error: Err) => Response | { status: number; body?: unknown }
-
-function render<Err>(value: unknown, policy: ErrorPolicy<Err>, renderer?: Renderer): Response
-function respond<Ctx, Ok, Err, Value>(
-  handler: (ctx: Ctx) => Response | Outcome<Ok, Err> | Value | Promise<…>,
-  policy: ErrorPolicy<Err>,
-  renderer?: Renderer,
-): (ctx: Ctx) => Promise<Response>
-function withPolicy<Err>(policy: ErrorPolicy<Err>, renderer?: Renderer): /* respond bound to policy */
-```
-
-`ok(value)` / `err(error)` construct outcomes. The policy's `Err` is **linked to
-the handler's `Outcome` error type** through `respond`'s generics — no cast at
-the call site.
-
-**Where the policy is supplied.** Per route: `respond(handler, policy)`.
-App/router-level default: `withPolicy(policy)` binds a policy (and optional
-renderer) once and returns a `respond`-shaped wrapper to reuse; an individual
-route can still call `respond` with a different policy to override. The framework
-ships no codes and no `crud()`/config registry — the `switch (error.code)` map
-that real consumers (e.g. sample: `APPLICATION_NOT_FOUND`→404,
-`INVALID_TRANSITION`→409) hand-write is expressed **user-side** as an
-`ErrorPolicy`, proven in `examples/todo-api` and the http tests.
-
-**Validation-400 vs domain policy.** They are separate layers.
-`withValidation`'s 400 is a framework malformed-request response and never
-invokes `ErrorPolicy`. Domain failures flow through `Outcome.error` → the user's
-policy. A route can use both: validate the body (400 on malformed input), then
-the validated `fn` returns an `Outcome` whose errors map through the policy.
+`fractal watch <app-module> --out <dir>` (implemented in `packages/codegen/src/cli.ts`)
+watches the source directory for changes, debounces them, and regenerates
+`client.ts`/`server.ts` on every save — folding the codegen step into the dev loop.
 
 ---
 
-## The http layer — WHATWG `Request => Response`, thin runtime adapters
+## Example
 
-`toHandler(router)` returns `(req: Request) => Promise<Response>`: it splits the
-path into segments, builds an `HttpCtx` (raw `query: URLSearchParams`, raw
-`headers: Headers`, a lazy `body()` thunk pulled at most once, the underlying
-`request` escape hatch), dispatches, and maps a top-level no-match to `notFound()`.
-Query and headers are **raw by default** — no capture combinator.
-
-Streaming (`sse`) and binary (`binary`) are ordinary `Response` bodies — no
-special framework support. The **only** runtime touch lives in `./adapter`:
-`serveBun` (Bun) and `serveNode` (a thin `node:http` shim adapting req/res to
-WHATWG). The core http module imports neither, staying runtime-agnostic.
-
-### Surface / runtime agnosticism
-
-- **Core** has no HTTP and no runtime. A non-HTTP surface (CLI, IPC, …) supplies
-  its own `RoutingCtx` extension and its own `Result` type.
-- **http** is one surface: it pins `Ctx = HttpCtx`, `Result = Response`, and owns
-  the `Result→Response` rendering. Rendering lives here precisely because it
-  produces `Response`; core never sees a `Response`.
-- **Adapters** bind a WHATWG fetch handler to a concrete runtime; they are the
-  only Bun/Node touch.
+The canonical working example is `examples/todo-api/src/app.ts` — a CRUD-ish
+`/todos` resource with GET list, POST validated create (201), GET one (404 if
+unknown), POST `/{id}/done`, SSE, and binary endpoints. 16 tests pass. The generated
+`client.ts` and `server.ts` are committed next to it; the drift guard keeps them
+in sync.
 
 ---
 
-## Retired & deferred
+## Retired
 
-- **Retired (this model replaces it):** the dispatch-`Node` algebra — `Pass`,
-  `choice`, `path`, `methods`, `route`, `param`/`query`/`header`/`body` combinators,
-  `typed`, `run`/`serve`/`listen`, `NodeMiddleware`/`pipe`, the required-params
-  `P`-discharge discipline. Any `optics-direction.md` content describing it is
-  **superseded**.
-- **Deferred (future, not forbidden):** the `worker` / `openapi` / `client`
-  packages. They are candidate future **adapters** (additional surfaces) and
-  **meta-walkers** (reflecting `Node.meta` into OpenAPI / a typed client) layered
-  on top of the current core — not part of the model as it stands.
+The following are **retired** — removed from the codebase, not deferred:
+
+- Builder-Router model: `httpRouter`, `RoutingCtx`, `Node<T,U,M>`, `bearerAuth`,
+  `withValidation` (the builder variant), `respond`, `Outcome`, `ErrorPolicy`.
+- Transport × codec × channel architecture: `transport`, `codec-json`,
+  `codec-structured-clone`, `protocol-correlation`, `channel-*`, `preset-websocket`,
+  `transport-conformance`.
+- Worker kit: `fractal-worker`, `procedure`, `field`, `dispatch`.
+- Node IR–based OpenAPI projection (superseded by the `.meta`-walk approach).
+- "Runtime client walker" (superseded by static codegen from the OpenAPI doc).

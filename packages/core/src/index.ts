@@ -15,8 +15,10 @@
 //
 // There is NO Route / Segment / Router / Node / Ctx / RoutingCtx type. `.meta`
 // is an INERT reflection sidecar bolted onto the handler function, read only by
-// the type-level client / OpenAPI projections and the runtime client walker —
-// NEVER on the dispatch path.
+// the OpenAPI projection (`toOpenApi`), the codegen (`generate`/`fractal watch`),
+// and the drift-guard substrate (`routeTable`/`RouteUnion`) — NEVER on the
+// dispatch path. There is no runtime client walker; codegen projects from the
+// static `.meta` tree at build time.
 
 // ============================================================================
 // Handler — the one framework type
