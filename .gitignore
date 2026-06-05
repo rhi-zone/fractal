@@ -18,6 +18,9 @@ docs/.vitepress/dist/
 .vscode/
 *.swp
 
+# Spike logs
+spike/*/logs/commit.log
+
 # Normalize
 .normalize/*
 !.normalize/config.toml
