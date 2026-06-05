@@ -1,7 +1,7 @@
 # fractal — roadmap & handoff
 
 Durable design state + prioritized backlog for a fresh session. Every claim here was
-verified against the code/commits at HEAD `ae037a9` (2026-06-05); where a figure could
+verified against the code/commits at the handoff snapshot (`docs: handoff roadmap — model, decisions, and prioritized feature backlog`, 2026-06-05); where a figure could
 not be verified it was dropped rather than guessed. Companion docs:
 `docs/design/handler-model.md` (model rationale), `docs/design/vs-hono-elysia.md`
 (competitive scorecard), `docs/design/scale.md` (scale data), `TODO.md` (task list).
@@ -217,7 +217,7 @@ via choice-correctness, but has no explicit committed regression test in
 
 ---
 
-## 8. Current state (verified at HEAD `ae037a9`)
+## 8. Current state (verified at handoff snapshot, 2026-06-05)
 
 - Packages: `core`, `http`, `client`, `openapi`, `codegen`.
 - Examples: `todo-api`, `dogfood`.

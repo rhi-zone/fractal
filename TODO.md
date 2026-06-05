@@ -6,7 +6,7 @@
 > is the task list; the roadmap is the context. **Next thing to build: the typed
 > `query(...)` combinator (backlog item 1).**
 
-## State (verified against repo, 2026-06-05, HEAD `ae037a9`)
+## State (verified against repo, 2026-06-05, at handoff snapshot)
 
 Bun-workspaces monorepo, `@rhi-zone` scope. **Entirely local — no remote, not pushed.**
 
@@ -77,9 +77,9 @@ the clone mechanism. Add one to `packages/core/src/index.test.ts`.
 ## Done since the original handoff (no longer open)
 
 - **Dogfood slice** — a generic auth+validation feature slice from the external reference
-  app is ported in `examples/dogfood` (commit `b0e22cf`).
+  app is ported in `examples/dogfood` (`example(dogfood): port a real auth+validation feature slice to validate the framework`).
 - **Middleware / auth in the new model** — `provide`/`withAuth` (ctx-discharge) and the
-  observing wrappers `logger`/`cors`/`errorBoundary` ship in core/http (commit `e8a2d72`).
+  observing wrappers `logger`/`cors`/`errorBoundary` ship in core/http (`feat(core,http): unify req.ctx bag; middleware/auth as ctx-discharge (provide/withAuth); observing wrappers (logger/cors)`).
 
 ---
 
