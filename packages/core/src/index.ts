@@ -222,13 +222,32 @@ export interface ParamMeta<N extends string, T, R> {
   readonly rest: R; // the inner handler's meta (what follows the dynamic segment)
   readonly __t?: T; // phantom decoded param type
 }
-/** An endpoint: the closed verb set, with per-verb input (body) + output phantoms. */
+/** Inert, REFLECTABLE schema references for one verb. Unlike the phantom `__io`
+ *  (erased at runtime), these are real runtime values — the Standard Schema (or
+ *  plain JSON-Schema-shaped object) the route validates its body against
+ *  (`input`) and/or annotates its response with (`output`). Read by the OpenAPI
+ *  projection; never on the dispatch path. Attached by @rhi-zone/fractal-http's
+ *  `validated`/`returns`, which stamp the handler with a `__schema` carrier the
+ *  `methods` constructor harvests into the meta. */
+export interface SchemaRef {
+  readonly input?: unknown;
+  readonly output?: unknown;
+}
+
+/** The carrier `validated`/`returns` stamp onto a handler so `methods` can lift
+ *  the schema into reflectable meta. Inert to dispatch (an extra own-property). */
+export type WithSchema = { readonly __schema?: SchemaRef };
+
+/** An endpoint: the closed verb set, with per-verb input (body) + output phantoms.
+ *  `schemas` carries the REFLECTABLE per-verb schema refs (runtime data) when a
+ *  verb's handler was built with `validated`/`returns`. */
 export interface MethodsMeta<
   Verbs extends string,
   IO extends Record<string, { i: unknown; o: unknown }>,
 > {
   readonly tag: "methods";
   readonly verbs: readonly Verbs[];
+  readonly schemas?: Readonly<Record<string, SchemaRef>>;
   readonly __io?: IO; // phantom per-verb { input, output }
 }
 /** A `path(record)`: a record keyed by literal segment → inner meta. */
@@ -296,9 +315,18 @@ export function methods<
   table: T,
 ): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P> {
   const verbs = Object.keys(table) as Extract<keyof T, string>[];
+  // Harvest REFLECTABLE schema refs that `validated`/`returns` stamped onto each
+  // verb's handler (inert `__schema` carrier). Only present when a handler was
+  // built with body validation / output annotation; absent verbs contribute none.
+  const schemas: Record<string, SchemaRef> = {};
+  for (const v of verbs) {
+    const ref = (table[v] as WithSchema | undefined)?.__schema;
+    if (ref !== undefined) schemas[v] = ref;
+  }
+  const hasSchemas = Object.keys(schemas).length > 0;
   return withMeta<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P>(
     methodsRT<P>(table),
-    { tag: "methods", verbs },
+    { tag: "methods", verbs, ...(hasSchemas ? { schemas } : {}) },
   );
 }
 

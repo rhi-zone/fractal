@@ -18,6 +18,7 @@ import {
   type ReturnsHandler,
   type StandardSchemaV1,
   type ValidatedHandler,
+  type WithSchema,
 } from "@rhi-zone/fractal-core";
 
 // ============================================================================
@@ -149,12 +150,29 @@ export function validated<
     }
     return fn((r as { value: InferOutput<S> }).value, req);
   };
+  // Stamp the body schema as an INERT, reflectable runtime carrier so the
+  // `methods` constructor can lift it into `.meta` for the OpenAPI projection.
+  // Erased from the dispatch path (an extra own-property on the function).
+  (h as unknown as { __schema: WithSchema["__schema"] }).__schema = {
+    input: schema,
+  };
   return h as ValidatedHandler<InferOutput<S>, O>;
 }
 
-/** `returns<O>(handler)` — annotate a non-validated handler's output type so the
- *  client return is typed, without forcing a body. Identity at runtime. */
-export function returns<O>(h: Handler): ReturnsHandler<O> {
+/** `returns<O>(handler, schema?)` — annotate a non-validated handler's output
+ *  type so the client return is typed, without forcing a body. Identity at
+ *  runtime. If a Standard Schema (or plain JSON-Schema-shaped object) is passed,
+ *  it is stamped as an inert reflectable `__schema.output` carrier so the OpenAPI
+ *  projection can emit a typed success response. */
+export function returns<O>(
+  h: Handler,
+  schema?: StandardSchemaV1<unknown, O> | object,
+): ReturnsHandler<O> {
+  if (schema !== undefined) {
+    (h as unknown as { __schema: WithSchema["__schema"] }).__schema = {
+      output: schema,
+    };
+  }
   return h as ReturnsHandler<O>;
 }
 

@@ -41,26 +41,38 @@ function schema<const F extends Record<string, "string" | "boolean">>(
   { [K in keyof F]: F[K] extends "string" ? string : boolean }
 > {
   type Out = { [K in keyof F]: F[K] extends "string" ? string : boolean };
-  return {
-    "~standard": {
-      version: 1,
-      vendor: "todo-fixture",
-      validate(value: unknown) {
-        if (typeof value !== "object" || value === null) {
-          return { issues: [{ message: "expected an object" }] };
+  // a JSON-Schema view of the fixture, so the OpenAPI projection
+  // (@rhi-zone/fractal-openapi) resolves a real body schema rather than degrading
+  // to `{}`. This is the Standard-Schema JSON-Schema reflective trait.
+  const properties: Record<string, { type: string }> = {};
+  for (const [k, t] of Object.entries(fields)) properties[k] = { type: t };
+  const asJsonSchema = () => ({
+    type: "object",
+    properties,
+    required: Object.keys(fields),
+  });
+  const std = {
+    version: 1 as const,
+    vendor: "todo-fixture",
+    // the extra reflective trait is invisible to the StandardSchemaV1 type but
+    // present at runtime for the OpenAPI projection to read.
+    jsonSchema: { input: asJsonSchema, output: asJsonSchema },
+    validate(value: unknown) {
+      if (typeof value !== "object" || value === null) {
+        return { issues: [{ message: "expected an object" }] };
+      }
+      const obj = value as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const [k, t] of Object.entries(fields)) {
+        if (typeof obj[k] !== t) {
+          return { issues: [{ message: `field "${k}" must be a ${t}` }] };
         }
-        const obj = value as Record<string, unknown>;
-        const out: Record<string, unknown> = {};
-        for (const [k, t] of Object.entries(fields)) {
-          if (typeof obj[k] !== t) {
-            return { issues: [{ message: `field "${k}" must be a ${t}` }] };
-          }
-          out[k] = obj[k];
-        }
-        return { value: out as Out };
-      },
+        out[k] = obj[k];
+      }
+      return { value: out as Out };
     },
   };
+  return { "~standard": std } as StandardSchemaV1<unknown, Out>;
 }
 
 const createSchema = schema({ title: "string" });
