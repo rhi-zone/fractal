@@ -199,7 +199,7 @@ describe("generate — typed client source", () => {
     expect(client).toContain("export const _drift: Assert<");
     expect(client).toContain("AssertExact<RouteUnion<typeof app>, GenUnion>");
     // Validated-body routes carry a concrete body in the union; returns-only
-    // routes carry the concrete response (mirroring the `.meta` `__io` phantom).
+    // routes carry the concrete response (mirroring the meta's `IO` type param).
     expect(client).toContain('RouteEntry<"POST /todos", {}, {');
     // Linear: a UNION, never a keyed object materialization (the O(N^2) trap).
     expect(client).not.toContain("UnionToObj");

@@ -105,14 +105,6 @@ function pathRT<P = {}>(routes: Record<string, Handler<P>>): Handler<P> {
 }
 
 /**
- * Consume a literal prefix segment, then delegate to `inner`. Convenience over
- * `path` for a single fixed prefix. Same URL-advancing mechanism.
- */
-function mountRT<P = {}>(prefix: string, inner: Handler<P>): Handler<P> {
-  return pathRT<P>({ [prefix]: inner });
-}
-
-/**
  * Capture a dynamic path segment as a TYPED param and DISCHARGE it. `param(name,
  * child)` reads the first remaining segment, binds it into `req.params[name]`,
  * advances the URL past it, and delegates to `child`. The child is parameterized
@@ -204,8 +196,12 @@ function withMeta<M, P = {}>(h: Handler<P>, meta: M): Reflected<M, P> {
 // type among them — a handler stays `Handler`.)
 // ----------------------------------------------------------------------------
 
-/** A dynamic path segment: name + decoded type T (phantom). The runtime reads
- *  the value directly off the Request; this only records position + type. */
+/** A dynamic path segment: name + decoded type `T` + inner meta `R`. `T` is a
+ *  PURE type parameter (no carrier field): the drift walk reads it via
+ *  `M extends ParamMeta<infer N, infer T, infer Rest>` — TS recovers a type
+ *  argument from the annotated construction site even with no field referencing
+ *  it, so no phantom `__t` is needed. The runtime reads the param VALUE directly
+ *  off the Request; this meta only records position + (optionally) a schema. */
 export interface ParamMeta<N extends string, T, R> {
   readonly tag: "param";
   readonly name: N;
@@ -216,10 +212,9 @@ export interface ParamMeta<N extends string, T, R> {
    *  object) read only by the OpenAPI projection, never on the dispatch path. A
    *  bare `param(name, inner)` records no schema (the segment is a raw string). */
   readonly schema?: unknown;
-  readonly __t?: T; // phantom decoded param type
 }
-/** Inert, REFLECTABLE schema references for one verb. Unlike the phantom `__io`
- *  (erased at runtime), these are real runtime values — the Standard Schema (or
+/** Inert, REFLECTABLE schema references for one verb. Unlike the type-only `IO`
+ *  param (no runtime presence), these are real runtime values — the Standard Schema (or
  *  plain JSON-Schema-shaped object) the route validates its body against
  *  (`input`) and/or annotates its response with (`output`). Read by the OpenAPI
  *  projection; never on the dispatch path. Attached by @rhi-zone/fractal-http's
@@ -234,9 +229,14 @@ export interface SchemaRef {
  *  the schema into reflectable meta. Inert to dispatch (an extra own-property). */
 export type WithSchema = { readonly __schema?: SchemaRef };
 
-/** An endpoint: the closed verb set, with per-verb input (body) + output phantoms.
- *  `schemas` carries the REFLECTABLE per-verb schema refs (runtime data) when a
- *  verb's handler was built with `validated`/`returns`. */
+/** An endpoint: the closed verb set, with per-verb input (body) + output types.
+ *  `IO` is a PURE type parameter (no carrier field): the drift walk reads it via
+ *  `M extends MethodsMeta<infer Verbs, infer IO>` and projects each verb's body
+ *  (`IO[V]["i"]`) + response (`IO[V]["o"]`). TS recovers a type argument from the
+ *  annotated construction site (`MethodsMeta<…, MethodsIO<T>>` in `methods`) even
+ *  with no field referencing it — verified on tsgo AND tsc — so no phantom `__io`
+ *  field is needed. `schemas` carries the REFLECTABLE per-verb schema refs
+ *  (runtime data) when a verb's handler was built with `validated`/`returns`. */
 export interface MethodsMeta<
   Verbs extends string,
   IO extends Record<string, { i: unknown; o: unknown }>,
@@ -244,18 +244,11 @@ export interface MethodsMeta<
   readonly tag: "methods";
   readonly verbs: readonly Verbs[];
   readonly schemas?: Readonly<Record<string, SchemaRef>>;
-  readonly __io?: IO; // phantom per-verb { input, output }
 }
 /** A `path(record)`: a record keyed by literal segment → inner meta. */
 export interface PathMeta<R extends Record<string, unknown>> {
   readonly tag: "path";
   readonly routes: R;
-}
-/** A `mount(prefix, inner)`: a single literal prefix + inner meta. */
-export interface PrefixMeta<P extends string, R> {
-  readonly tag: "prefix";
-  readonly pre: P;
-  readonly rest: R;
 }
 /** A `choice(...alts)`: a tuple of alternative metas (the router). */
 export interface ChoiceMeta<Ms extends readonly unknown[]> {
@@ -411,16 +404,23 @@ export function path<
   );
 }
 
-/** `mount(prefix, inner)` — consume a literal prefix with an inert prefix meta. */
+/** `mount(prefix, inner)` — a thin ergonomic alias for a single-key `path`:
+ *  `mount("api", inner)` ≡ `path({ api: inner })`. It DESUGARS to `path`, emitting
+ *  a `PathMeta` with one literal key (NOT a distinct `prefix` tag) — so every
+ *  projection (toFetch, toOpenApi, the drift walk, codegen) handles ONE fewer
+ *  case. Prefixes are single segments: a `"a/b"` prefix is a single literal key
+ *  that never matches a `/a/b` request (segments split on "/"); use nested `path`
+ *  for multi-segment prefixes. Reads well for mounting a sub-router at a name. */
 export function mount<const Pre extends string, M, P = {}>(
   prefix: Pre,
   inner: Reflected<M, P>,
-): Reflected<PrefixMeta<Pre, M>, P> {
-  return withMeta<PrefixMeta<Pre, M>, P>(mountRT<P>(prefix, inner), {
-    tag: "prefix",
-    pre: prefix,
-    rest: inner.meta,
-  });
+): Reflected<PathMeta<{ readonly [K in Pre]: M }>, P> {
+  return path<P, { readonly [K in Pre]: Reflected<M, P> }>({
+    [prefix]: inner,
+  } as { readonly [K in Pre]: Reflected<M, P> }) as Reflected<
+    PathMeta<{ readonly [K in Pre]: M }>,
+    P
+  >;
 }
 
 /** `choice(...alts)` — first-match dispatch with an inert tuple-of-alt-metas.
@@ -508,7 +508,8 @@ export function paramValue(req: Request, name: string): string | undefined {
 // A PROJECTION primitive (never on the dispatch path): it walks the same inert
 // `.meta` DATA tree the OpenAPI projection walks, flattening it into a list of
 // concrete routes — one `{ pattern, verbs }` per path that a `methods` node sits
-// at. `path`/`prefix` append a LITERAL segment; `param` appends a `{ kind:
+// at. `path` (incl. the `mount` single-key alias) appends a LITERAL segment;
+// `param` appends a `{ kind:
 // "param" }` wildcard segment (matches any one path segment); `choice` BRANCHES
 // (every alt is its own route at the same accumulated pattern); `methods`
 // emits a route whose verbs are exactly its table's keys.
@@ -562,11 +563,6 @@ function walkMeta(
           out,
         );
       }
-      return;
-    }
-    case "prefix": {
-      const pm = meta as PrefixMeta<string, unknown>;
-      walkMeta(pm.rest, [...pattern, { kind: "literal", value: pm.pre }], out);
       return;
     }
     case "param": {

@@ -1,8 +1,9 @@
 // packages/core/src/index.test.ts — the algebra, end to end. Builds an app from
 // path/methods/choice/param, runs real Requests through it, and asserts status +
 // body. Plus type-level proofs of the Handler<P> discharge model, and an
-// ENFORCEMENT test that fails if a Route/Segment/Router/Node type is declared in
-// any package's source (the iron rule).
+// ENFORCEMENT test (the iron rule) that scans ALL five packages' source and
+// fails if any exported type declares a handler-shaped `(req: Request…) =>
+// Response` call signature under a name other than the canonical `Handler`.
 
 import { describe, expect, it } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
@@ -165,26 +166,72 @@ function _typeProofs() {
 void _typeProofs;
 
 // ============================================================================
-// ENFORCEMENT — the IRON RULE. Scan every package's tracked SOURCE for a
-// declaration of a forbidden framework type (Route / Segment / Router / Node /
-// Ctx / RoutingCtx). The ONLY framework type is `Handler`. A planted
-// `type Route = …` MUST make this test fail.
+// ENFORCEMENT — the IRON RULE, as a POSITIVE STRUCTURAL INVARIANT. The handler
+// is the ONLY handler-shaped framework type. Scan EVERY package's source
+// (core/http/client/openapi/codegen) and FAIL if any exported type alias or
+// interface declares a HANDLER-SHAPED call signature — `(req: Request…) =>
+// Response | …` — under any name OTHER than the canonical `Handler`.
+//
+// Why structural, not a name-blocklist: the old test scanned for the literal
+// names Route/Segment/Router/Node/Ctx and was evadable by ANY differently-named
+// rival framework type — `type Endpoint = (req: Request, ctx: unknown) =>
+// Response` would sail through. A second handler-shaped type (a rival dispatch
+// type, especially one with a `ctx` side-channel) is the actual failure mode the
+// rule guards; this catches it regardless of what it is named. A planted
+// `type Endpoint = (req: Request, …) => Response` MUST make this test fail.
 // ============================================================================
-describe("iron rule: no Route/Segment/Router/Node type declarations", () => {
-  // package src roots, relative to this file (packages/core/src).
+describe("iron rule: Handler is the only handler-shaped framework type", () => {
+  // ALL FIVE package src roots, relative to this file (packages/core/src).
   const PKG_SRC = [
     join(import.meta.dir, "..", "..", "core", "src"),
     join(import.meta.dir, "..", "..", "http", "src"),
     join(import.meta.dir, "..", "..", "client", "src"),
+    join(import.meta.dir, "..", "..", "openapi", "src"),
+    join(import.meta.dir, "..", "..", "codegen", "src"),
   ];
 
-  // a declaration of a forbidden NAME as a type/interface/class/enum. Exact
-  // identifier following the keyword, word-boundaried — so `ParamMeta`,
-  // `MethodsMeta`, etc. are NOT matched; only an EXACT forbidden identifier.
-  const FORBIDDEN = ["Route", "Segment", "Router", "Node", "Ctx", "RoutingCtx"];
-  const decl = new RegExp(
-    `\\b(?:type|interface|class|enum)\\s+(${FORBIDDEN.join("|")})\\b`,
+  /** Strip BOTH `//` line comments and `/* *​/` block comments (including
+   *  multi-line ones) from a source string, so prose mentioning these shapes is
+   *  not flagged. Block comments first (they can span lines), then line comments. */
+  function stripComments(src: string): string {
+    return src
+      .replace(/\/\*[\s\S]*?\*\//g, " ") // block comments (non-greedy, multi-line)
+      .replace(/\/\/[^\n]*/g, ""); // line comments
+  }
+
+  // A RIVAL DISPATCH handler-shaped call signature. The canonical `Handler` and
+  // the client `Transport` are both `(req: Request) => …Response…`; the rule must
+  // catch a SECOND *dispatch* type without flagging those. A rival dispatch type
+  // is distinguished by EITHER of two structural tells, both of which the planted
+  // attacks exhibit and neither of which Handler/Transport do under another name:
+  //
+  //   (A) a SECOND PARAMETER after `req: Request` — the `ctx` side-channel
+  //       (`(req: Request, ctx: …) => Response`). A handler with no ctx has one
+  //       param; a dispatch type that smuggles state in a second arg is the
+  //       forbidden shape. (The `Endpoint`/`Ctx` rivals are caught here.)
+  //   (B) the DISPATCH PASS-PROTOCOL return `Response | …` (a UNION including
+  //       `Response`, e.g. `Response | undefined`) — a renamed `Handler`. The
+  //       client `Transport` returns a BARE `Promise<Response>` (no union), so it
+  //       is not a dispatch type and is not flagged.
+  //
+  // Both regexes anchor on a first `req: Request` param; `[^=)]*` spans an
+  // optional `& {…}` refinement without crossing into another param or the `=>`.
+  const FIRST_REQ = String.raw`\(\s*_?\w+\s*:\s*Request\b[^=)]*`;
+  // (A) a comma → a second parameter (the ctx side-channel) before `=>`.
+  const CTX_SIDE_CHANNEL = new RegExp(FIRST_REQ + String.raw`,[^=]*=>[^;{]*\bResponse\b`);
+  // (B) a `Response | …` UNION return (the pass protocol). `\|` before/after a
+  //     `Response` token in the return position marks the union (vs bare Response).
+  const PASS_PROTOCOL = new RegExp(
+    FIRST_REQ + String.raw`\)\s*=>[^;{]*(?:\bResponse\b\s*\||\|\s*[^;{]*\bResponse\b)`,
   );
+  const RIVAL_SHAPES: readonly [string, RegExp][] = [
+    ["ctx side-channel (2nd param)", CTX_SIDE_CHANNEL],
+    ["dispatch pass-protocol return (Response | …)", PASS_PROTOCOL],
+  ];
+
+  // An exported type alias / interface declaration; capture its name so a match
+  // can be attributed and the canonical `Handler` can be exempted.
+  const EXPORT_DECL = /\bexport\s+(?:type|interface)\s+(\w+)/g;
 
   function srcFiles(dir: string): string[] {
     return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -192,6 +239,7 @@ describe("iron rule: no Route/Segment/Router/Node type declarations", () => {
       if (e.isDirectory()) return srcFiles(full);
       if (!e.name.endsWith(".ts")) return [];
       if (e.name.endsWith(".test.ts")) return []; // skip the scanner / tests
+      if (full.includes("/generated/")) return []; // skip generated files
       return [full];
     });
   }
@@ -199,13 +247,29 @@ describe("iron rule: no Route/Segment/Router/Node type declarations", () => {
   for (const root of PKG_SRC) {
     for (const file of srcFiles(root)) {
       const label = file.split("/packages/")[1] ?? file;
-      it(`no forbidden type declaration in ${label}`, () => {
-        const src = readFileSync(file, "utf8");
-        for (const line of src.split("\n")) {
-          // strip line comments so doc text mentioning the names is allowed.
-          const code = line.replace(/\/\/.*$/, "");
-          const m = decl.exec(code);
-          expect(m === null ? null : `${m[1]} :: ${line.trim()}`).toBeNull();
+      it(`no rival handler-shaped type in ${label}`, () => {
+        const code = stripComments(readFileSync(file, "utf8"));
+        // Walk each exported type/interface decl; inspect the source slice from
+        // its `=`/`{` up to the next top-level decl for a handler-shaped sig.
+        const decls: { name: string; start: number }[] = [];
+        for (const m of code.matchAll(EXPORT_DECL)) {
+          decls.push({ name: m[1]!, start: m.index! });
+        }
+        for (let i = 0; i < decls.length; i++) {
+          const { name, start } = decls[i]!;
+          const end = decls[i + 1]?.start ?? code.length;
+          const body = code.slice(start, end);
+          if (name === "Handler") continue; // the one allowed bearer
+          for (const [why, re] of RIVAL_SHAPES) {
+            const hit = re.exec(body);
+            expect(
+              hit === null
+                ? null
+                : `rival handler-shaped type "${name}" [${why}] in ${label}: ${hit[0]
+                    .replace(/\s+/g, " ")
+                    .trim()}`,
+            ).toBeNull();
+          }
         }
       });
     }

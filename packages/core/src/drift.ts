@@ -5,7 +5,7 @@
 // `type` (plus the `Assert<…> = true` witness const the generated guard emits).
 //
 // The contract: the SOURCE of truth is `typeof app`, whose type carries `.meta`
-// (a tree of PathMeta / ChoiceMeta / ParamMeta / PrefixMeta / MethodsMeta). The
+// (a tree of PathMeta / ChoiceMeta / ParamMeta / MethodsMeta). The
 // GENERATED artifact (@rhi-zone/fractal-codegen) emits a concrete `GenUnion` — a
 // union of `RouteEntry<"VERB /path", params, body, response>` — and a guard:
 //
@@ -30,7 +30,6 @@ import type {
   MethodsMeta,
   ParamMeta,
   PathMeta,
-  PrefixMeta,
 } from "./index.ts";
 
 // ============================================================================
@@ -117,13 +116,11 @@ type WalkUnion<M, Pfx extends string, P> =
       }[Verbs]
     : M extends PathMeta<infer R>
       ? { [K in keyof R]: WalkUnion<R[K], `${Pfx}/${K & string}`, P> }[keyof R]
-      : M extends PrefixMeta<infer Pre, infer Rest>
-        ? WalkUnion<Rest, `${Pfx}/${Pre & string}`, P>
-        : M extends ParamMeta<infer N, infer T, infer Rest>
-          ? WalkUnion<Rest, `${Pfx}/{${N & string}}`, P & { [K in N & string]: T }>
-          : M extends ChoiceMeta<infer Alts>
-            ? WalkUnionAlts<Alts, Pfx, P>
-            : never;
+      : M extends ParamMeta<infer N, infer T, infer Rest>
+        ? WalkUnion<Rest, `${Pfx}/{${N & string}}`, P & { [K in N & string]: T }>
+        : M extends ChoiceMeta<infer Alts>
+          ? WalkUnionAlts<Alts, Pfx, P>
+          : never;
 
 type WalkUnionAlts<Alts, Pfx extends string, P> = Alts extends readonly [
   infer Head,

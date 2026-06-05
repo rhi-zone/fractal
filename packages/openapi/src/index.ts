@@ -7,7 +7,7 @@
 // `.meta` DATA tree and emits a valid OpenAPI 3.0 document — which
 // @rhi-zone/fractal-codegen in turn turns into a typed client + server signatures.
 //
-// The walk descends `path`/`prefix`/`param`
+// The walk descends `path`/`param`
 // accumulating path segments, then at each `methods` node emit one operation per
 // declared verb. `choice` BRANCHES — every alt is its own set of endpoints, never
 // collapsed. `param` turns the URL into the OpenAPI `/{id}` form and contributes
@@ -26,7 +26,6 @@ import type {
   MethodsMeta,
   ParamMeta,
   PathMeta,
-  PrefixMeta,
   Reflected,
   SchemaRef,
 } from "@rhi-zone/fractal-core";
@@ -194,7 +193,6 @@ export function toJsonSchema(
 type AnyMeta =
   | MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
   | PathMeta<Record<string, unknown>>
-  | PrefixMeta<string, unknown>
   | ParamMeta<string, unknown, unknown>
   | ChoiceMeta<readonly unknown[]>;
 
@@ -239,16 +237,6 @@ function build(
           warnings,
         );
       }
-      return;
-    }
-    case "prefix": {
-      const pm = m as PrefixMeta<string, unknown>;
-      build(
-        pm.rest,
-        { ...state, segments: [...state.segments, pm.pre] },
-        paths,
-        warnings,
-      );
       return;
     }
     case "param": {

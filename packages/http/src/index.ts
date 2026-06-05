@@ -265,7 +265,7 @@ export function returns<O, H extends Handler = Handler>(
     };
   }
   // PRESERVE the input handler's brand: `returns(validated(s, fn), out)` is a
-  // `ValidatedHandler<I> & ReturnsHandler<O>`, so the `.meta` `__io` phantom keeps
+  // `ValidatedHandler<I> & ReturnsHandler<O>`, so the meta's `IO` type param keeps
   // the validated INPUT type (which the drift guard compares against the generated
   // body). Returning a bare `ReturnsHandler<O>` would erase the `validated` brand
   // and the guard would see `body: never` for a route that DOES take a body.
