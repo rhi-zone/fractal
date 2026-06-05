@@ -3,7 +3,15 @@
 // Throws on mismatch. Run with: bun spike/std/app.test.ts
 
 import { app } from "./app.ts";
-import { methods, toFetch, type Handler } from "./std.ts";
+import {
+  choice,
+  json,
+  methods,
+  param,
+  path,
+  toFetch,
+  type Handler,
+} from "./std.ts";
 
 const fetch = toFetch(app);
 const BASE = "http://x";
@@ -116,5 +124,53 @@ const _guard: Handler = methods({
   GETT: () => new Response("nope"),
 });
 void _guard;
+
+// ============================================================================
+// TYPED-PARAM proofs (Handler<P> design). Compile-time only; `void` to run.
+// ============================================================================
+
+// (req 1) a PLAIN web handler IS a Handler<{}> / Handler / even Handler<{id}>.
+// `Request & {params:P}` is a subtype of `Request`, so the param-ignoring plain
+// handler is contravariantly assignable. No `params?:` / default-init needed.
+const list = (_req: Request): Response => json([]);
+const _p0: Handler = list;
+const _p1: Handler<{}> = list;
+const _p2: Handler<{ id: string }> = list; // param-ignoring handler is fine
+void _p0; void _p1; void _p2;
+
+// (req 2) typed param READ: req.params.id is string; a typo is a compile error.
+const user: Handler<{ id: string }> = (req) => json(req.params.id);
+const _userTypo: Handler<{ id: string }> = (req) =>
+  // @ts-expect-error — `idd` is not a key of params; typed read catches the typo.
+  json(req.params.idd);
+void user; void _userTypo;
+
+// (req 3) compositional DISCHARGE. `user` is a standalone reusable value.
+const dischargedA: Handler<{}> = param("id", user); // mount point 1
+const dischargedB: Handler<{}> = param("id", user); // REUSED at mount point 2
+void dischargedA; void dischargedB;
+
+// nested: param("id", param("postId", grandchild)) discharges BOTH → Handler<{}>.
+const grandchild: Handler<{ id: string; postId: string }> = (req) =>
+  json(`${req.params.id}/${req.params.postId}`);
+const nested: Handler<{}> = param("id", param("postId", grandchild));
+void nested;
+
+// path/methods/choice thread P (add no params); choice requires alts share P.
+const _threaded: Handler<{ id: string }> = choice(
+  user,
+  (req) => json(req.params.id),
+);
+const _dischargedThreaded: Handler<{}> = path({ users: param("id", user) });
+void _threaded; void _dischargedThreaded;
+
+// (req 4) an UNDISCHARGED param is a compile error at the root: a handler that
+// reads req.params.id is Handler<{id:string}>, NOT assignable to toFetch's
+// Handler<{}>. Discharging it with param("id", …) fixes it.
+const leaky: Handler<{ id: string }> = (req) => json(req.params.id);
+// @ts-expect-error — undischarged `{id:string}` param: not a Handler<{}> root.
+toFetch(leaky);
+toFetch(param("id", leaky)); // discharged → compiles
+void leaky;
 
 console.log(`OK — ${passed} assertions passed`);

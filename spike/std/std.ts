@@ -9,9 +9,25 @@
 // rewrite the URL (advance past consumed segments) when descending, so there
 // is no ctx object, no router type, no side channel.
 
-export type Handler = (
-  req: Request,
+// `Handler<P>` is parameterized by its captured path params. The params ride as
+// a TYPED FIELD on the standard `Request` (itty-router-style runtime, iron-style
+// typing — NO separate Ctx wrapper). `P` defaults to `{}` so a paramless handler
+// is just `Handler`. Because `Request & { params: P }` is a SUBtype of `Request`,
+// a plain `(req: Request) => Response` is contravariantly assignable to `Handler`
+// AND to any `Handler<P>` — a plain web handler IS a Handler (requirement 1).
+export type Handler<P = {}> = (
+  req: Request & { params: P },
 ) => Response | undefined | Promise<Response | undefined>;
+
+/** The runtime carrier: a real `Request` with a `params` own-property. */
+export type ReqWithParams<P> = Request & { params: P };
+
+/** Attach (or re-attach) a `params` own-property to a Request, in place. Returns
+ *  the SAME Request, retyped — it stays a real Request (json()/headers/method). */
+function withParams<P>(req: Request, params: P): ReqWithParams<P> {
+  (req as ReqWithParams<P>).params = params;
+  return req as ReqWithParams<P>;
+}
 
 // Closed verb union: a typo like "GETT" is a COMPILE ERROR in `methods`.
 export type Method =
@@ -30,11 +46,14 @@ export function segments(req: Request): string[] {
   return new URL(req.url).pathname.split("/").filter((s) => s !== "");
 }
 
-/** Clone `req` with its pathname replaced by `segs` (method/headers/body kept). */
-function withSegments(req: Request, segs: string[]): Request {
+/** Clone `req` with its pathname replaced by `segs` (method/headers/body kept).
+ *  `new Request(url, req)` drops custom own-properties, so we re-attach `params`
+ *  (carried from the source Request, defaulting to `{}`) to keep it a typed Req. */
+function withSegments<P>(req: Request, segs: string[]): ReqWithParams<P> {
   const url = new URL(req.url);
   url.pathname = "/" + segs.join("/");
-  return new Request(url, req);
+  const params = (req as Partial<ReqWithParams<P>>).params ?? ({} as P);
+  return withParams(new Request(url, req), params);
 }
 
 /**
@@ -45,7 +64,7 @@ function withSegments(req: Request, segs: string[]): Request {
  * no value, takes no pattern, and reads nothing — it only advances the URL
  * (rule 5), while the id is still read directly off the Request (rule 4).
  */
-export function rest(req: Request): Request {
+export function rest<P>(req: ReqWithParams<P>): ReqWithParams<P> {
   return withSegments(req, segments(req).slice(1));
 }
 
@@ -56,14 +75,14 @@ export function rest(req: Request): Request {
  * segment names. If the first remaining segment is a key, call that handler
  * with a Request advanced past that segment; otherwise return undefined.
  */
-export function path(routes: Record<string, Handler>): Handler {
+export function path<P = {}>(routes: Record<string, Handler<P>>): Handler<P> {
   return (req) => {
     const segs = segments(req);
     const head = segs[0];
     if (head === undefined) return undefined;
     const next = routes[head];
     if (next === undefined) return undefined;
-    return next(withSegments(req, segs.slice(1)));
+    return next(withSegments<P>(req, segs.slice(1)));
   };
 }
 
@@ -71,8 +90,36 @@ export function path(routes: Record<string, Handler>): Handler {
  * Consume a literal prefix segment, then delegate to `inner`. Convenience over
  * `path` for a single fixed prefix. Same URL-advancing mechanism.
  */
-export function mount(prefix: string, inner: Handler): Handler {
-  return path({ [prefix]: inner });
+export function mount<P = {}>(prefix: string, inner: Handler<P>): Handler<P> {
+  return path<P>({ [prefix]: inner });
+}
+
+/**
+ * Capture a dynamic path segment as a TYPED param and DISCHARGE it. `param(name,
+ * child)` reads the first remaining segment, binds it into `req.params[name]`,
+ * advances the URL past it, and delegates to `child`. The child is parameterized
+ * by `Q` (its full captured-param object, which must include `name`); the result
+ * is `Handler<Omit<Q, name>>` — the captured key is removed from the obligation.
+ *
+ * The signature infers the child's WHOLE param object `Q` and removes `K` via
+ * `Omit` (rather than `Handler<P & Record<K,string>> -> Handler<P>`, which fails
+ * inference: TS cannot split a `P & Record<K,string>` intersection back into `P`,
+ * so it binds `P` to the whole thing and discharges nothing). `Omit` is the
+ * minimal fix and composes: `param("id", param("postId", gc))` discharges both.
+ */
+export function param<K extends string, Q extends Record<K, string>>(
+  name: K,
+  child: Handler<Q>,
+): Handler<Omit<Q, K>> {
+  return (req) => {
+    const value = segments(req)[0];
+    if (value === undefined) return undefined;
+    // bind the captured value into params, then advance the URL past the segment.
+    const bound = { ...(req.params as object), [name]: value } as Q;
+    const advanced = withSegments<Q>(req, segments(req).slice(1));
+    advanced.params = bound;
+    return child(advanced);
+  };
 }
 
 /**
@@ -83,7 +130,9 @@ export function mount(prefix: string, inner: Handler): Handler {
  *   - HEAD with GET present      -> run GET, return its response with null body
  *   - OPTIONS (if not in table)  -> 204 + Allow
  */
-export function methods(table: Partial<Record<Method, Handler>>): Handler {
+export function methods<P = {}>(
+  table: Partial<Record<Method, Handler<P>>>,
+): Handler<P> {
   const verbs = Object.keys(table) as Method[];
   const allow = verbs.join(", ");
   return async (req) => {
@@ -111,7 +160,7 @@ export function methods(table: Partial<Record<Method, Handler>>): Handler {
 }
 
 /** Try each handler in order; first non-undefined wins; else undefined. */
-export function choice(...handlers: Handler[]): Handler {
+export function choice<P = {}>(...handlers: Handler<P>[]): Handler<P> {
   return async (req) => {
     for (const h of handlers) {
       const res = await h(req);
@@ -145,7 +194,10 @@ export function notFound(body = "Not Found"): Response {
 
 // --- the one adapter -------------------------------------------------------
 
-/** Run `app`; a final `undefined` becomes a 404. Runtime-agnostic. */
-export function toFetch(app: Handler): (req: Request) => Promise<Response> {
-  return async (req) => (await app(req)) ?? notFound();
+/** Run `app`; a final `undefined` becomes a 404. Runtime-agnostic. The root only
+ *  accepts a FULLY-DISCHARGED `Handler<{}>`: an app that reads `req.params.id`
+ *  without a `param("id", …)` discharging it is `Handler<{id:string}>` and FAILS
+ *  to compile here (requirement 4). Initializes `params` to `{}` for the root. */
+export function toFetch(app: Handler<{}>): (req: Request) => Promise<Response> {
+  return async (req) => (await app(withParams(req, {}))) ?? notFound();
 }

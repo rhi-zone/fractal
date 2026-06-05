@@ -18,9 +18,8 @@ import {
   choice as choiceRT,
   methods as methodsRT,
   mount as mountRT,
+  param as paramRT,
   path as pathRT,
-  rest,
-  segments,
   type Handler,
   type Method,
 } from "./std.ts";
@@ -32,12 +31,13 @@ import {
 // dispatch path. `M = undefined` for a handler with no reflection need.
 // ============================================================================
 
-export type Reflected<M> = Handler & { readonly meta: M };
+export type Reflected<M, P = {}> = Handler<P> & { readonly meta: M };
 
 /** Attach `meta` to an existing std Handler, producing a Reflected handler. The
- *  handler IS the std handler; `meta` is a bolted-on property. */
-function withMeta<M>(h: Handler, meta: M): Reflected<M> {
-  const r = h as Reflected<M> & { meta: M };
+ *  handler IS the std handler; `meta` is a bolted-on property. `P` is the handler's
+ *  captured-param obligation, threaded so `param` can discharge it (rule 3). */
+function withMeta<M, P = {}>(h: Handler<P>, meta: M): Reflected<M, P> {
+  const r = h as Reflected<M, P> & { meta: M };
   (r as { meta: M }).meta = meta;
   return r;
 }
@@ -121,12 +121,18 @@ export interface ChoiceMeta<Ms extends readonly unknown[]> {
 
 /** `methods(table)` with an inert verb-set meta. Runtime = std `methods`. */
 export function methods<
-  const T extends Partial<Record<Method, Handler>>,
+  P = {},
+  const T extends Partial<Record<Method, Handler<P>>> = Partial<
+    Record<Method, Handler<P>>
+  >,
 >(
   table: T,
-): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>> {
+): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P> {
   const verbs = Object.keys(table) as Extract<keyof T, string>[];
-  return withMeta(methodsRT(table), { tag: "methods", verbs });
+  return withMeta<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P>(
+    methodsRT<P>(table),
+    { tag: "methods", verbs },
+  );
 }
 
 // Per-verb input/output from the handlers in a methods table. A handler may be
@@ -145,23 +151,32 @@ type MethodsIO<T> = {
 };
 
 /** `path(record)` with an inert record-of-meta. Runtime = std `path`. */
-export function path<const R extends Record<string, Reflected<unknown>>>(
+export function path<
+  P = {},
+  const R extends Record<string, Reflected<unknown, P>> = Record<
+    string,
+    Reflected<unknown, P>
+  >,
+>(
   routes: R,
-): Reflected<PathMeta<{ readonly [K in keyof R]: R[K]["meta"] }>> {
+): Reflected<PathMeta<{ readonly [K in keyof R]: R[K]["meta"] }>, P> {
   const inner: Record<string, unknown> = {};
   for (const k of Object.keys(routes)) inner[k] = routes[k]!.meta;
-  return withMeta(pathRT(routes), {
-    tag: "path",
-    routes: inner as { readonly [K in keyof R]: R[K]["meta"] },
-  });
+  return withMeta<PathMeta<{ readonly [K in keyof R]: R[K]["meta"] }>, P>(
+    pathRT<P>(routes),
+    {
+      tag: "path",
+      routes: inner as { readonly [K in keyof R]: R[K]["meta"] },
+    },
+  );
 }
 
 /** `mount(prefix, inner)` with an inert prefix meta. Runtime = std `mount`. */
-export function mount<const P extends string, M>(
-  prefix: P,
-  inner: Reflected<M>,
-): Reflected<PrefixMeta<P, M>> {
-  return withMeta(mountRT(prefix, inner), {
+export function mount<const Pre extends string, M, P = {}>(
+  prefix: Pre,
+  inner: Reflected<M, P>,
+): Reflected<PrefixMeta<Pre, M>, P> {
+  return withMeta<PrefixMeta<Pre, M>, P>(mountRT<P>(prefix, inner), {
     tag: "prefix",
     pre: prefix,
     rest: inner.meta,
@@ -171,13 +186,22 @@ export function mount<const P extends string, M>(
 /** `choice(...alts)` with an inert tuple-of-alt-metas. Runtime = std `choice`.
  *  This is what lets the client see THROUGH choice (the iron flat-union move):
  *  the meta keeps every alt's structure rather than collapsing to one handler. */
-export function choice<const Hs extends readonly Reflected<unknown>[]>(
+export function choice<
+  P = {},
+  const Hs extends readonly Reflected<unknown, P>[] = readonly Reflected<
+    unknown,
+    P
+  >[],
+>(
   ...alts: Hs
-): Reflected<ChoiceMeta<{ readonly [K in keyof Hs]: Hs[K]["meta"] }>> {
+): Reflected<ChoiceMeta<{ readonly [K in keyof Hs]: Hs[K]["meta"] }>, P> {
   const metas = alts.map((a) => a.meta) as {
     readonly [K in keyof Hs]: Hs[K]["meta"];
   };
-  return withMeta(choiceRT(...alts), { tag: "choice", alts: metas });
+  return withMeta<ChoiceMeta<{ readonly [K in keyof Hs]: Hs[K]["meta"] }>, P>(
+    choiceRT<P>(...alts),
+    { tag: "choice", alts: metas },
+  );
 }
 
 /**
@@ -191,37 +215,40 @@ export function choice<const Hs extends readonly Reflected<unknown>[]>(
  * Overloads: bare `param("id")` → `{id: string}`; `param("id", codec)` →
  * `{id: InferOutput<codec>}` (the codec is type-only here — std doesn't decode).
  */
-export function param<const N extends string, M>(
+export function param<
+  const N extends string,
+  M,
+  Q extends Record<N, string>,
+>(
   name: N,
-  inner: Reflected<M>,
-): Reflected<ParamMeta<N, string, M>>;
-export function param<const N extends string, S, M>(
+  inner: Reflected<M, Q>,
+): Reflected<ParamMeta<N, string, M>, Omit<Q, N>>;
+export function param<
+  const N extends string,
+  S,
+  M,
+  Q extends Record<N, string>,
+>(
   name: N,
   codec: StandardSchemaV1<string, S>,
-  inner: Reflected<M>,
-): Reflected<ParamMeta<N, S, M>>;
+  inner: Reflected<M, Q>,
+): Reflected<ParamMeta<N, S, M>, Omit<Q, N>>;
 export function param(
   name: string,
-  arg2: Reflected<unknown> | StandardSchemaV1<string, unknown>,
-  arg3?: Reflected<unknown>,
-): Reflected<ParamMeta<string, unknown, unknown>> {
-  const inner = (arg3 ?? arg2) as Reflected<unknown>;
-  // Runtime: read the dynamic segment off the Request, advance past it, delegate
-  // to inner. Mirrors app.ts (read id, then rest(req)). The consumed value is
-  // stashed on the advanced Request's headers (`x-param-<name>`) so the inner
-  // handler can still read it off the Request — the Request stays the only side
-  // channel (no ctx object). `paramValue(req, name)` is the read accessor.
-  const h: Handler = (req) => {
-    const value = segments(req)[0];
-    if (value === undefined) return undefined;
-    const advanced = rest(req);
-    const next = new Request(advanced, {
-      headers: new Headers(advanced.headers),
-    });
-    next.headers.set(`x-param-${name}`, value);
-    return inner(next);
-  };
-  return withMeta(h, { tag: "param", name, rest: inner.meta });
+  arg2: Reflected<unknown, Record<string, string>> | StandardSchemaV1<string, unknown>,
+  arg3?: Reflected<unknown, Record<string, string>>,
+): Reflected<ParamMeta<string, unknown, unknown>, Record<string, string>> {
+  const inner = (arg3 ?? arg2) as Reflected<unknown, Record<string, string>>;
+  // Runtime: delegate to std's `param`, which reads the dynamic segment off the
+  // Request, BINDS it into `req.params[name]`, advances the URL past it, and
+  // delegates to `inner`. The captured value is read off `req.params` (rule 4)
+  // — the Request stays the only side channel (no ctx object). `paramValue` is
+  // the convenience accessor over `req.params`.
+  const h = paramRT(name, inner);
+  return withMeta<ParamMeta<string, unknown, unknown>, Record<string, string>>(
+    h as Handler<Record<string, string>>,
+    { tag: "param", name, rest: inner.meta },
+  );
 }
 
 // ============================================================================
@@ -290,9 +317,10 @@ export function returns<O>(h: Handler): ReturnsHandler<O> {
   return h as ReturnsHandler<O>;
 }
 
-/** Read a dynamic segment value off the Request, where `param(name, …)` stashed
- *  it. Keeps "params are read off the Request" literally true after `param`
- *  advanced past the segment. */
+/** Read a dynamic segment value off the Request, where `param(name, …)` bound it
+ *  into `req.params`. Keeps "params are read off the Request" literally true after
+ *  `param` advanced past the segment. Convenience over `req.params[name]`. */
 export function paramValue(req: Request, name: string): string | undefined {
-  return req.headers.get(`x-param-${name}`) ?? undefined;
+  const params = (req as Partial<{ params: Record<string, string> }>).params;
+  return params?.[name] ?? undefined;
 }

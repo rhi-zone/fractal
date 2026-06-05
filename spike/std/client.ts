@@ -166,9 +166,16 @@ export type Transport = (req: Request) => Promise<Response>;
 
 /** In-process transport: run the SAME app handler in memory; a final `undefined`
  *  becomes a 404 (mirrors `toFetch`). */
-export function inProcess(app: Handler): Transport {
-  return async (req) =>
-    (await app(req)) ?? new Response("Not Found", { status: 404 });
+export function inProcess(app: Handler<{}>): Transport {
+  return async (req) => {
+    // initialize the root params to `{}` (mirrors `toFetch`) — the app is the
+    // fully-discharged root, so it carries no outstanding param obligation.
+    (req as Request & { params: {} }).params = {};
+    return (
+      (await app(req as Request & { params: {} })) ??
+      new Response("Not Found", { status: 404 })
+    );
+  };
 }
 
 /** Build the typed client. `transport` defaults to in-process over `app`. */
