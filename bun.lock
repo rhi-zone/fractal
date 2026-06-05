@@ -62,6 +62,7 @@
         "@rhi-zone/fractal-core": "workspace:*",
       },
       "devDependencies": {
+        "@rhi-zone/fractal-openapi": "workspace:*",
         "vite": "^6.0.0",
       },
     },

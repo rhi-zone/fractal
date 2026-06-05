@@ -27,6 +27,7 @@
     "test:watch": "bun test --watch"
   },
   "devDependencies": {
-    "vite":   "^6.0.0"
+    "@rhi-zone/fractal-openapi": "workspace:*",
+    "vite": "^6.0.0"
   }
 }

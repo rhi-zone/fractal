@@ -153,7 +153,12 @@ export function validated<
   // Stamp the body schema as an INERT, reflectable runtime carrier so the
   // `methods` constructor can lift it into `.meta` for the OpenAPI projection.
   // Erased from the dispatch path (an extra own-property on the function).
+  // MERGE into any existing carrier (e.g. `returns` may have already set
+  // `output`) rather than replacing it, so both `input` and `output` survive
+  // when `validated` and `returns` are composed on the same handler.
+  const existing = (h as unknown as WithSchema).__schema;
   (h as unknown as { __schema: WithSchema["__schema"] }).__schema = {
+    ...existing,
     input: schema,
   };
   return h as ValidatedHandler<InferOutput<S>, O>;
@@ -169,7 +174,12 @@ export function returns<O>(
   schema?: StandardSchemaV1<unknown, O> | object,
 ): ReturnsHandler<O> {
   if (schema !== undefined) {
+    // MERGE into any existing carrier (e.g. `validated` may have already set
+    // `input`) rather than replacing it, so both `input` and `output` survive
+    // when `validated` and `returns` are composed on the same handler.
+    const existing = (h as unknown as WithSchema).__schema;
     (h as unknown as { __schema: WithSchema["__schema"] }).__schema = {
+      ...existing,
       output: schema,
     };
   }

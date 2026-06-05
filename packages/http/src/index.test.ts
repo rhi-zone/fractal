@@ -13,9 +13,13 @@ import {
   type StandardSchemaV1,
 } from "@rhi-zone/fractal-core";
 import {
+  toOpenApi,
+} from "@rhi-zone/fractal-openapi";
+import {
   binary,
   json,
   notFound,
+  returns,
   sse,
   status,
   text,
@@ -167,3 +171,137 @@ function _typeGuard() {
   toFetch(param("id", leaky)); // discharged → compiles
 }
 void _typeGuard;
+
+// ---------------------------------------------------------------------------
+// Schema meta — validated / returns merge (not overwrite)
+// ---------------------------------------------------------------------------
+
+/** Minimal hand-rolled Standard Schema (no JSON-Schema trait; resolves to {} in
+ *  OpenAPI, but the SchemaRef presence is what matters here). */
+function makeSchema<T>(
+  check: (v: unknown) => v is T,
+  msg: string,
+): StandardSchemaV1<unknown, T> {
+  return {
+    "~standard": {
+      version: 1,
+      vendor: "merge-test",
+      validate: (v) =>
+        check(v)
+          ? { value: v }
+          : { issues: [{ message: msg }] },
+    },
+  };
+}
+
+const bodySchema = makeSchema(
+  (v): v is { name: string } =>
+    typeof v === "object" && v !== null && typeof (v as { name?: unknown }).name === "string",
+  "expected { name: string }",
+);
+
+const outputSchema = { type: "object", properties: { ok: { type: "boolean" } } };
+
+type SchemasOf = { schemas?: Record<string, { input?: unknown; output?: unknown }> };
+
+describe("validated + returns __schema merge", () => {
+  it("validated then returns: both input and output survive in __schema", () => {
+    const h = validated(bodySchema, (v) => json({ ok: true, name: v.name }));
+    returns(h, outputSchema);
+    const app = methods({ POST: h });
+    const schemas = (app.meta as SchemasOf).schemas;
+    expect(schemas?.["POST"]?.input).toBe(bodySchema);
+    expect(schemas?.["POST"]?.output).toBe(outputSchema);
+  });
+
+  it("returns then validated: both input and output survive in __schema", () => {
+    // validated() produces a ValidatedHandler; returns() wraps any Handler and
+    // merges output into the existing __schema. Call returns after validated so
+    // the output is stamped onto the validated handler's already-stamped input.
+    const h = validated(bodySchema, (v) => json({ ok: true, name: v.name }));
+    const h2 = returns(h, outputSchema);
+    const app = methods({ POST: h2 });
+    const schemas = (app.meta as SchemasOf).schemas;
+    expect(schemas?.["POST"]?.input).toBe(bodySchema);
+    expect(schemas?.["POST"]?.output).toBe(outputSchema);
+  });
+
+  it("validated then returns: toOpenApi emits requestBody AND response schema", () => {
+    // Use a plain JSON-Schema-shaped object for the input schema so resolveSchema
+    // picks it up without needing the JSON-Schema trait.
+    const inputJsonSchema = { type: "object", properties: { title: { type: "string" } }, required: ["title"] };
+    const inputSchema: StandardSchemaV1<unknown, { title: string }> = {
+      "~standard": {
+        version: 1,
+        vendor: "merge-test-openapi",
+        validate: (v) => {
+          if (typeof v === "object" && v !== null && typeof (v as { title?: unknown }).title === "string") {
+            return { value: v as { title: string } };
+          }
+          return { issues: [{ message: "expected { title: string }" }] };
+        },
+      },
+    };
+    // Stamp the JSON-Schema property onto the ~standard interface so resolveSchema
+    // can pick it up via the trait ladder. Cast through unknown to satisfy the
+    // read-only standard interface.
+    (inputSchema["~standard"] as unknown as Record<string, unknown>)["jsonSchema"] = {
+      input: () => inputJsonSchema,
+      output: () => inputJsonSchema,
+    };
+
+    const h = validated(inputSchema, (v) => json({ ok: true, title: v.title }));
+    // Attach an output schema that looks like plain JSON Schema so toOpenApi resolves it.
+    const h2 = returns(h, { type: "object", properties: { ok: { type: "boolean" } } });
+
+    const app = methods({ POST: h2 });
+    const doc = toOpenApi(app as unknown as Parameters<typeof toOpenApi>[0], { title: "t", version: "1" });
+    const post = doc.paths["/"]?.post;
+    // requestBody must be present (input schema was not clobbered)
+    expect(post?.requestBody).toBeDefined();
+    // response schema must be present (output schema was not clobbered)
+    expect(post?.responses["200"]?.content?.["application/json"]?.schema).toBeDefined();
+  });
+
+  it("returns then validated: toOpenApi emits requestBody AND response schema", () => {
+    // Same as above but stamp returns AFTER validated — the merge must work both ways.
+    const inputSchema: StandardSchemaV1<unknown, { name: string }> = bodySchema;
+    // Stamp JSON-Schema trait so the requestBody schema resolves to real JSON Schema.
+    const inputJsonSchema = { type: "object", properties: { name: { type: "string" } }, required: ["name"] };
+    (inputSchema["~standard"] as unknown as Record<string, unknown>)["jsonSchema"] = {
+      input: () => inputJsonSchema,
+      output: () => inputJsonSchema,
+    };
+    const h = validated(bodySchema, (_v, _req) => json({ done: true }));
+    const h2 = returns(h, { type: "object", properties: { done: { type: "boolean" } } });
+
+    const app = methods({ POST: h2 });
+    const doc = toOpenApi(app as unknown as Parameters<typeof toOpenApi>[0], { title: "t", version: "1" });
+    const post = doc.paths["/"]?.post;
+    expect(post?.requestBody).toBeDefined();
+    expect(post?.responses["200"]?.content?.["application/json"]?.schema).toBeDefined();
+  });
+
+  it("runtime dispatch is unchanged: validated still rejects bad input after returns", async () => {
+    const h = validated(bodySchema, (v) => json({ ok: true, name: v.name }));
+    returns(h, outputSchema);
+    // Good body → 200
+    const good = await h(
+      new Request("http://x/", {
+        method: "POST",
+        body: JSON.stringify({ name: "ada" }),
+        headers: { "Content-Type": "application/json" },
+      }) as Request & { params: {} },
+    );
+    expect(good?.status).toBe(200);
+    // Bad body → 400
+    const bad = await h(
+      new Request("http://x/", {
+        method: "POST",
+        body: JSON.stringify(42),
+        headers: { "Content-Type": "application/json" },
+      }) as Request & { params: {} },
+    );
+    expect(bad?.status).toBe(400);
+  });
+});
