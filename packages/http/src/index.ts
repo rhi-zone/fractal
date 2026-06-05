@@ -4,8 +4,8 @@
 // @rhi-zone/fractal-core. Provides:
 //   - toFetch(app)                  Handler<{}> → (Request) => Promise<Response>
 //   - json / text / notFound / binary / sse / status helpers   response builders
-//   - validated(schema, fn)         Standard Schema body validation
-//   - returns<O>(handler)           output-type annotation for the typed client
+//   - validated(schema, fn)         Standard Schema body validation (input type)
+//   - returns(handler, outSchema)   output schema → typed client return type
 //
 // Runtime-agnostic: this module imports NO Bun and NO Node. The only runtime
 // touch lives in ./adapter (serveBun / serveNode), which this file does not
@@ -198,19 +198,20 @@ function allowHeader(verbs: ReadonlySet<Method>): string {
  *   3. on issues → `400` JSON `{ error, issues }`,
  *   4. on success → calls `fn(value, req)` with the *typed* validated value.
  * The input type `InferOutput<schema>` is carried as a phantom so the typed
- * client requires a correctly-shaped `body`. `O` (optional) annotates the
- * response body type for client return typing.
+ * client requires a correctly-shaped `body`. `validated` types the INPUT ONLY —
+ * a typed RESPONSE requires a real output schema value, which `returns(handler,
+ * outputSchema)` supplies (codegen projects the return type from the runtime
+ * `__schema.output` carrier → OpenAPI `responses[200]`, never from a TS phantom,
+ * so an output type param here would be a dead phantom invisible to the client).
+ * To type a validated route's response, compose: `returns(validated(s, fn), out)`.
  */
-export function validated<
-  S extends StandardSchemaV1<unknown, unknown>,
-  O = unknown,
->(
+export function validated<S extends StandardSchemaV1<unknown, unknown>>(
   schema: S,
   fn: (
     value: InferOutput<S>,
     req: Request,
   ) => Response | undefined | Promise<Response | undefined>,
-): ValidatedHandler<InferOutput<S>, O> {
+): ValidatedHandler<InferOutput<S>> {
   const h: Handler = async (req) => {
     let raw: unknown;
     try {
@@ -241,7 +242,7 @@ export function validated<
     ...existing,
     input: schema,
   };
-  return h as ValidatedHandler<InferOutput<S>, O>;
+  return h as ValidatedHandler<InferOutput<S>>;
 }
 
 /** `returns<O>(handler, schema?)` — annotate a non-validated handler's output

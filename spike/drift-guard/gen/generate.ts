@@ -48,20 +48,22 @@ function appSource(resources: number): string {
   lines.push(``);
   // Body/response phantom handler factories (type-level only; runtime is a stub).
   lines.push(`// Phantom-typed handlers: the TYPE carries body (i) / response (o); runtime is inert.`);
-  lines.push(`declare function vh<I, O>(): ValidatedHandler<I, O>;`);
+  lines.push(`declare function vh<I>(): ValidatedHandler<I>;`);
   lines.push(`declare function rh<O>(): ReturnsHandler<O>;`);
   lines.push(`declare function h(): Handler<{ id: string }>;`);
   lines.push(``);
-  lines.push(`// Param route table pinned with BOTH type args so the literal verb set survives`);
-  lines.push(`// in .meta (methods<P>({...}) alone erases verbs to the full Method union —`);
-  lines.push(`// see the report's "core API finding"). methods<P, typeof tbl>(tbl) keeps "GET".`);
+  lines.push(`// \`methods\` now takes ONE \`const T\` type-arg (commit "methods infers literal`);
+  lines.push(`// verb sets …"): \`const T\` keeps the verb set literal ("GET", not the full`);
+  lines.push(`// Method union) and \`ParamsOf<T>\` extracts the {id} obligation from the handler`);
+  lines.push(`// value — so a bare \`methods(idTbl)\` over a handler declaring its param type is`);
+  lines.push(`// enough; no explicit type-args (which would erase the literal verb set).`);
   lines.push(`const idTbl = { GET: h() };`);
   lines.push(``);
   lines.push(`export const app = path({`);
   for (let i = 0; i < resources; i++) {
     lines.push(`  res${i}: choice(`);
-    lines.push(`    methods({ GET: rh<{ id: number; name: string }>(), POST: vh<{ title: string }, { id: number }>() }),`);
-    lines.push(`    param("id", methods<{ id: string }, typeof idTbl>(idTbl)),`);
+    lines.push(`    methods({ GET: rh<{ id: number; name: string }>(), POST: vh<{ title: string }>() }),`);
+    lines.push(`    param("id", methods(idTbl)),`);
     lines.push(`  ),`);
   }
   lines.push(`});`);
@@ -91,9 +93,12 @@ interface RouteSpec {
 function routesFor(resources: number): RouteSpec[] {
   const r: RouteSpec[] = [];
   for (let i = 0; i < resources; i++) {
-    // methods({GET: returns<{id;name}>, POST: validated<{title},{id}>}) at /res{i}
+    // methods({GET: returns<{id;name}>, POST: validated<{title}>}) at /res{i}.
+    // POST has a typed BODY (validated) but NO typed response — `validated` types
+    // input only; a typed response would require composing `returns`. So its
+    // derived `o` is `unknown`, and the generated side must mirror that.
     r.push({ key: `GET /res${i}`, pathKey: `/res${i}`, verb: "get", params: "{}", body: "never", response: "{ id: number; name: string }" });
-    r.push({ key: `POST /res${i}`, pathKey: `/res${i}`, verb: "post", params: "{}", body: "{ title: string }", response: "{ id: number }" });
+    r.push({ key: `POST /res${i}`, pathKey: `/res${i}`, verb: "post", params: "{}", body: "{ title: string }", response: "unknown" });
     // param("id", methods<{id}>({GET}))  at /res{i}/{id}
     r.push({ key: `GET /res${i}/{id}`, pathKey: `/res${i}/{id}`, verb: "get", params: "{ id: string }", body: "never", response: "unknown" });
   }

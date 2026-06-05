@@ -87,7 +87,7 @@ const todos: Todo[] = [];
 
 const todosCollection = methods({
   GET: () => json(todos),
-  POST: validated<typeof createSchema, Todo>(createSchema, (value) =>
+  POST: validated(createSchema, (value) =>
     status(201, { id: "1", title: value.title, done: false }),
   ),
 });
@@ -96,9 +96,7 @@ const todoDone = param(
   "id",
   path({
     done: methods({
-      POST: validated<typeof doneSchema, Todo>(doneSchema, () =>
-        json(todos[0]),
-      ),
+      POST: validated(doneSchema, () => json(todos[0])),
     }),
   }),
 );

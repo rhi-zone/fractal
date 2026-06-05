@@ -23,6 +23,7 @@ import {
 import {
   binary,
   json,
+  returns,
   sse,
   status,
   text,
@@ -75,8 +76,40 @@ function schema<const F extends Record<string, "string" | "boolean">>(
   return { "~standard": std } as StandardSchemaV1<unknown, Out>;
 }
 
+/** Wrap an object schema as an ARRAY schema (same StandardSchema + JSON-Schema
+ *  trait shape), so a `returns(...)` annotation can type a list response. The
+ *  validate is identity-ish (the example never re-validates outputs); the
+ *  load-bearing part is the `jsonSchema` trait the OpenAPI projection reads. */
+function arrayOf<O>(
+  item: StandardSchemaV1<unknown, O>,
+): StandardSchemaV1<unknown, O[]> {
+  const itemJson = (item as { "~standard": { jsonSchema?: { output?: () => unknown } } })[
+    "~standard"
+  ].jsonSchema?.output;
+  const std = {
+    version: 1 as const,
+    vendor: "todo-fixture",
+    jsonSchema: {
+      input: () => ({ type: "array", items: itemJson?.() }),
+      output: () => ({ type: "array", items: itemJson?.() }),
+    },
+    validate(value: unknown) {
+      return Array.isArray(value)
+        ? { value: value as O[] }
+        : { issues: [{ message: "expected an array" }] };
+    },
+  };
+  return { "~standard": std } as StandardSchemaV1<unknown, O[]>;
+}
+
 const createSchema = schema({ title: "string" });
 const doneSchema = schema({ done: "boolean" });
+
+// Output schemas — the source of TYPED client responses. A `returns(handler,
+// schema)` stamps `__schema.output`, which the OpenAPI projection emits as the
+// 200 response schema and codegen turns into the client's concrete return type.
+const todoSchema = schema({ id: "string", title: "string", done: "boolean" });
+const todoListSchema = arrayOf(todoSchema);
 
 // ---------------------------------------------------------------------------
 // Domain — an in-memory todo store
@@ -98,12 +131,15 @@ let seq = 1;
 
 // GET /todos  +  POST /todos (validated create → 201)
 const todosCollection = methods({
-  GET: () => json(todos),
-  POST: validated<typeof createSchema, Todo>(createSchema, (value) => {
-    const todo: Todo = { id: String(seq++), title: value.title, done: false };
-    todos.push(todo);
-    return status(201, todo);
-  }),
+  GET: returns(() => json(todos), todoListSchema),
+  POST: returns(
+    validated(createSchema, (value) => {
+      const todo: Todo = { id: String(seq++), title: value.title, done: false };
+      todos.push(todo);
+      return status(201, todo);
+    }),
+    todoSchema,
+  ),
 });
 
 // /todos/{id}/done — POST a validated { done } body for a typed param id.
@@ -111,9 +147,8 @@ const todoDone = param(
   "id",
   path({
     done: methods({
-      POST: validated<typeof doneSchema, Todo | { error: string }>(
-        doneSchema,
-        (value, req) => {
+      POST: returns(
+        validated(doneSchema, (value, req) => {
           const id = paramValue(req, "id");
           const todo = todos.find((t) => t.id === id);
           if (todo === undefined) {
@@ -121,7 +156,8 @@ const todoDone = param(
           }
           todo.done = value.done;
           return json(todo);
-        },
+        }),
+        todoSchema,
       ),
     }),
   }),
@@ -131,13 +167,13 @@ const todoDone = param(
 const todoItem = param(
   "id",
   methods({
-    GET: (req) => {
+    GET: returns((req) => {
       const id = paramValue(req, "id");
       const todo = todos.find((t) => t.id === id);
       return todo
         ? json(todo)
         : json({ error: "TODO_NOT_FOUND", id }, { status: 404 });
-    },
+    }, todoSchema),
   }),
 );
 

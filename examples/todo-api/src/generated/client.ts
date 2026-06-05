@@ -8,22 +8,38 @@ import type { Handler } from "@rhi-zone/fractal-core";
 
 export interface ApiClient {
   "/todos": {
-    get: () => Promise<unknown>;
+    get: () => Promise<{
+    id: string;
+    title: string;
+    done: boolean;
+  }[]>;
     post: (args: { body: {
     title: string;
-  } }) => Promise<unknown>;
+  } }) => Promise<{
+    id: string;
+    title: string;
+    done: boolean;
+  }>;
   };
   "/todos/{id}/done": {
     post: (args: { params: {
     id: string;
   }; body: {
     done: boolean;
-  } }) => Promise<unknown>;
+  } }) => Promise<{
+    id: string;
+    title: string;
+    done: boolean;
+  }>;
   };
   "/todos/{id}": {
     get: (args: { params: {
     id: string;
-  } }) => Promise<unknown>;
+  } }) => Promise<{
+    id: string;
+    title: string;
+    done: boolean;
+  }>;
   };
   "/health": {
     get: () => Promise<unknown>;

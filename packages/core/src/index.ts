@@ -275,8 +275,13 @@ export interface ChoiceMeta<Ms extends readonly unknown[]> {
 
 declare const VALIDATED: unique symbol;
 declare const RETURNS: unique symbol;
-export type ValidatedHandler<I, O> = Handler & {
-  readonly [VALIDATED]: { i: I; o: O };
+/** A handler with a `validated(schema, fn)` body: the phantom carries ONLY the
+ *  validated INPUT type `I`. Output typing is NOT `validated`'s job — a typed
+ *  response requires a real output schema value, supplied by `returns(handler,
+ *  outputSchema)`, because codegen projects from the runtime `__schema.output`
+ *  carrier (→ OpenAPI `responses[200]`), never from a TS-only phantom. */
+export type ValidatedHandler<I> = Handler & {
+  readonly [VALIDATED]: { i: I };
 };
 export type ReturnsHandler<O> = Handler & { readonly [RETURNS]: O };
 
@@ -313,15 +318,21 @@ type ParamsOf<T> = UnionToIntersection<
 >;
 
 // Per-verb input/output from the handlers in a methods table. A handler may be
-// a plain `Handler` (output unknown) or a `Validated<I,O>`-tagged handler whose
-// phantom carries the typed body I and output O. Extracted in a single pass over
-// the table's KEYS (≤7 verbs) — never over N routes.
+// a plain `Handler` (no typed input, output unknown), a `ValidatedHandler<I>`
+// whose phantom carries the typed body `I` (output stays `unknown` — `validated`
+// types input only), or a `ReturnsHandler<O>` whose phantom carries the typed
+// output `O`. Extracted in a single pass over the table's KEYS (≤7 verbs) —
+// never over N routes. NB: a validated handler may ALSO be wrapped by `returns`
+// to add an output; the constructor merges both into `__schema` at runtime, and
+// the type is `ValidatedHandler<I> & ReturnsHandler<O>`, which the `ValidatedHandler`
+// arm matches first (input) but the output then falls to `unknown` here — output
+// typing on a validated route is read off the runtime schema by codegen, not this
+// phantom (this phantom path drives only the drift guard's structural compare).
 type MethodsIO<T> = {
   readonly [K in Extract<keyof T, string>]: T[K] extends ValidatedHandler<
-    infer I,
-    infer O
+    infer I
   >
-    ? { i: I; o: O }
+    ? { i: I; o: unknown }
     : T[K] extends ReturnsHandler<infer O>
       ? { i: never; o: Awaited<O> }
       : { i: never; o: unknown };

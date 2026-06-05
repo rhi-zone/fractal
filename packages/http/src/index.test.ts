@@ -57,9 +57,8 @@ const users = [
 
 const usersCollection = methods({
   GET: () => json(users),
-  POST: validated<typeof newUserSchema, { created: true; name: string }>(
-    newUserSchema,
-    (value) => json({ created: true, name: value.name }, { status: 201 }),
+  POST: validated(newUserSchema, (value) =>
+    json({ created: true, name: value.name }, { status: 201 }),
   ),
 });
 

@@ -9,7 +9,7 @@ import { json } from "@rhi-zone/fractal-http";
 import { methods } from "@rhi-zone/fractal-core";
 import { createClient, type ApiClient } from "./client.ts";
 import type { GetTodosId, PostTodosIdDone } from "./server.ts";
-import { app } from "../../../../../examples/todo-api/src/app.ts";
+import { app, type Todo } from "../../../../../examples/todo-api/src/app.ts";
 
 // ---------------------------------------------------------------------------
 // CLIENT — positive shapes.
@@ -25,6 +25,26 @@ export async function clientPositives(): Promise<void> {
   await client["/todos"].post({ body: { title: "x" } });
   // POST /todos/{id}/done — typed param AND typed body.
   await client["/todos/{id}/done"].post({ params: { id: "1" }, body: { done: true } });
+}
+
+// ---------------------------------------------------------------------------
+// CLIENT — RESPONSE TYPES. `returns(handler, todoSchema)` on GET /todos/{id}
+// makes the call resolve to a CONCRETE Todo shape (not `Promise<unknown>`).
+// ---------------------------------------------------------------------------
+export async function clientResponses(): Promise<void> {
+  // POSITIVE: the resolved value is assignable to Todo (structural; the generated
+  // return is the inline `{ id; title; done }` the output schema projects).
+  const one: Todo = await client["/todos/{id}"].get({ params: { id: "1" } });
+  void one;
+  // POSITIVE: GET /todos resolves to a Todo[] (the array output schema).
+  const list: Todo[] = await client["/todos"].get();
+  void list;
+}
+
+export async function clientResponseNegatives(): Promise<void> {
+  // @ts-expect-error — the GET /todos/{id} response is a Todo, NOT a string.
+  const bad: string = await client["/todos/{id}"].get({ params: { id: "1" } });
+  void bad;
 }
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ import {
   type Reflected,
   type StandardSchemaV1,
 } from "@rhi-zone/fractal-core";
-import { json, status, text, validated } from "@rhi-zone/fractal-http";
+import { json, returns, status, text, validated } from "@rhi-zone/fractal-http";
 import { inProcess, type Transport } from "@rhi-zone/fractal-client";
 import { toOpenApi } from "@rhi-zone/fractal-openapi";
 import { generate, jsonSchemaToTs } from "./index.ts";
@@ -70,6 +70,8 @@ function schema<const F extends Record<string, "string" | "boolean">>(
 
 const createSchema = schema({ title: "string" });
 const doneSchema = schema({ done: "boolean" });
+// Output schema for a Todo — drives the TYPED client RESPONSE via `returns(...)`.
+const todoSchema = schema({ id: "string", title: "string", done: "boolean" });
 
 interface Todo {
   id: string;
@@ -82,32 +84,38 @@ function makeApp(): Reflected<unknown> {
   let seq = 1;
   const collection = methods({
     GET: () => json(todos),
-    POST: validated<typeof createSchema, Todo>(createSchema, (value) => {
-      const todo: Todo = { id: String(seq++), title: value.title, done: false };
-      todos.push(todo);
-      return status(201, todo);
-    }),
+    POST: returns(
+      validated(createSchema, (value) => {
+        const todo: Todo = { id: String(seq++), title: value.title, done: false };
+        todos.push(todo);
+        return status(201, todo);
+      }),
+      todoSchema,
+    ),
   });
   const todoDone = param(
     "id",
     path({
       done: methods({
-        POST: validated<typeof doneSchema, Todo>(doneSchema, (value, req) => {
-          const todo = todos.find((t) => t.id === paramValue(req, "id"));
-          if (todo === undefined) return json({ error: "NOT_FOUND" }, { status: 404 });
-          todo.done = value.done;
-          return json(todo);
-        }),
+        POST: returns(
+          validated(doneSchema, (value, req) => {
+            const todo = todos.find((t) => t.id === paramValue(req, "id"));
+            if (todo === undefined) return json({ error: "NOT_FOUND" }, { status: 404 });
+            todo.done = value.done;
+            return json(todo);
+          }),
+          todoSchema,
+        ),
       }),
     }),
   );
   const todoItem = param(
     "id",
     methods({
-      GET: (req) => {
+      GET: returns((req) => {
         const todo = todos.find((t) => t.id === paramValue(req, "id"));
         return todo ? json(todo) : json({ error: "NOT_FOUND" }, { status: 404 });
-      },
+      }, todoSchema),
     }),
   );
   return path({
@@ -176,6 +184,16 @@ describe("generate — typed client source", () => {
   it("types path params concretely", () => {
     const { client } = generate(doc);
     expect(client).toContain("id: string;");
+  });
+
+  it("types responses concretely from `returns(...)` output schema (not unknown)", () => {
+    const { client } = generate(doc);
+    // GET /todos/{id} declared `returns(..., todoSchema)` → a concrete Todo shape,
+    // not `Promise<unknown>`. The presence of the resolved property lines on the
+    // return side proves the success response schema reached the call signature.
+    expect(client).toContain("=> Promise<{");
+    // GET /todos has NO `returns` → it legitimately stays `Promise<unknown>`.
+    expect(client).toContain("get: () => Promise<unknown>;");
   });
 });
 
