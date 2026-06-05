@@ -12,9 +12,15 @@
 // import. Streaming (SSE) and binary are ordinary Response bodies.
 
 import {
+  patternMatches,
+  routeTable,
+  segments,
   withParams,
   type Handler,
   type InferOutput,
+  type MetaRoute,
+  type Method,
+  type Reflected,
   type ReturnsHandler,
   type StandardSchemaV1,
   type ValidatedHandler,
@@ -95,12 +101,86 @@ export function sse(
 // The one adapter — toFetch
 // ============================================================================
 
-/** Run `app`; a final `undefined` becomes a 404. Runtime-agnostic. The root only
- *  accepts a FULLY-DISCHARGED `Handler<{}>`: an app that reads `req.params.id`
- *  without a `param("id", …)` discharging it is `Handler<{id:string}>` and FAILS
- *  to compile here. Initializes `params` to `{}` for the root. */
+/**
+ * Run `app`; turn a final `undefined` into the correct HTTP-correctness
+ * response. Runtime-agnostic. The root only accepts a FULLY-DISCHARGED
+ * `Handler<{}>`: an app that reads `req.params.id` without a `param("id", …)`
+ * discharging it is `Handler<{id:string}>` and FAILS to compile here.
+ *
+ * HTTP correctness is a PROJECTION from `.meta`, NOT something dispatch emits
+ * (see the dispatch-vs-projection boundary in @rhi-zone/fractal-core). Dispatch
+ * (`methods`) is pure verb dispatch that PASSES on a verb-miss; here we close
+ * the loop:
+ *   1. Precompute the route table from `app.meta` ONCE (at construction).
+ *   2. Per request, run `app(req)`. If it returns a `Response`, return it.
+ *   3. On `undefined`, match the request path against the table's patterns
+ *      (param segments match any one segment) and aggregate the verbs of EVERY
+ *      matching pattern (so choice alts / mounts at the same path UNION their
+ *      verbs — the cross-branch `Allow` no single `methods` node could compute):
+ *        - HEAD where GET ∈ verbs → re-run dispatch as GET, return that
+ *          response with a null body (status + headers preserved).
+ *        - OPTIONS at a matched path → 204 + `Allow` (sorted union, HEAD when
+ *          GET present, OPTIONS always).
+ *        - any other verb at a matched path → 405 + that same `Allow`.
+ *        - no pattern matches the path → 404.
+ *
+ * `app` is typed `Handler<{}>` for the root discharge invariant; the route table
+ * is read off its `.meta` sidecar (absent on a bare handler → no routes → 404,
+ * which is the correct degenerate behaviour).
+ */
 export function toFetch(app: Handler<{}>): (req: Request) => Promise<Response> {
-  return async (req) => (await app(withParams(req, {}))) ?? notFound();
+  const table = routeTable((app as Partial<Reflected<unknown>>).meta);
+  return async (req) => {
+    const direct = await app(withParams(req, {}));
+    if (direct !== undefined) return direct;
+
+    // Dispatch passed — project the correct correctness response from .meta.
+    const segs = segments(req);
+    const matches = table.filter((r) => patternMatches(r.pattern, segs));
+    if (matches.length === 0) return notFound(); // path doesn't exist → 404
+
+    const verbs = unionVerbs(matches);
+    const method = req.method as Method;
+
+    if (method === "HEAD" && verbs.has("GET")) {
+      // Re-run dispatch with the method swapped to GET, strip the body.
+      const getReq = withParams(
+        new Request(req.url, { ...req, method: "GET" }),
+        {},
+      );
+      const res = await app(getReq);
+      if (res !== undefined) return new Response(null, res);
+      // GET handler itself passed → fall through to 405 (no body served).
+    }
+
+    if (method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: { Allow: allowHeader(verbs) },
+      });
+    }
+
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { Allow: allowHeader(verbs) },
+    });
+  };
+}
+
+/** Union the verb sets of every matching route (cross-choice / cross-mount). */
+function unionVerbs(matches: readonly MetaRoute[]): Set<Method> {
+  const verbs = new Set<Method>();
+  for (const r of matches) for (const v of r.verbs) verbs.add(v);
+  return verbs;
+}
+
+/** A sorted `Allow` value: the declared verbs, plus HEAD when GET is present and
+ *  OPTIONS always (both are auto-served by this projection). */
+function allowHeader(verbs: ReadonlySet<Method>): string {
+  const all = new Set<Method>(verbs);
+  if (all.has("GET")) all.add("HEAD");
+  all.add("OPTIONS");
+  return [...all].sort().join(", ");
 }
 
 // ============================================================================

@@ -141,39 +141,29 @@ function paramRT<K extends string, Q extends Record<K, string>>(
 }
 
 /**
- * Method dispatch. Only fires when the path is FULLY consumed.
- *   - segment remaining          -> undefined (not mine)
+ * PURE verb dispatch + pass. Only fires when the path is FULLY consumed.
+ *   - segment remaining          -> undefined (not mine — path not consumed)
  *   - consumed + method in table -> call it
- *   - consumed + method missing  -> 405 with `Allow` header
- *   - HEAD with GET present      -> run GET, return its response with null body
- *   - OPTIONS (if not in table)  -> 204 + Allow
+ *   - consumed + method missing  -> undefined (PASS — let a sibling alt try)
+ *
+ * Dispatch is a pure `(Request) => Response | undefined`. `methods` serves ONLY
+ * the verbs explicitly present in its table (a user who puts HEAD/OPTIONS in the
+ * table gets them served directly). It NEVER emits 405, never auto-derives HEAD
+ * from GET, and never synthesizes OPTIONS — emitting a 405 mid-dispatch would
+ * short-circuit `choice` and hide a later alt that DOES handle the verb, and an
+ * `Allow` computed from one table cannot see sibling alts / mounts at the same
+ * path. Those HTTP-correctness concerns (405 / Allow / auto-HEAD / OPTIONS /
+ * 404) are a PROJECTION computed from `.meta` in `toFetch` — see the
+ * dispatch-vs-projection boundary note at the head of the COMBINATORS section.
  */
 function methodsRT<P = {}>(
   table: Partial<Record<Method, Handler<P>>>,
 ): Handler<P> {
-  const verbs = Object.keys(table) as Method[];
-  const allow = verbs.join(", ");
-  return async (req) => {
+  return (req) => {
     if (segments(req).length > 0) return undefined; // path not fully consumed
-    const method = req.method as Method;
-
-    const direct = table[method];
+    const direct = table[req.method as Method];
     if (direct !== undefined) return direct(req);
-
-    if (method === "HEAD" && table.GET !== undefined) {
-      const res = await table.GET(req);
-      if (res === undefined) return undefined;
-      return new Response(null, res);
-    }
-
-    if (method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: { Allow: allow } });
-    }
-
-    return new Response(`Method Not Allowed`, {
-      status: 405,
-      headers: { Allow: allow },
-    });
+    return undefined; // verb-miss -> PASS (a sibling choice alt may handle it)
   };
 }
 
@@ -341,6 +331,19 @@ type MethodsIO<T> = {
 // COMBINATORS — meta-carrying. Each delegates to a bare runtime combinator
 // (identical behaviour) and bolts on the structural meta. These ARE the public
 // combinators: a typed client is derived from the meta they attach.
+//
+// DISPATCH vs PROJECTION boundary (load-bearing invariant):
+//   - The DISPATCH combinators (`path`/`methods`/`choice`/`param`/`mount`) are
+//     PURE and meta-FREE on the runtime path: each is a `(Request) => Response |
+//     undefined` that reads nothing from `.meta`. `undefined` means "not mine —
+//     pass". A verb-miss in `methods` is a pass, NOT a 405.
+//   - The PROJECTIONS (`toFetch`, `toOpenApi`, codegen) are the ONLY readers of
+//     `.meta`. HTTP correctness — 405 + `Allow`, auto-HEAD-from-GET, OPTIONS,
+//     and the 404-vs-405 distinction — is computed by `toFetch` from `.meta`
+//     (the same inert structure `toOpenApi` walks), AFTER dispatch returns
+//     `undefined`. This is what makes correctness compositional across `choice`
+//     and `mount`: `Allow` is the UNION of verbs across every branch resolving
+//     to the matched path, which no single in-dispatch `methods` node can see.
 // ============================================================================
 
 /** `methods(table)` — method dispatch with an inert verb-set meta.
@@ -486,6 +489,102 @@ export function param(
 export function paramValue(req: Request, name: string): string | undefined {
   const params = (req as Partial<{ params: Record<string, string> }>).params;
   return params?.[name] ?? undefined;
+}
+
+// ============================================================================
+// META-ROUTE EXTRACTOR — the shared, inert walk over `.meta`.
+//
+// A PROJECTION primitive (never on the dispatch path): it walks the same inert
+// `.meta` DATA tree the OpenAPI projection walks, flattening it into a list of
+// concrete routes — one `{ pattern, verbs }` per path that a `methods` node sits
+// at. `path`/`prefix` append a LITERAL segment; `param` appends a `{ kind:
+// "param" }` wildcard segment (matches any one path segment); `choice` BRANCHES
+// (every alt is its own route at the same accumulated pattern); `methods`
+// emits a route whose verbs are exactly its table's keys.
+//
+// `toFetch` uses this to compute 405 / `Allow` / auto-HEAD / OPTIONS / 404 as a
+// projection — aggregating verbs across EVERY route matching a request path, so
+// choice alts and mounted sub-routers at the same path UNION their verbs. The
+// OpenAPI projection walks the same meta for its richer per-verb operation
+// output; this extractor is the verb-level view of that one walk.
+// ============================================================================
+
+/** One segment of a route pattern: a literal name, or a dynamic param wildcard. */
+export type PatternSegment =
+  | { readonly kind: "literal"; readonly value: string }
+  | { readonly kind: "param"; readonly name: string };
+
+/** A concrete route flattened out of `.meta`: the segment pattern leading to a
+ *  `methods` node, plus that node's declared verb set. */
+export interface MetaRoute {
+  readonly pattern: readonly PatternSegment[];
+  readonly verbs: ReadonlySet<Method>;
+}
+
+/** Flatten an app's inert `.meta` tree into the list of concrete `MetaRoute`s.
+ *  Pure: reads only `.meta`, runs nothing, touches no Request. */
+export function routeTable(meta: unknown): MetaRoute[] {
+  const out: MetaRoute[] = [];
+  walkMeta(meta, [], out);
+  return out;
+}
+
+function walkMeta(
+  meta: unknown,
+  pattern: PatternSegment[],
+  out: MetaRoute[],
+): void {
+  if (typeof meta !== "object" || meta === null) return;
+  const m = meta as { tag?: string };
+  switch (m.tag) {
+    case "methods": {
+      const mm = meta as MethodsMeta<string, never>;
+      out.push({ pattern: [...pattern], verbs: new Set(mm.verbs as Method[]) });
+      return;
+    }
+    case "path": {
+      const pm = meta as PathMeta<Record<string, unknown>>;
+      for (const k of Object.keys(pm.routes)) {
+        walkMeta(
+          pm.routes[k],
+          [...pattern, { kind: "literal", value: k }],
+          out,
+        );
+      }
+      return;
+    }
+    case "prefix": {
+      const pm = meta as PrefixMeta<string, unknown>;
+      walkMeta(pm.rest, [...pattern, { kind: "literal", value: pm.pre }], out);
+      return;
+    }
+    case "param": {
+      const pm = meta as ParamMeta<string, unknown, unknown>;
+      walkMeta(pm.rest, [...pattern, { kind: "param", name: pm.name }], out);
+      return;
+    }
+    case "choice": {
+      // BRANCH: every alt is its own route at the SAME accumulated pattern.
+      for (const alt of (meta as ChoiceMeta<readonly unknown[]>).alts) {
+        walkMeta(alt, pattern, out);
+      }
+      return;
+    }
+  }
+}
+
+/** Does a route `pattern` match a request's path `segs`? Literal segments match
+ *  by exact name; param segments match ANY one segment; length must be equal. */
+export function patternMatches(
+  pattern: readonly PatternSegment[],
+  segs: readonly string[],
+): boolean {
+  if (pattern.length !== segs.length) return false;
+  for (let i = 0; i < pattern.length; i++) {
+    const p = pattern[i]!;
+    if (p.kind === "literal" && p.value !== segs[i]) return false;
+  }
+  return true;
 }
 
 // ============================================================================

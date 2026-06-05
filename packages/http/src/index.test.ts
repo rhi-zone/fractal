@@ -7,9 +7,11 @@ import { describe, expect, it } from "bun:test";
 import {
   choice,
   methods,
+  mount,
   param,
   paramValue,
   path,
+  type Handler,
   type StandardSchemaV1,
 } from "@rhi-zone/fractal-core";
 import {
@@ -126,6 +128,127 @@ describe("toFetch + response builders", () => {
     const body = await res.text();
     expect(body).toContain("event: connected");
     expect(body).toContain("event: done");
+  });
+});
+
+// ===========================================================================
+// HTTP CORRECTNESS — a PROJECTION computed by toFetch from .meta, NOT emitted by
+// dispatch. `methods` passes on a verb-miss; toFetch turns the pass into 405 /
+// Allow / auto-HEAD / OPTIONS / 404, aggregating verbs across choice & mount.
+// ===========================================================================
+describe("http correctness (toFetch projection from .meta)", () => {
+  // single-table 405 + Allow
+  it("known path, wrong verb -> 405 + Allow lists the table's verbs", async () => {
+    const res = await hit("/users", { method: "DELETE" });
+    expect(res.status).toBe(405);
+    const allow = res.headers.get("Allow") ?? "";
+    expect(allow.includes("GET")).toBe(true);
+    expect(allow.includes("POST")).toBe(true);
+  });
+
+  // auto-HEAD: status + headers preserved, empty body
+  it("auto-HEAD mirrors GET: status + headers preserved, empty body", async () => {
+    const get = await hit("/users");
+    const head = await hit("/users", { method: "HEAD" });
+    expect(head.status).toBe(get.status);
+    expect(head.headers.get("Content-Type")).toBe(get.headers.get("Content-Type"));
+    expect(await head.text()).toBe("");
+  });
+
+  // OPTIONS 204 + Allow (includes HEAD when GET present, includes OPTIONS)
+  it("OPTIONS -> 204 + Allow union (HEAD when GET present, OPTIONS always)", async () => {
+    const res = await hit("/users", { method: "OPTIONS" });
+    expect(res.status).toBe(204);
+    const allow = res.headers.get("Allow") ?? "";
+    expect(allow).toBe("GET, HEAD, OPTIONS, POST");
+  });
+
+  // 404 vs 405 distinction
+  it("unknown path -> 404 (path does not exist)", async () => {
+    expect((await hit("/nope")).status).toBe(404);
+  });
+  it("unknown NESTED path -> 404, not 405", async () => {
+    expect((await hit("/users/1/nope")).status).toBe(404);
+  });
+  it("known path, wrong verb -> 405, not 404", async () => {
+    expect((await hit("/users", { method: "PATCH" })).status).toBe(405);
+  });
+
+  // param-route 405: DELETE on a GET-only /users/{id}
+  it("param route, wrong verb -> 405 + Allow: GET", async () => {
+    const res = await hit("/users/1", { method: "DELETE" });
+    expect(res.status).toBe(405);
+    expect(res.headers.get("Allow")).toBe("GET, HEAD, OPTIONS");
+  });
+
+  // method case: WHATWG `Request` normalizes the lowercase forms of the standard
+  // verbs to uppercase, so `get` IS the GET verb and is served. (A non-standard
+  // verb is NOT normalized — see the QUERY case below.)
+  it("lowercase 'get' is normalized to GET by Request -> 200", async () => {
+    const res = await hit("/health", { method: "get" });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("ok");
+  });
+
+  // unknown methods at a known path -> 405
+  it("unknown method QUERY at a known path -> 405 + Allow", async () => {
+    const res = await hit("/health", { method: "QUERY" });
+    expect(res.status).toBe(405);
+    expect(res.headers.get("Allow")).toBe("GET, HEAD, OPTIONS");
+  });
+});
+
+// ===========================================================================
+// REGRESSION — adversarial finding C-F1: correctness must compose across choice
+// AND mount. A 405 must NOT short-circuit a later alt that DOES serve the verb,
+// and Allow must be the UNION of verbs across every branch at the path.
+// ===========================================================================
+describe("regression: cross-choice / cross-mount correctness (C-F1)", () => {
+  // choice(methods{GET}, methods{POST}) at the same path.
+  const split = path({
+    r: choice(
+      methods({ GET: () => text("g") }),
+      methods({ POST: () => text("p") }),
+    ),
+  });
+  const splitFetch = toFetch(split as Handler<{}>);
+
+  it("POST reaches the 2nd alt -> 200 (no 405 short-circuit)", async () => {
+    const res = await splitFetch(new Request("http://x/r", { method: "POST" }));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("p");
+  });
+  it("GET reaches the 1st alt -> 200", async () => {
+    const res = await splitFetch(new Request("http://x/r"));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("g");
+  });
+  it("PUT -> 405 with Allow aggregating BOTH alts' verbs", async () => {
+    const res = await splitFetch(new Request("http://x/r", { method: "PUT" }));
+    expect(res.status).toBe(405);
+    expect(res.headers.get("Allow")).toBe("GET, HEAD, OPTIONS, POST");
+  });
+
+  // two sub-routers mounted at the SAME path serving DIFFERENT verbs.
+  const mountedA = mount("api", methods({ GET: () => text("ga") }));
+  const mountedB = mount("api", methods({ POST: () => text("pb") }));
+  const merged = choice(mountedA, mountedB);
+  const mergedFetch = toFetch(merged as Handler<{}>);
+
+  it("cross-mount: GET served by mount A", async () => {
+    const res = await mergedFetch(new Request("http://x/api"));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("ga");
+  });
+  it("cross-mount: POST served by mount B (not short-circuited)", async () => {
+    const res = await mergedFetch(new Request("http://x/api", { method: "POST" }));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("pb");
+  });
+  it("cross-mount: DELETE -> 405 with Allow unioning BOTH mounts' verbs", async () => {
+    const res = await mergedFetch(new Request("http://x/api", { method: "DELETE" }));
+    expect(res.status).toBe(405);
+    expect(res.headers.get("Allow")).toBe("GET, HEAD, OPTIONS, POST");
   });
 });
 

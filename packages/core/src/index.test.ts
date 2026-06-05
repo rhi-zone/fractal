@@ -87,22 +87,33 @@ describe("path/methods/choice/param dispatch", () => {
     expect((await hit("/nope")).status).toBe(404);
   });
 
-  it("known path wrong verb -> 405 + Allow", async () => {
+  // `methods` is PURE verb dispatch: a verb-miss is a PASS (undefined), NOT a
+  // 405. The bare inline adapter here turns that pass into a 404. 405 / Allow /
+  // auto-HEAD / OPTIONS are a PROJECTION computed by `toFetch` from `.meta` — see
+  // those tests in @rhi-zone/fractal-http. This proves dispatch stays pure.
+  it("known path wrong verb -> dispatch PASSES (undefined → bare-adapter 404)", async () => {
     const res = await hit("/users", "DELETE");
-    expect(res.status).toBe(405);
-    const allow = res.headers.get("Allow") ?? "";
-    expect(allow.includes("GET") && allow.includes("POST")).toBe(true);
+    expect(res.status).toBe(404);
   });
 
-  it("auto-HEAD mirrors GET with empty body", async () => {
+  it("HEAD is NOT auto-derived in bare dispatch (passes → 404)", async () => {
     const res = await hit("/users", "HEAD");
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe("");
+    expect(res.status).toBe(404);
   });
 
-  it("OPTIONS -> 204 + Allow", async () => {
+  it("OPTIONS is NOT synthesized in bare dispatch (passes → 404)", async () => {
     const res = await hit("/users", "OPTIONS");
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(404);
+  });
+
+  it("a verb explicitly in the table IS served directly by methods", async () => {
+    const m = methods({ OPTIONS: () => new Response("custom-opts") });
+    const req = new Request("http://x/", { method: "OPTIONS" }) as Request & {
+      params: {};
+    };
+    req.params = {};
+    const direct = await (m as Handler<{}>)(req);
+    expect(await direct!.text()).toBe("custom-opts");
   });
 
   it("segments / rest helpers advance the URL", async () => {
