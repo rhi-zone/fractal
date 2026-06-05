@@ -76,12 +76,28 @@ export function segments(req: Request): string[] {
 
 /** Clone `req` with its pathname replaced by `segs` (method/headers/body kept).
  *  `new Request(url, req)` drops custom own-properties, so we re-attach `ctx`
- *  (carried from the source Request, defaulting to `{}`) to keep it a typed Req. */
+ *  (carried from the source Request, defaulting to `{}`) to keep it a typed Req.
+ *
+ *  BODY ISOLATION (load-bearing): `new Request(url, src)` TRANSFERS `src`'s body
+ *  stream into the new Request on spec-compliant runtimes (Node/Deno/Workers) —
+ *  it disturbs/locks `src`, so the source can never be advanced again. That breaks
+ *  sibling `param` alts under one `choice`: `param` matches ANY one segment, so the
+ *  FIRST sibling alt advances (transfers the body) and bails on a wrong sub-path;
+ *  the NEXT sibling alt then advances off the same source whose body is already
+ *  disturbed, and the matching leaf's `req.json()` (in `validated`) throws
+ *  "ReadableStream has already been used". To keep advancing NON-CONSUMING, we feed
+ *  `src.clone()` — which TEES the body into an independent stream, leaving `src`
+ *  pristine — so any number of sibling alts can advance off the same source and the
+ *  matching leaf still reads the body exactly once. A bodiless request (e.g. GET)
+ *  needs no tee: there is nothing to disturb, so we pass `src` directly and never
+ *  buffer. Only the matching leaf ever reads its tee; non-matching siblings' tees
+ *  are discarded unread, so body-bearing side effects still run only-once. */
 function withSegments<R>(req: Request, segs: string[]): ReqWithCtx<R> {
   const url = new URL(req.url);
   url.pathname = "/" + segs.join("/");
   const ctx = (req as Partial<ReqWithCtx<R>>).ctx ?? ({} as R);
-  return withCtx(new Request(url, req), ctx);
+  const src = req.body !== null && !req.bodyUsed ? req.clone() : req;
+  return withCtx(new Request(url, src), ctx);
 }
 
 /**
@@ -564,7 +580,12 @@ function provideRT<K extends string, Q extends Record<K, unknown>>(
     if (produced === undefined) return undefined; // pass — not handled here
     if (produced instanceof Response) return produced; // short-circuit (e.g. 401)
     // inject the value into a FRESH ctx on a cloned request (no shared mutation).
-    const next = withCtx<Q>(new Request(req.url, req), {
+    // Tee the body (`clone()`) rather than transfer it so the source stays
+    // readable — same body-isolation discipline as `withSegments` (see its note):
+    // a `provide`/`withAuth` over a bodied route must not disturb the body before
+    // the inner leaf reads it. Bodiless requests need no tee.
+    const src = req.body !== null && !req.bodyUsed ? req.clone() : req;
+    const next = withCtx<Q>(new Request(req.url, src), {
       ...(req.ctx as object),
       [key]: produced,
     } as Q);

@@ -144,18 +144,13 @@ const collection = methods({
 });
 
 // ---------------------------------------------------------------------------
-// /prospects/{id}/... — sub-routes under a SINGLE `param("id", ...)`.
-//
-// BUG WORKAROUND (load-bearing — see report, "Awkward / blockers"): the dynamic
-// routes are nested under ONE `param`, not written as three sibling
-// `param("id", ...)` alts in the outer `choice`. With sibling param alts, a
-// request WITH A BODY (PATCH/POST) crashes: the first non-matching `param` alt
-// clones the Request (`new Request(url, req)` in core's `withSegments`), which
-// consumes/locks the body ReadableStream, so the matching alt's `req.json()`
-// throws "ReadableStream has already been used". A single outer `param` clones
-// the body exactly once; the inner `choice` of `path`s bails on a key-miss
-// BEFORE cloning, so only the matching branch reads the body. (Reproduced
-// minimally; this is a real framework defect, not an example artifact.)
+// /prospects/{id}/... — the NATURAL shape: each dynamic route is its own
+// `param("id", ...)` sibling alt in the outer `choice`. A bodied PATCH/POST works
+// even though several sibling `param` alts advance the `:id` segment first:
+// advancing TEES the request body (`req.clone()` in core's `withSegments`) rather
+// than transferring it, so the body stays readable for the matching leaf's
+// `req.json()` regardless of how many sibling alts ran. (This used to crash with
+// "ReadableStream has already been used" — fixed in @rhi-zone/fractal-core.)
 // ---------------------------------------------------------------------------
 
 // /prospects/{id}/status — PATCH a status transition (multi-error -> 404/409/422)
@@ -215,14 +210,15 @@ const itemMethods = methods({
   }, prospectSchema),
 });
 
-// ONE `param("id", ...)` over the inner choice — clones the body once.
-const itemResource = param(
-  "id",
-  choice(statusRoute, assignRoute, itemMethods),
+// `choice` tries the collection first, then each {id} sibling alt in turn. Each
+// dynamic route is its OWN `param("id", ...)` — the idiomatic shape. Sibling param
+// alts with bodies are safe (advancing tees the body; see the note above).
+const prospectsResource = choice(
+  collection,
+  param("id", statusRoute),
+  param("id", assignRoute),
+  param("id", itemMethods),
 );
-
-// `choice` tries the collection first, then the {id} subtree.
-const prospectsResource = choice(collection, itemResource);
 
 // The whole resource sits behind auth. `withAuth` discharges the `user` var for
 // every handler beneath it; `user` never reaches the client signature.

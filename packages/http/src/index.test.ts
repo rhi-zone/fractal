@@ -287,6 +287,166 @@ describe("validated body validation", () => {
   });
 });
 
+describe("regression: sibling param routes with bodies (C-body-stream)", () => {
+  // The NATURAL resource shape: several dynamic sibling routes share one `choice`,
+  // each a `param("id", …)`. `param` matches ANY single segment, so the FIRST
+  // sibling alt always advances past `:id` before its inner bails — and advancing
+  // used to do `new Request(url, req)`, which CONSUMES/locks the source body
+  // stream. When an earlier sibling READ the body and PASSED (returned undefined),
+  // the next sibling's advance hit an already-used stream and threw "ReadableStream
+  // has already been used" inside `withSegments`, so the matching leaf's `req.json()`
+  // never ran. Fix: advancing TEES the body (`req.clone()`) instead of transferring
+  // it, so any number of sibling alts can advance and the matching leaf still reads
+  // the body exactly once. This block pins the natural shape end-to-end.
+
+  // A schema fixture for a `{ contactName }` body.
+  const bodySchema: StandardSchemaV1<unknown, { contactName: string }> = {
+    "~standard": {
+      version: 1,
+      vendor: "test-fixture",
+      validate(v) {
+        if (
+          typeof v !== "object" ||
+          v === null ||
+          typeof (v as { contactName?: unknown }).contactName !== "string"
+        ) {
+          return { issues: [{ message: "contactName must be a string" }] };
+        }
+        return { value: { contactName: (v as { contactName: string }).contactName } };
+      },
+    },
+  };
+
+  // The natural prospects tree: a GET/POST collection plus THREE sibling
+  // `param("id", …)` alts — two behind a sub-path, one a bare item — exactly the
+  // shape the dogfood example wanted but had to work around.
+  const resource = path({
+    prospects: choice(
+      methods({
+        GET: () => json(["a", "b"]),
+        POST: validated(bodySchema, (v) => status(201, v)),
+      }),
+      // A bodied PATCH behind a sub-path. For a `/prospects/:id` request this alt
+      // advances the `:id` segment, READS the body in `validated`, then PASSES
+      // (the inner sub-path "status" is absent) — the precise condition that used
+      // to lock the stream for the next sibling.
+      param(
+        "id",
+        path({
+          status: methods({
+            PATCH: validated(bodySchema, (v, req) =>
+              json({ id: paramValue(req, "id"), where: "status", ...v }),
+            ),
+          }),
+        }),
+      ),
+      param(
+        "id",
+        path({
+          assign: methods({
+            POST: validated(bodySchema, (v, req) =>
+              json({ id: paramValue(req, "id"), where: "assign", ...v }),
+            ),
+          }),
+        }),
+      ),
+      // The bare item: GET one / bodied PATCH update / DELETE. This is the matching
+      // leaf for `PATCH /prospects/:id` — it must still read the body after the
+      // earlier sibling alts ran.
+      param(
+        "id",
+        methods({
+          GET: (req: Request & { ctx: { id: string } }) => json({ id: req.ctx.id }),
+          PATCH: validated(bodySchema, (v, req) =>
+            json({ id: paramValue(req, "id"), where: "item", ...v }),
+          ),
+          DELETE: () => status(204),
+        }),
+      ),
+    ),
+  });
+  const run = toFetch(resource);
+  const call = (p: string, init?: RequestInit): Promise<Response> =>
+    run(new Request("http://x" + p, init));
+
+  it("bodied PATCH on the bare item leaf parses, after sibling param alts ran", async () => {
+    const res = await call("/prospects/42", {
+      method: "PATCH",
+      body: JSON.stringify({ contactName: "Ada" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: "42", where: "item", contactName: "Ada" });
+  });
+
+  it("bodied PATCH that DOES match a sub-path sibling still parses its body", async () => {
+    const res = await call("/prospects/42/status", {
+      method: "PATCH",
+      body: JSON.stringify({ contactName: "Grace" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: "42",
+      where: "status",
+      contactName: "Grace",
+    });
+  });
+
+  it("a sibling GET still works (no body, no buffering needed)", async () => {
+    const one = await call("/prospects/7", { method: "GET" });
+    expect(one.status).toBe(200);
+    expect(await one.json()).toEqual({ id: "7" });
+    const list = await call("/prospects", { method: "GET" });
+    expect(list.status).toBe(200);
+    expect(await list.json()).toEqual(["a", "b"]);
+  });
+
+  it("validated still rejects a bad body at the matching leaf (400)", async () => {
+    const res = await call("/prospects/42", {
+      method: "PATCH",
+      body: JSON.stringify({ nope: 1 }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("VALIDATION");
+  });
+
+  it("404 for an unknown sub-path, 405 for an unsupported verb", async () => {
+    const notFound = await call("/prospects/42/unknown", { method: "GET" });
+    expect(notFound.status).toBe(404);
+    const methodNotAllowed = await call("/prospects/42", { method: "PUT" });
+    expect(methodNotAllowed.status).toBe(405);
+    expect(methodNotAllowed.headers.get("Allow")).toContain("PATCH");
+  });
+
+  it("clone-non-bleed: a passing param alt does not leak ctx into the next alt", async () => {
+    // Two sibling param alts capture DIFFERENT key names. The first reads `req.ctx`
+    // and passes; the second must see a ctx WITHOUT the first alt's bound key.
+    let leaked: unknown = "unset";
+    const probe = path({
+      r: choice(
+        // First alt binds `a`, inspects ctx, then PASSES (no matching sub-path).
+        param("a", path({ never: methods({ GET: () => text("x") }) })),
+        // Second alt binds `b`; its ctx must contain ONLY `b`, never `a`.
+        param(
+          "b",
+          methods({
+            GET: (req: Request & { ctx: { b: string } }) => {
+              leaked = (req.ctx as Record<string, unknown>)["a"];
+              return json({ b: req.ctx.b });
+            },
+          }),
+        ),
+      ),
+    });
+    const res = await toFetch(probe)(new Request("http://x/r/val", { method: "GET" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ b: "val" });
+    expect(leaked).toBeUndefined(); // the first alt's bound `a` did not bleed in
+  });
+});
+
 // type-level: an UNDISCHARGED param app is NOT a Handler<{}> root.
 function _typeGuard() {
   const leaky = methods({
