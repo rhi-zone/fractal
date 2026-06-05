@@ -10,6 +10,18 @@
         "typescript": "^6.0.3",
       },
     },
+    "examples/dogfood": {
+      "name": "@rhi-zone/fractal-example-dogfood",
+      "version": "0.0.0",
+      "dependencies": {
+        "@rhi-zone/fractal-client": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-http": "workspace:*",
+      },
+      "devDependencies": {
+        "@rhi-zone/fractal-codegen": "workspace:*",
+      },
+    },
     "examples/todo-api": {
       "name": "@rhi-zone/fractal-example-todo-api",
       "version": "0.0.0",
@@ -136,6 +148,8 @@
     "@rhi-zone/fractal-codegen": ["@rhi-zone/fractal-codegen@workspace:packages/codegen"],
 
     "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
+
+    "@rhi-zone/fractal-example-dogfood": ["@rhi-zone/fractal-example-dogfood@workspace:examples/dogfood"],
 
     "@rhi-zone/fractal-example-todo-api": ["@rhi-zone/fractal-example-todo-api@workspace:examples/todo-api"],
 
