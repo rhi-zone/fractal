@@ -1,33 +1,28 @@
 {
   "name": "@rhi-zone/fractal-http",
   "version": "0.1.0-alpha.0",
-  "description": "WHATWG/runtime adapter kit for fractal — toFetch, response builders, validated, serveBun/serveNode",
+  "description": "WHATWG renderer for the function-core tree — toFetch, response builders, Result encoders, serveBun/serveNode",
   "type": "module",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types":  "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./adapter": {
-      "types":  "./dist/adapter.d.ts",
-      "import": "./dist/adapter.js"
+      "types": "./src/adapter.ts",
+      "import": "./src/adapter.ts"
     }
   },
-  "files": ["dist"],
+  "files": ["src"],
   "dependencies": {
     "@rhi-zone/fractal-core": "workspace:*"
   },
   "scripts": {
-    "dev":        "vite build --watch",
-    "build":      "vite build && tsgo --emitDeclarationOnly",
-    "typecheck":  "tsgo --noEmit",
-    "test":       "bun test",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "test:watch": "bun test --watch"
-  },
-  "devDependencies": {
-    "@rhi-zone/fractal-openapi": "workspace:*",
-    "vite": "^6.0.0"
   }
 }

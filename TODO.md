@@ -6,6 +6,34 @@
 > is the task list; the roadmap is the context. **Next thing to build: the typed
 > `query(...)` combinator (backlog item 1).**
 
+## Migrate to function-core model (post-spine)
+
+The function-core rewrite (`docs/design/function-core-and-projection.md`) landed
+as a vertical slice: `packages/core` + `packages/http` are rewritten to the new
+model (function category + Result + Kleisli/applicative combinators; the
+protocol-neutral D-tree `path`/`param`/`group`/`methods`/`route` + `app`; HTTP
+dispatch + `Result`→`Response` encoding), proven by `examples/spine-demo`.
+
+The packages below import the RETIRED `Handler<R>` / `req.ctx` / `.meta` model and
+were **fenced out of the active workspace** (removed from root `package.json`
+`workspaces`; not deleted) so the new slice builds green. They must be migrated to
+the function-core model (or retired) before being re-added:
+
+- `packages/openapi` — OpenAPI projection from `.meta`. Must become an OUTPUT
+  projection from inferred types (compiler-API walk), not a `.meta` reader.
+- `packages/codegen` — typed client + drift guard from `.meta`. Migrate to the
+  types→client / types→OpenAPI build-time projection; drift guard is retired (no
+  second source of truth once types are the only truth).
+- `packages/client` — typed HTTP client factory. Re-mirror the new handler
+  signature exactly.
+- `examples/todo-api` — re-author on the D-tree.
+- `examples/dogfood` — re-author on the D-tree.
+
+When migrating, also re-point each package's `package.json` `exports`/`main` and
+`tsconfig` to match the slice's convention (currently `exports` → `src` directly +
+`tsconfig` `paths` to sibling `src`, no build step) or restore a real `dist` build.
+
+
 ## State (verified against repo, 2026-06-05, at handoff snapshot)
 
 Bun-workspaces monorepo, `@rhi-zone` scope. **Entirely local — no remote, not pushed.**

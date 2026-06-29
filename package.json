@@ -2,12 +2,15 @@
   "name": "fractal-monorepo",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*", "examples/*"],
+  "comment": "Workspaces fenced to the function-core spine slice. packages/{openapi,codegen,client} and examples/{todo-api,dogfood} are FENCED OUT pending migration to the function-core model — see TODO.md.",
+  "workspaces": [
+    "packages/core",
+    "packages/http",
+    "examples/spine-demo"
+  ],
   "scripts": {
-    "build": "bun run --filter '@rhi-zone/fractal-core' build && bun run --filter '@rhi-zone/fractal-http' build && bun run --filter '@rhi-zone/fractal-client' build && bun run --filter '@rhi-zone/fractal-openapi' build && bun run --filter '@rhi-zone/fractal-codegen' build",
     "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun run --filter '*' test",
-    "dev": "bun run --filter '@rhi-zone/fractal-core' --filter '@rhi-zone/fractal-http' --filter '@rhi-zone/fractal-client' dev"
+    "test": "bun run --filter '*' test"
   },
   "devDependencies": {
     "@typescript/native-preview": "latest",
