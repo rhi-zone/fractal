@@ -1,3 +1,5 @@
+> **The model described here (§1–§3, the `Handler<R>` / `req.ctx` / `.meta` design) is superseded by [function-core-and-projection.md](./function-core-and-projection.md).** The repo-state snapshot, the scale evidence, the competitive scorecard, and the dogfood-derived backlog (§4–§8) remain useful history; the design model does not. Read §1–§3 as the prior model, not the current one.
+
 # fractal — roadmap & handoff
 
 Durable design state + prioritized backlog for a fresh session. Every claim here was

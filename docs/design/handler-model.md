@@ -1,3 +1,5 @@
+> **Superseded by [function-core-and-projection.md](./function-core-and-projection.md).** The `Handler<R>` / `req.ctx` / `.meta` model below is being replaced by the function-category core + producers + protocol projection model. Retained for reasoning history and for the salvageable infrastructure it documents (the WHATWG adapter, `toFetch`'s HTTP-correctness behaviour, codegen patterns). Do NOT treat the model here as current.
+
 # Handler model — the library-first framework
 
 ## Status
