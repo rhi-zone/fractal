@@ -1,12 +1,55 @@
 # fractal — TODO
 
-> **Handoff & roadmap:** `docs/design/roadmap.md` is the authoritative durable
-> handoff — the model, the projection pipeline, design decisions + WHY, gotchas, the
-> competitive position, and the prioritized feature backlog with specifics. This file
-> is the task list; the roadmap is the context. **Next thing to build: the typed
-> `query(...)` combinator (backlog item 1).**
+## Open threads (advisory)
 
-## Migrate to function-core model (post-spine)
+> *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
+
+These are starting context for a future session, not a task list. Each points at
+the design docs for detail rather than restating them; verify each is still live
+before acting.
+
+### Design model is captured and authoritative in `docs/design/invariants.md`
+
+The settled model was mined from the design conversation (with the original
+author's verbatim words) into `docs/design/invariants.md`, and the next-session
+handoff lives in `docs/design/handoff.md`. `docs/design/function-core-and-projection.md`
+is fuller but partly superseded — on any conflict, invariants.md wins. invariants.md
+also records 7 **guardrails** (things to NOT do — reified runtime meta, treating
+input as "raw", leaking HTTP shape into the handler, Kleisli-as-base, losing the
+single explicit tree, `create→POST`, forcing "data over code") that recurred as
+mistakes. Worth reading those before proposing anything in this area.
+
+### Unsettled design questions need the author's own definition, not invention
+
+From invariants.md §open — these were explicitly left open and (per the guardrails)
+should be settled FROM the author's definition rather than guessed:
+
+- The full **verb/method model**: only "POST = a method call, not create" is
+  settled; the `read→GET / replace→PUT / remove→DELETE / partial→PATCH`
+  access-verb mapping was an *unconfirmed assistant proposal*, not part of the
+  model. The author seemed to be leaning toward starting with the verb model
+  first, but that's a lean, not a decision.
+- Whether **one agnostic tree can auto-derive both HTTP and CLI**, given HTTP
+  paths/headers and CLI subcommands/env vars have no 1:1 mapping — open and
+  unreconciled.
+- **Node disambiguation**: segment vs operation vs param within one node, and
+  where the input→options transform lives.
+- **Authoring form for bespoke verb/path overrides**: inline on the node vs a
+  separate binding layer — undecided.
+- **Creation / non-record output encoding** (author leans toward an explicit
+  `POST /…/new`, not settled).
+- The unresolved **"is it too general?"** tension — never closed.
+
+### Codegen-from-types is not yet built
+
+The current vertical slice authors provisional runtime `Schema` values
+(`str`/`num`/`bool`/`obj`) on the leaf as dispatch-time-validation **scaffolding**.
+The intent is to replace these with codegen-derived validators, where the single
+source of truth is the inferred TS types + JSDoc (not an on-tree schema). The
+on-tree schemas should NOT be mistaken for the model — they're a placeholder until
+codegen-from-types exists. See `docs/design/handoff.md` §"PROVISIONAL / to replace".
+
+### Migrate the fenced packages to the function-core model
 
 The function-core rewrite (`docs/design/function-core-and-projection.md`) landed
 as a vertical slice: `packages/core` + `packages/http` are rewritten to the new
@@ -16,102 +59,27 @@ dispatch + `Result`→`Response` encoding), proven by `examples/spine-demo`.
 
 The packages below import the RETIRED `Handler<R>` / `req.ctx` / `.meta` model and
 were **fenced out of the active workspace** (removed from root `package.json`
-`workspaces`; not deleted) so the new slice builds green. They must be migrated to
-the function-core model (or retired) before being re-added:
+`workspaces`; not deleted) so the new slice builds green. They might need migrating
+to the function-core model (or retiring) before being re-added:
 
-- `packages/openapi` — OpenAPI projection from `.meta`. Must become an OUTPUT
+- `packages/openapi` — OpenAPI projection from `.meta`. Would become an OUTPUT
   projection from inferred types (compiler-API walk), not a `.meta` reader.
-- `packages/codegen` — typed client + drift guard from `.meta`. Migrate to the
-  types→client / types→OpenAPI build-time projection; drift guard is retired (no
-  second source of truth once types are the only truth).
-- `packages/client` — typed HTTP client factory. Re-mirror the new handler
-  signature exactly.
+- `packages/codegen` — typed client + drift guard from `.meta`. Would migrate to
+  the types→client / types→OpenAPI build-time projection; the drift guard is
+  likely retired (no second source of truth once types are the only truth).
+- `packages/client` — typed HTTP client factory. Would re-mirror the new handler
+  signature.
 - `examples/todo-api` — re-author on the D-tree.
 - `examples/dogfood` — re-author on the D-tree.
 
-When migrating, also re-point each package's `package.json` `exports`/`main` and
-`tsconfig` to match the slice's convention (currently `exports` → `src` directly +
-`tsconfig` `paths` to sibling `src`, no build step) or restore a real `dist` build.
-
-
-## State (verified against repo, 2026-06-05, at handoff snapshot)
-
-Bun-workspaces monorepo, `@rhi-zone` scope. **Entirely local — no remote, not pushed.**
-
-### Package inventory (`packages/` + `examples/`)
-
-| Package | Status |
-|---|---|
-| `core` (`@rhi-zone/fractal-core`) | Handler model + drift substrate — built & green. 24 tests pass. |
-| `http` (`@rhi-zone/fractal-http`) | WHATWG adapter kit + `toFetch`/`validated`/`returns`/observing wrappers — built & green. 40 tests pass. |
-| `openapi` (`@rhi-zone/fractal-openapi`) | OpenAPI 3.x projection from `.meta` — built & green. 19 tests pass. |
-| `codegen` (`@rhi-zone/fractal-codegen`) | typed client.ts + server.ts + static drift guard + `fractal watch` — built & green. 16 tests pass. |
-| `client` (`@rhi-zone/fractal-client`) | Typed HTTP client factory — built & green. 5 tests pass. |
-| `examples/todo-api` (`@rhi-zone/fractal-example-todo-api`) | Private example — green. 21 tests pass. |
-| `examples/dogfood` (`@rhi-zone/fractal-example-dogfood`) | Generic auth+validation feature slice from the external reference app — green. 22 tests pass. |
-
-Total: **147 tests pass, 0 fail** (`bun test`, 2026-06-05) — core 24, http 40, openapi 19, codegen 16, client 5, todo-api 21, dogfood 22.
-
-**Retired (deleted):** the builder-Router model (`httpRouter`/`RoutingCtx`/`Node<T,U,M>`,
-`bearerAuth`, `withValidation`, `respond`/`Outcome`/`ErrorPolicy`); the transport ×
-codec × channel architecture (`transport`, `codec-json`, `codec-structured-clone`,
-`protocol-correlation`, `channel-*`, `preset-websocket`, `transport-conformance`);
-the worker kit (`fractal-worker`); the node-IR–based OpenAPI projection.
-These packages implemented the old architecture. All superseded by the Handler model.
-
-**No `worker` package exists.** Any reference to a `worker` package or kit is stale.
+When migrating, each package's `package.json` `exports`/`main` and `tsconfig`
+would also need re-pointing to match the slice's convention (currently `exports` →
+`src` directly + `tsconfig` `paths` to sibling `src`, no build step) or restoring a
+real `dist` build.
 
 ---
 
-## Feature backlog (from the dogfood — see roadmap §6 for full specifics)
-
-### 1. Typed `query(...)` combinator — HIGHEST VALUE
-
-Query params have no typed story: read by hand off `new URL(req.url).searchParams`,
-never reach OpenAPI/client. Plumbing half-present — `ParameterObject` in
-`packages/openapi/src/index.ts` already supports `in: "query"`, but the projection only
-emits `in: "path"` (~line 302) and codegen's `paramsType` filters `in === "path"`
-(`packages/codegen/src/index.ts` line 138). Open design question: do query params ride
-`req.ctx` + the discharge model, or are they read-not-discharged (they don't gate
-routing)?
-
-### 2. Error-response modeling
-
-Declare a route's error codes → statuses → shapes → typed client error union + OpenAPI
-non-200 responses. Today only the `returns(...)` 200 shape is typed (the response-schema
-gap from criterion 6 of `docs/design/vs-hono-elysia.md`).
-
-### 3. Nullable / optional in the schema story
-
-The hand-rolled schema fixture dropped `string | null` → wrong client type. The schema
-projection needs nullable/optional fidelity.
-
-### 4. OpenAPI security emission
-
-`withAuth` already stamps an inert `ProvideMeta.security` hint (`{ scheme: key }`) that no
-projection reads. Emit `securitySchemes` + per-operation `security`. Then scoped authz
-(beyond binary 401).
-
-### 5. Minor — param-clone non-bleed regression test
-
-`param("id", inner)` binds the captured value onto a CLONE of the request (via
-`withSegments`/`paramRT` in `packages/core/src/index.ts`), so a sibling `choice` alt
-sees no leaked `ctx` param. Structurally guaranteed and tested indirectly via
-choice-correctness (`packages/http/src/index.test.ts`), but no test EXPLICITLY asserts
-the clone mechanism. Add one to `packages/core/src/index.test.ts`.
-
----
-
-## Done since the original handoff (no longer open)
-
-- **Dogfood slice** — a generic auth+validation feature slice from the external reference
-  app is ported in `examples/dogfood` (`example(dogfood): port a real auth+validation feature slice to validate the framework`).
-- **Middleware / auth in the new model** — `provide`/`withAuth` (ctx-discharge) and the
-  observing wrappers `logger`/`cors`/`errorBoundary` ship in core/http (`feat(core,http): unify req.ctx bag; middleware/auth as ctx-discharge (provide/withAuth); observing wrappers (logger/cors)`).
-
----
-
-## PUBLISH (after backlog matures)
+## PUBLISH (after the model settles)
 
 - Create `github.com/rhi-zone/fractal`, push, set pages/topics/homepage.
 - Ecosystem docs-sync in `~/git/rhizone/github-io` — 7 touchpoints:
@@ -127,23 +95,27 @@ the clone mechanism. Add one to `packages/core/src/index.test.ts`.
 
 ### WebSocket / MCP / CLI surface kits
 
-The `Handler<R>` model is surface-agnostic at the core level. Additional transport
-kits (WS, MCP, CLI) would follow the same pattern: a kit package that wraps core
-combinators with a surface-specific entry point. No design work started.
+The protocol-neutral D-tree is surface-agnostic at the core level. Additional
+surface kits (WS, MCP, CLI) would follow the same projection pattern. Note the open
+question above on whether one tree can drive both HTTP and CLI — that's a
+prerequisite for the CLI kit. No design work started.
 
 ### Reactivity / streaming substrate
 
-SSE is already supported (`sse()` in `@rhi-zone/fractal-http`). Live queries and
-reactive client bindings require a reactive client library to exist first.
+invariants.md notes the author wants a canonical stream construct (rejecting a
+`Result<T,E> | Response` escape hatch). Live queries and reactive client bindings
+would require a reactive client library to exist first.
 
 ---
 
 ## Pointers
 
+- **Authoritative model: `docs/design/invariants.md`** (mined, verbatim; wins on conflict)
+- **Next-session handoff: `docs/design/handoff.md`**
+- Fuller (partly superseded) design: `docs/design/function-core-and-projection.md`
 - Commit history: `git log --oneline` in this repo
-- **Roadmap / handoff: `docs/design/roadmap.md`** (model, decisions, backlog)
-- Handler model design: `docs/design/handler-model.md`
 - Scorecard vs Hono/Elysia: `docs/design/vs-hono-elysia.md`
 - Ecosystem design principles: `~/git/rhizone/github-io/docs/decisions/throughlines.md`
-- Scale data: `spike/scale/logs/`, `spike/drift-guard/logs/`
-- Optics direction (superseded): `docs/design/optics-direction.md`
+- Pre-function-core docs (superseded): `docs/design/roadmap.md`, `docs/design/handler-model.md`, `docs/design/optics-direction.md`
+</content>
+</invoke>
