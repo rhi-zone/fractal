@@ -1,5 +1,10 @@
 # Function core and projection — the converged architecture
 
+> **Superseded in part.** [`invariants.md`](./invariants.md) is the authoritative
+> model, mined verbatim from the design conversation, and supersedes this doc
+> wherever they conflict — specifically the authored-verb/placement framing, the
+> two-tree split, and the verb-convention scheme are superseded.
+
 ## Status
 
 **Canonical.** This is the spec the rewrite builds to. It supersedes the
