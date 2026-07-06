@@ -8,6 +8,37 @@ user's own words; the quotes are load-bearing and preserved verbatim.
 
 ---
 
+## SUPERSEDED / CORRECTED (see [`converged-model.md`](./converged-model.md))
+
+> Added 2026-07 after the operation/projection model converged. The current
+> authoritative synthesis is [`converged-model.md`](./converged-model.md); prior art
+> is `server-less` (`/home/me/git/rhizone/server-less`), which already implements the
+> model. This section corrects specific items below that over-blessed
+> assistant-invented material. Everything not listed here remains as stated.
+
+- **(a) The `read→GET / replace→PUT / remove→DELETE / partial→PATCH` verb table is
+  REJECTED.** It was assistant-invented, not a designed operation kind. Verbs are one
+  lossy, downstream HTTP projection — not an agnostic kind/object. (Corrects the
+  "CRITICAL" note under the POST invariant and Open question #1.)
+
+- **(b) The operation-characterization is ARBITRARY, OPEN metadata — not a designed
+  kind/verb set.** An op is a function carrying an open metadata bag; each protocol
+  projection reads the keys it recognizes and ignores the rest. Metadata is only for
+  non-type-expressible projection/taste concerns (verb, idempotency, cache, auth) —
+  never a second source for domain data (types + JSDoc remain that).
+
+- **(c) Any claim that the wire surface is "generated unaided with zero config"
+  should read as "unaided defaults for the obvious + overrideable metadata for
+  taste."** No deterministic program can divine taste; inference is a fine but always
+  OVERRIDEABLE default, never authoritative. (Tempers the "codegen just works for
+  whatever's obvious" invariant — losing unaided-projection-for-the-obvious is a
+  dealbreaker, but total/objective projection is wrong.)
+
+- **(d) Current authoritative synthesis: [`converged-model.md`](./converged-model.md);
+  prior art: `server-less`.**
+
+---
+
 ## Settled invariants
 
 - **Core = plain functions + composition.** The base is `T => U` plus
@@ -73,6 +104,10 @@ user's own words; the quotes are load-bearing and preserved verbatim.
   > "as good as a handwritten one structurally and semantically"
   > "codegen'd is more consistent = better"
 
+  > **CORRECTED (c):** read "generated unaided / just works" as "unaided defaults for
+  > the obvious + overrideable metadata for taste" — never total/objective
+  > projection. See [`converged-model.md`](./converged-model.md).
+
 - **One explicit nested routing tree; combinators name the node kind via a record
   API (`path({ classes: ... })`); no `tree([])`, no opaque `leaf`, no scattered
   declarations.**
@@ -105,6 +140,9 @@ user's own words; the quotes are load-bearing and preserved verbatim.
   **CRITICAL:** the `read→GET / replace→PUT / remove→DELETE / partial→PATCH`
   scheme was **assistant-invented** and is **NOT user-settled**. It is recorded
   here only as the assistant's unconfirmed proposal — it is not part of the model.
+  **CORRECTED (a/b):** this table is now explicitly REJECTED; verbs are downstream
+  projection metadata, not a designed kind. See
+  [`converged-model.md`](./converged-model.md).
 
 - **verb / path / placement (query/body/header/cookie) are projected from binding
   + convention; never authored as ceremony on the leaf. `InputSource`-style enums
