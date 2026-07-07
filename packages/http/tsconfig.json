@@ -12,7 +12,9 @@
     "allowImportingTsExtensions": true,
     "types": ["bun-types"],
     "paths": {
-      "@rhi-zone/fractal-core": ["../core/src/index.ts"]
+      "@rhi-zone/fractal-core": ["../core/src/index.ts"],
+      "@rhi-zone/fractal-core/node": ["../core/src/node.ts"],
+      "@rhi-zone/fractal-core/tags": ["../core/src/tags.ts"]
     }
   },
   "include": ["src"]

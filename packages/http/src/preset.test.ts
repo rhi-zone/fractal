@@ -1,0 +1,193 @@
+// packages/http/src/preset.test.ts — OOTB preset end-to-end tests
+
+import { describe, expect, it } from "bun:test"
+import { node, op, param, service } from "@rhi-zone/fractal-core/node"
+import { createFetch } from "./preset.ts"
+
+// ============================================================================
+// Mixed API fixture
+// ============================================================================
+
+class UserService {
+  listUsers(_: unknown) {
+    return [{ id: 1, name: "Alice" }]
+  }
+  createUser(input: { name: string }) {
+    return { id: 2, name: input.name }
+  }
+}
+
+const usersNode = service(new UserService(), {
+  meta: {
+    listUsers: { readOnly: true, http: { segment: "list" } },
+    createUser: { http: { segment: "create" } },
+  },
+})
+
+const invoicesNode = node({
+  children: {
+    invoiceId: param(
+      "invoiceId",
+      node({
+        ops: {
+          checkout: op(
+            (input: { invoiceId: string; currency?: string }) => ({
+              url: `https://pay.example.com/${input.invoiceId}`,
+              currency: input.currency ?? "usd",
+            }),
+            { http: { verb: "POST", segment: "checkout" } },
+          ),
+        },
+      }),
+    ),
+  },
+})
+
+const api = node({
+  children: {
+    users: usersNode,
+    invoices: invoicesNode,
+  },
+})
+
+const fetch = createFetch(api)
+
+// ============================================================================
+// 1. Basic dispatch
+// ============================================================================
+
+describe("OOTB preset — basic dispatch", () => {
+  it("GET /users/list → 200 JSON list", async () => {
+    const res = await fetch(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+    const body = await res.json() as unknown
+    expect(body).toEqual([{ id: 1, name: "Alice" }])
+  })
+
+  it("POST /users/create → 200 with created user", async () => {
+    const res = await fetch(
+      new Request("http://localhost/users/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Bob" }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json() as unknown
+    expect(body).toEqual({ id: 2, name: "Bob" })
+  })
+
+  it("GET /nonexistent → 404", async () => {
+    const res = await fetch(new Request("http://localhost/nonexistent"))
+    expect(res.status).toBe(404)
+  })
+})
+
+// ============================================================================
+// 2. Slug threads into op input provenance-blind
+// ============================================================================
+
+describe("OOTB preset — slug threading (provenance-blind)", () => {
+  it("POST /invoices/{invoiceId}/checkout — invoiceId from path segment merges into input", async () => {
+    const res = await fetch(
+      new Request("http://localhost/invoices/inv-42/checkout", {
+        method: "POST",
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json() as { url: string; currency: string }
+    // invoiceId slug ("inv-42") is in the URL produced by the handler — proves
+    // it arrived in input without the handler knowing it came from the path
+    expect(body.url).toContain("inv-42")
+  })
+
+  it("path slug and body fields both arrive in input at the same level", async () => {
+    let capturedInput: Record<string, unknown> = {}
+    const spyNode = node({
+      children: {
+        items: node({
+          children: {
+            itemId: param(
+              "itemId",
+              node({
+                ops: {
+                  update: op(
+                    (input: Record<string, unknown>) => {
+                      capturedInput = input
+                      return { ok: true }
+                    },
+                    { idempotent: true, http: { segment: "update" } },
+                  ),
+                },
+              }),
+            ),
+          },
+        }),
+      },
+    })
+    const f = createFetch(spyNode)
+    await f(
+      new Request("http://localhost/items/item-99/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "New Title" }),
+      }),
+    )
+    // Both itemId (path) and title (body) are present at the same level
+    expect(capturedInput).toMatchObject({
+      itemId: "item-99",
+      title: "New Title",
+    })
+  })
+})
+
+// ============================================================================
+// 3. Auto-method behaviors from preset
+// ============================================================================
+
+describe("OOTB preset — auto-method layer included", () => {
+  it("HEAD /users/list → 200, no body", async () => {
+    const res = await fetch(
+      new Request("http://localhost/users/list", { method: "HEAD" }),
+    )
+    expect(res.status).toBe(200)
+    expect(res.body).toBeNull()
+  })
+
+  it("OPTIONS /users/list → 204 + Allow header", async () => {
+    const res = await fetch(
+      new Request("http://localhost/users/list", { method: "OPTIONS" }),
+    )
+    expect(res.status).toBe(204)
+    const allow = res.headers.get("Allow")
+    expect(allow).not.toBeNull()
+    expect(allow).toContain("GET")
+    expect(allow).toContain("OPTIONS")
+  })
+
+  it("wrong method on known path → 405 + Allow", async () => {
+    const res = await fetch(
+      new Request("http://localhost/users/list", { method: "DELETE" }),
+    )
+    expect(res.status).toBe(405)
+    expect(res.headers.get("Allow")).toContain("GET")
+  })
+})
+
+// ============================================================================
+// 4. CORS opt-in
+// ============================================================================
+
+describe("OOTB preset — CORS opt-in", () => {
+  const fetchWithCors = createFetch(api, { cors: true })
+
+  it("response includes Access-Control-Allow-Origin when cors: true", async () => {
+    const res = await fetchWithCors(new Request("http://localhost/users/list"))
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
+  })
+
+  it("default preset (no cors option) does NOT include CORS headers", async () => {
+    const res = await fetch(new Request("http://localhost/users/list"))
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull()
+  })
+})

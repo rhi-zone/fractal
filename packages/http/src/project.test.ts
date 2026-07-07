@@ -1,0 +1,271 @@
+// packages/http/src/project.test.ts — route-table builder tests
+
+import { describe, expect, it } from "bun:test"
+import { node, op, param, service } from "@rhi-zone/fractal-core/node"
+import {
+  buildRoutes,
+  makeRouter,
+  matchRoute,
+  parsePath,
+  verbFromTags,
+} from "./project.ts"
+
+// ============================================================================
+// 1. Path derivation from tree walk
+// ============================================================================
+
+describe("buildRoutes — path from tree walk", () => {
+  it("produces /invoices/{invoiceId}/checkout from a param() node", () => {
+    const createCheckoutSession = (_: { invoiceId: string }) => ({
+      url: "https://pay.stripe.com/…",
+    })
+    const api = node({
+      children: {
+        invoices: node({
+          children: {
+            invoiceId: param(
+              "invoiceId",
+              node({
+                ops: {
+                  checkout: op(createCheckoutSession, {
+                    http: { verb: "POST", segment: "checkout" },
+                  }),
+                },
+              }),
+            ),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    expect(routes).toHaveLength(1)
+    expect(routes[0]!.path).toBe("/invoices/{invoiceId}/checkout")
+    expect(routes[0]!.verb).toBe("POST")
+  })
+
+  it("uses the static child key as the segment", () => {
+    const api = node({
+      children: {
+        users: node({
+          ops: {
+            list: op((_: unknown) => [], { readOnly: true }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    // static child key "users" → /users; op key "list" → /list; inferSegment("list") = "list"
+    expect(routes[0]!.path).toBe("/users/list")
+  })
+
+  it("uses meta.http.segment to rename a child node segment", () => {
+    const api = node({
+      children: {
+        progressNode: node({
+          meta: { http: { segment: "progress" } },
+          ops: {
+            awardProgress: op((_: unknown) => ({}), {
+              http: { segment: "award" },
+            }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    expect(routes[0]!.path).toBe("/progress/award")
+  })
+
+  it("uses meta.http.legacyPath as full-path override [DEBT]", () => {
+    const api = node({
+      ops: {
+        legacyEndpoint: op((_: unknown) => ({}), {
+          http: { legacyPath: "/v1/old/legacy-path", verb: "GET" },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    expect(routes[0]!.path).toBe("/v1/old/legacy-path")
+    expect(routes[0]!.verb).toBe("GET")
+  })
+
+  it("collects ops from multiple children", () => {
+    const api = node({
+      children: {
+        users: node({
+          ops: {
+            list: op((_: unknown) => [], { readOnly: true }),
+          },
+        }),
+        orders: node({
+          ops: {
+            list: op((_: unknown) => [], { readOnly: true }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    const paths = routes.map((r) => r.path).sort()
+    expect(paths).toEqual(["/orders/list", "/users/list"])
+  })
+
+  it("service() surface produces routes identically to node()", () => {
+    class Svc {
+      listItems(_: unknown) {
+        return []
+      }
+    }
+    const n = service(new Svc(), {
+      meta: { listItems: { readOnly: true } },
+    })
+    const routes = buildRoutes(n)
+    expect(routes[0]!.verb).toBe("GET")
+    // inferSegment("listItems") = "items"
+    expect(routes[0]!.path).toBe("/items")
+  })
+})
+
+// ============================================================================
+// 2. Verb from three-valued tag lattice
+// ============================================================================
+
+describe("verbFromTags — three-valued dispatch", () => {
+  it("readOnly = true → GET", () => {
+    expect(verbFromTags({ readOnly: true })).toBe("GET")
+  })
+
+  it("idempotent = true + destructive = true → DELETE", () => {
+    expect(verbFromTags({ idempotent: true, destructive: true })).toBe("DELETE")
+  })
+
+  it("idempotent = true + destructive = false → PUT", () => {
+    expect(verbFromTags({ idempotent: true, destructive: false })).toBe("PUT")
+  })
+
+  it("idempotent = true + destructive = undefined → PUT (unknown ≠ explicitly destructive)", () => {
+    expect(verbFromTags({ idempotent: true })).toBe("PUT")
+  })
+
+  it("no tags → POST (conservative default)", () => {
+    expect(verbFromTags({})).toBe("POST")
+  })
+
+  it("idempotent = false → POST (explicit false)", () => {
+    expect(verbFromTags({ idempotent: false })).toBe("POST")
+  })
+
+  it("idempotent = undefined → POST (unknown is conservative)", () => {
+    expect(verbFromTags({ destructive: true })).toBe("POST")
+  })
+
+  it("meta.http.verb override wins over all tags", () => {
+    expect(verbFromTags({ readOnly: true, http: { verb: "POST" } })).toBe(
+      "POST",
+    )
+  })
+
+  it("meta.http.verb override is uppercased", () => {
+    expect(verbFromTags({ http: { verb: "delete" } })).toBe("DELETE")
+  })
+
+  it("readOnly = true implies idempotent (lattice: safe ⇒ idempotent)", () => {
+    // readOnly = true always → GET regardless of other tags
+    expect(verbFromTags({ readOnly: true, idempotent: false })).toBe("GET")
+  })
+})
+
+// ============================================================================
+// 3. parsePath and matchRoute helpers
+// ============================================================================
+
+describe("parsePath", () => {
+  it("parses literal segments", () => {
+    const parts = parsePath("/users/list")
+    expect(parts).toEqual([
+      { kind: "literal", value: "users" },
+      { kind: "literal", value: "list" },
+    ])
+  })
+
+  it("parses param segments", () => {
+    const parts = parsePath("/invoices/{invoiceId}/checkout")
+    expect(parts).toEqual([
+      { kind: "literal", value: "invoices" },
+      { kind: "param", name: "invoiceId" },
+      { kind: "literal", value: "checkout" },
+    ])
+  })
+})
+
+describe("matchRoute", () => {
+  it("matches a literal path", () => {
+    const pattern = parsePath("/users/list")
+    expect(matchRoute(pattern, ["users", "list"])).toEqual({})
+  })
+
+  it("extracts param values", () => {
+    const pattern = parsePath("/invoices/{invoiceId}/checkout")
+    expect(
+      matchRoute(pattern, ["invoices", "inv-123", "checkout"]),
+    ).toEqual({ invoiceId: "inv-123" })
+  })
+
+  it("returns null on length mismatch", () => {
+    const pattern = parsePath("/users/list")
+    expect(matchRoute(pattern, ["users"])).toBeNull()
+  })
+
+  it("returns null on literal mismatch", () => {
+    const pattern = parsePath("/users/list")
+    expect(matchRoute(pattern, ["users", "other"])).toBeNull()
+  })
+})
+
+// ============================================================================
+// 4. makeRouter — core dispatch (no HTTP-correctness layer)
+// ============================================================================
+
+describe("makeRouter — core router (no auto-method layer)", () => {
+  const getUser = (_: unknown) => ({ id: 1, name: "Alice" })
+  const api = node({
+    ops: {
+      getUser: op(getUser, { readOnly: true, http: { segment: "user" } }),
+    },
+  })
+  const routes = buildRoutes(api)
+  const router = makeRouter(routes)
+
+  it("dispatches an exact GET match → 200", async () => {
+    const res = await router(new Request("http://localhost/user"))
+    expect(res.status).toBe(200)
+    const body = await res.json() as unknown
+    expect(body).toEqual({ id: 1, name: "Alice" })
+  })
+
+  it("returns 404 for missing path", async () => {
+    const res = await router(new Request("http://localhost/nonexistent"))
+    expect(res.status).toBe(404)
+  })
+
+  it("returns 404 for wrong method (no 405 + Allow without the layer)", async () => {
+    const res = await router(
+      new Request("http://localhost/user", { method: "POST" }),
+    )
+    expect(res.status).toBe(404)
+    // Core does NOT add an Allow header — that's the auto-method layer's job
+    expect(res.headers.get("Allow")).toBeNull()
+  })
+
+  it("returns 404 for HEAD (no HEAD-from-GET without the layer)", async () => {
+    const res = await router(
+      new Request("http://localhost/user", { method: "HEAD" }),
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it("returns 404 for OPTIONS (no auto-OPTIONS without the layer)", async () => {
+    const res = await router(
+      new Request("http://localhost/user", { method: "OPTIONS" }),
+    )
+    expect(res.status).toBe(404)
+  })
+})
