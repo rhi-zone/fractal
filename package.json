@@ -8,7 +8,8 @@
     "packages/http",
     "packages/mcp",
     "packages/codegen",
-    "examples/spine-demo"
+    "examples/spine-demo",
+    "examples/library-api"
   ],
   "scripts": {
     "typecheck": "bun run --filter '*' typecheck",

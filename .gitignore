@@ -18,6 +18,9 @@ docs/.vitepress/dist/
 .vscode/
 *.swp
 
+# Agent worktrees (temporary, never tracked)
+.claude/worktrees/
+
 # Spike logs
 spike/*/logs/commit.log
 

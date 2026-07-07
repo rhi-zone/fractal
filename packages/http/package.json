@@ -14,6 +14,14 @@
     "./adapter": {
       "types": "./src/adapter.ts",
       "import": "./src/adapter.ts"
+    },
+    "./preset": {
+      "types": "./src/preset.ts",
+      "import": "./src/preset.ts"
+    },
+    "./project": {
+      "types": "./src/project.ts",
+      "import": "./src/project.ts"
     }
   },
   "files": ["src"],

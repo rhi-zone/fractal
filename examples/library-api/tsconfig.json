@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["bun-types"],
+    "paths": {
+      "@rhi-zone/fractal-core/node": ["../../packages/core/src/node.ts"],
+      "@rhi-zone/fractal-core/tags": ["../../packages/core/src/tags.ts"],
+      "@rhi-zone/fractal-http/preset": ["../../packages/http/src/preset.ts"],
+      "@rhi-zone/fractal-http/project": ["../../packages/http/src/project.ts"],
+      "@rhi-zone/fractal-mcp": ["../../packages/mcp/src/index.ts"],
+      "@rhi-zone/fractal-codegen": ["../../packages/codegen/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

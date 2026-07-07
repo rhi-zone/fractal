@@ -1,0 +1,17 @@
+{
+  "name": "@rhi-zone/fractal-example-library-api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Live end-to-end example on the new model — HTTP+MCP+codegen, library domain",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-http": "workspace:*",
+    "@rhi-zone/fractal-mcp": "workspace:*",
+    "@rhi-zone/fractal-codegen": "workspace:*"
+  }
+}
