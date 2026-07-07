@@ -82,17 +82,119 @@
 
 ---
 
-## Open (genuinely unresolved — next work)
+## AS-BUILT (implemented this session)
 
-- **[OPEN]** The CONCRETE authoring surface / API shape in TS — what authoring an op,
-  a node, metadata, and a subtree actually looks like in code. This is the priority
-  next step.
+**[BUILT]** Workspaces (5 active): `@rhi-zone/fractal-core`, `-http`, `-mcp`,
+`-codegen`, `examples/library-api`. (`packages/openapi` and `packages/client`
+exist but are fenced out of the workspace pending migration to the new model —
+see `package.json` comment.) 130 tests pass across the 5 active workspaces,
+0 fail; typecheck clean.
 
-- **[OPEN]** Tree EDGES for standalone functions — `server-less` uses a method
-  returning `&ChildType` as a mount edge; the free-function equivalent for nesting a
-  subtree is undesigned.
+**[BUILT] `@rhi-zone/fractal-core` (`packages/core`):**
+- `node.ts` — types: `Meta` (open bag, `tags?` sub-bag), `Op<I,O>` (`fn` +
+  `meta`), `ParamNode` (`_tag:"param"`, `name`, `subtree`), `ChildEntry = Node |
+  ParamNode`, `Node` (`ops`, `children`, `meta`). Constructors: `op(fn, meta?)`,
+  `param(name, subtree)`, `node({ops?,children?,meta?})`, `service(instance,
+  opts?)`. Runtime: `dispatch(node, segments, input, slugs?)` walker (accumulates
+  param slugs provenance-blind into op input).
+- `tags.ts` — `Tags` type (open three-valued dict: `readOnly?/idempotent?/
+  destructive?/openWorld?/streaming?/[custom:string]?: boolean|undefined`).
+  `resolveTags(tags): ResolvedTags` applies the implication lattice (`readOnly ⇒
+  idempotent`; `readOnly ∧ destructive → conflict`). `effectiveTags(path)` merges
+  root→op closest-wins; `undefined` defers upward (unknown ≠ false).
+- `index.ts` — base primitives kept: `compose`/`pipe`; `Result<T,E>` + `ok/err/
+  isOk/isErr/map/bind/match`; derived combinators `composeK`/`collect`. Old
+  D-tree/Schema routing retired.
 
-- **[OPEN]** Whether the shared structural metadata (`server-less`'s
-  param/route/response equivalents) should also be open.
+**[BUILT] `@rhi-zone/fractal-http` (`packages/http`):**
+- `project.ts` — `buildRoutes(node)`: path purely from tree walk (static key →
+  `/{seg}`, ParamNode → `/{name}`, segment inferral strips leading verb word +
+  kebab-cases). `meta.http.segment` overrides a node/op's contribution;
+  `meta.http.legacyPath` is a [DEBT] escape hatch that bypasses tree-walk.
+  `verbFromTags(meta)`: lattice `readOnly→GET`, `idempotent+destructive→DELETE`,
+  `idempotent→PUT`, else→`POST`; `meta.http.verb` override wins. `makeRouter`:
+  exact verb+path dispatcher, 404 on miss — no HEAD/OPTIONS/405 built in.
+- `layers.ts` — `autoMethodLayer(inner, routes)`: droppable layer adding
+  HEAD-from-GET, OPTIONS→204+Allow, 405+Allow. `corsLayer(opts)`: opt-in CORS
+  preflight + origin headers, off by default.
+- `preset.ts` — `createFetch(node, opts?)`: OOTB preset composing buildRoutes +
+  makeRouter + autoMethodLayer + optional corsLayer; returns WHATWG
+  `(req)=>Promise<Response>` suitable for Bun, Deno, Cloudflare Workers, Node.
+- `adapter.ts` — `serveBun` / `serveNode` runtime adapters (isolated; core stays
+  runtime-agnostic).
 
-- **[OPEN]** Codegen specifics for lowering types+JSDoc → runtime data/validators.
+**[BUILT] `@rhi-zone/fractal-mcp` (`packages/mcp`):**
+- `project.ts` — `toTools(node, opts?)`: walks Node tree, emits `McpTool[]` (one
+  per op). Name: underscore-joined prefix from tree walk (`meta.mcp.name` full
+  override; `meta.mcp.segment` per-node contribution). Annotation hints
+  (`readOnlyHint/destructiveHint/idempotentHint/openWorldHint`) derived from the
+  SAME `meta.tags` as HTTP; three-valued semantics: unknown tag → hint OMITTED
+  (unknown ≠ false). `meta.mcp.annotations` overrides individual hints.
+  Description: `meta.mcp.description > meta.description > derived.description >
+  op key`. `inputSchema` from supplied `SchemaMap` (codegen) or MCP spec minimum
+  `{type:"object"}`.
+
+**[BUILT] `@rhi-zone/fractal-codegen` (`packages/codegen`):**
+- `extract.ts` — TS compiler API (read-only). `schemaFromType`: primitives
+  (string/number/boolean), arrays, optional fields (strips `|undefined`), nested
+  objects; punts unions/generics/exotic to `{type:"object",$comment:"TODO(codegen):
+  …"}`. `schemaFromFunctionNode`: derives schema from op's first parameter type.
+  `extractJsDoc`: reads leading JSDoc text, climbs parent chain to declaration.
+- `tree.ts` — `extractToolSchemas(entryFile): SchemaMap`: walks exported `node()`
+  calls at AST level (runtime type erases op input shapes), mirrors toTools'
+  underscore-joined name construction. Supports `node({ops,children})`, `op(fn,
+  meta)`, `param("name", node({…}))` children. NOTE: `meta.mcp.name` /
+  `meta.mcp.segment` overrides not yet mirrored here (TODO in source).
+
+**[BUILT] End-to-end proof (`examples/library-api`):**
+`catalog.search` (tagged `readOnly` at node level via inheritance) projects to:
+HTTP `GET /catalog/search`, MCP `catalog_search` with `readOnlyHint:true`, and a
+real codegen-derived `inputSchema: {type:"object",properties:{q:{type:"string"}}}`.
+One authoring source; three surfaces; live test assertions for each. Also
+exercises: `service()` authoring (BooksService), `param("bookId",…)` subtree,
+`destructive+idempotent→DELETE`, `idempotent→PUT`, autoMethodLayer (HEAD/OPTIONS/
+405), and codegen schema derivation for `catalog.genres`.
+
+**[BUILT] Legacy retired:** provisional D-tree combinators, `Schema` validators,
+old `toFetch`, `spine-demo` removed. Composition (`compose/pipe`) and `Result`
+base kept.
+
+---
+
+## Open (remaining — next work)
+
+- **[BUILT]** ~~The CONCRETE authoring surface / API shape in TS~~ — done:
+  `op/node/service/param` constructors, `meta`/`meta.tags` sub-bag, full test
+  suite.
+
+- **[BUILT]** ~~Tree EDGES for standalone functions~~ — done: `param(name,
+  subtree)` for parameterized edges; `children` record for static edges.
+
+- **[BUILT]** ~~Codegen specifics for lowering types+JSDoc → runtime data~~ —
+  done: `extractToolSchemas` + `schemaFromType` via TS compiler API.
+
+- **[OPEN]** Only HTTP and MCP projections exist. CLI, GraphQL, gRPC, WebSocket,
+  and OpenAPI are still to build.
+
+- **[OPEN]** Codegen does not yet honor `meta.mcp.name` / `meta.mcp.segment`
+  overrides when reconstructing tool names in `tree.ts` — a mismatch will cause
+  wrong key lookups if those overrides are used.
+
+- **[OPEN]** Codegen punts unions, generics, and exotic types to `{type:
+  "object"}`. Any op with a non-obvious input shape gets the MCP spec minimum.
+
+- **[OPEN]** JSDoc description extraction is minimal (leading comment only; no
+  `@param` / `@returns` / tag parsing).
+
+- **[OPEN]** Per-param HTTP location (query vs path vs body vs header) is
+  unresolved. Input is currently assembled flat and provenance-blind — the handler
+  cannot distinguish a path slug from a query param from a body field.
+
+- **[OPEN]** `openWorld` tag is provisional / weakly defined.
+
+- **[OPEN]** `readOnly` tag name is provisional. The canonical tag-set document
+  uses `safe`; the code uses `readOnly` pending final naming resolution.
+
+- **[OPEN]** Whether shared structural metadata (`server-less`'s param/route/
+  response equivalents) should also live in the open bag, or be a typed
+  first-class concern.
