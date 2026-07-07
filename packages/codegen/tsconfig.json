@@ -7,13 +7,16 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-    "declaration": true,
-    "declarationDir": "dist",
-    "outDir": "dist",
-    "rootDir": "src",
+    "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "types": ["bun-types"]
+    "types": ["bun-types"],
+    "paths": {
+      "@rhi-zone/fractal-core": ["../core/src/index.ts"],
+      "@rhi-zone/fractal-core/node": ["../core/src/node.ts"],
+      "@rhi-zone/fractal-core/tags": ["../core/src/tags.ts"],
+      "@rhi-zone/fractal-mcp": ["../mcp/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

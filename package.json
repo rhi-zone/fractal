@@ -2,11 +2,12 @@
   "name": "fractal-monorepo",
   "private": true,
   "type": "module",
-  "comment": "Workspaces fenced to the function-core spine slice. packages/{openapi,codegen,client} and examples/{todo-api,dogfood} are FENCED OUT pending migration to the function-core model — see TODO.md.",
+  "comment": "Workspaces fenced to the function-core spine slice. packages/{openapi,client} and examples/{todo-api,dogfood} are FENCED OUT pending migration to the function-core model — see TODO.md. packages/codegen was migrated (types+JSDoc → runtime schema extractor).",
   "workspaces": [
     "packages/core",
     "packages/http",
     "packages/mcp",
+    "packages/codegen",
     "examples/spine-demo"
   ],
   "scripts": {

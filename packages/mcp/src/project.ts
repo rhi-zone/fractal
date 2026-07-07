@@ -14,13 +14,15 @@
 // is passed through; the standard keys are name / description / title /
 // segment (node-level) / annotations (per-hint overrides).
 //
-// inputSchema is a best-effort placeholder (`{ type: "object" }`) until
-// types-codegen lands. See TODO below.
+// inputSchema and the JSDoc description fallback come from a derived-from-type
+// SchemaMap (built by @rhi-zone/fractal-codegen). When no schema is supplied
+// for a tool, inputSchema degrades to the MCP spec minimum `{ type: "object" }`.
 //
 // See:
 //   docs/artifacts/fc-op-kinds/projection-mcp.md — MCP concept list + classification
 //   packages/core/src/tags.ts                    — tag lattice + effectiveTags
 //   packages/http/src/project.ts                 — sibling projection (structural mirror)
+//   packages/codegen/src/tree.ts                 — extractToolSchemas (schema source)
 
 import { isParamNode } from "@rhi-zone/fractal-core/node"
 import { effectiveTags, resolveTags } from "@rhi-zone/fractal-core/tags"
@@ -53,20 +55,36 @@ export type McpAnnotations = {
 /**
  * MCP Tool descriptor — one per op in the Node tree.
  *
- * inputSchema is a best-effort placeholder. Real JSON-Schema derivation from
- * op input types is deferred to the types-codegen increment.
- *
- * TODO(codegen): replace `inputSchema: { type: "object" }` with a real
- * JSON-Schema (`{ type: "object", properties: {...}, required: [...] }`)
- * inferred from the op's TypeScript input type via the codegen pipeline.
- * The MCP spec requires `inputSchema` to be a valid JSON-Schema object; the
- * minimum (`{ type: "object" }`) is used here as a safe placeholder.
+ * inputSchema is a real JSON-Schema when a derived schema map is supplied to
+ * `toTools` (see @rhi-zone/fractal-codegen's `extractToolSchemas`, which lowers
+ * op input types via the TypeScript compiler API). Absent a match it degrades
+ * to the MCP spec minimum `{ type: "object" }` — never a hand-authored second
+ * source.
  */
 export type McpTool = {
   readonly name: string
   readonly description: string
   readonly inputSchema: Record<string, unknown>
   readonly annotations?: McpAnnotations
+}
+
+/**
+ * Derived-from-type facts for one tool, keyed by tool name. Produced at build
+ * time by @rhi-zone/fractal-codegen; consumed here to fill inputSchema and the
+ * JSDoc-derived description fallback. No hand-authored schema is involved.
+ */
+export type ToolSchema = {
+  readonly inputSchema?: Record<string, unknown>
+  readonly description?: string
+}
+
+/** Map of tool name → derived schema/description (from codegen). */
+export type SchemaMap = Readonly<Record<string, ToolSchema>>
+
+/** Options for `toTools`. */
+export type ToToolsOptions = {
+  /** Tool-name → derived input schema + JSDoc description (from codegen). */
+  readonly schemas?: SchemaMap
 }
 
 // ============================================================================
@@ -126,86 +144,92 @@ function getMcpMeta(meta: Meta): Record<string, unknown> {
  *   title       — emits annotations.title
  *   annotations — merged over tag-derived hints (override wins per key)
  *
- * @param n        - The node to walk.
- * @param prefix   - Accumulated name prefix from ancestor nodes ("" at root).
- * @param tagPath  - Accumulated nodes/ops array for effectiveTags inheritance.
+ * @param n     - The root node to walk.
+ * @param opts  - Optional derived `schemas` map (from @rhi-zone/fractal-codegen).
  */
-export function toTools(
-  n: Node,
-  prefix = "",
-  tagPath: Array<{ meta?: { tags?: Tags } }> = [],
-): McpTool[] {
-  const out: McpTool[] = []
-  const nodePath = [...tagPath, n]
+export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
+  const schemas = opts.schemas ?? {}
 
-  // ── Leaf ops on this node ─────────────────────────────────────────────────
+  const walk = (
+    n: Node,
+    prefix: string,
+    tagPath: Array<{ meta?: { tags?: Tags } }>,
+  ): McpTool[] => {
+    const out: McpTool[] = []
+    const nodePath = [...tagPath, n]
 
-  for (const [key, o] of Object.entries(n.ops)) {
-    const opPath = [...nodePath, o]
-    const effective = effectiveTags(opPath)
-    const mcp = getMcpMeta(o.meta)
+    // ── Leaf ops on this node ───────────────────────────────────────────────
 
-    // Name: meta.mcp.name wins; else underscore-join prefix + op key
-    const name =
-      typeof mcp.name === "string"
-        ? mcp.name
-        : prefix.length > 0
-          ? `${prefix}_${key}`
-          : key
+    for (const [key, o] of Object.entries(n.ops)) {
+      const opPath = [...nodePath, o]
+      const effective = effectiveTags(opPath)
+      const mcp = getMcpMeta(o.meta)
 
-    // Description: meta.mcp.description > meta.description > op key.
-    // NOTE: JSDoc extraction is a codegen concern — not yet built.
-    // TODO(codegen): when JSDoc extraction lands, fall through to doc-comment
-    // text before defaulting to the op key.
-    const description =
-      typeof mcp.description === "string"
-        ? mcp.description
-        : typeof o.meta.description === "string"
-          ? o.meta.description
-          : key
+      // Name: meta.mcp.name wins; else underscore-join prefix + op key
+      const name =
+        typeof mcp.name === "string"
+          ? mcp.name
+          : prefix.length > 0
+            ? `${prefix}_${key}`
+            : key
 
-    // Hints derived from the tag lattice (three-valued)
-    const baseHints = hintsFromTags(effective)
+      const derived = schemas[name]
 
-    // meta.mcp.annotations overrides individual hint keys
-    const annotationOverride: Record<string, unknown> =
-      typeof mcp.annotations === "object" && mcp.annotations !== null
-        ? (mcp.annotations as Record<string, unknown>)
-        : {}
+      // Description: meta.mcp.description > meta.description > JSDoc-derived
+      // (from codegen) > op key.
+      const description =
+        typeof mcp.description === "string"
+          ? mcp.description
+          : typeof o.meta.description === "string"
+            ? o.meta.description
+            : typeof derived?.description === "string"
+              ? derived.description
+              : key
 
-    // meta.mcp.title → annotations.title
-    const titleEntry: Record<string, string> =
-      typeof mcp.title === "string" ? { title: mcp.title } : {}
+      // Hints derived from the tag lattice (three-valued)
+      const baseHints = hintsFromTags(effective)
 
-    const annotationsMerged = { ...baseHints, ...annotationOverride, ...titleEntry }
-    const annotations: McpAnnotations | undefined =
-      Object.keys(annotationsMerged).length > 0 ? annotationsMerged : undefined
+      // meta.mcp.annotations overrides individual hint keys
+      const annotationOverride: Record<string, unknown> =
+        typeof mcp.annotations === "object" && mcp.annotations !== null
+          ? (mcp.annotations as Record<string, unknown>)
+          : {}
 
-    out.push({
-      name,
-      description,
-      // TODO(codegen): real JSON-Schema from op input types not yet built;
-      // `{ type: "object" }` satisfies the MCP spec minimum until codegen lands.
-      inputSchema: { type: "object" },
-      ...(annotations !== undefined ? { annotations } : {}),
-    })
-  }
+      // meta.mcp.title → annotations.title
+      const titleEntry: Record<string, string> =
+        typeof mcp.title === "string" ? { title: mcp.title } : {}
 
-  // ── Child nodes ───────────────────────────────────────────────────────────
+      const annotationsMerged = { ...baseHints, ...annotationOverride, ...titleEntry }
+      const annotations: McpAnnotations | undefined =
+        Object.keys(annotationsMerged).length > 0 ? annotationsMerged : undefined
 
-  for (const [key, child] of Object.entries(n.children)) {
-    if (isParamNode(child)) {
-      // ParamNode: contribute the param name (e.g. "userId") as the segment
-      const seg = prefix.length > 0 ? `${prefix}_${child.name}` : child.name
-      out.push(...toTools(child.subtree, seg, nodePath))
-    } else {
-      // Static child: use meta.mcp.segment override or the tree key
-      const childMcp = getMcpMeta(child.meta)
-      const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
-      const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg
-      out.push(...toTools(child, seg, nodePath))
+      out.push({
+        name,
+        description,
+        // Derived-from-type schema when available; else the MCP spec minimum.
+        inputSchema: derived?.inputSchema ?? { type: "object" },
+        ...(annotations !== undefined ? { annotations } : {}),
+      })
     }
+
+    // ── Child nodes ─────────────────────────────────────────────────────────
+
+    for (const [key, child] of Object.entries(n.children)) {
+      if (isParamNode(child)) {
+        // ParamNode: contribute the param name (e.g. "userId") as the segment
+        const seg = prefix.length > 0 ? `${prefix}_${child.name}` : child.name
+        out.push(...walk(child.subtree, seg, nodePath))
+      } else {
+        // Static child: use meta.mcp.segment override or the tree key
+        const childMcp = getMcpMeta(child.meta)
+        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
+        const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg
+        out.push(...walk(child, seg, nodePath))
+      }
+    }
+
+    return out
   }
 
-  return out
+  return walk(n, "", [])
 }

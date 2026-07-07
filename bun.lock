@@ -18,6 +18,17 @@
         "@rhi-zone/fractal-http": "workspace:*",
       },
     },
+    "packages/codegen": {
+      "name": "@rhi-zone/fractal-codegen",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "typescript": "^6.0.3",
+      },
+      "devDependencies": {
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-mcp": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@rhi-zone/fractal-core",
       "version": "0.1.0-alpha.0",
@@ -41,6 +52,8 @@
     },
   },
   "packages": {
+    "@rhi-zone/fractal-codegen": ["@rhi-zone/fractal-codegen@workspace:packages/codegen"],
+
     "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
 
     "@rhi-zone/fractal-example-spine-demo": ["@rhi-zone/fractal-example-spine-demo@workspace:examples/spine-demo"],
