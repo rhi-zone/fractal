@@ -1,16 +1,9 @@
 {
   "name": "@rhi-zone/fractal-http",
   "version": "0.1.0-alpha.0",
-  "description": "WHATWG renderer for the function-core tree — toFetch, response builders, Result encoders, serveBun/serveNode",
+  "description": "WHATWG renderer for the function-core tree — makeRouter, buildRoutes, autoMethodLayer, corsLayer, createFetch, serveBun/serveNode",
   "type": "module",
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
-    },
     "./adapter": {
       "types": "./src/adapter.ts",
       "import": "./src/adapter.ts"
@@ -22,6 +15,10 @@
     "./project": {
       "types": "./src/project.ts",
       "import": "./src/project.ts"
+    },
+    "./layers": {
+      "types": "./src/layers.ts",
+      "import": "./src/layers.ts"
     }
   },
   "files": ["src"],

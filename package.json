@@ -8,7 +8,6 @@
     "packages/http",
     "packages/mcp",
     "packages/codegen",
-    "examples/spine-demo",
     "examples/library-api"
   ],
   "scripts": {

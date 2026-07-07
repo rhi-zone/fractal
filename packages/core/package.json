@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-core",
   "version": "0.1.0-alpha.0",
-  "description": "Function-core model — function category + Result + Kleisli/applicative combinators, the protocol-neutral D-tree (path/param/group/methods/route + app), and Schema",
+  "description": "Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in ./node; Tags lattice in ./tags",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",

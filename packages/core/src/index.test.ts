@@ -9,11 +9,8 @@ import {
   err,
   map,
   match,
-  obj,
   ok,
   pipe,
-  str,
-  num,
   type Result,
 } from "./index.ts";
 
@@ -69,16 +66,3 @@ describe("collect (applicative)", () => {
   });
 });
 
-describe("Schema", () => {
-  it("str / num coerce, obj validates fields", () => {
-    expect(str().parse("hi")).toEqual({ ok: true, value: "hi" });
-    expect(str().parse(null).ok).toBe(false);
-    expect(num().parse("42")).toEqual({ ok: true, value: 42 });
-    const s = obj({ title: str(), n: num() });
-    expect(s.parse({ title: "t", n: "3" })).toEqual({
-      ok: true,
-      value: { title: "t", n: 3 },
-    });
-    expect(s.parse({ title: 1, n: 3 }).ok).toBe(false);
-  });
-});
