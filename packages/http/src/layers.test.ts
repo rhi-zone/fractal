@@ -13,7 +13,7 @@ describe("autoMethodLayer — proves droppable", () => {
   const api = node({
     ops: {
       getItem: op((_: unknown) => ({ id: 42 }), {
-        readOnly: true,
+        tags: { readOnly: true },
         http: { segment: "item" },
       }),
     },
@@ -104,11 +104,11 @@ describe("autoMethodLayer — multi-verb routes", () => {
   const api = node({
     ops: {
       getItem: op((_: unknown) => ({ id: 1 }), {
-        readOnly: true,
+        tags: { readOnly: true },
         http: { segment: "item" },
       }),
       updateItem: op((_: unknown) => ({ updated: true }), {
-        idempotent: true,
+        tags: { idempotent: true },
         http: { segment: "item" },
       }),
     },

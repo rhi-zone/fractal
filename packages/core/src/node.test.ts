@@ -14,11 +14,13 @@ import {
 } from "./node.ts"
 import {
   resolveTags,
+  effectiveTags,
   TAG_READ_ONLY,
   TAG_IDEMPOTENT,
   TAG_DESTRUCTIVE,
   TAG_OPEN_WORLD,
   TAG_STREAMING,
+  type Tags,
 } from "./tags.ts"
 
 // ============================================================================
@@ -207,21 +209,20 @@ describe("open metadata", () => {
     expect(n.meta["analytics"]).toEqual({ track: "pageview" })
   })
 
-  it("resolveTags leaves non-standard keys in meta untouched (not consumed)", () => {
-    // resolveTags reads only known tag keys; extras are ignored but the bag
-    // itself is unmodified — the caller retains the original meta object
-    const meta: Meta = {
+  it("resolveTags leaves non-standard boolean keys in tags untouched (not consumed)", () => {
+    // resolveTags reads only known tag keys; custom boolean keys pass through in
+    // the Tags bag untouched — the caller retains the original tags object
+    const tags: Tags = {
       [TAG_READ_ONLY]: true,
-      "acme:cacheable": { ttl: 60 },
-      unknownTag: true,
+      customTag: true,
     }
-    const result = resolveTags(meta)
+    const result = resolveTags(tags)
     // Standard tags resolved correctly
     expect(result.readOnly).toBe(true)
     expect(result.idempotent).toBe(true)
-    // The original meta bag is untouched
-    expect(meta["acme:cacheable"]).toEqual({ ttl: 60 })
-    expect(meta["unknownTag"]).toBe(true)
+    // The original tags bag is untouched
+    expect(tags[TAG_READ_ONLY]).toBe(true)
+    expect(tags["customTag"]).toBe(true)
   })
 })
 
@@ -240,10 +241,10 @@ describe("op surfaces", () => {
   it("standalone function op with meta works", async () => {
     const o = op(
       (input: { id: string }) => ({ found: true, id: input.id }),
-      { [TAG_READ_ONLY]: true, http: { segment: "detail" } },
+      { tags: { [TAG_READ_ONLY]: true }, http: { segment: "detail" } },
     )
     expect(await o.fn({ id: "x" })).toEqual({ found: true, id: "x" })
-    expect(o.meta[TAG_READ_ONLY]).toBe(true)
+    expect(o.meta.tags?.[TAG_READ_ONLY]).toBe(true)
     expect(o.meta["http"]).toEqual({ segment: "detail" })
   })
 
@@ -270,5 +271,77 @@ describe("op surfaces", () => {
     expect(isParamNode(n)).toBe(false)
     expect(isNode(null)).toBe(false)
     expect(isParamNode(42)).toBe(false)
+  })
+})
+
+// ============================================================================
+// 6. effectiveTags — node-level tag inheritance
+// ============================================================================
+
+describe("effectiveTags — inheritance", () => {
+  it("node tags flow to op when op has no own tags", () => {
+    const path = [
+      { meta: { tags: { readOnly: true } } },  // parent node
+      { meta: {} },                              // op with no tags
+    ]
+    const result = effectiveTags(path)
+    expect(result.readOnly).toBe(true)
+  })
+
+  it("op-level readOnly:false overrides ancestor readOnly:true", () => {
+    const path = [
+      { meta: { tags: { readOnly: true } } },   // ancestor
+      { meta: { tags: { readOnly: false } } },  // op
+    ]
+    const result = effectiveTags(path)
+    expect(result.readOnly).toBe(false)
+  })
+
+  it("op idempotent:true does not disturb ancestor readOnly:false; other ancestor tags flow through", () => {
+    const path = [
+      { meta: { tags: { readOnly: false, openWorld: true } } },  // ancestor
+      { meta: { tags: { idempotent: true } } },                   // op — no readOnly key
+    ]
+    const result = effectiveTags(path)
+    expect(result.idempotent).toBe(true)
+    expect(result.readOnly).toBe(false)    // flows through from ancestor
+    expect(result.openWorld).toBe(true)   // flows through from ancestor
+  })
+
+  it("undefined at op level defers to ancestor value", () => {
+    const path = [
+      { meta: { tags: { readOnly: true } } },
+      { meta: { tags: { readOnly: undefined } } },  // explicit undefined — defers upward
+    ]
+    const result = effectiveTags(path)
+    expect(result.readOnly).toBe(true)
+  })
+
+  it("two-level nesting resolves closest-wins: op > parent > grandparent", () => {
+    const path = [
+      { meta: { tags: { readOnly: true } } },    // grandparent
+      { meta: { tags: { idempotent: false } } }, // parent
+      { meta: { tags: { destructive: true } } }, // op
+    ]
+    const result = effectiveTags(path)
+    expect(result.readOnly).toBe(true)      // from grandparent
+    expect(result.idempotent).toBe(false)   // from parent
+    expect(result.destructive).toBe(true)   // from op
+  })
+
+  it("three-valued: explicit false overrides true from ancestor", () => {
+    const path = [
+      { meta: { tags: { readOnly: true } } },
+      { meta: { tags: { readOnly: false } } },
+    ]
+    expect(effectiveTags(path).readOnly).toBe(false)
+  })
+
+  it("three-valued: explicit true overrides false from ancestor", () => {
+    const path = [
+      { meta: { tags: { readOnly: false } } },
+      { meta: { tags: { readOnly: true } } },
+    ]
+    expect(effectiveTags(path).readOnly).toBe(true)
   })
 })

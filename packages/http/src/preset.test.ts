@@ -19,7 +19,7 @@ class UserService {
 
 const usersNode = service(new UserService(), {
   meta: {
-    listUsers: { readOnly: true, http: { segment: "list" } },
+    listUsers: { tags: { readOnly: true }, http: { segment: "list" } },
     createUser: { http: { segment: "create" } },
   },
 })
@@ -116,7 +116,7 @@ describe("OOTB preset — slug threading (provenance-blind)", () => {
                       capturedInput = input
                       return { ok: true }
                     },
-                    { idempotent: true, http: { segment: "update" } },
+                    { tags: { idempotent: true }, http: { segment: "update" } },
                   ),
                 },
               }),

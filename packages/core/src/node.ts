@@ -11,6 +11,8 @@
 //   docs/design/converged-model.md                  — certified constraints
 // ============================================================================
 
+import type { Tags } from "./tags.ts"
+
 // ============================================================================
 // Core types
 // ============================================================================
@@ -20,13 +22,13 @@
  *
  * Two uses co-exist in this bag:
  *   1. Projection namespaces: `meta.http = { verb: "GET", segment: "users" }`
- *   2. Agnostic behavioral tags: `meta.readOnly = true`
+ *   2. Agnostic behavioral tags: `meta.tags = { readOnly: true }`
  *
  * Types (+ JSDoc) are the truth for domain data. This bag is ONLY for
  * non-type-expressible projection/taste concerns (verb, segment, idempotency,
  * auth). Never a second source for domain data.
  */
-export type Meta = { readonly [key: string]: unknown }
+export type Meta = { tags?: Tags; readonly [key: string]: unknown }
 
 /** An operation IS a function T => U, carrying an open metadata bag. */
 export type Op<I = unknown, O = unknown> = {

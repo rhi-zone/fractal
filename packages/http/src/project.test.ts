@@ -48,7 +48,7 @@ describe("buildRoutes — path from tree walk", () => {
       children: {
         users: node({
           ops: {
-            list: op((_: unknown) => [], { readOnly: true }),
+            list: op((_: unknown) => [], { tags: { readOnly: true } }),
           },
         }),
       },
@@ -93,12 +93,12 @@ describe("buildRoutes — path from tree walk", () => {
       children: {
         users: node({
           ops: {
-            list: op((_: unknown) => [], { readOnly: true }),
+            list: op((_: unknown) => [], { tags: { readOnly: true } }),
           },
         }),
         orders: node({
           ops: {
-            list: op((_: unknown) => [], { readOnly: true }),
+            list: op((_: unknown) => [], { tags: { readOnly: true } }),
           },
         }),
       },
@@ -115,12 +115,45 @@ describe("buildRoutes — path from tree walk", () => {
       }
     }
     const n = service(new Svc(), {
-      meta: { listItems: { readOnly: true } },
+      meta: { listItems: { tags: { readOnly: true } } },
     })
     const routes = buildRoutes(n)
     expect(routes[0]!.verb).toBe("GET")
     // inferSegment("listItems") = "items"
     expect(routes[0]!.path).toBe("/items")
+  })
+
+  it("node-level readOnly:true makes op project to GET via inheritance", () => {
+    const api = node({
+      children: {
+        catalog: node({
+          meta: { tags: { readOnly: true } },
+          ops: {
+            list: op((_: unknown) => []),  // no own tags
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    expect(routes[0]!.verb).toBe("GET")
+  })
+
+  it("op-level tag overrides node-level tag inheritance", () => {
+    const api = node({
+      children: {
+        items: node({
+          meta: { tags: { readOnly: true } },
+          ops: {
+            // op explicitly opts out of readOnly
+            delete: op((_: unknown) => ({}), {
+              tags: { readOnly: false, idempotent: true, destructive: true },
+            }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    expect(routes[0]!.verb).toBe("DELETE")
   })
 })
 
@@ -130,19 +163,19 @@ describe("buildRoutes — path from tree walk", () => {
 
 describe("verbFromTags — three-valued dispatch", () => {
   it("readOnly = true → GET", () => {
-    expect(verbFromTags({ readOnly: true })).toBe("GET")
+    expect(verbFromTags({ tags: { readOnly: true } })).toBe("GET")
   })
 
   it("idempotent = true + destructive = true → DELETE", () => {
-    expect(verbFromTags({ idempotent: true, destructive: true })).toBe("DELETE")
+    expect(verbFromTags({ tags: { idempotent: true, destructive: true } })).toBe("DELETE")
   })
 
   it("idempotent = true + destructive = false → PUT", () => {
-    expect(verbFromTags({ idempotent: true, destructive: false })).toBe("PUT")
+    expect(verbFromTags({ tags: { idempotent: true, destructive: false } })).toBe("PUT")
   })
 
   it("idempotent = true + destructive = undefined → PUT (unknown ≠ explicitly destructive)", () => {
-    expect(verbFromTags({ idempotent: true })).toBe("PUT")
+    expect(verbFromTags({ tags: { idempotent: true } })).toBe("PUT")
   })
 
   it("no tags → POST (conservative default)", () => {
@@ -150,15 +183,15 @@ describe("verbFromTags — three-valued dispatch", () => {
   })
 
   it("idempotent = false → POST (explicit false)", () => {
-    expect(verbFromTags({ idempotent: false })).toBe("POST")
+    expect(verbFromTags({ tags: { idempotent: false } })).toBe("POST")
   })
 
   it("idempotent = undefined → POST (unknown is conservative)", () => {
-    expect(verbFromTags({ destructive: true })).toBe("POST")
+    expect(verbFromTags({ tags: { destructive: true } })).toBe("POST")
   })
 
   it("meta.http.verb override wins over all tags", () => {
-    expect(verbFromTags({ readOnly: true, http: { verb: "POST" } })).toBe(
+    expect(verbFromTags({ tags: { readOnly: true }, http: { verb: "POST" } })).toBe(
       "POST",
     )
   })
@@ -169,7 +202,7 @@ describe("verbFromTags — three-valued dispatch", () => {
 
   it("readOnly = true implies idempotent (lattice: safe ⇒ idempotent)", () => {
     // readOnly = true always → GET regardless of other tags
-    expect(verbFromTags({ readOnly: true, idempotent: false })).toBe("GET")
+    expect(verbFromTags({ tags: { readOnly: true, idempotent: false } })).toBe("GET")
   })
 })
 
@@ -228,7 +261,7 @@ describe("makeRouter — core router (no auto-method layer)", () => {
   const getUser = (_: unknown) => ({ id: 1, name: "Alice" })
   const api = node({
     ops: {
-      getUser: op(getUser, { readOnly: true, http: { segment: "user" } }),
+      getUser: op(getUser, { tags: { readOnly: true }, http: { segment: "user" } }),
     },
   })
   const routes = buildRoutes(api)
