@@ -105,7 +105,7 @@ describe("fallback for exotic types", () => {
 })
 
 // ============================================================================
-// 5. outputSchema extraction from op return types
+// 5. outputSchema extraction from op return types — Result<T,E> unwrapping
 // ============================================================================
 
 describe("outputSchema derivation", () => {
@@ -125,9 +125,55 @@ describe("outputSchema derivation", () => {
     })
   })
 
-  it("Result<T,E> union return punts with a TODO $comment", () => {
-    const output = schemas["fallible_compute"]?.outputSchema
+  // ── Result unwrapping — 5 cases ────────────────────────────────────────────
+
+  // (a) Direct import: Result<T,E> annotated return → syntax path extracts T
+  it("(a) direct Result<T,E> return unwraps to T's schema via syntax path", () => {
+    expect(schemas["fallible_compute"]?.outputSchema).toEqual({
+      type: "object",
+      properties: { answer: { type: "number" } },
+      required: ["answer"],
+    })
+  })
+
+  // (b) Barrel re-export: `import type { Result as ResultFromBarrel } from "./barrel"`
+  //     The syntax path checks the TypeReference identifier name ("Result" after
+  //     the barrel re-exports it) — extracts T from the first type argument.
+  it("(b) barrel-re-exported Result<T,E> unwraps to T's schema via syntax path", () => {
+    expect(schemas["barrel_query"]?.outputSchema).toEqual({
+      type: "object",
+      properties: { count: { type: "number" } },
+      required: ["count"],
+    })
+  })
+
+  // (c) Further-generic alias: `type ApiResult<T> = Result<T, string>`.
+  //     The syntax path walks the local TypeAliasDeclaration — its body is
+  //     Result<T,...> — and extracts the call site's first type argument as T.
+  it("(c) further-generic alias ApiResult<T> unwraps to T's schema via syntax path", () => {
+    expect(schemas["generic_search"]?.outputSchema).toEqual({
+      type: "object",
+      properties: { items: { type: "array", items: { type: "string" } } },
+      required: ["items"],
+    })
+  })
+
+  // Promise<Result<T,E>>: syntax path strips Promise first, then unwraps Result
+  it("Promise<Result<T,E>> unwraps both layers to T's schema", () => {
+    expect(schemas["promiseResult_load"]?.outputSchema).toEqual({
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+    })
+  })
+
+  // Genuine 2-member union that is NOT a Result — must NOT be false-positived.
+  // No "Result" identifier in the annotation → syntax path skips it.
+  // The union has no ok/value/error DU shape → structural path also skips it.
+  it("a different 2-member union with different discriminant does not unwrap (punts)", () => {
+    const output = schemas["differentUnion_ping"]?.outputSchema
     expect(output?.type).toBe("object")
     expect(output?.$comment).toMatch(/TODO\(codegen\)/)
+    expect(output?.$comment).toMatch(/union/)
   })
 })
