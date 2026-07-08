@@ -9,6 +9,7 @@
     "packages/mcp",
     "packages/codegen",
     "packages/openapi",
+    "packages/cli",
     "examples/library-api"
   ],
   "scripts": {
