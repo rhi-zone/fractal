@@ -27,6 +27,7 @@ export type Route = {
   readonly path: string
   readonly pattern: readonly PatternPart[]
   readonly handler: Op["fn"]
+  readonly meta: Meta
 }
 
 // ============================================================================
@@ -168,11 +169,11 @@ export function buildRoutes(
     if (http.legacyPath !== undefined) {
       // [DEBT] escape hatch: full-path override skips all tree-walk logic
       const path = http.legacyPath
-      out.push({ verb, path, pattern: parsePath(path), handler: o.fn })
+      out.push({ verb, path, pattern: parsePath(path), handler: o.fn, meta: o.meta })
     } else {
       const seg = http.segment ?? inferSegment(name)
       const path = `${prefix}/${seg}`
-      out.push({ verb, path, pattern: parsePath(path), handler: o.fn })
+      out.push({ verb, path, pattern: parsePath(path), handler: o.fn, meta: o.meta })
     }
   }
 

@@ -103,3 +103,31 @@ describe("fallback for exotic types", () => {
     expect(q?.$comment).toMatch(/union/)
   })
 })
+
+// ============================================================================
+// 5. outputSchema extraction from op return types
+// ============================================================================
+
+describe("outputSchema derivation", () => {
+  it("extracts outputSchema for a plain object return", () => {
+    expect(schemas["users_create"]?.outputSchema).toEqual({
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
+    })
+  })
+
+  it("unwraps Promise<T> return type to T's schema", () => {
+    expect(schemas["async_fetch"]?.outputSchema).toEqual({
+      type: "object",
+      properties: { value: { type: "number" } },
+      required: ["value"],
+    })
+  })
+
+  it("Result<T,E> union return punts with a TODO $comment", () => {
+    const output = schemas["fallible_compute"]?.outputSchema
+    expect(output?.type).toBe("object")
+    expect(output?.$comment).toMatch(/TODO\(codegen\)/)
+  })
+})

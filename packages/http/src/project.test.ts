@@ -158,6 +158,24 @@ describe("buildRoutes — path from tree walk", () => {
 })
 
 // ============================================================================
+// 1b. Route carries op.meta (including tags)
+// ============================================================================
+
+describe("buildRoutes — route carries op.meta", () => {
+  it("includes meta on the route so consumers can read tags without fn-identity correlation", () => {
+    const api = node({
+      ops: {
+        listItems: op((_: unknown) => [], { tags: { readOnly: true } }),
+      },
+    })
+    const routes = buildRoutes(api)
+    expect(routes).toHaveLength(1)
+    const route = routes[0]!
+    expect((route.meta.tags as { readOnly?: boolean } | undefined)?.readOnly).toBe(true)
+  })
+})
+
+// ============================================================================
 // 2. Verb from three-valued tag lattice
 // ============================================================================
 

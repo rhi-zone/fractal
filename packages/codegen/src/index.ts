@@ -9,6 +9,7 @@ export {
   extractJsDoc,
   opFunctionNode,
   schemaFromFunctionNode,
+  schemaFromReturnType,
   schemaFromType,
   type JsonSchema,
 } from "./extract.ts"

@@ -20,12 +20,14 @@ import {
   extractJsDoc,
   opFunctionNode,
   schemaFromFunctionNode,
+  schemaFromReturnType,
   type JsonSchema,
 } from "./extract.ts"
 
 /** Per-tool derived facts: real input schema + JSDoc-derived description. */
 export type ToolSchema = {
   inputSchema: JsonSchema
+  outputSchema?: JsonSchema
   description?: string
 }
 
@@ -80,8 +82,10 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
           if (!fn) continue
           const name = join(prefix, opKey)
           const description = extractJsDoc(opProp)
+          const outputSchema = schemaFromReturnType(fn, checker)
           out[name] = {
             inputSchema: schemaFromFunctionNode(fn, checker),
+            outputSchema,
             ...(description !== undefined ? { description } : {}),
           }
         }

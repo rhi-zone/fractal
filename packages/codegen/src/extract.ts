@@ -140,6 +140,48 @@ export function schemaFromFunctionNode(
 }
 
 // ============================================================================
+// Function/op return type → JSON-Schema
+// ============================================================================
+
+/**
+ * Derive the output schema from a function-typed node by inspecting its return
+ * type. Strips `Promise<T>` (takes the first type argument) and `Result<T, E>`
+ * (recognized by the type name "Result", takes the first type argument).
+ * Exotic/unresolvable return types punt to `{ type: "object" }` with a TODO
+ * $comment, consistent with the input-side fallback.
+ */
+export function schemaFromReturnType(
+  fn: ts.Node,
+  checker: ts.TypeChecker,
+): JsonSchema {
+  const fnType = checker.getTypeAtLocation(fn)
+  const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
+  if (!sig) return punt("no call signature on op fn")
+
+  let returnType = checker.getReturnTypeOfSignature(sig)
+
+  // Strip Promise<T> — take the first type argument
+  if (returnType.symbol?.name === "Promise") {
+    const args = checker.getTypeArguments(returnType as ts.TypeReference)
+    const inner = args[0]
+    if (inner === undefined) return punt("Promise with no type argument")
+    returnType = inner
+  }
+
+  // Strip Result<T, E> — recognized by type name "Result", take the first arg
+  // TODO(codegen): recognize Result by nominal identity (import symbol) once
+  // the core package exports it as a branded type rather than a structural alias
+  if (returnType.symbol?.name === "Result") {
+    const args = checker.getTypeArguments(returnType as ts.TypeReference)
+    const inner = args[0]
+    if (inner === undefined) return punt("Result with no type argument")
+    returnType = inner
+  }
+
+  return schemaFromType(returnType, checker, fn)
+}
+
+// ============================================================================
 // JSDoc → description
 // ============================================================================
 
