@@ -4,6 +4,12 @@
   "private": true,
   "description": "Live end-to-end example on the new model — HTTP+MCP+codegen, library domain",
   "type": "module",
+  "exports": {
+    "./tree": {
+      "types": "./src/tree.ts",
+      "import": "./src/tree.ts"
+    }
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test"

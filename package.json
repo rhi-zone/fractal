@@ -10,6 +10,7 @@
     "packages/codegen",
     "packages/openapi",
     "packages/cli",
+    "packages/client",
     "examples/library-api"
   ],
   "scripts": {

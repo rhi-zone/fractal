@@ -28,6 +28,15 @@
         "@rhi-zone/fractal-core": "workspace:*",
       },
     },
+    "packages/client": {
+      "name": "@rhi-zone/fractal-client",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-example-library-api": "workspace:*",
+        "@rhi-zone/fractal-http": "workspace:*",
+      },
+    },
     "packages/codegen": {
       "name": "@rhi-zone/fractal-codegen",
       "version": "0.1.0-alpha.0",
@@ -72,6 +81,8 @@
   },
   "packages": {
     "@rhi-zone/fractal-cli": ["@rhi-zone/fractal-cli@workspace:packages/cli"],
+
+    "@rhi-zone/fractal-client": ["@rhi-zone/fractal-client@workspace:packages/client"],
 
     "@rhi-zone/fractal-codegen": ["@rhi-zone/fractal-codegen@workspace:packages/codegen"],
 
