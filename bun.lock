@@ -10,12 +10,14 @@
         "typescript": "^6.0.3",
       },
     },
-    "examples/spine-demo": {
-      "name": "@rhi-zone/fractal-example-spine-demo",
+    "examples/library-api": {
+      "name": "@rhi-zone/fractal-example-library-api",
       "version": "0.0.0",
       "dependencies": {
+        "@rhi-zone/fractal-codegen": "workspace:*",
         "@rhi-zone/fractal-core": "workspace:*",
         "@rhi-zone/fractal-http": "workspace:*",
+        "@rhi-zone/fractal-mcp": "workspace:*",
       },
     },
     "packages/codegen": {
@@ -50,17 +52,28 @@
         "@rhi-zone/fractal-http": "workspace:*",
       },
     },
+    "packages/openapi": {
+      "name": "@rhi-zone/fractal-openapi",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-codegen": "workspace:*",
+        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-http": "workspace:*",
+      },
+    },
   },
   "packages": {
     "@rhi-zone/fractal-codegen": ["@rhi-zone/fractal-codegen@workspace:packages/codegen"],
 
     "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
 
-    "@rhi-zone/fractal-example-spine-demo": ["@rhi-zone/fractal-example-spine-demo@workspace:examples/spine-demo"],
+    "@rhi-zone/fractal-example-library-api": ["@rhi-zone/fractal-example-library-api@workspace:examples/library-api"],
 
     "@rhi-zone/fractal-http": ["@rhi-zone/fractal-http@workspace:packages/http"],
 
     "@rhi-zone/fractal-mcp": ["@rhi-zone/fractal-mcp@workspace:packages/mcp"],
+
+    "@rhi-zone/fractal-openapi": ["@rhi-zone/fractal-openapi@workspace:packages/openapi"],
 
     "@types/node": ["@types/node@25.9.1", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg=="],
 
