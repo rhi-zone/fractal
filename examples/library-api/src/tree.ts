@@ -14,6 +14,7 @@
 // its ops degrade to the MCP spec-minimum `{ type: "object" }` placeholder.
 
 import { node, op, param, service } from "@rhi-zone/fractal-core/node"
+import { http } from "@rhi-zone/fractal-http/verbs"
 
 // ============================================================================
 // Domain types + in-memory store
@@ -87,9 +88,28 @@ const bookItemNode = node({
     /** Checkout action — a named action kept as a segment-child (branch node). */
     checkout: node({
       children: {
-        /** Initiate a checkout session for a book reservation. */
+        /**
+         * Initiate a checkout session for a book reservation.
+         * Authored with `http.post` verb helper — bundles POST pin (no implied tags).
+         * POST /books/{bookId}/checkout/start
+         */
         start: op(
           (input: { bookId: string }) => ({ sessionId: `checkout-${input.bookId}` }),
+          http.post,
+        ),
+
+        /**
+         * Reserve a book for a patron — idempotent (same patron+book = same reservation).
+         * Authored with `http.put` verb helper — bundles PUT pin + idempotent:true.
+         * The bundled `idempotent` tag flows to MCP (idempotentHint) for free.
+         * PUT /books/{bookId}/checkout/reserve
+         */
+        reserve: op(
+          (input: { bookId: string; patronId: string }) => ({
+            reservationId: `res-${input.bookId}-${input.patronId}`,
+            patronId: input.patronId,
+          }),
+          http.put,
         ),
       },
     }),

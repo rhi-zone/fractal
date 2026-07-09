@@ -14,6 +14,10 @@ import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore } from "./tree.ts"
 import { createFetch } from "@rhi-zone/fractal-http/preset"
 import { buildRoutes } from "@rhi-zone/fractal-http/project"
+import { http } from "@rhi-zone/fractal-http/verbs"
+import { op } from "@rhi-zone/fractal-core/node"
+import { resolveTags } from "@rhi-zone/fractal-core/tags"
+import type { Tags } from "@rhi-zone/fractal-core/tags"
 import { toTools } from "@rhi-zone/fractal-mcp"
 import { extractToolSchemas } from "@rhi-zone/fractal-codegen"
 
@@ -218,5 +222,69 @@ describe("library-api — MCP tools", () => {
       type: "object",
       properties: { prefix: { type: "string" } },
     })
+  })
+})
+
+// ============================================================================
+// Verb-helper bundles: one helper → HTTP verb AND MCP hint
+// ============================================================================
+
+describe("library-api — verb-helper bundles (http.*)", () => {
+  // http.put bundle: checkout/reserve op authored with http.put
+  it("http.put on reserve: HTTP route is PUT /books/{bookId}/checkout/reserve", () => {
+    const routes = buildRoutes(api)
+    const r = routes.find((r) => r.path === "/books/{bookId}/checkout/reserve")
+    expect(r?.verb).toBe("PUT")
+  })
+
+  it("http.put on reserve: MCP tool gets idempotentHint (bundle → MCP for free)", () => {
+    const tools = toTools(api)
+    const t = tools.find((t) => t.name === "books_bookId_checkout_reserve")
+    expect(t?.annotations?.idempotentHint).toBe(true)
+  })
+
+  // http.post bundle: checkout/start op authored with http.post
+  it("http.post on start: HTTP route is POST /books/{bookId}/checkout/start", () => {
+    const routes = buildRoutes(api)
+    const r = routes.find((r) => r.path === "/books/{bookId}/checkout/start")
+    expect(r?.verb).toBe("POST")
+  })
+
+  it("http.post on start: MCP tool has no idempotentHint (plain mutation)", () => {
+    const tools = toTools(api)
+    const t = tools.find((t) => t.name === "books_bookId_checkout_start")
+    // post bundles no idempotent tag — hint should be absent or false
+    expect(t?.annotations?.idempotentHint).toBeFalsy()
+  })
+
+  // mergeMeta-not-spread proof: op(fn, http.put, { tags: { destructive: false } })
+  // keeps idempotent:true from bundle AND applies destructive:false from extra
+  it("op(fn, http.put, extra-tags) deep-merges: bundle's idempotent preserved + extra applied", () => {
+    const n = op((_: unknown) => {}, http.put, { tags: { destructive: false } })
+    const nodeTags = (n.meta.tags ?? {}) as Tags
+    const resolved = resolveTags(nodeTags)
+    // idempotent:true from http.put bundle is NOT clobbered by the extra contribution
+    expect(resolved.idempotent).toBe(true)
+    // destructive:false from extra contribution is applied
+    expect(resolved.destructive).toBe(false)
+    // http.verb from bundle is preserved
+    const httpMeta = n.meta.http as { verb: string }
+    expect(httpMeta.verb).toBe("PUT")
+  })
+
+  // end-to-end: verb-helper-authored reserve op dispatches correctly
+  it("PUT /books/{bookId}/checkout/reserve dispatches via verb-helper route", async () => {
+    const fetch = createFetch(api)
+    const res = await fetch(
+      new Request("http://localhost/books/book-1/checkout/reserve", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patronId: "patron-99" }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { reservationId: string; patronId: string }
+    expect(body.reservationId).toBe("res-book-1-patron-99")
+    expect(body.patronId).toBe("patron-99")
   })
 })

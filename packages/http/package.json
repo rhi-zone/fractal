@@ -19,6 +19,10 @@
     "./layers": {
       "types": "./src/layers.ts",
       "import": "./src/layers.ts"
+    },
+    "./verbs": {
+      "types": "./src/verbs.ts",
+      "import": "./src/verbs.ts"
     }
   },
   "files": ["src"],

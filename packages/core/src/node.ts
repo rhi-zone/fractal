@@ -142,15 +142,23 @@ export function mergeMeta(...metas: Array<Meta | undefined>): Meta {
  * Produce a leaf node: a Node carrying a handler and merged meta.
  *
  * `op(fn)` — bare fn → leaf with empty meta.
- * `op(fn, meta)` — leaf with explicit meta bag.
+ * `op(fn, meta)` — leaf with a single meta bag.
+ * `op(fn, ...contributions)` — leaf with multiple meta bags deep-merged
+ *   left-to-right via `mergeMeta` (later wins per key; undefined defers).
+ *   A verb-bundle + extra tags compose without either clobbering the other.
  *
  * The result IS a Node (not a separate `{fn, meta}` record). Projections
  * detect a leaf by `node.handler !== undefined`.
  */
 export function op<I, O>(
   fn: (input: I) => O | Promise<O>,
-  meta: Meta = {},
+  ...contributions: Array<Meta>
 ): Node {
+  const meta = contributions.length === 0
+    ? {}
+    : contributions.length === 1
+      ? contributions[0]!
+      : mergeMeta(...contributions)
   return { handler: fn as Handler, meta }
 }
 
