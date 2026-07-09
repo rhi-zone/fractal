@@ -3,6 +3,12 @@
 // End-to-end tests for the library-api on the new fractal model.
 // Exercises the whole stack: HTTP (createFetch) + MCP (toTools) + codegen
 // (extractToolSchemas). Each assertion proves a specific new-model invariant.
+//
+// The byId subtree uses attribute-dispatch (meta.http.dispatch === "method"):
+//   read    → GET  /books/{bookId}
+//   replace → PUT  /books/{bookId}
+//   remove  → DELETE /books/{bookId}
+// CLI/MCP name these by their agnostic child keys (read, replace, remove).
 
 import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore } from "./tree.ts"
@@ -43,16 +49,37 @@ describe("library-api — HTTP routes", () => {
     expect(r?.verb).toBe("GET")
   })
 
-  it("destructive op (remove) → DELETE route", () => {
+  it("attribute-dispatch: read → GET /books/{bookId}", () => {
     const routes = buildRoutes(api)
-    const r = routes.find((r) => r.path === "/books/{bookId}/remove")
-    expect(r?.verb).toBe("DELETE")
+    const r = routes.find((r) => r.path === "/books/{bookId}" && r.verb === "GET")
+    expect(r).toBeDefined()
   })
 
-  it("idempotent op (update) → PUT route", () => {
+  it("attribute-dispatch: replace → PUT /books/{bookId}", () => {
     const routes = buildRoutes(api)
-    const r = routes.find((r) => r.path === "/books/{bookId}/update")
-    expect(r?.verb).toBe("PUT")
+    const r = routes.find((r) => r.path === "/books/{bookId}" && r.verb === "PUT")
+    expect(r).toBeDefined()
+  })
+
+  it("attribute-dispatch: remove → DELETE /books/{bookId}", () => {
+    const routes = buildRoutes(api)
+    const r = routes.find((r) => r.path === "/books/{bookId}" && r.verb === "DELETE")
+    expect(r).toBeDefined()
+  })
+
+  it("attribute-dispatch: 3 distinct verbs at the same /books/{bookId} path", () => {
+    const routes = buildRoutes(api)
+    const byIdRoutes = routes.filter((r) => r.path === "/books/{bookId}")
+    expect(byIdRoutes).toHaveLength(3)
+    const verbs = new Set(byIdRoutes.map((r) => r.verb))
+    expect(verbs).toEqual(new Set(["GET", "PUT", "DELETE"]))
+  })
+
+  it("checkout branch child under method-dispatch node → segment-dispatched", () => {
+    const routes = buildRoutes(api)
+    // checkout is a branch, not a leaf — its leaf 'start' gets a segment
+    const r = routes.find((r) => r.path === "/books/{bookId}/checkout/start")
+    expect(r).toBeDefined()
   })
 
   it("catalog ops inherit readOnly from node level → GET routes", () => {
@@ -73,17 +100,17 @@ describe("library-api — HTTP routes", () => {
     expect(addRes.status).toBe(200)
     const book = (await addRes.json()) as { id: string }
 
-    // GET details — bookId comes from the URL path segment, not from the body
-    const detailsRes = await fetch(
-      new Request(`http://localhost/books/${book.id}/details`),
+    // GET /books/{id} — attribute-dispatch REST read
+    const readRes = await fetch(
+      new Request(`http://localhost/books/${book.id}`),
     )
-    expect(detailsRes.status).toBe(200)
-    const details = (await detailsRes.json()) as { id: string; title: string }
+    expect(readRes.status).toBe(200)
+    const details = (await readRes.json()) as { id: string; title: string }
     expect(details.id).toBe(book.id)
     expect(details.title).toBe("The Pragmatic Programmer")
   })
 
-  it("DELETE /books/{id}/remove → deletes the book", async () => {
+  it("DELETE /books/{id} → deletes the book", async () => {
     const addRes = await fetch(
       jsonReq("POST", "http://localhost/books/add", {
         title: "Clean Code",
@@ -94,7 +121,7 @@ describe("library-api — HTTP routes", () => {
     const { id } = (await addRes.json()) as { id: string }
 
     const delRes = await fetch(
-      new Request(`http://localhost/books/${id}/remove`, { method: "DELETE" }),
+      new Request(`http://localhost/books/${id}`, { method: "DELETE" }),
     )
     expect(delRes.status).toBe(200)
     const body = (await delRes.json()) as { deleted: boolean }
@@ -145,10 +172,16 @@ describe("library-api — MCP tools", () => {
     expect(t?.annotations?.destructiveHint).toBe(true)
   })
 
-  it("idempotent op (books_bookId_update) → idempotentHint: true", () => {
+  it("idempotent op (books_bookId_replace) → idempotentHint: true", () => {
     const tools = toTools(api)
-    const t = tools.find((t) => t.name === "books_bookId_update")
+    const t = tools.find((t) => t.name === "books_bookId_replace")
     expect(t?.annotations?.idempotentHint).toBe(true)
+  })
+
+  it("readOnly op (books_bookId_read) → readOnlyHint: true", () => {
+    const tools = toTools(api)
+    const t = tools.find((t) => t.name === "books_bookId_read")
+    expect(t?.annotations?.readOnlyHint).toBe(true)
   })
 
   it("node-level readOnly inheritance: catalog_search → readOnlyHint: true", () => {

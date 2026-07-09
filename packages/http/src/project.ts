@@ -161,6 +161,46 @@ export function buildRoutes(
   const out: Route[] = []
   const nodePath = [...tagPath, n]
 
+  // Check if this node dispatches its leaf children by method (attribute-dispatch).
+  // When true, leaf children share the node's own path; verb comes from their tags.
+  const thisHttp = getHttpMeta(n.meta)
+  const methodDispatch = thisHttp.dispatch === "method"
+
+  if (methodDispatch) {
+    // Collect method-dispatched leaf routes at `prefix` (no added segment for each child).
+    // Non-leaf children still get a segment appended (segment-dispatch, unchanged).
+    const seenVerbs = new Map<string, string>() // verb → child name (for collision error)
+    for (const [name, child] of Object.entries(n.children ?? {})) {
+      if (isParamNode(child)) {
+        // ParamNode under a method-dispatch node: still contributes {name} segment
+        out.push(...buildRoutes(child.subtree, `${prefix}/{${child.name}}`, nodePath))
+      } else if (isLeaf(child)) {
+        // Leaf child: resolves to the parent's own path — no per-child segment
+        const leafPath = [...nodePath, child]
+        const effective = effectiveTags(leafPath)
+        const verbMeta: Meta = { ...child.meta, tags: effective }
+        const verb = verbFromTags(verbMeta)
+
+        // Collision check: two leaf children must not resolve to the same verb
+        const existing = seenVerbs.get(verb)
+        if (existing !== undefined) {
+          throw new Error(
+            `attribute-dispatch collision at "${prefix}": children "${existing}" and "${name}" both resolve to ${verb}`,
+          )
+        }
+        seenVerbs.set(verb, name)
+
+        const path = prefix === "" ? "/" : prefix
+        out.push({ verb, path, pattern: parsePath(path), handler: child.handler!, meta: child.meta })
+      } else {
+        // Branch child under method-dispatch node: still segment-dispatched
+        const seg = getHttpMeta(child.meta).segment ?? name
+        out.push(...buildRoutes(child, `${prefix}/${seg}`, nodePath))
+      }
+    }
+    return out
+  }
+
   for (const [name, child] of Object.entries(n.children ?? {})) {
     if (isParamNode(child)) {
       // ParamNode: contributes {name} segment; recurse into subtree
@@ -271,6 +311,14 @@ type HttpMeta = {
   readonly verb?: string
   readonly segment?: string
   readonly legacyPath?: string
+  /**
+   * `dispatch: "method"` — this node's LEAF children all resolve to the node's
+   * own path. Each child's HTTP verb is derived from its effective tags (or
+   * meta.http.verb override). Non-leaf children are unaffected and still
+   * contribute a segment. CLI/MCP ignore this field and continue to key children
+   * by their agnostic name.
+   */
+  readonly dispatch?: "method"
 }
 
 /** Safely extract typed HTTP projection metadata from an open Meta bag. */
@@ -278,9 +326,10 @@ function getHttpMeta(meta: Meta): HttpMeta {
   const h = meta.http
   if (typeof h !== "object" || h === null) return {}
   const r = h as Record<string, unknown>
-  const out: { verb?: string; segment?: string; legacyPath?: string } = {}
+  const out: { verb?: string; segment?: string; legacyPath?: string; dispatch?: "method" } = {}
   if (typeof r.verb === "string") out.verb = r.verb
   if (typeof r.segment === "string") out.segment = r.segment
   if (typeof r.legacyPath === "string") out.legacyPath = r.legacyPath
+  if (r.dispatch === "method") out.dispatch = "method"
   return out
 }

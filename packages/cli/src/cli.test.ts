@@ -145,16 +145,16 @@ describe("CLI projection — library-api fixture", () => {
   })
 
   // 4. param-node slug value threads into op input (round-trip)
-  it("books byId details — slug bookId threads into op input", async () => {
+  it("books byId read — slug bookId threads into op input", async () => {
     // Add a book to get a known ID
     const addMock = makeMockIO(true)
     await runCli(api, ["books", "add", "--title", "Foundation", "--author", "Asimov", "--genre", "Sci-Fi"], addMock.io)
     const added = JSON.parse(addMock.out.join("")) as { id: string; title: string }
 
-    // Fetch it via param-node slug path: books byId <id> details
-    const detailsMock = makeMockIO(true)
-    await runCli(api, ["books", "byId", added.id, "details"], detailsMock.io)
-    const fetched = JSON.parse(detailsMock.out.join("")) as { id: string; title: string }
+    // Fetch it via param-node slug path: books byId <id> read (agnostic name)
+    const readMock = makeMockIO(true)
+    await runCli(api, ["books", "byId", added.id, "read"], readMock.io)
+    const fetched = JSON.parse(readMock.out.join("")) as { id: string; title: string }
 
     expect(fetched.id).toBe(added.id)
     expect(fetched.title).toBe("Foundation")
@@ -214,16 +214,16 @@ describe("CLI projection — library-api fixture", () => {
     expect(out).toContain("Usage:")
   })
 
-  // Extra: books update (idempotent, not destructive) — no confirm
-  it("books byId update (idempotent, not destructive) — no confirm, result written", async () => {
+  // Extra: books replace (idempotent, not destructive) — no confirm
+  it("books byId replace (idempotent, not destructive) — no confirm, result written", async () => {
     const addMock = makeMockIO(true)
     await runCli(api, ["books", "add", "--title", "Old Title", "--author", "Auth", "--genre", "Genre"], addMock.io)
     const book = JSON.parse(addMock.out.join("")) as { id: string }
 
-    const updateMock = makeMockIO(false)  // would say no if asked
-    await runCli(api, ["books", "byId", book.id, "update", "--title", "New Title"], updateMock.io)
-    expect(updateMock.confirmCalled).toBe(false)
-    const updated = JSON.parse(updateMock.out.join("")) as { title: string }
+    const replaceMock = makeMockIO(false)  // would say no if asked
+    await runCli(api, ["books", "byId", book.id, "replace", "--title", "New Title"], replaceMock.io)
+    expect(replaceMock.confirmCalled).toBe(false)
+    const updated = JSON.parse(replaceMock.out.join("")) as { title: string }
     expect(updated.title).toBe("New Title")
   })
 

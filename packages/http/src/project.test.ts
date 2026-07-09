@@ -320,3 +320,92 @@ describe("makeRouter — core router (no auto-method layer)", () => {
     expect(res.status).toBe(404)
   })
 })
+
+// ============================================================================
+// 5. Attribute-dispatch (meta.http.dispatch === "method")
+// ============================================================================
+
+describe("buildRoutes — attribute-dispatch (method)", () => {
+  it("method-dispatched node: leaf children share parent path, distinct verbs", () => {
+    const api = node({
+      children: {
+        books: node({
+          children: {
+            bookId: param(
+              "bookId",
+              node({
+                meta: { http: { dispatch: "method" } },
+                children: {
+                  read: op((_: { bookId: string }) => ({}), { tags: { readOnly: true } }),
+                  replace: op((_: { bookId: string }) => ({}), { tags: { idempotent: true } }),
+                  remove: op((_: { bookId: string }) => ({}), { tags: { idempotent: true, destructive: true } }),
+                },
+              }),
+            ),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    const byIdRoutes = routes.filter((r) => r.path === "/books/{bookId}")
+    // All three leaves resolve to the SAME path
+    expect(byIdRoutes).toHaveLength(3)
+    const verbs = new Set(byIdRoutes.map((r) => r.verb))
+    expect(verbs).toEqual(new Set(["GET", "PUT", "DELETE"]))
+  })
+
+  it("method-dispatched: collision (two leaves → same verb) throws at build time", () => {
+    const api = node({
+      children: {
+        items: node({
+          meta: { http: { dispatch: "method" } },
+          children: {
+            readA: op((_: unknown) => ({}), { tags: { readOnly: true } }),
+            readB: op((_: unknown) => ({}), { tags: { readOnly: true } }),
+          },
+        }),
+      },
+    })
+    expect(() => buildRoutes(api)).toThrow(/collision/)
+  })
+
+  it("method-dispatched: branch child under dispatch node still gets a segment", () => {
+    const api = node({
+      children: {
+        resource: node({
+          meta: { http: { dispatch: "method" } },
+          children: {
+            read: op((_: unknown) => ({}), { tags: { readOnly: true } }),
+            actions: node({
+              children: {
+                trigger: op((_: unknown) => ({})),
+              },
+            }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    // Leaf 'read' → GET /resource (no added segment)
+    expect(routes.find((r) => r.path === "/resource" && r.verb === "GET")).toBeDefined()
+    // Branch 'actions' / leaf 'trigger' → POST /resource/actions/trigger
+    expect(routes.find((r) => r.path === "/resource/actions/trigger")).toBeDefined()
+  })
+
+  it("default (no dispatch marker) = segment-dispatch unchanged", () => {
+    const api = node({
+      children: {
+        items: node({
+          children: {
+            read: op((_: unknown) => ({}), { tags: { readOnly: true } }),
+            remove: op((_: unknown) => ({}), { tags: { idempotent: true, destructive: true } }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    // Each leaf gets its own segment path — default behavior unchanged
+    expect(routes.find((r) => r.path === "/items/read")?.verb).toBe("GET")
+    expect(routes.find((r) => r.path === "/items/remove")?.verb).toBe("DELETE")
+  })
+})

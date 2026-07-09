@@ -4,6 +4,12 @@
 // All tests use `fetch: createFetch(api)` for in-process dispatch — no
 // network, no server process. The injected fetch goes through the full
 // HTTP stack (makeRouter → handler) so verb+path correctness is exercised.
+//
+// The byId subtree uses attribute-dispatch (meta.http.dispatch === "method"):
+//   read    → GET  /books/{bookId}
+//   replace → PUT  /books/{bookId}
+//   remove  → DELETE /books/{bookId}
+// MCP/CLI keep the agnostic child names; only HTTP changes (path assignment).
 
 import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore } from "@rhi-zone/fractal-example-library-api/tree"
@@ -49,11 +55,11 @@ describe("readOnly op round-trip", () => {
 })
 
 // ============================================================================
-// 2. ParamNode round-trip: create then fetch by id
+// 2. ParamNode + attribute-dispatch round-trip: create then fetch by id
 // ============================================================================
 
 describe("ParamNode round-trip", () => {
-  it("add a book then fetch by id via byId(id).details()", async () => {
+  it("add a book then fetch by id via byId(id).read()", async () => {
     const client = makeClient()
     const created = await client.books.add({
       title: "The Pragmatic Programmer",
@@ -63,7 +69,7 @@ describe("ParamNode round-trip", () => {
 
     expect(typeof created.id).toBe("string")
 
-    const fetched = await client.books.byId(created.id).details() as typeof created
+    const fetched = await client.books.byId(created.id).read() as typeof created
     expect(fetched.id).toBe(created.id)
     expect(fetched.title).toBe("The Pragmatic Programmer")
     expect(fetched.author).toBe("Hunt & Thomas")
@@ -74,7 +80,7 @@ describe("ParamNode round-trip", () => {
     const client = makeClient()
     const input = { title: "Clean Code", author: "Robert Martin", genre: "Engineering" }
     const created = await client.books.add(input) as { id: string } & typeof input
-    const fetched = await client.books.byId(created.id).details() as typeof created
+    const fetched = await client.books.byId(created.id).read() as typeof created
     expect(fetched).toMatchObject(input)
   })
 })
@@ -84,7 +90,7 @@ describe("ParamNode round-trip", () => {
 // ============================================================================
 
 describe("mutating ops", () => {
-  it("update op changes book fields and returns updated value", async () => {
+  it("replace op changes book fields and returns updated value", async () => {
     const client = makeClient()
     const created = await client.books.add({
       title: "Original Title",
@@ -92,7 +98,7 @@ describe("mutating ops", () => {
       genre: "Fiction",
     }) as { id: string; title: string }
 
-    const updated = await client.books.byId(created.id).update({
+    const updated = await client.books.byId(created.id).replace({
       title: "New Title",
     }) as { id: string; title: string }
 
@@ -100,7 +106,7 @@ describe("mutating ops", () => {
     expect(updated.id).toBe(created.id)
 
     // Verify it persisted
-    const fetched = await client.books.byId(created.id).details() as { title: string }
+    const fetched = await client.books.byId(created.id).read() as { title: string }
     expect(fetched.title).toBe("New Title")
   })
 
@@ -130,7 +136,7 @@ describe("ClientError", () => {
     const client = makeClient()
     let caught: unknown
     try {
-      await client.books.byId("does-not-exist").details()
+      await client.books.byId("does-not-exist").read()
     } catch (e) {
       caught = e
     }
@@ -170,39 +176,29 @@ describe("verb-correctness spy", () => {
     calls.length = 0
 
     await client.books.list()
-    await client.books.byId(book.id).details()
-    await client.books.byId(book.id).update({ title: "Updated" })
+    await client.books.byId(book.id).read()
+    await client.books.byId(book.id).replace({ title: "Updated" })
     await client.catalog.search({ q: "spy" })
-
-    // Expected from buildRoutes (verified against the actual route table)
-    const routes = buildRoutes(api)
-    const byPath = (path: string) => routes.find((r) => r.path === path)
 
     // books.list → GET /books/list
     expect(calls[0]).toMatchObject({
-      method: byPath("/books/list")?.verb,
+      method: "GET",
       pathname: "/books/list",
     })
-    // books.byId.details → GET /books/{bookId}/details
+    // books.byId.read → GET /books/{bookId}  (attribute-dispatch)
     expect(calls[1]).toMatchObject({
-      method: byPath("/books/{bookId}/details")?.verb,
-      pathname: `/books/${book.id}/details`,
+      method: "GET",
+      pathname: `/books/${book.id}`,
     })
-    // books.byId.update → PUT /books/{bookId}/update
+    // books.byId.replace → PUT /books/{bookId}  (attribute-dispatch)
     expect(calls[2]).toMatchObject({
-      method: byPath("/books/{bookId}/update")?.verb,
-      pathname: `/books/${book.id}/update`,
+      method: "PUT",
+      pathname: `/books/${book.id}`,
     })
     // catalog.search → GET /catalog/search
     expect(calls[3]).toMatchObject({
-      method: byPath("/catalog/search")?.verb,
+      method: "GET",
       pathname: "/catalog/search",
     })
-
-    // Confirm the verbs matched our expectations (GET/GET/PUT/GET)
-    expect(calls[0]?.method).toBe("GET")
-    expect(calls[1]?.method).toBe("GET")
-    expect(calls[2]?.method).toBe("PUT")
-    expect(calls[3]?.method).toBe("GET")
   })
 })

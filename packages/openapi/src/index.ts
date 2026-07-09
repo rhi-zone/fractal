@@ -157,16 +157,22 @@ function pathParams(path: string): string[] {
 // Internal: safe http meta extraction (mirrors http/project.ts getHttpMeta)
 // ============================================================================
 
-type HttpMeta = { readonly verb?: string; readonly segment?: string; readonly legacyPath?: string }
+type HttpMeta = {
+  readonly verb?: string
+  readonly segment?: string
+  readonly legacyPath?: string
+  readonly dispatch?: "method"
+}
 
 function getHttpMeta(meta: Meta): HttpMeta {
   const h = meta.http
   if (typeof h !== "object" || h === null) return {}
   const r = h as Record<string, unknown>
-  const out: { verb?: string; segment?: string; legacyPath?: string } = {}
+  const out: { verb?: string; segment?: string; legacyPath?: string; dispatch?: "method" } = {}
   if (typeof r.verb === "string") out.verb = r.verb
   if (typeof r.segment === "string") out.segment = r.segment
   if (typeof r.legacyPath === "string") out.legacyPath = r.legacyPath
+  if (r.dispatch === "method") out.dispatch = "method"
   return out
 }
 
@@ -209,6 +215,11 @@ function walkTree(
   const out: RouteEntry[] = []
   const nodePath = [...tagPath, n]
 
+  // Attribute-dispatch: if this node has dispatch:"method", its leaf children
+  // share the node's own HTTP path rather than getting a per-child segment.
+  const thisHttp = getHttpMeta(n.meta)
+  const methodDispatch = thisHttp.dispatch === "method"
+
   for (const [key, child] of Object.entries(n.children ?? {})) {
     if (isParamNode(child)) {
       const newHttpPrefix = `${httpPrefix}/{${child.name}}`
@@ -226,6 +237,10 @@ function walkTree(
 
       if (http.legacyPath !== undefined) {
         out.push({ codenName, path: http.legacyPath, verb, meta: child.meta })
+      } else if (methodDispatch) {
+        // Method-dispatch: leaf resolves to the parent's own path
+        const path = httpPrefix === "" ? "/" : httpPrefix
+        out.push({ codenName, path, verb, meta: child.meta })
       } else {
         const seg = http.segment ?? inferSegment(key)
         const path = `${httpPrefix}/${seg}`

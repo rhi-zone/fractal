@@ -76,14 +76,14 @@ describe("verb derivation from tags", () => {
     expect(pathItem!["post"]).toBeUndefined()
   })
 
-  it("destructive+idempotent op (remove) → DELETE path", () => {
-    const pathItem = doc.paths["/books/{bookId}/remove"]
+  it("destructive+idempotent op (remove) → DELETE /books/{bookId} (attribute-dispatch)", () => {
+    const pathItem = doc.paths["/books/{bookId}"]
     expect(pathItem).toBeDefined()
     expect(pathItem!["delete"]).toBeDefined()
   })
 
-  it("idempotent op (update) → PUT path", () => {
-    const pathItem = doc.paths["/books/{bookId}/update"]
+  it("idempotent op (replace) → PUT /books/{bookId} (attribute-dispatch)", () => {
+    const pathItem = doc.paths["/books/{bookId}"]
     expect(pathItem).toBeDefined()
     expect(pathItem!["put"]).toBeDefined()
   })
@@ -105,8 +105,8 @@ describe("verb derivation from tags", () => {
 // ============================================================================
 
 describe("path parameters", () => {
-  it("param route /books/{bookId}/details yields a path parameter", () => {
-    const op = doc.paths["/books/{bookId}/details"]?.["get"]
+  it("param route GET /books/{bookId} yields a path parameter (attribute-dispatch read)", () => {
+    const op = doc.paths["/books/{bookId}"]?.["get"]
     expect(op).toBeDefined()
     expect(op!.parameters).toBeDefined()
     expect(op!.parameters).toHaveLength(1)
@@ -115,8 +115,8 @@ describe("path parameters", () => {
     expect(op!.parameters![0]!.required).toBe(true)
   })
 
-  it("param route /books/{bookId}/update also yields path parameter", () => {
-    const op = doc.paths["/books/{bookId}/update"]?.["put"]
+  it("param route PUT /books/{bookId} also yields path parameter (attribute-dispatch replace)", () => {
+    const op = doc.paths["/books/{bookId}"]?.["put"]
     expect(op?.parameters).toBeDefined()
     const p = op!.parameters![0]!
     expect(p.name).toBe("bookId")
@@ -209,9 +209,10 @@ describe("operationId", () => {
     expect(op?.operationId).toBe("books.list")
   })
 
-  it("operationId for param child op includes param name", () => {
-    const op = doc.paths["/books/{bookId}/details"]?.["get"]
-    expect(op?.operationId).toBe("books.bookId.details")
+  it("operationId for param child op includes param name (attribute-dispatch: GET /books/{bookId})", () => {
+    // With attribute-dispatch, read/replace/remove share /books/{bookId}
+    const op = doc.paths["/books/{bookId}"]?.["get"]
+    expect(op?.operationId).toBe("books.bookId.read")
   })
 })
 

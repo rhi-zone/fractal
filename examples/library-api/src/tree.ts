@@ -36,13 +36,23 @@ export function clearStore(): void {
 }
 
 // ============================================================================
-// Per-book subtree (will be mounted under books/{bookId} via ParamNode)
+// Per-book subtree — REST resource via attribute-dispatch
+//
+// `meta.http.dispatch === "method"` makes all LEAF children co-locate at the
+// node's own path (/books/{bookId}), distinguished by HTTP verb derived from
+// their tags. Branch children (checkout) still contribute a segment as normal.
+//
+// read   → readOnly → GET    /books/{bookId}
+// replace → idempotent → PUT  /books/{bookId}
+// remove  → idempotent+destructive → DELETE /books/{bookId}
+// checkout (branch/action) → POST /books/{bookId}/checkout  (segment-dispatch)
 // ============================================================================
 
 const bookItemNode = node({
+  meta: { http: { dispatch: "method" } },
   children: {
-    /** Get a single book by its ID. */
-    details: op(
+    /** Get a single book by its ID. GET /books/{bookId} */
+    read: op(
       (input: { bookId: string }) => {
         const book = store.get(input.bookId)
         if (book === undefined) throw new Error(`Not Found: ${input.bookId}`)
@@ -51,8 +61,8 @@ const bookItemNode = node({
       { tags: { readOnly: true } },
     ),
 
-    /** Update book metadata. Idempotent — repeated updates with the same fields converge. */
-    update: op(
+    /** Replace book metadata wholesale. Idempotent. PUT /books/{bookId} */
+    replace: op(
       (input: { bookId: string; title?: string; author?: string; genre?: string }) => {
         const existing = store.get(input.bookId)
         if (existing === undefined) throw new Error(`Not Found: ${input.bookId}`)
@@ -68,11 +78,21 @@ const bookItemNode = node({
       { tags: { idempotent: true } },
     ),
 
-    /** Permanently delete a book from the library. Destructive and irreversible. */
+    /** Permanently delete a book. Destructive and irreversible. DELETE /books/{bookId} */
     remove: op(
       (_: { bookId: string }) => ({ deleted: store.delete(_.bookId) }),
       { tags: { destructive: true, idempotent: true } },
     ),
+
+    /** Checkout action — a named action kept as a segment-child (branch node). */
+    checkout: node({
+      children: {
+        /** Initiate a checkout session for a book reservation. */
+        start: op(
+          (input: { bookId: string }) => ({ sessionId: `checkout-${input.bookId}` }),
+        ),
+      },
+    }),
   },
 })
 
