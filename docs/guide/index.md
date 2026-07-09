@@ -70,3 +70,9 @@ const doc = toOpenApi(app, { title: 'My API', version: '1.0.0' })
 // doc.paths has every route, parameter, requestBody schema, and security requirement
 // derived from the same node tree that runs requests
 ```
+
+## Guides
+
+- [Concepts](./concepts.md) — core model: nodes, dispatch, tags, projections, metadata
+- [Authoring](./authoring.md) — how to build trees with `op`, `node`, `service`, `param`, verb-helper bundles, and `mergeMeta`
+- [Versioning](./versioning.md) — versioning model: layered strategies from zero-machinery to composed transforms _(design, not yet built)_
