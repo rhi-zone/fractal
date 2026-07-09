@@ -162,6 +162,31 @@ user's own words; the quotes are load-bearing and preserved verbatim.
 - **"data over code" is NOT a forcing principle here** (it was poisoning context).
   > "the data over code thing is kinda poisoning context"
 
+- **Tagged-union discriminant fields are named `kind`, not `type` and not
+  per-site names like `by`.**
+
+  Applies to all serializable tagged-union ("frozen call") data —
+  `MatchCondition`, `meta.http.dispatch`, and any future plug-in or config data
+  of the same shape.
+
+  Rationale: this codebase reifies types as its core thesis ("the typed thing is
+  the truth; type is inferred from TS"), placing it in compiler/language-tooling
+  territory (Rust `ExprKind`/`TokenKind`, Clang/LLVM AST, Kubernetes `kind`)
+  where `kind` is standard precisely to avoid colliding with the loaded word
+  "type." Reading `type: "date"` in a system where "type" means the inferred TS
+  type is genuinely ambiguous; `kind` is not.
+
+  The one override: when serializing INTO an external wire format that fixes its
+  own discriminant (e.g. JSON:API / Redux use `type`), match that format at the
+  boundary. The internal convention is `kind`.
+
+  Shape framing: such a value is a frozen function application — `kind` is the
+  callee (which matcher / variant), the remaining fields are its arguments; the
+  nullary case may degenerate to a bare string tag (e.g. `"method"`). The
+  discriminant exists because the value is data resolved to a function later by
+  the projection — a closure at that boundary would lose
+  serialization/introspection.
+
 - **Reject `Result<T,E> | Response` escape hatch; want a canonical stream
   construct.**
   > "why not a canonical stream construct?"

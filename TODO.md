@@ -79,6 +79,16 @@ real `dist` build.
 
 ---
 
+## Pending renames (apply when code is next touched)
+
+- `DispatchMarker` in `packages/http/src/project.ts` currently uses `by` as the
+  discriminant key (`{ by: "header", name }`, `{ by: "query", name }`,
+  `{ by: "contentType" }`). Rename `by` → `kind` to match the settled convention
+  (tagged-union discriminants are `kind`). Do NOT rename now — record here per
+  the convention.
+
+---
+
 ## PUBLISH (after the model settles)
 
 - Create `github.com/rhi-zone/fractal`, push, set pages/topics/homepage.
