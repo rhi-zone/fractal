@@ -3,13 +3,21 @@
 // Walk an authored Node tree AT THE SOURCE LEVEL and produce a tool-name →
 // { inputSchema, description } map — the artifact the MCP projection consumes.
 //
-// Why source-level: a `Node` value's TYPE erases per-op input types (`ops:
-// Record<string, Op>`), so the concrete `op((input: {...}) => …)` shapes only
-// survive in the AST. This walker mirrors toTools' underscore-joined name
-// construction so the emitted keys line up with the runtime tool names.
+// Why source-level: a `Node` value's TYPE erases per-leaf handler input types
+// (`children: Record<string, ChildEntry>`), so the concrete
+// `op((input: {...}) => …)` shapes only survive in the AST. This walker mirrors
+// toTools' underscore-joined name construction so the emitted keys line up with
+// the runtime tool names.
 //
-// Supported structure (obvious cases): `node({ ops, children })` with op values
-// `op(fn, meta)` or bare arrows, and `param("name", node({…}))` children.
+// In the new node model:
+//   - Leaf nodes are authored as `op(fn, meta?)` calls stored in `children`.
+//   - Branch nodes are authored as `node({ children?, meta? })` calls.
+//   - The `ops` key no longer exists in the authoring API.
+//
+// Supported structure: `node({ children })` with child values:
+//   - `op(fn, meta?)` or bare arrow → leaf (callable)
+//   - `node({…})` → static branch child
+//   - `param("name", node({…}))` → parameterized branch child
 // meta.mcp.name / meta.mcp.segment overrides are NOT yet mirrored here.
 //   TODO(codegen): honor meta.mcp.name / meta.mcp.segment when reconstructing
 //   tool names, matching packages/mcp/src/project.ts.
@@ -57,6 +65,9 @@ const join = (prefix: string, seg: string): string =>
 /**
  * Extract the tool-name → schema map for every exported `node({…})` tree in a
  * source file. Mirrors toTools' name construction.
+ *
+ * In the new node model, children that are `op(...)` calls are leaf nodes;
+ * children that are `node(...)` or `param(...)` calls are branch or param nodes.
  */
 export function extractToolSchemas(entryFile: string): SchemaMap {
   const program = createExtractorProgram(entryFile)
@@ -74,23 +85,6 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
       const key = propName(prop)
       if (!ts.isPropertyAssignment(prop) || key === undefined) continue
 
-      if (key === "ops" && ts.isObjectLiteralExpression(prop.initializer)) {
-        for (const opProp of prop.initializer.properties) {
-          const opKey = propName(opProp)
-          if (!ts.isPropertyAssignment(opProp) || opKey === undefined) continue
-          const fn = opFunctionNode(opProp.initializer)
-          if (!fn) continue
-          const name = join(prefix, opKey)
-          const description = extractJsDoc(opProp)
-          const outputSchema = schemaFromReturnType(fn, checker)
-          out[name] = {
-            inputSchema: schemaFromFunctionNode(fn, checker),
-            outputSchema,
-            ...(description !== undefined ? { description } : {}),
-          }
-        }
-      }
-
       if (key === "children" && ts.isObjectLiteralExpression(prop.initializer)) {
         for (const childProp of prop.initializer.properties) {
           const childKey = propName(childProp)
@@ -98,7 +92,22 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
           const init = childProp.initializer
           if (!ts.isCallExpression(init)) continue
           const callee = calleeName(init)
-          if (callee === "param") {
+
+          if (callee === "op") {
+            // Leaf node: op(fn, meta?) — extract input schema from fn's first arg
+            const firstArg = init.arguments[0]
+            if (firstArg === undefined) continue
+            const fn = opFunctionNode(firstArg)
+            if (!fn) continue
+            const name = join(prefix, childKey)
+            const description = extractJsDoc(childProp)
+            const outputSchema = schemaFromReturnType(fn, checker)
+            out[name] = {
+              inputSchema: schemaFromFunctionNode(fn, checker),
+              outputSchema,
+              ...(description !== undefined ? { description } : {}),
+            }
+          } else if (callee === "param") {
             // param("name", node({…}))
             const [nameArg, subtree] = init.arguments
             const paramName =
@@ -107,7 +116,7 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
               walkNodeCall(subtree, join(prefix, paramName))
             }
           } else {
-            // static child: node({…})
+            // static branch child: node({…}) or other constructor
             walkNodeCall(init, join(prefix, childKey))
           }
         }

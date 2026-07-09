@@ -1,8 +1,12 @@
 // packages/codegen/src/__fixtures__/tree.fixture.ts
 //
 // A real Node tree used by extract.test.ts as BOTH the extractor's source input
-// (parsed via the compiler API for its op input types + JSDoc) and the runtime
-// tree fed to toTools. Not a test file (no `.test.ts`), so bun test skips it.
+// (parsed via the compiler API for its leaf handler input types + JSDoc) and the
+// runtime tree fed to toTools. Not a test file (no `.test.ts`), so bun test skips it.
+//
+// In the new node model, leaf nodes (callables) are stored in `children` as
+// `op(fn, meta?)` calls. The codegen walker recognises `op(...)` children as
+// leaves and extracts their input schemas.
 
 import { node, op, param } from "@rhi-zone/fractal-core/node"
 // (a) Direct import from core's package root.
@@ -21,7 +25,7 @@ type ApiResult<T> = Result<T, string>
 export const tree = node({
   children: {
     users: node({
-      ops: {
+      children: {
         /** Create a new user account. */
         create: op(
           (_input: {
@@ -31,12 +35,10 @@ export const tree = node({
             address: { street: string; zip?: string }
           }) => ({ id: "u1" }),
         ),
-      },
-      children: {
         userId: param(
           "userId",
           node({
-            ops: {
+            children: {
               get: op((input: { userId: string }) => ({ userId: input.userId })),
             },
           }),
@@ -45,19 +47,19 @@ export const tree = node({
     }),
     // Union input → exercises the punt path.
     search: node({
-      ops: {
+      children: {
         run: op((_input: { q: string | number }) => ({ hits: 0 })),
       },
     }),
     // Promise<T> return → output schema should unwrap to T's schema.
     async: node({
-      ops: {
+      children: {
         fetch: op(async (_input: { id: string }) => ({ value: 42 })),
       },
     }),
     // (a) Direct import: Result<T,E> — syntax path extracts T by name + 2 typeArgs.
     fallible: node({
-      ops: {
+      children: {
         compute: op(
           (_input: { x: number }): Result<{ answer: number }, string> =>
             ({ ok: true, value: { answer: _input.x } }),
@@ -68,7 +70,7 @@ export const tree = node({
     // The syntax path checks the identifier name, not the origin file, so it
     // correctly extracts T from `ResultFromBarrel<{count:number}>`.
     barrel: node({
-      ops: {
+      children: {
         query: op(
           (_input: { term: string }): ResultFromBarrel<{ count: number }, string> =>
             ({ ok: true, value: { count: 0 } }),
@@ -78,7 +80,7 @@ export const tree = node({
     // (c) Further-generic alias: ApiResult<T> = Result<T, string>.
     // Syntax path walks the local TypeAliasDeclaration and recognizes the pattern.
     generic: node({
-      ops: {
+      children: {
         search: op(
           (_input: { q: string }): ApiResult<{ items: string[] }> =>
             ({ ok: true, value: { items: [] } }),
@@ -87,7 +89,7 @@ export const tree = node({
     }),
     // Promise<Result<T,E>> → syntax path strips Promise first, then unwraps Result.
     promiseResult: node({
-      ops: {
+      children: {
         load: op(
           async (_input: { id: string }): Promise<Result<{ name: string }, string>> =>
             ({ ok: true, value: { name: "Alice" } }),
@@ -97,7 +99,7 @@ export const tree = node({
     // Genuinely-different union that must NOT be false-positived.
     // This is a 2-member union but does NOT have the Result name or DU shape.
     differentUnion: node({
-      ops: {
+      children: {
         ping: op(
           (_input: { x: number }): { kind: "a"; x: number } | { kind: "b"; y: string } =>
             ({ kind: "a", x: _input.x }),

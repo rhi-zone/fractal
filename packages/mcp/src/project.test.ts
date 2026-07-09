@@ -16,7 +16,7 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
   it("readOnly:true → readOnlyHint:true (MCP) + GET (HTTP)", () => {
     // Single authored node — meta.tags authored ONCE
     const n = node({
-      ops: {
+      children: {
         get: op((_: unknown) => "result", { tags: { readOnly: true } }),
       },
     })
@@ -34,7 +34,7 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
 
   it("destructive:true → destructiveHint:true (MCP) + non-GET verb (HTTP)", () => {
     const n = node({
-      ops: {
+      children: {
         delete: op((_: unknown) => null, { tags: { destructive: true } }),
       },
     })
@@ -51,7 +51,7 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
 
   it("idempotent:true + destructive:true → idempotentHint:true + destructiveHint:true (MCP) + DELETE (HTTP)", () => {
     const n = node({
-      ops: {
+      children: {
         remove: op((_: unknown) => null, {
           tags: { idempotent: true, destructive: true },
         }),
@@ -68,16 +68,16 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
 })
 
 // ============================================================================
-// 2. Node-level tag inheritance: parent tag flows into child ops
+// 2. Node-level tag inheritance: parent tag flows into child leaves
 // ============================================================================
 
 describe("node-level tag inheritance → MCP annotations", () => {
-  it("readOnly:true on a node makes all its ops emit readOnlyHint:true", () => {
+  it("readOnly:true on a node makes all its leaf children emit readOnlyHint:true", () => {
     const api = node({
       children: {
         catalog: node({
           meta: { tags: { readOnly: true } },
-          ops: {
+          children: {
             list: op((_: unknown) => []), // no own tags — inherits from parent
             search: op((_: unknown) => []), // no own tags — inherits from parent
           },
@@ -91,13 +91,13 @@ describe("node-level tag inheritance → MCP annotations", () => {
     }
   })
 
-  it("op-level tag overrides node-level tag (closest-wins)", () => {
+  it("leaf-level tag overrides node-level tag (closest-wins)", () => {
     const api = node({
       children: {
         items: node({
           meta: { tags: { readOnly: true } },
-          ops: {
-            // op explicitly negates readOnly and asserts idempotent+destructive
+          children: {
+            // leaf explicitly negates readOnly and asserts idempotent+destructive
             delete: op((_: unknown) => ({}), {
               tags: { readOnly: false, idempotent: true, destructive: true },
             }),
@@ -122,20 +122,20 @@ describe("node-level tag inheritance → MCP annotations", () => {
 
 describe("unknown tags omit hints", () => {
   it("no meta.tags → no annotations object at all", () => {
-    const n = node({ ops: { create: op((_: unknown) => ({})) } })
+    const n = node({ children: { create: op((_: unknown) => ({})) } })
     const tools = toTools(n)
     expect(tools[0]!.annotations).toBeUndefined()
   })
 
   it("empty meta.tags → no annotations object", () => {
-    const n = node({ ops: { create: op((_: unknown) => ({}), { tags: {} }) } })
+    const n = node({ children: { create: op((_: unknown) => ({}), { tags: {} }) } })
     const tools = toTools(n)
     expect(tools[0]!.annotations).toBeUndefined()
   })
 
   it("tags present for some hints only — absent hints are omitted, not false", () => {
     const n = node({
-      ops: {
+      children: {
         fetch: op((_: unknown) => ({}), {
           tags: { readOnly: true, openWorld: true },
         }),
@@ -154,7 +154,7 @@ describe("unknown tags omit hints", () => {
 
   it("idempotent explicitly unknown (undefined) with no readOnly → hint omitted", () => {
     const n = node({
-      ops: { update: op((_: unknown) => ({}), { tags: { destructive: true } }) },
+      children: { update: op((_: unknown) => ({}), { tags: { destructive: true } }) },
     })
     const tools = toTools(n)
     const ann = tools[0]!.annotations!
@@ -169,17 +169,17 @@ describe("unknown tags omit hints", () => {
 // ============================================================================
 
 describe("name namespacing from tree position", () => {
-  it("root-level op name is just the op key", () => {
-    const n = node({ ops: { create: op((_: unknown) => ({})) } })
+  it("root-level leaf name is just the leaf key", () => {
+    const n = node({ children: { create: op((_: unknown) => ({})) } })
     const tools = toTools(n)
     expect(tools[0]!.name).toBe("create")
   })
 
-  it("nested op name is underscore-joined: parent_key", () => {
+  it("nested leaf name is underscore-joined: parent_key", () => {
     const api = node({
       children: {
         users: node({
-          ops: { list: op((_: unknown) => []) },
+          children: { list: op((_: unknown) => []) },
         }),
       },
     })
@@ -187,13 +187,13 @@ describe("name namespacing from tree position", () => {
     expect(tools[0]!.name).toBe("users_list")
   })
 
-  it("deeply nested op name: grandparent_parent_op", () => {
+  it("deeply nested leaf name: grandparent_parent_leaf", () => {
     const api = node({
       children: {
         invoices: node({
           children: {
             items: node({
-              ops: { get: op((_: unknown) => ({})) },
+              children: { get: op((_: unknown) => ({})) },
             }),
           },
         }),
@@ -210,7 +210,7 @@ describe("name namespacing from tree position", () => {
           children: {
             userId: param(
               "userId",
-              node({ ops: { profile: op((_: unknown) => ({})) } }),
+              node({ children: { profile: op((_: unknown) => ({})) } }),
             ),
           },
         }),
@@ -225,7 +225,7 @@ describe("name namespacing from tree position", () => {
       children: {
         usersNode: node({
           meta: { mcp: { segment: "users" } },
-          ops: { list: op((_: unknown) => []) },
+          children: { list: op((_: unknown) => []) },
         }),
       },
     })
@@ -241,7 +241,7 @@ describe("name namespacing from tree position", () => {
 describe("meta.mcp per-projection overrides", () => {
   it("meta.mcp.name overrides the inferred name", () => {
     const n = node({
-      ops: {
+      children: {
         list: op((_: unknown) => [], { mcp: { name: "catalog_search" } }),
       },
     })
@@ -251,7 +251,7 @@ describe("meta.mcp per-projection overrides", () => {
 
   it("meta.mcp.description overrides description", () => {
     const n = node({
-      ops: {
+      children: {
         list: op((_: unknown) => [], {
           description: "agnostic description",
           mcp: { description: "MCP-specific description for model planning" },
@@ -264,7 +264,7 @@ describe("meta.mcp per-projection overrides", () => {
 
   it("meta.description is used when meta.mcp.description is absent", () => {
     const n = node({
-      ops: {
+      children: {
         list: op((_: unknown) => [], { description: "lists all items" }),
       },
     })
@@ -274,7 +274,7 @@ describe("meta.mcp per-projection overrides", () => {
 
   it("meta.mcp.title emits annotations.title", () => {
     const n = node({
-      ops: {
+      children: {
         get: op((_: unknown) => ({}), { mcp: { title: "Get Item" } }),
       },
     })
@@ -284,7 +284,7 @@ describe("meta.mcp per-projection overrides", () => {
 
   it("meta.mcp.annotations overrides individual hint keys", () => {
     const n = node({
-      ops: {
+      children: {
         // tag says readOnly, but MCP projection overrides readOnlyHint to false
         get: op((_: unknown) => ({}), {
           tags: { readOnly: true },
@@ -298,11 +298,11 @@ describe("meta.mcp per-projection overrides", () => {
 })
 
 // ============================================================================
-// 6. Param-node ops produce a tool (structural coverage)
+// 6. Param-node leaves produce a tool (structural coverage)
 // ============================================================================
 
-describe("param-node ops produce a tool", () => {
-  it("produces a tool for an op inside a param node", () => {
+describe("param-node leaves produce a tool", () => {
+  it("produces a tool for a leaf inside a param node", () => {
     const api = node({
       children: {
         invoices: node({
@@ -310,7 +310,7 @@ describe("param-node ops produce a tool", () => {
             invoiceId: param(
               "invoiceId",
               node({
-                ops: {
+                children: {
                   checkout: op((_: { invoiceId: string }) => ({ url: "…" }), {
                     tags: { idempotent: true },
                   }),
@@ -336,7 +336,7 @@ describe("param-node ops produce a tool", () => {
 describe("inputSchema placeholder", () => {
   it("every tool has inputSchema: { type: 'object' }", () => {
     const api = node({
-      ops: {
+      children: {
         a: op((_: unknown) => ({})),
         b: op((_: unknown) => ({}), { tags: { readOnly: true } }),
       },

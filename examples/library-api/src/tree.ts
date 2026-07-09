@@ -4,6 +4,10 @@
 // param() for per-book routes, meta.tags spanning readOnly/idempotent/destructive,
 // and node-level tag inheritance on the catalog subtree.
 //
+// In the new node model, callables are leaf nodes stored in `children` via
+// `op(fn, meta?)`. The `ops` map is gone — a leaf child IS a Node with handler.
+// `service()` still works: methods become leaf node children automatically.
+//
 // This file is also the codegen entry-point: extractToolSchemas walks the
 // exported `api` node() call and derives input schemas for inline ops.
 // The booksNode is authored via service() (not node()), so codegen skips it —
@@ -36,7 +40,7 @@ export function clearStore(): void {
 // ============================================================================
 
 const bookItemNode = node({
-  ops: {
+  children: {
     /** Get a single book by its ID. */
     details: op(
       (input: { bookId: string }) => {
@@ -115,9 +119,9 @@ export const api = node({
     }),
 
     // catalog is tagged readOnly at the NODE level — both search and genres
-    // inherit readOnly via effectiveTags (closest-wins), without any op-level tag.
+    // inherit readOnly via effectiveTags (closest-wins), without any leaf-level tag.
     catalog: node({
-      ops: {
+      children: {
         /** Search the library catalog by title or author keyword. */
         search: op((input: { q?: string }) => {
           const q = input.q !== undefined ? input.q.toLowerCase() : undefined
@@ -136,7 +140,7 @@ export const api = node({
           return prefix !== undefined ? all.filter((g) => g.startsWith(prefix)) : all
         }),
       },
-      // Node-level tag: ops inherit readOnly → GET routes + readOnlyHint annotations
+      // Node-level tag: leaves inherit readOnly → GET routes + readOnlyHint annotations
       meta: { tags: { readOnly: true } },
     }),
   },

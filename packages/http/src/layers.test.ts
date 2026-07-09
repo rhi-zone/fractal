@@ -11,7 +11,7 @@ import { autoMethodLayer, corsLayer } from "./layers.ts"
 
 describe("autoMethodLayer — proves droppable", () => {
   const api = node({
-    ops: {
+    children: {
       getItem: op((_: unknown) => ({ id: 42 }), {
         tags: { readOnly: true },
         http: { segment: "item" },
@@ -102,7 +102,7 @@ describe("autoMethodLayer — proves droppable", () => {
 
 describe("autoMethodLayer — multi-verb routes", () => {
   const api = node({
-    ops: {
+    children: {
       getItem: op((_: unknown) => ({ id: 1 }), {
         tags: { readOnly: true },
         http: { segment: "item" },

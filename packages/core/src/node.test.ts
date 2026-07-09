@@ -1,4 +1,4 @@
-// packages/core/src/node.test.ts — new Node/Op/Meta/ParamNode model
+// packages/core/src/node.test.ts — new Node/Handler/Meta/ParamNode model
 
 import { describe, expect, it } from "bun:test"
 import {
@@ -8,7 +8,9 @@ import {
   param,
   dispatch,
   isNode,
+  isLeaf,
   isParamNode,
+  mergeMeta,
   type Meta,
   type Node,
 } from "./node.ts"
@@ -42,41 +44,42 @@ describe("lowering equivalence: service ≡ node", () => {
 
     // Surface B: standalone function
     const fromNode = node({
-      ops: {
+      children: {
         getUser: op(handler, meta),
       },
     })
 
     // Both lower to the same shape
-    expect(fromService.children).toEqual(fromNode.children)
+    expect(fromService.children?.["getUser"] !== undefined).toBe(true)
+    expect(fromNode.children?.["getUser"] !== undefined).toBe(true)
     expect(fromService.meta).toEqual(fromNode.meta)
-    // ops are structurally equal: same keys, same meta; fn identity differs (bind)
-    expect(Object.keys(fromService.ops)).toEqual(Object.keys(fromNode.ops))
-    expect(fromService.ops["getUser"]?.meta).toEqual(fromNode.ops["getUser"]?.meta)
-    // both fns produce the same output
-    expect(
-      fromService.ops["getUser"]?.fn({ userId: "u1" }),
-    ).toEqual(
-      fromNode.ops["getUser"]?.fn({ userId: "u1" }),
-    )
+    // children are structurally equivalent: same keys, same meta; handler identity differs (bind)
+    expect(Object.keys(fromService.children ?? {})).toEqual(Object.keys(fromNode.children ?? {}))
+    const svcChild = fromService.children?.["getUser"] as Node
+    const nodeChild = fromNode.children?.["getUser"] as Node
+    expect(svcChild.meta).toEqual(nodeChild.meta)
+    // both handlers produce the same output
+    expect(svcChild.handler!({ userId: "u1" })).toEqual(nodeChild.handler!({ userId: "u1" }))
   })
 
-  it("bare function in node() ops is lifted to {fn, meta:{}}", () => {
+  it("op(fn) produces a leaf node with empty meta", () => {
     const bare = (input: { n: number }) => input.n * 2
-    const n = node({ ops: { double: bare } })
-    expect(n.ops["double"]?.meta).toEqual({})
-    expect(n.ops["double"]?.fn({ n: 3 })).toBe(6)
+    const n = node({ children: { double: op(bare) } })
+    const child = n.children?.["double"] as Node
+    expect(child.meta).toEqual({})
+    expect(child.handler!({ n: 3 })).toBe(6)
+    expect(isLeaf(child)).toBe(true)
   })
 })
 
 // ============================================================================
-// 2. Param slug threads into op input (provenance-blind dispatch)
+// 2. Param slug threads into handler input (provenance-blind dispatch)
 // ============================================================================
 
-describe("param slug threads into op input", () => {
-  it("merges a single param slug into the op's input", async () => {
+describe("param slug threads into handler input", () => {
+  it("merges a single param slug into the handler's input", async () => {
     const captured: unknown[] = []
-    const checkoutOp = op(
+    const checkoutLeaf = op(
       (input: { invoiceId: string; currency?: string }) => {
         captured.push(input)
         return { url: "https://pay.example.com" }
@@ -86,13 +89,13 @@ describe("param slug threads into op input", () => {
 
     const invoicesNode: Node = node({
       children: {
-        invoiceId: param("invoiceId", node({ ops: { checkout: checkoutOp } })),
+        invoiceId: param("invoiceId", node({ children: { checkout: checkoutLeaf } })),
       },
     })
 
     const root: Node = node({ children: { invoices: invoicesNode } })
 
-    // segments: [child-key, param-slug-value, op-name]
+    // segments: [child-key, param-slug-value, leaf-key]
     await dispatch(root, ["invoices", "inv-42", "checkout"], { currency: "usd" })
 
     expect(captured[0]).toEqual({ currency: "usd", invoiceId: "inv-42" })
@@ -100,14 +103,14 @@ describe("param slug threads into op input", () => {
 
   it("accumulates multiple nested param slugs", async () => {
     const captured: unknown[] = []
-    const leafOp = op((input: { orgId: string; userId: string }) => {
+    const getLeaf = op((input: { orgId: string; userId: string }) => {
       captured.push(input)
       return { ok: true }
     })
 
     const usersNode: Node = node({
       children: {
-        userId: param("userId", node({ ops: { get: leafOp } })),
+        userId: param("userId", node({ children: { get: getLeaf } })),
       },
     })
     const orgsNode: Node = node({
@@ -122,8 +125,8 @@ describe("param slug threads into op input", () => {
     expect(captured[0]).toEqual({ orgId: "org-1", userId: "user-7" })
   })
 
-  it("throws on missing op", () => {
-    const n = node({ ops: { ping: op(() => "pong") } })
+  it("throws on missing leaf", () => {
+    const n = node({ children: { ping: op(() => "pong") } })
     expect(() => dispatch(n, ["missing"], {})).toThrow("op not found: missing")
   })
 
@@ -194,13 +197,13 @@ describe("resolveTags", () => {
 // ============================================================================
 
 describe("open metadata", () => {
-  it("arbitrary/unknown meta keys are preserved on op", () => {
-    const o = op(() => "ok", {
+  it("arbitrary/unknown meta keys are preserved on leaf op", () => {
+    const leaf = op(() => "ok", {
       myCustomProjection: { foo: "bar", nested: { deep: 42 } },
       "acme:cache": { ttl: 300, varyOn: ["id"] },
     })
-    expect(o.meta["myCustomProjection"]).toEqual({ foo: "bar", nested: { deep: 42 } })
-    expect(o.meta["acme:cache"]).toEqual({ ttl: 300, varyOn: ["id"] })
+    expect(leaf.meta["myCustomProjection"]).toEqual({ foo: "bar", nested: { deep: 42 } })
+    expect(leaf.meta["acme:cache"]).toEqual({ ttl: 300, varyOn: ["id"] })
   })
 
   it("arbitrary/unknown meta keys are preserved on node", () => {
@@ -231,24 +234,25 @@ describe("open metadata", () => {
 // ============================================================================
 
 describe("op surfaces", () => {
-  it("standalone function op works", async () => {
+  it("standalone function op produces a leaf node", async () => {
     const greet = (input: { name: string }) => `Hello, ${input.name}!`
-    const o = op(greet)
-    expect(await o.fn({ name: "world" })).toBe("Hello, world!")
-    expect(o.meta).toEqual({})
+    const leaf = op(greet)
+    expect(isLeaf(leaf)).toBe(true)
+    expect(await leaf.handler!({ name: "world" })).toBe("Hello, world!")
+    expect(leaf.meta).toEqual({})
   })
 
-  it("standalone function op with meta works", async () => {
-    const o = op(
+  it("standalone function op with meta preserves meta", async () => {
+    const leaf = op(
       (input: { id: string }) => ({ found: true, id: input.id }),
       { tags: { [TAG_READ_ONLY]: true }, http: { segment: "detail" } },
     )
-    expect(await o.fn({ id: "x" })).toEqual({ found: true, id: "x" })
-    expect(o.meta.tags?.[TAG_READ_ONLY]).toBe(true)
-    expect(o.meta["http"]).toEqual({ segment: "detail" })
+    expect(await leaf.handler!({ id: "x" })).toEqual({ found: true, id: "x" })
+    expect(leaf.meta.tags?.[TAG_READ_ONLY]).toBe(true)
+    expect(leaf.meta["http"]).toEqual({ segment: "detail" })
   })
 
-  it("method op (from service) works and is bound", async () => {
+  it("method op (from service) produces a leaf node child and is bound", async () => {
     class Greeter {
       private prefix = "Hi"
       greet(input: { name: string }) {
@@ -256,19 +260,24 @@ describe("op surfaces", () => {
       }
     }
     const n = service(new Greeter())
-    const greetOp = n.ops["greet"]
-    expect(greetOp).toBeDefined()
+    const greetLeaf = n.children?.["greet"] as Node
+    expect(greetLeaf).toBeDefined()
+    expect(isLeaf(greetLeaf)).toBe(true)
     // Call without receiver — binding must have captured `this`
-    expect(await greetOp!.fn({ name: "Alice" })).toBe("Hi, Alice!")
+    expect(await greetLeaf.handler!({ name: "Alice" })).toBe("Hi, Alice!")
   })
 
-  it("isNode / isParamNode discriminators are correct", () => {
+  it("isNode / isParamNode / isLeaf discriminators are correct", () => {
     const n = node({})
     const p = param("id", node({}))
+    const leaf = op(() => "x")
     expect(isNode(n)).toBe(true)
+    expect(isNode(leaf)).toBe(true)   // a leaf IS a node (has meta)
     expect(isNode(p)).toBe(false)
     expect(isParamNode(p)).toBe(true)
     expect(isParamNode(n)).toBe(false)
+    expect(isLeaf(n)).toBe(false)     // branch node with no handler
+    expect(isLeaf(leaf)).toBe(true)
     expect(isNode(null)).toBe(false)
     expect(isParamNode(42)).toBe(false)
   })
@@ -279,28 +288,28 @@ describe("op surfaces", () => {
 // ============================================================================
 
 describe("effectiveTags — inheritance", () => {
-  it("node tags flow to op when op has no own tags", () => {
+  it("node tags flow to leaf when leaf has no own tags", () => {
     const path = [
       { meta: { tags: { readOnly: true } } },  // parent node
-      { meta: {} },                              // op with no tags
+      { meta: {} },                              // leaf with no tags
     ]
     const result = effectiveTags(path)
     expect(result.readOnly).toBe(true)
   })
 
-  it("op-level readOnly:false overrides ancestor readOnly:true", () => {
+  it("leaf-level readOnly:false overrides ancestor readOnly:true", () => {
     const path = [
       { meta: { tags: { readOnly: true } } },   // ancestor
-      { meta: { tags: { readOnly: false } } },  // op
+      { meta: { tags: { readOnly: false } } },  // leaf
     ]
     const result = effectiveTags(path)
     expect(result.readOnly).toBe(false)
   })
 
-  it("op idempotent:true does not disturb ancestor readOnly:false; other ancestor tags flow through", () => {
+  it("leaf idempotent:true does not disturb ancestor readOnly:false; other ancestor tags flow through", () => {
     const path = [
       { meta: { tags: { readOnly: false, openWorld: true } } },  // ancestor
-      { meta: { tags: { idempotent: true } } },                   // op — no readOnly key
+      { meta: { tags: { idempotent: true } } },                   // leaf — no readOnly key
     ]
     const result = effectiveTags(path)
     expect(result.idempotent).toBe(true)
@@ -308,7 +317,7 @@ describe("effectiveTags — inheritance", () => {
     expect(result.openWorld).toBe(true)   // flows through from ancestor
   })
 
-  it("undefined at op level defers to ancestor value", () => {
+  it("undefined at leaf level defers to ancestor value", () => {
     const path = [
       { meta: { tags: { readOnly: true } } },
       { meta: { tags: { readOnly: undefined } } },  // explicit undefined — defers upward
@@ -317,16 +326,16 @@ describe("effectiveTags — inheritance", () => {
     expect(result.readOnly).toBe(true)
   })
 
-  it("two-level nesting resolves closest-wins: op > parent > grandparent", () => {
+  it("two-level nesting resolves closest-wins: leaf > parent > grandparent", () => {
     const path = [
       { meta: { tags: { readOnly: true } } },    // grandparent
       { meta: { tags: { idempotent: false } } }, // parent
-      { meta: { tags: { destructive: true } } }, // op
+      { meta: { tags: { destructive: true } } }, // leaf
     ]
     const result = effectiveTags(path)
     expect(result.readOnly).toBe(true)      // from grandparent
     expect(result.idempotent).toBe(false)   // from parent
-    expect(result.destructive).toBe(true)   // from op
+    expect(result.destructive).toBe(true)   // from leaf
   })
 
   it("three-valued: explicit false overrides true from ancestor", () => {
@@ -343,5 +352,46 @@ describe("effectiveTags — inheritance", () => {
       { meta: { tags: { readOnly: true } } },
     ]
     expect(effectiveTags(path).readOnly).toBe(true)
+  })
+})
+
+// ============================================================================
+// 7. mergeMeta — deep-merge with precedence
+// ============================================================================
+
+describe("mergeMeta", () => {
+  it("later bag wins over earlier for scalar keys", () => {
+    const m = mergeMeta({ foo: 1 }, { foo: 2 })
+    expect(m["foo"]).toBe(2)
+  })
+
+  it("undefined in later bag defers — does not override", () => {
+    const m = mergeMeta({ foo: 1 }, { foo: undefined })
+    expect(m["foo"]).toBe(1)
+  })
+
+  it("sub-bag objects are merged one level deep (later wins per key)", () => {
+    const m = mergeMeta(
+      { tags: { readOnly: true, openWorld: true } },
+      { tags: { readOnly: false } },
+    )
+    expect((m.tags as Tags).readOnly).toBe(false)   // overridden
+    expect((m.tags as Tags).openWorld).toBe(true)   // inherited
+  })
+
+  it("arrays are NOT merged — later replaces", () => {
+    const m = mergeMeta({ roles: ["a"] }, { roles: ["b", "c"] })
+    expect(m["roles"]).toEqual(["b", "c"])
+  })
+
+  it("undefined metas are skipped", () => {
+    const m = mergeMeta(undefined, { x: 1 }, undefined)
+    expect(m["x"]).toBe(1)
+  })
+
+  it("key absent in later bag is inherited from earlier", () => {
+    const m = mergeMeta({ a: 1, b: 2 }, { b: 3 })
+    expect(m["a"]).toBe(1)
+    expect(m["b"]).toBe(3)
   })
 })

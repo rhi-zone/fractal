@@ -223,7 +223,7 @@ describe("meta.openapi overrides", () => {
   it("meta.openapi.operationId overrides inferred operationId", async () => {
     const { node, op } = await import("@rhi-zone/fractal-core/node")
     const n = node({
-      ops: {
+      children: {
         list: op((_: unknown) => [], {
           tags: { readOnly: true },
           openapi: { operationId: "listAllItems", summary: "List every item" },
@@ -239,7 +239,7 @@ describe("meta.openapi overrides", () => {
   it("meta.openapi.deprecated passes through", async () => {
     const { node, op } = await import("@rhi-zone/fractal-core/node")
     const n = node({
-      ops: {
+      children: {
         old: op((_: unknown) => null, {
           openapi: { deprecated: true },
         }),

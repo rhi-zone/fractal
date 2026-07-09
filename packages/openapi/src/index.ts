@@ -2,10 +2,14 @@
 //
 // OpenAPI 3.1 projection for the function-core tree.
 //
-// Walks a Node tree once, computing for each op:
+// Walks a Node tree once, computing for each leaf node (node with handler):
 //   - the codegen-style underscore name (for extractToolSchemas lookup)
 //   - the HTTP path + verb (same logic as buildRoutes in packages/http)
 //   - the effective tags (for verb derivation and documentation)
+//
+// In the new node model, leaf nodes (nodes with `handler`) live in `children`
+// alongside branch nodes. A leaf child keyed `k` behaves exactly as an op
+// keyed `k` did: its key contributes to path/name, its meta drives verb.
 //
 // CORRELATION APPROACH (A — self-contained tree walk):
 //   Rather than using buildRoutes and correlating by function identity,
@@ -20,10 +24,10 @@
 // See:
 //   packages/http/src/project.ts — buildRoutes, verbFromTags, inferSegment
 //   packages/codegen/src/tree.ts — extractToolSchemas, SchemaMap
-//   packages/core/src/node.ts    — Node, Op, ParamNode
+//   packages/core/src/node.ts    — Node, Handler, ParamNode
 //   packages/core/src/tags.ts    — effectiveTags, resolveTags
 
-import { isParamNode } from "@rhi-zone/fractal-core/node"
+import { isParamNode, isLeaf } from "@rhi-zone/fractal-core/node"
 import { effectiveTags, resolveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
 import type { Meta, Node } from "@rhi-zone/fractal-core/node"
@@ -186,14 +190,14 @@ function getOpenApiMeta(meta: Meta): OpenApiMeta {
 }
 
 // ============================================================================
-// Internal: tree walk — computes (codenName, httpPath, verb, opMeta) per op
+// Internal: tree walk — computes (codenName, httpPath, verb, leafMeta) per leaf
 // ============================================================================
 
 type RouteEntry = {
   readonly codenName: string  // underscore-joined tree position (for schema lookup)
   readonly path: string       // HTTP path string e.g. /books/{bookId}/details
   readonly verb: string       // HTTP method in uppercase
-  readonly meta: Meta         // op's own meta bag
+  readonly meta: Meta         // leaf's own meta bag
 }
 
 function walkTree(
@@ -205,32 +209,30 @@ function walkTree(
   const out: RouteEntry[] = []
   const nodePath = [...tagPath, n]
 
-  // Leaf ops on this node
-  for (const [key, o] of Object.entries(n.ops)) {
-    const opPath = [...nodePath, o]
-    const effective = effectiveTags(opPath)
-    const verbMeta: Meta = { ...o.meta, tags: effective }
-    const verb = verbFromTags(verbMeta)
-    const http = getHttpMeta(o.meta)
-
-    const codenName = namePrefix.length > 0 ? `${namePrefix}_${key}` : key
-
-    if (http.legacyPath !== undefined) {
-      out.push({ codenName, path: http.legacyPath, verb, meta: o.meta })
-    } else {
-      const seg = http.segment ?? inferSegment(key)
-      const path = `${httpPrefix}/${seg}`
-      out.push({ codenName, path, verb, meta: o.meta })
-    }
-  }
-
-  // Child nodes
-  for (const [key, child] of Object.entries(n.children)) {
+  for (const [key, child] of Object.entries(n.children ?? {})) {
     if (isParamNode(child)) {
       const newHttpPrefix = `${httpPrefix}/{${child.name}}`
       const newNamePrefix = namePrefix.length > 0 ? `${namePrefix}_${child.name}` : child.name
       out.push(...walkTree(child.subtree, newHttpPrefix, newNamePrefix, nodePath))
+    } else if (isLeaf(child)) {
+      // Leaf node: build a route entry for it
+      const leafPath = [...nodePath, child]
+      const effective = effectiveTags(leafPath)
+      const verbMeta: Meta = { ...child.meta, tags: effective }
+      const verb = verbFromTags(verbMeta)
+      const http = getHttpMeta(child.meta)
+
+      const codenName = namePrefix.length > 0 ? `${namePrefix}_${key}` : key
+
+      if (http.legacyPath !== undefined) {
+        out.push({ codenName, path: http.legacyPath, verb, meta: child.meta })
+      } else {
+        const seg = http.segment ?? inferSegment(key)
+        const path = `${httpPrefix}/${seg}`
+        out.push({ codenName, path, verb, meta: child.meta })
+      }
     } else {
+      // Branch child
       const seg = getHttpMeta(child.meta).segment ?? key
       const newHttpPrefix = `${httpPrefix}/${seg}`
       const newNamePrefix = namePrefix.length > 0 ? `${namePrefix}_${key}` : key
@@ -248,13 +250,13 @@ function walkTree(
 /**
  * Project a Node tree to an OpenAPI 3.1 document object.
  *
- * Each op in the tree becomes one path item method entry. The path and HTTP
- * verb are derived by the same logic as buildRoutes in packages/http — so
+ * Each leaf node in the tree becomes one path item method entry. The path and
+ * HTTP verb are derived by the same logic as buildRoutes in packages/http — so
  * the OpenAPI paths exactly match the live HTTP router. Input/output schemas
  * come from extractToolSchemas (codegen) when a sourceFile or schemas map is
  * supplied; otherwise they degrade to `{ type: "object" }` placeholders.
  *
- * meta.openapi on an op carries per-operation OpenAPI overrides: operationId,
+ * meta.openapi on a leaf carries per-operation OpenAPI overrides: operationId,
  * summary, description, tags, deprecated. Any unrecognised keys pass through.
  *
  * @param n    - The root node to project.

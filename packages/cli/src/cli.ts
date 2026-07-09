@@ -3,9 +3,13 @@
 // CLI projection for the function-core tree.
 //
 // Walks a Node tree along an argv subcommand path, resolving:
-//   - Static children → subcommand prefix segments
-//   - ParamNode children → positional slug values merged into op input
-//   - Op keys → terminal subcommand names
+//   - Branch children → subcommand prefix segments
+//   - ParamNode children → positional slug values merged into handler input
+//   - Leaf children (nodes with handler) → terminal subcommand names
+//
+// In the new node model, leaf nodes (nodes with `handler`) live in `children`
+// alongside branch nodes. A leaf child keyed `k` behaves exactly as an op
+// keyed `k` did: its key is the subcommand name, its meta drives behavior.
 //
 // Tag-driven behavior (via effectiveTags + resolveTags):
 //   - destructive:true  → io.confirm() before running (skippable via --yes/--force)
@@ -24,15 +28,15 @@
 // process.exit, keeping the test runner alive).
 //
 // See:
-//   packages/core/src/node.ts   — Node, Op, ParamNode, dispatch
+//   packages/core/src/node.ts   — Node, Handler, ParamNode, dispatch
 //   packages/core/src/tags.ts   — effectiveTags, resolveTags
 //   packages/codegen/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
-import { isParamNode } from "@rhi-zone/fractal-core/node"
+import { isParamNode, isLeaf } from "@rhi-zone/fractal-core/node"
 import { effectiveTags, resolveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
-import type { Meta, Node, ParamNode, Op } from "@rhi-zone/fractal-core/node"
+import type { Handler, Meta, Node, ParamNode } from "@rhi-zone/fractal-core/node"
 import type { SchemaMap } from "@rhi-zone/fractal-codegen"
 
 // ============================================================================
@@ -103,24 +107,25 @@ function getCliMeta(meta: Meta): CliMeta {
 // ============================================================================
 
 /**
- * Resolved dispatch target: the op to call, accumulated slug values from
- * ParamNode traversal, and the tag path (root-to-op) for effectiveTags.
+ * Resolved dispatch target: the leaf handler to call, accumulated slug values
+ * from ParamNode traversal, and the tag path (root-to-leaf) for effectiveTags.
  */
 type Resolved = {
-  readonly op: Op
+  readonly handler: Handler
   readonly slugs: Record<string, string>
   readonly tagPath: Array<{ meta?: { tags?: Tags } }>
-  readonly opName: string
+  readonly leafName: string
+  readonly leafMeta: Meta
 }
 
 /**
  * Walk the node tree along argv segments, resolving:
  *
- *   Static child (not ParamNode) → consume segment, recurse into child
- *   Static child (IS ParamNode)  → consume segment (tree key), enter subtree,
- *                                   consume NEXT segment as slug value
- *   No static match + ParamNode  → consume current segment as slug value, recurse
- *   Op key at tail               → terminal; return resolved
+ *   Branch child (not ParamNode, no handler) → consume segment, recurse
+ *   ParamNode child                           → consume segment (tree key), enter subtree,
+ *                                               consume NEXT segment as slug value
+ *   No static match + ParamNode              → consume current segment as slug value, recurse
+ *   Leaf child (has handler) at tail         → terminal; return resolved
  *
  * CLI navigates ParamNode children by their tree key (e.g. "byId"), then the
  * following segment is the slug value (e.g. "book-1"). This differs from HTTP
@@ -128,7 +133,7 @@ type Resolved = {
  *
  * Returns null if no matching path is found.
  */
-function resolveOp(
+function resolveLeaf(
   n: Node,
   segments: string[],
   slugs: Record<string, string>,
@@ -139,18 +144,25 @@ function resolveOp(
   if (head === undefined) return null
 
   const nodePath: Array<{ meta?: { tags?: Tags } }> = [...tagPath, n]
+  const children = n.children ?? {}
 
-  // Terminal: head should be an op name
+  // Terminal: head should name a leaf child
   if (tail.length === 0) {
-    const o = n.ops[head]
-    if (o !== undefined) {
-      return { op: o, slugs, tagPath: [...nodePath, o], opName: head }
+    const child = children[head]
+    if (child !== undefined && !isParamNode(child) && isLeaf(child)) {
+      return {
+        handler: child.handler!,
+        slugs,
+        tagPath: [...nodePath, child],
+        leafName: head,
+        leafMeta: child.meta,
+      }
     }
     return null
   }
 
   // Non-terminal: try static child first
-  const staticChild = n.children[head]
+  const staticChild = children[head]
   if (staticChild !== undefined) {
     if (isParamNode(staticChild)) {
       // head matched the ParamNode slot key (e.g. "byId").
@@ -158,22 +170,26 @@ function resolveOp(
       // Consume it and recurse into the subtree.
       const [slugValue, ...afterSlug] = tail
       if (slugValue === undefined) return null
-      return resolveOp(
+      return resolveLeaf(
         staticChild.subtree,
         afterSlug,
         { ...slugs, [staticChild.name]: slugValue },
         nodePath,
       )
     }
-    // Static non-param child: recurse with no slug
-    return resolveOp(staticChild, tail, slugs, nodePath)
+    if (!isLeaf(staticChild)) {
+      // Static branch child: recurse with no slug
+      return resolveLeaf(staticChild, tail, slugs, nodePath)
+    }
+    // A leaf child at non-tail is a dead-end (a leaf has no children to recurse into)
+    return null
   }
 
   // No static match — scan for a bare ParamNode child.
   // In this case, head IS the slug value (no key prefix in the path).
-  for (const child of Object.values(n.children)) {
+  for (const child of Object.values(children)) {
     if (isParamNode(child)) {
-      return resolveOp(child.subtree, tail, { ...slugs, [child.name]: head }, nodePath)
+      return resolveLeaf(child.subtree, tail, { ...slugs, [child.name]: head }, nodePath)
     }
   }
 
@@ -204,25 +220,32 @@ function buildHelp(
 
   lines.push(`Usage: ${cmd} <subcommand> [options]`, "")
 
-  // List ops
-  const ops = Object.entries(n.ops)
-  if (ops.length > 0) {
+  const children = n.children ?? {}
+
+  // List leaf children (callables)
+  const leafEntries = Object.entries(children).filter(
+    ([, child]) => !isParamNode(child) && isLeaf(child),
+  )
+  if (leafEntries.length > 0) {
     lines.push("Commands:")
-    for (const [key, o] of ops) {
-      const cliMeta = getCliMeta(o.meta)
+    for (const [key, child] of leafEntries) {
+      if (isParamNode(child)) continue
+      const cliMeta = getCliMeta(child.meta)
       if (cliMeta.hidden === true) continue
-      const opDesc = descriptionFrom(o.meta)
-      const opName = typeof cliMeta.name === "string" ? cliMeta.name : key
-      lines.push(`  ${opName}${opDesc !== undefined ? `  — ${opDesc}` : ""}`)
+      const leafDesc = descriptionFrom(child.meta)
+      const leafName = typeof cliMeta.name === "string" ? cliMeta.name : key
+      lines.push(`  ${leafName}${leafDesc !== undefined ? `  — ${leafDesc}` : ""}`)
     }
   }
 
-  // List child nodes
-  const children = Object.entries(n.children)
-  if (children.length > 0) {
-    if (ops.length > 0) lines.push("")
+  // List branch/param children
+  const nonLeafEntries = Object.entries(children).filter(
+    ([, child]) => isParamNode(child) || !isLeaf(child),
+  )
+  if (nonLeafEntries.length > 0) {
+    if (leafEntries.length > 0) lines.push("")
     lines.push("Subcommand groups:")
-    for (const [key, child] of children) {
+    for (const [key, child] of nonLeafEntries) {
       if (isParamNode(child)) {
         const cliMeta = getCliMeta(child.subtree.meta)
         if (cliMeta.hidden === true) continue
@@ -245,7 +268,7 @@ function buildHelp(
   return lines.join("\n") + "\n"
 }
 
-function buildOpHelp(
+function buildLeafHelp(
   resolved: Resolved,
   path: string[],
   programName: string,
@@ -253,12 +276,12 @@ function buildOpHelp(
 ): string {
   const lines: string[] = []
   const cmd = [programName, ...path].join(" ")
-  const desc = descriptionFrom(resolved.op.meta)
+  const desc = descriptionFrom(resolved.leafMeta)
   if (desc !== undefined) lines.push(desc, "")
   lines.push(`Usage: ${cmd} [options]`, "")
 
   const tags = resolveTags(effectiveTags(resolved.tagPath))
-  if (tags.destructive === true) lines.push("  This operation is destructive. Requires --yes/--force to skip confirmation.", "")
+  if (tags.destructive === true) lines.push("  This operation is destructive and irreversible. Requires --yes/--force to skip confirmation.", "")
   if (tags.readOnly === true) lines.push("  This operation is read-only.", "")
   if (tags.streaming === true) lines.push("  This operation streams results (one JSON object per line).", "")
 
@@ -361,7 +384,7 @@ function parseFlags(argv: string[]): ParsedArgv {
 }
 
 // ============================================================================
-// Build op input from parsed flags + slugs
+// Build handler input from parsed flags + slugs
 // ============================================================================
 
 /**
@@ -403,7 +426,7 @@ const defaultIO: CliIO = {
  *
  * argv should be the arguments AFTER the program name (i.e. process.argv.slice(2)).
  * Leading non-flag tokens are consumed as the subcommand path; remaining
- * --flags are parsed as op input fields.
+ * --flags are parsed as handler input fields.
  *
  * Throws CliError (with exitCode) instead of calling process.exit() directly —
  * the caller (a real main() entry point) is responsible for actually exiting.
@@ -452,18 +475,18 @@ export async function runCli(
 
   // --help requested — show help for the subcommand path
   if (help) {
-    // Try to resolve to an op first
-    const target = resolveOp(n, pathSegments, {}, [])
+    // Try to resolve to a leaf first
+    const target = resolveLeaf(n, pathSegments, {}, [])
     if (target !== null) {
-      ioResolved.stdout.write(buildOpHelp(target, pathSegments, "cli", schemas))
+      ioResolved.stdout.write(buildLeafHelp(target, pathSegments, "cli", schemas))
       return
     }
-    // Otherwise walk to a child node for group help
+    // Otherwise walk to a branch child for group help
     let cursor: Node = n
     let depth = 0
     for (const seg of pathSegments) {
-      const child = cursor.children[seg]
-      if (child !== undefined && !isParamNode(child)) {
+      const child = (cursor.children ?? {})[seg]
+      if (child !== undefined && !isParamNode(child) && !isLeaf(child)) {
         cursor = child
         depth++
       } else {
@@ -474,8 +497,8 @@ export async function runCli(
     return
   }
 
-  // Resolve the op
-  const target = resolveOp(n, pathSegments, {}, [])
+  // Resolve the leaf handler
+  const target = resolveLeaf(n, pathSegments, {}, [])
   if (target === null) {
     ioResolved.stderr.write(`Unknown command: ${pathSegments.join(" ")}\nRun with --help for usage.\n`)
     throw new CliError(`Unknown command: ${pathSegments.join(" ")}`, 1)
@@ -499,10 +522,10 @@ export async function runCli(
   // Build input: flags + slugs (provenance-blind merge)
   const input = buildInput(flags, target.slugs)
 
-  // Call op
+  // Call handler
   let result: unknown
   try {
-    result = await Promise.resolve(target.op.fn(input))
+    result = await Promise.resolve(target.handler(input))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     ioResolved.stderr.write(`Error: ${msg}\n`)
@@ -549,19 +572,19 @@ async function collectAsync(it: AsyncIterable<unknown>): Promise<unknown[]> {
 }
 
 // ============================================================================
-// Tree walk for listing all ops (for help / introspection)
+// Tree walk for listing all leaf nodes (for help / introspection)
 // ============================================================================
 
 export type CliCommandEntry = {
   readonly path: string[]
-  readonly opName: string
-  readonly op: Op
+  readonly leafName: string
+  readonly handler: Handler
   readonly slugs: string[]
   readonly tagPath: Array<{ meta?: { tags?: Tags } }>
 }
 
 /**
- * Walk the Node tree and enumerate all reachable ops with their CLI paths.
+ * Walk the Node tree and enumerate all reachable leaf nodes with their CLI paths.
  * Useful for generating full help text or testing coverage.
  */
 export function walkCliCommands(
@@ -573,17 +596,7 @@ export function walkCliCommands(
   const out: CliCommandEntry[] = []
   const nodePath = [...tagPath, n]
 
-  for (const [key, o] of Object.entries(n.ops)) {
-    out.push({
-      path: prefix,
-      opName: key,
-      op: o,
-      slugs: slugAcc,
-      tagPath: [...nodePath, o],
-    })
-  }
-
-  for (const [key, child] of Object.entries(n.children)) {
+  for (const [key, child] of Object.entries(n.children ?? {})) {
     if (isParamNode(child)) {
       out.push(
         ...walkCliCommands(
@@ -593,6 +606,14 @@ export function walkCliCommands(
           [...slugAcc, child.name],
         ),
       )
+    } else if (isLeaf(child)) {
+      out.push({
+        path: prefix,
+        leafName: key,
+        handler: child.handler!,
+        slugs: slugAcc,
+        tagPath: [...nodePath, child],
+      })
     } else {
       out.push(...walkCliCommands(child, [...prefix, key], nodePath, slugAcc))
     }
@@ -603,4 +624,4 @@ export function walkCliCommands(
 
 // Re-export types for consumers
 export type { SchemaMap }
-export type { Node, Op, ParamNode, Meta }
+export type { Node, Handler, ParamNode, Meta }

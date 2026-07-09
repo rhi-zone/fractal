@@ -29,7 +29,7 @@ const invoicesNode = node({
     invoiceId: param(
       "invoiceId",
       node({
-        ops: {
+        children: {
           checkout: op(
             (input: { invoiceId: string; currency?: string }) => ({
               url: `https://pay.example.com/${input.invoiceId}`,
@@ -84,7 +84,7 @@ describe("OOTB preset — basic dispatch", () => {
 })
 
 // ============================================================================
-// 2. Slug threads into op input provenance-blind
+// 2. Slug threads into handler input provenance-blind
 // ============================================================================
 
 describe("OOTB preset — slug threading (provenance-blind)", () => {
@@ -110,7 +110,7 @@ describe("OOTB preset — slug threading (provenance-blind)", () => {
             itemId: param(
               "itemId",
               node({
-                ops: {
+                children: {
                   update: op(
                     (input: Record<string, unknown>) => {
                       capturedInput = input

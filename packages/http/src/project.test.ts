@@ -26,7 +26,7 @@ describe("buildRoutes — path from tree walk", () => {
             invoiceId: param(
               "invoiceId",
               node({
-                ops: {
+                children: {
                   checkout: op(createCheckoutSession, {
                     http: { verb: "POST", segment: "checkout" },
                   }),
@@ -47,14 +47,14 @@ describe("buildRoutes — path from tree walk", () => {
     const api = node({
       children: {
         users: node({
-          ops: {
+          children: {
             list: op((_: unknown) => [], { tags: { readOnly: true } }),
           },
         }),
       },
     })
     const routes = buildRoutes(api)
-    // static child key "users" → /users; op key "list" → /list; inferSegment("list") = "list"
+    // static child key "users" → /users; leaf key "list" → /list; inferSegment("list") = "list"
     expect(routes[0]!.path).toBe("/users/list")
   })
 
@@ -63,7 +63,7 @@ describe("buildRoutes — path from tree walk", () => {
       children: {
         progressNode: node({
           meta: { http: { segment: "progress" } },
-          ops: {
+          children: {
             awardProgress: op((_: unknown) => ({}), {
               http: { segment: "award" },
             }),
@@ -77,7 +77,7 @@ describe("buildRoutes — path from tree walk", () => {
 
   it("uses meta.http.legacyPath as full-path override [DEBT]", () => {
     const api = node({
-      ops: {
+      children: {
         legacyEndpoint: op((_: unknown) => ({}), {
           http: { legacyPath: "/v1/old/legacy-path", verb: "GET" },
         }),
@@ -88,16 +88,16 @@ describe("buildRoutes — path from tree walk", () => {
     expect(routes[0]!.verb).toBe("GET")
   })
 
-  it("collects ops from multiple children", () => {
+  it("collects leaves from multiple children", () => {
     const api = node({
       children: {
         users: node({
-          ops: {
+          children: {
             list: op((_: unknown) => [], { tags: { readOnly: true } }),
           },
         }),
         orders: node({
-          ops: {
+          children: {
             list: op((_: unknown) => [], { tags: { readOnly: true } }),
           },
         }),
@@ -123,12 +123,12 @@ describe("buildRoutes — path from tree walk", () => {
     expect(routes[0]!.path).toBe("/items")
   })
 
-  it("node-level readOnly:true makes op project to GET via inheritance", () => {
+  it("node-level readOnly:true makes leaf project to GET via inheritance", () => {
     const api = node({
       children: {
         catalog: node({
           meta: { tags: { readOnly: true } },
-          ops: {
+          children: {
             list: op((_: unknown) => []),  // no own tags
           },
         }),
@@ -138,13 +138,13 @@ describe("buildRoutes — path from tree walk", () => {
     expect(routes[0]!.verb).toBe("GET")
   })
 
-  it("op-level tag overrides node-level tag inheritance", () => {
+  it("leaf-level tag overrides node-level tag inheritance", () => {
     const api = node({
       children: {
         items: node({
           meta: { tags: { readOnly: true } },
-          ops: {
-            // op explicitly opts out of readOnly
+          children: {
+            // leaf explicitly opts out of readOnly
             delete: op((_: unknown) => ({}), {
               tags: { readOnly: false, idempotent: true, destructive: true },
             }),
@@ -158,13 +158,13 @@ describe("buildRoutes — path from tree walk", () => {
 })
 
 // ============================================================================
-// 1b. Route carries op.meta (including tags)
+// 1b. Route carries leaf meta (including tags)
 // ============================================================================
 
-describe("buildRoutes — route carries op.meta", () => {
+describe("buildRoutes — route carries leaf meta", () => {
   it("includes meta on the route so consumers can read tags without fn-identity correlation", () => {
     const api = node({
-      ops: {
+      children: {
         listItems: op((_: unknown) => [], { tags: { readOnly: true } }),
       },
     })
@@ -278,7 +278,7 @@ describe("matchRoute", () => {
 describe("makeRouter — core router (no auto-method layer)", () => {
   const getUser = (_: unknown) => ({ id: 1, name: "Alice" })
   const api = node({
-    ops: {
+    children: {
       getUser: op(getUser, { tags: { readOnly: true }, http: { segment: "user" } }),
     },
   })

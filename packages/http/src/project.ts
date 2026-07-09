@@ -5,14 +5,20 @@
 // the legacyPath [DEBT] escape hatch). Verb is derived from the tag lattice
 // (readOnly/idempotent/destructive) with a meta.http.verb override.
 //
+// In the new node model, leaf nodes (nodes with `handler`) are stored in
+// `children` alongside branch nodes. A leaf keyed `k` behaves exactly as an
+// op keyed `k` did: its key is the path segment, its meta drives the verb.
+// Distinction: `isParamNode(child)` for param children, `child.handler` for
+// leaf children, otherwise branch children.
+//
 // See:
 //   docs/artifacts/fc-op-kinds/concrete-api-v2.md — tree-walk spec
 //   docs/artifacts/fc-op-kinds/tag-set.md         — verb-dispatch lattice
 
-import { isParamNode } from "@rhi-zone/fractal-core/node"
+import { isParamNode, isLeaf } from "@rhi-zone/fractal-core/node"
 import { resolveTags, effectiveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
-import type { Meta, Node, Op } from "@rhi-zone/fractal-core/node"
+import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
 
 // ============================================================================
 // Types
@@ -26,7 +32,7 @@ export type Route = {
   readonly verb: string
   readonly path: string
   readonly pattern: readonly PatternPart[]
-  readonly handler: Op["fn"]
+  readonly handler: Handler
   readonly meta: Meta
 }
 
@@ -135,13 +141,13 @@ export function allowHeader(verbs: Iterable<string>): string {
  * Walk a Node tree and produce a flat route table.
  *
  * Path construction (purely from tree structure):
- *   static child key     → /{key}  (or /{meta.http.segment} rename)
+ *   leaf child key       → /{key}  (or /{meta.http.segment} rename)
  *   ParamNode            → /{name} (the param name, wrapped in braces)
- *   op leaf key          → /{key}  (or /{meta.http.segment} rename)
+ *   branch child key     → /{key}  (or /{meta.http.segment} rename)
  *
  * Tag inheritance: a node tagged `meta.tags: {readOnly: true}` makes all its
- * ops project to GET unless a descendant op overrides via its own `meta.tags`.
- * Closest-wins: op > parent > grandparent (undefined defers upward).
+ * leaf descendants project to GET unless a closer node overrides via `meta.tags`.
+ * Closest-wins: leaf > parent > grandparent (undefined defers upward).
  *
  * [DEBT] meta.http.legacyPath: full-path override, bypasses all tree-walk
  * logic. Use ONLY for external-contract / legacy-URL pinning. Reaching for
@@ -155,36 +161,32 @@ export function buildRoutes(
   const out: Route[] = []
   const nodePath = [...tagPath, n]
 
-  // Leaf ops on this node
-  for (const [name, o] of Object.entries(n.ops)) {
-    // Merge tags from root → node → op (closest-wins)
-    const opPath = [...nodePath, o]
-    const effective = effectiveTags(opPath)
-    // Build a synthetic meta with the effective tags so verbFromTags can do
-    // both http.verb override (from op's own meta) and tag-derived verb.
-    const verbMeta: Meta = { ...o.meta, tags: effective }
-    const verb = verbFromTags(verbMeta)
-    const http = getHttpMeta(o.meta)
-
-    if (http.legacyPath !== undefined) {
-      // [DEBT] escape hatch: full-path override skips all tree-walk logic
-      const path = http.legacyPath
-      out.push({ verb, path, pattern: parsePath(path), handler: o.fn, meta: o.meta })
-    } else {
-      const seg = http.segment ?? inferSegment(name)
-      const path = `${prefix}/${seg}`
-      out.push({ verb, path, pattern: parsePath(path), handler: o.fn, meta: o.meta })
-    }
-  }
-
-  // Child nodes
-  for (const [key, child] of Object.entries(n.children)) {
+  for (const [name, child] of Object.entries(n.children ?? {})) {
     if (isParamNode(child)) {
       // ParamNode: contributes {name} segment; recurse into subtree
       out.push(...buildRoutes(child.subtree, `${prefix}/{${child.name}}`, nodePath))
+    } else if (isLeaf(child)) {
+      // Leaf child: this is a callable — build a route for it
+      const leafPath = [...nodePath, child]
+      const effective = effectiveTags(leafPath)
+      // Build a synthetic meta with the effective tags so verbFromTags can do
+      // both http.verb override (from leaf's own meta) and tag-derived verb.
+      const verbMeta: Meta = { ...child.meta, tags: effective }
+      const verb = verbFromTags(verbMeta)
+      const http = getHttpMeta(child.meta)
+
+      if (http.legacyPath !== undefined) {
+        // [DEBT] escape hatch: full-path override skips all tree-walk logic
+        const path = http.legacyPath
+        out.push({ verb, path, pattern: parsePath(path), handler: child.handler!, meta: child.meta })
+      } else {
+        const seg = http.segment ?? inferSegment(name)
+        const path = `${prefix}/${seg}`
+        out.push({ verb, path, pattern: parsePath(path), handler: child.handler!, meta: child.meta })
+      }
     } else {
-      // Static child: key is the default segment, overrideable via meta.http.segment
-      const seg = getHttpMeta(child.meta).segment ?? key
+      // Branch child: static child — key is the default segment, overrideable via meta.http.segment
+      const seg = getHttpMeta(child.meta).segment ?? name
       out.push(...buildRoutes(child, `${prefix}/${seg}`, nodePath))
     }
   }
