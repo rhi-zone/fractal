@@ -161,18 +161,33 @@ type HttpMeta = {
   readonly verb?: string
   readonly segment?: string
   readonly legacyPath?: string
-  readonly dispatch?: "method"
+  /**
+   * dispatch: "method" — children distinguished by HTTP verb (method-dispatch).
+   * Non-method dispatch markers (header/query/contentType) are treated here as
+   * segment-dispatch: each child gets a path segment equal to its key or
+   * meta.http.segment rename. This means OpenAPI reflects the attribute value
+   * as a path segment rather than a runtime condition — a reasonable approximation
+   * for enumerating projection. Callers who need precise OpenAPI for attribute-
+   * dispatched endpoints should annotate with meta.openapi explicitly.
+   */
+  readonly dispatch?: "method" | "attr"  // "attr" = any non-method marker (collapsed)
 }
 
 function getHttpMeta(meta: Meta): HttpMeta {
   const h = meta.http
   if (typeof h !== "object" || h === null) return {}
   const r = h as Record<string, unknown>
-  const out: { verb?: string; segment?: string; legacyPath?: string; dispatch?: "method" } = {}
+  const out: { verb?: string; segment?: string; legacyPath?: string; dispatch?: "method" | "attr" } = {}
   if (typeof r.verb === "string") out.verb = r.verb
   if (typeof r.segment === "string") out.segment = r.segment
   if (typeof r.legacyPath === "string") out.legacyPath = r.legacyPath
-  if (r.dispatch === "method") out.dispatch = "method"
+  if (r.dispatch === "method") {
+    out.dispatch = "method"
+  } else if (typeof r.dispatch === "object" && r.dispatch !== null) {
+    // Non-method dispatch (header/query/contentType): collapse to "attr" sentinel.
+    // OpenAPI treats these children as segment-dispatched (each child gets a segment).
+    out.dispatch = "attr"
+  }
   return out
 }
 
@@ -217,8 +232,11 @@ function walkTree(
 
   // Attribute-dispatch: if this node has dispatch:"method", its leaf children
   // share the node's own HTTP path rather than getting a per-child segment.
+  // Non-method dispatch (dispatch:"attr") is treated as segment-dispatch in
+  // OpenAPI: each child gets a path segment equal to its key or segment rename.
   const thisHttp = getHttpMeta(n.meta)
   const methodDispatch = thisHttp.dispatch === "method"
+  // "attr" dispatch → OpenAPI treats children as segment-dispatched (approximation)
 
   for (const [key, child] of Object.entries(n.children ?? {})) {
     if (isParamNode(child)) {
@@ -242,6 +260,7 @@ function walkTree(
         const path = httpPrefix === "" ? "/" : httpPrefix
         out.push({ codenName, path, verb, meta: child.meta })
       } else {
+        // Segment-dispatch (default) or attr-dispatch (treated as segment for OpenAPI)
         const seg = http.segment ?? inferSegment(key)
         const path = `${httpPrefix}/${seg}`
         out.push({ codenName, path, verb, meta: child.meta })

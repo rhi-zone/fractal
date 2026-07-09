@@ -28,10 +28,35 @@ export type PatternPart =
   | { readonly kind: "literal"; readonly value: string }
   | { readonly kind: "param"; readonly name: string }
 
+/**
+ * A single match condition applied after path matching.
+ *
+ * - `method`      — HTTP method must equal `value` (e.g. "GET"). Used for
+ *                   method-dispatched nodes; the route's `verb` field mirrors
+ *                   this value for autoMethodLayer compatibility.
+ * - `header`      — request header `name` must equal `value` (case-insensitive
+ *                   header name, case-sensitive value).
+ * - `query`       — query parameter `name` must equal `value`.
+ * - `contentType` — request Content-Type must include `value` (substring match,
+ *                   e.g. "application/json" matches "application/json; charset=utf-8").
+ */
+export type MatchCondition =
+  | { readonly kind: "method"; readonly value: string }
+  | { readonly kind: "header"; readonly name: string; readonly value: string }
+  | { readonly kind: "query"; readonly name: string; readonly value: string }
+  | { readonly kind: "contentType"; readonly value: string }
+
 export type Route = {
   readonly verb: string
   readonly path: string
   readonly pattern: readonly PatternPart[]
+  /**
+   * Extra match conditions beyond verb+path. Empty for plain routes.
+   * Method conditions are captured here AND mirrored in `verb` for
+   * autoMethodLayer compatibility.
+   * Header/query/contentType conditions are evaluated after path match.
+   */
+  readonly conditions: readonly MatchCondition[]
   readonly handler: Handler
   readonly meta: Meta
 }
@@ -157,23 +182,23 @@ export function buildRoutes(
   n: Node,
   prefix = "",
   tagPath: Array<{ meta?: { tags?: Tags } }> = [],
+  inheritedConditions: readonly MatchCondition[] = [],
 ): Route[] {
   const out: Route[] = []
   const nodePath = [...tagPath, n]
 
-  // Check if this node dispatches its leaf children by method (attribute-dispatch).
-  // When true, leaf children share the node's own path; verb comes from their tags.
+  // Check the dispatch marker on this node
   const thisHttp = getHttpMeta(n.meta)
-  const methodDispatch = thisHttp.dispatch === "method"
+  const dispatch = thisHttp.dispatch
 
-  if (methodDispatch) {
-    // Collect method-dispatched leaf routes at `prefix` (no added segment for each child).
-    // Non-leaf children still get a segment appended (segment-dispatch, unchanged).
+  if (dispatch === "method") {
+    // METHOD DISPATCH: leaf children share the node's own path; verb distinguishes them.
+    // Non-leaf children are still segment-dispatched (contribute a path segment).
     const seenVerbs = new Map<string, string>() // verb → child name (for collision error)
     for (const [name, child] of Object.entries(n.children ?? {})) {
       if (isParamNode(child)) {
         // ParamNode under a method-dispatch node: still contributes {name} segment
-        out.push(...buildRoutes(child.subtree, `${prefix}/{${child.name}}`, nodePath))
+        out.push(...buildRoutes(child.subtree, `${prefix}/{${child.name}}`, nodePath, inheritedConditions))
       } else if (isLeaf(child)) {
         // Leaf child: resolves to the parent's own path — no per-child segment
         const leafPath = [...nodePath, child]
@@ -191,20 +216,101 @@ export function buildRoutes(
         seenVerbs.set(verb, name)
 
         const path = prefix === "" ? "/" : prefix
-        out.push({ verb, path, pattern: parsePath(path), handler: child.handler!, meta: child.meta })
+        const conditions: readonly MatchCondition[] = [
+          ...inheritedConditions,
+          { kind: "method", value: verb },
+        ]
+        out.push({ verb, path, pattern: parsePath(path), conditions, handler: child.handler!, meta: child.meta })
       } else {
         // Branch child under method-dispatch node: still segment-dispatched
         const seg = getHttpMeta(child.meta).segment ?? name
-        out.push(...buildRoutes(child, `${prefix}/${seg}`, nodePath))
+        out.push(...buildRoutes(child, `${prefix}/${seg}`, nodePath, inheritedConditions))
       }
     }
     return out
   }
 
+  if (dispatch !== undefined) {
+    // NON-METHOD ATTRIBUTE DISPATCH: leaf children share the node's own path;
+    // a condition on the request attribute distinguishes them.
+    // Non-leaf children are still segment-dispatched.
+    const seenValues = new Map<string, string>() // matchValue → child name (for collision error)
+
+    for (const [name, child] of Object.entries(n.children ?? {})) {
+      if (isParamNode(child)) {
+        out.push(...buildRoutes(child.subtree, `${prefix}/{${child.name}}`, nodePath, inheritedConditions))
+      } else if (isLeaf(child)) {
+        // The match value is the child key by default; per-child `when` overrides.
+        const childHttp = getHttpMeta(child.meta)
+        const matchValue = childHttp.when ?? name
+
+        // Collision check: two children resolving to the same match value
+        const existing = seenValues.get(matchValue)
+        if (existing !== undefined) {
+          throw new Error(
+            `attribute-dispatch collision at "${prefix}": children "${existing}" and "${name}" both match value "${matchValue}" for dispatch ${JSON.stringify(dispatch)}`,
+          )
+        }
+        seenValues.set(matchValue, name)
+
+        // Build the condition for this child
+        const condition: MatchCondition =
+          dispatch.by === "header"
+            ? { kind: "header", name: dispatch.name, value: matchValue }
+            : dispatch.by === "query"
+              ? { kind: "query", name: dispatch.name, value: matchValue }
+              : { kind: "contentType", value: matchValue }
+
+        const leafPath = [...nodePath, child]
+        const effective = effectiveTags(leafPath)
+        const verbMeta: Meta = { ...child.meta, tags: effective }
+        const verb = verbFromTags(verbMeta)
+
+        const path = prefix === "" ? "/" : prefix
+        const conditions: readonly MatchCondition[] = [...inheritedConditions, condition]
+        out.push({ verb, path, pattern: parsePath(path), conditions, handler: child.handler!, meta: child.meta })
+      } else {
+        // Branch child under a non-method dispatch node.
+        // The parent dispatch attribute applies to this branch too: its key (or `when`)
+        // is the match value at this dispatch level, and the condition is inherited by
+        // all descendant leaves. The branch still contributes NO segment (same-path
+        // dispatch), but carries the parent condition down.
+        //
+        // This enables multi-attribute nesting: a header-dispatch node whose branch
+        // children are method-dispatch nodes → leaves carry both conditions.
+        const childHttp = getHttpMeta(child.meta)
+        const matchValue = childHttp.when ?? name
+
+        // Collision check for branch children with the same match value
+        const existingBranch = seenValues.get(matchValue)
+        if (existingBranch !== undefined) {
+          throw new Error(
+            `attribute-dispatch collision at "${prefix}": children "${existingBranch}" and "${name}" both match value "${matchValue}" for dispatch ${JSON.stringify(dispatch)}`,
+          )
+        }
+        seenValues.set(matchValue, name)
+
+        // Build the condition for this branch child (same as for leaf children)
+        const branchCondition: MatchCondition =
+          dispatch.by === "header"
+            ? { kind: "header", name: dispatch.name, value: matchValue }
+            : dispatch.by === "query"
+              ? { kind: "query", name: dispatch.name, value: matchValue }
+              : { kind: "contentType", value: matchValue }
+
+        // Recurse into the branch at the SAME path prefix (no segment added),
+        // but with the parent's condition propagated.
+        out.push(...buildRoutes(child, prefix, nodePath, [...inheritedConditions, branchCondition]))
+      }
+    }
+    return out
+  }
+
+  // DEFAULT: SEGMENT DISPATCH (no dispatch marker)
   for (const [name, child] of Object.entries(n.children ?? {})) {
     if (isParamNode(child)) {
       // ParamNode: contributes {name} segment; recurse into subtree
-      out.push(...buildRoutes(child.subtree, `${prefix}/{${child.name}}`, nodePath))
+      out.push(...buildRoutes(child.subtree, `${prefix}/{${child.name}}`, nodePath, inheritedConditions))
     } else if (isLeaf(child)) {
       // Leaf child: this is a callable — build a route for it
       const leafPath = [...nodePath, child]
@@ -218,16 +324,16 @@ export function buildRoutes(
       if (http.legacyPath !== undefined) {
         // [DEBT] escape hatch: full-path override skips all tree-walk logic
         const path = http.legacyPath
-        out.push({ verb, path, pattern: parsePath(path), handler: child.handler!, meta: child.meta })
+        out.push({ verb, path, pattern: parsePath(path), conditions: [...inheritedConditions], handler: child.handler!, meta: child.meta })
       } else {
         const seg = http.segment ?? inferSegment(name)
         const path = `${prefix}/${seg}`
-        out.push({ verb, path, pattern: parsePath(path), handler: child.handler!, meta: child.meta })
+        out.push({ verb, path, pattern: parsePath(path), conditions: [...inheritedConditions], handler: child.handler!, meta: child.meta })
       }
     } else {
       // Branch child: static child — key is the default segment, overrideable via meta.http.segment
       const seg = getHttpMeta(child.meta).segment ?? name
-      out.push(...buildRoutes(child, `${prefix}/${seg}`, nodePath))
+      out.push(...buildRoutes(child, `${prefix}/${seg}`, nodePath, inheritedConditions))
     }
   }
 
@@ -243,19 +349,48 @@ export function buildRoutes(
 // without them, returning 404 for any request with no exact match.
 // ============================================================================
 
+/**
+ * Evaluate all match conditions for a route against a request.
+ * Returns true if all conditions are satisfied.
+ */
+function matchConditions(conditions: readonly MatchCondition[], req: Request): boolean {
+  for (const cond of conditions) {
+    if (cond.kind === "method") {
+      if (req.method !== cond.value) return false
+    } else if (cond.kind === "header") {
+      if (req.headers.get(cond.name) !== cond.value) return false
+    } else if (cond.kind === "query") {
+      const url = new URL(req.url)
+      if (url.searchParams.get(cond.name) !== cond.value) return false
+    } else if (cond.kind === "contentType") {
+      const ct = req.headers.get("Content-Type") ?? ""
+      if (!ct.includes(cond.value)) return false
+    }
+  }
+  return true
+}
+
 export function makeRouter(
   routes: Route[],
 ): (req: Request) => Promise<Response> {
   return async (req) => {
     const segs = pathSegs(req.url)
 
-    // Find an exact (verb + path) match
+    // Find a match: verb + path + all conditions
+    // For routes with no method condition in conditions[], the verb field
+    // is still used for matching (backward compat + non-method-dispatch routes).
     let matched: Route | undefined
     for (const r of routes) {
-      if (r.verb === req.method && matchRoute(r.pattern, segs) !== null) {
-        matched = r
-        break
-      }
+      // Determine if this route has an explicit method condition
+      const hasMethodCond = r.conditions.some((c) => c.kind === "method")
+      // Method check: if route has a method condition, it's enforced there;
+      // otherwise fall back to comparing verb directly (plain routes).
+      const verbOk = hasMethodCond ? true : r.verb === req.method
+      if (!verbOk) continue
+      if (matchRoute(r.pattern, segs) === null) continue
+      if (!matchConditions(r.conditions, req)) continue
+      matched = r
+      break
     }
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
@@ -307,18 +442,50 @@ export function jsonResponse(value: unknown, init?: ResponseInit): Response {
 // Internal helpers
 // ============================================================================
 
+/**
+ * The `dispatch` marker shape in `meta.http`.
+ *
+ * - `"method"` — children distinguished by HTTP verb (derived from tags).
+ *   The verb IS the match key; child agnostic names are ignored by HTTP.
+ *
+ * - `{ by: "header", name: "X-Api-Version" }` — children distinguished by
+ *   the value of request header `name`. A child keyed `v1` matches when the
+ *   header value is `"v1"`. Override per-child via `meta.http.when`.
+ *
+ * - `{ by: "query", name: "mode" }` — children distinguished by the value
+ *   of query parameter `name`. Same key=value default; `when` overrides.
+ *
+ * - `{ by: "contentType" }` — children distinguished by the request
+ *   Content-Type value. Child key = match value; `when` overrides.
+ *
+ * In all non-method dispatch cases, non-leaf children are still
+ * segment-dispatched (they contribute a path segment). CLI/MCP projections
+ * ignore the dispatch marker and key children by their agnostic name.
+ *
+ * No-match behavior:
+ * - Method dispatch: 405 + Allow (via autoMethodLayer).
+ * - Header/query/contentType dispatch: 404 (no special status — the
+ *   attribute is not part of the HTTP-visible address).
+ */
+export type DispatchMarker =
+  | "method"
+  | { readonly by: "header"; readonly name: string }
+  | { readonly by: "query"; readonly name: string }
+  | { readonly by: "contentType" }
+
 type HttpMeta = {
   readonly verb?: string
   readonly segment?: string
   readonly legacyPath?: string
+  readonly dispatch?: DispatchMarker
   /**
-   * `dispatch: "method"` — this node's LEAF children all resolve to the node's
-   * own path. Each child's HTTP verb is derived from its effective tags (or
-   * meta.http.verb override). Non-leaf children are unaffected and still
-   * contribute a segment. CLI/MCP ignore this field and continue to key children
-   * by their agnostic name.
+   * `when`: per-child match-value override for non-method attribute dispatch.
+   * When set on a leaf child's `meta.http`, it overrides the default (child
+   * key = match value). Use for aliasing or matching multiple values:
+   *   `when: "application/json"` on a child keyed `json` to match that
+   *   content-type regardless of the key name.
    */
-  readonly dispatch?: "method"
+  readonly when?: string
 }
 
 /** Safely extract typed HTTP projection metadata from an open Meta bag. */
@@ -326,10 +493,29 @@ function getHttpMeta(meta: Meta): HttpMeta {
   const h = meta.http
   if (typeof h !== "object" || h === null) return {}
   const r = h as Record<string, unknown>
-  const out: { verb?: string; segment?: string; legacyPath?: string; dispatch?: "method" } = {}
+  const out: {
+    verb?: string
+    segment?: string
+    legacyPath?: string
+    dispatch?: DispatchMarker
+    when?: string
+  } = {}
   if (typeof r.verb === "string") out.verb = r.verb
   if (typeof r.segment === "string") out.segment = r.segment
   if (typeof r.legacyPath === "string") out.legacyPath = r.legacyPath
-  if (r.dispatch === "method") out.dispatch = "method"
+  if (typeof r.when === "string") out.when = r.when
+  // Parse dispatch marker
+  if (r.dispatch === "method") {
+    out.dispatch = "method"
+  } else if (typeof r.dispatch === "object" && r.dispatch !== null) {
+    const d = r.dispatch as Record<string, unknown>
+    if (d.by === "header" && typeof d.name === "string") {
+      out.dispatch = { by: "header", name: d.name }
+    } else if (d.by === "query" && typeof d.name === "string") {
+      out.dispatch = { by: "query", name: d.name }
+    } else if (d.by === "contentType") {
+      out.dispatch = { by: "contentType" }
+    }
+  }
   return out
 }

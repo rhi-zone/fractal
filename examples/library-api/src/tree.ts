@@ -149,6 +149,39 @@ class BooksService {
 // `books: service(...)` child is not a node() call and is skipped.
 // ============================================================================
 
+// ============================================================================
+// API version node — header-dispatch demo
+//
+// `meta.http.dispatch = { by: "header", name: "X-Api-Version" }` makes the
+// leaf children distinguish themselves by the X-Api-Version header value.
+// Child keyed `v1` matches when the header value is exactly `"v1"`.
+// Child keyed `v2` matches when the header value is exactly `"v2"`.
+// Both live at the same path (GET /version); no path segment per child.
+//
+// Both v1 and v2 are readOnly → GET /version. The X-Api-Version header
+// selects which child's handler runs.
+// ============================================================================
+
+const versionNode = node({
+  meta: { http: { dispatch: { by: "header", name: "X-Api-Version" } } },
+  children: {
+    /** API version 1 response. Dispatched when X-Api-Version: v1. */
+    v1: op((_: unknown) => ({ version: "v1", message: "Library API — classic edition" }), {
+      tags: { readOnly: true },
+    }),
+
+    /**
+     * API version 2 response. Dispatched when X-Api-Version: v2.
+     * Uses `when` override to demonstrate key≠value: the child key is `v2Alias`
+     * but the match value is still `"v2"` (the header value to match).
+     */
+    v2Alias: op((_: unknown) => ({ version: "v2", message: "Library API — enhanced edition", features: ["pagination", "filtering"] }), {
+      tags: { readOnly: true },
+      http: { when: "v2" },
+    }),
+  },
+})
+
 export const api = node({
   children: {
     books: service(new BooksService(), {
@@ -183,5 +216,8 @@ export const api = node({
       // Node-level tag: leaves inherit readOnly → GET routes + readOnlyHint annotations
       meta: { tags: { readOnly: true } },
     }),
+
+    // Header-dispatch demo: X-Api-Version header selects the version handler
+    version: versionNode,
   },
 })

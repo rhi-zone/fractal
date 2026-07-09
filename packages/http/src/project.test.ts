@@ -409,3 +409,320 @@ describe("buildRoutes — attribute-dispatch (method)", () => {
     expect(routes.find((r) => r.path === "/items/remove")?.verb).toBe("DELETE")
   })
 })
+
+// ============================================================================
+// 6. Arbitrary-attribute dispatch (header / query / contentType)
+// ============================================================================
+
+describe("buildRoutes — arbitrary-attribute dispatch (non-method)", () => {
+  // ── Header dispatch ────────────────────────────────────────────────────────
+
+  it("header-dispatch: children share parent path; conditions carry header check", () => {
+    const api = node({
+      children: {
+        version: node({
+          meta: { http: { dispatch: { by: "header", name: "X-Api-Version" } } },
+          children: {
+            v1: op((_: unknown) => ({ v: 1 }), { tags: { readOnly: true } }),
+            v2: op((_: unknown) => ({ v: 2 }), { tags: { readOnly: true } }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    // Both children resolve to the same path /version — no per-child segment
+    expect(routes.filter((r) => r.path === "/version")).toHaveLength(2)
+    // Each has a header condition
+    const r1 = routes.find((r) => r.path === "/version" && r.conditions.some((c) => c.kind === "header" && c.value === "v1"))
+    const r2 = routes.find((r) => r.path === "/version" && r.conditions.some((c) => c.kind === "header" && c.value === "v2"))
+    expect(r1).toBeDefined()
+    expect(r2).toBeDefined()
+  })
+
+  it("header-dispatch: makeRouter dispatches by header value", async () => {
+    const api = node({
+      children: {
+        version: node({
+          meta: { http: { dispatch: { by: "header", name: "X-Api-Version" } } },
+          children: {
+            v1: op((_: unknown) => ({ edition: "classic" }), { tags: { readOnly: true } }),
+            v2: op((_: unknown) => ({ edition: "enhanced" }), { tags: { readOnly: true } }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    const router = makeRouter(routes)
+
+    const resV1 = await router(new Request("http://localhost/version", {
+      headers: { "X-Api-Version": "v1" },
+    }))
+    expect(resV1.status).toBe(200)
+    const bodyV1 = await resV1.json() as { edition: string }
+    expect(bodyV1.edition).toBe("classic")
+
+    const resV2 = await router(new Request("http://localhost/version", {
+      headers: { "X-Api-Version": "v2" },
+    }))
+    expect(resV2.status).toBe(200)
+    const bodyV2 = await resV2.json() as { edition: string }
+    expect(bodyV2.edition).toBe("enhanced")
+  })
+
+  it("header-dispatch: no matching header value → 404 (not 405)", async () => {
+    const api = node({
+      children: {
+        version: node({
+          meta: { http: { dispatch: { by: "header", name: "X-Api-Version" } } },
+          children: {
+            v1: op((_: unknown) => ({ v: 1 }), { tags: { readOnly: true } }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    const router = makeRouter(routes)
+
+    // Wrong header value → 404 (attribute miss, not method miss)
+    const res = await router(new Request("http://localhost/version", {
+      headers: { "X-Api-Version": "v99" },
+    }))
+    expect(res.status).toBe(404)
+  })
+
+  // ── `when` override (key ≠ value) ─────────────────────────────────────────
+
+  it("when override: child key≠value; `when` sets the match value", async () => {
+    const api = node({
+      children: {
+        endpoint: node({
+          meta: { http: { dispatch: { by: "header", name: "X-Api-Version" } } },
+          children: {
+            // key is "aliasChild" but matches when header value = "v2"
+            aliasChild: op((_: unknown) => ({ matched: "aliasChild" }), {
+              tags: { readOnly: true },
+              http: { when: "v2" },
+            }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    const router = makeRouter(routes)
+
+    const res = await router(new Request("http://localhost/endpoint", {
+      headers: { "X-Api-Version": "v2" },
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { matched: string }
+    expect(body.matched).toBe("aliasChild")
+
+    // The key "aliasChild" does NOT match
+    const resWrong = await router(new Request("http://localhost/endpoint", {
+      headers: { "X-Api-Version": "aliasChild" },
+    }))
+    expect(resWrong.status).toBe(404)
+  })
+
+  // ── Query dispatch ─────────────────────────────────────────────────────────
+
+  it("query-dispatch: dispatches by query param value", async () => {
+    const api = node({
+      children: {
+        resource: node({
+          meta: { http: { dispatch: { by: "query", name: "mode" } } },
+          children: {
+            fast: op((_: unknown) => ({ mode: "fast" }), { tags: { readOnly: true } }),
+            slow: op((_: unknown) => ({ mode: "slow" }), { tags: { readOnly: true } }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    const router = makeRouter(routes)
+
+    const res = await router(new Request("http://localhost/resource?mode=fast"))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { mode: string }
+    expect(body.mode).toBe("fast")
+
+    const resSlow = await router(new Request("http://localhost/resource?mode=slow"))
+    expect(resSlow.status).toBe(200)
+    const bodySlow = await resSlow.json() as { mode: string }
+    expect(bodySlow.mode).toBe("slow")
+  })
+
+  // ── Collision detection ────────────────────────────────────────────────────
+
+  it("header-dispatch: collision on same value throws at build time", () => {
+    const api = node({
+      children: {
+        endpoint: node({
+          meta: { http: { dispatch: { by: "header", name: "X-Api-Version" } } },
+          children: {
+            a: op((_: unknown) => ({}), { tags: { readOnly: true } }),
+            // both 'a' default key and 'b' with when:"a" match value "a"
+            b: op((_: unknown) => ({}), { tags: { readOnly: true }, http: { when: "a" } }),
+          },
+        }),
+      },
+    })
+    expect(() => buildRoutes(api)).toThrow(/collision/)
+  })
+
+  // ── Method dispatch still works unchanged ──────────────────────────────────
+
+  it("method-dispatch still produces correct verb routes (unchanged behavior)", () => {
+    const api = node({
+      children: {
+        resource: node({
+          meta: { http: { dispatch: "method" } },
+          children: {
+            read: op((_: unknown) => ({}), { tags: { readOnly: true } }),
+            remove: op((_: unknown) => ({}), { tags: { idempotent: true, destructive: true } }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    expect(routes.find((r) => r.path === "/resource" && r.verb === "GET")).toBeDefined()
+    expect(routes.find((r) => r.path === "/resource" && r.verb === "DELETE")).toBeDefined()
+  })
+
+  // ── Multi-attribute nesting (header then method) ──────────────────────────
+  //
+  // A header-dispatch node whose branch children are method-dispatch nodes.
+  // The outer header condition (X-Api-Version) is inherited by all leaves
+  // inside each branch, stacked with the inner method condition.
+  //
+  // Tree structure (all at path /items):
+  //   items (header-dispatch, X-Api-Version)
+  //     v1 (branch, method-dispatch)
+  //       read  (leaf, readOnly → GET) → conditions: [header==v1, method==GET]
+  //       write (leaf, no tags → POST) → conditions: [header==v1, method==POST]
+  //     v2 (branch, method-dispatch)
+  //       read  (leaf, readOnly → GET) → conditions: [header==v2, method==GET]
+
+  it("header-then-method nesting: conditions stack (header + method)", async () => {
+    const api = node({
+      children: {
+        items: node({
+          meta: { http: { dispatch: { by: "header", name: "X-Api-Version" } } },
+          children: {
+            // branch child "v1" — its match value for the header is "v1"
+            v1: node({
+              meta: { http: { dispatch: "method" } },
+              children: {
+                read: op((_: unknown) => ({ version: "v1", method: "GET" }), { tags: { readOnly: true } }),
+                write: op((_: unknown) => ({ version: "v1", method: "POST" })),
+              },
+            }),
+            // branch child "v2" — its match value for the header is "v2"
+            v2: node({
+              meta: { http: { dispatch: "method" } },
+              children: {
+                read: op((_: unknown) => ({ version: "v2", method: "GET" }), { tags: { readOnly: true } }),
+              },
+            }),
+          },
+        }),
+      },
+    })
+    const routes = buildRoutes(api)
+    const router = makeRouter(routes)
+
+    // GET /items + X-Api-Version: v1 → v1 read handler
+    const resV1Get = await router(new Request("http://localhost/items", {
+      method: "GET",
+      headers: { "X-Api-Version": "v1" },
+    }))
+    expect(resV1Get.status).toBe(200)
+    const bV1Get = await resV1Get.json() as { version: string; method: string }
+    expect(bV1Get.version).toBe("v1")
+    expect(bV1Get.method).toBe("GET")
+
+    // POST /items + X-Api-Version: v1 → v1 write handler
+    const resV1Post = await router(new Request("http://localhost/items", {
+      method: "POST",
+      headers: { "X-Api-Version": "v1" },
+    }))
+    expect(resV1Post.status).toBe(200)
+    const bV1Post = await resV1Post.json() as { version: string; method: string }
+    expect(bV1Post.version).toBe("v1")
+    expect(bV1Post.method).toBe("POST")
+
+    // GET /items + X-Api-Version: v2 → v2 read handler
+    const resV2Get = await router(new Request("http://localhost/items", {
+      method: "GET",
+      headers: { "X-Api-Version": "v2" },
+    }))
+    expect(resV2Get.status).toBe(200)
+    const bV2Get = await resV2Get.json() as { version: string; method: string }
+    expect(bV2Get.version).toBe("v2")
+    expect(bV2Get.method).toBe("GET")
+
+    // GET /items + wrong header → 404
+    const resBad = await router(new Request("http://localhost/items", {
+      method: "GET",
+      headers: { "X-Api-Version": "v99" },
+    }))
+    expect(resBad.status).toBe(404)
+  })
+})
+
+// ============================================================================
+// 7. Library-api version node — end-to-end round-trip
+// ============================================================================
+
+describe("library-api version node — header-dispatch round-trip", () => {
+  it("GET /version with X-Api-Version: v1 returns v1 payload", async () => {
+    // Import the library-api api and createFetch
+    const { api } = await import("../../../examples/library-api/src/tree.ts")
+    const { createFetch } = await import("./preset.ts")
+    const fetch = createFetch(api)
+
+    const res = await fetch(new Request("http://localhost/version", {
+      headers: { "X-Api-Version": "v1" },
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { version: string; message: string }
+    expect(body.version).toBe("v1")
+    expect(body.message).toContain("classic")
+  })
+
+  it("GET /version with X-Api-Version: v2 returns v2 payload (when override: key=v2Alias, value=v2)", async () => {
+    const { api } = await import("../../../examples/library-api/src/tree.ts")
+    const { createFetch } = await import("./preset.ts")
+    const fetch = createFetch(api)
+
+    const res = await fetch(new Request("http://localhost/version", {
+      headers: { "X-Api-Version": "v2" },
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { version: string; features: string[] }
+    expect(body.version).toBe("v2")
+    expect(body.features).toContain("pagination")
+  })
+
+  it("GET /version with no X-Api-Version header → 404", async () => {
+    const { api } = await import("../../../examples/library-api/src/tree.ts")
+    const { createFetch } = await import("./preset.ts")
+    const fetch = createFetch(api)
+
+    const res = await fetch(new Request("http://localhost/version"))
+    expect(res.status).toBe(404)
+  })
+
+  it("method-dispatch still produces 405+Allow for wrong method at /books/{bookId}", async () => {
+    const { api } = await import("../../../examples/library-api/src/tree.ts")
+    const { createFetch } = await import("./preset.ts")
+    const fetch = createFetch(api)
+
+    const res = await fetch(new Request("http://localhost/books/book-1", { method: "PATCH" }))
+    expect(res.status).toBe(405)
+    const allow = res.headers.get("Allow") ?? ""
+    expect(allow).toContain("GET")
+    expect(allow).toContain("PUT")
+    expect(allow).toContain("DELETE")
+  })
+})
