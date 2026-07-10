@@ -27,38 +27,69 @@ what the author calls the operation — not a verb set, not a fixed vocabulary.
 
 ---
 
-## Core insight
+## Dispatch
 
-The tree IS the entire router. It is a uniform, nested dispatch structure — not a `{ops, children}`
-node plus a separate flat route table. Dispatch = walking the tree; each internal node dispatches
-its children by *one attribute of the request*.
+Every internal node dispatches its children by **one attribute of the request**
+(path-segment, method, header value, …). Path-segment is the default, not
+privileged.
+
+Dispatch data on the node is a **discriminated union** (DU) tagged by `kind`.
+The projector interprets each variant — this is the **interpreter pattern**
+applied as a degenerate (non-nested) case: the DU is the "AST", the projector
+does case analysis on the `kind` tag and calls the corresponding matcher.
+
+The DU is extensible (augmentable `DispatchKinds` interface). New variants are
+added by batteries; corresponding interpreters (matchers) are plain functions
+provided in a dictionary at the projector call site. See
+[dispatch-extensibility.md](dispatch-extensibility.md).
+
+### No compilation step
+
+The projector dispatches **directly on the tree** at runtime — tree walk is
+O(depth) via keyed child lookup at each node. There is no flattening to a
+flat route table; the tree structure IS the efficient dispatch structure.
+
+Enumeration projections (OpenAPI, CLI help) walk the tree collecting leaves.
 
 ---
 
-## Dispatch is by attribute; path is not special
+## Verb derivation
 
-- Every node dispatches its children by ONE attribute of the request. Path-segment is just the
-  DEFAULT attribute, not a privileged one; method, header, content-type, query are peers.
-- WHICH attribute a node dispatches its children on is a PROJECTION concern (projection meta,
-  default = path-segment). Mark a node to dispatch its children by method → those children
-  co-locate at the node's own path (a REST resource), HTTP picking among them by verb. A
-  header-dispatch is the same mechanism with a different attribute.
-- Multi-verb-same-path = a node whose children are method-dispatched: `read`/`replace`/`remove`
-  share `/books/{id}`, distinguished by verb. It adds nothing to the tree shape — it's just a
-  different dispatch attribute at that node.
+The verb helper **bundle** (e.g. `methods({ read, replace, remove })`) applies
+the tag-to-verb mapping at tree-build time. The mapping itself:
 
----
+| tags | verb |
+| --- | --- |
+| `readOnly` | GET |
+| `idempotent ∧ ¬readOnly ∧ ¬destructive` | PUT |
+| `idempotent ∧ destructive` | DELETE |
+| *(else)* | POST |
 
-## Verbs are never in the tree
+Verb is derived from tags at projection time — never stored as a separate key.
 
-- Verbs (`GET`/`POST`/…) never appear in the tree — they're uppercase HTTP vocabulary, meaningless
-  to non-HTTP projections. The tree's keys are agnostic names.
-- A handler's verb is DERIVED from its tags at BUILD time, used only by HTTP. Lattice:
-  `readOnly→GET`, `idempotent∧¬readOnly∧¬destructive→PUT`, `idempotent∧destructive→DELETE`,
-  else `POST`. Overrideable via `meta.http.verb`.
-- Dispatch is COMPILED: at build, tags→verb resolved and the tree compiled into a lookup (path trie
-  + a small method map at terminals, or method folded in as a final level). Runtime dispatch is a
-  precomputed lookup — no tags touched, method as fast as path (tiny fixed keyspace).
+## HTTP metadata — interpreter pattern, not named keys
+
+`meta.http` is NOT a fixed record of named keys (`verb`, `segment`, `when`).
+It is a **DU** (or collection of DU values) interpreted by the projector.
+
+Each piece of HTTP-specific data on a node is a tagged variant. The projector
+has an interpreter (function) for each variant kind. Adding a new concern =
+adding a new DU variant (augment the interface) + adding an interpreter
+(dictionary entry). This is the same extensibility mechanism as dispatch kinds.
+
+Specific keys like `verb`, `segment`, `when` are retired — they were
+protocol-specific keys that should instead be DU variants with interpreters.
+
+### Escape hatches
+
+A DU variant MAY contain a closure (arbitrary function) for truly one-off
+cases. This is allowed but discouraged — closures are opaque (can't be
+inspected by enumeration projections). If an escape hatch recurs, it should
+graduate to a proper DU variant.
+
+## Meta composition
+
+Composition = **deep-merge of `meta`** (child wins on conflict).
 
 ---
 
@@ -72,30 +103,6 @@ its children by *one attribute of the request*.
 - `meta.tags`: open, three-valued (`true`/`false`/`undefined`=unknown) behavioral markers —
   `readOnly`, `idempotent`, `destructive`, `openWorld`, `streaming`, + custom. Each projection
   reads them (HTTP→verb, MCP→hints, CLI→confirm, gRPC→idempotency).
-
----
-
-## Verb helpers are verb+implied-tags BUNDLES
-
-- `http.get`/`put`/`post`/`patch`/`delete` are NOT fn-wrappers and NOT bare verb-pins. Each is a
-  metadata VALUE bundling the verb pin AND the behavioral tags that verb implies: `get`→`{readOnly}`,
-  `put`→`{idempotent}`, `delete`→`{destructive, idempotent}`, `patch`/`post`→`{}` (plain mutation).
-  Attached to a handler declaratively, next to the bare fn — the fn is never wrapped.
-- Rationale: a bare verb-pin would be useless (equal to writing `verb:'patch'` yourself). Bundling
-  the implied tags means picking a verb still lights up MCP hints / CLI confirm / gRPC idempotency
-  — the reverse (verb→implied-tags) direction, as a convenience. Tags remain the source of truth;
-  the helper sets both at once.
-
----
-
-## Meta composition = deep-merge-with-precedence, never spread
-
-- `meta` has nested sub-bags (`tags`, `http`, …). Composing metas (a verb-bundle + explicit tags +
-  overrides; or inherited node tags + op tags) is a DEEP merge per sub-bag (union `tags`, union
-  `http`), NOT object spread — spread shallow-clobbers nested sub-bags and silently drops tags.
-- Precedence: later/explicit wins; `undefined` defers. This is the SAME three-valued closest-wins
-  primitive as node tag-inheritance — one merge function reused for both inheritance-down-the-tree
-  and helper-bundle composition.
 
 ---
 
