@@ -89,71 +89,32 @@ real `dist` build.
 
 ## Design backlog (2026-07-10 session audit)
 
-> Ordered roughly easiest-to-hardest to decide. Each must be earned — no
-> rubber-stamping what's built.
+Ordered roughly easiest → hardest to decide:
 
-### Override authoring form — do `meta.http.*` keys earn their keep?
-
-The code has `meta.http.verb`, `meta.http.segment`, `meta.http.legacyPath`,
-`meta.http.when`, `meta.http.dispatch`. Open questions for each:
-
-- Why `verb` not `method`? (HTTP spec says "method.")
-- Is one-segment granularity (`segment`) always sufficient, or does
-  `legacyPath` existing as DEBT suggest it isn't?
-- Is `when` a peer of the others or structurally part of `dispatch`?
-- Are flat keys on `meta.http` the right structure vs sub-grouping?
-
-Each key that doesn't earn its keep goes back to the drawing board.
-
-### `readOnly` vs `safe` tag naming
-
-Code uses `readOnly`, an artifacts doc uses `safe`. User said "safe sucks."
-Needs a final call. See `converged-model.md` `[OPEN]`.
-
-### `openWorld` tag — provisional, weakly defined
-
-Exists in code but semantics are unclear. Is it needed? What does it mean?
-See `converged-model.md` `[OPEN]`.
-
-### Codegen hardening
-
-Technical debt, not design questions (unless design input is needed):
-- Unions/generics/exotic types punt to `{type:"object"}`
-- JSDoc: leading comment only, no `@param`/`@returns`
-- `meta.mcp.name`/`meta.mcp.segment` overrides not mirrored in codegen
-
-### Versioning patterns on top of dispatch
-
-The dispatch mechanism (dispatch kinds, matchers, dictionary) is settled.
-The patterns built on it are not: gone/absent/redirect lifecycle (410s,
-404s, 301/308 redirects), version introduction, version removal. Are these
-just handlers at version boundaries, or is there more structure?
-
-### Decorator/metadata layer
-
-User said "not against it." Undesigned. Worth designing now or defer?
-
-### Per-param HTTP location
-
-Where does query/path/body/header distinction live? Input is currently flat
-and provenance-blind. Any solution must not violate guardrail #3 (no HTTP
-shape leak into the handler). See `converged-model.md` `[OPEN]`.
-
-### Node disambiguation
-
-With `fallback` separated from `children`, static children always win (keyed
-lookup); fallback fires only when no child matches. Remaining question: is
-there ever more than one fallback?
-
-### One tree for HTTP + CLI
-
-Can one agnostic tree auto-derive both, given paths/headers vs
-subcommands/env-vars have no 1:1 mapping? Unreconciled.
-See `invariants.md` open question #2.
-
-### "Is it too general?"
-
-Never closed. See `invariants.md` open question #7.
+1. ~~**Override authoring form**~~ — SETTLED (2026-07-10): `meta.http` is a DU
+   interpreted by the projector (interpreter pattern), not named keys. `verb`,
+   `segment`, `when` are retired as separate keys. See router-model.md
+   § HTTP metadata.
+2. **`readOnly` vs `safe`** — tag naming. `safe` aligns with HTTP semantics
+   (RFC 9110 §9.2.1); `readOnly` is more intuitive but narrower.
+3. **`openWorld` tag** — is it a tag, a meta field, or something else? What
+   does it actually control?
+4. **Codegen hardening** — the current spine infers schemas from TS types at
+   build time; how robust is this, and what are the edges?
+5. **Versioning patterns** — how do versioning strategies (date-based, semver,
+   header) compose with the dispatch model? (dispatch-extensibility.md has
+   the date-versioning example; are there others?)
+6. **Decorator / metadata layer** — is there a need for a decorator-like
+   pattern for cross-cutting metadata (auth, rate-limit, caching)?
+7. **Per-param HTTP location** — where does each handler parameter come from
+   (path, query, body, header)? Currently implicit; should it be explicit?
+8. **Node disambiguation** — with `fallback` separated from `children`, static
+   children always win (keyed lookup); fallback fires only when no child
+   matches. Remaining question: is there ever more than one fallback?
+9. **One tree for HTTP + CLI** — can one tree drive both projections, or do
+   they need separate trees? What are the seams?
+10. **"Is it too general?"** — the perennial question. When does generality
+    become a liability?
 
 ---
 
@@ -176,6 +137,13 @@ Never closed. See `invariants.md` open question #7.
 - `ParamNode` type and `param()` constructor — replaced by `fallback` field on
   `Node`. `fallback: { name, subtree }` separates wildcard capture from keyed
   dispatch. See `docs/design/router-model.md` § Node Shape. (2026-07-10)
+- `buildRoutes` / `compile` / flat route table in `packages/http/src/project.ts`
+  — the projector dispatches directly on the tree at runtime (tree walk,
+  O(depth)). No flattening step. See `docs/design/router-model.md`
+  § No compilation step. (2026-07-10)
+- `meta.http.verb`, `meta.http.segment`, `meta.http.when` as named keys —
+  replaced by DU variants in `meta.http` with interpreter functions in the
+  projector. See `docs/design/router-model.md` § HTTP metadata. (2026-07-10)
 
 ---
 
