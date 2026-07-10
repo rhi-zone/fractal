@@ -62,8 +62,9 @@ its children by *one attribute of the request*.
 ## Tags (unchanged from converged-model, restated)
 
 > **CHANGED (2026-07-10):** Tag inheritance (closest-wins tree-walk / `effectiveTags`) is removed.
-> Subtree-wide tags are a `(tree) => tree` transform — composition, not inheritance. A node's
-> tags are exactly what's on the node; they don't depend on ancestors.
+> `(tree) => tree` transforms are the general modification primitive — tags, dispatch defaults,
+> metadata processing are all transforms. A node's tags are exactly what's on the node; they
+> don't depend on ancestors. See [`dispatch-extensibility.md`](dispatch-extensibility.md).
 
 - `meta.tags`: open, three-valued (`true`/`false`/`undefined`=unknown) behavioral markers —
   `readOnly`, `idempotent`, `destructive`, `openWorld`, `streaming`, + custom. Each projection

@@ -69,6 +69,33 @@ Per-node parameters (which header, which query param) are in the dispatch data o
 Per-kind defaults (e.g., "every date-dispatch node reads the same header") are tree transforms
 — `(tree) => tree` composition, not matcher config.
 
+### Tree transforms are the general modification primitive
+
+`(tree) => tree` is the general mechanism for modifying trees — not specific to any one
+concern. Tags, dispatch defaults, metadata processing, and any future structural modification
+are all tree transforms. Tag inheritance (closest-wins `effectiveTags`) is replaced by this
+primitive: applying tags to a subtree is just one transform among many.
+
+Core provides a visitor/walker so individual transforms don't each reinvent recursion over
+`children`:
+
+```ts
+// Pre-order: fn sees the node before its children are walked
+function mapNodes(tree: Node, fn: (node: Node) => Node): Node {
+  const mapped = fn(tree)
+  if (!mapped.children) return mapped
+  return {
+    ...mapped,
+    children: Object.fromEntries(
+      Object.entries(mapped.children).map(([k, v]) => [k, mapNodes(v, fn)])
+    ),
+  }
+}
+```
+
+Pre-order (parent before children) and post-order (children first) variants; both are trivial
+given the shape (`{ handler?, children?, meta }`).
+
 ### Compiled and runtime resolution both supported
 
 Dispatch supports both compiled and runtime resolution — more flexible than compiled-only.

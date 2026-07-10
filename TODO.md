@@ -98,10 +98,11 @@ real `dist` build.
 ## Pending removals (apply when code is next touched)
 
 - `effectiveTags` / tag inheritance in `packages/core/src/tags.ts`: remove the
-  closest-wins tree-walk. A node's tags are what's on the node — subtree-wide
-  tags are a `(tree) => tree` transform, not inheritance. Tags on a node should
-  not depend on ancestors (breaks composability: moving a subtree silently
-  changes its behavior).
+  closest-wins tree-walk. A node's tags are what's on the node; they don't
+  depend on ancestors (breaks composability: moving a subtree changes behavior
+  silently). Replace with `(tree) => tree` transform helpers — `mapNodes` visitor
+  for pre-order and post-order walks. Tree transforms are the general modification
+  primitive (tags, dispatch defaults, metadata processing).
 
 ---
 
