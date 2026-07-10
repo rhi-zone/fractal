@@ -159,6 +159,64 @@ Ordered roughly easiest → hardest to decide:
   6. NEW `docs/projects/fractal.md`
   7. `~/git/rhizone/profile/profile/README.md`
 
+---
+
+## Architecture gaps (2026-07-11 session)
+
+The gap between the abstract tree and a complete API projection is larger than
+currently addressed. The tree says WHAT exists and HOW it's organized; the
+projection fills in HOW TO TALK TO IT in a specific protocol. Key gaps:
+
+### Input extraction
+
+How to get `T` from a protocol request. Currently hardcoded in the HTTP
+projector: merge path params + query params + JSON body. Should be pluggable
+with reasonable defaults. Reasonable defaults first, decomposition into
+primitives later — don't over-engineer upfront.
+
+All extraction strategies are extensions (same mechanism as dispatch kinds —
+shipped variants are not architecturally different from user-added ones).
+The need for specific default strategies should be proven, not assumed.
+
+### Output formatting
+
+How to turn `U` into a protocol response. Currently hardcoded: JSON + 200 OK.
+Same approach as input: pluggable, reasonable defaults, decompose later.
+
+### Protocol behavior
+
+Protocol obligations that aren't business logic:
+- HEAD (derive from GET response), OPTIONS (allowed methods), 405 — currently
+  `autoMethodLayer`
+- CORS — separate concern from the above (preflight, Access-Control-* headers)
+- Content negotiation, error status mapping, etc.
+
+### Middleware / cross-cutting
+
+Auth, rate limiting, logging, caching. Not in the tree. Design backlog #6.
+
+### SDK generation / Stainless NIH
+
+Generating typed client SDKs directly from the tree (no OpenAPI intermediate).
+The tree already has the structure and types that Stainless infers from OpenAPI.
+`packages/client` proxy is a rough version of this. A natural projection.
+
+### Projection-specific metadata is co-located, not external
+
+Metadata that governs a node lives on the node (`meta.http.*`). Tree transforms
+targeting specific nodes in a typesafe manner is impractical (fragile path
+strings or heavy lens machinery). Each projection reads what it needs from meta;
+other projections ignore irrelevant namespaces.
+
+### Dispatch builtins are extensions, not a separate category
+
+Method dispatch, header dispatch, etc. are DU variants + matchers shipped with
+the package — same mechanism as user-added kinds. The architecture is uniform.
+Note: the specific builtins shipped (method, header) were assumed from HTTP
+convention, not derived from proven need. This may or may not be problematic.
+
+---
+
 ## Deferred (build when needed)
 
 ### WebSocket / MCP / CLI surface kits
