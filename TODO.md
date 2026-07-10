@@ -87,6 +87,76 @@ real `dist` build.
 
 ---
 
+## Design backlog (2026-07-10 session audit)
+
+> Ordered roughly easiest-to-hardest to decide. Each must be earned — no
+> rubber-stamping what's built.
+
+### Override authoring form — do `meta.http.*` keys earn their keep?
+
+The code has `meta.http.verb`, `meta.http.segment`, `meta.http.legacyPath`,
+`meta.http.when`, `meta.http.dispatch`. Open questions for each:
+
+- Why `verb` not `method`? (HTTP spec says "method.")
+- Is one-segment granularity (`segment`) always sufficient, or does
+  `legacyPath` existing as DEBT suggest it isn't?
+- Is `when` a peer of the others or structurally part of `dispatch`?
+- Are flat keys on `meta.http` the right structure vs sub-grouping?
+
+Each key that doesn't earn its keep goes back to the drawing board.
+
+### `readOnly` vs `safe` tag naming
+
+Code uses `readOnly`, an artifacts doc uses `safe`. User said "safe sucks."
+Needs a final call. See `converged-model.md` `[OPEN]`.
+
+### `openWorld` tag — provisional, weakly defined
+
+Exists in code but semantics are unclear. Is it needed? What does it mean?
+See `converged-model.md` `[OPEN]`.
+
+### Codegen hardening
+
+Technical debt, not design questions (unless design input is needed):
+- Unions/generics/exotic types punt to `{type:"object"}`
+- JSDoc: leading comment only, no `@param`/`@returns`
+- `meta.mcp.name`/`meta.mcp.segment` overrides not mirrored in codegen
+
+### Versioning patterns on top of dispatch
+
+The dispatch mechanism (dispatch kinds, matchers, dictionary) is settled.
+The patterns built on it are not: gone/absent/redirect lifecycle (410s,
+404s, 301/308 redirects), version introduction, version removal. Are these
+just handlers at version boundaries, or is there more structure?
+
+### Decorator/metadata layer
+
+User said "not against it." Undesigned. Worth designing now or defer?
+
+### Per-param HTTP location
+
+Where does query/path/body/header distinction live? Input is currently flat
+and provenance-blind. Any solution must not violate guardrail #3 (no HTTP
+shape leak into the handler). See `converged-model.md` `[OPEN]`.
+
+### Node disambiguation
+
+Segment vs operation vs param within one node; where the input→options
+transform lives. Partially addressed by router-model (`handler` vs
+`children`), but details unresolved. See `invariants.md` open question #3.
+
+### One tree for HTTP + CLI
+
+Can one agnostic tree auto-derive both, given paths/headers vs
+subcommands/env-vars have no 1:1 mapping? Unreconciled.
+See `invariants.md` open question #2.
+
+### "Is it too general?"
+
+Never closed. See `invariants.md` open question #7.
+
+---
+
 ## Pending renames (apply when code is next touched)
 
 - `DispatchMarker` in `packages/http/src/project.ts` currently uses `by` as the
