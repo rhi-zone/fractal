@@ -32,10 +32,12 @@ should be settled FROM the author's definition rather than guessed:
 - Whether **one agnostic tree can auto-derive both HTTP and CLI**, given HTTP
   paths/headers and CLI subcommands/env vars have no 1:1 mapping — open and
   unreconciled.
-- **Node disambiguation**: segment vs operation vs param within one node, and
-  where the input→options transform lives.
-- **Authoring form for bespoke verb/path overrides**: inline on the node vs a
-  separate binding layer — undecided.
+- ~~**Node disambiguation**~~: partly addressed — `fallback` field separates
+  wildcard capture from keyed dispatch, static children always win. Remaining
+  question: is there ever more than one fallback?
+- ~~**Authoring form for bespoke verb/path overrides**~~: settled — `meta.http`
+  is a DU interpreted by the projector (interpreter pattern). No named keys.
+  See `docs/design/router-model.md` § HTTP metadata.
 - **Creation / non-record output encoding** (author leans toward an explicit
   `POST /…/new`, not settled).
 - The unresolved **"is it too general?"** tension — never closed.
@@ -56,6 +58,12 @@ batteries as plain matcher functions, declaration merging next to the tree,
 projector takes a dictionary + tree. See `docs/design/dispatch-extensibility.md`
 for the full model and pseudocode. Implementation: replace the closed
 `DispatchMarker` union and hardcoded if/else dispatch in `packages/http/src/project.ts`.
+
+Note: dispatchers/matchers are interpreters — degenerate (non-nested) case
+of the interpreter pattern. The DU is the "AST", the projector does case
+analysis. This reframing means ALL projection concerns (not just dispatch)
+should follow the same DU + interpreter pattern. See `router-model.md`
+§ HTTP metadata.
 
 ### Migrate the fenced packages to the function-core model
 
