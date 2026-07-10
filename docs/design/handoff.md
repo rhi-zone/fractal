@@ -1,3 +1,10 @@
+> **STALE (2026-07-10):** This handoff was written for the original spine slice (`f35975f`).
+> The D-tree combinators (`path/param/group/methods/route`), Schema validators, and `toFetch`
+> described here have been retired and replaced. Current authoritative docs:
+> [`invariants.md`](invariants.md) (settled model), [`converged-model.md`](converged-model.md)
+> (operation/projection convergence), [`router-model.md`](router-model.md) (current node shape
+> + dispatch), [`dispatch-extensibility.md`](dispatch-extensibility.md) (extensible dispatch).
+
 # Next-session handoff
 
 ## Read order

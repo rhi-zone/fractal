@@ -86,6 +86,12 @@
 
 ---
 
+> **STALE (2026-07-10):** The AS-BUILT section below describes the state at the time of the
+> converged-model session. The node shape (`{ops, children, meta}` / `Op<I,O>` / `ParamNode`)
+> and dispatch model have since been superseded by [`router-model.md`](router-model.md)
+> (`{handler?, children?, meta}`, attribute-dispatch). The tags/metadata principles remain
+> valid; the concrete code descriptions do not reflect current state.
+
 ## AS-BUILT (implemented this session)
 
 **[BUILT]** Workspaces (5 active): `@rhi-zone/fractal-core`, `-http`, `-mcp`,

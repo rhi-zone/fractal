@@ -155,6 +155,11 @@ user's own words; the quotes are load-bearing and preserved verbatim.
   > "how the fuck is methods() not a fucking HTTP construct"
   > "where the FUCK did methods({}) go"
 
+  > **STALE (2026-07-10):** `methods({})` as a distinct combinator was replaced by
+  > `meta.http.dispatch = "method"` on a node — see [`router-model.md`](router-model.md).
+  > The intent (HTTP method-dispatch must exist; bespoke verb/path = explicit overrides)
+  > remains valid; the mechanism changed.
+
 - **API-first; clean interfaces; the HTTP router is both dogfood for the generic
   core AND a wanted product with SOTA DX + SOTA perf.**
   > "the interface(s) themselves should be clean."
