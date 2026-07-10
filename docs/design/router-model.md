@@ -5,6 +5,10 @@
 > `packages/http` `buildRoutes`. Tags/metadata/projection principles in `converged-model.md`
 > still hold — only the node shape and dispatch change.
 
+> **Extended:** Dispatch extensibility model in [`dispatch-extensibility.md`](dispatch-extensibility.md)
+> settles how dispatch kinds are added and wired (augmentable interface, dictionary of matchers,
+> declaration merging next to the tree).
+
 ---
 
 ## Core insight
@@ -57,10 +61,13 @@ its children by *one attribute of the request*.
 
 ## Tags (unchanged from converged-model, restated)
 
+> **CHANGED (2026-07-10):** Tag inheritance (closest-wins tree-walk / `effectiveTags`) is removed.
+> Subtree-wide tags are a `(tree) => tree` transform — composition, not inheritance. A node's
+> tags are exactly what's on the node; they don't depend on ancestors.
+
 - `meta.tags`: open, three-valued (`true`/`false`/`undefined`=unknown) behavioral markers —
-  `readOnly`, `idempotent`, `destructive`, `openWorld`, `streaming`, + custom. Node-level tags
-  inherit down (closest-wins, three-valued). Each projection reads them (HTTP→verb, MCP→hints,
-  CLI→confirm, gRPC→idempotency).
+  `readOnly`, `idempotent`, `destructive`, `openWorld`, `streaming`, + custom. Each projection
+  reads them (HTTP→verb, MCP→hints, CLI→confirm, gRPC→idempotency).
 
 ---
 

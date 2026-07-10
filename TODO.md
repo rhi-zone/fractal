@@ -49,6 +49,14 @@ source of truth is the inferred TS types + JSDoc (not an on-tree schema). The
 on-tree schemas should NOT be mistaken for the model — they're a placeholder until
 codegen-from-types exists. See `docs/design/handoff.md` §"PROVISIONAL / to replace".
 
+### Dispatch extensibility model is settled in `docs/design/dispatch-extensibility.md`
+
+The extensible dispatch model is settled: augmentable `DispatchKinds` interface,
+batteries as plain matcher functions, declaration merging next to the tree,
+projector takes a dictionary + tree. See `docs/design/dispatch-extensibility.md`
+for the full model and pseudocode. Implementation: replace the closed
+`DispatchMarker` union and hardcoded if/else dispatch in `packages/http/src/project.ts`.
+
 ### Migrate the fenced packages to the function-core model
 
 The function-core rewrite (`docs/design/function-core-and-projection.md`) landed
@@ -86,6 +94,14 @@ real `dist` build.
   `{ by: "contentType" }`). Rename `by` → `kind` to match the settled convention
   (tagged-union discriminants are `kind`). Do NOT rename now — record here per
   the convention.
+
+## Pending removals (apply when code is next touched)
+
+- `effectiveTags` / tag inheritance in `packages/core/src/tags.ts`: remove the
+  closest-wins tree-walk. A node's tags are what's on the node — subtree-wide
+  tags are a `(tree) => tree` transform, not inheritance. Tags on a node should
+  not depend on ancestors (breaks composability: moving a subtree silently
+  changes its behavior).
 
 ---
 
