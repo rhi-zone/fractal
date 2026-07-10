@@ -141,9 +141,9 @@ shape leak into the handler). See `converged-model.md` `[OPEN]`.
 
 ### Node disambiguation
 
-Segment vs operation vs param within one node; where the input→options
-transform lives. Partially addressed by router-model (`handler` vs
-`children`), but details unresolved. See `invariants.md` open question #3.
+With `fallback` separated from `children`, static children always win (keyed
+lookup); fallback fires only when no child matches. Remaining question: is
+there ever more than one fallback?
 
 ### One tree for HTTP + CLI
 
@@ -173,6 +173,9 @@ Never closed. See `invariants.md` open question #7.
   silently). Replace with `(tree) => tree` transform helpers — `mapNodes` visitor
   for pre-order and post-order walks. Tree transforms are the general modification
   primitive (tags, dispatch defaults, metadata processing).
+- `ParamNode` type and `param()` constructor — replaced by `fallback` field on
+  `Node`. `fallback: { name, subtree }` separates wildcard capture from keyed
+  dispatch. See `docs/design/router-model.md` § Node Shape. (2026-07-10)
 
 ---
 

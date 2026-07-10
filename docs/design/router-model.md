@@ -11,24 +11,27 @@
 
 ---
 
+## Node Shape
+
+A tree node is `{ handler?, children?, fallback?, meta }`.
+
+- **Leaf**: a node with a `handler` and no `children`.
+- **Branch**: a node with `children` (a `Record<string, Node>`) and no `handler`.
+- **Fallback**: `{ name: string, subtree: Node }` — optional on any node. When
+  keyed dispatch finds no matching child, the fallback consumes the value, binds
+  it as a named parameter, and continues into `subtree`. Replaces `ParamNode`.
+
+There is no `ops` map. Each operation is a leaf node; children are keyed by
+agnostic lowercase names (`list`, `read`, `replace`, `remove`, …). The name is
+what the author calls the operation — not a verb set, not a fixed vocabulary.
+
+---
+
 ## Core insight
 
 The tree IS the entire router. It is a uniform, nested dispatch structure — not a `{ops, children}`
 node plus a separate flat route table. Dispatch = walking the tree; each internal node dispatches
 its children by *one attribute of the request*.
-
----
-
-## Node
-
-- A node is `{ handler?, children?, meta }`. It may be callable (carries a bare handler fn
-  `T => U`) and/or a branch (has children). A leaf = a node with a handler and no children.
-- There is NO `ops` map. The previous `ops` was a mistake: it put callables on the path-segment
-  axis (op-key = segment), colliding with `children` and unable to co-locate. Callables are just
-  nodes.
-- `children` is `Record<string, Node>`, keyed by an AGNOSTIC name (lowercase). The name is
-  identity — a path segment for segment-dispatch; for method-dispatch HTTP ignores the name and
-  uses the derived verb; CLI/MCP use the name as an identity. Names are the ONLY keyed namespace.
 
 ---
 
