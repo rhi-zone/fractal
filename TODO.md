@@ -69,33 +69,34 @@ Reframed: the DU + matcher model is one implementation of the `match`
 combinator in the routing expression model. See
 `docs/design/routing-expression-model.md`.
 
-### Migrate the fenced packages to the function-core model
+### Migrate the fenced packages to the function-core model — STALE, re-verified 2026-07-11
 
 The function-core rewrite (`docs/design/function-core-and-projection.md`) landed
 as a vertical slice: `packages/core` + `packages/http` are rewritten to the new
 model (function category + Result + Kleisli/applicative combinators; the
 protocol-neutral D-tree `path`/`param`/`group`/`methods`/`route` + `app`; HTTP
-dispatch + `Result`→`Response` encoding), proven by `examples/spine-demo`.
+dispatch + `Result`→`Response` encoding), proven by `examples/library-api` (the
+`examples/spine-demo` name in earlier notes does not exist on disk — the actual
+example directory is `examples/library-api`; `examples/todo-api` and
+`examples/dogfood` also do not exist on disk).
 
-The packages below import the RETIRED `Handler<R>` / `req.ctx` / `.meta` model and
-were **fenced out of the active workspace** (removed from root `package.json`
-`workspaces`; not deleted) so the new slice builds green. They might need migrating
-to the function-core model (or retiring) before being re-added:
+Root `package.json` `workspaces` (verified 2026-07-11) is now:
+`packages/core`, `packages/http`, `packages/mcp`, `packages/codegen`,
+`packages/openapi`, `packages/cli`, `packages/client`, `examples/library-api`.
+**Every package in `packages/` is in the workspace — none are fenced out
+anymore.** `packages/openapi` and `packages/client` were previously fenced but
+are back in; `packages/mcp` and `packages/cli` are new packages not mentioned
+in the original fencing note at all. `examples/library-api` imports
+`@rhi-zone/fractal-mcp` and `@rhi-zone/fractal-codegen` directly, so at least
+those two are active, not just present.
 
-- `packages/openapi` — OpenAPI projection from `.meta`. Would become an OUTPUT
-  projection from inferred types (compiler-API walk), not a `.meta` reader.
-- `packages/codegen` — typed client + drift guard from `.meta`. Would migrate to
-  the types→client / types→OpenAPI build-time projection; the drift guard is
-  likely retired (no second source of truth once types are the only truth).
-- `packages/client` — typed HTTP client factory. Would re-mirror the new handler
-  signature.
-- `examples/todo-api` — re-author on the D-tree.
-- `examples/dogfood` — re-author on the D-tree.
-
-When migrating, each package's `package.json` `exports`/`main` and `tsconfig`
-would also need re-pointing to match the slice's convention (currently `exports` →
-`src` directly + `tsconfig` `paths` to sibling `src`, no build step) or restoring a
-real `dist` build.
+Open question this leaves (not re-verified here): whether `openapi` and
+`client` have actually been migrated to the function-core model (the root
+`package.json` `comment` field claims `codegen` was migrated but says nothing
+about `openapi`/`client`), or whether they're back in the workspace un-migrated
+and something else is keeping the build green. Check each package's source
+against the `Handler<R>`/`req.ctx`/`.meta` legacy shape before assuming it's
+current.
 
 ---
 
@@ -156,6 +157,20 @@ Ordered roughly easiest → hardest to decide:
 - `meta.http.verb`, `meta.http.segment`, `meta.http.when` as named keys —
   replaced by DU variants in `meta.http` with interpreter functions in the
   projector. See `docs/design/router-model.md` § HTTP metadata. (2026-07-10)
+- `dispatch()` in `packages/core/src/node.ts` (2026-07-11 finding): a
+  path-segment-only tree-walking dispatcher (`dispatch(root, segments, input)`)
+  that resolves a leaf handler by walking `children`/`ParamNode` and merging
+  slug values into the handler input. It is exercised only by its own test
+  (`packages/core/src/node.test.ts`) — grepped across `packages/` and
+  `examples/`, no production code (`http`, `cli`, `mcp`, `openapi`, `client`)
+  calls it; `cli.ts` references the `Node`/`ParamNode` *types* from the same
+  file but implements its own resolution rather than calling `dispatch()`.
+  It also has no concept of HTTP method or header dispatch — it only walks
+  path segments to a terminal leaf. Needs a decision: retire it as dead code,
+  or decide its relationship to the HTTP projector's own dispatch (see
+  Architecture gaps § Two divergent dispatch mechanisms below) — e.g. as the
+  protocol-neutral base that HTTP's tree walk should delegate to instead of
+  duplicating.
 
 ---
 
@@ -239,6 +254,20 @@ convention, not derived from proven need. This may or may not be problematic.
 Reframed by routing expression model: "which builtins earn their spot" falls
 out of the expression language design, not from importing HTTP categories.
 See `docs/design/routing-expression-model.md`.
+
+### Two divergent dispatch mechanisms (2026-07-11 finding)
+
+`packages/core/src/node.ts` has its own `dispatch()` — a protocol-neutral,
+path-segment-only tree walk (no method/header awareness) — while
+`packages/http/src/project.ts` has `buildRoutes`/`makeRouter`, which is the one
+actually wired into the HTTP projection and already flagged above for removal
+in favor of a direct-tree-walk-at-runtime projector (per
+`docs/design/router-model.md` § No compilation step). Neither currently calls
+the other. Core's `dispatch()` looks like it could be the protocol-neutral
+primitive that a rewritten HTTP dispatch delegates into (adding method/header
+matching on top of the path walk), but that relationship is not decided
+anywhere in the design docs — see the `dispatch()` entry under Pending
+removals for the concrete finding.
 
 ---
 
