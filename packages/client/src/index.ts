@@ -5,30 +5,34 @@
 // createClient(tree, opts?) walks the Node tree and returns a nested proxy
 // object that mirrors the tree structure. Each leaf node (node with handler)
 // becomes a callable that fires an HTTP request to the matching server route.
-// Method + path come from buildRoutes so they EXACTLY match what the server's
-// makeRouter expects.
 //
-// In the new node model, leaf nodes (nodes with `handler`) live in `children`
-// alongside branch nodes. Correlation between tree walk and route table uses
-// handler function identity (same as before — buildRoutes stores the handler
-// directly in Route.handler).
+// The client is an ENUMERATING projection (like OpenAPI/CLI-help), not a
+// dispatching one (see docs/design/router-model.md — "Projections"): it walks
+// the WHOLE tree once at construction time to build the proxy, computing each
+// leaf's verb + concrete path (with fallback slug values substituted directly
+// as the proxy is navigated, rather than via a template filled later). It
+// mirrors `verbFromTags`/segment-inference from packages/http/src/project.ts
+// (imported directly for verb derivation; segment/dispatch-marker resolution
+// is duplicated locally — the same self-contained-walk pattern used by
+// packages/openapi, to avoid coupling this package to http's dispatch
+// internals) so the client's paths exactly match the server's tree-walk router.
 //
-// ParamNode convention: a ParamNode becomes a function taking the slug value,
-// returning the sub-client for that node. Example:
-//   client.books.byId("book-1").details()
+// A `fallback` (wildcard-capture) node becomes a function keyed by its
+// `fallback.name`, taking the slug value and returning the sub-client for the
+// bound subtree:
+//   client.books.bookId("book-1").read()
 //
 // TODO(client): typed client via codegen from source — the current shape uses
 // unknown/generics everywhere. A typed surface requires codegen'd input/output
 // types per leaf, which is a future milestone.
 //
 // See:
-//   packages/http/src/project.ts — buildRoutes, Route, verbFromTags
-//   packages/core/src/node.ts    — Node, ParamNode, isParamNode, isLeaf
+//   packages/http/src/project.ts — verbFromTags, meta.http DU (dispatch/directives)
+//   packages/core/src/node.ts    — Node, fallback, isLeaf
 
-import { isParamNode, isLeaf } from "@rhi-zone/fractal-core/node"
-import type { Handler, Node } from "@rhi-zone/fractal-core/node"
-import { buildRoutes } from "@rhi-zone/fractal-http/project"
-import type { Route } from "@rhi-zone/fractal-http/project"
+import { isLeaf } from "@rhi-zone/fractal-core/node"
+import type { Meta, Node } from "@rhi-zone/fractal-core/node"
+import { verbFromTags } from "@rhi-zone/fractal-http/project"
 import { ClientError } from "./client-error.ts"
 
 export { ClientError } from "./client-error.ts"
@@ -52,32 +56,111 @@ export type ClientOptions = {
 export type AnyClient = Record<string, any>
 
 // ============================================================================
-// Internal: fill path template with accumulated slug values
+// Internal: meta.http interpreter (segment / dispatch-marker / legacyPath)
+//
+// verbFromTags is imported directly (public API of packages/http); segment and
+// dispatch-marker resolution are duplicated locally, following the same
+// self-contained-walk pattern packages/openapi uses, to avoid depending on
+// http's private dispatch internals.
 // ============================================================================
 
-/**
- * Replace `{param}` segments in a route path with slug values collected
- * during tree traversal. Unrecognised placeholders are left as-is.
- */
-function fillPath(path: string, slugs: Record<string, string>): string {
-  return path.replace(/\{([^}]+)\}/g, (_, name: string) => slugs[name] ?? `{${name}}`)
+type DispatchKind = "method" | "attr"
+
+type ResolvedHttpMeta = {
+  readonly segment?: string
+  readonly legacyPath?: string
+  readonly dispatchKind?: DispatchKind
+}
+
+function getHttpMeta(meta: Meta): ResolvedHttpMeta {
+  const h = meta.http
+  if (typeof h !== "object" || h === null) return {}
+  const r = h as { dispatch?: unknown; directives?: unknown }
+  const out: { segment?: string; legacyPath?: string; dispatchKind?: DispatchKind } = {}
+
+  if (typeof r.dispatch === "object" && r.dispatch !== null) {
+    const d = r.dispatch as Record<string, unknown>
+    out.dispatchKind = d.kind === "method" ? "method" : "attr"
+  }
+
+  if (Array.isArray(r.directives)) {
+    for (const entry of r.directives as unknown[]) {
+      if (typeof entry !== "object" || entry === null) continue
+      const d = entry as Record<string, unknown>
+      if (d.kind === "segment" && typeof d.value === "string") out.segment = d.value
+      else if (d.kind === "legacyPath" && typeof d.value === "string") out.legacyPath = d.value
+    }
+  }
+
+  return out
+}
+
+function inferSegment(name: string): string {
+  const stripped = name
+    .replace(/^(get|list|find|read|create|send|award|delete|remove)/i, "")
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
+    .replace(/^-/, "")
+    .toLowerCase()
+  return stripped.length > 0 ? stripped : name.toLowerCase()
 }
 
 // ============================================================================
-// Internal: correlate leaf handler identity to Route
+// Internal: leaf caller
 // ============================================================================
 
-/**
- * Build a handler→Route map from the route table.
- * Handler function identity is the stable correlation key between the tree
- * walk and the route table (buildRoutes stores the handler directly in Route).
- */
-function buildHandlerMap(routes: Route[]): Map<Route["handler"], Route> {
-  const map = new Map<Route["handler"], Route>()
-  for (const r of routes) {
-    map.set(r.handler, r)
+function makeCaller(
+  verb: string,
+  path: string,
+  slugValues: ReadonlySet<string>,
+  baseUrl: string,
+  fetchImpl: (req: Request) => Promise<Response>,
+): (input?: unknown) => Promise<unknown> {
+  return async (input?: unknown): Promise<unknown> => {
+    let req: Request
+    if (verb === "GET" || verb === "HEAD" || verb === "DELETE") {
+      // Input goes into query params for read-only/deletion ops; body is not
+      // conventional for GET/HEAD/DELETE.
+      const finalUrl = baseUrl.startsWith("http")
+        ? new URL(path, baseUrl)
+        : new URL(path, "http://localhost")
+      if (input !== null && input !== undefined && typeof input === "object") {
+        for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+          if (slugValues.has(k)) continue // already embedded in the path
+          if (v !== undefined && v !== null) {
+            finalUrl.searchParams.set(k, String(v))
+          }
+        }
+      }
+      const url = baseUrl.startsWith("http")
+        ? finalUrl.toString()
+        : finalUrl.pathname + (finalUrl.search !== "" ? finalUrl.search : "")
+      req = new Request(url, { method: verb })
+    } else {
+      // POST/PUT/PATCH: input as JSON body
+      const url = `${baseUrl}${path}`
+      req = new Request(url, {
+        method: verb,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input ?? {}),
+      })
+    }
+
+    const res = await fetchImpl(req)
+
+    let body: unknown
+    const ct = res.headers.get("Content-Type") ?? ""
+    if (ct.includes("application/json")) {
+      body = await res.json()
+    } else {
+      body = await res.text()
+    }
+
+    if (!res.ok) {
+      throw new ClientError(res.status, body)
+    }
+
+    return body
   }
-  return map
 }
 
 // ============================================================================
@@ -86,99 +169,38 @@ function buildHandlerMap(routes: Route[]): Map<Route["handler"], Route> {
 
 function buildSubClient(
   n: Node,
-  handlerMap: Map<Route["handler"], Route>,
-  slugs: Record<string, string>,
+  prefix: string,
+  slugValues: ReadonlySet<string>,
   baseUrl: string,
   fetchImpl: (req: Request) => Promise<Response>,
 ): AnyClient {
   const client: AnyClient = {}
+  const dispatchKind = getHttpMeta(n.meta).dispatchKind
 
-  for (const [name, child] of Object.entries(n.children ?? {})) {
-    if (isParamNode(child)) {
-      // ParamNode: expose as a function receiving the slug value
-      const paramName = child.name
-      const subtree = child.subtree
-      client[name] = (slugValue: string): AnyClient => {
-        return buildSubClient(
-          subtree,
-          handlerMap,
-          { ...slugs, [paramName]: slugValue },
-          baseUrl,
-          fetchImpl,
-        )
-      }
-    } else if (isLeaf(child)) {
-      // Leaf node: becomes a callable that fires an HTTP request
-      const route = handlerMap.get(child.handler as Handler)
-      if (route === undefined) {
-        // Should not happen in a well-formed tree; surface as a noop that throws
-        client[name] = async () => {
-          throw new Error(`fractal-client: no route found for leaf "${name}" — tree/route table mismatch`)
-        }
-        continue
-      }
-
-      const verb = route.verb
-      const pathTemplate = route.path
-
-      client[name] = async (input?: unknown): Promise<unknown> => {
-        const filledPath = fillPath(pathTemplate, slugs)
-        const url = `${baseUrl}${filledPath}`
-
-        let req: Request
-        if (verb === "GET" || verb === "HEAD" || verb === "DELETE") {
-          // Input goes into query params for read-only ops; body is not
-          // conventional for GET/HEAD. DELETE carries no body.
-          const u = new URL(url, "http://localhost")
-          if (input !== null && input !== undefined && typeof input === "object") {
-            for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
-              // Skip slug keys that are already embedded in the path
-              if (slugs[k] !== undefined) continue
-              if (v !== undefined && v !== null) {
-                u.searchParams.set(k, String(v))
-              }
-            }
-          }
-          // Reconstruct URL: preserve the original host from baseUrl if present,
-          // otherwise use the full URL with the localhost-relative trick.
-          const finalUrl = baseUrl.startsWith("http")
-            ? (() => {
-                const base = new URL(baseUrl)
-                base.pathname = filledPath
-                for (const [k, v] of u.searchParams) base.searchParams.set(k, v)
-                return base.toString()
-              })()
-            : u.pathname + (u.search !== "" ? u.search : "")
-          req = new Request(finalUrl, { method: verb })
-        } else {
-          // POST/PUT/PATCH: input as JSON body
-          req = new Request(url, {
-            method: verb,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(input ?? {}),
-          })
-        }
-
-        const res = await fetchImpl(req)
-
-        let body: unknown
-        const ct = res.headers.get("Content-Type") ?? ""
-        if (ct.includes("application/json")) {
-          body = await res.json()
-        } else {
-          body = await res.text()
-        }
-
-        if (!res.ok) {
-          throw new ClientError(res.status, body)
-        }
-
-        return body
-      }
+  for (const [key, child] of Object.entries(n.children ?? {})) {
+    if (isLeaf(child)) {
+      const http = getHttpMeta(child.meta)
+      const path = http.legacyPath !== undefined
+        ? http.legacyPath
+        : dispatchKind !== undefined
+          ? (prefix === "" ? "/" : prefix) // method/attribute dispatch: leaf shares the parent path
+          : `${prefix}/${http.segment ?? inferSegment(key)}`
+      client[key] = makeCaller(verbFromTags(child.meta), path, slugValues, baseUrl, fetchImpl)
     } else {
-      // Branch child: eagerly build its sub-client (slugs are not needed yet)
-      client[name] = buildSubClient(child, handlerMap, slugs, baseUrl, fetchImpl)
+      // Branch child: method-dispatch (or default/no marker) branches still get
+      // a segment; header/query/contentType-dispatch branches do NOT (mirrors
+      // packages/http/src/project.ts's collectCandidates).
+      const branchGetsSegment = dispatchKind === undefined || dispatchKind === "method"
+      const seg = branchGetsSegment ? (getHttpMeta(child.meta).segment ?? key) : undefined
+      const newPrefix = seg !== undefined ? `${prefix}/${seg}` : prefix
+      client[key] = buildSubClient(child, newPrefix, slugValues, baseUrl, fetchImpl)
     }
+  }
+
+  if (n.fallback !== undefined) {
+    const { name, subtree } = n.fallback
+    client[name] = (slugValue: string): AnyClient =>
+      buildSubClient(subtree, `${prefix}/${slugValue}`, new Set([...slugValues, name]), baseUrl, fetchImpl)
   }
 
   return client
@@ -193,12 +215,12 @@ function buildSubClient(
  *
  * The returned object mirrors the tree structure:
  *   - branch children → nested client objects
- *   - ParamNode children → functions `(slug: string) => sub-client`
+ *   - a `fallback` → a function `(slug: string) => sub-client` keyed by
+ *     `fallback.name`
  *   - leaf children (nodes with handler) → async callables `(input?) => Promise<unknown>`
  *
- * Method and path for each leaf are derived from buildRoutes, guaranteeing
- * exact parity with the server's makeRouter — the same verb/path logic runs
- * on both sides.
+ * Method and path for each leaf are derived the same way the server's
+ * tree-walk router derives them, so client and server exactly agree.
  *
  * @param tree - The root Node to project into a client.
  * @param opts - Optional: baseUrl (default ""), fetch (default global fetch).
@@ -206,7 +228,5 @@ function buildSubClient(
 export function createClient(tree: Node, opts: ClientOptions = {}): AnyClient {
   const baseUrl = opts.baseUrl ?? ""
   const fetchImpl = opts.fetch ?? globalThis.fetch.bind(globalThis)
-  const routes = buildRoutes(tree)
-  const handlerMap = buildHandlerMap(routes)
-  return buildSubClient(tree, handlerMap, {}, baseUrl, fetchImpl)
+  return buildSubClient(tree, "", new Set(), baseUrl, fetchImpl)
 }

@@ -1,8 +1,8 @@
 // packages/mcp/src/project.test.ts — MCP tool projection tests
 
 import { describe, expect, it } from "bun:test"
-import { node, op, param } from "@rhi-zone/fractal-core/node"
-import { buildRoutes } from "@rhi-zone/fractal-http/project"
+import { node, op } from "@rhi-zone/fractal-core/node"
+import { candidatesForUrl } from "@rhi-zone/fractal-http/project"
 import { toTools } from "./project.ts"
 
 // ============================================================================
@@ -26,10 +26,11 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
     expect(tools).toHaveLength(1)
     expect(tools[0]!.annotations?.readOnlyHint).toBe(true)
 
-    // HTTP surface: same meta.tags → GET (safe method)
-    const routes = buildRoutes(n)
-    expect(routes).toHaveLength(1)
-    expect(routes[0]!.verb).toBe("GET")
+    // HTTP surface: same meta.tags → GET (safe method); default segment
+    // dispatch: inferSegment("get") = "get"
+    const candidates = candidatesForUrl(n, "http://localhost/get")
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]!.verb).toBe("GET")
   })
 
   it("destructive:true → destructiveHint:true (MCP) + non-GET verb (HTTP)", () => {
@@ -44,9 +45,10 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
     expect(tools[0]!.annotations?.destructiveHint).toBe(true)
 
     // HTTP surface: same meta.tags → POST (destructive without idempotent = conservative)
-    const routes = buildRoutes(n)
-    expect(routes[0]!.verb).toBe("POST") // not GET — a mutating verb
-    expect(routes[0]!.verb).not.toBe("GET")
+    // inferSegment("delete") = "delete"
+    const candidates = candidatesForUrl(n, "http://localhost/delete")
+    expect(candidates[0]!.verb).toBe("POST") // not GET — a mutating verb
+    expect(candidates[0]!.verb).not.toBe("GET")
   })
 
   it("idempotent:true + destructive:true → idempotentHint:true + destructiveHint:true (MCP) + DELETE (HTTP)", () => {
@@ -62,24 +64,25 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
     expect(tools[0]!.annotations?.idempotentHint).toBe(true)
     expect(tools[0]!.annotations?.destructiveHint).toBe(true)
 
-    const routes = buildRoutes(n)
-    expect(routes[0]!.verb).toBe("DELETE")
+    // inferSegment("remove") = "remove"
+    const candidates = candidatesForUrl(n, "http://localhost/remove")
+    expect(candidates[0]!.verb).toBe("DELETE")
   })
 })
 
 // ============================================================================
-// 2. Node-level tag inheritance: parent tag flows into child leaves
+// 2. Tags are read directly from the leaf's own meta — no ancestor inheritance
 // ============================================================================
 
-describe("node-level tag inheritance → MCP annotations", () => {
-  it("readOnly:true on a node makes all its leaf children emit readOnlyHint:true", () => {
+describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
+  it("a node-level tag does NOT flow to leaf children with no own tags", () => {
     const api = node({
       children: {
         catalog: node({
           meta: { tags: { readOnly: true } },
           children: {
-            list: op((_: unknown) => []), // no own tags — inherits from parent
-            search: op((_: unknown) => []), // no own tags — inherits from parent
+            list: op((_: unknown) => []), // no own tags — does NOT inherit
+            search: op((_: unknown) => []), // no own tags — does NOT inherit
           },
         }),
       },
@@ -87,17 +90,16 @@ describe("node-level tag inheritance → MCP annotations", () => {
     const tools = toTools(api)
     expect(tools).toHaveLength(2)
     for (const t of tools) {
-      expect(t.annotations?.readOnlyHint).toBe(true)
+      expect(t.annotations).toBeUndefined()
     }
   })
 
-  it("leaf-level tag overrides node-level tag (closest-wins)", () => {
+  it("a leaf's own tags drive its annotations regardless of ancestor meta", () => {
     const api = node({
       children: {
         items: node({
-          meta: { tags: { readOnly: true } },
+          meta: { tags: { readOnly: true } }, // node-level tag — has no bearing
           children: {
-            // leaf explicitly negates readOnly and asserts idempotent+destructive
             delete: op((_: unknown) => ({}), {
               tags: { readOnly: false, idempotent: true, destructive: true },
             }),
@@ -110,9 +112,10 @@ describe("node-level tag inheritance → MCP annotations", () => {
     expect(tools[0]!.annotations?.destructiveHint).toBe(true)
     expect(tools[0]!.annotations?.idempotentHint).toBe(true)
 
-    // HTTP surface consistent: same closest-wins logic → DELETE
-    const routes = buildRoutes(api)
-    expect(routes[0]!.verb).toBe("DELETE")
+    // HTTP surface consistent: same leaf-only read → DELETE
+    // default segment dispatch: inferSegment("delete") = "delete"
+    const candidates = candidatesForUrl(api, "http://localhost/items/delete")
+    expect(candidates[0]!.verb).toBe("DELETE")
   })
 })
 
@@ -203,15 +206,13 @@ describe("name namespacing from tree position", () => {
     expect(tools[0]!.name).toBe("invoices_items_get")
   })
 
-  it("param node contributes its name to the tool name prefix", () => {
+  it("fallback contributes its name to the tool name prefix", () => {
     const api = node({
       children: {
         users: node({
-          children: {
-            userId: param(
-              "userId",
-              node({ children: { profile: op((_: unknown) => ({})) } }),
-            ),
+          fallback: {
+            name: "userId",
+            subtree: node({ children: { profile: op((_: unknown) => ({})) } }),
           },
         }),
       },
@@ -298,25 +299,23 @@ describe("meta.mcp per-projection overrides", () => {
 })
 
 // ============================================================================
-// 6. Param-node leaves produce a tool (structural coverage)
+// 6. Fallback-subtree leaves produce a tool (structural coverage)
 // ============================================================================
 
-describe("param-node leaves produce a tool", () => {
-  it("produces a tool for a leaf inside a param node", () => {
+describe("fallback-subtree leaves produce a tool", () => {
+  it("produces a tool for a leaf inside a fallback subtree", () => {
     const api = node({
       children: {
         invoices: node({
-          children: {
-            invoiceId: param(
-              "invoiceId",
-              node({
-                children: {
-                  checkout: op((_: { invoiceId: string }) => ({ url: "…" }), {
-                    tags: { idempotent: true },
-                  }),
-                },
-              }),
-            ),
+          fallback: {
+            name: "invoiceId",
+            subtree: node({
+              children: {
+                checkout: op((_: { invoiceId: string }) => ({ url: "…" }), {
+                  tags: { idempotent: true },
+                }),
+              },
+            }),
           },
         }),
       },

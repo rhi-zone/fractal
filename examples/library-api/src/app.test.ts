@@ -13,7 +13,7 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore } from "./tree.ts"
 import { createFetch } from "@rhi-zone/fractal-http/preset"
-import { buildRoutes } from "@rhi-zone/fractal-http/project"
+import { candidatesForUrl } from "@rhi-zone/fractal-http/project"
 import { http } from "@rhi-zone/fractal-http/verbs"
 import { op } from "@rhi-zone/fractal-core/node"
 import { resolveTags } from "@rhi-zone/fractal-core/tags"
@@ -48,51 +48,44 @@ describe("library-api — HTTP routes", () => {
   })
 
   it("readOnly op (books list) → GET route", () => {
-    const routes = buildRoutes(api)
-    const r = routes.find((r) => r.path === "/books/list")
-    expect(r?.verb).toBe("GET")
+    const candidates = candidatesForUrl(api, "http://localhost/books/list")
+    expect(candidates[0]?.verb).toBe("GET")
   })
 
   it("attribute-dispatch: read → GET /books/{bookId}", () => {
-    const routes = buildRoutes(api)
-    const r = routes.find((r) => r.path === "/books/{bookId}" && r.verb === "GET")
-    expect(r).toBeDefined()
+    const candidates = candidatesForUrl(api, "http://localhost/books/book-1")
+    expect(candidates.find((c) => c.verb === "GET")).toBeDefined()
   })
 
   it("attribute-dispatch: replace → PUT /books/{bookId}", () => {
-    const routes = buildRoutes(api)
-    const r = routes.find((r) => r.path === "/books/{bookId}" && r.verb === "PUT")
-    expect(r).toBeDefined()
+    const candidates = candidatesForUrl(api, "http://localhost/books/book-1")
+    expect(candidates.find((c) => c.verb === "PUT")).toBeDefined()
   })
 
   it("attribute-dispatch: remove → DELETE /books/{bookId}", () => {
-    const routes = buildRoutes(api)
-    const r = routes.find((r) => r.path === "/books/{bookId}" && r.verb === "DELETE")
-    expect(r).toBeDefined()
+    const candidates = candidatesForUrl(api, "http://localhost/books/book-1")
+    expect(candidates.find((c) => c.verb === "DELETE")).toBeDefined()
   })
 
   it("attribute-dispatch: 3 distinct verbs at the same /books/{bookId} path", () => {
-    const routes = buildRoutes(api)
-    const byIdRoutes = routes.filter((r) => r.path === "/books/{bookId}")
-    expect(byIdRoutes).toHaveLength(3)
-    const verbs = new Set(byIdRoutes.map((r) => r.verb))
+    const candidates = candidatesForUrl(api, "http://localhost/books/book-1")
+    expect(candidates).toHaveLength(3)
+    const verbs = new Set(candidates.map((c) => c.verb))
     expect(verbs).toEqual(new Set(["GET", "PUT", "DELETE"]))
   })
 
   it("checkout branch child under method-dispatch node → segment-dispatched", () => {
-    const routes = buildRoutes(api)
     // checkout is a branch, not a leaf — its leaf 'start' gets a segment
-    const r = routes.find((r) => r.path === "/books/{bookId}/checkout/start")
-    expect(r).toBeDefined()
+    const candidates = candidatesForUrl(api, "http://localhost/books/book-1/checkout/start")
+    expect(candidates).toHaveLength(1)
   })
 
-  it("catalog ops inherit readOnly from node level → GET routes", () => {
-    const routes = buildRoutes(api)
-    expect(routes.find((r) => r.path === "/catalog/search")?.verb).toBe("GET")
-    expect(routes.find((r) => r.path === "/catalog/genres")?.verb).toBe("GET")
+  it("catalog ops each carry their own readOnly tag → GET routes", () => {
+    expect(candidatesForUrl(api, "http://localhost/catalog/search")[0]?.verb).toBe("GET")
+    expect(candidatesForUrl(api, "http://localhost/catalog/genres")[0]?.verb).toBe("GET")
   })
 
-  it("param slug (bookId) threads into handler input provenance-blind", async () => {
+  it("fallback slug (bookId) threads into handler input provenance-blind", async () => {
     // Add a book; capture its generated ID
     const addRes = await fetch(
       jsonReq("POST", "http://localhost/books/add", {
@@ -232,9 +225,8 @@ describe("library-api — MCP tools", () => {
 describe("library-api — verb-helper bundles (http.*)", () => {
   // http.put bundle: checkout/reserve op authored with http.put
   it("http.put on reserve: HTTP route is PUT /books/{bookId}/checkout/reserve", () => {
-    const routes = buildRoutes(api)
-    const r = routes.find((r) => r.path === "/books/{bookId}/checkout/reserve")
-    expect(r?.verb).toBe("PUT")
+    const candidates = candidatesForUrl(api, "http://localhost/books/book-1/checkout/reserve")
+    expect(candidates[0]?.verb).toBe("PUT")
   })
 
   it("http.put on reserve: MCP tool gets idempotentHint (bundle → MCP for free)", () => {
@@ -245,9 +237,8 @@ describe("library-api — verb-helper bundles (http.*)", () => {
 
   // http.post bundle: checkout/start op authored with http.post
   it("http.post on start: HTTP route is POST /books/{bookId}/checkout/start", () => {
-    const routes = buildRoutes(api)
-    const r = routes.find((r) => r.path === "/books/{bookId}/checkout/start")
-    expect(r?.verb).toBe("POST")
+    const candidates = candidatesForUrl(api, "http://localhost/books/book-1/checkout/start")
+    expect(candidates[0]?.verb).toBe("POST")
   })
 
   it("http.post on start: MCP tool has no idempotentHint (plain mutation)", () => {
@@ -267,9 +258,9 @@ describe("library-api — verb-helper bundles (http.*)", () => {
     expect(resolved.idempotent).toBe(true)
     // destructive:false from extra contribution is applied
     expect(resolved.destructive).toBe(false)
-    // http.verb from bundle is preserved
-    const httpMeta = n.meta.http as { verb: string }
-    expect(httpMeta.verb).toBe("PUT")
+    // verb directive from bundle is preserved
+    const httpMeta = n.meta.http as { directives: readonly { kind: string; value?: string }[] }
+    expect(httpMeta.directives.find((d) => d.kind === "verb")?.value).toBe("PUT")
   })
 
   // end-to-end: verb-helper-authored reserve op dispatches correctly

@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-http",
   "version": "0.1.0-alpha.0",
-  "description": "WHATWG renderer for the function-core tree — makeRouter, buildRoutes, autoMethodLayer, corsLayer, createFetch, serveBun/serveNode",
+  "description": "WHATWG renderer for the function-core tree — direct tree-walk makeRouter, autoMethodLayer, corsLayer, createFetch, serveBun/serveNode",
   "type": "module",
   "exports": {
     "./adapter": {

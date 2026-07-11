@@ -1,19 +1,23 @@
 // examples/library-api/src/tree.ts
 //
 // Library API — new-model authoring: both service class and standalone node(),
-// param() for per-book routes, meta.tags spanning readOnly/idempotent/destructive,
-// and node-level tag inheritance on the catalog subtree.
+// a `fallback` field for per-book routes, meta.tags spanning
+// readOnly/idempotent/destructive. Each leaf carries its OWN tags — there is
+// no ancestor tag inheritance (removed; see docs/design/router-model.md —
+// "Tags"): a node-level tag no longer flows down to its descendants.
 //
 // In the new node model, callables are leaf nodes stored in `children` via
 // `op(fn, meta?)`. The `ops` map is gone — a leaf child IS a Node with handler.
-// `service()` still works: methods become leaf node children automatically.
+// `service()` still works: methods become leaf node children automatically;
+// an instance field literally named `fallback` (shape `{ name, subtree }`)
+// becomes the resulting node's `fallback` (replaces the former `param()`).
 //
 // This file is also the codegen entry-point: extractToolSchemas walks the
 // exported `api` node() call and derives input schemas for inline ops.
 // The booksNode is authored via service() (not node()), so codegen skips it —
 // its ops degrade to the MCP spec-minimum `{ type: "object" }` placeholder.
 
-import { node, op, param, service } from "@rhi-zone/fractal-core/node"
+import { node, op, service } from "@rhi-zone/fractal-core/node"
 import { http } from "@rhi-zone/fractal-http/verbs"
 
 // ============================================================================
@@ -39,9 +43,10 @@ export function clearStore(): void {
 // ============================================================================
 // Per-book subtree — REST resource via attribute-dispatch
 //
-// `meta.http.dispatch === "method"` makes all LEAF children co-locate at the
-// node's own path (/books/{bookId}), distinguished by HTTP verb derived from
-// their tags. Branch children (checkout) still contribute a segment as normal.
+// `meta.http.dispatch === {kind:"method"}` makes all LEAF children co-locate
+// at the node's own path (/books/{bookId}), distinguished by HTTP verb derived
+// from their tags. Branch children (checkout) still contribute a segment as
+// normal.
 //
 // read   → readOnly → GET    /books/{bookId}
 // replace → idempotent → PUT  /books/{bookId}
@@ -50,7 +55,7 @@ export function clearStore(): void {
 // ============================================================================
 
 const bookItemNode = node({
-  meta: { http: { dispatch: "method" } },
+  meta: { http: { dispatch: { kind: "method" } } },
   children: {
     /** Get a single book by its ID. GET /books/{bookId} */
     read: op(
@@ -90,7 +95,7 @@ const bookItemNode = node({
       children: {
         /**
          * Initiate a checkout session for a book reservation.
-         * Authored with `http.post` verb helper — bundles POST pin (no implied tags).
+         * Authored with `http.post` verb helper — bundles POST directive (no implied tags).
          * POST /books/{bookId}/checkout/start
          */
         start: op(
@@ -100,7 +105,7 @@ const bookItemNode = node({
 
         /**
          * Reserve a book for a patron — idempotent (same patron+book = same reservation).
-         * Authored with `http.put` verb helper — bundles PUT pin + idempotent:true.
+         * Authored with `http.put` verb helper — bundles PUT directive + idempotent:true.
          * The bundled `idempotent` tag flows to MCP (idempotentHint) for free.
          * PUT /books/{bookId}/checkout/reserve
          */
@@ -122,10 +127,11 @@ const bookItemNode = node({
 
 class BooksService {
   /**
-   * ParamNode field: service() picks up Node/ParamNode instance properties as
-   * children, so `byId` becomes children["byId"] in the lowered Node.
+   * A field literally named `fallback` (shape `{ name, subtree }`): service()
+   * picks this up as the resulting node's `fallback` (wildcard-capture),
+   * replacing the former `param()`-constructed ParamNode child.
    */
-  byId = param("bookId", bookItemNode)
+  fallback = { name: "bookId", subtree: bookItemNode }
 
   /** List all books in the library. */
   list(_: unknown): Book[] {
@@ -152,7 +158,7 @@ class BooksService {
 // ============================================================================
 // API version node — header-dispatch demo
 //
-// `meta.http.dispatch = { by: "header", name: "X-Api-Version" }` makes the
+// `meta.http.dispatch = {kind: "header", name: "X-Api-Version"}` makes the
 // leaf children distinguish themselves by the X-Api-Version header value.
 // Child keyed `v1` matches when the header value is exactly `"v1"`.
 // Child keyed `v2` matches when the header value is exactly `"v2"`.
@@ -163,7 +169,7 @@ class BooksService {
 // ============================================================================
 
 const versionNode = node({
-  meta: { http: { dispatch: { by: "header", name: "X-Api-Version" } } },
+  meta: { http: { dispatch: { kind: "header", name: "X-Api-Version" } } },
   children: {
     /** API version 1 response. Dispatched when X-Api-Version: v1. */
     v1: op((_: unknown) => ({ version: "v1", message: "Library API — classic edition" }), {
@@ -172,12 +178,12 @@ const versionNode = node({
 
     /**
      * API version 2 response. Dispatched when X-Api-Version: v2.
-     * Uses `when` override to demonstrate key≠value: the child key is `v2Alias`
-     * but the match value is still `"v2"` (the header value to match).
+     * Uses a `when` directive to demonstrate key≠value: the child key is
+     * `v2Alias` but the match value is still `"v2"` (the header value to match).
      */
     v2Alias: op((_: unknown) => ({ version: "v2", message: "Library API — enhanced edition", features: ["pagination", "filtering"] }), {
       tags: { readOnly: true },
-      http: { when: "v2" },
+      http: { directives: [{ kind: "when", value: "v2" }] },
     }),
   },
 })
@@ -191,8 +197,8 @@ export const api = node({
       },
     }),
 
-    // catalog is tagged readOnly at the NODE level — both search and genres
-    // inherit readOnly via effectiveTags (closest-wins), without any leaf-level tag.
+    // Each leaf carries its OWN readOnly tag — tags do not inherit from the
+    // node (removed; see docs/design/router-model.md — "Tags").
     catalog: node({
       children: {
         /** Search the library catalog by title or author keyword. */
@@ -204,17 +210,15 @@ export const api = node({
               b.title.toLowerCase().includes(q) ||
               b.author.toLowerCase().includes(q),
           )
-        }),
+        }, { tags: { readOnly: true } }),
 
         /** List all genres in the catalog, optionally filtered to those starting with a prefix. */
         genres: op((input: { prefix?: string }) => {
           const all = [...new Set([...store.values()].map((b) => b.genre))]
           const { prefix } = input
           return prefix !== undefined ? all.filter((g) => g.startsWith(prefix)) : all
-        }),
+        }, { tags: { readOnly: true } }),
       },
-      // Node-level tag: leaves inherit readOnly → GET routes + readOnlyHint annotations
-      meta: { tags: { readOnly: true } },
     }),
 
     // Header-dispatch demo: X-Api-Version header selects the version handler

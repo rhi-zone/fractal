@@ -4,31 +4,31 @@
 //
 // Walks a Node tree once, computing for each leaf node (node with handler):
 //   - the codegen-style underscore name (for extractToolSchemas lookup)
-//   - the HTTP path + verb (same logic as buildRoutes in packages/http)
-//   - the effective tags (for verb derivation and documentation)
+//   - the HTTP path + verb (same logic as the direct tree-walk dispatch in
+//     packages/http/src/project.ts)
+//   - the leaf's OWN tags (for verb derivation and documentation — no
+//     ancestor inheritance; see docs/design/router-model.md — "Tags")
 //
 // In the new node model, leaf nodes (nodes with `handler`) live in `children`
 // alongside branch nodes. A leaf child keyed `k` behaves exactly as an op
 // keyed `k` did: its key contributes to path/name, its meta drives verb.
+// A `fallback` (wildcard-capture) contributes `{name}` as a path segment,
+// same as the HTTP projection.
 //
-// CORRELATION APPROACH (A — self-contained tree walk):
-//   Rather than using buildRoutes and correlating by function identity,
-//   we walk the tree ourselves computing name+path+verb+schema together.
-//   This keeps openapi self-contained, avoids touching http/project.ts
-//   (which has passing tests), and mirrors the pattern already used by
-//   toTools in packages/mcp. The codegen name (underscore-joined tree
-//   position) is computed alongside the HTTP path so schema lookup is
-//   exact. The path/verb derivation copies the same logic as buildRoutes
-//   (inferSegment, verbFromTags) to guarantee paths match exactly.
+// SELF-CONTAINED TREE WALK: OpenAPI walks the tree itself computing
+// name+path+verb+schema together (mirroring the pattern used by toTools in
+// packages/mcp), rather than depending on http/project.ts's dispatch
+// internals. The path/verb derivation copies the same logic
+// (inferSegment, verbFromTags) to guarantee paths match exactly.
 //
 // See:
-//   packages/http/src/project.ts — buildRoutes, verbFromTags, inferSegment
+//   packages/http/src/project.ts — verbFromTags, meta.http DU (dispatch/directives)
 //   packages/codegen/src/tree.ts — extractToolSchemas, SchemaMap
-//   packages/core/src/node.ts    — Node, Handler, ParamNode
-//   packages/core/src/tags.ts    — effectiveTags, resolveTags
+//   packages/core/src/node.ts    — Node, Handler, fallback
+//   packages/core/src/tags.ts    — resolveTags
 
-import { isParamNode, isLeaf } from "@rhi-zone/fractal-core/node"
-import { effectiveTags, resolveTags } from "@rhi-zone/fractal-core/tags"
+import { isLeaf } from "@rhi-zone/fractal-core/node"
+import { resolveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
 import type { Meta, Node } from "@rhi-zone/fractal-core/node"
 import type { SchemaMap } from "@rhi-zone/fractal-codegen"
@@ -113,11 +113,8 @@ export type OpenApiDoc = {
 // ============================================================================
 
 function verbFromTags(meta: Meta): string {
-  const rawHttp = meta.http
-  if (typeof rawHttp === "object" && rawHttp !== null) {
-    const httpVerb = (rawHttp as Record<string, unknown>).verb
-    if (typeof httpVerb === "string") return httpVerb.toUpperCase()
-  }
+  const httpVerb = getHttpMeta(meta).verb
+  if (httpVerb !== undefined) return httpVerb.toUpperCase()
   const tags = resolveTags((meta.tags ?? {}) as Tags)
   if (tags.readOnly === true) return "GET"
   if (tags.idempotent === true && tags.destructive === true) return "DELETE"
@@ -165,7 +162,7 @@ type HttpMeta = {
    * dispatch: "method" — children distinguished by HTTP verb (method-dispatch).
    * Non-method dispatch markers (header/query/contentType) are treated here as
    * segment-dispatch: each child gets a path segment equal to its key or
-   * meta.http.segment rename. This means OpenAPI reflects the attribute value
+   * segment directive rename. This means OpenAPI reflects the attribute value
    * as a path segment rather than a runtime condition — a reasonable approximation
    * for enumerating projection. Callers who need precise OpenAPI for attribute-
    * dispatched endpoints should annotate with meta.openapi explicitly.
@@ -173,21 +170,31 @@ type HttpMeta = {
   readonly dispatch?: "method" | "attr"  // "attr" = any non-method marker (collapsed)
 }
 
+/** Extracts the resolved HTTP meta: verb/segment/legacyPath directives + the
+ *  dispatch marker's kind (mirrors packages/http/src/project.ts's interpreter). */
 function getHttpMeta(meta: Meta): HttpMeta {
   const h = meta.http
   if (typeof h !== "object" || h === null) return {}
-  const r = h as Record<string, unknown>
+  const r = h as { dispatch?: unknown; directives?: unknown }
   const out: { verb?: string; segment?: string; legacyPath?: string; dispatch?: "method" | "attr" } = {}
-  if (typeof r.verb === "string") out.verb = r.verb
-  if (typeof r.segment === "string") out.segment = r.segment
-  if (typeof r.legacyPath === "string") out.legacyPath = r.legacyPath
-  if (r.dispatch === "method") {
-    out.dispatch = "method"
-  } else if (typeof r.dispatch === "object" && r.dispatch !== null) {
+
+  if (typeof r.dispatch === "object" && r.dispatch !== null) {
+    const d = r.dispatch as Record<string, unknown>
     // Non-method dispatch (header/query/contentType): collapse to "attr" sentinel.
     // OpenAPI treats these children as segment-dispatched (each child gets a segment).
-    out.dispatch = "attr"
+    out.dispatch = d.kind === "method" ? "method" : "attr"
   }
+
+  if (Array.isArray(r.directives)) {
+    for (const entry of r.directives as unknown[]) {
+      if (typeof entry !== "object" || entry === null) continue
+      const d = entry as Record<string, unknown>
+      if (d.kind === "verb" && typeof d.value === "string") out.verb = d.value
+      else if (d.kind === "segment" && typeof d.value === "string") out.segment = d.value
+      else if (d.kind === "legacyPath" && typeof d.value === "string") out.legacyPath = d.value
+    }
+  }
+
   return out
 }
 
@@ -225,10 +232,8 @@ function walkTree(
   n: Node,
   httpPrefix: string,
   namePrefix: string,
-  tagPath: Array<{ meta?: { tags?: Tags } }>,
 ): RouteEntry[] {
   const out: RouteEntry[] = []
-  const nodePath = [...tagPath, n]
 
   // Attribute-dispatch: if this node has dispatch:"method", its leaf children
   // share the node's own HTTP path rather than getting a per-child segment.
@@ -239,16 +244,10 @@ function walkTree(
   // "attr" dispatch → OpenAPI treats children as segment-dispatched (approximation)
 
   for (const [key, child] of Object.entries(n.children ?? {})) {
-    if (isParamNode(child)) {
-      const newHttpPrefix = `${httpPrefix}/{${child.name}}`
-      const newNamePrefix = namePrefix.length > 0 ? `${namePrefix}_${child.name}` : child.name
-      out.push(...walkTree(child.subtree, newHttpPrefix, newNamePrefix, nodePath))
-    } else if (isLeaf(child)) {
-      // Leaf node: build a route entry for it
-      const leafPath = [...nodePath, child]
-      const effective = effectiveTags(leafPath)
-      const verbMeta: Meta = { ...child.meta, tags: effective }
-      const verb = verbFromTags(verbMeta)
+    if (isLeaf(child)) {
+      // Leaf node: build a route entry for it. Tags are read directly from
+      // the leaf's own meta — no ancestor inheritance.
+      const verb = verbFromTags(child.meta)
       const http = getHttpMeta(child.meta)
 
       const codenName = namePrefix.length > 0 ? `${namePrefix}_${key}` : key
@@ -270,8 +269,14 @@ function walkTree(
       const seg = getHttpMeta(child.meta).segment ?? key
       const newHttpPrefix = `${httpPrefix}/${seg}`
       const newNamePrefix = namePrefix.length > 0 ? `${namePrefix}_${key}` : key
-      out.push(...walkTree(child, newHttpPrefix, newNamePrefix, nodePath))
+      out.push(...walkTree(child, newHttpPrefix, newNamePrefix))
     }
+  }
+
+  if (n.fallback !== undefined) {
+    const newHttpPrefix = `${httpPrefix}/{${n.fallback.name}}`
+    const newNamePrefix = namePrefix.length > 0 ? `${namePrefix}_${n.fallback.name}` : n.fallback.name
+    out.push(...walkTree(n.fallback.subtree, newHttpPrefix, newNamePrefix))
   }
 
   return out
@@ -285,8 +290,9 @@ function walkTree(
  * Project a Node tree to an OpenAPI 3.1 document object.
  *
  * Each leaf node in the tree becomes one path item method entry. The path and
- * HTTP verb are derived by the same logic as buildRoutes in packages/http — so
- * the OpenAPI paths exactly match the live HTTP router. Input/output schemas
+ * HTTP verb are derived by the same logic as the direct tree-walk dispatch in
+ * packages/http — so the OpenAPI paths exactly match the live HTTP router.
+ * Input/output schemas
  * come from extractToolSchemas (codegen) when a sourceFile or schemas map is
  * supplied; otherwise they degrade to `{ type: "object" }` placeholders.
  *
@@ -307,7 +313,7 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
     schemas = extractToolSchemas(opts.sourceFile)
   }
 
-  const entries = walkTree(n, "", "", [])
+  const entries = walkTree(n, "", "")
 
   const paths: Record<string, Record<string, OpenApiOperation>> = {}
 

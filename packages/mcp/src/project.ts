@@ -5,10 +5,10 @@
 // (readOnlyHint, destructiveHint, idempotentHint, openWorldHint) are derived
 // from the SAME meta.tags that drives the HTTP verb — one authoring, two surfaces.
 //
-// In the new node model, leaf nodes (nodes with `handler`) live in `children`
-// alongside branch nodes. A leaf child keyed `k` behaves exactly as an op
-// keyed `k` did: its key contributes to the MCP tool name, its meta drives
-// annotations. Distinction: `isParamNode(child)` / `isLeaf(child)` / branch.
+// A leaf's tags are read directly from its OWN meta.tags — there is no
+// ancestor inheritance (removed; see docs/design/router-model.md — "Tags").
+// A `fallback` (wildcard-capture) contributes its `name` (e.g. "userId") as a
+// tool-name segment, mirroring the HTTP projection's `{name}` path segment.
 //
 // Three-valued hint semantics (mirrors the tag lattice):
 //   true  → emit hint: true
@@ -25,12 +25,12 @@
 //
 // See:
 //   docs/artifacts/fc-op-kinds/projection-mcp.md — MCP concept list + classification
-//   packages/core/src/tags.ts                    — tag lattice + effectiveTags
+//   packages/core/src/tags.ts                    — tag lattice (resolveTags)
 //   packages/http/src/project.ts                 — sibling projection (structural mirror)
 //   packages/codegen/src/tree.ts                 — extractToolSchemas (schema source)
 
-import { isParamNode, isLeaf } from "@rhi-zone/fractal-core/node"
-import { effectiveTags, resolveTags } from "@rhi-zone/fractal-core/tags"
+import { isLeaf } from "@rhi-zone/fractal-core/node"
+import { resolveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
 import type { Meta, Node } from "@rhi-zone/fractal-core/node"
 
@@ -97,14 +97,14 @@ export type ToToolsOptions = {
 // ============================================================================
 
 /**
- * Derive MCP annotation hints from an effective Tags bag.
+ * Derive MCP annotation hints from a Tags bag (the leaf's OWN meta.tags).
  *
  * Only emits a hint key when the resolved tag value is explicitly true or
  * false. Omits the key entirely when the tag is undefined (unknown).
  * This preserves three-valued semantics: unknown ≠ false.
  */
-function hintsFromTags(effective: Tags): Record<string, boolean> {
-  const r = resolveTags(effective)
+function hintsFromTags(tags: Tags): Record<string, boolean> {
+  const r = resolveTags(tags)
   const hints: Record<string, boolean> = {}
   if (r.readOnly !== undefined) hints.readOnlyHint = r.readOnly
   if (r.destructive !== undefined) hints.destructiveHint = r.destructive
@@ -134,14 +134,11 @@ function getMcpMeta(meta: Meta): Record<string, unknown> {
  * Name construction (tree-position namespacing, underscore-joined):
  *   root leaf "get"                    → "get"
  *   child "users" / leaf "list"        → "users_list"
- *   param child name "userId" / leaf   → "users_userId_get"
+ *   fallback name "userId" / leaf      → "users_userId_get"
  *   meta.mcp.name on leaf              → full override (no prefix applied)
  *   meta.mcp.segment on a child node   → that node's contribution to the prefix
  *
- * Tag inheritance (closest-wins via effectiveTags):
- *   A node tagged `meta.tags: { readOnly: true }` makes all descendant leaf
- *   nodes emit `readOnlyHint: true` unless a closer ancestor or the leaf itself
- *   overrides via its own `meta.tags`.
+ * Tags: read directly from the leaf's own meta.tags — no ancestor inheritance.
  *
  * Per-projection overrides via meta.mcp (open bag):
  *   name        — override full tool name (prefix ignored when set)
@@ -155,23 +152,12 @@ function getMcpMeta(meta: Meta): Record<string, unknown> {
 export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
   const schemas = opts.schemas ?? {}
 
-  const walk = (
-    n: Node,
-    prefix: string,
-    tagPath: Array<{ meta?: { tags?: Tags } }>,
-  ): McpTool[] => {
+  const walk = (n: Node, prefix: string): McpTool[] => {
     const out: McpTool[] = []
-    const nodePath = [...tagPath, n]
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
-      if (isParamNode(child)) {
-        // ParamNode: contribute the param name (e.g. "userId") as the segment
-        const seg = prefix.length > 0 ? `${prefix}_${child.name}` : child.name
-        out.push(...walk(child.subtree, seg, nodePath))
-      } else if (isLeaf(child)) {
+      if (isLeaf(child)) {
         // ── Leaf node: this is a callable → build an MCP tool ──────────────
-        const leafPath = [...nodePath, child]
-        const effective = effectiveTags(leafPath)
         const mcp = getMcpMeta(child.meta)
 
         // Name: meta.mcp.name wins; else underscore-join prefix + leaf key
@@ -195,8 +181,8 @@ export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
                 ? derived.description
                 : key
 
-        // Hints derived from the tag lattice (three-valued)
-        const baseHints = hintsFromTags(effective)
+        // Hints derived from the tag lattice (three-valued), the leaf's own tags only
+        const baseHints = hintsFromTags((child.meta.tags ?? {}) as Tags)
 
         // meta.mcp.annotations overrides individual hint keys
         const annotationOverride: Record<string, unknown> =
@@ -225,12 +211,18 @@ export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
         const childMcp = getMcpMeta(child.meta)
         const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
         const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg
-        out.push(...walk(child, seg, nodePath))
+        out.push(...walk(child, seg))
       }
+    }
+
+    if (n.fallback !== undefined) {
+      // fallback: contribute its name (e.g. "userId") as the segment
+      const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
+      out.push(...walk(n.fallback.subtree, seg))
     }
 
     return out
   }
 
-  return walk(n, "", [])
+  return walk(n, "")
 }

@@ -5,7 +5,7 @@
 // network, no server process. The injected fetch goes through the full
 // HTTP stack (makeRouter → handler) so verb+path correctness is exercised.
 //
-// The byId subtree uses attribute-dispatch (meta.http.dispatch === "method"):
+// The bookId fallback subtree uses attribute-dispatch (meta.http.dispatch = {kind:"method"}):
 //   read    → GET  /books/{bookId}
 //   replace → PUT  /books/{bookId}
 //   remove  → DELETE /books/{bookId}
@@ -14,7 +14,6 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore } from "@rhi-zone/fractal-example-library-api/tree"
 import { createFetch } from "@rhi-zone/fractal-http/preset"
-import { buildRoutes } from "@rhi-zone/fractal-http/project"
 import { createClient } from "../src/index.ts"
 import { ClientError } from "../src/client-error.ts"
 
@@ -55,11 +54,11 @@ describe("readOnly op round-trip", () => {
 })
 
 // ============================================================================
-// 2. ParamNode + attribute-dispatch round-trip: create then fetch by id
+// 2. fallback + attribute-dispatch round-trip: create then fetch by id
 // ============================================================================
 
-describe("ParamNode round-trip", () => {
-  it("add a book then fetch by id via byId(id).read()", async () => {
+describe("fallback round-trip", () => {
+  it("add a book then fetch by id via bookId(id).read()", async () => {
     const client = makeClient()
     const created = await client.books.add({
       title: "The Pragmatic Programmer",
@@ -69,7 +68,7 @@ describe("ParamNode round-trip", () => {
 
     expect(typeof created.id).toBe("string")
 
-    const fetched = await client.books.byId(created.id).read() as typeof created
+    const fetched = await client.books.bookId(created.id).read() as typeof created
     expect(fetched.id).toBe(created.id)
     expect(fetched.title).toBe("The Pragmatic Programmer")
     expect(fetched.author).toBe("Hunt & Thomas")
@@ -80,7 +79,7 @@ describe("ParamNode round-trip", () => {
     const client = makeClient()
     const input = { title: "Clean Code", author: "Robert Martin", genre: "Engineering" }
     const created = await client.books.add(input) as { id: string } & typeof input
-    const fetched = await client.books.byId(created.id).read() as typeof created
+    const fetched = await client.books.bookId(created.id).read() as typeof created
     expect(fetched).toMatchObject(input)
   })
 })
@@ -98,7 +97,7 @@ describe("mutating ops", () => {
       genre: "Fiction",
     }) as { id: string; title: string }
 
-    const updated = await client.books.byId(created.id).replace({
+    const updated = await client.books.bookId(created.id).replace({
       title: "New Title",
     }) as { id: string; title: string }
 
@@ -106,7 +105,7 @@ describe("mutating ops", () => {
     expect(updated.id).toBe(created.id)
 
     // Verify it persisted
-    const fetched = await client.books.byId(created.id).read() as { title: string }
+    const fetched = await client.books.bookId(created.id).read() as { title: string }
     expect(fetched.title).toBe("New Title")
   })
 
@@ -118,7 +117,7 @@ describe("mutating ops", () => {
       genre: "Misc",
     }) as { id: string }
 
-    const result = await client.books.byId(created.id).remove() as { deleted: boolean }
+    const result = await client.books.bookId(created.id).remove() as { deleted: boolean }
     expect(result.deleted).toBe(true)
 
     // The book should no longer be in the list
@@ -136,7 +135,7 @@ describe("ClientError", () => {
     const client = makeClient()
     let caught: unknown
     try {
-      await client.books.byId("does-not-exist").read()
+      await client.books.bookId("does-not-exist").read()
     } catch (e) {
       caught = e
     }
@@ -150,7 +149,7 @@ describe("ClientError", () => {
 // ============================================================================
 
 describe("verb-correctness spy", () => {
-  it("each op fires the exact verb+path that buildRoutes emits", async () => {
+  it("each op fires the exact verb+path the server tree-walk dispatch expects", async () => {
     type CallRecord = { method: string; pathname: string }
     const calls: CallRecord[] = []
 
@@ -165,7 +164,7 @@ describe("verb-correctness spy", () => {
 
     const client = createClient(api, { baseUrl: "http://localhost", fetch: spyFetch })
 
-    // Add a book so we have an id for param-node routes
+    // Add a book so we have an id for fallback routes
     const book = await client.books.add({
       title: "Spy Target",
       author: "Test",
@@ -176,8 +175,8 @@ describe("verb-correctness spy", () => {
     calls.length = 0
 
     await client.books.list()
-    await client.books.byId(book.id).read()
-    await client.books.byId(book.id).replace({ title: "Updated" })
+    await client.books.bookId(book.id).read()
+    await client.books.bookId(book.id).replace({ title: "Updated" })
     await client.catalog.search({ q: "spy" })
 
     // books.list → GET /books/list
@@ -185,12 +184,12 @@ describe("verb-correctness spy", () => {
       method: "GET",
       pathname: "/books/list",
     })
-    // books.byId.read → GET /books/{bookId}  (attribute-dispatch)
+    // books.bookId.read → GET /books/{bookId}  (attribute-dispatch)
     expect(calls[1]).toMatchObject({
       method: "GET",
       pathname: `/books/${book.id}`,
     })
-    // books.byId.replace → PUT /books/{bookId}  (attribute-dispatch)
+    // books.bookId.replace → PUT /books/{bookId}  (attribute-dispatch)
     expect(calls[2]).toMatchObject({
       method: "PUT",
       pathname: `/books/${book.id}`,

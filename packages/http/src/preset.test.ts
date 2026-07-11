@@ -1,7 +1,7 @@
 // packages/http/src/preset.test.ts — OOTB preset end-to-end tests
 
 import { describe, expect, it } from "bun:test"
-import { node, op, param, service } from "@rhi-zone/fractal-core/node"
+import { node, op, service } from "@rhi-zone/fractal-core/node"
 import { createFetch } from "./preset.ts"
 
 // ============================================================================
@@ -19,27 +19,25 @@ class UserService {
 
 const usersNode = service(new UserService(), {
   meta: {
-    listUsers: { tags: { readOnly: true }, http: { segment: "list" } },
-    createUser: { http: { segment: "create" } },
+    listUsers: { tags: { readOnly: true }, http: { directives: [{ kind: "segment", value: "list" }] } },
+    createUser: { http: { directives: [{ kind: "segment", value: "create" }] } },
   },
 })
 
 const invoicesNode = node({
-  children: {
-    invoiceId: param(
-      "invoiceId",
-      node({
-        children: {
-          checkout: op(
-            (input: { invoiceId: string; currency?: string }) => ({
-              url: `https://pay.example.com/${input.invoiceId}`,
-              currency: input.currency ?? "usd",
-            }),
-            { http: { verb: "POST", segment: "checkout" } },
-          ),
-        },
-      }),
-    ),
+  fallback: {
+    name: "invoiceId",
+    subtree: node({
+      children: {
+        checkout: op(
+          (input: { invoiceId: string; currency?: string }) => ({
+            url: `https://pay.example.com/${input.invoiceId}`,
+            currency: input.currency ?? "usd",
+          }),
+          { http: { directives: [{ kind: "verb", value: "POST" }, { kind: "segment", value: "checkout" }] } },
+        ),
+      },
+    }),
   },
 })
 
@@ -106,21 +104,19 @@ describe("OOTB preset — slug threading (provenance-blind)", () => {
     const spyNode = node({
       children: {
         items: node({
-          children: {
-            itemId: param(
-              "itemId",
-              node({
-                children: {
-                  update: op(
-                    (input: Record<string, unknown>) => {
-                      capturedInput = input
-                      return { ok: true }
-                    },
-                    { tags: { idempotent: true }, http: { segment: "update" } },
-                  ),
-                },
-              }),
-            ),
+          fallback: {
+            name: "itemId",
+            subtree: node({
+              children: {
+                update: op(
+                  (input: Record<string, unknown>) => {
+                    capturedInput = input
+                    return { ok: true }
+                  },
+                  { tags: { idempotent: true }, http: { directives: [{ kind: "segment", value: "update" }] } },
+                ),
+              },
+            }),
           },
         }),
       },

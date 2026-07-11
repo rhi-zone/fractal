@@ -4,20 +4,21 @@
 // { inputSchema, description } map — the artifact the MCP projection consumes.
 //
 // Why source-level: a `Node` value's TYPE erases per-leaf handler input types
-// (`children: Record<string, ChildEntry>`), so the concrete
+// (`children: Record<string, Node>`), so the concrete
 // `op((input: {...}) => …)` shapes only survive in the AST. This walker mirrors
 // toTools' underscore-joined name construction so the emitted keys line up with
 // the runtime tool names.
 //
 // In the new node model:
 //   - Leaf nodes are authored as `op(fn, meta?)` calls stored in `children`.
-//   - Branch nodes are authored as `node({ children?, meta? })` calls.
+//   - Branch nodes are authored as `node({ children?, fallback?, meta? })` calls.
 //   - The `ops` key no longer exists in the authoring API.
 //
-// Supported structure: `node({ children })` with child values:
-//   - `op(fn, meta?)` or bare arrow → leaf (callable)
-//   - `node({…})` → static branch child
-//   - `param("name", node({…}))` → parameterized branch child
+// Supported structure: `node({ children, fallback })` where:
+//   - `children` values are: `op(fn, meta?)` or bare arrow → leaf (callable);
+//     `node({…})` → static branch child.
+//   - `fallback: { name: "...", subtree: node({…}) }` → wildcard-capture
+//     subtree, namespaced by `name` (replaces the former `param(name, subtree)`).
 // meta.mcp.name / meta.mcp.segment overrides are NOT yet mirrored here.
 //   TODO(codegen): honor meta.mcp.name / meta.mcp.segment when reconstructing
 //   tool names, matching packages/mcp/src/project.ts.
@@ -67,7 +68,8 @@ const join = (prefix: string, seg: string): string =>
  * source file. Mirrors toTools' name construction.
  *
  * In the new node model, children that are `op(...)` calls are leaf nodes;
- * children that are `node(...)` or `param(...)` calls are branch or param nodes.
+ * children that are `node(...)` calls are static branch nodes; a sibling
+ * `fallback: { name, subtree }` property is the wildcard-capture subtree.
  */
 export function extractToolSchemas(entryFile: string): SchemaMap {
   const program = createExtractorProgram(entryFile)
@@ -107,18 +109,26 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
               outputSchema,
               ...(description !== undefined ? { description } : {}),
             }
-          } else if (callee === "param") {
-            // param("name", node({…}))
-            const [nameArg, subtree] = init.arguments
-            const paramName =
-              nameArg && ts.isStringLiteral(nameArg) ? nameArg.text : childKey
-            if (subtree && ts.isCallExpression(subtree)) {
-              walkNodeCall(subtree, join(prefix, paramName))
-            }
           } else {
             // static branch child: node({…}) or other constructor
             walkNodeCall(init, join(prefix, childKey))
           }
+        }
+      } else if (key === "fallback" && ts.isObjectLiteralExpression(prop.initializer)) {
+        // fallback: { name: "...", subtree: node({…}) }
+        let fallbackName: string | undefined
+        let subtreeCall: ts.CallExpression | undefined
+        for (const fbProp of prop.initializer.properties) {
+          const fbKey = propName(fbProp)
+          if (!ts.isPropertyAssignment(fbProp) || fbKey === undefined) continue
+          if (fbKey === "name" && ts.isStringLiteral(fbProp.initializer)) {
+            fallbackName = fbProp.initializer.text
+          } else if (fbKey === "subtree" && ts.isCallExpression(fbProp.initializer)) {
+            subtreeCall = fbProp.initializer
+          }
+        }
+        if (fallbackName !== undefined && subtreeCall !== undefined) {
+          walkNodeCall(subtreeCall, join(prefix, fallbackName))
         }
       }
     }

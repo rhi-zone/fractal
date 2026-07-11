@@ -142,29 +142,47 @@ export function resolveTags(tags: Tags): ResolvedTags {
 }
 
 // ============================================================================
-// Tag inheritance — closest-wins merge along the node path
+// Tree transforms — the general modification primitive
 // ============================================================================
+//
+// Tag inheritance (the former closest-wins tree-walk / `effectiveTags`) is
+// removed: a node's tags are exactly what's on the node — they do not depend
+// on ancestors (inheritance-by-position breaks composability: moving a
+// subtree would silently change its behavior). `(tree) => tree` transforms
+// are the general modification primitive instead. `mapNodes` is the pre-order
+// visitor: a transform that wants "push this tag down to descendants" builds
+// that explicitly as its own recursive transform; `mapNodes` is the shared
+// walking primitive underneath.
+//
+// See docs/design/router-model.md — "Tags" section.
+
+// A minimal structural view of Node, avoiding a runtime import of node.ts
+// (node.ts imports Tags from this module as a type-only import; keeping this
+// import type-only too avoids introducing a runtime circular dependency).
+import type { Node } from "./node.ts"
 
 /**
- * Merge tags from root → ... → op, closest-wins.
+ * Pre-order visitor over a Node tree: `fn` sees each node BEFORE its children
+ * (and fallback subtree) are walked. Returns a new tree with `fn` applied to
+ * every node reachable via `children` and `fallback.subtree`.
  *
- * A defined value (true OR false) at a closer level overrides a farther one.
- * `undefined` at a level does NOT override — it defers upward.
- * The last element of the path array is treated as the op itself.
- *
- * @param path - Array of nodes/ops from root to op (inclusive), each
- *               optionally carrying `meta.tags`.
+ * This is the general modification primitive for tree transforms (tags,
+ * dispatch defaults, metadata processing, …) — replacing the removed
+ * closest-wins tag inheritance walk.
  */
-export function effectiveTags(path: Array<{ meta?: { tags?: Tags } }>): Tags {
-  const merged: Record<string, boolean | undefined> = {}
-  for (const entry of path) {
-    const entryTags = entry.meta?.tags
-    if (entryTags === undefined) continue
-    for (const [key, value] of Object.entries(entryTags)) {
-      if (value !== undefined) {
-        merged[key] = value
-      }
-    }
+export function mapNodes(tree: Node, fn: (node: Node) => Node): Node {
+  const mapped = fn(tree)
+  const children = mapped.children === undefined
+    ? undefined
+    : Object.fromEntries(
+        Object.entries(mapped.children).map(([k, v]) => [k, mapNodes(v, fn)]),
+      )
+  const fallback = mapped.fallback === undefined
+    ? undefined
+    : { name: mapped.fallback.name, subtree: mapNodes(mapped.fallback.subtree, fn) }
+  return {
+    ...mapped,
+    ...(children !== undefined ? { children } : {}),
+    ...(fallback !== undefined ? { fallback } : {}),
   }
-  return merged as Tags
 }

@@ -99,38 +99,38 @@ describe("CLI projection — library-api fixture", () => {
     expect(mock.confirmCalled).toBe(false)
   })
 
-  it("catalog search (readOnly inherited from node) — does NOT call confirm", async () => {
+  it("catalog search (readOnly on the leaf) — does NOT call confirm", async () => {
     const mock = makeMockIO(false)
     await runCli(api, ["catalog", "search"], mock.io)
     expect(mock.confirmCalled).toBe(false)
   })
 
   // 3. destructive op DOES call io.confirm; --yes skips it
-  it("books byId remove (destructive) — calls confirm when no --yes", async () => {
+  it("books <id> remove (destructive) — calls confirm when no --yes", async () => {
     // First add a book
     const addMock = makeMockIO(true)
     await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"], addMock.io)
     const book = JSON.parse(addMock.out.join("")) as { id: string }
 
     const removeMock = makeMockIO(true)  // confirm returns true
-    await runCli(api, ["books", "byId", book.id, "remove"], removeMock.io)
+    await runCli(api, ["books", book.id, "remove"], removeMock.io)
     expect(removeMock.confirmCalled).toBe(true)
   })
 
-  it("books byId remove (destructive) with --yes — skips confirm, succeeds", async () => {
+  it("books <id> remove (destructive) with --yes — skips confirm, succeeds", async () => {
     // Add a book first
     const addMock = makeMockIO(true)
     await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"], addMock.io)
     const book = JSON.parse(addMock.out.join("")) as { id: string }
 
     const removeMock = makeMockIO(false)  // confirm would return false, but should not be called
-    await runCli(api, ["books", "byId", book.id, "remove", "--yes"], removeMock.io)
+    await runCli(api, ["books", book.id, "remove", "--yes"], removeMock.io)
     expect(removeMock.confirmCalled).toBe(false)
     const result = JSON.parse(removeMock.out.join("")) as { deleted: boolean }
     expect(result.deleted).toBe(true)
   })
 
-  it("books byId remove (destructive) confirm declined — throws CliError", async () => {
+  it("books <id> remove (destructive) confirm declined — throws CliError", async () => {
     // Add a book
     const addMock = makeMockIO(true)
     await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"], addMock.io)
@@ -138,22 +138,22 @@ describe("CLI projection — library-api fixture", () => {
 
     const removeMock = makeMockIO(false)  // confirm returns false → abort
     await expect(
-      runCli(api, ["books", "byId", book.id, "remove"], removeMock.io)
+      runCli(api, ["books", book.id, "remove"], removeMock.io)
     ).rejects.toBeInstanceOf(CliError)
     expect(removeMock.confirmCalled).toBe(true)
     expect(removeMock.err.join("")).toContain("Aborted")
   })
 
-  // 4. param-node slug value threads into op input (round-trip)
-  it("books byId read — slug bookId threads into op input", async () => {
+  // 4. fallback slug value threads into op input (round-trip)
+  it("books <id> read — slug bookId threads into op input", async () => {
     // Add a book to get a known ID
     const addMock = makeMockIO(true)
     await runCli(api, ["books", "add", "--title", "Foundation", "--author", "Asimov", "--genre", "Sci-Fi"], addMock.io)
     const added = JSON.parse(addMock.out.join("")) as { id: string; title: string }
 
-    // Fetch it via param-node slug path: books byId <id> read (agnostic name)
+    // Fetch it via the fallback slug path: books <id> read (agnostic name)
     const readMock = makeMockIO(true)
-    await runCli(api, ["books", "byId", added.id, "read"], readMock.io)
+    await runCli(api, ["books", added.id, "read"], readMock.io)
     const fetched = JSON.parse(readMock.out.join("")) as { id: string; title: string }
 
     expect(fetched.id).toBe(added.id)
@@ -215,13 +215,13 @@ describe("CLI projection — library-api fixture", () => {
   })
 
   // Extra: books replace (idempotent, not destructive) — no confirm
-  it("books byId replace (idempotent, not destructive) — no confirm, result written", async () => {
+  it("books <id> replace (idempotent, not destructive) — no confirm, result written", async () => {
     const addMock = makeMockIO(true)
     await runCli(api, ["books", "add", "--title", "Old Title", "--author", "Auth", "--genre", "Genre"], addMock.io)
     const book = JSON.parse(addMock.out.join("")) as { id: string }
 
     const replaceMock = makeMockIO(false)  // would say no if asked
-    await runCli(api, ["books", "byId", book.id, "replace", "--title", "New Title"], replaceMock.io)
+    await runCli(api, ["books", book.id, "replace", "--title", "New Title"], replaceMock.io)
     expect(replaceMock.confirmCalled).toBe(false)
     const updated = JSON.parse(replaceMock.out.join("")) as { title: string }
     expect(updated.title).toBe("New Title")

@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { node, op } from "@rhi-zone/fractal-core/node"
-import { buildRoutes, makeRouter } from "./project.ts"
+import { makeRouter } from "./project.ts"
 import { autoMethodLayer, corsLayer } from "./layers.ts"
 
 // ============================================================================
@@ -14,12 +14,11 @@ describe("autoMethodLayer — proves droppable", () => {
     children: {
       getItem: op((_: unknown) => ({ id: 42 }), {
         tags: { readOnly: true },
-        http: { segment: "item" },
+        http: { directives: [{ kind: "segment", value: "item" }] },
       }),
     },
   })
-  const routes = buildRoutes(api)
-  const coreRouter = makeRouter(routes)
+  const coreRouter = makeRouter(api)
 
   // ── Without the layer (core only) ─────────────────────────────────────────
 
@@ -47,7 +46,7 @@ describe("autoMethodLayer — proves droppable", () => {
 
   // ── With the layer ─────────────────────────────────────────────────────────
 
-  const handler = autoMethodLayer(coreRouter, routes)
+  const handler = autoMethodLayer(coreRouter, api)
 
   it("[layer] HEAD → derives from GET, body stripped, status 200", async () => {
     const res = await handler(
@@ -105,16 +104,15 @@ describe("autoMethodLayer — multi-verb routes", () => {
     children: {
       getItem: op((_: unknown) => ({ id: 1 }), {
         tags: { readOnly: true },
-        http: { segment: "item" },
+        http: { directives: [{ kind: "segment", value: "item" }] },
       }),
       updateItem: op((_: unknown) => ({ updated: true }), {
         tags: { idempotent: true },
-        http: { segment: "item" },
+        http: { directives: [{ kind: "segment", value: "item" }] },
       }),
     },
   })
-  const routes = buildRoutes(api)
-  const handler = autoMethodLayer(makeRouter(routes), routes)
+  const handler = autoMethodLayer(makeRouter(api), api)
 
   it("OPTIONS lists all registered verbs for the path", async () => {
     const res = await handler(

@@ -4,21 +4,20 @@
 //
 // Walks a Node tree along an argv subcommand path, resolving:
 //   - Branch children → subcommand prefix segments
-//   - ParamNode children → positional slug values merged into handler input
+//   - `fallback` (wildcard-capture) → the current argv token IS the slug
+//     value directly (no separate key segment — same as HTTP: the value
+//     itself discriminates, not a tree-authored name)
 //   - Leaf children (nodes with handler) → terminal subcommand names
 //
-// In the new node model, leaf nodes (nodes with `handler`) live in `children`
-// alongside branch nodes. A leaf child keyed `k` behaves exactly as an op
-// keyed `k` did: its key is the subcommand name, its meta drives behavior.
-//
-// Tag-driven behavior (via effectiveTags + resolveTags):
+// Tag-driven behavior (read directly from the leaf's OWN meta.tags — there is
+// no ancestor inheritance; see docs/design/router-model.md — "Tags"):
 //   - destructive:true  → io.confirm() before running (skippable via --yes/--force)
 //   - readOnly:true     → no confirm
 //   - streaming:true    → output each item as a JSONL line
 //
 // Input field → flag derivation:
-//   Named --flags parsed from argv; slugs from ParamNode traversal merged on
-//   top (provenance-blind — handler sees one flat input object).
+//   Named --flags parsed from argv; fallback slug values merged on top
+//   (provenance-blind — handler sees one flat input object).
 //
 // Help: --help at any level prints usage text.
 // Output: JSON pretty-printed to io.stdout. Error: thrown CliError (exit code 1).
@@ -28,15 +27,15 @@
 // process.exit, keeping the test runner alive).
 //
 // See:
-//   packages/core/src/node.ts   — Node, Handler, ParamNode, dispatch
-//   packages/core/src/tags.ts   — effectiveTags, resolveTags
+//   packages/core/src/node.ts   — Node, Handler, fallback
+//   packages/core/src/tags.ts   — resolveTags
 //   packages/codegen/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
-import { isParamNode, isLeaf } from "@rhi-zone/fractal-core/node"
-import { effectiveTags, resolveTags } from "@rhi-zone/fractal-core/tags"
+import { isLeaf } from "@rhi-zone/fractal-core/node"
+import { resolveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
-import type { Handler, Meta, Node, ParamNode } from "@rhi-zone/fractal-core/node"
+import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
 import type { SchemaMap } from "@rhi-zone/fractal-codegen"
 
 // ============================================================================
@@ -107,13 +106,12 @@ function getCliMeta(meta: Meta): CliMeta {
 // ============================================================================
 
 /**
- * Resolved dispatch target: the leaf handler to call, accumulated slug values
- * from ParamNode traversal, and the tag path (root-to-leaf) for effectiveTags.
+ * Resolved dispatch target: the leaf handler to call and the accumulated
+ * slug values from `fallback` traversal.
  */
 type Resolved = {
   readonly handler: Handler
   readonly slugs: Record<string, string>
-  readonly tagPath: Array<{ meta?: { tags?: Tags } }>
   readonly leafName: string
   readonly leafMeta: Meta
 }
@@ -121,15 +119,10 @@ type Resolved = {
 /**
  * Walk the node tree along argv segments, resolving:
  *
- *   Branch child (not ParamNode, no handler) → consume segment, recurse
- *   ParamNode child                           → consume segment (tree key), enter subtree,
- *                                               consume NEXT segment as slug value
- *   No static match + ParamNode              → consume current segment as slug value, recurse
- *   Leaf child (has handler) at tail         → terminal; return resolved
- *
- * CLI navigates ParamNode children by their tree key (e.g. "byId"), then the
- * following segment is the slug value (e.g. "book-1"). This differs from HTTP
- * dispatch where the URL segment IS the slug value (no key prefix).
+ *   Static child (no handler) → consume segment, recurse
+ *   No static match + `fallback` present → consume current segment as the
+ *     slug value directly, bind it as `fallback.name`, recurse into subtree
+ *   Leaf child (has handler) at tail → terminal; return resolved
  *
  * Returns null if no matching path is found.
  */
@@ -137,23 +130,20 @@ function resolveLeaf(
   n: Node,
   segments: string[],
   slugs: Record<string, string>,
-  tagPath: Array<{ meta?: { tags?: Tags } }>,
 ): Resolved | null {
   if (segments.length === 0) return null
   const [head, ...tail] = segments
   if (head === undefined) return null
 
-  const nodePath: Array<{ meta?: { tags?: Tags } }> = [...tagPath, n]
   const children = n.children ?? {}
 
   // Terminal: head should name a leaf child
   if (tail.length === 0) {
     const child = children[head]
-    if (child !== undefined && !isParamNode(child) && isLeaf(child)) {
+    if (child !== undefined && isLeaf(child)) {
       return {
         handler: child.handler!,
         slugs,
-        tagPath: [...nodePath, child],
         leafName: head,
         leafMeta: child.meta,
       }
@@ -161,36 +151,20 @@ function resolveLeaf(
     return null
   }
 
-  // Non-terminal: try static child first
+  // Non-terminal: try a static child first (static children always win)
   const staticChild = children[head]
   if (staticChild !== undefined) {
-    if (isParamNode(staticChild)) {
-      // head matched the ParamNode slot key (e.g. "byId").
-      // The NEXT segment (tail[0]) is the actual slug value.
-      // Consume it and recurse into the subtree.
-      const [slugValue, ...afterSlug] = tail
-      if (slugValue === undefined) return null
-      return resolveLeaf(
-        staticChild.subtree,
-        afterSlug,
-        { ...slugs, [staticChild.name]: slugValue },
-        nodePath,
-      )
-    }
     if (!isLeaf(staticChild)) {
-      // Static branch child: recurse with no slug
-      return resolveLeaf(staticChild, tail, slugs, nodePath)
+      return resolveLeaf(staticChild, tail, slugs)
     }
     // A leaf child at non-tail is a dead-end (a leaf has no children to recurse into)
     return null
   }
 
-  // No static match — scan for a bare ParamNode child.
-  // In this case, head IS the slug value (no key prefix in the path).
-  for (const child of Object.values(children)) {
-    if (isParamNode(child)) {
-      return resolveLeaf(child.subtree, tail, { ...slugs, [child.name]: head }, nodePath)
-    }
+  // No static match — fall back to the wildcard-capture subtree, if any.
+  // `head` IS the slug value directly (no separate key segment).
+  if (n.fallback !== undefined) {
+    return resolveLeaf(n.fallback.subtree, tail, { ...slugs, [n.fallback.name]: head })
   }
 
   return null
@@ -223,13 +197,10 @@ function buildHelp(
   const children = n.children ?? {}
 
   // List leaf children (callables)
-  const leafEntries = Object.entries(children).filter(
-    ([, child]) => !isParamNode(child) && isLeaf(child),
-  )
+  const leafEntries = Object.entries(children).filter(([, child]) => isLeaf(child))
   if (leafEntries.length > 0) {
     lines.push("Commands:")
     for (const [key, child] of leafEntries) {
-      if (isParamNode(child)) continue
       const cliMeta = getCliMeta(child.meta)
       if (cliMeta.hidden === true) continue
       const leafDesc = descriptionFrom(child.meta)
@@ -238,23 +209,21 @@ function buildHelp(
     }
   }
 
-  // List branch/param children
-  const nonLeafEntries = Object.entries(children).filter(
-    ([, child]) => isParamNode(child) || !isLeaf(child),
-  )
-  if (nonLeafEntries.length > 0) {
+  // List branch children
+  const nonLeafEntries = Object.entries(children).filter(([, child]) => !isLeaf(child))
+  if (nonLeafEntries.length > 0 || n.fallback !== undefined) {
     if (leafEntries.length > 0) lines.push("")
     lines.push("Subcommand groups:")
     for (const [key, child] of nonLeafEntries) {
-      if (isParamNode(child)) {
-        const cliMeta = getCliMeta(child.subtree.meta)
-        if (cliMeta.hidden === true) continue
-        lines.push(`  ${key} <${child.name}>  — parameterized group`)
-      } else {
-        const cliMeta = getCliMeta(child.meta)
-        if (cliMeta.hidden === true) continue
-        const childDesc = descriptionFrom(child.meta)
-        lines.push(`  ${key}${childDesc !== undefined ? `  — ${childDesc}` : ""}`)
+      const cliMeta = getCliMeta(child.meta)
+      if (cliMeta.hidden === true) continue
+      const childDesc = descriptionFrom(child.meta)
+      lines.push(`  ${key}${childDesc !== undefined ? `  — ${childDesc}` : ""}`)
+    }
+    if (n.fallback !== undefined) {
+      const cliMeta = getCliMeta(n.fallback.subtree.meta)
+      if (cliMeta.hidden !== true) {
+        lines.push(`  <${n.fallback.name}>  — parameterized group`)
       }
     }
   }
@@ -280,7 +249,7 @@ function buildLeafHelp(
   if (desc !== undefined) lines.push(desc, "")
   lines.push(`Usage: ${cmd} [options]`, "")
 
-  const tags = resolveTags(effectiveTags(resolved.tagPath))
+  const tags = resolveTags((resolved.leafMeta.tags ?? {}) as Tags)
   if (tags.destructive === true) lines.push("  This operation is destructive and irreversible. Requires --yes/--force to skip confirmation.", "")
   if (tags.readOnly === true) lines.push("  This operation is read-only.", "")
   if (tags.streaming === true) lines.push("  This operation streams results (one JSON object per line).", "")
@@ -476,7 +445,7 @@ export async function runCli(
   // --help requested — show help for the subcommand path
   if (help) {
     // Try to resolve to a leaf first
-    const target = resolveLeaf(n, pathSegments, {}, [])
+    const target = resolveLeaf(n, pathSegments, {})
     if (target !== null) {
       ioResolved.stdout.write(buildLeafHelp(target, pathSegments, "cli", schemas))
       return
@@ -486,7 +455,7 @@ export async function runCli(
     let depth = 0
     for (const seg of pathSegments) {
       const child = (cursor.children ?? {})[seg]
-      if (child !== undefined && !isParamNode(child) && !isLeaf(child)) {
+      if (child !== undefined && !isLeaf(child)) {
         cursor = child
         depth++
       } else {
@@ -498,15 +467,14 @@ export async function runCli(
   }
 
   // Resolve the leaf handler
-  const target = resolveLeaf(n, pathSegments, {}, [])
+  const target = resolveLeaf(n, pathSegments, {})
   if (target === null) {
     ioResolved.stderr.write(`Unknown command: ${pathSegments.join(" ")}\nRun with --help for usage.\n`)
     throw new CliError(`Unknown command: ${pathSegments.join(" ")}`, 1)
   }
 
-  // Derive effective tags
-  const effective = effectiveTags(target.tagPath)
-  const tags = resolveTags(effective)
+  // Tags are read directly from the leaf's own meta — no ancestor inheritance.
+  const tags = resolveTags((target.leafMeta.tags ?? {}) as Tags)
 
   // Confirm for destructive ops (unless --yes/--force)
   if (tags.destructive === true && !yes) {
@@ -580,7 +548,6 @@ export type CliCommandEntry = {
   readonly leafName: string
   readonly handler: Handler
   readonly slugs: string[]
-  readonly tagPath: Array<{ meta?: { tags?: Tags } }>
 }
 
 /**
@@ -590,33 +557,25 @@ export type CliCommandEntry = {
 export function walkCliCommands(
   n: Node,
   prefix: string[] = [],
-  tagPath: Array<{ meta?: { tags?: Tags } }> = [],
   slugAcc: string[] = [],
 ): CliCommandEntry[] {
   const out: CliCommandEntry[] = []
-  const nodePath = [...tagPath, n]
 
   for (const [key, child] of Object.entries(n.children ?? {})) {
-    if (isParamNode(child)) {
-      out.push(
-        ...walkCliCommands(
-          child.subtree,
-          [...prefix, key],
-          nodePath,
-          [...slugAcc, child.name],
-        ),
-      )
-    } else if (isLeaf(child)) {
+    if (isLeaf(child)) {
       out.push({
         path: prefix,
         leafName: key,
         handler: child.handler!,
         slugs: slugAcc,
-        tagPath: [...nodePath, child],
       })
     } else {
-      out.push(...walkCliCommands(child, [...prefix, key], nodePath, slugAcc))
+      out.push(...walkCliCommands(child, [...prefix, key], slugAcc))
     }
+  }
+
+  if (n.fallback !== undefined) {
+    out.push(...walkCliCommands(n.fallback.subtree, prefix, [...slugAcc, n.fallback.name]))
   }
 
   return out
@@ -624,4 +583,4 @@ export function walkCliCommands(
 
 // Re-export types for consumers
 export type { SchemaMap }
-export type { Node, Handler, ParamNode, Meta }
+export type { Node, Handler, Meta }

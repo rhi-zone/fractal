@@ -8,7 +8,7 @@
 // `op(fn, meta?)` calls. The codegen walker recognises `op(...)` children as
 // leaves and extracts their input schemas.
 
-import { node, op, param } from "@rhi-zone/fractal-core/node"
+import { node, op } from "@rhi-zone/fractal-core/node"
 // (a) Direct import from core's package root.
 import type { Result } from "@rhi-zone/fractal-core"
 // (b) Barrel re-export: Result re-exported through a local barrel FILE, name
@@ -35,14 +35,14 @@ export const tree = node({
             address: { street: string; zip?: string }
           }) => ({ id: "u1" }),
         ),
-        userId: param(
-          "userId",
-          node({
-            children: {
-              get: op((input: { userId: string }) => ({ userId: input.userId })),
-            },
-          }),
-        ),
+      },
+      fallback: {
+        name: "userId",
+        subtree: node({
+          children: {
+            get: op((input: { userId: string }) => ({ userId: input.userId })),
+          },
+        }),
       },
     }),
     // Union input → exercises the punt path.

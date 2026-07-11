@@ -1,14 +1,14 @@
 // packages/http/src/verbs.test.ts — verb-helper bundle tests
 //
 // Proves:
-//   1. http.put on an op yields BOTH http.verb === "PUT" AND resolveTags → idempotent
-//   2. http.get on an op yields BOTH http.verb === "GET" AND resolveTags → readOnly
+//   1. http.put on an op yields BOTH a verb directive PUT AND resolveTags → idempotent
+//   2. http.get on an op yields BOTH a verb directive GET AND resolveTags → readOnly
 //   3. http.delete on an op yields verb DELETE + destructive + idempotent
 //   4. http.post / http.patch: verb set, no implied tags
 //   5. Composing op(fn, http.put, { tags: { destructive: false } }) deep-merges:
 //      keeps idempotent from the bundle AND applies the override — NOT a spread
 //      that drops the bundle's tags
-//   6. verbFromTags respects the meta.http.verb pin from the bundle (GET, not POST)
+//   6. verbFromTags respects the meta.http verb directive from the bundle (GET, not POST)
 //   7. head / options helpers exist and carry readOnly
 
 import { describe, expect, it } from "bun:test"
@@ -17,6 +17,7 @@ import { resolveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
 import { http } from "./verbs.ts"
 import { verbFromTags } from "./project.ts"
+import type { HttpDirective } from "./project.ts"
 
 // ============================================================================
 // Helpers
@@ -28,6 +29,11 @@ function tags(n: ReturnType<typeof op>): Tags {
   return (n.meta.tags ?? {}) as Tags
 }
 
+function verbDirective(n: ReturnType<typeof op>): string | undefined {
+  const http_ = n.meta.http as { directives: readonly HttpDirective[] } | undefined
+  return http_?.directives.find((d) => d.kind === "verb")?.value
+}
+
 // ============================================================================
 // 1. http.put → verb PUT + idempotent tag → MCP idempotentHint
 // ============================================================================
@@ -35,12 +41,11 @@ function tags(n: ReturnType<typeof op>): Tags {
 describe("http.put bundle", () => {
   const n = op(noop, http.put)
 
-  it("http.verb pin is PUT", () => {
-    const httpMeta = n.meta.http as { verb: string }
-    expect(httpMeta.verb).toBe("PUT")
+  it("verb directive is PUT", () => {
+    expect(verbDirective(n)).toBe("PUT")
   })
 
-  it("verbFromTags respects the verb pin → PUT (not tag-derived)", () => {
+  it("verbFromTags respects the verb directive → PUT (not tag-derived)", () => {
     expect(verbFromTags(n.meta)).toBe("PUT")
   })
 
@@ -66,12 +71,11 @@ describe("http.put bundle", () => {
 describe("http.get bundle", () => {
   const n = op(noop, http.get)
 
-  it("http.verb pin is GET", () => {
-    const httpMeta = n.meta.http as { verb: string }
-    expect(httpMeta.verb).toBe("GET")
+  it("verb directive is GET", () => {
+    expect(verbDirective(n)).toBe("GET")
   })
 
-  it("verbFromTags respects the verb pin → GET", () => {
+  it("verbFromTags respects the verb directive → GET", () => {
     expect(verbFromTags(n.meta)).toBe("GET")
   })
 
@@ -97,9 +101,8 @@ describe("http.get bundle", () => {
 describe("http.delete bundle", () => {
   const n = op(noop, http.delete)
 
-  it("http.verb pin is DELETE", () => {
-    const httpMeta = n.meta.http as { verb: string }
-    expect(httpMeta.verb).toBe("DELETE")
+  it("verb directive is DELETE", () => {
+    expect(verbDirective(n)).toBe("DELETE")
   })
 
   it("verbFromTags → DELETE", () => {
@@ -128,9 +131,8 @@ describe("http.delete bundle", () => {
 describe("http.post bundle", () => {
   const n = op(noop, http.post)
 
-  it("http.verb pin is POST", () => {
-    const httpMeta = n.meta.http as { verb: string }
-    expect(httpMeta.verb).toBe("POST")
+  it("verb directive is POST", () => {
+    expect(verbDirective(n)).toBe("POST")
   })
 
   it("resolveTags → no readOnly, no idempotent, no destructive", () => {
@@ -144,9 +146,8 @@ describe("http.post bundle", () => {
 describe("http.patch bundle", () => {
   const n = op(noop, http.patch)
 
-  it("http.verb pin is PATCH", () => {
-    const httpMeta = n.meta.http as { verb: string }
-    expect(httpMeta.verb).toBe("PATCH")
+  it("verb directive is PATCH", () => {
+    expect(verbDirective(n)).toBe("PATCH")
   })
 
   it("resolveTags → no implied tags", () => {
@@ -173,12 +174,11 @@ describe("op multi-contribution merge (bundle + extra)", () => {
     expect(tags(n).destructive).toBe(false)
   })
 
-  it("http.verb from bundle is preserved after merge", () => {
-    const httpMeta = n.meta.http as { verb: string }
-    expect(httpMeta.verb).toBe("PUT")
+  it("verb directive from bundle is preserved after merge", () => {
+    expect(verbDirective(n)).toBe("PUT")
   })
 
-  it("verbFromTags still resolves to PUT (verb pin wins)", () => {
+  it("verbFromTags still resolves to PUT (verb directive wins)", () => {
     expect(verbFromTags(n.meta)).toBe("PUT")
   })
 
@@ -206,9 +206,8 @@ describe("op with no contributions", () => {
 // ============================================================================
 
 describe("http.head bundle", () => {
-  it("http.verb pin is HEAD", () => {
-    const httpMeta = http.head.http as { verb: string }
-    expect(httpMeta.verb).toBe("HEAD")
+  it("verb directive is HEAD", () => {
+    expect(http.head.http.directives.find((d) => d.kind === "verb")?.value).toBe("HEAD")
   })
 
   it("carries readOnly tag", () => {
@@ -217,9 +216,8 @@ describe("http.head bundle", () => {
 })
 
 describe("http.options bundle", () => {
-  it("http.verb pin is OPTIONS", () => {
-    const httpMeta = http.options.http as { verb: string }
-    expect(httpMeta.verb).toBe("OPTIONS")
+  it("verb directive is OPTIONS", () => {
+    expect(http.options.http.directives.find((d) => d.kind === "verb")?.value).toBe("OPTIONS")
   })
 
   it("carries readOnly tag", () => {
