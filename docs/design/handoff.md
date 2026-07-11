@@ -79,9 +79,13 @@ code vs design to identify and begin closing gaps.
 10. **NEW: Tag-to-verb derivation soundness.** The mapping is leaky for
     common cases (search-as-POST, login/logout, PATCH). Validate against
     real APIs or decouple tags from verb selection.
-11. **NEW: Code-to-design sync.** Coordinated refactor in progress
-    (ParamNode→fallback, effectiveTags removal, by→kind, named keys→DU,
-    buildRoutes→tree walk, core dispatch() removal). Results pending.
+11. **RESOLVED (2026-07-11, commit 8e8329c): Code-to-design sync.** Coordinated
+    refactor landed (ParamNode→fallback, effectiveTags removal, by→kind, named
+    keys→DU, buildRoutes→tree walk, core dispatch() removal), touching core,
+    http, openapi, client, cli, codegen, mcp, and examples/library-api. All
+    packages' tests/typecheck pass (8/8 workspaces, 233 tests, 0 failures).
+    TODO.md's pending renames/removals and architecture-gaps entries for these
+    items are cleaned up accordingly.
 
 ## Read order
 

@@ -69,7 +69,7 @@ Reframed: the DU + matcher model is one implementation of the `match`
 combinator in the routing expression model. See
 `docs/design/routing-expression-model.md`.
 
-### Migrate the fenced packages to the function-core model — STALE, re-verified 2026-07-11
+### Migrate the fenced packages to the function-core model — RESOLVED (2026-07-11, commit 8e8329c)
 
 The function-core rewrite (`docs/design/function-core-and-projection.md`) landed
 as a vertical slice: `packages/core` + `packages/http` are rewritten to the new
@@ -83,20 +83,21 @@ example directory is `examples/library-api`; `examples/todo-api` and
 Root `package.json` `workspaces` (verified 2026-07-11) is now:
 `packages/core`, `packages/http`, `packages/mcp`, `packages/codegen`,
 `packages/openapi`, `packages/cli`, `packages/client`, `examples/library-api`.
-**Every package in `packages/` is in the workspace — none are fenced out
-anymore.** `packages/openapi` and `packages/client` were previously fenced but
-are back in; `packages/mcp` and `packages/cli` are new packages not mentioned
-in the original fencing note at all. `examples/library-api` imports
+**Every package in `packages/` is in the workspace — none are fenced out.**
+`packages/openapi` and `packages/client` were previously fenced but are back
+in; `packages/mcp` and `packages/cli` are new packages not mentioned in the
+original fencing note at all. `examples/library-api` imports
 `@rhi-zone/fractal-mcp` and `@rhi-zone/fractal-codegen` directly, so at least
 those two are active, not just present.
 
-Open question this leaves (not re-verified here): whether `openapi` and
-`client` have actually been migrated to the function-core model (the root
-`package.json` `comment` field claims `codegen` was migrated but says nothing
-about `openapi`/`client`), or whether they're back in the workspace un-migrated
-and something else is keeping the build green. Check each package's source
-against the `Handler<R>`/`req.ctx`/`.meta` legacy shape before assuming it's
-current.
+The open question this left — whether `openapi` and `client` had actually
+been migrated to the function-core model, or were back in the workspace
+un-migrated — is now closed: the coordinated refactor (commit 8e8329c) touched
+`openapi`, `client`, `cli`, `codegen`, and `mcp` directly, updating each for
+the `fallback` field and DU-based `meta.http` shape (and rewriting
+`packages/client` as a self-contained enumerator mirroring `openapi`'s
+pattern). All packages work with the new node shape now; `npm test`/typecheck
+pass across all 8 workspaces (233 tests, 0 failures) per the commit.
 
 ---
 
@@ -131,46 +132,43 @@ Ordered roughly easiest → hardest to decide:
 
 ---
 
-## Pending renames (apply when code is next touched)
+## Pending renames — DONE (2026-07-11, commit 8e8329c)
 
-- `DispatchMarker` in `packages/http/src/project.ts` currently uses `by` as the
-  discriminant key (`{ by: "header", name }`, `{ by: "query", name }`,
-  `{ by: "contentType" }`). Rename `by` → `kind` to match the settled convention
-  (tagged-union discriminants are `kind`). Do NOT rename now — record here per
-  the convention.
+- `by` → `kind` rename on the HTTP dispatch marker discriminant landed in
+  `packages/http/src/project.ts` as part of the coordinated refactor.
 
-## Pending removals (apply when code is next touched)
+## Pending removals — DONE (2026-07-11, commit 8e8329c)
 
-- `effectiveTags` / tag inheritance in `packages/core/src/tags.ts`: remove the
-  closest-wins tree-walk. A node's tags are what's on the node; they don't
-  depend on ancestors (breaks composability: moving a subtree changes behavior
-  silently). Replace with `(tree) => tree` transform helpers — `mapNodes` visitor
-  for pre-order and post-order walks. Tree transforms are the general modification
-  primitive (tags, dispatch defaults, metadata processing).
-- `ParamNode` type and `param()` constructor — replaced by `fallback` field on
-  `Node`. `fallback: { name, subtree }` separates wildcard capture from keyed
-  dispatch. See `docs/design/router-model.md` § Node Shape. (2026-07-10)
+All four items landed in the coordinated refactor (commit 8e8329c,
+"refactor: retire dispatch()/ParamNode/effectiveTags/buildRoutes for fallback
++ DU model"):
+
+- `effectiveTags` / tag inheritance in `packages/core/src/tags.ts` — removed;
+  replaced by the `mapNodes` pre-order/post-order tree-transform visitor. A
+  node's tags are now exactly what's on the node.
+- `ParamNode` type and `param()` constructor — removed; replaced by a
+  `fallback?: { name, subtree }` field on `Node` (`children` is now
+  `Record<string, Node>`). See `docs/design/router-model.md` § Node Shape.
 - `buildRoutes` / `compile` / flat route table in `packages/http/src/project.ts`
-  — the projector dispatches directly on the tree at runtime (tree walk,
-  O(depth)). No flattening step. See `docs/design/router-model.md`
-  § No compilation step. (2026-07-10)
+  — removed; the projector dispatches directly on the tree at request time
+  (`candidatesForUrl` + `makeRouter(node)`, O(depth)), with a small full-tree
+  scan reserved for the `legacyPath` escape hatch only. See
+  `docs/design/router-model.md` § No compilation step.
 - `meta.http.verb`, `meta.http.segment`, `meta.http.when` as named keys —
-  replaced by DU variants in `meta.http` with interpreter functions in the
-  projector. See `docs/design/router-model.md` § HTTP metadata. (2026-07-10)
-- `dispatch()` in `packages/core/src/node.ts` (2026-07-11 finding): a
-  path-segment-only tree-walking dispatcher (`dispatch(root, segments, input)`)
-  that resolves a leaf handler by walking `children`/`ParamNode` and merging
-  slug values into the handler input. It is exercised only by its own test
-  (`packages/core/src/node.test.ts`) — grepped across `packages/` and
-  `examples/`, no production code (`http`, `cli`, `mcp`, `openapi`, `client`)
-  calls it; `cli.ts` references the `Node`/`ParamNode` *types* from the same
-  file but implements its own resolution rather than calling `dispatch()`.
-  It also has no concept of HTTP method or header dispatch — it only walks
-  path segments to a terminal leaf. Needs a decision: retire it as dead code,
-  or decide its relationship to the HTTP projector's own dispatch (see
-  Architecture gaps § Two divergent dispatch mechanisms below) — e.g. as the
-  protocol-neutral base that HTTP's tree walk should delegate to instead of
-  duplicating.
+  removed; replaced by DU variants (`meta.http.dispatch: DispatchMarker`,
+  `meta.http.directives: HttpDirective[]`) with interpreter functions in the
+  projector. See `docs/design/router-model.md` § HTTP metadata.
+- `dispatch()` in `packages/core/src/node.ts` — removed along with its test
+  (the dead protocol-neutral path-walking dispatcher flagged 2026-07-11 had no
+  callers in production code). The "which mechanism wins" question this
+  raised is moot now that both the core walker and the flagged
+  `buildRoutes`/`makeRouter` duplication are gone — see Architecture gaps
+  § Two divergent dispatch mechanisms below.
+
+Downstream packages (`cli`, `mcp`, `openapi`, `client`, `codegen`) and
+`examples/library-api` were updated in the same commit for the new
+`fallback`/DU shapes. All packages' `npm test`/typecheck pass (8/8
+workspaces, 233 tests, 0 failures) per the commit message.
 
 ---
 
@@ -255,19 +253,17 @@ Reframed by routing expression model: "which builtins earn their spot" falls
 out of the expression language design, not from importing HTTP categories.
 See `docs/design/routing-expression-model.md`.
 
-### Two divergent dispatch mechanisms (2026-07-11 finding)
+### Two divergent dispatch mechanisms — RESOLVED (2026-07-11, commit 8e8329c)
 
-`packages/core/src/node.ts` has its own `dispatch()` — a protocol-neutral,
-path-segment-only tree walk (no method/header awareness) — while
-`packages/http/src/project.ts` has `buildRoutes`/`makeRouter`, which is the one
-actually wired into the HTTP projection and already flagged above for removal
-in favor of a direct-tree-walk-at-runtime projector (per
-`docs/design/router-model.md` § No compilation step). Neither currently calls
-the other. Core's `dispatch()` looks like it could be the protocol-neutral
-primitive that a rewritten HTTP dispatch delegates into (adding method/header
-matching on top of the path walk), but that relationship is not decided
-anywhere in the design docs — see the `dispatch()` entry under Pending
-removals for the concrete finding.
+`packages/core/src/node.ts` used to have its own `dispatch()` — a
+protocol-neutral, path-segment-only tree walk (no method/header awareness) —
+while `packages/http/src/project.ts` had `buildRoutes`/`makeRouter`, the one
+actually wired into the HTTP projection. Both were removed in the coordinated
+refactor: core's `dispatch()` was deleted outright (dead code, no production
+callers), and HTTP's `buildRoutes`/`makeRouter(routes)`/`Route[]` were replaced
+by direct tree-walk dispatch at request time (`candidatesForUrl` +
+`makeRouter(node)`, O(depth)). There is now a single dispatch mechanism, not
+two.
 
 ---
 
