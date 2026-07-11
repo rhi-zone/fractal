@@ -168,6 +168,92 @@ coverage — including edge cases — is needed before settling the initial set.
 
 ---
 
+## Expression type: `T => T | undefined`
+
+The routing step type is `T => T | undefined`. `undefined` is NoMatch — "this
+edge doesn't apply." No special monad, no wrapper — just TypeScript's native
+optional.
+
+`choice(f, g, h)` tries branches in order, takes the first non-undefined
+result. If the last branch is `T => T` (total — never returns undefined), the
+whole `choice` is `T => T`. The type system tracks exhaustiveness: a top-level
+router with a 404 catch-all as its final branch is total (`T => T`); one
+without is partial (`T => T | undefined`).
+
+The 404 handler is not a framework concept — it's a regular handler that
+happens to be the last branch of a top-level `choice`, making the router total.
+
+---
+
+## Metadata vs. expression nodes
+
+The principled boundary:
+
+**Expression nodes** (DU variants) — what the node does during traversal.
+Dispatch behavior IS the expression node, not metadata on it. `match` with
+an accessor is the node itself, not a node with `meta.http.dispatch`.
+
+**Metadata** — what projections read about a node, without affecting which
+handler a request reaches. Tags (readOnly, idempotent, destructive),
+projection hints (verb override, hidden, OpenAPI description), documentation.
+
+The test: if removing it changes which handler a request reaches, it's in the
+expression. If it only changes how a projection renders or documents the
+handler, it's metadata.
+
+---
+
+## Protocol-agnostic expressions don't contain protocol-specific dispatch
+
+`match(method, { GET: ..., POST: ... })` is not agnostic — method is an HTTP
+concept. In the agnostic expression, operations have names and tags. The HTTP
+projection derives method dispatch from tags; the CLI projection derives
+subcommands. Protocol-specific dispatch is a projection-level construct, not
+authored in the expression.
+
+Worked example — a users CRUD as an agnostic expression:
+
+```ts
+path("users", {
+  list: handler(listUsers, { tags: { readOnly: true } }),
+  create: handler(createUser),
+  byId: capture("id", {
+    read: handler(getUser, { tags: { readOnly: true } }),
+    update: handler(updateUser, { tags: { idempotent: true } }),
+    remove: handler(deleteUser, { tags: { idempotent: true, destructive: true } }),
+  })
+})
+```
+
+The HTTP projection derives: readOnly → GET, idempotent+destructive → DELETE,
+idempotent → PUT, else → POST.
+
+---
+
+## Tag-to-verb derivation is leaky (open)
+
+The tag→verb mapping breaks for common cases:
+
+- readOnly operations with POST bodies (search endpoints like Elasticsearch,
+  GraphQL) — URL-length constraints override the tag
+- Login/logout — side-effecting but neither destructive nor mutation; no tag
+  slot
+- PATCH (partial update) — no corresponding tag; falls through to override
+
+The tag set (readOnly, idempotent, destructive, openWorld) originates from MCP
+tool annotations — designed as UX/agent behavior hints, not as a mechanical
+protocol-dispatch key. Whether stretching them to select HTTP verbs is sound
+hasn't been validated against real APIs.
+
+gRPC uses explicit per-RPC HTTP annotations (no semantic derivation). GraphQL
+sidesteps the problem (one POST endpoint).
+
+The codebase already implements derived-default-with-override (tags feed a
+VerbResolver, explicit per-op override wins). Whether the default mapping is
+useful enough to keep is the open question.
+
+---
+
 ## What this reframes
 
 - The DU + matcher model from `dispatch-extensibility.md` is one
@@ -179,3 +265,8 @@ coverage — including edge cases — is needed before settling the initial set.
   language, not from importing HTTP categories.
 - The value prop question (thread #6) has a partial answer: the value is
   the shipped combinators, not the extensibility mechanism.
+- NoMatch is `undefined`, not a special type. `choice` with a total last
+  branch is total.
+- Metadata vs. expression boundary is principled: expression = affects which
+  handler is reached; metadata = affects rendering/documentation only.
+- Protocol-specific dispatch belongs in the projection, not the expression.

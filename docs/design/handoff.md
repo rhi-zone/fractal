@@ -2,9 +2,9 @@
 
 ## What happened this session
 
-Continued the design session. Explored cycles/corecursion in routing,
-transition names vs. dispatch data, flat state machines vs. combinators, and
-arrived at "combinators are the product."
+Continued design session. Worked through expression types, metadata
+boundary, protocol-agnostic expressions, tag-to-verb validation, and audited
+code vs design to identify and begin closing gaps.
 
 ### Settled
 
@@ -25,27 +25,38 @@ arrived at "combinators are the product."
    builtins earn their spot falls out of the expression language design,
    not from importing HTTP categories.
 
-5. **NEW: Cycles/corecursion use `lazy(() => expr)`** (Zod-style thunks) — a
+5. **Cycles/corecursion use `lazy(() => expr)`** (Zod-style thunks) — a
    thunk that defers evaluation until dispatch time, when all definitions are
    bound. No formal fixpoint or letrec needed. Enumeration projections
    (OpenAPI) detect cycles via reference identity and emit `$ref` instead of
    expanding.
 
-6. **NEW: Transition names and dispatch data are separate concepts** that
+6. **Transition names and dispatch data are separate concepts** that
    coincide for path segments in the common case. A transition's name is
    structural (for the author); its dispatch data says what input drives the
    transition (path capture, method, header, etc.).
 
-7. **NEW: Flat state/transition maps are the right mental model, not the
+7. **Flat state/transition maps are the right mental model, not the
    authoring form.** Combinators as authoring, DU as data, projections as
    interpreters. The state machine is the execution model, not something you
    write directly.
 
-8. **NEW: Combinators are the product.** The extensible DU + interpreter
-   pattern is the mechanism — anyone can apply it. The value of the framework
-   is the shipped combinators, which encode design taste about API structure.
-   The extensibility exists so users can add domain-specific combinators, but
+8. **Combinators are the product.** The extensible DU + interpreter pattern
+   is the mechanism — anyone can apply it. The value of the framework is the
+   shipped combinators, which encode design taste about API structure. The
+   extensibility exists so users can add domain-specific combinators, but
    the shipped set is the product.
+
+9. **NEW: Expression step type is `T => T | undefined`.** NoMatch is
+   `undefined`. `choice` with a total last branch is total. 404 is a regular
+   handler, not a framework concept.
+
+10. **NEW: Principled metadata vs expression boundary** — expression =
+    affects handler selection; metadata = affects rendering/documentation.
+
+11. **NEW: Protocol-specific dispatch (method, header) belongs in the
+    projection, not the agnostic expression.** Operations have names and
+    tags; projections derive protocol dispatch.
 
 ### Open threads (carried forward, updated)
 
@@ -62,15 +73,21 @@ arrived at "combinators are the product."
    design taste they encode.
 7. **Design backlog #2-#10** remain open.
 8. **Core types for the expression model** — carried forward.
-9. **NEW: Principled capability boundary.** How to determine how capable the
+9. **Principled capability boundary.** How to determine how capable the
    composition of shipped combinators needs to be, including edge cases.
    Needed before settling the initial set.
+10. **NEW: Tag-to-verb derivation soundness.** The mapping is leaky for
+    common cases (search-as-POST, login/logout, PATCH). Validate against
+    real APIs or decouple tags from verb selection.
+11. **NEW: Code-to-design sync.** Coordinated refactor in progress
+    (ParamNode→fallback, effectiveTags removal, by→kind, named keys→DU,
+    buildRoutes→tree walk, core dispatch() removal). Results pending.
 
 ## Read order
 
 1. `docs/design/invariants.md` — authoritative constraints (wins on conflict)
-2. `docs/design/routing-expression-model.md` — expression model, state
-   machine, combinators as product
+2. `docs/design/routing-expression-model.md` — expression types, metadata
+   boundary, protocol-agnostic expressions, tag-to-verb validation
 3. `docs/design/router-model.md` — node shape, dispatch (partially reframed)
 4. `docs/design/dispatch-extensibility.md` — DU + dictionary (one
    implementation of `match`)
@@ -79,7 +96,6 @@ arrived at "combinators are the product."
 
 ## Key files changed
 
-- `docs/design/routing-expression-model.md` — cycles/corecursion, transition
-  names, combinators as product
+- `docs/design/routing-expression-model.md` — expression types, metadata
+  boundary, protocol-agnostic expressions, tag-to-verb validation
 - `docs/design/handoff.md` — new handoff
-- (`TODO.md` not changed this round)
