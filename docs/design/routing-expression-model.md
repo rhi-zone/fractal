@@ -89,6 +89,85 @@ of node dispatch.
 
 ---
 
+## Tree vs. state machine: cycles and corecursion
+
+The tree representation cannot express cycles. Corecursive API structures
+(e.g., `/nodes/a/children/b/children/c/...` where each node has the same
+operations — read, delete, list children, create child, descend into child)
+require a routing state machine with cycles. This is not contrived —
+path-based resource traversal, nested comment threads, org hierarchies all
+have this shape.
+
+Mutual recursion (e.g., a `node` shape and a `collection` shape that reference
+each other) also requires cycles.
+
+Simple path traversal (unbounded depth with no per-level structure) can be
+handled by a rest/splat parameter. But if each level has its own operations,
+properties, and dispatch (method dispatch, property access, recursive descent),
+a rest param pushes the entire router into the handler.
+
+Cycles in the expression use `lazy(() => expr)` — a thunk that defers
+evaluation until dispatch time, when all definitions are bound (same approach
+as Zod's `z.lazy()` for recursive schemas). No formal fixpoint or letrec
+needed. Enumeration projections (OpenAPI) detect cycles via reference identity
+and emit `$ref` instead of expanding.
+
+---
+
+## Transition names vs. dispatch data
+
+In the tree authoring form, keys serve double duty: they are both the
+transition name (structural identifier) and the dispatch value (the path
+segment to match). These are separate concepts that happen to coincide for
+path segments.
+
+A transition named `"byId"` might dispatch on a path capture. A transition
+named `"getOrCreate"` might dispatch on method. The name is for the author
+and the structure; the dispatch data says what input drives it. The tree
+form's convenience is that the default dispatch data is "match a path segment
+equal to this name."
+
+---
+
+## Flat state/transition maps are the right mental model, not the authoring form
+
+The flat state machine (states + transitions as an adjacency list) is the
+correct mental model for what routing does — named states, input-driven
+transitions, terminal states with handlers. But as an authoring form it's
+verbose and loses the composability that combinators provide.
+
+Combinators as authoring, expression (DU) as the data they produce,
+projections as interpreters. The state machine is the execution model, not
+something you write directly.
+
+---
+
+## Combinators are the product
+
+The extensible DU + interpreter pattern is the mechanism. Anyone can apply it.
+The value of the framework is the **shipped combinators** — they encode
+opinions about how APIs should be structured. Composed, they give you a
+well-structured API that projects correctly to every surface (HTTP, OpenAPI,
+CLI, SDK, MCP).
+
+The combinators embody design taste (what a good API shape looks like); the
+projections make it real. The extensibility exists so users can add
+domain-specific combinators, but the shipped set is the product.
+
+The initial set of combinators is therefore the product question, not just a
+technical question.
+
+---
+
+## Open: principled capability boundary
+
+How capable does the composition of shipped combinators need to be? The
+question is not "what combinators exist" but "what API shapes can you express
+by composing them, and where are the edges?" A principled way to determine
+coverage — including edge cases — is needed before settling the initial set.
+
+---
+
 ## What this reframes
 
 - The DU + matcher model from `dispatch-extensibility.md` is one
@@ -98,3 +177,5 @@ of node dispatch.
 - Thread #1 (dispatch builtins assumed not proven) collapses — "which
   builtins earn their spot" falls out of understanding the full expression
   language, not from importing HTTP categories.
+- The value prop question (thread #6) has a partial answer: the value is
+  the shipped combinators, not the extensibility mechanism.

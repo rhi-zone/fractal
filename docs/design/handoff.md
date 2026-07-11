@@ -2,9 +2,9 @@
 
 ## What happened this session
 
-Design session continuing from the dispatch builtins thread. Started with
-thread #1 (dispatch builtins assumed not proven), arrived at a routing
-expression model that reframes dispatch, middleware, and auth.
+Continued the design session. Explored cycles/corecursion in routing,
+transition names vs. dispatch data, flat state machines vs. combinators, and
+arrived at "combinators are the product."
 
 ### Settled
 
@@ -17,46 +17,69 @@ expression model that reframes dispatch, middleware, and auth.
    HTTP metadata. Projections are interpreters over the expression —
    dispatch evaluates, OpenAPI enumerates.
 
-3. **Auth and middleware concerns collapse into input extraction** (thread
-   #3 from the previous handoff). Auth credentials are just another input
-   parameter sourced from the protocol request. No special middleware layer.
+3. **Auth and middleware concerns collapse into input extraction**. Auth
+   credentials are just another input parameter sourced from the protocol
+   request. No special middleware layer.
 
 4. **Thread #1 (dispatch builtins) is subsumed** — the question of which
    builtins earn their spot falls out of the expression language design,
    not from importing HTTP categories.
 
+5. **NEW: Cycles/corecursion use `lazy(() => expr)`** (Zod-style thunks) — a
+   thunk that defers evaluation until dispatch time, when all definitions are
+   bound. No formal fixpoint or letrec needed. Enumeration projections
+   (OpenAPI) detect cycles via reference identity and emit `$ref` instead of
+   expanding.
+
+6. **NEW: Transition names and dispatch data are separate concepts** that
+   coincide for path segments in the common case. A transition's name is
+   structural (for the author); its dispatch data says what input drives the
+   transition (path capture, method, header, etc.).
+
+7. **NEW: Flat state/transition maps are the right mental model, not the
+   authoring form.** Combinators as authoring, DU as data, projections as
+   interpreters. The state machine is the execution model, not something you
+   write directly.
+
+8. **NEW: Combinators are the product.** The extensible DU + interpreter
+   pattern is the mechanism — anyone can apply it. The value of the framework
+   is the shipped combinators, which encode design taste about API structure.
+   The extensibility exists so users can add domain-specific combinators, but
+   the shipped set is the product.
+
 ### Open threads (carried forward, updated)
 
-1. (was #2) **What ARE the DU variants?** Now reframed as: what are the
-   combinator primitives in the expression language? (`match`, `pipe`,
-   `alt`, `consume`, `capture` are illustrative, not settled.)
-2. (was #3) **Input extraction design** — now expanded: includes auth,
-   caller-context, per-parameter protocol sourcing.
-3. (was #4) **Output formatting design** — unchanged.
-4. (was #5) **Protocol behavior layer** — unchanged.
-5. (was #6) **Stainless NIH / SDK generation** — unchanged.
-6. (was #7) **Value prop clarity** — unchanged.
-7. (was #8) **Design backlog #2-#10** remain open.
-8. **NEW: What are the core types for the graph/expression model?** The
-   tree node shape is authoring form, not the core type. What replaces it?
-9. **NEW: Combinator primitives are illustrative, not settled.** What's the
-   actual set?
+1. **What are the combinator primitives?** Carried forward, now understood
+   as the product question — not just "what exists" but what design taste
+   the shipped set should encode.
+2. **Input extraction design** — carried forward, expanded with
+   auth/caller-context.
+3. **Output formatting design** — carried forward.
+4. **Protocol behavior layer** — carried forward.
+5. **Stainless NIH / SDK generation** — carried forward.
+6. **Value prop clarity** — partially answered: the value is the shipped
+   combinators, not the extensibility mechanism. Remaining: articulate what
+   design taste they encode.
+7. **Design backlog #2-#10** remain open.
+8. **Core types for the expression model** — carried forward.
+9. **NEW: Principled capability boundary.** How to determine how capable the
+   composition of shipped combinators needs to be, including edge cases.
+   Needed before settling the initial set.
 
 ## Read order
 
 1. `docs/design/invariants.md` — authoritative constraints (wins on conflict)
-2. `docs/design/routing-expression-model.md` (NEW) — expression model, state
-   machine framing
-3. `docs/design/router-model.md` — node shape, dispatch (partially reframed
-   by expression model)
-4. `docs/design/dispatch-extensibility.md` — DU + dictionary (now understood
-   as one implementation of `match`)
+2. `docs/design/routing-expression-model.md` — expression model, state
+   machine, combinators as product
+3. `docs/design/router-model.md` — node shape, dispatch (partially reframed)
+4. `docs/design/dispatch-extensibility.md` — DU + dictionary (one
+   implementation of `match`)
 5. `TODO.md` — open threads, architecture gaps, pending removals, backlog
 6. This file — session context
 
 ## Key files changed
 
-- `docs/design/routing-expression-model.md` (NEW) — state machine framing,
-  combinator/expression model, auth-as-input-extraction, zag.js prior art
-- `TODO.md` — updated architecture gaps and cross-references to the new doc
-- This file — new handoff
+- `docs/design/routing-expression-model.md` — cycles/corecursion, transition
+  names, combinators as product
+- `docs/design/handoff.md` — new handoff
+- (`TODO.md` not changed this round)
