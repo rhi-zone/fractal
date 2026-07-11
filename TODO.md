@@ -65,6 +65,10 @@ analysis. This reframing means ALL projection concerns (not just dispatch)
 should follow the same DU + interpreter pattern. See `router-model.md`
 § HTTP metadata.
 
+Reframed: the DU + matcher model is one implementation of the `match`
+combinator in the routing expression model. See
+`docs/design/routing-expression-model.md`.
+
 ### Migrate the fenced packages to the function-core model
 
 The function-core rewrite (`docs/design/function-core-and-projection.md`) landed
@@ -186,6 +190,11 @@ All extraction strategies are extensions (same mechanism as dispatch kinds —
 shipped variants are not architecturally different from user-added ones).
 The need for specific default strategies should be proven, not assumed.
 
+Auth and caller-context (middleware concerns) collapse into input
+extraction — auth credentials are just another input parameter sourced from
+the protocol request. No special middleware layer needed. See
+`docs/design/routing-expression-model.md`.
+
 ### Output formatting
 
 How to turn `U` into a protocol response. Currently hardcoded: JSON + 200 OK.
@@ -202,6 +211,10 @@ Protocol obligations that aren't business logic:
 ### Middleware / cross-cutting
 
 Auth, rate limiting, logging, caching. Not in the tree. Design backlog #6.
+
+Auth collapses into input extraction. Rate limiting, logging, caching remain
+as open questions — may also reduce to input extraction or may need their
+own expression. See `docs/design/routing-expression-model.md`.
 
 ### SDK generation / Stainless NIH
 
@@ -222,6 +235,10 @@ Method dispatch, header dispatch, etc. are DU variants + matchers shipped with
 the package — same mechanism as user-added kinds. The architecture is uniform.
 Note: the specific builtins shipped (method, header) were assumed from HTTP
 convention, not derived from proven need. This may or may not be problematic.
+
+Reframed by routing expression model: "which builtins earn their spot" falls
+out of the expression language design, not from importing HTTP categories.
+See `docs/design/routing-expression-model.md`.
 
 ---
 
