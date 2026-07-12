@@ -1,10 +1,11 @@
-# Handoff — 2026-07-11
+# Handoff — 2026-07-12
 
 ## What happened this session
 
-Continued design session. Worked through expression types, metadata
-boundary, protocol-agnostic expressions, tag-to-verb validation, and audited
-code vs design to identify and begin closing gaps.
+Concluded the design session. Covered projection as composed pipeline,
+fractal's invocation layer gap, prior art survey (tRPC/Effect/Hono/Elysia/
+server-less), zero-ceremony via build step, and the question of what fractal
+uniquely offers.
 
 ### Settled
 
@@ -47,59 +48,77 @@ code vs design to identify and begin closing gaps.
    extensibility exists so users can add domain-specific combinators, but
    the shipped set is the product.
 
-9. **NEW: Expression step type is `T => T | undefined`.** NoMatch is
+9. **Expression step type is `T => T | undefined`.** NoMatch is
    `undefined`. `choice` with a total last branch is total. 404 is a regular
    handler, not a framework concept.
 
-10. **NEW: Principled metadata vs expression boundary** — expression =
+10. **Principled metadata vs expression boundary** — expression =
     affects handler selection; metadata = affects rendering/documentation.
 
-11. **NEW: Protocol-specific dispatch (method, header) belongs in the
+11. **Protocol-specific dispatch (method, header) belongs in the
     projection, not the agnostic expression.** Operations have names and
     tags; projections derive protocol dispatch.
+
+12. **NEW: Projection is a composed pipeline of stages** (dispatch, extract,
+    invoke, format), not a monolith. Cross-cutting concerns wrap individual
+    stages.
+
+13. **NEW: Fractal should cover the invocation layer** (caller-context,
+    audit, tracing) — not surface-only. The pipeline model addresses this.
+
+14. **NEW: Zero-ceremony authoring is the target.** Build step (TS Compiler
+    API) is already decided. Function signature + name + JSDoc = complete
+    API declaration.
+
+15. **NEW: Prior art surveyed.** Fractal's differentiator vs tRPC:
+    zero-ceremony + multi-projection (one function → HTTP + CLI + MCP +
+    OpenAPI + SDK). No existing TS framework does this.
 
 ### Open threads (carried forward, updated)
 
 1. **What are the combinator primitives?** Carried forward, now understood
    as the product question — not just "what exists" but what design taste
    the shipped set should encode.
-2. **Input extraction design** — carried forward, expanded with
-   auth/caller-context.
-3. **Output formatting design** — carried forward.
-4. **Protocol behavior layer** — carried forward.
+2. **Input extraction design** — carried forward, expanded (auth,
+   caller-context, per-parameter sourcing). Now part of the Extract stage
+   in the projection pipeline.
+3. **Output formatting design** — now the Format stage. Carried forward.
+4. **Protocol behavior layer** (HEAD/OPTIONS/405/CORS) — carried forward.
 5. **Stainless NIH / SDK generation** — carried forward.
-6. **Value prop clarity** — partially answered: the value is the shipped
-   combinators, not the extensibility mechanism. Remaining: articulate what
-   design taste they encode.
+6. **Value prop clarity** — partially closed: fractal's differentiator is
+   zero-ceremony multi-projection from typed functions.
 7. **Design backlog #2-#10** remain open.
 8. **Core types for the expression model** — carried forward.
 9. **Principled capability boundary.** How to determine how capable the
    composition of shipped combinators needs to be, including edge cases.
    Needed before settling the initial set.
-10. **NEW: Tag-to-verb derivation soundness.** The mapping is leaky for
-    common cases (search-as-POST, login/logout, PATCH). Validate against
-    real APIs or decouple tags from verb selection.
-11. **RESOLVED (2026-07-11, commit 8e8329c): Code-to-design sync.** Coordinated
-    refactor landed (ParamNode→fallback, effectiveTags removal, by→kind, named
-    keys→DU, buildRoutes→tree walk, core dispatch() removal), touching core,
-    http, openapi, client, cli, codegen, mcp, and examples/library-api. All
-    packages' tests/typecheck pass (8/8 workspaces, 233 tests, 0 failures).
-    TODO.md's pending renames/removals and architecture-gaps entries for these
-    items are cleaned up accordingly.
+10. **Tag-to-verb derivation soundness.** OPEN: server-less uses
+    name-prefix convention. Tags are leaky. What mechanism should fractal
+    use?
+11. **How does context accumulation work at the type level?** tRPC/Effect/
+    Elysia all solve this differently. Fractal doesn't yet.
 
 ## Read order
 
 1. `docs/design/invariants.md` — authoritative constraints (wins on conflict)
-2. `docs/design/routing-expression-model.md` — expression types, metadata
-   boundary, protocol-agnostic expressions, tag-to-verb validation
-3. `docs/design/router-model.md` — node shape, dispatch (partially reframed)
-4. `docs/design/dispatch-extensibility.md` — DU + dictionary (one
+2. `docs/design/routing-expression-model.md` — expression model, pipeline,
+   invocation layer, zero-ceremony, prior art
+3. `docs/design/prior-art/` — tRPC, Effect, Hono, Elysia, server-less,
+   zero-ceremony-ts
+4. `docs/design/router-model.md` — node shape, dispatch (partially reframed)
+5. `docs/design/dispatch-extensibility.md` — DU + dictionary (one
    implementation of `match`)
-5. `TODO.md` — open threads, architecture gaps, pending removals, backlog
-6. This file — session context
+6. `TODO.md` — open threads, architecture gaps, pending removals, backlog
+7. This file — session context
 
-## Key files changed
+## Key files changed this session
 
-- `docs/design/routing-expression-model.md` — expression types, metadata
-  boundary, protocol-agnostic expressions, tag-to-verb validation
-- `docs/design/handoff.md` — new handoff
+- `docs/design/routing-expression-model.md` — expression model, pipeline,
+  invocation layer, zero-ceremony, prior art
+- `docs/design/prior-art/` (NEW directory, 6 files) — tRPC, Effect, Hono,
+  Elysia, server-less, zero-ceremony-ts
+- `docs/design/handoff.md` — this file
+- Code: refactored ParamNode→fallback, effectiveTags→mapNodes, by→kind,
+  named keys→DU, buildRoutes→tree walk, removed dead dispatch()
+- `TODO.md` — cleaned up completed items
+- `docs/archive/` — moved pre-refactor audit artifacts

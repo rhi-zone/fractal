@@ -254,6 +254,58 @@ useful enough to keep is the open question.
 
 ---
 
+## Projection as composed pipeline
+
+The projection is not a monolith. It's composed from independent stages, each a plain function:
+
+- **Dispatch**: Request → find the handler in the expression
+- **Extract**: Request + route params → T (handler's typed input)
+- **Invoke**: call handler(T) → U
+- **Format**: U → Response
+
+Cross-cutting concerns (caller-context, audit, tracing) are higher-order functions wrapping individual stages — not a separate middleware layer:
+
+```ts
+// Caller-context: wraps Extract
+const withContext = (extract, buildCtx) =>
+  (matched) => ({ ...extract(matched), actor: buildCtx(matched.req) })
+
+// Audit: wraps Invoke
+const withAudit = (invoke, consumer) =>
+  (input, handler) => { const result = invoke(input, handler); consumer({ input, result }); return result }
+```
+
+Each concern wraps one stage. Adding caller-context is wrapping Extract; adding audit is wrapping Invoke. The projection is composition of stages; each stage is independently wrappable.
+
+---
+
+## Fractal covers the invocation layer
+
+The eval against another project (2026-07-12) established: fractal currently covers external surface projection only — no caller-context, no per-call scope, no internal dispatch. This is a gap, not a feature. The composed-pipeline projection model addresses it: caller-context assembly is the Extract stage (or a wrapper on it), per-call scope is the Invoke wrapper.
+
+---
+
+## Scale-to-zero learning curve via build step
+
+The authoring target: write a plain typed function, the framework derives everything else (path, method, input extraction, output formatting, OpenAPI, typed client, CLI, MCP). This is what server-less achieves in Rust via proc macros.
+
+In TypeScript, type erasure means this requires a build step (TS Compiler API / ts-morph) — already planned as codegen-from-types. The build step is not a question; it's decided.
+
+The zero-ceremony ideal: the function signature + name + JSDoc IS the complete API declaration. Everything else is derived.
+
+---
+
+## Prior art survey (2026-07-12)
+
+Researched: tRPC, Effect, Hono, Elysia, server-less. Findings in `docs/design/prior-art/`. Key observations:
+
+- No TypeScript framework derives the full set (method, path, input, output, OpenAPI, client) from a bare function. tRPC is closest but still requires `.query()`/`.mutation()` + `.input(schema)`.
+- Every framework separates handler (opaque function) from route metadata (inspectable data). Inspectability comes from parallel data structures, not from making handlers themselves inspectable.
+- Context accumulation is solved via type-level composition in tRPC (Overwrite<>), Effect (R union), and Elysia (Reconcile/MergeSchema).
+- server-less (Rust, same author) achieves the zero-ceremony goal via proc macros + name-prefix convention. This is the direct precedent.
+
+---
+
 ## What this reframes
 
 - The DU + matcher model from `dispatch-extensibility.md` is one
@@ -270,3 +322,12 @@ useful enough to keep is the open question.
 - Metadata vs. expression boundary is principled: expression = affects which
   handler is reached; metadata = affects rendering/documentation only.
 - Protocol-specific dispatch belongs in the projection, not the expression.
+- The invocation layer (caller-context, audit, tracing) is a gap fractal
+  should fill — via composed projection pipeline, not middleware in the
+  expression.
+- Tag-to-verb derivation is leaky and no other framework attempts it.
+  server-less uses name-prefix convention instead. The derivation mechanism
+  is an open question.
+- tRPC is sufficient for most use cases but doesn't achieve zero-ceremony or
+  multi-projection (CLI, MCP). Fractal's differentiator is the zero-ceremony
+  multi-projection from one function definition.
