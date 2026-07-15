@@ -117,33 +117,44 @@ A fractal-owned type IR sits between `ts.Type` (input) and projections
 (consumers). One translation from `ts.Type` to the IR; N projections from
 the IR.
 
-Design principles for the IR:
+The IR has two parts:
 
-- **Extensible hierarchy, not flat, not closed.** Type constructors form a
-  hierarchy (e.g. `int32` is a kind of `integer` which is a kind of
-  `number`). The hierarchy is extensible — projections can introduce type
-  concepts the core doesn't know about.
-- **Fallback via hierarchy.** A projection that doesn't recognize a type
-  walks up the hierarchy to the nearest known ancestor. No explicit fallback
-  mapping needed; the hierarchy IS the fallback.
-- **No blessed organizing principle.** The IR doesn't commit to a theory of
-  which type concepts are first-class. Refinements, readonly markers,
-  effects, linearity — whatever concepts projections need, they add. None
-  is special.
+- **Shape**: an extensible type hierarchy reflecting actual subtyping
+  relationships between concrete types (`int32` → `integer` → `number`,
+  `uuid` → `string`, `timestamptz` → `timestamp`). No intermediate
+  taxonomic categories (Scalar, Composite) unless a specific projection
+  would use them as a fallback target. Every node in the hierarchy is a
+  valid fallback target — a projection that doesn't recognize a type walks
+  up to the nearest type it understands. (Precedent: Avro's logical-type
+  fallback is spec-mandated and works this way.)
+
+- **Metadata**: an open bag on every type node. Presence (nullable,
+  optional, default), direction (input/output), constraints, refinements —
+  all just metadata with conventional keys. Projections read what they
+  recognize, ignore the rest. Conventions, not contracts — no fixed axes,
+  no blessed set of fields. If you violate conventions, no guarantees it
+  works.
+
+Design principles:
+
+- **Extensible hierarchy, not flat, not closed.** The hierarchy is
+  extensible via the augmentable interface pattern (same as
+  `DispatchKinds` for routing). Projections can introduce type concepts the
+  core doesn't know about.
 - **Superset of all targets.** The IR should be able to represent anything
   any target needs, so projections are always narrowing (dropping what they
   can't express), never guessing (inventing what the IR didn't capture).
-  The target set is open — the IR can't be designed by surveying a fixed
-  list of targets.
+  The target set is open.
 - **Richer than TypeScript.** TS is one input, not the upper bound. SQL has
   numeric precision (decimal(10,2)), temporal types (timestamptz,
   interval), binary types (bytea), domain-specific types (geometry, cidr).
   The IR must be able to represent these.
+- **No blessed organizing principle.** The IR doesn't commit to a theory of
+  which type concepts are first-class. Whatever concepts projections need,
+  they add. None is special.
 
-A type system survey across JSON Schema, JTD, serde, TypeScript,
-OCaml/ReasonML, Haskell, protobuf, SQL dialects, GraphQL, Cap'n Proto,
-Avro, and Valibot/Zod/TypeBox is in progress — see
-`docs/design/type-ir-survey.md` (when complete).
+Type system survey: `docs/design/type-ir-survey.md`. Cap'n Proto design
+rationale: `docs/design/prior-art/capnp-design-rationale.md`.
 
 ### SQL dialect projections
 
