@@ -78,6 +78,10 @@
         "@rhi-zone/fractal-http": "workspace:*",
       },
     },
+    "packages/type-ir": {
+      "name": "@rhi-zone/fractal-type-ir",
+      "version": "0.1.0-alpha.0",
+    },
   },
   "packages": {
     "@rhi-zone/fractal-cli": ["@rhi-zone/fractal-cli@workspace:packages/cli"],
@@ -95,6 +99,8 @@
     "@rhi-zone/fractal-mcp": ["@rhi-zone/fractal-mcp@workspace:packages/mcp"],
 
     "@rhi-zone/fractal-openapi": ["@rhi-zone/fractal-openapi@workspace:packages/openapi"],
+
+    "@rhi-zone/fractal-type-ir": ["@rhi-zone/fractal-type-ir@workspace:packages/type-ir"],
 
     "@types/node": ["@types/node@25.9.1", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg=="],
 

@@ -5,6 +5,7 @@
   "comment": "Workspaces fenced to the function-core spine slice. packages/{openapi,client} and examples/{todo-api,dogfood} are FENCED OUT pending migration to the function-core model — see TODO.md. packages/codegen was migrated (types+JSDoc → runtime schema extractor).",
   "workspaces": [
     "packages/core",
+    "packages/type-ir",
     "packages/http",
     "packages/mcp",
     "packages/codegen",
