@@ -1,124 +1,127 @@
-# Handoff — 2026-07-12
+# Handoff — 2026-07-16
 
 ## What happened this session
 
-Concluded the design session. Covered projection as composed pipeline,
-fractal's invocation layer gap, prior art survey (tRPC/Effect/Hono/Elysia/
-server-less), zero-ceremony via build step, and the question of what fractal
-uniquely offers.
+Design session covering value prop, architecture layers, type IR design, and
+prior art research.
 
 ### Settled
 
-1. **Dispatch space is a state machine** (directed graph), not just a tree.
-   A tree is a subcase — acyclic, single incoming edge per node. Tree is
-   authoring convenience, not the semantic primitive.
+1. **Value prop: typed, composable routing (not stringly-typed).** Every
+   incumbent uses `app.get('/users/:id', handler)` — route structure encoded
+   in strings. Fractal makes routing typed and composable. Multi-surface
+   projection (HTTP, CLI, MCP, OpenAPI, SDK) is a natural consequence, not
+   the primary differentiator.
 
-2. **Router as expression**: combinators produce data (DU variants), not
-   closures. Same interpreter pattern already used for dispatch kinds and
-   HTTP metadata. Projections are interpreters over the expression —
-   dispatch evaluates, OpenAPI enumerates.
+2. **Routing IS the API structure.** Routing is not an HTTP concept. It's
+   the navigable structure of typed functions that IS the API. HTTP paths,
+   CLI subcommands, MCP tool names are projections of the same structure.
 
-3. **Auth and middleware concerns collapse into input extraction**. Auth
-   credentials are just another input parameter sourced from the protocol
-   request. No special middleware layer.
+3. **Three architecture layers (independent):** Combinators (compose
+   functionality, authoring surface), Constructors/DU (produce inspectable
+   expression data), Interpreters/projections (consume DU to produce
+   surfaces). Each independent of the others. The DU is the contract.
 
-4. **Thread #1 (dispatch builtins) is subsumed** — the question of which
-   builtins earn their spot falls out of the expression language design,
-   not from importing HTTP categories.
+4. **Three consumption paths from one authoring surface:** Direct
+   composition (closures, opaque), DU + dynamic interpreter (runtime, no
+   build step), DU + codegen'd evaluator (build step reads DU, emits
+   optimized code).
 
-5. **Cycles/corecursion use `lazy(() => expr)`** (Zod-style thunks) — a
-   thunk that defers evaluation until dispatch time, when all definitions are
-   bound. No formal fixpoint or letrec needed. Enumeration projections
-   (OpenAPI) detect cycles via reference identity and emit `$ref` instead of
-   expanding.
+5. **Two authoring surfaces, both first-class:** Combinator tree (explicit
+   composition) and zero-ceremony bare functions (build step derives
+   everything). These don't conflict — the build step emits combinator
+   expressions. Two mental models is fine; conflicting mental models is not.
 
-6. **Transition names and dispatch data are separate concepts** that
-   coincide for path segments in the common case. A transition's name is
-   structural (for the author); its dispatch data says what input drives the
-   transition (path capture, method, header, etc.).
+6. **Type projection is separate from routing.** Types are not APIs. The
+   routing DU handles API structure. Type projection handles data shapes.
+   Same structural patterns (extensible DU, open metadata, interpreters) but
+   different data.
 
-7. **Flat state/transition maps are the right mental model, not the
-   authoring form.** Combinators as authoring, DU as data, projections as
-   interpreters. The state machine is the execution model, not something you
-   write directly.
+7. **Type IR design: shape + metadata.**
+   - Shape: extensible type hierarchy via subtyping (not taxonomy). `int32`
+     → `integer` → `number`. No intermediate categories unless a projection
+     would use them as fallback targets.
+   - Metadata: open bag on every type node. Presence, direction, constraints
+     — all conventional keys, not fixed axes. Conventions, not contracts.
+   - Superset of all targets (target set is open). Richer than TypeScript.
+   - Fallback via hierarchy (Avro precedent). No blessed organizing
+     principle.
 
-8. **Combinators are the product.** The extensible DU + interpreter pattern
-   is the mechanism — anyone can apply it. The value of the framework is the
-   shipped combinators, which encode design taste about API structure. The
-   extensibility exists so users can add domain-specific combinators, but
-   the shipped set is the product.
+8. **Extensible DU + interpreter as the recurring pattern.** Augmentable
+   TypeScript interface → discriminated union. Used for dispatch kinds, type
+   IR, and anywhere a closed set would force core changes. Documented in
+   CLAUDE.md as design philosophy.
 
-9. **Expression step type is `T => T | undefined`.** NoMatch is
-   `undefined`. `choice` with a total last branch is total. 404 is a regular
-   handler, not a framework concept.
+9. **Open metadata bag over fixed schema.** Metadata is conventional keys on
+   a plain object. No fixed spec. Documented in CLAUDE.md.
 
-10. **Principled metadata vs expression boundary** — expression =
-    affects handler selection; metadata = affects rendering/documentation.
+10. **Spec references in projector source code.** Projector code cites the
+    spec sections it implements. LLMs are unreliable; inline references make
+    projectors auditable.
 
-11. **Protocol-specific dispatch (method, header) belongs in the
-    projection, not the agnostic expression.** Operations have names and
-    tags; projections derive protocol dispatch.
+11. **Build step uses TS Compiler API directly (standalone program), not
+    ts-patch/compiler-plugin.** Avoids typia's fragility.
 
-12. **NEW: Projection is a composed pipeline of stages** (dispatch, extract,
-    invoke, format), not a monolith. Cross-cutting concerns wrap individual
-    stages.
-
-13. **NEW: Fractal should cover the invocation layer** (caller-context,
-    audit, tracing) — not surface-only. The pipeline model addresses this.
-
-14. **NEW: Zero-ceremony authoring is the target.** Build step (TS Compiler
-    API) is already decided. Function signature + name + JSDoc = complete
-    API declaration.
-
-15. **NEW: Prior art surveyed.** Fractal's differentiator vs tRPC:
-    zero-ceremony + multi-projection (one function → HTTP + CLI + MCP +
-    OpenAPI + SDK). No existing TS framework does this.
+12. **Fractal avoids incumbent pain points by construction:** no live type
+    inference (no editor perf cliff), no OpenAPI codegen for clients (no
+    generated-file-correctness cliff), can support both throw and return
+    error conventions, cache invalidation is composable and orthogonal.
 
 ### Open threads (carried forward, updated)
 
-1. **What are the combinator primitives?** Carried forward, now understood
-   as the product question — not just "what exists" but what design taste
-   the shipped set should encode.
-2. **Input extraction design** — carried forward, expanded (auth,
-   caller-context, per-parameter sourcing). Now part of the Extract stage
-   in the projection pipeline.
-3. **Output formatting design** — now the Format stage. Carried forward.
-4. **Protocol behavior layer** (HEAD/OPTIONS/405/CORS) — carried forward.
-5. **Stainless NIH / SDK generation** — carried forward.
-6. **Value prop clarity** — partially closed: fractal's differentiator is
-   zero-ceremony multi-projection from typed functions.
-7. **Design backlog #2-#10** remain open.
-8. **Core types for the expression model** — carried forward.
-9. **Principled capability boundary.** How to determine how capable the
-   composition of shipped combinators needs to be, including edge cases.
-   Needed before settling the initial set.
-10. **Tag-to-verb derivation soundness.** OPEN: server-less uses
-    name-prefix convention. Tags are leaky. What mechanism should fractal
-    use?
-11. **How does context accumulation work at the type level?** tRPC/Effect/
-    Elysia all solve this differently. Fractal doesn't yet.
+1. **Combinator primitives** — still open. The product question. What are
+   the actual combinators? (Carried forward from previous session.)
+2. **Concrete type hierarchy** — the shape axis of the type IR needs actual
+   types and subtyping relationships sketched out. Survey is done
+   (type-ir-survey.md), design principles settled, but the concrete
+   hierarchy isn't built yet.
+3. **Input extraction design** — carried forward. Now understood as
+   metadata conventions on the type IR, but the specifics aren't designed.
+4. **Output formatting design** — carried forward.
+5. **Protocol behavior layer** (HEAD/OPTIONS/405/CORS) — carried forward.
+6. **Tag-to-verb derivation soundness** — carried forward. Still leaky.
+7. **Context accumulation at the type level** — carried forward.
+8. **The built code doesn't match the combinator identity.** Current code
+   is `node/op/service/param` (data-structure construction), not
+   Parsec-style combinator composition. The expression model was supposed
+   to bridge this but isn't implemented.
+9. **Principled capability boundary** — carried forward.
+10. **Design backlog #2-#10** from TODO.md — carried forward.
 
 ## Read order
 
-1. `docs/design/invariants.md` — authoritative constraints (wins on conflict)
-2. `docs/design/routing-expression-model.md` — expression model, pipeline,
-   invocation layer, zero-ceremony, prior art
-3. `docs/design/prior-art/` — tRPC, Effect, Hono, Elysia, server-less,
-   zero-ceremony-ts
-4. `docs/design/router-model.md` — node shape, dispatch (partially reframed)
-5. `docs/design/dispatch-extensibility.md` — DU + dictionary (one
-   implementation of `match`)
-6. `TODO.md` — open threads, architecture gaps, pending removals, backlog
-7. This file — session context
+1. `CLAUDE.md` — design philosophy (biases with reasoning), hard
+   constraints, disposition
+2. `docs/design/invariants.md` — authoritative constraints (wins on
+   conflict)
+3. `docs/design/architecture-layers.md` — layers, consumption paths,
+   authoring surfaces, type IR, value prop
+4. `docs/design/routing-expression-model.md` — expression model, pipeline,
+   zero-ceremony
+5. `docs/design/type-ir-survey.md` — survey of 12 type systems, synthesis
+6. `docs/design/prior-art/` — tRPC, Effect, Hono, Elysia, server-less,
+   zero-ceremony-ts, capnp-design-rationale, dx-pain-* files
+7. `docs/design/router-model.md` — node shape, dispatch
+8. `docs/design/dispatch-extensibility.md` — DU + dictionary
+9. `TODO.md` — open threads, backlog
+10. This file — session context
 
 ## Key files changed this session
 
-- `docs/design/routing-expression-model.md` — expression model, pipeline,
-  invocation layer, zero-ceremony, prior art
-- `docs/design/prior-art/` (NEW directory, 6 files) — tRPC, Effect, Hono,
-  Elysia, server-less, zero-ceremony-ts
-- `docs/design/handoff.md` — this file
-- Code: refactored ParamNode→fallback, effectiveTags→mapNodes, by→kind,
-  named keys→DU, buildRoutes→tree walk, removed dead dispatch()
-- `TODO.md` — cleaned up completed items
-- `docs/archive/` — moved pre-refactor audit artifacts
+- `CLAUDE.md` — added Design Philosophy section (9 biases with reasoning)
+- `docs/design/architecture-layers.md` (NEW) — layers, consumption paths,
+  authoring surfaces, type IR design, value prop
+- `docs/design/type-ir-survey.md` (NEW) — survey of 12 type systems with
+  synthesis
+- `docs/design/prior-art/capnp-design-rationale.md` (NEW) — Cap'n Proto
+  design decisions and rationale
+- `docs/design/prior-art/dx-pain-trpc.md` (NEW) — tRPC DX pain points
+- `docs/design/prior-art/dx-pain-hono.md` (NEW) — Hono DX pain points
+- `docs/design/prior-art/dx-pain-elysia.md` (NEW) — Elysia DX pain points
+- `docs/design/prior-art/dx-pain-express-fastify.md` (NEW) — Express/Fastify
+  DX pain points
+- `docs/design/prior-art/dx-pain-typia.md` (NEW) — Typia mechanism and DX
+  pain points
+- `docs/design/prior-art/dx-pain-rpc-clients.md` (NEW) — cross-ecosystem RPC
+  client pain
+- `docs/design/handoff.md` — this file (updated)
