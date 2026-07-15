@@ -10,6 +10,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./json-schema": {
+      "types": "./src/json-schema.ts",
+      "import": "./src/json-schema.ts"
     }
   },
   "files": ["src"],

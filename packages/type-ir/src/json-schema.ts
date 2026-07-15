@@ -1,0 +1,114 @@
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+
+export type JsonSchema = Record<string, unknown>
+
+const passthroughKeys = [
+  "minimum",
+  "maximum",
+  "minLength",
+  "maxLength",
+  "pattern",
+  "multipleOf",
+] as const
+
+function withMeta(schema: JsonSchema, meta: Readonly<Record<string, unknown>>, complex: boolean): JsonSchema {
+  let result = schema
+
+  if (meta.nullable === true) {
+    if (complex) {
+      result = { anyOf: [result, { type: "null" }] }
+    } else if (typeof result.type === "string") {
+      result = { ...result, type: [result.type, "null"] }
+    } else {
+      result = { anyOf: [result, { type: "null" }] }
+    }
+  }
+
+  if (typeof meta.description === "string") result = { ...result, description: meta.description }
+  if (meta.deprecated === true) result = { ...result, deprecated: true }
+  if (meta.default !== undefined) result = { ...result, default: meta.default }
+
+  for (const key of passthroughKeys) {
+    if (meta[key] !== undefined) result = { ...result, [key]: meta[key] }
+  }
+
+  return result
+}
+
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => JsonSchema
+
+const leaf =
+  (schema: JsonSchema): Converter =>
+  () =>
+    schema
+
+const handlers: Record<string, Converter> = {
+  boolean: leaf({ type: "boolean" }),
+  number: leaf({ type: "number" }),
+  integer: leaf({ type: "integer" }),
+  int32: leaf({ type: "integer", format: "int32" }),
+  int64: leaf({ type: "integer", format: "int64" }),
+  float32: leaf({ type: "number", format: "float" }),
+  float64: leaf({ type: "number", format: "double" }),
+  string: leaf({ type: "string" }),
+  uuid: leaf({ type: "string", format: "uuid" }),
+  uri: leaf({ type: "string", format: "uri" }),
+  datetime: leaf({ type: "string", format: "date-time" }),
+  date: leaf({ type: "string", format: "date" }),
+  time: leaf({ type: "string", format: "time" }),
+  duration: leaf({ type: "string", format: "duration" }),
+  bytes: leaf({ type: "string", contentEncoding: "base64" }),
+  null: leaf({ type: "null" }),
+  void: leaf({ type: "null" }),
+  unknown: leaf({}),
+  never: leaf({ not: {} }),
+  object: (shape) => {
+    const s = shape as TypeShape & { kind: "object" }
+    const properties: Record<string, JsonSchema> = {}
+    const required: string[] = []
+    for (const [name, field] of Object.entries(s.fields)) {
+      properties[name] = toJsonSchema(field)
+      if (field.meta.optional !== true) required.push(name)
+    }
+    const schema: JsonSchema = { type: "object", properties }
+    if (required.length > 0) schema.required = required
+    return schema
+  },
+  array: (shape) => {
+    const s = shape as TypeShape & { kind: "array" }
+    return { type: "array", items: toJsonSchema(s.element) }
+  },
+  tuple: (shape) => {
+    const s = shape as TypeShape & { kind: "tuple" }
+    return { type: "array", prefixItems: s.elements.map(toJsonSchema), items: false }
+  },
+  map: (shape) => {
+    const s = shape as TypeShape & { kind: "map" }
+    return { type: "object", additionalProperties: toJsonSchema(s.value) }
+  },
+  union: (shape) => {
+    const s = shape as TypeShape & { kind: "union" }
+    return { anyOf: s.variants.map(toJsonSchema) }
+  },
+  literal: (shape) => {
+    const s = shape as TypeShape & { kind: "literal" }
+    return { const: s.value }
+  },
+  enum: (shape) => {
+    const s = shape as TypeShape & { kind: "enum" }
+    return { type: "string", enum: [...s.members] }
+  },
+  ref: (shape) => {
+    const s = shape as TypeShape & { kind: "ref" }
+    return { $ref: `#/$defs/${s.target}` }
+  },
+}
+
+const complexKinds = new Set(["object", "array", "tuple", "map", "union"])
+
+export function toJsonSchema(ref: TypeRef): JsonSchema {
+  const converter = resolve(ref.shape.kind, handlers)
+  const schema = converter === undefined ? {} : converter(ref.shape, ref.meta)
+  const complex = complexKinds.has(ref.shape.kind)
+  return withMeta(schema, ref.meta, complex)
+}
