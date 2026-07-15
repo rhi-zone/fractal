@@ -51,6 +51,42 @@ source of truth is the inferred TS types + JSDoc (not an on-tree schema). The
 on-tree schemas should NOT be mistaken for the model — they're a placeholder until
 codegen-from-types exists. See `docs/design/handoff.md` §"PROVISIONAL / to replace".
 
+Update (2026-07-14–16 session): the type IR design is now settled at the
+principles level — shape hierarchy via subtyping + open metadata bag, documented
+in `docs/design/architecture-layers.md` § Type IR and in CLAUDE.md § Design
+Philosophy. The next step is the concrete hierarchy (see new open thread below),
+not further principle-level design.
+
+### Concrete type hierarchy is the next step after the type IR principles
+
+The type IR design principles are settled: shape hierarchy via subtyping + open
+metadata bag (`docs/design/architecture-layers.md` § Type IR; also CLAUDE.md §
+Design Philosophy). A survey of 12 type systems informing this is done —
+`docs/design/type-ir-survey.md`. Not yet done: sketching the actual types and
+their subtyping relationships. The hierarchy should reflect subtyping, not
+taxonomy — every node must be a valid fallback target for projections (a more
+specific node can always stand in for a more general one along the fallback
+path).
+
+### Built code doesn't match the combinator identity
+
+The stated identity is "Parsec-style combinator composition," but the built
+code is `node`/`op`/`service`/`param` — data structure construction, not
+combinator composition. `docs/design/routing-expression-model.md` was supposed
+to bridge this gap but the combinator primitives aren't settled and the
+expression model isn't implemented. Until this is resolved, the gap between
+stated identity and built code is real, not cosmetic.
+
+### Type projection as a deliberate capability, not incidental to MCP
+
+`fractal-codegen` already does type projection (TS types → JSON Schema for MCP
+input schemas), and a valibot codegen spike exists in `the consumer app`. The
+2026-07-14–16 session recognized this should be a first-class concern —
+separate from routing — rather than something that happens to exist because
+MCP needed it. The type IR (see the concrete-type-hierarchy thread above) is
+the foundation for projecting to JSON Schema, validation schemas, SQL DDL, etc.
+See `docs/design/architecture-layers.md` § Type projection layer.
+
 ### Dispatch extensibility model is settled in `docs/design/dispatch-extensibility.md`
 
 The extensible dispatch model is settled: augmentable `DispatchKinds` interface,
@@ -122,6 +158,10 @@ Ordered roughly easiest → hardest to decide:
    pattern for cross-cutting metadata (auth, rate-limit, caching)?
 7. **Per-param HTTP location** — where does each handler parameter come from
    (path, query, body, header)? Currently implicit; should it be explicit?
+   Reframed (2026-07-14–16 session): this is understood as metadata
+   conventions on the type IR / routing metadata, not a separate mechanism.
+   Still open, but now scoped as an instance of the type-IR-metadata question
+   rather than an HTTP-specific one.
 8. **Node disambiguation** — with `fallback` separated from `children`, static
    children always win (keyed lookup); fallback fires only when no child
    matches. Remaining question: is there ever more than one fallback?
@@ -293,5 +333,10 @@ would require a reactive client library to exist first.
 - Scorecard vs Hono/Elysia: `docs/design/vs-hono-elysia.md`
 - Ecosystem design principles: `~/git/rhizone/github-io/docs/decisions/throughlines.md`
 - Pre-function-core docs (superseded): `docs/design/roadmap.md`, `docs/design/handler-model.md`, `docs/design/optics-direction.md`
+- Architecture layers: `docs/design/architecture-layers.md`
+- Type IR survey: `docs/design/type-ir-survey.md`
+- Cap'n Proto design rationale: `docs/design/prior-art/capnp-design-rationale.md`
+- DX pain points: `docs/design/prior-art/dx-pain-*.md`
+- Design philosophy: `CLAUDE.md` § Design Philosophy
 </content>
 </invoke>
