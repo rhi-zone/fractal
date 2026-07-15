@@ -24,12 +24,15 @@
 //   tool names, matching packages/mcp/src/project.ts.
 
 import ts from "typescript"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import {
   createExtractorProgram,
   extractJsDoc,
   opFunctionNode,
   schemaFromFunctionNode,
   schemaFromReturnType,
+  typeRefFromFunctionNode,
+  typeRefFromReturnType,
   type JsonSchema,
 } from "./extract.ts"
 
@@ -42,6 +45,16 @@ export type ToolSchema = {
 
 /** Map of MCP tool name → derived schema/description. */
 export type SchemaMap = Record<string, ToolSchema>
+
+/** Per-tool derived facts as TypeRefs (pre-projection). */
+export type ToolTypeInfo = {
+  input: TypeRef
+  output?: TypeRef
+  description?: string
+}
+
+/** Map of MCP tool name → derived TypeRefs/description. */
+export type TypeRefMap = Record<string, ToolTypeInfo>
 
 const propName = (p: ts.ObjectLiteralElementLike): string | undefined => {
   if (!ts.isPropertyAssignment(p)) return undefined
@@ -64,20 +77,26 @@ const join = (prefix: string, seg: string): string =>
   prefix.length > 0 ? `${prefix}_${seg}` : seg
 
 /**
- * Extract the tool-name → schema map for every exported `node({…})` tree in a
- * source file. Mirrors toTools' name construction.
+ * Walk every exported `node({…})` tree in a source file, mirroring toTools'
+ * name construction, and invoke `onLeaf` for each `op(fn, meta?)` leaf found.
  *
  * In the new node model, children that are `op(...)` calls are leaf nodes;
  * children that are `node(...)` calls are static branch nodes; a sibling
  * `fallback: { name, subtree }` property is the wildcard-capture subtree.
  */
-export function extractToolSchemas(entryFile: string): SchemaMap {
+function walkTree(
+  entryFile: string,
+  onLeaf: (
+    name: string,
+    fn: ts.Node,
+    childProp: ts.ObjectLiteralElementLike,
+    checker: ts.TypeChecker,
+  ) => void,
+): void {
   const program = createExtractorProgram(entryFile)
   const checker = program.getTypeChecker()
   const source = program.getSourceFile(entryFile)
-  if (!source) throw new Error(`extractToolSchemas: source not found: ${entryFile}`)
-
-  const out: SchemaMap = {}
+  if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
 
   const walkNodeCall = (call: ts.CallExpression, prefix: string): void => {
     const obj = objectArgOf(call)
@@ -101,14 +120,7 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
             if (firstArg === undefined) continue
             const fn = opFunctionNode(firstArg)
             if (!fn) continue
-            const name = join(prefix, childKey)
-            const description = extractJsDoc(childProp)
-            const outputSchema = schemaFromReturnType(fn, checker)
-            out[name] = {
-              inputSchema: schemaFromFunctionNode(fn, checker),
-              outputSchema,
-              ...(description !== undefined ? { description } : {}),
-            }
+            onLeaf(join(prefix, childKey), fn, childProp, checker)
           } else {
             // static branch child: node({…}) or other constructor
             walkNodeCall(init, join(prefix, childKey))
@@ -150,5 +162,40 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
   }
 
   visit(source)
+}
+
+/**
+ * Extract the tool-name → schema map for every exported `node({…})` tree in a
+ * source file. Mirrors toTools' name construction.
+ */
+export function extractToolSchemas(entryFile: string): SchemaMap {
+  const out: SchemaMap = {}
+  walkTree(entryFile, (name, fn, childProp, checker) => {
+    const description = extractJsDoc(childProp)
+    out[name] = {
+      inputSchema: schemaFromFunctionNode(fn, checker),
+      outputSchema: schemaFromReturnType(fn, checker),
+      ...(description !== undefined ? { description } : {}),
+    }
+  })
+  return out
+}
+
+/**
+ * Extract the tool-name → TypeRef map for every exported `node({…})` tree in
+ * a source file. Mirrors toTools' name construction. Same tree walk as
+ * `extractToolSchemas`, but yields TypeRefs (pre-projection) instead of
+ * JSON Schema.
+ */
+export function extractToolTypeRefs(entryFile: string): TypeRefMap {
+  const out: TypeRefMap = {}
+  walkTree(entryFile, (name, fn, childProp, checker) => {
+    const description = extractJsDoc(childProp)
+    out[name] = {
+      input: typeRefFromFunctionNode(fn, checker),
+      output: typeRefFromReturnType(fn, checker),
+      ...(description !== undefined ? { description } : {}),
+    }
+  })
   return out
 }

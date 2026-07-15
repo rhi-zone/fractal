@@ -41,6 +41,7 @@
       "name": "@rhi-zone/fractal-codegen",
       "version": "0.1.0-alpha.0",
       "dependencies": {
+        "@rhi-zone/fractal-type-ir": "workspace:*",
         "typescript": "^6.0.3",
       },
       "devDependencies": {

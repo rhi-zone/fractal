@@ -10,9 +10,11 @@
 // Scope: obvious shapes only. Object types with primitive fields
 // (string/number/boolean), optional (`?` / `| undefined`), arrays, and nested
 // objects are lowered structurally. Anything exotic (unions, generics, branded
-// / callable types, …) is PUNTED to `{ type: "object" }` carrying a `$comment`
-// that names the unhandled case — a valid JSON-Schema value that is
-// self-documenting rather than silently lossy.
+// / callable types, …) is PUNTED to `t(types.unknown, { $comment })` carrying
+// a `$comment` that names the unhandled case — self-documenting rather than
+// silently lossy. Extraction goes TS type → TypeRef → JSON Schema; the
+// TypeRef is produced here and projected via
+// `@rhi-zone/fractal-type-ir/json-schema`'s `toJsonSchema`.
 //
 // Derived-from-type ONLY: there is no hand-authored schema anywhere. If a shape
 // isn't recovered here, it degrades to the MCP spec minimum, never to a second
@@ -23,6 +25,8 @@
 //   packages/mcp/src/project.ts  — the consumer (toTools inputSchema/description)
 
 import ts from "typescript"
+import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir"
+import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
 
 // ============================================================================
 // JSON-Schema value (structural subset we emit)
@@ -31,25 +35,90 @@ import ts from "typescript"
 /**
  * The JSON-Schema shapes this extractor produces. `$comment` carries a
  * `TODO(codegen): …` marker on any punted node so the fallback is visible in
- * the emitted value itself.
+ * the emitted value itself. Punted nodes now come from `types.unknown` via
+ * the TypeRef projector, so `type` is no longer guaranteed present.
  */
 export type JsonSchema = {
-  type: "string" | "number" | "boolean" | "array" | "object"
+  type?: "string" | "number" | "boolean" | "array" | "object"
   properties?: Record<string, JsonSchema>
   required?: string[]
   items?: JsonSchema
   $comment?: string
 }
 
-/** The punt: a spec-minimum object schema tagged with the unhandled case. */
-const punt = (reason: string): JsonSchema => ({
-  type: "object",
-  $comment: `TODO(codegen): unhandled type — ${reason}`,
-})
-
 // ============================================================================
 // Core: TypeScript type → JSON-Schema
 // ============================================================================
+
+/** The TypeRef punt: `unknown` tagged with the unhandled case. */
+const puntRef = (reason: string): TypeRef =>
+  t(types.unknown, { $comment: `TODO(codegen): unhandled type — ${reason}` })
+
+/**
+ * Lower a resolved `ts.Type` to a TypeRef.
+ *
+ * Handles the obvious cases; punts everything else to `t(types.unknown, …)`
+ * carrying a `$comment` naming the case. `loc` anchors symbol-type resolution.
+ */
+export function typeRefFromType(
+  type: ts.Type,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+): TypeRef {
+  const flags = type.flags
+
+  // ── Primitives ────────────────────────────────────────────────────────────
+  if (flags & ts.TypeFlags.StringLike) return t(types.string)
+  if (flags & ts.TypeFlags.NumberLike) return t(types.number)
+  if (flags & ts.TypeFlags.BooleanLike) return t(types.boolean)
+
+  // ── Arrays (T[] / Array<T>) ───────────────────────────────────────────────
+  if (checker.isArrayType(type)) {
+    const [elem] = checker.getTypeArguments(type as ts.TypeReference)
+    return t(
+      types.array(
+        elem
+          ? typeRefFromType(elem, checker, loc)
+          : puntRef("unknown array element"),
+      ),
+    )
+  }
+
+  // ── Genuine unions punt (optional `| undefined` is stripped upstream) ──────
+  if (type.isUnion()) {
+    return puntRef(`union (${checker.typeToString(type)})`)
+  }
+
+  // ── Object types: primitive/optional/array/nested fields ──────────────────
+  if (flags & ts.TypeFlags.Object) {
+    // Function-like objects (call/construct signatures) are not domain shapes.
+    if (
+      checker.getSignaturesOfType(type, ts.SignatureKind.Call).length > 0 ||
+      checker.getSignaturesOfType(type, ts.SignatureKind.Construct).length > 0
+    ) {
+      return puntRef(`callable/constructable (${checker.typeToString(type)})`)
+    }
+
+    const fields: Record<string, TypeRef> = {}
+
+    for (const prop of checker.getPropertiesOfType(type)) {
+      const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0
+      // Strip `| undefined` so `field?: string` lowers as a plain string.
+      const propType = checker
+        .getTypeOfSymbolAtLocation(prop, loc)
+        .getNonNullableType()
+      const fieldRef = typeRefFromType(propType, checker, loc)
+      fields[prop.name] = optional
+        ? t(fieldRef.shape, { ...fieldRef.meta, optional: true })
+        : fieldRef
+    }
+
+    return t(types.object(fields))
+  }
+
+  // ── Everything else (generic param, unknown, any, branded, …) ─────────────
+  return puntRef(`unsupported (${checker.typeToString(type)})`)
+}
 
 /**
  * Lower a resolved `ts.Type` to a JSON-Schema value.
@@ -62,64 +131,30 @@ export function schemaFromType(
   checker: ts.TypeChecker,
   loc: ts.Node,
 ): JsonSchema {
-  const flags = type.flags
-
-  // ── Primitives ────────────────────────────────────────────────────────────
-  if (flags & ts.TypeFlags.StringLike) return { type: "string" }
-  if (flags & ts.TypeFlags.NumberLike) return { type: "number" }
-  if (flags & ts.TypeFlags.BooleanLike) return { type: "boolean" }
-
-  // ── Arrays (T[] / Array<T>) ───────────────────────────────────────────────
-  if (checker.isArrayType(type)) {
-    const [elem] = checker.getTypeArguments(type as ts.TypeReference)
-    return {
-      type: "array",
-      items: elem
-        ? schemaFromType(elem, checker, loc)
-        : punt("unknown array element"),
-    }
-  }
-
-  // ── Genuine unions punt (optional `| undefined` is stripped upstream) ──────
-  if (type.isUnion()) {
-    return punt(`union (${checker.typeToString(type)})`)
-  }
-
-  // ── Object types: primitive/optional/array/nested fields ──────────────────
-  if (flags & ts.TypeFlags.Object) {
-    // Function-like objects (call/construct signatures) are not domain shapes.
-    if (
-      checker.getSignaturesOfType(type, ts.SignatureKind.Call).length > 0 ||
-      checker.getSignaturesOfType(type, ts.SignatureKind.Construct).length > 0
-    ) {
-      return punt(`callable/constructable (${checker.typeToString(type)})`)
-    }
-
-    const properties: Record<string, JsonSchema> = {}
-    const required: string[] = []
-
-    for (const prop of checker.getPropertiesOfType(type)) {
-      const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0
-      // Strip `| undefined` so `field?: string` lowers as a plain string.
-      const propType = checker
-        .getTypeOfSymbolAtLocation(prop, loc)
-        .getNonNullableType()
-      properties[prop.name] = schemaFromType(propType, checker, loc)
-      if (!optional) required.push(prop.name)
-    }
-
-    const schema: JsonSchema = { type: "object", properties }
-    if (required.length > 0) schema.required = required
-    return schema
-  }
-
-  // ── Everything else (generic param, unknown, any, branded, …) ─────────────
-  return punt(`unsupported (${checker.typeToString(type)})`)
+  return toJsonSchema(typeRefFromType(type, checker, loc)) as JsonSchema
 }
 
 // ============================================================================
 // Function/op input → JSON-Schema
 // ============================================================================
+
+/**
+ * Derive the input TypeRef from a function-typed node (arrow or function
+ * expression): its first parameter's type is the op input. A niladic op
+ * lowers to an empty object TypeRef.
+ */
+export function typeRefFromFunctionNode(
+  fn: ts.Node,
+  checker: ts.TypeChecker,
+): TypeRef {
+  const fnType = checker.getTypeAtLocation(fn)
+  const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
+  if (!sig) return puntRef("no call signature on op fn")
+  const [param] = sig.getParameters()
+  if (!param) return t(types.object({}))
+  const paramType = checker.getTypeOfSymbolAtLocation(param, fn)
+  return typeRefFromType(paramType, checker, fn)
+}
 
 /**
  * Derive the input schema from a function-typed node (arrow or function
@@ -130,13 +165,7 @@ export function schemaFromFunctionNode(
   fn: ts.Node,
   checker: ts.TypeChecker,
 ): JsonSchema {
-  const fnType = checker.getTypeAtLocation(fn)
-  const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
-  if (!sig) return punt("no call signature on op fn")
-  const [param] = sig.getParameters()
-  if (!param) return { type: "object", properties: {} }
-  const paramType = checker.getTypeOfSymbolAtLocation(param, fn)
-  return schemaFromType(paramType, checker, fn)
+  return toJsonSchema(typeRefFromFunctionNode(fn, checker)) as JsonSchema
 }
 
 // ============================================================================
@@ -346,13 +375,13 @@ function structuralResultValueType(
  *     type IS a proper union — covers inferred-return cases or fully-resolved
  *     contexts outside of skipLibCheck.
  */
-export function schemaFromReturnType(
+export function typeRefFromReturnType(
   fn: ts.Node,
   checker: ts.TypeChecker,
-): JsonSchema {
+): TypeRef {
   const fnType = checker.getTypeAtLocation(fn)
   const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
-  if (!sig) return punt("no call signature on op fn")
+  if (!sig) return puntRef("no call signature on op fn")
 
   // ── SYNTAX PATH: explicit return type annotation on the function node ────
   //
@@ -370,7 +399,7 @@ export function schemaFromReturnType(
       const tNode = resultTypeArgNodeFrom(retTypeNode, checker)
       if (tNode !== undefined) {
         const tType = checker.getTypeAtLocation(tNode)
-        return schemaFromType(tType, checker, fn)
+        return typeRefFromType(tType, checker, fn)
       }
     }
   }
@@ -384,7 +413,7 @@ export function schemaFromReturnType(
   if (returnType.symbol?.name === "Promise") {
     const args = checker.getTypeArguments(returnType as ts.TypeReference)
     const inner = args[0]
-    if (inner === undefined) return punt("Promise with no type argument")
+    if (inner === undefined) return puntRef("Promise with no type argument")
     returnType = inner
   }
 
@@ -395,7 +424,18 @@ export function schemaFromReturnType(
     returnType = structuralValue
   }
 
-  return schemaFromType(returnType, checker, fn)
+  return typeRefFromType(returnType, checker, fn)
+}
+
+/**
+ * Derive the output schema from a function-typed node by inspecting its return
+ * type. Unwraps `Result<T, E>` and `Promise<Result<T, E>>` to yield T's schema.
+ */
+export function schemaFromReturnType(
+  fn: ts.Node,
+  checker: ts.TypeChecker,
+): JsonSchema {
+  return toJsonSchema(typeRefFromReturnType(fn, checker)) as JsonSchema
 }
 
 // ============================================================================

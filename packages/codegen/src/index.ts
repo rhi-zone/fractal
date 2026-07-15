@@ -11,11 +11,17 @@ export {
   schemaFromFunctionNode,
   schemaFromReturnType,
   schemaFromType,
+  typeRefFromFunctionNode,
+  typeRefFromReturnType,
+  typeRefFromType,
   type JsonSchema,
 } from "./extract.ts"
 
 export {
   extractToolSchemas,
+  extractToolTypeRefs,
   type SchemaMap,
   type ToolSchema,
+  type ToolTypeInfo,
+  type TypeRefMap,
 } from "./tree.ts"

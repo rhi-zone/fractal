@@ -9,6 +9,7 @@ const passthroughKeys = [
   "maxLength",
   "pattern",
   "multipleOf",
+  "$comment",
 ] as const
 
 function withMeta(schema: JsonSchema, meta: Readonly<Record<string, unknown>>, complex: boolean): JsonSchema {

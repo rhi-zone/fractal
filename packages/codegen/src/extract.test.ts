@@ -8,11 +8,47 @@
 
 import { describe, expect, it } from "bun:test"
 import { toTools } from "@rhi-zone/fractal-mcp"
-import { extractToolSchemas } from "./index.ts"
+import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
+import {
+  extractToolSchemas,
+  extractToolTypeRefs,
+  schemaFromFunctionNode,
+  schemaFromReturnType,
+  schemaFromType,
+  typeRefFromFunctionNode,
+  typeRefFromReturnType,
+  typeRefFromType,
+} from "./index.ts"
 import { tree } from "./__fixtures__/tree.fixture.ts"
+import { createExtractorProgram, opFunctionNode } from "./extract.ts"
+import ts from "typescript"
 
 const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`
 const schemas = extractToolSchemas(FIXTURE)
+
+const TYPEREF_FIXTURE = `${import.meta.dir}/__fixtures__/typeref.fixture.ts`
+
+/** Locate an exported const's function-typed initializer node by name. */
+function findExportedFn(source: ts.SourceFile, name: string): ts.Node {
+  let found: ts.Node | undefined
+  const visit = (n: ts.Node): void => {
+    if (
+      !found &&
+      ts.isVariableStatement(n) &&
+      n.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+    ) {
+      for (const decl of n.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name) && decl.name.text === name && decl.initializer) {
+          found = opFunctionNode(decl.initializer)
+        }
+      }
+    }
+    if (!found) ts.forEachChild(n, visit)
+  }
+  visit(source)
+  if (!found) throw new Error(`findExportedFn: ${name} not found`)
+  return found
+}
 
 // ============================================================================
 // 1. Object type → JSON-Schema (primitive + optional + array + nested)
@@ -96,9 +132,8 @@ describe("MCP tool carries the derived inputSchema + description", () => {
 describe("fallback for exotic types", () => {
   it("punts a union field to { type: 'object' } with a TODO $comment", () => {
     const q = (schemas["search_run"]?.inputSchema.properties as
-      | Record<string, { type: string; $comment?: string }>
+      | Record<string, { type?: string; $comment?: string }>
       | undefined)?.q
-    expect(q?.type).toBe("object")
     expect(q?.$comment).toMatch(/TODO\(codegen\)/)
     expect(q?.$comment).toMatch(/union/)
   })
@@ -172,8 +207,109 @@ describe("outputSchema derivation", () => {
   // The union has no ok/value/error DU shape → structural path also skips it.
   it("a different 2-member union with different discriminant does not unwrap (punts)", () => {
     const output = schemas["differentUnion_ping"]?.outputSchema
-    expect(output?.type).toBe("object")
     expect(output?.$comment).toMatch(/TODO\(codegen\)/)
     expect(output?.$comment).toMatch(/union/)
+  })
+})
+
+// ============================================================================
+// 6. TypeRef extraction — TS type → TypeRef → JSON Schema
+// ============================================================================
+
+describe("TypeRef extraction", () => {
+  const typeRefs = extractToolTypeRefs(FIXTURE)
+
+  it("typeRefFromType produces correct shapes for primitives / optional / array / nested fields", () => {
+    const input = typeRefs["users_create"]!.input
+    expect(input.shape.kind).toBe("object")
+    const fields = (input.shape as { kind: "object"; fields: Record<string, import("@rhi-zone/fractal-type-ir").TypeRef> }).fields
+    expect(fields.name?.shape.kind).toBe("string")
+    expect(fields.age?.shape.kind).toBe("number")
+    expect(fields.age?.meta.optional).toBe(true)
+    expect(fields.roles?.shape.kind).toBe("array")
+    expect((fields.roles?.shape as { element: { shape: { kind: string } } }).element.shape.kind).toBe("string")
+    expect(fields.address?.shape.kind).toBe("object")
+  })
+
+  it("typeRefFromFunctionNode produces the correct TypeRef for a function input", () => {
+    const input = typeRefs["users_userId_get"]!.input
+    expect(toJsonSchema(input)).toEqual(schemas["users_userId_get"]!.inputSchema)
+  })
+
+  it("typeRefFromReturnType unwraps Result<T,E> to T's TypeRef", () => {
+    const output = typeRefs["fallible_compute"]!.output!
+    expect(output.shape.kind).toBe("object")
+    expect(toJsonSchema(output)).toEqual(schemas["fallible_compute"]!.outputSchema!)
+  })
+
+  it("extractToolTypeRefs carries the JSDoc description alongside the TypeRefs", () => {
+    expect(typeRefs["users_create"]!.description).toBe("Create a new user account.")
+    expect(typeRefs["users_userId_get"]!.description).toBeUndefined()
+  })
+
+  it("punted types produce t(types.unknown, { $comment }) — no `type` discriminant carried over", () => {
+    const fields = (typeRefs["search_run"]!.input.shape as {
+      kind: "object"
+      fields: Record<string, import("@rhi-zone/fractal-type-ir").TypeRef>
+    }).fields
+    const q = fields.q!
+    expect(q.shape.kind).toBe("unknown")
+    expect(q.meta.$comment).toMatch(/TODO\(codegen\)/)
+    expect(q.meta.$comment).toMatch(/union/)
+  })
+
+  it("round-trips: toJsonSchema(typeRefFromType(...)) matches schemaFromType(...) for non-punted tools", () => {
+    const names = [
+      "users_create",
+      "users_userId_get",
+      "async_fetch",
+      "fallible_compute",
+      "barrel_query",
+      "generic_search",
+      "promiseResult_load",
+    ]
+    for (const name of names) {
+      expect(toJsonSchema(typeRefs[name]!.input)).toEqual(schemas[name]!.inputSchema)
+      if (typeRefs[name]!.output !== undefined) {
+        expect(toJsonSchema(typeRefs[name]!.output!)).toEqual(schemas[name]!.outputSchema!)
+      }
+    }
+  })
+})
+
+// ============================================================================
+// 7. TypeRef extraction functions called directly (not via the tree walker)
+// ============================================================================
+
+describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, called directly", () => {
+  const program = createExtractorProgram(TYPEREF_FIXTURE)
+  const checker = program.getTypeChecker()
+  const source = program.getSourceFile(TYPEREF_FIXTURE)!
+  const fn = findExportedFn(source, "sample")
+
+  it("typeRefFromFunctionNode lowers the input parameter to a TypeRef matching schemaFromFunctionNode", () => {
+    const inputRef = typeRefFromFunctionNode(fn, checker)
+    expect(inputRef.shape.kind).toBe("object")
+    expect(toJsonSchema(inputRef)).toEqual(schemaFromFunctionNode(fn, checker))
+  })
+
+  it("typeRefFromType matches schemaFromType for the same resolved parameter type", () => {
+    const fnType = checker.getTypeAtLocation(fn)
+    const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
+    const [param] = sig!.getParameters()
+    const paramType = checker.getTypeOfSymbolAtLocation(param!, fn)
+    const ref = typeRefFromType(paramType, checker, fn)
+    expect(toJsonSchema(ref)).toEqual(schemaFromType(paramType, checker, fn))
+  })
+
+  it("typeRefFromReturnType unwraps Result<T,E> to T's TypeRef matching schemaFromReturnType", () => {
+    const outputRef = typeRefFromReturnType(fn, checker)
+    expect(outputRef.shape.kind).toBe("object")
+    expect(toJsonSchema(outputRef)).toEqual(schemaFromReturnType(fn, checker))
+    expect(toJsonSchema(outputRef)).toEqual({
+      type: "object",
+      properties: { total: { type: "number" } },
+      required: ["total"],
+    })
   })
 })
