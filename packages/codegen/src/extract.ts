@@ -73,6 +73,33 @@ function isPrivateOrProtected(prop: ts.Symbol): boolean {
 const BRAND_PROP_NAMES = ["__brand", "__tag", "_brand", "_tag"]
 
 /**
+ * Derive a brand name from a `unique symbol`-keyed brand property, e.g.
+ * `declare const LocationIdBrand: unique symbol; type LocationId = string &
+ * { readonly [LocationIdBrand]: never }`.
+ *
+ * Unlike the string-literal-tag pattern (`{ readonly __brand: "LocationId" }`),
+ * there is no literal value to read — the symbol IS the tag, and the property's
+ * value type is typically `never`. The brand name is instead read off the
+ * `unique symbol` declaration's own identifier (`LocationIdBrand`), with a
+ * trailing `Brand` suffix stripped for consistency with the string-literal-tag
+ * convention (whose tag values are bare names like `"LocationId"`, not
+ * `"LocationIdBrand"`). Returns `undefined` if the property isn't a computed
+ * property name, or its expression doesn't resolve to a named symbol.
+ */
+function brandNameFromSymbolKeyedProp(
+  prop: ts.Symbol,
+  checker: ts.TypeChecker,
+): string | undefined {
+  const decl = prop.declarations?.[0]
+  if (!decl) return undefined
+  const nameNode = (decl as ts.NamedDeclaration).name
+  if (!nameNode || !ts.isComputedPropertyName(nameNode)) return undefined
+  const sym = checker.getSymbolAtLocation(nameNode.expression)
+  if (!sym?.name) return undefined
+  return sym.name.endsWith("Brand") ? sym.name.slice(0, -"Brand".length) : sym.name
+}
+
+/**
  * Extract a literal's runtime value (string/number/boolean) from a resolved
  * `ts.Type`, or `undefined` if `type` isn't a literal. Booleans don't carry
  * `.value` on `ts.LiteralType` — they're read via `intrinsicName` instead
@@ -113,10 +140,20 @@ function brandFromIntersection(
       const isNamedBrand = BRAND_PROP_NAMES.includes(prop.name)
       if (!isSymbolKeyed && !isNamedBrand) continue
 
-      const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
-      if (!(propType.flags & ts.TypeFlags.StringLiteral)) continue
+      // Symbol-keyed tags carry no literal value (typically `never`) — the
+      // brand name comes from the `unique symbol` declaration's identifier
+      // instead. Named tags (`__brand`/`__tag`/…) carry the name as a string
+      // literal value, as before.
+      const brandValue = isSymbolKeyed
+        ? brandNameFromSymbolKeyedProp(prop, checker)
+        : (() => {
+            const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
+            return propType.flags & ts.TypeFlags.StringLiteral
+              ? ((propType as ts.LiteralType).value as string)
+              : undefined
+          })()
+      if (brandValue === undefined) continue
 
-      const brandValue = (propType as ts.LiteralType).value as string
       const nextSeen = new Set(seen).add(type)
       const baseRef = typeRefFromType(base, checker, loc, nextSeen)
       return t(baseRef.shape, { ...baseRef.meta, brand: brandValue })

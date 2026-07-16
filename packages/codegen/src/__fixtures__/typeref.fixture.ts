@@ -146,3 +146,16 @@ export type NonDiscriminated = { a: string } | { b: number }
 
 export const shapeUnionFn = (shape: ShapeUnion): void => {}
 export const nonDiscriminatedFn = (u: NonDiscriminated): void => {}
+
+// ── Symbol-branded type fixtures ────────────────────────────────────────────
+
+declare const LocationIdBrand: unique symbol
+/** Branded string via a `unique symbol` key, rather than a string-literal tag. */
+export type SymbolBrandedId = string & { readonly [LocationIdBrand]: never }
+
+declare const UserIdBrand: unique symbol
+/** A second symbol-branded type, over `number` instead of `string`. */
+export type SymbolBrandedUserId = number & { readonly [UserIdBrand]: never }
+
+/** A symbol-branded field nested as an object field. */
+export type SymbolBrandedField = { id: SymbolBrandedId; name: string }

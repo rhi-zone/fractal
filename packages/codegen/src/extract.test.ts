@@ -479,6 +479,29 @@ describe("typeRefFromType gap fixes", () => {
     expect(fields.name?.meta.brand).toBeUndefined()
   })
 
+  // ── Symbol-branded types (`unique symbol` tag, not a string-literal tag) ──
+
+  it("lowers a unique-symbol-branded string to its base shape, with brand name from the symbol declaration", () => {
+    const ref = typeRefFromType(typeOf("SymbolBrandedId"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.brand).toBe("LocationId")
+  })
+
+  it("lowers a unique-symbol-branded number the same way", () => {
+    const ref = typeRefFromType(typeOf("SymbolBrandedUserId"), checker, source)
+    expect(ref.shape).toEqual({ kind: "number" })
+    expect(ref.meta.brand).toBe("UserId")
+  })
+
+  it("carries unique-symbol brand metadata through a field on an object", () => {
+    const ref = typeRefFromType(typeOf("SymbolBrandedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.id?.shape).toEqual({ kind: "string" })
+    expect(fields.id?.meta.brand).toBe("LocationId")
+    expect(fields.name?.shape).toEqual({ kind: "string" })
+    expect(fields.name?.meta.brand).toBeUndefined()
+  })
+
   it("does not treat a plain (non-branded) intersection as a brand — lowers to types.intersection", () => {
     const ref = typeRefFromType(typeOf("PlainIntersection"), checker, source)
     expect(ref.shape.kind).toBe("intersection")
