@@ -164,6 +164,33 @@ describe("deprecated", () => {
   })
 })
 
+describe("description", () => {
+  test("meta.description sets the field description", () => {
+    const field = toProtoField(t(types.string, { description: "the user's name" }))
+    expect(field.description).toBe("the user's name")
+  })
+
+  test("meta.description is absent by default", () => {
+    const field = toProtoField(t(types.string))
+    expect(field.description).toBeUndefined()
+  })
+
+  test("renders as a // comment above the field", () => {
+    const message = toProtoMessage(
+      "Person",
+      t(types.object({ name: t(types.string, { description: "the user's name" }) })),
+    )
+    const rendered = renderProto([message])
+    expect(rendered).toContain("  // the user's name\n  string name = 1;")
+  })
+
+  test("renders as a // comment above the message", () => {
+    const message = toProtoMessage("Person", t(types.object({ name: t(types.string) }), { description: "a person" }))
+    const rendered = renderProto([message])
+    expect(rendered).toContain("// a person\nmessage Person {")
+  })
+})
+
 describe("toProtoMessage", () => {
   test("flat object with auto-numbered fields", () => {
     const ref = t(

@@ -49,6 +49,9 @@ function withChainedMeta(e: Emitted, meta: Readonly<Record<string, unknown>>): E
   if (typeof meta.pattern === "string") chain.push(`.matching(${regexLiteral(meta.pattern)})`)
   if (typeof meta.description === "string") chain.push(`.describe(${JSON.stringify(meta.description)})`)
   if (meta.default !== undefined) chain.push(`.default(${JSON.stringify(meta.default)})`)
+  // https://arktype.io/docs/expressions#brand — `.brand(name)` nominally tags a
+  // type's output so structurally-identical types are no longer interchangeable.
+  if (typeof meta.brand === "string") chain.push(`.brand(${JSON.stringify(meta.brand)})`)
   if (chain.length === 0) return e
 
   const base = e.mode === "expr" ? e.text : e.mode === "literal" ? `type(${e.text})` : `type(${JSON.stringify(e.text)})`

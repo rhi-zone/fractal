@@ -102,9 +102,17 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { type: "object", additionalProperties: toJsonSchema07(s.value) }
   },
-  union: (shape) => {
+  // draft-07 §9.2.1.3 defines `oneOf` (exactly one variant matches) but no
+  // `discriminator` keyword; the OpenAPI-originated `discriminator: { propertyName }`
+  // shape is a widely-recognized extension (carried by `meta.discriminator`, an open
+  // metadata bag convention — see CLAUDE.md), same as json-schema.ts's latest projector.
+  union: (shape, meta) => {
     const s = shape as TypeShape & { kind: "union" }
-    return { anyOf: s.variants.map(toJsonSchema07) }
+    const variants = s.variants.map(toJsonSchema07)
+    if (typeof meta.discriminator === "string") {
+      return { oneOf: variants, discriminator: { propertyName: meta.discriminator } }
+    }
+    return { anyOf: variants }
   },
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" }

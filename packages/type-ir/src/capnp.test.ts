@@ -150,6 +150,30 @@ describe("unknown kind fallback", () => {
   })
 })
 
+describe("description", () => {
+  test("meta.description sets the field description", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string, { description: "the user's name" }) })))
+    expect(struct.fields[0]?.description).toBe("the user's name")
+  })
+
+  test("meta.description is absent by default", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string) })))
+    expect(struct.fields[0]?.description).toBeUndefined()
+  })
+
+  test("renders as a # comment above the field", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string, { description: "the user's name" }) })))
+    const rendered = renderCapnp([struct])
+    expect(rendered).toContain("  # the user's name\n  name @0 :Text;")
+  })
+
+  test("renders as a # comment above the struct", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string) }), { description: "a person" }))
+    const rendered = renderCapnp([struct])
+    expect(rendered).toContain("# a person\nstruct Person {")
+  })
+})
+
 describe("toCapnpStruct", () => {
   test("flat object with auto-numbered ordinals starting at 0", () => {
     const ref = t(

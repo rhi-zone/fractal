@@ -250,6 +250,16 @@ describe("constraints", () => {
     expect(toArkType(ref)).toBe('type("number >= 0").describe("count").default(0)')
   })
 
+  test("brand uses .brand()", () => {
+    const ref = t(types.string, { brand: "UserId" })
+    expect(toArkType(ref)).toBe('type("string").brand("UserId")')
+  })
+
+  test("brand chains after description and default", () => {
+    const ref = t(types.string, { description: "id", default: "x", brand: "UserId" })
+    expect(toArkType(ref)).toBe('type("string").describe("id").default("x").brand("UserId")')
+  })
+
   test("pattern is applied to nested object fields, not just the top level", () => {
     const ref = t(types.object({ name: t(types.string, { pattern: "^[a-z]+$" }) }))
     expect(toArkType(ref)).toBe('type({ name: type("string").matching(/^[a-z]+$/) })')

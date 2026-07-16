@@ -3,9 +3,10 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 // Cap'n Proto schema language: https://capnproto.org/language.html
 export type CapnpStruct = {
   name: string
-  fields: Array<{ name: string; type: string; ordinal: number }>
+  fields: Array<{ name: string; type: string; ordinal: number; description?: string }>
   nestedStructs?: CapnpStruct[]
   nestedEnums?: Array<{ name: string; values: readonly string[] }>
+  description?: string
 }
 
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
@@ -95,10 +96,12 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
   let ordinal = 0
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
+    const description: { description: string } | Record<string, never> =
+      typeof fieldRef.meta.description === "string" ? { description: fieldRef.meta.description } : {}
     if (fieldRef.shape.kind === "object") {
       const nestedName = capitalize(fieldName)
       nestedStructs.push(toCapnpStruct(nestedName, fieldRef))
-      fields.push({ name: fieldName, type: nestedName, ordinal })
+      fields.push({ name: fieldName, type: nestedName, ordinal, ...description })
     } else if (
       fieldRef.shape.kind === "array" &&
       (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "object"
@@ -106,12 +109,12 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
       const nestedName = capitalize(fieldName)
       const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
       nestedStructs.push(toCapnpStruct(nestedName, element))
-      fields.push({ name: fieldName, type: `List(${nestedName})`, ordinal })
+      fields.push({ name: fieldName, type: `List(${nestedName})`, ordinal, ...description })
     } else if (fieldRef.shape.kind === "enum") {
       const enumName = capitalize(fieldName)
       const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
       nestedEnums.push({ name: enumName, values: members })
-      fields.push({ name: fieldName, type: enumName, ordinal })
+      fields.push({ name: fieldName, type: enumName, ordinal, ...description })
     } else if (fieldRef.shape.kind === "map") {
       const mapShape = fieldRef.shape as TypeShape & { kind: "map" }
       const entryName = `${capitalize(fieldName)}Entry`
@@ -125,9 +128,9 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
         ],
       }
       nestedStructs.push(entryStruct)
-      fields.push({ name: fieldName, type: `List(${entryName})`, ordinal })
+      fields.push({ name: fieldName, type: `List(${entryName})`, ordinal, ...description })
     } else {
-      fields.push({ name: fieldName, type: toCapnpType(fieldRef), ordinal })
+      fields.push({ name: fieldName, type: toCapnpType(fieldRef), ordinal, ...description })
     }
     ordinal++
   }
@@ -135,19 +138,29 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
   const result: CapnpStruct = { name, fields }
   if (nestedStructs.length > 0) result.nestedStructs = nestedStructs
   if (nestedEnums.length > 0) result.nestedEnums = nestedEnums
+  if (typeof ref.meta.description === "string") result.description = ref.meta.description
   return result
 }
 
-function renderField(field: CapnpStruct["fields"][number], indent: string): string {
-  return `${indent}${field.name} @${field.ordinal} :${field.type};`
+function renderField(field: CapnpStruct["fields"][number], indent: string): string[] {
+  const lines: string[] = []
+  // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
+  // comments immediately above the field are the idiomatic convention.
+  if (typeof field.description === "string") lines.push(`${indent}# ${field.description}`)
+  lines.push(`${indent}${field.name} @${field.ordinal} :${field.type};`)
+  return lines
 }
 
 function renderStruct(struct: CapnpStruct, depth: number): string[] {
   const indent = "  ".repeat(depth)
   const inner = "  ".repeat(depth + 1)
-  const lines = [`${indent}struct ${struct.name} {`]
+  const lines: string[] = []
+  // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
+  // comments immediately above the struct are the idiomatic convention.
+  if (typeof struct.description === "string") lines.push(`${indent}# ${struct.description}`)
+  lines.push(`${indent}struct ${struct.name} {`)
 
-  for (const field of struct.fields) lines.push(renderField(field, inner))
+  for (const field of struct.fields) lines.push(...renderField(field, inner))
 
   for (const e of struct.nestedEnums ?? []) {
     lines.push(`${inner}enum ${e.name} {`)

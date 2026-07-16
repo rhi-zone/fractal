@@ -8,6 +8,7 @@ export type ProtoField = {
   mapKey?: string
   mapValue?: string
   deprecated?: boolean
+  description?: string
 }
 
 export type ProtoMessage = {
@@ -15,6 +16,7 @@ export type ProtoMessage = {
   fields: Array<{ name: string; field: ProtoField; number: number }>
   nestedMessages?: ProtoMessage[]
   nestedEnums?: Array<{ name: string; values: readonly string[] }>
+  description?: string
 }
 
 type ProtoBase = { type: string; repeated?: boolean; mapKey?: string; mapValue?: string }
@@ -109,6 +111,11 @@ export function toProtoField(ref: TypeRef): ProtoField {
   // FieldOptions.deprecated (descriptor.proto): renders as the `[deprecated = true]`
   // field option (§ "Options" / https://protobuf.dev/programming-guides/proto3/#options).
   if (ref.meta.deprecated === true) field.deprecated = true
+  // Proto3 has no doc-comment keyword of its own; `//` line comments (§ "Language
+  // Specification" — the same C/C++-style comments as the rest of the language)
+  // immediately above a field are the idiomatic way tools like protoc-gen-doc
+  // read documentation, so `meta.description` renders as one.
+  if (typeof ref.meta.description === "string") field.description = ref.meta.description
   return field
 }
 
@@ -127,10 +134,12 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
     const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
     const deprecated: { deprecated: true } | Record<string, never> =
       fieldRef.meta.deprecated === true ? { deprecated: true } : {}
+    const description: { description: string } | Record<string, never> =
+      typeof fieldRef.meta.description === "string" ? { description: fieldRef.meta.description } : {}
     if (fieldRef.shape.kind === "object") {
       const nestedName = capitalize(fieldName)
       nestedMessages.push(toProtoMessage(nestedName, fieldRef))
-      fields.push({ name: fieldName, field: { type: nestedName, repeated: false, optional, ...deprecated }, number })
+      fields.push({ name: fieldName, field: { type: nestedName, repeated: false, optional, ...deprecated, ...description }, number })
     } else if (
       fieldRef.shape.kind === "array" &&
       (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "object"
@@ -138,12 +147,16 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
       const nestedName = capitalize(fieldName)
       const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
       nestedMessages.push(toProtoMessage(nestedName, element))
-      fields.push({ name: fieldName, field: { type: nestedName, repeated: true, optional: false, ...deprecated }, number })
+      fields.push({
+        name: fieldName,
+        field: { type: nestedName, repeated: true, optional: false, ...deprecated, ...description },
+        number,
+      })
     } else if (fieldRef.shape.kind === "enum") {
       const enumName = capitalize(fieldName)
       const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
       nestedEnums.push({ name: enumName, values: members })
-      fields.push({ name: fieldName, field: { type: enumName, repeated: false, optional, ...deprecated }, number })
+      fields.push({ name: fieldName, field: { type: enumName, repeated: false, optional, ...deprecated, ...description }, number })
     } else {
       fields.push({ name: fieldName, field: toProtoField(fieldRef), number })
     }
@@ -153,26 +166,36 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
   const message: ProtoMessage = { name, fields }
   if (nestedMessages.length > 0) message.nestedMessages = nestedMessages
   if (nestedEnums.length > 0) message.nestedEnums = nestedEnums
+  if (typeof ref.meta.description === "string") message.description = ref.meta.description
   return message
 }
 
-function renderField(entry: ProtoMessage["fields"][number], indent: string): string {
+function renderField(entry: ProtoMessage["fields"][number], indent: string): string[] {
   const { field } = entry
+  const lines: string[] = []
+  // Proto3 has no doc-comment keyword (§ "Language Specification"); `//` line
+  // comments immediately above the field are the idiomatic convention.
+  if (typeof field.description === "string") lines.push(`${indent}// ${field.description}`)
   // Map fields carry no label (§ "Maps": "repeated is not allowed for map fields"); proto3
   // optional fields use the explicit "optional" keyword (§ "Field Rules").
   const label = field.mapKey !== undefined ? "" : field.repeated ? "repeated " : field.optional ? "optional " : ""
   // FieldOptions.deprecated renders as a bracketed field option
   // (§ "Options": https://protobuf.dev/programming-guides/proto3/#options).
   const options = field.deprecated === true ? " [deprecated = true]" : ""
-  return `${indent}${label}${field.type} ${entry.name} = ${entry.number}${options};`
+  lines.push(`${indent}${label}${field.type} ${entry.name} = ${entry.number}${options};`)
+  return lines
 }
 
 function renderMessage(message: ProtoMessage, depth: number): string[] {
   const indent = "  ".repeat(depth)
   const inner = "  ".repeat(depth + 1)
-  const lines = [`${indent}message ${message.name} {`]
+  const lines: string[] = []
+  // Proto3 has no doc-comment keyword (§ "Language Specification"); `//` line
+  // comments immediately above the message are the idiomatic convention.
+  if (typeof message.description === "string") lines.push(`${indent}// ${message.description}`)
+  lines.push(`${indent}message ${message.name} {`)
 
-  for (const entry of message.fields) lines.push(renderField(entry, inner))
+  for (const entry of message.fields) lines.push(...renderField(entry, inner))
 
   for (const e of message.nestedEnums ?? []) {
     lines.push(`${inner}enum ${e.name} {`)
