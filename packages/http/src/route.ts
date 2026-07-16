@@ -517,6 +517,23 @@ function defaultEncode(output: unknown): Response {
   return jsonRouteResponse(output, { status: 200 })
 }
 
+/** Default error encode: a 400 JSON response wrapping the error value. */
+function defaultEncodeError(error: unknown): Response {
+  return jsonRouteResponse({ error }, { status: 400 })
+}
+
+/**
+ * Exact Result<T, E> check: matches the core `Result` DU shape
+ * `{ kind: "ok", value } | { kind: "err", error }`. Only triggers when
+ * `kind` is exactly `"ok"` or `"err"` — user data with an unrelated
+ * `kind` field won't false-positive.
+ */
+function isResult(v: unknown): v is { kind: "ok"; value: unknown } | { kind: "err"; error: unknown } {
+  if (typeof v !== "object" || v === null || !("kind" in v)) return false
+  const kind = (v as { kind: unknown }).kind
+  return kind === "ok" || kind === "err"
+}
+
 export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<Response> {
   return async (req) => {
     const candidates = routeCandidatesForUrl(root, req.url)
@@ -547,6 +564,22 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
       let output: unknown = await (matched.handler(input) as Promise<unknown>)
       for (const transform of outputTransforms) output = await transform(output, meta)
 
+      // Result unwrapping: if the handler returned a Result<T, E>, separate
+      // the success and error paths before encoding. The check is exact —
+      // typeof + boolean — to avoid false-positives on user data that happens
+      // to have an `ok` field with a non-boolean value.
+      if (isResult(output)) {
+        if (output.kind === "ok") {
+          output = output.value
+        } else {
+          let response: Response = pipeline.encode !== undefined
+            ? await pipeline.encode(output.error, meta)
+            : defaultEncodeError(output.error)
+          for (const transform of resTransforms) response = await transform(response, meta)
+          return response
+        }
+      }
+
       let response: Response = isResponseOverride(output)
         ? jsonRouteResponse(output.body, output.init)
         : pipeline.encode !== undefined
@@ -556,8 +589,8 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
       for (const transform of resTransforms) response = await transform(response, meta)
 
       return response
-    } catch (e: unknown) {
-      return jsonRouteResponse({ error: String(e) }, { status: 500 })
+    } catch {
+      return jsonRouteResponse({ error: "internal server error" }, { status: 500 })
     }
   }
 }
