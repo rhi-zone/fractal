@@ -23,9 +23,17 @@
       "types": "./src/json-schema-07.ts",
       "import": "./src/json-schema-07.ts"
     },
+    "./json-schema-04": {
+      "types": "./src/json-schema-04.ts",
+      "import": "./src/json-schema-04.ts"
+    },
     "./openapi30": {
       "types": "./src/openapi30.ts",
       "import": "./src/openapi30.ts"
+    },
+    "./openapi20": {
+      "types": "./src/openapi20.ts",
+      "import": "./src/openapi20.ts"
     },
     "./typescript": {
       "types": "./src/typescript.ts",
@@ -34,6 +42,10 @@
     "./sql": {
       "types": "./src/sql.ts",
       "import": "./src/sql.ts"
+    },
+    "./sql-mssql": {
+      "types": "./src/sql-mssql.ts",
+      "import": "./src/sql-mssql.ts"
     },
     "./protobuf": {
       "types": "./src/protobuf.ts",
