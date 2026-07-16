@@ -7,7 +7,7 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 
 type Expr = { schema: string; actions: readonly string[] }
-type Converter = (shape: TypeShape) => Expr
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => Expr
 
 function quote(value: string): string {
   return JSON.stringify(value)
@@ -69,9 +69,18 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { schema: `v.record(v.string(), ${toValibot(s.value)})`, actions: [] }
   },
-  union: (shape) => {
+  // https://valibot.dev/api/variant/ — v.variant(key, [...]) is Valibot's
+  // native discriminated-union schema, keyed on a shared literal field for
+  // O(1) variant selection. Driven by `meta.discriminator` (open metadata bag
+  // convention, see CLAUDE.md); a plain union (no discriminator) keeps
+  // v.union().
+  union: (shape, meta) => {
     const s = shape as TypeShape & { kind: "union" }
-    return { schema: `v.union([${s.variants.map(toValibot).join(", ")}])`, actions: [] }
+    const variants = s.variants.map(toValibot)
+    if (typeof meta.discriminator === "string") {
+      return { schema: `v.variant(${quote(meta.discriminator)}, [${variants.join(", ")}])`, actions: [] }
+    }
+    return { schema: `v.union([${variants.join(", ")}])`, actions: [] }
   },
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" }
@@ -96,7 +105,7 @@ const handlers: Record<string, Converter> = {
 
 export function toValibot(ref: TypeRef): string {
   const converter = resolve(ref.shape.kind, handlers)
-  const { schema, actions: baseActions } = converter === undefined ? { schema: "v.unknown()", actions: [] } : converter(ref.shape)
+  const { schema, actions: baseActions } = converter === undefined ? { schema: "v.unknown()", actions: [] } : converter(ref.shape, ref.meta)
   const actions = [...baseActions, ...constraintActions(ref.meta)]
   if (typeof ref.meta.brand === "string") actions.push(`v.brand(${quote(ref.meta.brand)})`)
   let expr = actions.length > 0 ? `v.pipe(${schema}, ${actions.join(", ")})` : schema

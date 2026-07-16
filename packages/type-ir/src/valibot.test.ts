@@ -123,6 +123,14 @@ describe("union", () => {
     expect(toValibot(ref)).toBe("v.union([v.string(), v.pipe(v.number(), v.integer())])")
   })
 
+  test("discriminated union: v.variant(key, [...]), driven by meta.discriminator", () => {
+    const circle = t(types.object({ type: t(types.literal("circle")), radius: t(types.number) }))
+    const square = t(types.object({ type: t(types.literal("square")), side: t(types.number) }))
+    const ref = t(types.union([circle, square]), { discriminator: "type" })
+    expect(toValibot(ref)).toBe(
+      'v.variant("type", [v.object({ type: v.literal("circle"), radius: v.number() }), v.object({ type: v.literal("square"), side: v.number() })])',
+    )
+  })
 })
 
 describe("intersection", () => {

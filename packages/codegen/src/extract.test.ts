@@ -206,10 +206,25 @@ describe("outputSchema derivation", () => {
   // Genuine 2-member union that is NOT a Result — must NOT be false-positived.
   // No "Result" identifier in the annotation → syntax path skips it.
   // The union has no ok/value/error DU shape → structural path also skips it.
-  it("a different 2-member union with different discriminant does not unwrap (punts)", () => {
+  // It IS, however, a discriminated union on `kind` — it now extracts fully
+  // rather than punting (discriminated-union detection, see extract.ts).
+  it("a different 2-member union with a different discriminant does not unwrap as Result — extracts as its own discriminated union instead", () => {
     const output = schemas["differentUnion_ping"]?.outputSchema
-    expect(output?.$comment).toMatch(/TODO\(codegen\)/)
-    expect(output?.$comment).toMatch(/union/)
+    expect(output).toEqual({
+      oneOf: [
+        {
+          type: "object",
+          properties: { kind: { const: "a" }, x: { type: "number" } },
+          required: ["kind", "x"],
+        },
+        {
+          type: "object",
+          properties: { kind: { const: "b" }, y: { type: "string" } },
+          required: ["kind", "y"],
+        },
+      ],
+      discriminator: { propertyName: "kind" },
+    })
   })
 })
 
@@ -464,11 +479,37 @@ describe("typeRefFromType gap fixes", () => {
     expect(fields.name?.meta.brand).toBeUndefined()
   })
 
-  it("does not treat a plain (non-branded) intersection as a brand — punts cleanly", () => {
+  it("does not treat a plain (non-branded) intersection as a brand — lowers to types.intersection", () => {
     const ref = typeRefFromType(typeOf("PlainIntersection"), checker, source)
-    expect(ref.shape.kind).toBe("unknown")
-    expect(ref.meta.$comment).toMatch(/TODO\(codegen\)/)
-    expect(ref.meta.$comment).toMatch(/intersection/)
+    expect(ref.shape.kind).toBe("intersection")
+    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members
+    expect(members).toHaveLength(2)
+    expect(members[0]?.shape.kind).toBe("object")
+    expect(members[1]?.shape.kind).toBe("object")
+  })
+
+  // ── Mixin intersections (structural, non-branded) ─────────────────────────
+
+  it("extracts a two-way mixin intersection with each constituent lowered recursively", () => {
+    const ref = typeRefFromType(typeOf("MixinType"), checker, source)
+    expect(ref.shape.kind).toBe("intersection")
+    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members
+    expect(members).toHaveLength(2)
+    const [hasId, hasTimestamps] = members
+    expect(hasId?.shape.kind).toBe("object")
+    const idFields = (hasId?.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(idFields)).toEqual(["id"])
+    expect(hasTimestamps?.shape.kind).toBe("object")
+    const tsFields = (hasTimestamps?.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(tsFields)).toEqual(["createdAt", "updatedAt"])
+  })
+
+  it("extracts a three-way intersection (two named mixins + an inline object) fully", () => {
+    const ref = typeRefFromType(typeOf("TripleIntersection"), checker, source)
+    expect(ref.shape.kind).toBe("intersection")
+    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members
+    expect(members).toHaveLength(3)
+    expect(members.every((m) => m.shape.kind === "object")).toBe(true)
   })
 
   // ── Enums / literal unions ────────────────────────────────────────────────
@@ -538,5 +579,35 @@ describe("typeRefFromType gap fixes", () => {
       ]),
     )
     expect(variants).toHaveLength(3)
+  })
+
+  // ── Discriminated unions ──────────────────────────────────────────────────
+
+  it("extracts a discriminated union (ShapeUnion) as types.union with meta.discriminator = 'type', variants as full objects", () => {
+    const ref = typeRefFromType(paramTypeOf("shapeUnionFn"), checker, source)
+    expect(ref.shape.kind).toBe("union")
+    expect(ref.meta.discriminator).toBe("type")
+    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
+    expect(variants).toHaveLength(2)
+    expect(variants.every((v) => v.shape.kind === "object")).toBe(true)
+    const byDiscriminant = Object.fromEntries(
+      variants.map((v) => {
+        const fields = (v.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+        const typeField = fields.type!.shape as { kind: "literal"; value: unknown }
+        return [typeField.value as string, fields]
+      }),
+    )
+    expect(Object.keys(byDiscriminant).sort()).toEqual(["circle", "square"])
+    expect(byDiscriminant.circle?.radius?.shape.kind).toBe("number")
+    expect(byDiscriminant.square?.side?.shape.kind).toBe("number")
+  })
+
+  it("extracts a non-discriminated object union (NonDiscriminated) as types.union WITHOUT meta.discriminator", () => {
+    const ref = typeRefFromType(paramTypeOf("nonDiscriminatedFn"), checker, source)
+    expect(ref.shape.kind).toBe("union")
+    expect(ref.meta.discriminator).toBeUndefined()
+    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
+    expect(variants).toHaveLength(2)
+    expect(variants.every((v) => v.shape.kind === "object")).toBe(true)
   })
 })

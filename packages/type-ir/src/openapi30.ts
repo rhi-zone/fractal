@@ -87,9 +87,19 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { type: "object", additionalProperties: toOpenApi30(s.value) }
   },
-  union: (shape) => {
+  // OAS 3.0.3 §4.8.25 Discriminator Object: `discriminator.propertyName` names
+  // the field OAS-aware tooling (codegen, some validators) reads to pick the
+  // matching variant without trying each `oneOf` member — a native feature,
+  // driven here by `meta.discriminator` (open metadata bag convention, see
+  // CLAUDE.md). `oneOf` (not `anyOf`) is used once a discriminator is present,
+  // since the variants are then mutually exclusive by construction.
+  union: (shape, meta) => {
     const s = shape as TypeShape & { kind: "union" }
-    return { anyOf: s.variants.map(toOpenApi30) }
+    const variants = s.variants.map(toOpenApi30)
+    if (typeof meta.discriminator === "string") {
+      return { oneOf: variants, discriminator: { propertyName: meta.discriminator } }
+    }
+    return { anyOf: variants }
   },
   // OAS 3.0.3 has no `const` (also a 2020-12 addition) — a single-value `enum`
   // is the equivalent.

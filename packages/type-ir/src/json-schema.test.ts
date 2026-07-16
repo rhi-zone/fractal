@@ -142,6 +142,18 @@ describe("union", () => {
     expect(toJsonSchema(ref)).toEqual({ anyOf: [{ type: "string" }, { type: "integer" }] })
   })
 
+  test("discriminated union: oneOf + discriminator.propertyName, driven by meta.discriminator", () => {
+    const circle = t(types.object({ type: t(types.literal("circle")), radius: t(types.number) }))
+    const square = t(types.object({ type: t(types.literal("square")), side: t(types.number) }))
+    const ref = t(types.union([circle, square]), { discriminator: "type" })
+    expect(toJsonSchema(ref)).toEqual({
+      oneOf: [
+        { type: "object", properties: { type: { const: "circle" }, radius: { type: "number" } }, required: ["type", "radius"] },
+        { type: "object", properties: { type: { const: "square" }, side: { type: "number" } }, required: ["type", "side"] },
+      ],
+      discriminator: { propertyName: "type" },
+    })
+  })
 })
 
 describe("intersection", () => {

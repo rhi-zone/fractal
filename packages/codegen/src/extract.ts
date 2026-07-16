@@ -47,6 +47,9 @@ export type JsonSchema = {
   additionalProperties?: JsonSchema
   const?: string | number | boolean | null
   enum?: string[]
+  anyOf?: JsonSchema[]
+  oneOf?: JsonSchema[]
+  discriminator?: { propertyName: string }
   $comment?: string
 }
 
@@ -68,6 +71,21 @@ function isPrivateOrProtected(prop: ts.Symbol): boolean {
 
 /** Property names conventionally used to tag a branded/opaque type. */
 const BRAND_PROP_NAMES = ["__brand", "__tag", "_brand", "_tag"]
+
+/**
+ * Extract a literal's runtime value (string/number/boolean) from a resolved
+ * `ts.Type`, or `undefined` if `type` isn't a literal. Booleans don't carry
+ * `.value` on `ts.LiteralType` — they're read via `intrinsicName` instead
+ * (mirrors the top-of-`typeRefFromType` literal handling).
+ */
+function literalValueOf(type: ts.Type): string | number | boolean | undefined {
+  if (type.flags & ts.TypeFlags.StringLiteral) return (type as ts.LiteralType).value as string
+  if (type.flags & ts.TypeFlags.NumberLiteral) return (type as ts.LiteralType).value as number
+  if (type.flags & ts.TypeFlags.BooleanLiteral) {
+    return (type as ts.Type & { intrinsicName?: string }).intrinsicName === "true"
+  }
+  return undefined
+}
 
 /**
  * Detect `Base & { readonly <brandProp>: "Literal" }` — the standard
@@ -224,10 +242,63 @@ export function typeRefFromType(
       return t(types.union(members.map((m) => typeRefFromType(m, checker, loc, seen))))
     }
 
+    // ── Object-like unions: lower to `types.union([...variants])`, each
+    //    variant a full object TypeRef. When every variant shares a field
+    //    name whose value is a distinct literal, that field is the
+    //    discriminator — recorded as `meta.discriminator` (open metadata bag,
+    //    CLAUDE.md: open metadata over fixed schema). Discriminator-aware
+    //    projectors (OpenAPI 3.0's native `discriminator`, Zod's
+    //    `discriminatedUnion`, Valibot's `variant`) read it; others ignore it
+    //    and just emit a plain union. A union with no shared discriminator
+    //    field still lowers this way (no `meta.discriminator`) — only a union
+    //    with a non-object-like variant (primitive, array, callable, …)
+    //    genuinely punts below.
+    const isObjectLikeMember = (m: ts.Type): boolean =>
+      !m.isUnion() &&
+      !m.isIntersection() &&
+      (m.flags & ts.TypeFlags.Object) !== 0 &&
+      !checker.isArrayType(m) &&
+      !checker.isTupleType(m) &&
+      checker.getSignaturesOfType(m, ts.SignatureKind.Call).length === 0 &&
+      checker.getSignaturesOfType(m, ts.SignatureKind.Construct).length === 0
+
+    if (members.every(isObjectLikeMember)) {
+      const nextSeen = new Set(seen).add(type)
+
+      const fieldNameSets = members.map(
+        (m) => new Set(checker.getPropertiesOfType(m).map((p) => p.name)),
+      )
+      const [firstNames] = fieldNameSets
+      const sharedNames = firstNames
+        ? [...firstNames].filter((name) => fieldNameSets.every((names) => names.has(name)))
+        : []
+
+      let discriminator: string | undefined
+      for (const name of sharedNames) {
+        const seenValues = new Set<string | number | boolean>()
+        const distinctLiteralOnEveryVariant = members.every((m) => {
+          const prop = m.getProperty(name)
+          if (!prop) return false
+          const value = literalValueOf(checker.getTypeOfSymbolAtLocation(prop, loc))
+          if (value === undefined || seenValues.has(value)) return false
+          seenValues.add(value)
+          return true
+        })
+        if (distinctLiteralOnEveryVariant) {
+          discriminator = name
+          break
+        }
+      }
+
+      const variants = members.map((m) => typeRefFromType(m, checker, loc, nextSeen))
+      return t(types.union(variants), discriminator ? { discriminator } : {})
+    }
+
     return puntRef(`union (${checker.typeToString(type)})`)
   }
 
-  // ── Intersections: detect the branded/opaque type pattern ─────────────────
+  // ── Intersections: detect the branded/opaque type pattern, else lower
+  //    structurally ─────────────────────────────────────────────────────────
   //
   // `type LocationId = string & { readonly __brand: "LocationId" }` compiles to
   // an IntersectionType of a primitive constituent and an object constituent
@@ -236,11 +307,19 @@ export function typeRefFromType(
   // `meta.brand` set to the tag's literal string value — an open-metadata-bag
   // annotation (see CLAUDE.md: open metadata over fixed schema) that
   // brand-aware projectors (zod, typescript, valibot) read and others ignore.
-  // Anything else intersecting is a genuine structural intersection: punt.
+  //
+  // Anything else intersecting is a genuine structural intersection — the
+  // mixin pattern (`HasId & HasTimestamps & UserFields`). Each constituent is
+  // extracted recursively and carried as `types.intersection(members)`;
+  // projectors that can represent it natively (JSON Schema's `allOf`,
+  // TypeScript's `&`, Zod's `z.intersection`, …) do, and the rest fall back to
+  // their first member (lossy but safe — see each projector's handler).
   if (type.isIntersection()) {
     const brand = brandFromIntersection(type, checker, loc, seen)
     if (brand) return brand
-    return puntRef(`intersection (${checker.typeToString(type)})`)
+    const nextSeen = new Set(seen).add(type)
+    const members = type.types.map((member) => typeRefFromType(member, checker, loc, nextSeen))
+    return t(types.intersection(members))
   }
 
   // ── Object types: primitive/optional/array/nested fields ──────────────────

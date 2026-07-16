@@ -128,6 +128,14 @@ describe("union", () => {
     expect(toZod(ref)).toBe("z.union([z.string(), z.number().int()])")
   })
 
+  test("discriminated union: z.discriminatedUnion(key, [...]), driven by meta.discriminator", () => {
+    const circle = t(types.object({ type: t(types.literal("circle")), radius: t(types.number) }))
+    const square = t(types.object({ type: t(types.literal("square")), side: t(types.number) }))
+    const ref = t(types.union([circle, square]), { discriminator: "type" })
+    expect(toZod(ref)).toBe(
+      'z.discriminatedUnion("type", [z.object({ type: z.literal("circle"), radius: z.number() }), z.object({ type: z.literal("square"), side: z.number() })])',
+    )
+  })
 })
 
 describe("intersection", () => {

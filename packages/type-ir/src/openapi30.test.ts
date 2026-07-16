@@ -140,6 +140,19 @@ describe("union", () => {
     const ref = t(types.union([t(types.string), t(types.integer)]))
     expect(toOpenApi30(ref)).toEqual({ anyOf: [{ type: "string" }, { type: "integer" }] })
   })
+
+  test("discriminated union: oneOf + native OAS 3.0 discriminator.propertyName", () => {
+    const circle = t(types.object({ type: t(types.literal("circle")), radius: t(types.number) }))
+    const square = t(types.object({ type: t(types.literal("square")), side: t(types.number) }))
+    const ref = t(types.union([circle, square]), { discriminator: "type" })
+    expect(toOpenApi30(ref)).toEqual({
+      oneOf: [
+        { type: "object", properties: { type: { enum: ["circle"] }, radius: { type: "number" } }, required: ["type", "radius"] },
+        { type: "object", properties: { type: { enum: ["square"] }, side: { type: "number" } }, required: ["type", "side"] },
+      ],
+      discriminator: { propertyName: "type" },
+    })
+  })
 })
 
 describe("literal", () => {

@@ -73,8 +73,23 @@ export type PositiveInt = number & { readonly __tag: "PositiveInt" }
 /** A branded type nested as an object field. */
 export type BrandedField = { locationId: LocationId; name: string }
 
-/** A genuine structural intersection (not a brand pattern) — must still punt. */
+/** A genuine structural intersection (not a brand pattern) — lowers to
+ * `types.intersection`, each constituent extracted recursively. */
 export type PlainIntersection = { a: string } & { b: number }
+
+// ── Mixin intersection fixtures ─────────────────────────────────────────────
+
+/** A mixin constituent — merged into other object types via `&`. */
+export type HasId = { id: string }
+
+/** A second mixin constituent. */
+export type HasTimestamps = { createdAt: string; updatedAt: string }
+
+/** Two named mixins combined — the common "mixin" intersection pattern. */
+export type MixinType = HasId & HasTimestamps
+
+/** Three-way intersection: two named mixins plus an inline object literal. */
+export type TripleIntersection = HasId & HasTimestamps & { name: string }
 
 // ── Enum / literal-union fixtures ───────────────────────────────────────────
 
@@ -114,3 +129,20 @@ export const stringUnionFn = (u: StringUnion): void => {}
 export const mixedUnionFn = (u: MixedUnion): void => {}
 export const literalMixedUnionFn = (u: LiteralMixedUnion): void => {}
 export const booleanParamFn = (b: BooleanParam): void => {}
+
+// ── Discriminated union fixtures ────────────────────────────────────────────
+
+/** A discriminated-union variant — shares the `type` field with `Square`. */
+export type Circle = { type: "circle"; radius: number }
+
+/** A second variant — `type` distinguishes it from `Circle`. */
+export type Square = { type: "square"; side: number }
+
+/** A union of object types sharing a common literal-typed discriminator field. */
+export type ShapeUnion = Circle | Square
+
+/** A union of object types with NO shared literal field — no discriminator. */
+export type NonDiscriminated = { a: string } | { b: number }
+
+export const shapeUnionFn = (shape: ShapeUnion): void => {}
+export const nonDiscriminatedFn = (u: NonDiscriminated): void => {}

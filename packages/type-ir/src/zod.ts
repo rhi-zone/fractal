@@ -85,9 +85,18 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return `z.record(${toZod(s.key)}, ${toZod(s.value)})`
   },
-  union: (shape) => {
+  // https://zod.dev/?id=discriminated-unions — z.discriminatedUnion(key, [...])
+  // is Zod's native construct for object unions keyed on a shared literal
+  // field; it validates in O(1) by reading the key instead of trying every
+  // variant. Driven by `meta.discriminator` (open metadata bag convention,
+  // see CLAUDE.md); a plain union (no discriminator) keeps z.union().
+  union: (shape, meta) => {
     const s = shape as TypeShape & { kind: "union" }
-    return `z.union([${s.variants.map(toZod).join(", ")}])`
+    const variants = s.variants.map(toZod)
+    if (typeof meta.discriminator === "string") {
+      return `z.discriminatedUnion(${JSON.stringify(meta.discriminator)}, [${variants.join(", ")}])`
+    }
+    return `z.union([${variants.join(", ")}])`
   },
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" }
