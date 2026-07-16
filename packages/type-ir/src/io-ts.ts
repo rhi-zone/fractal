@@ -88,6 +88,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { code: s.target }
   },
+  // io-ts has `t.intersection([...])`, but this projector isn't wired to emit
+  // it for a general intersection — lossy fallback: the first member's codec,
+  // dropping the rest.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return { code: first === undefined ? "t.unknown" : toIoTs(first) }
+  },
 }
 
 function constraintNotes(meta: Readonly<Record<string, unknown>>, kind: string): string[] {

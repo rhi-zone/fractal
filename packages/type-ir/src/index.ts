@@ -26,6 +26,7 @@ export interface TypeKinds {
   literal: { readonly kind: "literal"; readonly value: string | number | boolean | null }
   enum: { readonly kind: "enum"; readonly members: readonly string[] }
   ref: { readonly kind: "ref"; readonly target: string }
+  intersection: { readonly kind: "intersection"; readonly members: readonly TypeRef[] }
 }
 
 export type TypeShape = TypeKinds[keyof TypeKinds]
@@ -63,6 +64,7 @@ const parents: Record<string, string | null> = {
   literal: null,
   enum: null,
   ref: null,
+  intersection: null,
 }
 
 export function registerParent(kind: string, parent: string | null): void {
@@ -122,6 +124,7 @@ export const types = {
   literal: (value: string | number | boolean | null) => ({ kind: "literal", value }) as const,
   enum: (members: readonly string[]) => ({ kind: "enum", members }) as const,
   ref: (target: string) => ({ kind: "ref", target }) as const,
+  intersection: (members: readonly TypeRef[]) => ({ kind: "intersection", members }) as const,
 }
 
 export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial, deepRequired } from "./derive.ts"

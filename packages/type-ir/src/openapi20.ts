@@ -142,6 +142,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { $ref: `#/definitions/${s.target}` }
   },
+  // Swagger 2.0 §4.7.4 keeps `allOf` from its JSON Schema draft-04 base (the
+  // only polymorphism keyword it kept) — the faithful encoding of a
+  // structural intersection (mixin composition).
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    return { allOf: s.members.map(toOpenApi20) }
+  },
 }
 
 function sameShape(a: OpenApi20Schema, b: OpenApi20Schema): boolean {

@@ -89,6 +89,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { type: s.target }
   },
+  // Proto3 has no intersection/mixin construct — lossy: falls back to the
+  // first member's field type, dropping the rest.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return first === undefined ? { type: "google.protobuf.Any" } : toProtoField(first)
+  },
 }
 
 export function toProtoField(ref: TypeRef): ProtoField {

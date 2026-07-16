@@ -117,6 +117,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
   },
+  // Effect Schema has no general schema-level intersection combinator (struct
+  // merging uses `S.extend`, which requires both sides to be Structs) — lossy
+  // fallback: the first member's schema, dropping the rest.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return first === undefined ? "S.Unknown" : toEffectSchema(first)
+  },
 }
 
 export function toEffectSchema(ref: TypeRef): string {

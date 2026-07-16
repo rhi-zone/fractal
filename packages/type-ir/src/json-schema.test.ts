@@ -141,6 +141,37 @@ describe("union", () => {
     const ref = t(types.union([t(types.string), t(types.integer)]))
     expect(toJsonSchema(ref)).toEqual({ anyOf: [{ type: "string" }, { type: "integer" }] })
   })
+
+})
+
+describe("intersection", () => {
+  test("allOf", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toJsonSchema(ref)).toEqual({
+      allOf: [
+        { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+        { type: "object", properties: { createdAt: { type: "string" } }, required: ["createdAt"] },
+      ],
+    })
+  })
+
+  test("three-way intersection preserves every member in allOf", () => {
+    const ref = t(
+      types.intersection([t(types.object({ a: t(types.string) })), t(types.string), t(types.number)]),
+    )
+    expect(toJsonSchema(ref)).toEqual({
+      allOf: [
+        { type: "object", properties: { a: { type: "string" } }, required: ["a"] },
+        { type: "string" },
+        { type: "number" },
+      ],
+    })
+  })
 })
 
 describe("literal", () => {

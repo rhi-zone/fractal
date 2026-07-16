@@ -107,9 +107,15 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { $ref: `#/definitions/${s.target}` }
   },
+  // draft-07 §9.2.1.1 `allOf`: every listed schema must validate — the
+  // faithful encoding of a structural intersection (mixin composition).
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    return { allOf: s.members.map(toJsonSchema07) }
+  },
 }
 
-const complexKinds = new Set(["object", "array", "tuple", "map", "union"])
+const complexKinds = new Set(["object", "array", "tuple", "map", "union", "intersection"])
 
 export function toJsonSchema07(ref: TypeRef): JsonSchema07 {
   const converter = resolve(ref.shape.kind, handlers)

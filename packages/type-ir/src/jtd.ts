@@ -108,6 +108,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { form: { ref: s.target } }
   },
+  // JTD has no intersection form. Degrade to the first member's schema (lossy
+  // — the rest are dropped) and flag it in metadata, same convention as tuple.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return { form: first === undefined ? {} : toJtd(first), metadata: { intersection: true } }
+  },
 }
 
 export function toJtd(ref: TypeRef): Jtd {

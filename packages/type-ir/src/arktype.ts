@@ -111,6 +111,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { text: s.target, mode: "expr" }
   },
+  // ArkType has `type.and()`, but this projector isn't wired to emit it —
+  // lossy fallback: the first member's schema, dropping the rest.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return first === undefined ? { text: "unknown", mode: "word" } : emitRef(first)
+  },
 }
 
 function emitRef(ref: TypeRef): Emitted {

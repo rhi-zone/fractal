@@ -86,6 +86,12 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { schema: s.target, actions: [] }
   },
+  // https://valibot.dev/api/intersect/ — v.intersect() takes an array of any
+  // arity, unlike Zod's binary z.intersection().
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    return { schema: `v.intersect([${s.members.map(toValibot).join(", ")}])`, actions: [] }
+  },
 }
 
 export function toValibot(ref: TypeRef): string {

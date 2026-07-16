@@ -97,6 +97,28 @@ test("literal string", () => {
   expect(toTypeScript(t(types.literal("active")))).toBe('"active"')
 })
 
+test("intersection", () => {
+  const ref = t(
+    types.intersection([
+      t(types.object({ id: t(types.string) })),
+      t(types.object({ createdAt: t(types.string) })),
+    ]),
+  )
+  expect(toTypeScript(ref)).toBe("{ id: string } & { createdAt: string }")
+})
+
+test("three-way intersection joins all members with &", () => {
+  const ref = t(
+    types.intersection([t(types.object({ id: t(types.string) })), t(types.string), t(types.number)]),
+  )
+  expect(toTypeScript(ref)).toBe("{ id: string } & string & number")
+})
+
+test("array of intersection uses Array<>", () => {
+  const ref = t(types.array(t(types.intersection([t(types.string), t(types.number)]))))
+  expect(toTypeScript(ref)).toBe("Array<string & number>")
+})
+
 test("literal number", () => {
   expect(toTypeScript(t(types.literal(42)))).toBe("42")
 })

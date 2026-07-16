@@ -107,6 +107,12 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { $ref: `#/components/schemas/${s.target}` }
   },
+  // OAS 3.0.3 §4.8.24 inherits JSON Schema's `allOf` — the faithful encoding
+  // of a structural intersection (mixin composition).
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    return { allOf: s.members.map(toOpenApi30) }
+  },
 }
 
 export function toOpenApi30(ref: TypeRef): OpenApi30Schema {

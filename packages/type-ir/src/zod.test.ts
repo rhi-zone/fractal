@@ -127,6 +127,34 @@ describe("union", () => {
     const ref = t(types.union([t(types.string), t(types.integer)]))
     expect(toZod(ref)).toBe("z.union([z.string(), z.number().int()])")
   })
+
+})
+
+describe("intersection", () => {
+  test("two members: z.intersection(a, b)", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toZod(ref)).toBe(
+      "z.intersection(z.object({ id: z.string() }), z.object({ createdAt: z.string() }))",
+    )
+  })
+
+  test("three members nest left-associatively: z.intersection(z.intersection(a, b), c)", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+        t(types.object({ name: t(types.string) })),
+      ]),
+    )
+    expect(toZod(ref)).toBe(
+      "z.intersection(z.intersection(z.object({ id: z.string() }), z.object({ createdAt: z.string() })), z.object({ name: z.string() }))",
+    )
+  })
 })
 
 describe("literal", () => {

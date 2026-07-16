@@ -58,4 +58,27 @@ describe("TypeRef construction", () => {
       },
     })
   })
+
+  test("builds an intersection of members", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(ref.shape).toEqual({
+      kind: "intersection",
+      members: [
+        { shape: { kind: "object", fields: { id: { shape: { kind: "string" }, meta: {} } } }, meta: {} },
+        {
+          shape: { kind: "object", fields: { createdAt: { shape: { kind: "string" }, meta: {} } } },
+          meta: {},
+        },
+      ],
+    })
+  })
+
+  test("intersection is a root kind with no ancestors", () => {
+    expect(ancestors("intersection")).toEqual([])
+  })
 })

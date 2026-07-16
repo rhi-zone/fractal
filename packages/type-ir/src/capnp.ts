@@ -64,6 +64,13 @@ const handlers: Record<string, Converter> = {
     return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`
   },
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
+  // No intersection/mixin construct (§ "Language Reference") — lossy: falls
+  // back to the first member's type, dropping the rest.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return first === undefined ? "AnyPointer" : toCapnpType(first)
+  },
 }
 
 export function toCapnpType(ref: TypeRef): string {

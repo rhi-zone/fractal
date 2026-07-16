@@ -122,6 +122,32 @@ describe("union", () => {
     const ref = t(types.union([t(types.string), t(types.integer)]))
     expect(toValibot(ref)).toBe("v.union([v.string(), v.pipe(v.number(), v.integer())])")
   })
+
+})
+
+describe("intersection", () => {
+  test("v.intersect([...]) accepts any arity", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toValibot(ref)).toBe("v.intersect([v.object({ id: v.string() }), v.object({ createdAt: v.string() })])")
+  })
+
+  test("three-way intersection stays a single flat v.intersect([...])", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+        t(types.object({ name: t(types.string) })),
+      ]),
+    )
+    expect(toValibot(ref)).toBe(
+      "v.intersect([v.object({ id: v.string() }), v.object({ createdAt: v.string() }), v.object({ name: v.string() })])",
+    )
+  })
 })
 
 describe("literal", () => {

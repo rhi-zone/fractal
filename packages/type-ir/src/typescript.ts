@@ -11,7 +11,7 @@ function quote(value: string): string {
   return JSON.stringify(value)
 }
 
-const complexKinds = new Set(["union", "object", "map"])
+const complexKinds = new Set(["union", "object", "map", "intersection"])
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("boolean"),
@@ -73,6 +73,10 @@ const handlers: Record<string, Converter> = {
   ref: (shape) => {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
+  },
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    return s.members.map(toTypeScript).join(" & ")
   },
 }
 

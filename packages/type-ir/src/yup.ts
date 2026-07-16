@@ -134,6 +134,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
   },
+  // Yup has no intersection combinator (`.concat()` merges two object shapes,
+  // not a general intersection) — lossy fallback: the first member's schema,
+  // dropping the rest.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return first === undefined ? "yup.mixed()" : toYup(first)
+  },
 }
 
 export function toYup(ref: TypeRef): string {

@@ -107,6 +107,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return call("Type.Ref", [s.target], [], meta)
   },
+  // TypeBox has `Type.Intersect`, but this projector isn't wired to emit it —
+  // lossy fallback: the first member's schema, dropping the rest.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return first === undefined ? "Type.Unknown()" : toTypeBox(first)
+  },
 }
 
 export function toTypeBox(ref: TypeRef): string {

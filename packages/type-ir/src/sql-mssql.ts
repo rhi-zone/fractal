@@ -43,6 +43,17 @@ const mssqlHandlers: Record<string, Converter> = {
   enum: leaf("NVARCHAR(255)"),
   ref: leaf("NVARCHAR(255)"),
 }
+// MSSQL has no intersection/mixin column type — lossy fallback: resolve the
+// first member's shape against this same handler map, dropping the rest.
+// Assigned after construction (not inline) so the closure captures the fully
+// initialized map, not a `const` reference mid-TDZ.
+mssqlHandlers.intersection = (shape) => {
+  const s = shape as TypeShape & { kind: "intersection" }
+  const [first] = s.members
+  if (first === undefined) return "NVARCHAR(255)"
+  const converter = resolve(first.shape.kind, mssqlHandlers)
+  return converter === undefined ? "NVARCHAR(255)" : converter(first.shape)
+}
 
 function sqlLiteral(value: unknown): string {
   if (value === null) return "NULL"

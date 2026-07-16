@@ -101,6 +101,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
   },
+  // Zod's z.intersection() only takes two schemas (https://zod.dev/?id=intersections) —
+  // 3+ members nest left-associatively: `z.intersection(z.intersection(a, b), c)`.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first, ...rest] = s.members
+    if (first === undefined) return "z.unknown()"
+    return rest.reduce((acc, member) => `z.intersection(${acc}, ${toZod(member)})`, toZod(first))
+  },
 }
 
 export function toZod(ref: TypeRef): string {

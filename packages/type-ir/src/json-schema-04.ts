@@ -143,6 +143,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { $ref: `#/definitions/${s.target}` }
   },
+  // draft-04 §5.5.3 `allOf`: every listed schema must validate — the faithful
+  // encoding of a structural intersection (mixin composition), unchanged from
+  // later drafts.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    return { allOf: s.members.map(toJsonSchema04) }
+  },
 }
 
 export function toJsonSchema04(ref: TypeRef): JsonSchema04 {

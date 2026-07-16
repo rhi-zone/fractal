@@ -51,6 +51,9 @@ const postgresHandlers: Record<string, Converter> = {
   enum: leaf("TEXT"),
   ref: leaf("TEXT"),
 }
+// Assigned after construction (not inline) so the closure captures the fully
+// initialized `postgresHandlers` map, not a `const` reference mid-TDZ.
+postgresHandlers.intersection = intersectionFallback(postgresHandlers, "JSONB")
 
 const sqliteHandlers: Record<string, Converter> = {
   ...postgresHandlers,
@@ -69,6 +72,25 @@ const sqliteHandlers: Record<string, Converter> = {
   tuple: leaf("TEXT"),
   map: leaf("TEXT"),
   union: leaf("TEXT"),
+}
+// Overridden (not inherited from the postgres spread) so the fallback
+// resolves against sqlite's own type names, not postgres's.
+sqliteHandlers.intersection = intersectionFallback(sqliteHandlers, "TEXT")
+
+// SQL has no intersection/mixin column type — lossy fallback: resolve the
+// first member's shape against the SAME dialect handler map, dropping the
+// rest. Declared as a `function` (hoisted) so it can be referenced by name
+// inside a handlers object literal without a TDZ violation — each dialect
+// map's `intersection` entry closes over that dialect's own `handlers`
+// parameter, so sqlite/mysql don't fall back through postgres's types.
+function intersectionFallback(handlers: Record<string, Converter>, fallback: string): Converter {
+  return (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    if (first === undefined) return fallback
+    const converter = resolve(first.shape.kind, handlers)
+    return converter === undefined ? fallback : converter(first.shape)
+  }
 }
 
 function sqlLiteral(value: unknown): string {
@@ -120,6 +142,7 @@ const mysqlHandlers: Record<string, Converter> = {
   enum: mysqlEnumHandler,
   ref: leaf("TEXT"),
 }
+mysqlHandlers.intersection = intersectionFallback(mysqlHandlers, "JSON")
 
 function handlersFor(dialect: SqlDialect | undefined): Record<string, Converter> {
   if (dialect === "sqlite") return sqliteHandlers
