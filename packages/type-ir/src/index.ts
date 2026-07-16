@@ -123,3 +123,5 @@ export const types = {
   enum: (members: readonly string[]) => ({ kind: "enum", members }) as const,
   ref: (target: string) => ({ kind: "ref", target }) as const,
 }
+
+export { partial, required, pick, omit, extend, nullable, withMeta } from "./derive.ts"

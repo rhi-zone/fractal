@@ -94,6 +94,10 @@
     "./effect-schema": {
       "types": "./src/effect-schema.ts",
       "import": "./src/effect-schema.ts"
+    },
+    "./derive": {
+      "types": "./src/derive.ts",
+      "import": "./src/derive.ts"
     }
   },
   "files": ["src"],
