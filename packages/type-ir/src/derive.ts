@@ -1,9 +1,8 @@
 // Type derivation operators — pure functions that transform TypeRefs into new
 // TypeRefs. These operate at the TypeRef level (not per-projection), so every
-// projector benefits automatically. No deep/recursive variants here (that
-// would be `deepPartial` etc.) — these only touch the top-level object shape.
+// projector benefits automatically.
 
-import { t, type TypeRef } from "./index.ts"
+import { t, type TypeRef, type TypeShape } from "./index.ts"
 
 function isObjectShape(ref: TypeRef): ref is TypeRef & { shape: { kind: "object"; fields: Readonly<Record<string, TypeRef>> } } {
   return ref.shape.kind === "object"
@@ -70,4 +69,60 @@ export function nullable(ref: TypeRef): TypeRef {
 /** Merge additional metadata into a TypeRef (constraints, descriptions, etc.). */
 export function withMeta(ref: TypeRef, meta: Record<string, unknown>): TypeRef {
   return t(ref.shape, { ...ref.meta, ...meta })
+}
+
+function deepPartialShape(shape: TypeShape, seen: Set<TypeShape>): TypeShape {
+  if (seen.has(shape)) return shape
+  if (shape.kind === "object") {
+    seen.add(shape)
+    const fields: Record<string, TypeRef> = {}
+    for (const [key, fieldRef] of Object.entries(shape.fields)) {
+      fields[key] = t(deepPartialShape(fieldRef.shape, seen), { ...fieldRef.meta, optional: true })
+    }
+    return { kind: "object", fields }
+  }
+  if (shape.kind === "array") {
+    seen.add(shape)
+    return { kind: "array", element: t(deepPartialShape(shape.element.shape, seen), shape.element.meta) }
+  }
+  return shape
+}
+
+/**
+ * Like `partial`, but recurses into nested object fields (and object elements
+ * of arrays), making every level optional. Non-object leaf fields just get
+ * `meta.optional = true`. Non-object refs pass through unchanged. Cycle-safe:
+ * a shape already visited is returned as-is rather than reprocessed.
+ */
+export function deepPartial(ref: TypeRef): TypeRef {
+  if (!isObjectShape(ref)) return ref
+  return t(deepPartialShape(ref.shape, new Set()), ref.meta)
+}
+
+function deepRequiredShape(shape: TypeShape, seen: Set<TypeShape>): TypeShape {
+  if (seen.has(shape)) return shape
+  if (shape.kind === "object") {
+    seen.add(shape)
+    const fields: Record<string, TypeRef> = {}
+    for (const [key, fieldRef] of Object.entries(shape.fields)) {
+      const { optional: _optional, ...rest } = fieldRef.meta
+      fields[key] = t(deepRequiredShape(fieldRef.shape, seen), rest)
+    }
+    return { kind: "object", fields }
+  }
+  if (shape.kind === "array") {
+    seen.add(shape)
+    return { kind: "array", element: t(deepRequiredShape(shape.element.shape, seen), shape.element.meta) }
+  }
+  return shape
+}
+
+/**
+ * Inverse of `deepPartial` — recurses into nested object fields (and object
+ * elements of arrays), removing `meta.optional` at every level. Non-object
+ * refs pass through unchanged. Cycle-safe like `deepPartial`.
+ */
+export function deepRequired(ref: TypeRef): TypeRef {
+  if (!isObjectShape(ref)) return ref
+  return t(deepRequiredShape(ref.shape, new Set()), ref.meta)
 }

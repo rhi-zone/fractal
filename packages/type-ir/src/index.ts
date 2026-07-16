@@ -124,4 +124,4 @@ export const types = {
   ref: (target: string) => ({ kind: "ref", target }) as const,
 }
 
-export { partial, required, pick, omit, extend, nullable, withMeta } from "./derive.ts"
+export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial, deepRequired } from "./derive.ts"

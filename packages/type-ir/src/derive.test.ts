@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { extend, nullable, omit, partial, pick, required, withMeta } from "./derive.ts"
+import { deepPartial, deepRequired, extend, nullable, omit, partial, pick, required, withMeta } from "./derive.ts"
 import { t, types } from "./index.ts"
 
 const user = t(
@@ -225,5 +225,222 @@ describe("composition", () => {
     // original untouched
     if (create.shape.kind !== "object") throw new Error("unreachable")
     expect(create.shape.fields.title!.meta.optional).toBeUndefined()
+  })
+})
+
+describe("deepPartial", () => {
+  test("flat object: same behavior as partial", () => {
+    const ref = deepPartial(user)
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    for (const field of Object.values(ref.shape.fields)) {
+      expect(field.meta.optional).toBe(true)
+    }
+  })
+
+  test("nested object: all levels become optional", () => {
+    const nested = t(
+      types.object({
+        user: t(
+          types.object({
+            name: t(types.string),
+            address: t(types.object({ city: t(types.string) })),
+          }),
+        ),
+      }),
+    )
+    const ref = deepPartial(nested)
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.user!.meta.optional).toBe(true)
+    const userShape = ref.shape.fields.user!.shape
+    if (userShape.kind !== "object") throw new Error("unreachable")
+    expect(userShape.fields.name!.meta.optional).toBe(true)
+    expect(userShape.fields.address!.meta.optional).toBe(true)
+    const addressShape = userShape.fields.address!.shape
+    if (addressShape.kind !== "object") throw new Error("unreachable")
+    expect(addressShape.fields.city!.meta.optional).toBe(true)
+  })
+
+  test("array of objects: element fields become optional", () => {
+    const ref = deepPartial(
+      t(
+        types.object({
+          items: t(types.array(t(types.object({ id: t(types.uuid), label: t(types.string) })))),
+        }),
+      ),
+    )
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.items!.meta.optional).toBe(true)
+    const arrayShape = ref.shape.fields.items!.shape
+    if (arrayShape.kind !== "array") throw new Error("unreachable")
+    const elementShape = arrayShape.element.shape
+    if (elementShape.kind !== "object") throw new Error("unreachable")
+    expect(elementShape.fields.id!.meta.optional).toBe(true)
+    expect(elementShape.fields.label!.meta.optional).toBe(true)
+  })
+
+  test("mixed nesting: objects inside arrays inside objects", () => {
+    const ref = deepPartial(
+      t(
+        types.object({
+          groups: t(
+            types.array(
+              t(
+                types.object({
+                  name: t(types.string),
+                  members: t(types.array(t(types.object({ id: t(types.uuid) })))),
+                }),
+              ),
+            ),
+          ),
+        }),
+      ),
+    )
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    const groupsArray = ref.shape.fields.groups!.shape
+    if (groupsArray.kind !== "array") throw new Error("unreachable")
+    const groupShape = groupsArray.element.shape
+    if (groupShape.kind !== "object") throw new Error("unreachable")
+    expect(groupShape.fields.name!.meta.optional).toBe(true)
+    expect(groupShape.fields.members!.meta.optional).toBe(true)
+    const membersArray = groupShape.fields.members!.shape
+    if (membersArray.kind !== "array") throw new Error("unreachable")
+    const memberShape = membersArray.element.shape
+    if (memberShape.kind !== "object") throw new Error("unreachable")
+    expect(memberShape.fields.id!.meta.optional).toBe(true)
+  })
+
+  test("non-object refs pass through unchanged", () => {
+    const ref = t(types.string, { nullable: true })
+    expect(deepPartial(ref)).toEqual(ref)
+  })
+
+  test("composes with pick", () => {
+    const nested = t(
+      types.object({
+        user: t(types.object({ name: t(types.string) })),
+        other: t(types.string),
+      }),
+    )
+    const ref = deepPartial(pick(nested, ["user"]))
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(Object.keys(ref.shape.fields)).toEqual(["user"])
+    const userShape = ref.shape.fields.user!.shape
+    if (userShape.kind !== "object") throw new Error("unreachable")
+    expect(userShape.fields.name!.meta.optional).toBe(true)
+  })
+})
+
+describe("deepRequired", () => {
+  test("flat object: same behavior as required", () => {
+    const ref = deepRequired(deepPartial(user))
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    for (const field of Object.values(ref.shape.fields)) {
+      expect(field.meta.optional).toBeUndefined()
+    }
+  })
+
+  test("nested object: all levels lose optional", () => {
+    const nested = t(
+      types.object({
+        user: t(
+          types.object({
+            name: t(types.string),
+            address: t(types.object({ city: t(types.string) })),
+          }),
+        ),
+      }),
+    )
+    const ref = deepRequired(deepPartial(nested))
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.user!.meta.optional).toBeUndefined()
+    const userShape = ref.shape.fields.user!.shape
+    if (userShape.kind !== "object") throw new Error("unreachable")
+    expect(userShape.fields.name!.meta.optional).toBeUndefined()
+    expect(userShape.fields.address!.meta.optional).toBeUndefined()
+    const addressShape = userShape.fields.address!.shape
+    if (addressShape.kind !== "object") throw new Error("unreachable")
+    expect(addressShape.fields.city!.meta.optional).toBeUndefined()
+  })
+
+  test("array of objects: element fields lose optional", () => {
+    const original = t(
+      types.object({
+        items: t(types.array(t(types.object({ id: t(types.uuid), label: t(types.string) })))),
+      }),
+    )
+    const ref = deepRequired(deepPartial(original))
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.items!.meta.optional).toBeUndefined()
+    const arrayShape = ref.shape.fields.items!.shape
+    if (arrayShape.kind !== "array") throw new Error("unreachable")
+    const elementShape = arrayShape.element.shape
+    if (elementShape.kind !== "object") throw new Error("unreachable")
+    expect(elementShape.fields.id!.meta.optional).toBeUndefined()
+    expect(elementShape.fields.label!.meta.optional).toBeUndefined()
+  })
+
+  test("mixed nesting: objects inside arrays inside objects", () => {
+    const original = t(
+      types.object({
+        groups: t(
+          types.array(
+            t(
+              types.object({
+                name: t(types.string),
+                members: t(types.array(t(types.object({ id: t(types.uuid) })))),
+              }),
+            ),
+          ),
+        ),
+      }),
+    )
+    const ref = deepRequired(deepPartial(original))
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    const groupsArray = ref.shape.fields.groups!.shape
+    if (groupsArray.kind !== "array") throw new Error("unreachable")
+    const groupShape = groupsArray.element.shape
+    if (groupShape.kind !== "object") throw new Error("unreachable")
+    expect(groupShape.fields.name!.meta.optional).toBeUndefined()
+    expect(groupShape.fields.members!.meta.optional).toBeUndefined()
+    const membersArray = groupShape.fields.members!.shape
+    if (membersArray.kind !== "array") throw new Error("unreachable")
+    const memberShape = membersArray.element.shape
+    if (memberShape.kind !== "object") throw new Error("unreachable")
+    expect(memberShape.fields.id!.meta.optional).toBeUndefined()
+  })
+
+  test("non-object refs pass through unchanged", () => {
+    const ref = t(types.string)
+    expect(deepRequired(ref)).toEqual(ref)
+  })
+})
+
+describe("deepPartial / deepRequired do not affect shallow partial / required", () => {
+  test("partial does not recurse into nested objects", () => {
+    const nested = t(
+      types.object({
+        user: t(types.object({ name: t(types.string) })),
+      }),
+    )
+    const ref = partial(nested)
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.user!.meta.optional).toBe(true)
+    const userShape = ref.shape.fields.user!.shape
+    if (userShape.kind !== "object") throw new Error("unreachable")
+    expect(userShape.fields.name!.meta.optional).toBeUndefined()
+  })
+
+  test("required does not recurse into nested objects", () => {
+    const nested = t(
+      types.object({
+        user: t(types.object({ name: t(types.string, { optional: true }) }), { optional: true }),
+      }),
+    )
+    const ref = required(nested)
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.user!.meta.optional).toBeUndefined()
+    const userShape = ref.shape.fields.user!.shape
+    if (userShape.kind !== "object") throw new Error("unreachable")
+    expect(userShape.fields.name!.meta.optional).toBe(true)
   })
 })
