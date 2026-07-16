@@ -15,12 +15,19 @@ function literalValue(value: string | number | boolean | null): string {
 const optionKeys = [
   "minimum",
   "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
   "minLength",
   "maxLength",
   "pattern",
   "multipleOf",
   "description",
   "default",
+  "deprecated",
+  "readOnly",
+  "writeOnly",
+  "examples",
+  "$comment",
 ] as const
 
 function metaOptionEntries(meta: Readonly<Record<string, unknown>>): [string, string][] {

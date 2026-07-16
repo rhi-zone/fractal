@@ -222,6 +222,36 @@ describe("options object", () => {
     expect(toTypeBox(ref)).toBe("Type.Integer({ default: 0 })")
   })
 
+  test("exclusiveMinimum / exclusiveMaximum", () => {
+    const ref = t(types.integer, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toTypeBox(ref)).toBe("Type.Integer({ exclusiveMinimum: 0, exclusiveMaximum: 100 })")
+  })
+
+  test("deprecated", () => {
+    const ref = t(types.string, { deprecated: true })
+    expect(toTypeBox(ref)).toBe("Type.String({ deprecated: true })")
+  })
+
+  test("readOnly", () => {
+    const ref = t(types.string, { readOnly: true })
+    expect(toTypeBox(ref)).toBe("Type.String({ readOnly: true })")
+  })
+
+  test("writeOnly", () => {
+    const ref = t(types.string, { writeOnly: true })
+    expect(toTypeBox(ref)).toBe("Type.String({ writeOnly: true })")
+  })
+
+  test("examples", () => {
+    const ref = t(types.string, { examples: ["a", "b"] })
+    expect(toTypeBox(ref)).toBe('Type.String({ examples: ["a","b"] })')
+  })
+
+  test("$comment", () => {
+    const ref = t(types.string, { $comment: "internal note" })
+    expect(toTypeBox(ref)).toBe('Type.String({ $comment: "internal note" })')
+  })
+
   test("format combined with meta constraints", () => {
     const ref = t(types.uuid, { description: "the id" })
     expect(toTypeBox(ref)).toBe('Type.String({ format: "uuid", description: "the id" })')
