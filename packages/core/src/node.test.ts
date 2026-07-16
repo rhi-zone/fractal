@@ -5,6 +5,7 @@ import {
   op,
   node,
   service,
+  api,
   isNode,
   isLeaf,
   mergeMeta,
@@ -316,5 +317,33 @@ describe("mergeMeta", () => {
     const m = mergeMeta({ a: 1, b: 2 }, { b: 3 })
     expect(m["a"]).toBe(1)
     expect(m["b"]).toBe(3)
+  })
+})
+
+// ============================================================================
+// 8. api() — DX sugar over node({ children, ...opts })
+// ============================================================================
+
+describe("api()", () => {
+  it("api(children) produces the same Node as node({ children })", () => {
+    const children = { users: op(() => []) }
+    expect(api(children)).toEqual(node({ children }))
+  })
+
+  it("api(children, opts) forwards meta and fallback exactly as node({...}) would", () => {
+    const children = { users: op(() => []) }
+    const meta: Meta = { tags: { readOnly: true } }
+    const fallback = { name: "id", subtree: op(() => ({})) }
+    expect(api(children, { meta, fallback })).toEqual(
+      node({ children, meta, fallback }),
+    )
+  })
+
+  it("composes with nested api() calls", () => {
+    const tree = api({
+      users: api({ list: op(() => []) }),
+    })
+    expect(isNode(tree)).toBe(true)
+    expect(isLeaf((tree.children?.["users"] as Node).children?.["list"] as Node)).toBe(true)
   })
 })

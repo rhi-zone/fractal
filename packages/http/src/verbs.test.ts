@@ -34,6 +34,11 @@ function verbDirective(n: ReturnType<typeof op>): string | undefined {
   return http_?.directives.find((d) => d.kind === "verb")?.value
 }
 
+function methodDirective(n: ReturnType<typeof op>): string | undefined {
+  const http_ = n.meta.http as { directives: readonly HttpDirective[] } | undefined
+  return http_?.directives.find((d) => d.kind === "method")?.value
+}
+
 // ============================================================================
 // 1. http.put → verb PUT + idempotent tag → MCP idempotentHint
 // ============================================================================
@@ -222,5 +227,37 @@ describe("http.options bundle", () => {
 
   it("carries readOnly tag", () => {
     expect(http.options.tags.readOnly).toBe(true)
+  })
+})
+
+// ============================================================================
+// 8. `kind: "method"` directives — read by the HttpRoute rewriter pipeline
+// (applyMethods in route.ts), added ALONGSIDE the legacy `kind: "verb"`
+// directive (read by verbFromTags, the direct tree-walk projector) — both
+// describe the same fact for two different projectors, neither clobbers
+// the other.
+// ============================================================================
+
+describe("http.* bundles carry a method directive alongside the verb directive", () => {
+  it("http.get: method directive is GET, verb directive is also GET", () => {
+    const n = op(noop, http.get)
+    expect(methodDirective(n)).toBe("GET")
+    expect(verbDirective(n)).toBe("GET")
+  })
+
+  it("http.post: method directive is POST", () => {
+    expect(methodDirective(op(noop, http.post))).toBe("POST")
+  })
+
+  it("http.put: method directive is PUT", () => {
+    expect(methodDirective(op(noop, http.put))).toBe("PUT")
+  })
+
+  it("http.patch: method directive is PATCH", () => {
+    expect(methodDirective(op(noop, http.patch))).toBe("PATCH")
+  })
+
+  it("http.delete: method directive is DELETE", () => {
+    expect(methodDirective(op(noop, http.delete))).toBe("DELETE")
   })
 })

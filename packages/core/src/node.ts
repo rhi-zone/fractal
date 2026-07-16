@@ -157,6 +157,23 @@ export const node = (def: {
   meta: def.meta ?? {},
 })
 
+/**
+ * Sugar over `node()`: positional children for the common case, an options
+ * object for the rare stuff (meta, fallback). `api(children, opts?)` is
+ * exactly `node({ children, ...opts })` — same Node value, shorter call.
+ *
+ * `api()` is the primary authoring-surface constructor; `node()` stays as
+ * the low-level form both `api()` and `service()` lower to.
+ *
+ * See docs/design/routing-and-transforms.md § DX — constructor sugar.
+ */
+export function api(
+  children: Record<string, Node>,
+  opts?: { meta?: Meta; fallback?: { name: string; subtree: Node } },
+): Node {
+  return node({ children, ...opts })
+}
+
 /** Duck-type check for the `{ name, subtree }` fallback shape. */
 const isFallbackShape = (v: unknown): v is { name: string; subtree: Node } =>
   typeof v === "object" &&

@@ -23,6 +23,35 @@ import type { Meta } from "@rhi-zone/fractal-core/node"
 import type { HttpDirective } from "./project.ts"
 
 // ============================================================================
+// HttpMethods — extensible method union
+// ============================================================================
+
+/**
+ * The known HTTP methods, as an interface so users can extend it via
+ * declaration merging (e.g. WebDAV's PROPFIND/MKCOL) without forking this
+ * package:
+ *
+ * ```ts
+ * declare module "@rhi-zone/fractal-http/verbs" {
+ *   interface HttpMethods { PROPFIND: "PROPFIND"; MKCOL: "MKCOL" }
+ * }
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface HttpMethods {
+  GET: "GET"
+  POST: "POST"
+  PUT: "PUT"
+  PATCH: "PATCH"
+  DELETE: "DELETE"
+  HEAD: "HEAD"
+  OPTIONS: "OPTIONS"
+}
+
+/** A known HTTP method name — the key set of `HttpMethods`, open via merging. */
+export type Method = keyof HttpMethods
+
+// ============================================================================
 // Verb-helper bundle type
 // ============================================================================
 
@@ -37,7 +66,11 @@ export type VerbBundle = Meta & {
 }
 
 const verbBundle = (verb: string, tags: Record<string, boolean | undefined>): VerbBundle => ({
-  http: { directives: [{ kind: "verb", value: verb }] },
+  // Carries BOTH the legacy `kind: "verb"` directive (read by `verbFromTags`,
+  // the direct tree-walk dispatcher in project.ts) and the new `kind: "method"`
+  // directive (read by `applyMethods`, the HttpRoute rewriter in route.ts).
+  // Both directives describe the same fact; two projectors read two shapes.
+  http: { directives: [{ kind: "verb", value: verb }, { kind: "method", value: verb }] },
   tags,
 })
 

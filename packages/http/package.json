@@ -3,10 +3,21 @@
   "version": "0.1.0-alpha.0",
   "description": "WHATWG renderer for the function-core tree — direct tree-walk makeRouter, autoMethodLayer, corsLayer, createFetch, serveBun/serveNode",
   "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
     "./adapter": {
       "types": "./src/adapter.ts",
       "import": "./src/adapter.ts"
+    },
+    "./dx": {
+      "types": "./src/dx.ts",
+      "import": "./src/dx.ts"
     },
     "./preset": {
       "types": "./src/preset.ts",
