@@ -1,0 +1,262 @@
+import { describe, expect, test } from "bun:test"
+import { t, types } from "./index.ts"
+import { renderProto, toProtoField, toProtoMessage } from "./protobuf.ts"
+
+describe("leaf types", () => {
+  test("boolean", () => {
+    expect(toProtoField(t(types.boolean))).toEqual({ type: "bool", repeated: false, optional: false })
+  })
+
+  test("int32", () => {
+    expect(toProtoField(t(types.int32))).toEqual({ type: "int32", repeated: false, optional: false })
+  })
+
+  test("string", () => {
+    expect(toProtoField(t(types.string))).toEqual({ type: "string", repeated: false, optional: false })
+  })
+
+  test("float64", () => {
+    expect(toProtoField(t(types.float64))).toEqual({ type: "double", repeated: false, optional: false })
+  })
+
+  test("bytes", () => {
+    expect(toProtoField(t(types.bytes))).toEqual({ type: "bytes", repeated: false, optional: false })
+  })
+})
+
+describe("string subtypes fall back to string", () => {
+  test("uuid", () => {
+    expect(toProtoField(t(types.uuid)).type).toBe("string")
+  })
+
+  test("uri", () => {
+    expect(toProtoField(t(types.uri)).type).toBe("string")
+  })
+
+  test("date", () => {
+    expect(toProtoField(t(types.date)).type).toBe("string")
+  })
+
+  test("time", () => {
+    expect(toProtoField(t(types.time)).type).toBe("string")
+  })
+})
+
+describe("well-known types", () => {
+  test("datetime -> google.protobuf.Timestamp", () => {
+    expect(toProtoField(t(types.datetime)).type).toBe("google.protobuf.Timestamp")
+  })
+
+  test("duration -> google.protobuf.Duration", () => {
+    expect(toProtoField(t(types.duration)).type).toBe("google.protobuf.Duration")
+  })
+
+  test("unknown -> google.protobuf.Any", () => {
+    expect(toProtoField(t(types.unknown)).type).toBe("google.protobuf.Any")
+  })
+
+  test("void -> google.protobuf.Empty", () => {
+    expect(toProtoField(t(types.void)).type).toBe("google.protobuf.Empty")
+  })
+
+  test("null -> google.protobuf.NullValue", () => {
+    expect(toProtoField(t(types.null)).type).toBe("google.protobuf.NullValue")
+  })
+})
+
+describe("array", () => {
+  test("repeated element type", () => {
+    expect(toProtoField(t(types.array(t(types.string))))).toEqual({
+      type: "string",
+      repeated: true,
+      optional: false,
+    })
+  })
+})
+
+describe("map", () => {
+  test("map<key, value>", () => {
+    const field = toProtoField(t(types.map(t(types.string), t(types.int64))))
+    expect(field.type).toBe("map<string, int64>")
+    expect(field.mapKey).toBe("string")
+    expect(field.mapValue).toBe("int64")
+  })
+})
+
+describe("tuple", () => {
+  test("uniform elements collapse to repeated of that type", () => {
+    const field = toProtoField(t(types.tuple([t(types.int32), t(types.int32)])))
+    expect(field).toEqual({ type: "int32", repeated: true, optional: false })
+  })
+
+  test("heterogeneous elements degrade to repeated Any", () => {
+    const field = toProtoField(t(types.tuple([t(types.int32), t(types.string)])))
+    expect(field.type).toBe("google.protobuf.Any")
+    expect(field.repeated).toBe(true)
+  })
+})
+
+describe("union", () => {
+  test("degrades to google.protobuf.Any", () => {
+    expect(toProtoField(t(types.union([t(types.string), t(types.int32)]))).type).toBe("google.protobuf.Any")
+  })
+})
+
+describe("literal", () => {
+  test("string literal -> string", () => {
+    expect(toProtoField(t(types.literal("a"))).type).toBe("string")
+  })
+
+  test("integer literal -> int64", () => {
+    expect(toProtoField(t(types.literal(1))).type).toBe("int64")
+  })
+
+  test("float literal -> double", () => {
+    expect(toProtoField(t(types.literal(1.5))).type).toBe("double")
+  })
+
+  test("boolean literal -> bool", () => {
+    expect(toProtoField(t(types.literal(true))).type).toBe("bool")
+  })
+})
+
+describe("object", () => {
+  test("standalone object falls back to google.protobuf.Struct", () => {
+    expect(toProtoField(t(types.object({}))).type).toBe("google.protobuf.Struct")
+  })
+
+  test("named object uses meta.messageName", () => {
+    expect(toProtoField(t(types.object({}), { messageName: "Foo" })).type).toBe("Foo")
+  })
+})
+
+describe("ref", () => {
+  test("ref -> target name", () => {
+    expect(toProtoField(t(types.ref("Widget"))).type).toBe("Widget")
+  })
+})
+
+describe("optional / nullable", () => {
+  test("meta.optional sets optional", () => {
+    expect(toProtoField(t(types.string, { optional: true })).optional).toBe(true)
+  })
+
+  test("meta.nullable sets optional", () => {
+    expect(toProtoField(t(types.string, { nullable: true })).optional).toBe(true)
+  })
+})
+
+describe("toProtoMessage", () => {
+  test("flat object with auto-numbered fields", () => {
+    const ref = t(
+      types.object({
+        id: t(types.uuid),
+        name: t(types.string),
+        age: t(types.int32, { optional: true }),
+      }),
+    )
+    const message = toProtoMessage("Person", ref)
+    expect(message.name).toBe("Person")
+    expect(message.fields).toEqual([
+      { name: "id", field: { type: "string", repeated: false, optional: false }, number: 1 },
+      { name: "name", field: { type: "string", repeated: false, optional: false }, number: 2 },
+      { name: "age", field: { type: "int32", repeated: false, optional: true }, number: 3 },
+    ])
+    expect(message.nestedMessages).toBeUndefined()
+  })
+
+  test("nested object field produces a nested message", () => {
+    const ref = t(
+      types.object({
+        address: t(types.object({ city: t(types.string) })),
+      }),
+    )
+    const message = toProtoMessage("Person", ref)
+    expect(message.fields).toEqual([
+      { name: "address", field: { type: "Address", repeated: false, optional: false }, number: 1 },
+    ])
+    expect(message.nestedMessages).toEqual([
+      { name: "Address", fields: [{ name: "city", field: { type: "string", repeated: false, optional: false }, number: 1 }] },
+    ])
+  })
+
+  test("array of nested objects produces a repeated nested message field", () => {
+    const ref = t(
+      types.object({
+        tags: t(types.array(t(types.object({ label: t(types.string) })))),
+      }),
+    )
+    const message = toProtoMessage("Post", ref)
+    expect(message.fields).toEqual([
+      { name: "tags", field: { type: "Tags", repeated: true, optional: false }, number: 1 },
+    ])
+    expect(message.nestedMessages?.[0]?.name).toBe("Tags")
+  })
+
+  test("enum field produces a nested enum", () => {
+    const ref = t(types.object({ status: t(types.enum(["ACTIVE", "INACTIVE"])) }))
+    const message = toProtoMessage("Account", ref)
+    expect(message.fields).toEqual([
+      { name: "status", field: { type: "Status", repeated: false, optional: false }, number: 1 },
+    ])
+    expect(message.nestedEnums).toEqual([{ name: "Status", values: ["ACTIVE", "INACTIVE"] }])
+  })
+})
+
+describe("renderProto", () => {
+  test("renders a flat message", () => {
+    const message = toProtoMessage(
+      "Person",
+      t(
+        types.object({
+          id: t(types.uuid),
+          age: t(types.int32, { optional: true }),
+        }),
+      ),
+    )
+    expect(renderProto([message])).toBe(
+      [
+        'syntax = "proto3";',
+        "",
+        "message Person {",
+        "  string id = 1;",
+        "  optional int32 age = 2;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+  })
+
+  test("renders repeated and map fields", () => {
+    const message = toProtoMessage(
+      "Widget",
+      t(
+        types.object({
+          tags: t(types.array(t(types.string))),
+          props: t(types.map(t(types.string), t(types.string))),
+        }),
+      ),
+    )
+    const output = renderProto([message])
+    expect(output).toContain("repeated string tags = 1;")
+    expect(output).toContain("map<string, string> props = 2;")
+  })
+
+  test("renders nested messages and enums", () => {
+    const message = toProtoMessage(
+      "Account",
+      t(
+        types.object({
+          status: t(types.enum(["ACTIVE", "INACTIVE"])),
+          address: t(types.object({ city: t(types.string) })),
+        }),
+      ),
+    )
+    const output = renderProto([message])
+    expect(output).toContain("enum Status {")
+    expect(output).toContain("ACTIVE = 0;")
+    expect(output).toContain("INACTIVE = 1;")
+    expect(output).toContain("message Address {")
+    expect(output).toContain("string city = 1;")
+  })
+})

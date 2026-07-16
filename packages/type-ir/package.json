@@ -14,6 +14,22 @@
     "./json-schema": {
       "types": "./src/json-schema.ts",
       "import": "./src/json-schema.ts"
+    },
+    "./typescript": {
+      "types": "./src/typescript.ts",
+      "import": "./src/typescript.ts"
+    },
+    "./sql": {
+      "types": "./src/sql.ts",
+      "import": "./src/sql.ts"
+    },
+    "./protobuf": {
+      "types": "./src/protobuf.ts",
+      "import": "./src/protobuf.ts"
+    },
+    "./jtd": {
+      "types": "./src/jtd.ts",
+      "import": "./src/jtd.ts"
     }
   },
   "files": ["src"],
