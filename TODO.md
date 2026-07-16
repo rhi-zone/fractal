@@ -241,9 +241,11 @@ Ordered roughly easiest → hardest to decide:
 10. ~~**"Is it too general?"**~~ — dissolved by the identity settlement. The
     scope is bounded by "what your codebase's skeleton needs to express." See
     invariants.md § Identity.
-11. **Constructor sugar / DX** — the authoring surface needs convenience
-    constructors competitive with Hono/Elysia. Shape TBD. See
-    `docs/design/routing-and-transforms.md` § Open items.
+11. **Constructor sugar / DX** — direction settled: `api(children, opts?)`
+    as the primary constructor, `http.*` meta bundles, `crud()` convention
+    helper, `httpProjection()` pre-composed preset, `HttpMethods` extensible
+    interface. Implementation pending. See
+    `docs/design/routing-and-transforms.md` § DX.
 
 ---
 

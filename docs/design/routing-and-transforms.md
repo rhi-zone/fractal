@@ -144,3 +144,130 @@ How handler inputs are sourced from protocol-specific locations (HTTP: query,
 body, path segments, headers, cookies; CLI: params, env vars) and
 validated/transformed. Not yet designed — separate from the structural
 routing model.
+
+## Interceptable pipeline
+
+The request/response lifecycle is decomposed into typed, interceptable stages.
+Every stage has access to operation metadata.
+
+```
+Request
+  → [Req => Req transforms (meta)]
+  → decode (Request → T)
+  → [T => T transforms (meta)]     ← audit, validation, session injection
+  → handler (T → U)
+  → [U => U transforms (meta)]     ← redaction, enrichment
+  → encode (U → Response)
+  → [Res => Res transforms (meta)] ← CORS, compression, caching
+Response
+```
+
+`decode` and `encode` are the symmetric boundary between protocol-land and
+business-logic-land. `decode` deserializes the request into typed input T.
+`encode` serializes output U into a protocol response. They are practical
+inverses across the protocol boundary.
+
+Input parsing (how `decode` sources T from query, body, path segments,
+headers, cookies for HTTP; params, env for CLI) is still open. Placeholder:
+`await req.json()` for HTTP.
+
+The pipeline lives on `HttpRoute` (and equivalently on each projection's
+route type). Each stage is a typed function; transforms are arrays of
+functions composed in order.
+
+## DX — constructor sugar
+
+### `api(children, opts?)`
+
+Positional children, options object for the rare stuff (meta, fallback):
+
+```typescript
+const app = api({
+  users: crud({ list: listUsers, create: createUser, get: getUser }),
+  products: api({ list: op(listProducts, http.get) }),
+})
+```
+
+`api()` is the primary constructor. `node()` stays as the low-level form.
+
+### `http.*` meta bundles
+
+Shorthand for common HTTP directives:
+
+```typescript
+export const http = {
+  get:    { http: { directives: [{ kind: "method", value: "GET" }] } },
+  post:   { http: { directives: [{ kind: "method", value: "POST" }] } },
+  put:    { http: { directives: [{ kind: "method", value: "PUT" }] } },
+  patch:  { http: { directives: [{ kind: "method", value: "PATCH" }] } },
+  delete: { http: { directives: [{ kind: "method", value: "DELETE" }] } },
+}
+```
+
+### `crud(handlers)`
+
+Convention constructor — returns a node with standard CRUD operations and
+HTTP method metadata. Accepts partial handlers (not all operations required):
+
+```typescript
+function crud(handlers: {
+  list?:   Handler,
+  create?: Handler,
+  get?:    Handler,
+  update?: Handler,
+  delete?: Handler,
+}) { ... }
+```
+
+Users can define their own `crud()` trivially — it's ~7 lines over `api()`
++ `op()` + `http.*`.
+
+### `HttpMethods` interface — extensible method union
+
+```typescript
+interface HttpMethods {
+  GET: "GET"; POST: "POST"; PUT: "PUT"; PATCH: "PATCH"; DELETE: "DELETE"
+}
+type Method = keyof HttpMethods
+```
+
+Users extend via declaration merging for custom methods (WebDAV, etc.):
+
+```typescript
+interface HttpMethods { PROPFIND: "PROPFIND"; MKCOL: "MKCOL" }
+```
+
+### Pre-composed HTTP projection preset
+
+One-call projection with standard transforms applied:
+
+```typescript
+const routes = httpProjection(apiTree)
+// Equivalent to:
+const routes = pipe(
+  naiveTransform(apiTree),
+  applyMethods,
+  applyPlacement,
+  applyResponse,
+)
+```
+
+Configurable — user can swap individual transforms:
+
+```typescript
+const routes = httpProjection(apiTree, {
+  transforms: [applyMethods, myCustomPlacement, applyResponse],
+})
+```
+
+## DX comparison summary
+
+| Scenario | Hono | Fractal |
+|----------|------|---------|
+| Single route | `app.get('/users', fn)` | `api({ users: op(fn, http.get) })` |
+| CRUD entity | 5× `app.verb(path, fn)` | `crud({ list, create, get, update, delete })` |
+| Using CRUD | imperative, path strings | `api({ users: crud({...}) })` — composes as data |
+| Audit logging | middleware sees raw request | handler wrapper sees typed input + meta |
+| JSON-RPC | rewrite everything | same tree, new projector |
+| CLI | can't | same tree, new projector |
+| Custom methods | not supported | declaration merging, free |
