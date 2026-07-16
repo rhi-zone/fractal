@@ -24,6 +24,33 @@ declarations (data) interpreted by projectors to produce surfaces. The
 combinator identity gap (TODO.md) was a symptom of unclear self-description,
 not a structural deficiency in the code.
 
+### Structure is optionally part of the skeleton
+
+The skeleton's navigable structure (how operations are organized) can be:
+
+1. **Explicit** — declared as a tree (`node({children: ...})`)
+2. **Flat** — operations declared with no structure; projectors derive it by
+   convention
+3. **Inferred from X** — structure read from an existing organizational signal
+   (class shape, module layout, other codebase metrics)
+
+`service()` is already an instance of #3: it infers skeleton structure from
+class shape. The general principle: if the codebase already has structure,
+don't redeclare it — read it. How much of the skeleton is declared vs
+inferred is a deployment choice, not an architectural fork.
+
+### API tree and route tree are separate
+
+The skeleton (API tree) is organized by domain — children are operations, not
+path segments. Protocol-specific trees (HTTP route tree, CLI command tree) are
+projections produced by `Tree => Tree` transforms. Two operations that share
+an HTTP path are different nodes in the API tree.
+
+Tree transforms are plain functions (`Tree => Tree`), chainable. The structural
+primitive is relative node placement — each node specifies where it goes in the
+output tree via a relative path string (stringly-typed, acceptable because it's
+transform input, not skeleton structure). `*` marks wildcard segments.
+
 ---
 
 ## SUPERSEDED / CORRECTED (see [`converged-model.md`](./converged-model.md))

@@ -24,14 +24,20 @@ mistakes. Worth reading those before proposing anything in this area.
 From invariants.md §open — these were explicitly left open and (per the guardrails)
 should be settled FROM the author's definition rather than guessed:
 
-- The full **verb/method model**: only "POST = a method call, not create" is
-  settled; the `read→GET / replace→PUT / remove→DELETE / partial→PATCH`
-  access-verb mapping was an *unconfirmed assistant proposal*, not part of the
-  model. The author seemed to be leaning toward starting with the verb model
-  first, but that's a lean, not a decision.
+- The full **verb/method model**: method dispatch is not a tree concern —
+  it's metadata on operations, interpreted by the HTTP projector. The API
+  tree is organized by domain (operations), not by HTTP method. Two
+  operations at the same HTTP path are different nodes in the API tree.
+  See `docs/design/routing-and-transforms.md`. The remaining open question
+  is the convention transforms: which name→verb mappings ship as builtins,
+  and how does the user override them?
 - Whether **one agnostic tree can auto-derive both HTTP and CLI**, given HTTP
-  paths/headers and CLI subcommands/env vars have no 1:1 mapping — open and
-  unreconciled.
+  paths/headers and CLI subcommands/env vars have no 1:1 mapping —
+  reframed (2026-07-16): structure is optionally part of the skeleton
+  (explicit tree, flat declarations, or inferred from class/module/other
+  signals). The question isn't "can one tree drive both" but "how much
+  structure does each projection need, and where does it come from?" See
+  `docs/design/invariants.md` § Identity.
 - ~~**Node disambiguation**~~: partly addressed — `fallback` field separates
   wildcard capture from keyed dispatch, static children always win. Remaining
   question: is there ever more than one fallback?
@@ -226,9 +232,10 @@ Ordered roughly easiest → hardest to decide:
    conventions on the type IR / routing metadata, not a separate mechanism.
    Still open, but now scoped as an instance of the type-IR-metadata question
    rather than an HTTP-specific one.
-8. **Node disambiguation** — with `fallback` separated from `children`, static
-   children always win (keyed lookup); fallback fires only when no child
-   matches. Remaining question: is there ever more than one fallback?
+8. ~~**Node disambiguation**~~ — reframed: the API tree is keyed by operation
+   name (unique by construction). Path-level disambiguation (wildcard vs
+   keyed dispatch) only arises in the HTTP route tree, which is a projection.
+   See `docs/design/routing-and-transforms.md`.
 9. **One tree for HTTP + CLI** — can one tree drive both projections, or do
    they need separate trees? What are the seams?
 10. ~~**"Is it too general?"**~~ — dissolved by the identity settlement. The
