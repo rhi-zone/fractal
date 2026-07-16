@@ -252,6 +252,139 @@ describe("toJsDocTypedef", () => {
   })
 })
 
+describe("toJsDocTypedef mode option", () => {
+  test("defaults to typedef mode when options omitted", () => {
+    const ref = t(types.object({ name: t(types.string) }))
+    expect(toJsDocTypedef("User", ref)).toBe(
+      ["/**", " * @typedef {Object} User", " * @property {string} name", " */"].join("\n"),
+    )
+  })
+
+  test("defaults to typedef mode when options given without mode", () => {
+    const ref = t(types.object({ name: t(types.string) }))
+    expect(toJsDocTypedef("User", ref, {})).toBe(
+      ["/**", " * @typedef {Object} User", " * @property {string} name", " */"].join("\n"),
+    )
+  })
+})
+
+describe("toJsDocTypedef interface mode", () => {
+  test("simple object with required and optional fields", () => {
+    const ref = t(
+      types.object({
+        name: t(types.string),
+        email: t(types.string),
+        age: t(types.integer, { optional: true }),
+      }),
+    )
+    expect(toJsDocTypedef("User", ref, { mode: "interface" })).toBe(
+      [
+        "/**",
+        " * @interface User",
+        " * @property {string} name",
+        " * @property {string} email",
+        " * @property {number} [age] - optional",
+        " */",
+      ].join("\n"),
+    )
+  })
+
+  test("nested objects", () => {
+    const ref = t(
+      types.object({
+        id: t(types.uuid),
+        address: t(types.object({ city: t(types.string) })),
+      }),
+    )
+    expect(toJsDocTypedef("User", ref, { mode: "interface" })).toBe(
+      [
+        "/**",
+        " * @interface User",
+        " * @property {string} id",
+        " * @property {{city: string}} address",
+        " */",
+      ].join("\n"),
+    )
+  })
+
+  test("with description metadata", () => {
+    const ref = t(
+      types.object({
+        id: t(types.uuid, { description: "primary key" }),
+      }),
+      { description: "A widget." },
+    )
+    expect(toJsDocTypedef("Widget", ref, { mode: "interface" })).toBe(
+      [
+        "/**",
+        " * @interface Widget A widget.",
+        " * @property {string} id - primary key",
+        " */",
+      ].join("\n"),
+    )
+  })
+})
+
+describe("toJsDocTypedef class mode", () => {
+  test("simple object with required and optional fields", () => {
+    const ref = t(
+      types.object({
+        name: t(types.string),
+        email: t(types.string),
+        age: t(types.integer, { optional: true }),
+      }),
+    )
+    expect(toJsDocTypedef("User", ref, { mode: "class" })).toBe(
+      [
+        "/**",
+        " * @class User",
+        " * @constructs User",
+        " * @param {string} name",
+        " * @param {string} email",
+        " * @param {number} [age] - optional",
+        " */",
+      ].join("\n"),
+    )
+  })
+
+  test("nested objects", () => {
+    const ref = t(
+      types.object({
+        id: t(types.uuid),
+        address: t(types.object({ city: t(types.string) })),
+      }),
+    )
+    expect(toJsDocTypedef("User", ref, { mode: "class" })).toBe(
+      [
+        "/**",
+        " * @class User",
+        " * @constructs User",
+        " * @param {string} id",
+        " * @param {{city: string}} address",
+        " */",
+      ].join("\n"),
+    )
+  })
+
+  test("with description metadata", () => {
+    const ref = t(
+      types.object({
+        id: t(types.uuid, { description: "primary key" }),
+      }),
+      { description: "A widget." },
+    )
+    expect(toJsDocTypedef("Widget", ref, { mode: "class" })).toBe(
+      [
+        "/**",
+        " * @class Widget A widget.",
+        " * @constructs Widget",
+        " * @param {string} id - primary key",
+        " */",
+      ].join("\n"),
+    )
+  })
+})
+
 describe("intersection", () => {
   test("falls back to the first member's type (lossy — JSDoc has no intersection operator)", () => {
     const ref = t(

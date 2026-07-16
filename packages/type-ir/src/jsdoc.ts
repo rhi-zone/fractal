@@ -85,25 +85,55 @@ export function toJsDocType(ref: TypeRef): string {
   return ref.meta.nullable === true ? `?${type}` : type
 }
 
+function fieldSuffix(field: TypeRef, optional: boolean): string {
+  const description =
+    typeof field.meta.description === "string" ? field.meta.description : optional ? "optional" : undefined
+  return description === undefined ? "" : ` - ${description}`
+}
+
 function propertyLine(name: string, field: TypeRef): string {
   const optional = field.meta.optional === true
   const label = optional ? `[${name}]` : name
   const typeExpr = toJsDocType(field)
-  const description =
-    typeof field.meta.description === "string" ? field.meta.description : optional ? "optional" : undefined
-  const suffix = description === undefined ? "" : ` - ${description}`
-  return ` * @property {${typeExpr}} ${label}${suffix}`
+  return ` * @property {${typeExpr}} ${label}${fieldSuffix(field, optional)}`
+}
+
+function paramLine(name: string, field: TypeRef): string {
+  const optional = field.meta.optional === true
+  const label = optional ? `[${name}]` : name
+  const typeExpr = toJsDocType(field)
+  return ` * @param {${typeExpr}} ${label}${fieldSuffix(field, optional)}`
 }
 
 function isObjectKind(kind: string): boolean {
   return kind === "object" || ancestors(kind).includes("object")
 }
 
-export function toJsDocTypedef(name: string, ref: TypeRef): string {
-  const description = typeof ref.meta.description === "string" ? ` ${ref.meta.description}` : ""
+export type JsDocDeclarationMode = "typedef" | "interface" | "class"
 
-  if (isObjectKind(ref.shape.kind)) {
-    const s = ref.shape as TypeShape & { kind: "object" }
+export interface JsDocDeclarationOptions {
+  readonly mode?: JsDocDeclarationMode
+}
+
+export function toJsDocTypedef(name: string, ref: TypeRef, options: JsDocDeclarationOptions = {}): string {
+  const mode = options.mode ?? "typedef"
+  const description = typeof ref.meta.description === "string" ? ` ${ref.meta.description}` : ""
+  const isObject = isObjectKind(ref.shape.kind)
+  const s = isObject ? (ref.shape as TypeShape & { kind: "object" }) : undefined
+
+  if (mode === "interface") {
+    const lines =
+      s === undefined ? [] : Object.entries(s.fields).map(([fieldName, field]) => propertyLine(fieldName, field))
+    return ["/**", ` * @interface ${name}${description}`, ...lines, " */"].join("\n")
+  }
+
+  if (mode === "class") {
+    const lines =
+      s === undefined ? [] : Object.entries(s.fields).map(([fieldName, field]) => paramLine(fieldName, field))
+    return ["/**", ` * @class ${name}${description}`, ` * @constructs ${name}`, ...lines, " */"].join("\n")
+  }
+
+  if (isObject && s !== undefined) {
     const lines = Object.entries(s.fields).map(([fieldName, field]) => propertyLine(fieldName, field))
     return ["/**", ` * @typedef {Object} ${name}${description}`, ...lines, " */"].join("\n")
   }
@@ -111,8 +141,8 @@ export function toJsDocTypedef(name: string, ref: TypeRef): string {
   return `/** @typedef {${toJsDocType(ref)}} ${name}${description} */`
 }
 
-export function toJsDocTypedefs(registry: Record<string, TypeRef>): string {
+export function toJsDocTypedefs(registry: Record<string, TypeRef>, options: JsDocDeclarationOptions = {}): string {
   return Object.entries(registry)
-    .map(([name, ref]) => toJsDocTypedef(name, ref))
+    .map(([name, ref]) => toJsDocTypedef(name, ref, options))
     .join("\n\n")
 }
