@@ -26,6 +26,10 @@ function withConstraints(e: Emitted, meta: Readonly<Record<string, unknown>>): E
   if (typeof meta.maximum === "number") text += ` <= ${meta.maximum}`
   if (typeof meta.minLength === "number") text += ` >= ${meta.minLength}`
   if (typeof meta.maxLength === "number") text += ` <= ${meta.maxLength}`
+  // https://arktype.io/docs/expressions — `%` is ArkType's divisibility operator
+  // (`"number % 2"` = "must be a multiple of 2"), the string-syntax equivalent
+  // of JSON Schema's `multipleOf`.
+  if (typeof meta.multipleOf === "number") text += ` % ${meta.multipleOf}`
   return { ...e, text }
 }
 
@@ -34,6 +38,21 @@ function withNullable(e: Emitted, meta: Readonly<Record<string, unknown>>): Emit
   if (e.mode === "word") return { ...e, text: `${e.text} | null` }
   const inner = e.mode === "expr" ? e.text : `type(${e.text})`
   return { text: `type.or(${inner}, type("null"))`, mode: "expr" }
+}
+
+// `.matching()`/`.describe()`/`.default()` are Type methods (https://arktype.io/docs/type-api,
+// https://arktype.io/docs/configuration), not string-syntax operators like `withConstraints`
+// handles — applying any of them forces the expression into "expr" mode (a `type(...)` call
+// with method chains), same as `withNullable` does for `type.or(...)`.
+function withChainedMeta(e: Emitted, meta: Readonly<Record<string, unknown>>): Emitted {
+  const chain: string[] = []
+  if (typeof meta.pattern === "string") chain.push(`.matching(${regexLiteral(meta.pattern)})`)
+  if (typeof meta.description === "string") chain.push(`.describe(${JSON.stringify(meta.description)})`)
+  if (meta.default !== undefined) chain.push(`.default(${JSON.stringify(meta.default)})`)
+  if (chain.length === 0) return e
+
+  const base = e.mode === "expr" ? e.text : e.mode === "literal" ? `type(${e.text})` : `type(${JSON.stringify(e.text)})`
+  return { text: `${base}${chain.join("")}`, mode: "expr" }
 }
 
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => Emitted
@@ -129,7 +148,7 @@ const handlers: Record<string, Converter> = {
 function emitRef(ref: TypeRef): Emitted {
   const converter = resolve(ref.shape.kind, handlers)
   const base: Emitted = converter === undefined ? { text: "unknown", mode: "word" } : converter(ref.shape, ref.meta)
-  return withNullable(withConstraints(base, ref.meta), ref.meta)
+  return withChainedMeta(withNullable(withConstraints(base, ref.meta), ref.meta), ref.meta)
 }
 
 function topLevelText(e: Emitted): string {
@@ -139,12 +158,10 @@ function topLevelText(e: Emitted): string {
 }
 
 export function toArkType(ref: TypeRef): string {
-  const e = emitRef(ref)
-  let text = topLevelText(e)
-  if (typeof ref.meta.pattern === "string" && e.mode === "word") {
-    text = `${text}.matching(${regexLiteral(ref.meta.pattern)})`
-  }
-  return text
+  // Pattern/description/default are applied inside emitRef via withChainedMeta,
+  // which already forces "expr" mode when any of them are present — so
+  // topLevelText only ever needs to wrap bare word/literal forms here.
+  return topLevelText(emitRef(ref))
 }
 
 export function toArkTypeDeclaration(name: string, ref: TypeRef): string {

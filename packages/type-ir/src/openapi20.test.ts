@@ -277,6 +277,17 @@ describe("metadata passthrough", () => {
     const ref = t(types.string, { $comment: "internal note" })
     expect(toOpenApi20(ref)).toEqual({ type: "string" })
   })
+
+  test("exclusiveMinimum / exclusiveMaximum (draft-04 boolean-modifier form)", () => {
+    const ref = t(types.integer, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toOpenApi20(ref)).toEqual({
+      type: "integer",
+      minimum: 0,
+      exclusiveMinimum: true,
+      maximum: 100,
+      exclusiveMaximum: true,
+    })
+  })
 })
 
 describe("unknown kind fallback", () => {

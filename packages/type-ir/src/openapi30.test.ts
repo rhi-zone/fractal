@@ -230,6 +230,22 @@ describe("metadata passthrough", () => {
       multipleOf: 5,
     })
   })
+
+  test("exclusiveMinimum / exclusiveMaximum (draft-05 boolean-modifier form)", () => {
+    const ref = t(types.integer, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toOpenApi30(ref)).toEqual({
+      type: "integer",
+      minimum: 0,
+      exclusiveMinimum: true,
+      maximum: 100,
+      exclusiveMaximum: true,
+    })
+  })
+
+  test("readOnly / writeOnly", () => {
+    expect(toOpenApi30(t(types.string, { readOnly: true }))).toEqual({ type: "string", readOnly: true })
+    expect(toOpenApi30(t(types.string, { writeOnly: true }))).toEqual({ type: "string", writeOnly: true })
+  })
 })
 
 describe("unknown kind fallback", () => {

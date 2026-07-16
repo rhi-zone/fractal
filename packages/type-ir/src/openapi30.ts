@@ -2,15 +2,9 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 
 export type OpenApi30Schema = Record<string, unknown>
 
-const passthroughKeys = [
-  "minimum",
-  "maximum",
-  "minLength",
-  "maxLength",
-  "pattern",
-  "multipleOf",
-  "$comment",
-] as const
+// "minimum"/"maximum" are handled explicitly in withMeta (interacting with
+// exclusiveMinimum/exclusiveMaximum), not passed through generically.
+const passthroughKeys = ["minLength", "maxLength", "pattern", "multipleOf", "$comment"] as const
 
 // OAS 3.0.3 §4.8.24 (Schema Object, "Composition and Inheritance") + §4.8.24.1
 // use `nullable: true` — there is no type-array nullable in draft-05.
@@ -23,6 +17,27 @@ function withMeta(schema: OpenApi30Schema, meta: Readonly<Record<string, unknown
   if (meta.deprecated === true) result = { ...result, deprecated: true }
   if (meta.default !== undefined) result = { ...result, default: meta.default }
   if (meta.example !== undefined) result = { ...result, example: meta.example }
+  // OAS 3.0.3 §4.8.24.2 Properties table: readOnly/writeOnly are booleans,
+  // mutually exclusive by spec ("a property MUST NOT be marked as both
+  // readOnly and writeOnly being true") — passed through as-authored.
+  if (meta.readOnly === true) result = { ...result, readOnly: true }
+  if (meta.writeOnly === true) result = { ...result, writeOnly: true }
+
+  // OAS 3.0.3 is restricted to a JSON Schema Wright Draft-05-based vocabulary
+  // (§4.8.24), which still uses draft-04-style boolean exclusiveMinimum/
+  // exclusiveMaximum modifiers on minimum/maximum — the numeric standalone
+  // form arrives only with OAS 3.1's move to 2020-12. Same encoding as
+  // json-schema-04.ts/openapi20.ts.
+  if (meta.exclusiveMinimum !== undefined) {
+    result = { ...result, minimum: meta.exclusiveMinimum, exclusiveMinimum: true }
+  } else if (meta.minimum !== undefined) {
+    result = { ...result, minimum: meta.minimum }
+  }
+  if (meta.exclusiveMaximum !== undefined) {
+    result = { ...result, maximum: meta.exclusiveMaximum, exclusiveMaximum: true }
+  } else if (meta.maximum !== undefined) {
+    result = { ...result, maximum: meta.maximum }
+  }
 
   for (const key of passthroughKeys) {
     if (meta[key] !== undefined) result = { ...result, [key]: meta[key] }

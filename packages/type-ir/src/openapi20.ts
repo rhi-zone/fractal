@@ -8,14 +8,9 @@ export type OpenApi20Schema = Record<string, unknown>
 // (no type arrays), and there is no `nullable`/`deprecated`/`examples` keyword
 // (those are OAS 3.0 additions). Vendor extensions (`x-*`, §4.7.26 Specification
 // Extensions) are the only escape hatch for concepts the format has no slot for.
-const passthroughKeys = [
-  "minimum",
-  "maximum",
-  "minLength",
-  "maxLength",
-  "pattern",
-  "multipleOf",
-] as const
+// "minimum"/"maximum" are handled explicitly in withMeta (interacting with
+// exclusiveMinimum/exclusiveMaximum), not passed through generically.
+const passthroughKeys = ["minLength", "maxLength", "pattern", "multipleOf"] as const
 
 // Swagger 2.0 §4.7.4: Schema Object supports `readOnly` (boolean) directly.
 // `writeOnly` was only added in OAS 3.0 — there is no vendor-extension
@@ -38,6 +33,22 @@ function withMeta(schema: OpenApi20Schema, meta: Readonly<Record<string, unknown
   // plural `examples` map is an OAS 3.0 Media Type Object concept.
   if (meta.example !== undefined) result = { ...result, example: meta.example }
   if (meta.readOnly === true) result = { ...result, readOnly: true }
+
+  // Swagger 2.0's Schema Object (§4.7.4) borrows its numeric-validation
+  // vocabulary from JSON Schema draft-04, where exclusiveMinimum/
+  // exclusiveMaximum are booleans that modify `minimum`/`maximum` rather than
+  // standalone numbers (that numeric form is a later, non-draft-04 JSON
+  // Schema addition) — same encoding as json-schema-04.ts.
+  if (meta.exclusiveMinimum !== undefined) {
+    result = { ...result, minimum: meta.exclusiveMinimum, exclusiveMinimum: true }
+  } else if (meta.minimum !== undefined) {
+    result = { ...result, minimum: meta.minimum }
+  }
+  if (meta.exclusiveMaximum !== undefined) {
+    result = { ...result, maximum: meta.exclusiveMaximum, exclusiveMaximum: true }
+  } else if (meta.maximum !== undefined) {
+    result = { ...result, maximum: meta.maximum }
+  }
 
   for (const key of passthroughKeys) {
     if (meta[key] !== undefined) result = { ...result, [key]: meta[key] }

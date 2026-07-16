@@ -24,6 +24,10 @@ function withMeta(expr: string, meta: Readonly<Record<string, unknown>>, kind: s
 
   if (typeof meta.minimum === "number" && numberLike) result += `.min(${meta.minimum})`
   if (typeof meta.maximum === "number" && numberLike) result += `.max(${meta.maximum})`
+  // https://zod.dev/?id=numbers — `.gt()`/`.lt()` are Zod's exclusive-bound
+  // equivalents of `.min()`/`.max()` (inclusive).
+  if (typeof meta.exclusiveMinimum === "number" && numberLike) result += `.gt(${meta.exclusiveMinimum})`
+  if (typeof meta.exclusiveMaximum === "number" && numberLike) result += `.lt(${meta.exclusiveMaximum})`
   if (typeof meta.minLength === "number" && lengthConstrainable) result += `.min(${meta.minLength})`
   if (typeof meta.maxLength === "number" && lengthConstrainable) result += `.max(${meta.maxLength})`
   if (typeof meta.pattern === "string" && stringLike) result += `.regex(${regexLiteral(meta.pattern)})`

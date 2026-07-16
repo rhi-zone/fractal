@@ -254,6 +254,25 @@ describe("metadata passthrough", () => {
       multipleOf: 5,
     })
   })
+
+  test("exclusiveMinimum / exclusiveMaximum (numeric form)", () => {
+    const ref = t(types.integer, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toJsonSchema(ref)).toEqual({
+      type: "integer",
+      exclusiveMinimum: 0,
+      exclusiveMaximum: 100,
+    })
+  })
+
+  test("examples", () => {
+    const ref = t(types.string, { examples: ["a", "b"] })
+    expect(toJsonSchema(ref)).toEqual({ type: "string", examples: ["a", "b"] })
+  })
+
+  test("readOnly / writeOnly", () => {
+    expect(toJsonSchema(t(types.string, { readOnly: true }))).toEqual({ type: "string", readOnly: true })
+    expect(toJsonSchema(t(types.string, { writeOnly: true }))).toEqual({ type: "string", writeOnly: true })
+  })
 })
 
 describe("unknown kind fallback", () => {

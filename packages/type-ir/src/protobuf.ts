@@ -7,6 +7,7 @@ export type ProtoField = {
   optional: boolean
   mapKey?: string
   mapValue?: string
+  deprecated?: boolean
 }
 
 export type ProtoMessage = {
@@ -105,6 +106,9 @@ export function toProtoField(ref: TypeRef): ProtoField {
   const field: ProtoField = { type: base.type, repeated: base.repeated === true, optional }
   if (base.mapKey !== undefined) field.mapKey = base.mapKey
   if (base.mapValue !== undefined) field.mapValue = base.mapValue
+  // FieldOptions.deprecated (descriptor.proto): renders as the `[deprecated = true]`
+  // field option (§ "Options" / https://protobuf.dev/programming-guides/proto3/#options).
+  if (ref.meta.deprecated === true) field.deprecated = true
   return field
 }
 
@@ -121,10 +125,12 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
     const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
+    const deprecated: { deprecated: true } | Record<string, never> =
+      fieldRef.meta.deprecated === true ? { deprecated: true } : {}
     if (fieldRef.shape.kind === "object") {
       const nestedName = capitalize(fieldName)
       nestedMessages.push(toProtoMessage(nestedName, fieldRef))
-      fields.push({ name: fieldName, field: { type: nestedName, repeated: false, optional }, number })
+      fields.push({ name: fieldName, field: { type: nestedName, repeated: false, optional, ...deprecated }, number })
     } else if (
       fieldRef.shape.kind === "array" &&
       (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "object"
@@ -132,12 +138,12 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
       const nestedName = capitalize(fieldName)
       const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
       nestedMessages.push(toProtoMessage(nestedName, element))
-      fields.push({ name: fieldName, field: { type: nestedName, repeated: true, optional: false }, number })
+      fields.push({ name: fieldName, field: { type: nestedName, repeated: true, optional: false, ...deprecated }, number })
     } else if (fieldRef.shape.kind === "enum") {
       const enumName = capitalize(fieldName)
       const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
       nestedEnums.push({ name: enumName, values: members })
-      fields.push({ name: fieldName, field: { type: enumName, repeated: false, optional }, number })
+      fields.push({ name: fieldName, field: { type: enumName, repeated: false, optional, ...deprecated }, number })
     } else {
       fields.push({ name: fieldName, field: toProtoField(fieldRef), number })
     }
@@ -155,7 +161,10 @@ function renderField(entry: ProtoMessage["fields"][number], indent: string): str
   // Map fields carry no label (§ "Maps": "repeated is not allowed for map fields"); proto3
   // optional fields use the explicit "optional" keyword (§ "Field Rules").
   const label = field.mapKey !== undefined ? "" : field.repeated ? "repeated " : field.optional ? "optional " : ""
-  return `${indent}${label}${field.type} ${entry.name} = ${entry.number};`
+  // FieldOptions.deprecated renders as a bracketed field option
+  // (§ "Options": https://protobuf.dev/programming-guides/proto3/#options).
+  const options = field.deprecated === true ? " [deprecated = true]" : ""
+  return `${indent}${label}${field.type} ${entry.name} = ${entry.number}${options};`
 }
 
 function renderMessage(message: ProtoMessage, depth: number): string[] {

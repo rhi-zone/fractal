@@ -219,6 +219,11 @@ describe("constraints", () => {
     expect(toZod(ref)).toBe("z.number().int().min(0).max(100).multipleOf(5)")
   })
 
+  test("numeric exclusiveMinimum/exclusiveMaximum use .gt()/.lt()", () => {
+    const ref = t(types.number, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toZod(ref)).toBe("z.number().gt(0).lt(100)")
+  })
+
   test("array minLength/maxLength", () => {
     const ref = t(types.array(t(types.string)), { minLength: 1, maxLength: 5 })
     expect(toZod(ref)).toBe("z.array(z.string()).min(1).max(5)")

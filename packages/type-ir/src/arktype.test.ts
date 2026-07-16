@@ -229,6 +229,36 @@ describe("constraints", () => {
     const ref = t(types.object({ id: t(types.string) }), { minLength: 1 })
     expect(toArkType(ref)).toBe('type({ id: "string" })')
   })
+
+  test("multipleOf uses the % divisibility operator", () => {
+    const ref = t(types.number, { multipleOf: 2 })
+    expect(toArkType(ref)).toBe('type("number % 2")')
+  })
+
+  test("description uses .describe()", () => {
+    const ref = t(types.string, { description: "a name" })
+    expect(toArkType(ref)).toBe('type("string").describe("a name")')
+  })
+
+  test("default uses .default()", () => {
+    const ref = t(types.string, { default: "hi" })
+    expect(toArkType(ref)).toBe('type("string").default("hi")')
+  })
+
+  test("description and default chain after constraints", () => {
+    const ref = t(types.number, { minimum: 0, description: "count", default: 0 })
+    expect(toArkType(ref)).toBe('type("number >= 0").describe("count").default(0)')
+  })
+
+  test("pattern is applied to nested object fields, not just the top level", () => {
+    const ref = t(types.object({ name: t(types.string, { pattern: "^[a-z]+$" }) }))
+    expect(toArkType(ref)).toBe('type({ name: type("string").matching(/^[a-z]+$/) })')
+  })
+
+  test("description is applied to nested array elements", () => {
+    const ref = t(types.array(t(types.string, { description: "item" })))
+    expect(toArkType(ref)).toBe('type.array(type("string").describe("item"))')
+  })
 })
 
 describe("unknown kind fallback", () => {

@@ -111,4 +111,23 @@ describe("shared: metadata passthrough", () => {
       pattern: "^[a-z]+$",
     })
   })
+
+  test("exclusiveMinimum / exclusiveMaximum (numeric form, since draft-06)", () => {
+    const ref = t(types.integer, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toJsonSchema07(ref)).toEqual({
+      type: "integer",
+      exclusiveMinimum: 0,
+      exclusiveMaximum: 100,
+    })
+  })
+
+  test("examples", () => {
+    const ref = t(types.string, { examples: ["a", "b"] })
+    expect(toJsonSchema07(ref)).toEqual({ type: "string", examples: ["a", "b"] })
+  })
+
+  test("readOnly / writeOnly", () => {
+    expect(toJsonSchema07(t(types.string, { readOnly: true }))).toEqual({ type: "string", readOnly: true })
+    expect(toJsonSchema07(t(types.string, { writeOnly: true }))).toEqual({ type: "string", writeOnly: true })
+  })
 })

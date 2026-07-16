@@ -28,6 +28,8 @@ function constraintActions(meta: Readonly<Record<string, unknown>>): string[] {
   if (typeof meta.minLength === "number") actions.push(`v.minLength(${meta.minLength})`)
   if (typeof meta.maxLength === "number") actions.push(`v.maxLength(${meta.maxLength})`)
   if (typeof meta.pattern === "string") actions.push(`v.regex(/${meta.pattern}/)`)
+  // https://valibot.dev/api/multipleOf/
+  if (typeof meta.multipleOf === "number") actions.push(`v.multipleOf(${meta.multipleOf})`)
   if (typeof meta.description === "string") actions.push(`v.description(${quote(meta.description)})`)
   return actions
 }
@@ -110,8 +112,32 @@ export function toValibot(ref: TypeRef): string {
   if (typeof ref.meta.brand === "string") actions.push(`v.brand(${quote(ref.meta.brand)})`)
   let expr = actions.length > 0 ? `v.pipe(${schema}, ${actions.join(", ")})` : schema
 
-  if (ref.meta.nullable === true) expr = `v.nullable(${expr})`
-  if (ref.meta.optional === true) expr = `v.optional(${expr})`
+  // https://valibot.dev/api/optional/ , https://valibot.dev/api/nullable/ — both
+  // wrappers accept a default value as their second argument, applied when the
+  // input is undefined (optional) / null (nullable) respectively. A schema-level
+  // default with neither wrapper has no valibot equivalent (defaults are only
+  // meaningful at an optional/nullable boundary) — surfaced as a trailing
+  // comment instead, same convention as io-ts/runtypes use for unsupported meta.
+  let defaultConsumed = false
+  if (ref.meta.nullable === true) {
+    if (ref.meta.default !== undefined && ref.meta.optional !== true) {
+      expr = `v.nullable(${expr}, ${JSON.stringify(ref.meta.default)})`
+      defaultConsumed = true
+    } else {
+      expr = `v.nullable(${expr})`
+    }
+  }
+  if (ref.meta.optional === true) {
+    if (ref.meta.default !== undefined) {
+      expr = `v.optional(${expr}, ${JSON.stringify(ref.meta.default)})`
+      defaultConsumed = true
+    } else {
+      expr = `v.optional(${expr})`
+    }
+  }
+  if (ref.meta.default !== undefined && !defaultConsumed) {
+    expr += ` /* default: ${JSON.stringify(ref.meta.default)} */`
+  }
 
   return expr
 }

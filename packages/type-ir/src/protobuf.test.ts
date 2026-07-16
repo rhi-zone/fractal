@@ -146,6 +146,24 @@ describe("optional / nullable", () => {
   })
 })
 
+describe("deprecated", () => {
+  test("meta.deprecated sets the deprecated field option", () => {
+    const field = toProtoField(t(types.string, { deprecated: true }))
+    expect(field.deprecated).toBe(true)
+  })
+
+  test("meta.deprecated is absent by default", () => {
+    const field = toProtoField(t(types.string))
+    expect(field.deprecated).toBeUndefined()
+  })
+
+  test("renders as a bracketed field option", () => {
+    const message = toProtoMessage("Person", t(types.object({ name: t(types.string, { deprecated: true }) })))
+    const rendered = renderProto([message])
+    expect(rendered).toContain("string name = 1 [deprecated = true];")
+  })
+})
+
 describe("toProtoMessage", () => {
   test("flat object with auto-numbered fields", () => {
     const ref = t(

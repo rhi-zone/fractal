@@ -9,11 +9,19 @@ export type JsonSchema07 = Record<string, unknown>
 const passthroughKeys = [
   "minimum",
   "maximum",
+  // draft-07 §6.2/§6.3: exclusiveMinimum/exclusiveMaximum are numbers (since
+  // draft-06 — draft-04's boolean-modifier form lives in json-schema-04.ts).
+  "exclusiveMinimum",
+  "exclusiveMaximum",
   "minLength",
   "maxLength",
   "pattern",
   "multipleOf",
   "$comment",
+  // draft-07 §10: readOnly/writeOnly are draft-07 additions; examples arrives
+  // in draft-06. (draft-04 has neither — see json-schema-04.ts.)
+  "readOnly",
+  "writeOnly",
 ] as const
 
 function withMeta(schema: JsonSchema07, meta: Readonly<Record<string, unknown>>, complex: boolean): JsonSchema07 {
@@ -32,6 +40,9 @@ function withMeta(schema: JsonSchema07, meta: Readonly<Record<string, unknown>>,
   if (typeof meta.description === "string") result = { ...result, description: meta.description }
   if (meta.deprecated === true) result = { ...result, deprecated: true }
   if (meta.default !== undefined) result = { ...result, default: meta.default }
+  // draft-07 §10.4: "examples" is an array of example values (distinct from
+  // OAS's singular "example").
+  if (Array.isArray(meta.examples)) result = { ...result, examples: meta.examples }
 
   for (const key of passthroughKeys) {
     if (meta[key] !== undefined) result = { ...result, [key]: meta[key] }

@@ -226,6 +226,28 @@ describe("constraints", () => {
     const ref = t(types.integer, { minimum: 0, maximum: 100 })
     expect(toValibot(ref)).toBe("v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100))")
   })
+
+  test("multipleOf", () => {
+    const ref = t(types.number, { multipleOf: 2 })
+    expect(toValibot(ref)).toBe("v.pipe(v.number(), v.multipleOf(2))")
+  })
+})
+
+describe("default", () => {
+  test("optional + default uses v.optional's second argument", () => {
+    const ref = t(types.string, { optional: true, default: "hi" })
+    expect(toValibot(ref)).toBe('v.optional(v.string(), "hi")')
+  })
+
+  test("nullable + default uses v.nullable's second argument", () => {
+    const ref = t(types.string, { nullable: true, default: "hi" })
+    expect(toValibot(ref)).toBe('v.nullable(v.string(), "hi")')
+  })
+
+  test("bare default (no optional/nullable wrapper) has no valibot equivalent — surfaced as a comment", () => {
+    const ref = t(types.string, { default: "hi" })
+    expect(toValibot(ref)).toBe('v.string() /* default: "hi" */')
+  })
 })
 
 describe("unknown kind fallback", () => {
