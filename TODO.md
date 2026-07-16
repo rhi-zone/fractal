@@ -57,18 +57,30 @@ in `docs/design/architecture-layers.md` § Type IR and in CLAUDE.md § Design
 Philosophy. The next step is the concrete hierarchy (see new open thread below),
 not further principle-level design.
 
-### Concrete type hierarchy is the next step after the type IR principles
+### Concrete type hierarchy — SETTLED and BUILT (2026-07-16, see handoff-2026-07-16-type-layer.md)
 
-The type IR design principles are settled: shape hierarchy via subtyping + open
-metadata bag (`docs/design/architecture-layers.md` § Type IR; also CLAUDE.md §
-Design Philosophy). A survey of 12 type systems informing this is done —
-`docs/design/type-ir-survey.md`. Not yet done: sketching the actual types and
-their subtyping relationships. The hierarchy should reflect subtyping, not
-taxonomy — every node must be a valid fallback target for projections (a more
-specific node can always stand in for a more general one along the fallback
-path).
+The type IR design principles (shape hierarchy via subtyping + open metadata
+bag) are now built, not just designed: `packages/type-ir` — 28 `TypeKind`s,
+`parents`/`ancestors`/`resolve()` subtyping-with-fallback, open `meta` bag,
+9 derivation operators (`partial`/`required`/`deepPartial`/`deepRequired`/
+`pick`/`omit`/`extend`/`nullable`/`withMeta`). 1118 tests passing in
+`packages/type-ir` alone (1365 across the full monorepo, verified this
+session). See `docs/design/handoff-2026-07-16-type-layer.md` for the full
+inventory.
 
-### Built code doesn't match the combinator identity
+### Type projector comprehensive coverage — SETTLED and BUILT (2026-07-16)
+
+21 projectors across 23 format targets (JSON Schema current/07/04, OpenAPI
+3.0/2.0, TypeScript, SQL DDL postgres/mysql/sqlite + separate MSSQL dialect,
+Protobuf, Cap'n Proto, JTD, JSDoc, and 9 runtime validator libraries: Zod,
+Valibot, TypeBox, ArkType, runtypes, Superstruct, io-ts, Yup, Effect Schema),
+all following the `handlers` + `resolve()` fallback pattern. The extractor
+(`packages/codegen/src/extract.ts`) was hardened for tuples, index
+signatures, literals, enums, discriminated unions, intersections, 3 branded-type
+patterns, recursive types, `Promise` unwrapping, and class privacy filtering.
+Full inventory: `docs/design/handoff-2026-07-16-type-layer.md`.
+
+### Built code doesn't match the combinator identity — PRIMARY OPEN THREAD
 
 The stated identity is "Parsec-style combinator composition," but the built
 code is `node`/`op`/`service`/`param` — data structure construction, not
@@ -76,6 +88,23 @@ combinator composition. `docs/design/routing-expression-model.md` was supposed
 to bridge this gap but the combinator primitives aren't settled and the
 expression model isn't implemented. Until this is resolved, the gap between
 stated identity and built code is real, not cosmetic.
+
+**New input (2026-07-16): `docs/design/operation-layer-spec.md`.** This is a
+requirements document mined from the consumer app's evidence (use-case
+descriptors, entity descriptors, HTTP binding, audit specs, session-input
+threading, authorization guards, error-code mapping) — not a fractal design
+proposal, but real pressure on this exact gap. The spec's requirements need,
+in order: (a) the combinator identity resolved first (an "operation"
+declaration presumably composes from combinators — no substrate to define it
+in terms of until the primitives are settled); (b) a decision on whether
+auth/audit/side-effects/error-mapping are DU metadata on an operation node
+(open metadata bag, consistent with the type IR's own pattern) or a separate
+mechanism/layer; (c) reconciliation of the spec's direct
+handler-binding-with-throws + declarative `errorMap` against the existing
+Result/Kleisli composition style in `packages/core`. Per the "unsettled
+design questions need the author's own definition" guardrail above, this
+spec supplies evidence and pressure, not an answer — the operation layer
+still needs the author's own definition, not invention from the evidence.
 
 ### Type projection as a deliberate capability, not incidental to MCP
 
@@ -86,6 +115,27 @@ separate from routing — rather than something that happens to exist because
 MCP needed it. The type IR (see the concrete-type-hierarchy thread above) is
 the foundation for projecting to JSON Schema, validation schemas, SQL DDL, etc.
 See `docs/design/architecture-layers.md` § Type projection layer.
+
+### SQL optional vs nullable — open design decision (2026-07-16)
+
+`partial()` (`packages/type-ir/src/derive.ts`) sets `meta.optional = true` on
+object fields; the SQL projector (`packages/type-ir/src/sql.ts`) only
+inspects `meta.nullable` when deciding whether to render a column as
+`NULL`-able. A `partial()`-derived type does not currently make its optional
+fields nullable in the emitted DDL. Open question: should `optional` imply
+`nullable` for the SQL projector specifically, or should they stay separate
+axes (a field can be optional on an input schema without being nullable in
+the stored table, e.g. server-defaulted)? Not yet decided; see
+`docs/design/handoff-2026-07-16-type-layer.md` § What's open.
+
+### Integration into the consumer app is not started (2026-07-16)
+
+`packages/type-ir` is built and tested in isolation but not wired into the
+consumer app to replace any hand-duplicated schemas — see
+`docs/design/operation-layer-spec.md` §1.2/§4 for the concrete duplication
+(`LocationCreateSchema`/`LocationPatchSchema`/`ListLocationsInputSchema`,
+"location patch" hand-typed in up to 4 places) this would resolve once wired
+up.
 
 ### Dispatch extensibility model is settled in `docs/design/dispatch-extensibility.md`
 
