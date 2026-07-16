@@ -89,8 +89,25 @@ export function toTypeScript(ref: TypeRef): string {
   return ref.meta.nullable === true ? `${type} | null` : type
 }
 
+// TSDoc (https://tsdoc.org/) comment above a declaration — driven by
+// `meta.description` (the summary text) and `meta.deprecated` (the
+// `@deprecated` block tag), same open-metadata-bag convention the jsdoc.ts
+// projector uses. A single line renders as `/** ... */`; both together render
+// as a multi-line block.
+function docComment(meta: Readonly<Record<string, unknown>>): string {
+  const description = typeof meta.description === "string" ? meta.description : undefined
+  const deprecated = meta.deprecated === true
+  if (description === undefined && !deprecated) return ""
+
+  if (description !== undefined && deprecated) {
+    return ["/**", ` * ${description}`, " * @deprecated", " */", ""].join("\n")
+  }
+  if (description !== undefined) return `/** ${description} */\n`
+  return "/** @deprecated */\n"
+}
+
 export function toTypeDeclaration(name: string, ref: TypeRef): string {
-  return `type ${name} = ${toTypeScript(ref)};`
+  return `${docComment(ref.meta)}type ${name} = ${toTypeScript(ref)};`
 }
 
 export function toTypeDeclarations(registry: Record<string, TypeRef>): string {

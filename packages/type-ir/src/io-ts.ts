@@ -103,8 +103,13 @@ function constraintNotes(meta: Readonly<Record<string, unknown>>, kind: string):
   const lengthConstrainable = stringLike || kind === "array"
 
   const notes: string[] = []
-  if (typeof meta.minimum === "number" && numberLike) notes.push(`minimum: ${meta.minimum}`)
-  if (typeof meta.maximum === "number" && numberLike) notes.push(`maximum: ${meta.maximum}`)
+  // io-ts has no built-in constraint codecs at all (see module comment above) —
+  // exclusiveMinimum/exclusiveMaximum surface as notes the same as every other
+  // constraint here, just with the "exclusive" qualifier preserved.
+  if (typeof meta.exclusiveMinimum === "number" && numberLike) notes.push(`exclusiveMinimum: ${meta.exclusiveMinimum}`)
+  else if (typeof meta.minimum === "number" && numberLike) notes.push(`minimum: ${meta.minimum}`)
+  if (typeof meta.exclusiveMaximum === "number" && numberLike) notes.push(`exclusiveMaximum: ${meta.exclusiveMaximum}`)
+  else if (typeof meta.maximum === "number" && numberLike) notes.push(`maximum: ${meta.maximum}`)
   if (typeof meta.minLength === "number" && lengthConstrainable) notes.push(`minLength: ${meta.minLength}`)
   if (typeof meta.maxLength === "number" && lengthConstrainable) notes.push(`maxLength: ${meta.maxLength}`)
   if (typeof meta.pattern === "string" && stringLike) notes.push(`pattern: ${JSON.stringify(meta.pattern)}`)

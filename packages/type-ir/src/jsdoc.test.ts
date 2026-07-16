@@ -250,6 +250,20 @@ describe("toJsDocTypedef", () => {
       ["/**", " * @typedef {Object} Named", " * @property {string} [nickname] - a nickname", " */"].join("\n"),
     )
   })
+
+  test("deprecated non-object type expands to multi-line with @deprecated tag", () => {
+    const ref = t(types.uuid, { deprecated: true })
+    expect(toJsDocTypedef("UserId", ref)).toBe(
+      ["/**", " * @typedef {string} UserId", " * @deprecated", " */"].join("\n"),
+    )
+  })
+
+  test("deprecated object typedef adds @deprecated tag", () => {
+    const ref = t(types.object({ name: t(types.string) }), { deprecated: true })
+    expect(toJsDocTypedef("User", ref)).toBe(
+      ["/**", " * @typedef {Object} User", " * @deprecated", " * @property {string} name", " */"].join("\n"),
+    )
+  })
 })
 
 describe("toJsDocTypedef mode option", () => {

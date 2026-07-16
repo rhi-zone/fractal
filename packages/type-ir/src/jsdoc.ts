@@ -120,22 +120,37 @@ export function toJsDocTypedef(name: string, ref: TypeRef, options: JsDocDeclara
   const description = typeof ref.meta.description === "string" ? ` ${ref.meta.description}` : ""
   const isObject = isObjectKind(ref.shape.kind)
   const s = isObject ? (ref.shape as TypeShape & { kind: "object" }) : undefined
+  // https://jsdoc.app/tags-deprecated.html — `@deprecated` is a standalone block
+  // tag; single-line `/** @typedef {...} Name */` forms must expand to multi-line
+  // to carry it.
+  const deprecatedLine = ref.meta.deprecated === true ? [" * @deprecated"] : []
 
   if (mode === "interface") {
     const lines =
       s === undefined ? [] : Object.entries(s.fields).map(([fieldName, field]) => propertyLine(fieldName, field))
-    return ["/**", ` * @interface ${name}${description}`, ...lines, " */"].join("\n")
+    return ["/**", ` * @interface ${name}${description}`, ...deprecatedLine, ...lines, " */"].join("\n")
   }
 
   if (mode === "class") {
     const lines =
       s === undefined ? [] : Object.entries(s.fields).map(([fieldName, field]) => paramLine(fieldName, field))
-    return ["/**", ` * @class ${name}${description}`, ` * @constructs ${name}`, ...lines, " */"].join("\n")
+    return [
+      "/**",
+      ` * @class ${name}${description}`,
+      ` * @constructs ${name}`,
+      ...deprecatedLine,
+      ...lines,
+      " */",
+    ].join("\n")
   }
 
   if (isObject && s !== undefined) {
     const lines = Object.entries(s.fields).map(([fieldName, field]) => propertyLine(fieldName, field))
-    return ["/**", ` * @typedef {Object} ${name}${description}`, ...lines, " */"].join("\n")
+    return ["/**", ` * @typedef {Object} ${name}${description}`, ...deprecatedLine, ...lines, " */"].join("\n")
+  }
+
+  if (ref.meta.deprecated === true) {
+    return ["/**", ` * @typedef {${toJsDocType(ref)}} ${name}${description}`, " * @deprecated", " */"].join("\n")
   }
 
   return `/** @typedef {${toJsDocType(ref)}} ${name}${description} */`

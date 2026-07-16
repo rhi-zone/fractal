@@ -261,6 +261,13 @@ describe("shared: meta", () => {
     const ref = t(types.number, { multipleOf: 5 })
     expect(toJsonSchema04(ref)).toEqual({ type: "number", multipleOf: 5 })
   })
+
+  test("$comment is dropped (draft-07+ keyword, not part of draft-04)", () => {
+    const ref = t(types.string, { $comment: "internal note" })
+    const schema = toJsonSchema04(ref)
+    expect(schema).toEqual({ type: "string" })
+    expect(schema).not.toHaveProperty("$comment")
+  })
 })
 
 describe("document wrapper", () => {

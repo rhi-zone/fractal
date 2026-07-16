@@ -22,8 +22,12 @@ function asDefArg(e: Emitted): string {
 function withConstraints(e: Emitted, meta: Readonly<Record<string, unknown>>): Emitted {
   if (e.mode !== "word") return e
   let text = e.text
-  if (typeof meta.minimum === "number") text += ` >= ${meta.minimum}`
-  if (typeof meta.maximum === "number") text += ` <= ${meta.maximum}`
+  // https://arktype.io/docs/expressions#range — string-syntax range operators
+  // support both inclusive (>=/<=) and exclusive (>/<) bounds directly.
+  if (typeof meta.exclusiveMinimum === "number") text += ` > ${meta.exclusiveMinimum}`
+  else if (typeof meta.minimum === "number") text += ` >= ${meta.minimum}`
+  if (typeof meta.exclusiveMaximum === "number") text += ` < ${meta.exclusiveMaximum}`
+  else if (typeof meta.maximum === "number") text += ` <= ${meta.maximum}`
   if (typeof meta.minLength === "number") text += ` >= ${meta.minLength}`
   if (typeof meta.maxLength === "number") text += ` <= ${meta.maxLength}`
   // https://arktype.io/docs/expressions — `%` is ArkType's divisibility operator

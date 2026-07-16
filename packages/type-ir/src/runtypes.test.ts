@@ -229,6 +229,15 @@ describe("constraints", () => {
     )
   })
 
+  test("exclusiveMinimum/exclusiveMaximum use strict > / < comparisons", () => {
+    const ref = t(types.integer, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toRuntypes(ref)).toBe(
+      'R.Number.withConstraint((n) => Number.isInteger(n) || "must be an integer")' +
+        '.withConstraint((n) => n > 0 || "must be > 0")' +
+        '.withConstraint((n) => n < 100 || "must be < 100")',
+    )
+  })
+
   test("array minLength/maxLength", () => {
     const ref = t(types.array(t(types.string)), { minLength: 1, maxLength: 5 })
     expect(toRuntypes(ref)).toBe(

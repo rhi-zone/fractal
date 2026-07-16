@@ -201,6 +201,11 @@ describe("constraints", () => {
     )
   })
 
+  test("exclusiveMinimum/exclusiveMaximum use strict greaterThan/lessThan", () => {
+    const ref = t(types.integer, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toEffectSchema(ref)).toBe("S.Int.pipe(S.greaterThan(0), S.lessThan(100))")
+  })
+
   test("array minLength/maxLength", () => {
     const ref = t(types.array(t(types.string)), { minLength: 1, maxLength: 5 })
     expect(toEffectSchema(ref)).toBe("S.Array(S.String).pipe(S.minLength(1), S.maxLength(5))")

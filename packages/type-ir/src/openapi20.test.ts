@@ -164,6 +164,14 @@ describe("union", () => {
   })
 })
 
+describe("union with discriminator", () => {
+  test("discriminator is a string, not a { propertyName } object", () => {
+    const ref = t(types.union([t(types.object({ kind: t(types.literal("a")) }))]), { discriminator: "kind" })
+    const schema = toOpenApi20(ref)
+    expect(schema.discriminator).toBe("kind")
+  })
+})
+
 describe("literal", () => {
   test("single-element enum, not const", () => {
     expect(toOpenApi20(t(types.literal("active")))).toEqual({ enum: ["active"] })

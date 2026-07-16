@@ -168,6 +168,29 @@ test("branded string emits an intersection with a __brand tag", () => {
   )
 })
 
+describe("doc comments", () => {
+  test("description alone emits a single-line TSDoc comment", () => {
+    const ref = t(types.string, { description: "A display name" })
+    expect(toTypeDeclaration("DisplayName", ref)).toBe("/** A display name */\ntype DisplayName = string;")
+  })
+
+  test("deprecated alone emits a single-line @deprecated comment", () => {
+    const ref = t(types.string, { deprecated: true })
+    expect(toTypeDeclaration("Old", ref)).toBe("/** @deprecated */\ntype Old = string;")
+  })
+
+  test("description and deprecated together emit a multi-line block", () => {
+    const ref = t(types.string, { description: "A display name", deprecated: true })
+    expect(toTypeDeclaration("DisplayName", ref)).toBe(
+      ["/**", " * A display name", " * @deprecated", " */", "type DisplayName = string;"].join("\n"),
+    )
+  })
+
+  test("no description or deprecated emits no comment", () => {
+    expect(toTypeDeclaration("Name", t(types.string))).toBe("type Name = string;")
+  })
+})
+
 test("unknown kind fallback", () => {
   const ref = { shape: { kind: "bogus" } as never, meta: {} }
   expect(toTypeScript(ref)).toBe("unknown")

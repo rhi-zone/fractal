@@ -212,6 +212,11 @@ describe("constraints", () => {
     expect(toValibot(ref)).toBe("v.pipe(v.number(), v.minValue(0), v.maxValue(10))")
   })
 
+  test("exclusiveMinimum/exclusiveMaximum use gtValue/ltValue, not minValue/maxValue", () => {
+    const ref = t(types.number, { exclusiveMinimum: 0, exclusiveMaximum: 10 })
+    expect(toValibot(ref)).toBe("v.pipe(v.number(), v.gtValue(0), v.ltValue(10))")
+  })
+
   test("pattern", () => {
     const ref = t(types.string, { pattern: "^[a-z]+$" })
     expect(toValibot(ref)).toBe("v.pipe(v.string(), v.regex(/^[a-z]+$/))")

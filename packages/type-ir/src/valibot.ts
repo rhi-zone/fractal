@@ -23,8 +23,12 @@ const leafWithAction =
 
 function constraintActions(meta: Readonly<Record<string, unknown>>): string[] {
   const actions: string[] = []
-  if (typeof meta.minimum === "number") actions.push(`v.minValue(${meta.minimum})`)
-  if (typeof meta.maximum === "number") actions.push(`v.maxValue(${meta.maximum})`)
+  // https://valibot.dev/api/gtValue/ , https://valibot.dev/api/ltValue/ — the
+  // strict (exclusive) counterparts of minValue/maxValue.
+  if (typeof meta.exclusiveMinimum === "number") actions.push(`v.gtValue(${meta.exclusiveMinimum})`)
+  else if (typeof meta.minimum === "number") actions.push(`v.minValue(${meta.minimum})`)
+  if (typeof meta.exclusiveMaximum === "number") actions.push(`v.ltValue(${meta.exclusiveMaximum})`)
+  else if (typeof meta.maximum === "number") actions.push(`v.maxValue(${meta.maximum})`)
   if (typeof meta.minLength === "number") actions.push(`v.minLength(${meta.minLength})`)
   if (typeof meta.maxLength === "number") actions.push(`v.maxLength(${meta.maxLength})`)
   if (typeof meta.pattern === "string") actions.push(`v.regex(/${meta.pattern}/)`)

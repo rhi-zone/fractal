@@ -234,6 +234,11 @@ describe("constraints render as comments (io-ts has no runtime constraint codecs
     expect(toIoTs(ref)).toBe("t.number /* integer, minimum: 0, maximum: 100, multipleOf: 5 */")
   })
 
+  test("exclusiveMinimum/exclusiveMaximum surface as notes (no constraint codecs in io-ts)", () => {
+    const ref = t(types.integer, { exclusiveMinimum: 0, exclusiveMaximum: 100 })
+    expect(toIoTs(ref)).toBe("t.number /* integer, exclusiveMinimum: 0, exclusiveMaximum: 100 */")
+  })
+
   test("array minLength/maxLength", () => {
     const ref = t(types.array(t(types.string)), { minLength: 1, maxLength: 5 })
     expect(toIoTs(ref)).toBe("t.array(t.string) /* minLength: 1, maxLength: 5 */")

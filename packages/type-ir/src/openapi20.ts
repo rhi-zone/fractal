@@ -134,9 +134,15 @@ const handlers: Record<string, Converter> = {
   // faithful encoding; the empty schema (any value) accepts every variant
   // (and more), with `x-oneOf` carrying the lossless variant list as a
   // vendor extension for tooling that wants it.
-  union: (shape) => {
+  union: (shape, meta) => {
     const s = shape as TypeShape & { kind: "union" }
-    return { "x-oneOf": s.variants.map(toOpenApi20) }
+    const schema: OpenApi20Schema = { "x-oneOf": s.variants.map(toOpenApi20) }
+    // Swagger 2.0 §4.7.4: `discriminator` is a *string* naming the property
+    // (unlike OAS 3.0's Discriminator Object with a `propertyName` field) —
+    // driven by `meta.discriminator` (open metadata bag convention, see
+    // CLAUDE.md), same as the other projectors' discriminator support.
+    if (typeof meta.discriminator === "string") schema.discriminator = meta.discriminator
+    return schema
   },
   // No `const` keyword in draft-04 — same substitution as JSON Schema/OAS 3.0.
   literal: (shape) => {

@@ -27,7 +27,10 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 // - No `propertyNames` (introduced draft-06)
 export type JsonSchema04 = Record<string, unknown>
 
-const passthroughKeys = ["minLength", "maxLength", "pattern", "multipleOf", "$comment"] as const
+// `$comment` is a draft-07+ keyword (json-schema.org draft-07 §10.1) — not part
+// of draft-04's vocabulary, so it is excluded here (unlike json-schema-07.ts/
+// json-schema.ts, and unlike openapi30.ts which also passes it through).
+const passthroughKeys = ["minLength", "maxLength", "pattern", "multipleOf"] as const
 
 function applyNumericBounds(schema: JsonSchema04, meta: Readonly<Record<string, unknown>>): JsonSchema04 {
   let result = schema

@@ -31,8 +31,12 @@ function withMeta(expr: string, meta: Readonly<Record<string, unknown>>, kind: s
   const lengthConstrainable = stringLike || kind === "array"
 
   const refinements: string[] = []
-  if (typeof meta.minimum === "number" && numberLike) refinements.push(`S.greaterThanOrEqualTo(${meta.minimum})`)
-  if (typeof meta.maximum === "number" && numberLike) refinements.push(`S.lessThanOrEqualTo(${meta.maximum})`)
+  // https://effect.website/docs/schema/filters/ — S.greaterThan/S.lessThan are the
+  // strict (exclusive) counterparts of greaterThanOrEqualTo/lessThanOrEqualTo.
+  if (typeof meta.exclusiveMinimum === "number" && numberLike) refinements.push(`S.greaterThan(${meta.exclusiveMinimum})`)
+  else if (typeof meta.minimum === "number" && numberLike) refinements.push(`S.greaterThanOrEqualTo(${meta.minimum})`)
+  if (typeof meta.exclusiveMaximum === "number" && numberLike) refinements.push(`S.lessThan(${meta.exclusiveMaximum})`)
+  else if (typeof meta.maximum === "number" && numberLike) refinements.push(`S.lessThanOrEqualTo(${meta.maximum})`)
   if (typeof meta.minLength === "number" && lengthConstrainable) refinements.push(`S.minLength(${meta.minLength})`)
   if (typeof meta.maxLength === "number" && lengthConstrainable) refinements.push(`S.maxLength(${meta.maxLength})`)
   if (typeof meta.pattern === "string" && stringLike) refinements.push(`S.pattern(${regexLiteral(meta.pattern)})`)

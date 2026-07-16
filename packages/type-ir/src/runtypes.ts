@@ -26,9 +26,13 @@ function withMeta(expr: string, meta: Readonly<Record<string, unknown>>, kind: s
   const stringLike = isA(kind, "string")
   const lengthConstrainable = stringLike || kind === "array"
 
-  if (typeof meta.minimum === "number" && numberLike)
+  if (typeof meta.exclusiveMinimum === "number" && numberLike)
+    result += `.withConstraint((n) => n > ${meta.exclusiveMinimum} || "must be > ${meta.exclusiveMinimum}")`
+  else if (typeof meta.minimum === "number" && numberLike)
     result += `.withConstraint((n) => n >= ${meta.minimum} || "must be >= ${meta.minimum}")`
-  if (typeof meta.maximum === "number" && numberLike)
+  if (typeof meta.exclusiveMaximum === "number" && numberLike)
+    result += `.withConstraint((n) => n < ${meta.exclusiveMaximum} || "must be < ${meta.exclusiveMaximum}")`
+  else if (typeof meta.maximum === "number" && numberLike)
     result += `.withConstraint((n) => n <= ${meta.maximum} || "must be <= ${meta.maximum}")`
   if (typeof meta.minLength === "number" && lengthConstrainable)
     result += `.withConstraint((v) => v.length >= ${meta.minLength} || "length must be >= ${meta.minLength}")`

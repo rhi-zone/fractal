@@ -205,6 +205,16 @@ describe("constraints", () => {
     expect(toArkType(ref)).toBe('type("number <= 100")')
   })
 
+  test("exclusiveMinimum uses strict > operator, not >=", () => {
+    const ref = t(types.number, { exclusiveMinimum: 0 })
+    expect(toArkType(ref)).toBe('type("number > 0")')
+  })
+
+  test("exclusiveMaximum uses strict < operator, not <=", () => {
+    const ref = t(types.number, { exclusiveMaximum: 100 })
+    expect(toArkType(ref)).toBe('type("number < 100")')
+  })
+
   test("minLength", () => {
     const ref = t(types.string, { minLength: 1 })
     expect(toArkType(ref)).toBe('type("string >= 1")')
