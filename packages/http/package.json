@@ -16,6 +16,10 @@
       "types": "./src/project.ts",
       "import": "./src/project.ts"
     },
+    "./route": {
+      "types": "./src/route.ts",
+      "import": "./src/route.ts"
+    },
     "./layers": {
       "types": "./src/layers.ts",
       "import": "./src/layers.ts"

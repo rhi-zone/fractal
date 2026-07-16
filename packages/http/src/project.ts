@@ -24,6 +24,33 @@ import { isLeaf } from "@rhi-zone/fractal-core/node"
 import { resolveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
+import { isHttpRoute, makeRouterFromRoute, naiveTransform } from "./route.ts"
+import type { HttpRoute } from "./route.ts"
+
+export type { HttpRoute } from "./route.ts"
+export {
+  applyMethods,
+  applyPlacement,
+  applyResponse,
+  composeTransforms,
+  httpRoute,
+  isHttpRoute,
+  isResponseOverride,
+  naiveTransform,
+  routeCandidatesForUrl,
+} from "./route.ts"
+export type { ResponseOverride } from "./route.ts"
+
+/**
+ * Produce the HTTP route tree from an API tree — the naive transform (see
+ * route.ts): every child becomes a path-segment child, every handler
+ * becomes a single POST entry. The baseline the rewriters (`applyMethods`,
+ * `applyPlacement`, `applyResponse`, chained via `composeTransforms`) start
+ * from.
+ */
+export function toHttpRoutes(node: Node): HttpRoute {
+  return naiveTransform(node)
+}
 
 // ============================================================================
 // meta.http DU types
@@ -71,12 +98,30 @@ export type DispatchMarker =
  * - `{ kind: "legacyPath", value }` — [DEBT] full-path override, bypasses the
  *   tree-walk address entirely. Escape hatch for external-contract / legacy
  *   URL pinning — reaching for this is a smell.
+ *
+ * The following variants are interpreted by the HttpRoute rewriters in
+ * route.ts (not by the direct tree-walk dispatcher above) — see
+ * docs/design/routing-and-transforms.md:
+ *
+ * - `{ kind: "method", value }` — sets the HTTP method on a route's method
+ *   entry (read by `applyMethods`; renames the `methods` key).
+ * - `{ kind: "place", path }` — relative node placement in the output route
+ *   tree (read by `applyPlacement`; see route.ts for the path algebra).
+ * - `{ kind: "response", status?, headers? }` — response overrides,
+ *   materialized into the handler via composition (read by `applyResponse`).
  */
 export type HttpDirective =
   | { readonly kind: "verb"; readonly value: string }
   | { readonly kind: "segment"; readonly value: string }
   | { readonly kind: "when"; readonly value: string }
   | { readonly kind: "legacyPath"; readonly value: string }
+  | { readonly kind: "method"; readonly value: string }
+  | { readonly kind: "place"; readonly path: string }
+  | {
+      readonly kind: "response"
+      readonly status?: number
+      readonly headers?: Record<string, string>
+    }
 
 // ============================================================================
 // Verb derivation from three-valued tag lattice
@@ -361,7 +406,21 @@ export function candidatesForUrl(root: Node, url: string): Candidate[] {
 // without them, returning 404 for any request with no exact match.
 // ============================================================================
 
-export function makeRouter(root: Node): (req: Request) => Promise<Response> {
+/**
+ * Build a fetch handler from either an `HttpRoute` tree (the new, primary
+ * path — simple exact path/method dispatch, see `makeRouterFromRoute` in
+ * route.ts) or, for backwards compat, directly from an API `Node` tree (the
+ * full direct tree-walk dispatcher below — attribute dispatch, match
+ * conditions, fallback slugs, legacyPath).
+ */
+export function makeRouter(root: HttpRoute): (req: Request) => Promise<Response>
+export function makeRouter(root: Node): (req: Request) => Promise<Response>
+export function makeRouter(root: Node | HttpRoute): (req: Request) => Promise<Response> {
+  if (isHttpRoute(root)) return makeRouterFromRoute(root)
+  return makeRouterForNode(root)
+}
+
+function makeRouterForNode(root: Node): (req: Request) => Promise<Response> {
   return async (req) => {
     const candidates = candidatesForUrl(root, req.url)
     const matched = candidates.find(

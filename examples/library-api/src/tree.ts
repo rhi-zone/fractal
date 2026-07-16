@@ -19,6 +19,7 @@
 
 import { node, op, service } from "@rhi-zone/fractal-core/node"
 import { http } from "@rhi-zone/fractal-http/verbs"
+import { toHttpRoutes } from "@rhi-zone/fractal-http/project"
 
 // ============================================================================
 // Domain types + in-memory store
@@ -225,3 +226,16 @@ export const api = node({
     version: versionNode,
   },
 })
+
+// ============================================================================
+// HttpRoute projection — the naive Node => HttpRoute transform (see
+// docs/design/routing-and-transforms.md and packages/http/src/route.ts).
+// This is the baseline route tree the rewriters (applyMethods,
+// applyPlacement, applyResponse) would start from; the API's HTTP surface
+// itself still runs through `createFetch(api)` (the direct tree-walk
+// dispatcher), which additionally supports attribute dispatch, fallback
+// slugs, and match conditions that the simple HttpRoute model does not yet
+// cover.
+// ============================================================================
+
+export const httpRoutes = toHttpRoutes(api)
