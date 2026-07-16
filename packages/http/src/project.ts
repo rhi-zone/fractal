@@ -27,7 +27,7 @@ import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
 import { isHttpRoute, makeRouterFromRoute, naiveTransform } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
 
-export type { HttpRoute } from "./route.ts"
+export type { HttpRoute, Pipeline } from "./route.ts"
 export {
   applyMethods,
   applyPlacement,

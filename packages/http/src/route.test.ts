@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { node, op } from "@rhi-zone/fractal-core/node"
+import type { Meta } from "@rhi-zone/fractal-core/node"
 import {
   applyMethods,
   applyPlacement,
@@ -14,6 +15,7 @@ import {
   isHttpRoute,
   naiveTransform,
 } from "./route.ts"
+import type { Pipeline } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 
 // ============================================================================
@@ -392,5 +394,223 @@ describe("httpRoute / isHttpRoute", () => {
     const res = await router(new Request("http://localhost/thing"))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ via: "node" })
+  })
+})
+
+// ============================================================================
+// Pipeline — interceptable request/response stages
+// (docs/design/routing-and-transforms.md § "Interceptable pipeline")
+// ============================================================================
+
+describe("Pipeline", () => {
+  it("runs a reqTransform that adds a header before decode", async () => {
+    const seen: Array<string | null> = []
+    const pipeline: Pipeline = {
+      reqTransforms: [
+        (req) => new Request(req, { headers: { ...Object.fromEntries(req.headers), "x-injected": "yes" } }),
+      ],
+      decode: (req) => {
+        seen.push(req.headers.get("x-injected"))
+        return {}
+      },
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => ({}), meta: {} } },
+      pipeline,
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/"))
+    expect(seen).toEqual(["yes"])
+  })
+
+  it("runs an inputTransform that injects a field before the handler sees it", async () => {
+    let seenInput: unknown
+    const pipeline: Pipeline = {
+      inputTransforms: [(input) => ({ ...(input as Record<string, unknown>), injected: true })],
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => {
+            seenInput = input
+            return {}
+          },
+          meta: {},
+        },
+      },
+      pipeline,
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/"))
+    expect(seenInput).toEqual({ injected: true })
+  })
+
+  it("runs an outputTransform that wraps the handler result", async () => {
+    const pipeline: Pipeline = {
+      outputTransforms: [(output) => ({ data: output })],
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => ({ id: 1 }), meta: {} } },
+      pipeline,
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const res = await router(new Request("http://localhost/"))
+    expect(await res.json()).toEqual({ data: { id: 1 } })
+  })
+
+  it("runs a resTransform that adds CORS headers to the response", async () => {
+    const pipeline: Pipeline = {
+      resTransforms: [
+        (res) => {
+          const headers = new Headers(res.headers)
+          headers.set("Access-Control-Allow-Origin", "*")
+          return new Response(res.body, { status: res.status, headers })
+        },
+      ],
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => ({ ok: true }), meta: {} } },
+      pipeline,
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const res = await router(new Request("http://localhost/"))
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
+  })
+
+  it("uses a custom decode/encode pair in place of the defaults", async () => {
+    const pipeline: Pipeline = {
+      decode: async (req) => ({ text: await req.text() }),
+      encode: (output) => new Response(`custom:${JSON.stringify(output)}`, { status: 202 }),
+    }
+    const route = httpRoute({
+      methods: {
+        POST: {
+          handler: (input: unknown) => input,
+          meta: {},
+        },
+      },
+      pipeline,
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const res = await router(new Request("http://localhost/", { method: "POST", body: "hello" }))
+    expect(res.status).toBe(202)
+    expect(await res.text()).toBe('custom:{"text":"hello"}')
+  })
+
+  it("default decode: JSON body merged for POST, empty input for GET", async () => {
+    let seenPost: unknown
+    let seenGet: unknown
+    const route = httpRoute({
+      methods: {
+        POST: { handler: (input: unknown) => { seenPost = input; return {} }, meta: {} },
+        GET: { handler: (input: unknown) => { seenGet = input; return {} }, meta: {} },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Dune" }),
+      }),
+    )
+    expect(seenPost).toEqual({ title: "Dune" })
+
+    await router(new Request("http://localhost/"))
+    expect(seenGet).toEqual({})
+  })
+
+  it("merges node-level and method-level pipelines, method transforms running last", async () => {
+    const order: string[] = []
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => input,
+          meta: {},
+          pipeline: {
+            inputTransforms: [(input) => { order.push("method"); return input }],
+          },
+        },
+      },
+      pipeline: {
+        inputTransforms: [(input) => { order.push("node"); return input }],
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/"))
+    expect(order).toEqual(["node", "method"])
+  })
+
+  it("runs the full pipeline (all stages) in the documented order", async () => {
+    const order: string[] = []
+    const pipeline: Pipeline = {
+      reqTransforms: [
+        (req: Request, _meta: Meta) => {
+          order.push("reqTransform")
+          return req
+        },
+      ],
+      decode: (_req: Request, _meta: Meta) => {
+        order.push("decode")
+        return { n: 1 }
+      },
+      inputTransforms: [
+        (input: unknown, _meta: Meta) => {
+          order.push("inputTransform")
+          return input
+        },
+      ],
+      outputTransforms: [
+        (output: unknown, _meta: Meta) => {
+          order.push("outputTransform")
+          return output
+        },
+      ],
+      encode: (output: unknown, _meta: Meta) => {
+        order.push("encode")
+        return jsonResponse(output)
+      },
+      resTransforms: [
+        (res: Response, _meta: Meta) => {
+          order.push("resTransform")
+          return res
+        },
+      ],
+    }
+    function jsonResponse(v: unknown): Response {
+      return new Response(JSON.stringify(v), { status: 200, headers: { "content-type": "application/json" } })
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => {
+            order.push("handler")
+            return input
+          },
+          meta: {},
+        },
+      },
+      pipeline,
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const res = await router(new Request("http://localhost/"))
+    expect(await res.json()).toEqual({ n: 1 })
+    expect(order).toEqual([
+      "reqTransform",
+      "decode",
+      "inputTransform",
+      "handler",
+      "outputTransform",
+      "encode",
+      "resTransform",
+    ])
   })
 })

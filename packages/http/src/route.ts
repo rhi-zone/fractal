@@ -27,14 +27,46 @@ import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
 import type { HttpDirective } from "./project.ts"
 
 // ============================================================================
+// Pipeline — interceptable request/response stages (docs/design/
+// routing-and-transforms.md § "Interceptable pipeline").
+//
+//   Request
+//     → reqTransforms  (Req => Req, in order)
+//     → decode         (Request => T)
+//     → inputTransforms (T => T, in order)     — audit, validation, session injection
+//     → handler        (T => U)
+//     → outputTransforms (U => U, in order)    — redaction, enrichment
+//     → encode         (U => Response)
+//     → resTransforms  (Res => Res, in order)  — CORS, compression, caching
+//   Response
+//
+// `decode`/`encode` are the symmetric protocol boundary; every stage sees the
+// operation's `Meta`. Configurable per-route (on an `HttpRoute` node) or
+// per-method (on a method entry) — `makeRouterFromRoute` merges the two when
+// both are present, method-level transforms running after node-level ones.
+// ============================================================================
+
+export type Pipeline = {
+  reqTransforms?: Array<(req: Request, meta: Meta) => Request | Promise<Request>>
+  decode?: (req: Request, meta: Meta) => unknown | Promise<unknown>
+  inputTransforms?: Array<(input: unknown, meta: Meta) => unknown | Promise<unknown>>
+  outputTransforms?: Array<(output: unknown, meta: Meta) => unknown | Promise<unknown>>
+  encode?: (output: unknown, meta: Meta) => Response | Promise<Response>
+  resTransforms?: Array<(res: Response, meta: Meta) => Response | Promise<Response>>
+}
+
+// ============================================================================
 // HttpRoute type + constructor
 // ============================================================================
 
 export type HttpRoute = {
-  readonly methods?: Readonly<Record<string, { readonly handler: Handler; readonly meta: Meta }>>
+  readonly methods?: Readonly<
+    Record<string, { readonly handler: Handler; readonly meta: Meta; readonly pipeline?: Pipeline }>
+  >
   readonly children?: Readonly<Record<string, HttpRoute>>
   readonly fallback?: { readonly name: string; readonly subtree: HttpRoute }
   readonly meta: Meta
+  readonly pipeline?: Pipeline
 }
 
 /**
@@ -48,15 +80,17 @@ const routeBrand = new WeakSet<object>()
 
 /** Construct an `HttpRoute` value. Registers the value for `isHttpRoute`. */
 export function httpRoute(def: {
-  methods?: Record<string, { handler: Handler; meta: Meta }> | undefined
+  methods?: Record<string, { handler: Handler; meta: Meta; pipeline?: Pipeline }> | undefined
   children?: Record<string, HttpRoute> | undefined
   fallback?: { name: string; subtree: HttpRoute } | undefined
   meta?: Meta | undefined
+  pipeline?: Pipeline | undefined
 }): HttpRoute {
   const route: HttpRoute = {
     ...(def.methods !== undefined ? { methods: def.methods } : {}),
     ...(def.children !== undefined ? { children: def.children } : {}),
     ...(def.fallback !== undefined ? { fallback: def.fallback } : {}),
+    ...(def.pipeline !== undefined ? { pipeline: def.pipeline } : {}),
     meta: def.meta ?? {},
   }
   routeBrand.add(route)
@@ -356,6 +390,28 @@ type RouteCandidate = {
   readonly handler: Handler
   readonly meta: Meta
   readonly slugs: Readonly<Record<string, string>>
+  readonly pipeline: Pipeline
+}
+
+/**
+ * Merge a route node's pipeline with a method entry's pipeline. Transform
+ * arrays concatenate (node-level transforms run first, method-level after);
+ * single-valued stages (`decode`/`encode`) take the more specific
+ * (method-level) value when both are configured.
+ */
+function mergePipelines(node: Pipeline | undefined, method: Pipeline | undefined): Pipeline {
+  if (node === undefined) return method ?? {}
+  if (method === undefined) return node
+  const decode = method.decode ?? node.decode
+  const encode = method.encode ?? node.encode
+  return {
+    reqTransforms: [...(node.reqTransforms ?? []), ...(method.reqTransforms ?? [])],
+    ...(decode !== undefined ? { decode } : {}),
+    inputTransforms: [...(node.inputTransforms ?? []), ...(method.inputTransforms ?? [])],
+    outputTransforms: [...(node.outputTransforms ?? []), ...(method.outputTransforms ?? [])],
+    ...(encode !== undefined ? { encode } : {}),
+    resTransforms: [...(node.resTransforms ?? []), ...(method.resTransforms ?? [])],
+  }
 }
 
 function collectRouteCandidates(
@@ -370,6 +426,7 @@ function collectRouteCandidates(
       handler: entry.handler,
       meta: entry.meta,
       slugs,
+      pipeline: mergePipelines(route.pipeline, entry.pipeline),
     }))
   }
   const seg = segs[idx]!
@@ -398,30 +455,73 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(value), { ...init, headers })
 }
 
+/**
+ * Default `decode`: merges fallback slugs and query params into the input
+ * object (unconditionally — they're part of the request's address, not its
+ * body), then adds the JSON body for methods that conventionally carry one.
+ * `GET`/`HEAD`/`DELETE` never attempt to read a body. [placeholder] — real
+ * input parsing (headers, cookies, richer body negotiation) is still open;
+ * see docs/design/routing-and-transforms.md § "Interceptable pipeline".
+ */
+async function defaultDecode(req: Request, slugs: Readonly<Record<string, string>>): Promise<unknown> {
+  const input: Record<string, unknown> = { ...slugs }
+  const url = new URL(req.url)
+  for (const [k, v] of url.searchParams) input[k] = v
+
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "DELETE") return input
+
+  const ct = req.headers.get("Content-Type") ?? ""
+  if (ct.includes("application/json")) {
+    const body: unknown = await req.json()
+    if (typeof body === "object" && body !== null) Object.assign(input, body)
+  }
+  return input
+}
+
+/** Default `encode`: a 200 JSON response. */
+function defaultEncode(output: unknown): Response {
+  return jsonRouteResponse(output, { status: 200 })
+}
+
 export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<Response> {
   return async (req) => {
     const candidates = routeCandidatesForUrl(root, req.url)
     const matched = candidates.find((c) => c.method === req.method)
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    const input: Record<string, unknown> = { ...matched.slugs }
-    const url = new URL(req.url)
-    for (const [k, v] of url.searchParams) input[k] = v
+    const { meta, pipeline } = matched
+    const reqTransforms = pipeline.reqTransforms ?? []
+    const inputTransforms = pipeline.inputTransforms ?? []
+    const outputTransforms = pipeline.outputTransforms ?? []
+    const resTransforms = pipeline.resTransforms ?? []
 
-    const ct = req.headers.get("Content-Type") ?? ""
-    if (ct.includes("application/json")) {
-      try {
-        const body: unknown = await req.json()
-        if (typeof body === "object" && body !== null) Object.assign(input, body)
-      } catch {
-        return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
-      }
+    let request = req
+    for (const transform of reqTransforms) request = await transform(request, meta)
+
+    let input: unknown
+    try {
+      input = pipeline.decode !== undefined
+        ? await pipeline.decode(request, meta)
+        : await defaultDecode(request, matched.slugs)
+    } catch {
+      return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
     }
 
     try {
-      const result: unknown = await (matched.handler(input) as Promise<unknown>)
-      if (isResponseOverride(result)) return jsonRouteResponse(result.body, result.init)
-      return jsonRouteResponse(result)
+      for (const transform of inputTransforms) input = await transform(input, meta)
+
+      let output: unknown = await (matched.handler(input) as Promise<unknown>)
+      for (const transform of outputTransforms) output = await transform(output, meta)
+
+      let response: Response = isResponseOverride(output)
+        ? jsonRouteResponse(output.body, output.init)
+        : pipeline.encode !== undefined
+          ? await pipeline.encode(output, meta)
+          : defaultEncode(output)
+
+      for (const transform of resTransforms) response = await transform(response, meta)
+
+      return response
     } catch (e: unknown) {
       return jsonRouteResponse({ error: String(e) }, { status: 500 })
     }
