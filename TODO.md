@@ -241,6 +241,9 @@ Ordered roughly easiest → hardest to decide:
 10. ~~**"Is it too general?"**~~ — dissolved by the identity settlement. The
     scope is bounded by "what your codebase's skeleton needs to express." See
     invariants.md § Identity.
+11. **Constructor sugar / DX** — the authoring surface needs convenience
+    constructors competitive with Hono/Elysia. Shape TBD. See
+    `docs/design/routing-and-transforms.md` § Open items.
 
 ---
 
@@ -319,6 +322,12 @@ Auth and caller-context (middleware concerns) collapse into input
 extraction — auth credentials are just another input parameter sourced from
 the protocol request. No special middleware layer needed. See
 `docs/design/routing-expression-model.md`.
+
+**Update (2026-07-17)**: input sources (query, body, path segments, headers,
+cookies for HTTP; params, env for CLI) and validation/transformation are still
+open. They're separate from the structural routing model settled in
+`docs/design/routing-and-transforms.md` — that doc covers tree structure and
+transforms only, not input binding.
 
 ### Output formatting
 
