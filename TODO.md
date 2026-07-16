@@ -236,8 +236,12 @@ Ordered roughly easiest → hardest to decide:
    name (unique by construction). Path-level disambiguation (wildcard vs
    keyed dispatch) only arises in the HTTP route tree, which is a projection.
    See `docs/design/routing-and-transforms.md`.
-9. **One tree for HTTP + CLI** — can one tree drive both projections, or do
-   they need separate trees? What are the seams?
+9. ~~**One tree for HTTP + CLI**~~ — resolved: one API tree drives both. Each
+   protocol has its own independent projection (`Node => ProtocolType`,
+   e.g. `Node => HttpRoute`) with its own convention transforms and
+   rewriters; the API tree itself doesn't change. The seam is the
+   projection function per protocol, not the tree. See
+   `docs/design/routing-and-transforms.md`.
 10. ~~**"Is it too general?"**~~ — dissolved by the identity settlement. The
     scope is bounded by "what your codebase's skeleton needs to express." See
     invariants.md § Identity.

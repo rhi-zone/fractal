@@ -13,19 +13,22 @@ in the skeleton.
 
 ## Tree transforms are functions
 
-A tree transform is a function `Tree => Tree`. No special status, no pipeline,
-no framework. Multiple transforms can be chained — they're endofunctors.
+Not every transform is the same shape. Convention transforms are endofunctors
+(`Node => Node`); the projection itself crosses a type boundary
+(`Node => ProtocolType`) and so is not an endofunctor. No special status, no
+pipeline, no framework beyond that distinction.
 
 Three roles:
 
 1. **Inline metadata** — one mechanism for explicit control. The user sets
    `meta.http.*` (or any projection-specific metadata) directly on operations.
-2. **Convention transforms** — optional `Tree => Tree` functions that fill in
-   metadata based on naming conventions (REST/CRUD, RPC-style, etc.). These
+2. **Convention transforms** — optional `Node => Node` endofunctors that fill
+   in metadata based on naming conventions (REST/CRUD, RPC-style, etc.). These
    are subjective — multiple can exist, none is privileged. They respect
-   already-set inline metadata (don't overwrite).
-3. **The projection transform** — the builtin `Tree => Tree` that reads
-   `meta.http.*` and reshapes the API tree into the HTTP route tree. This is
+   already-set inline metadata (don't overwrite). Multiple can be chained.
+3. **The projection transform** — the builtin `Node => HttpRoute` transform
+   that reads `meta.http.*` and reshapes the API tree into the HTTP route
+   tree. This crosses the type boundary, so it is not an endofunctor — it's
    the HTTP projector's own transform, not a convention.
 
 ## Structural transform primitive: relative node placement
@@ -108,8 +111,9 @@ the route tree accordingly:
 ### 3. Composition everywhere
 
 Response overrides are handler wrapping. Method assignment is tree rewriting.
-Placement is tree rewriting. No special-casing — everything is either a
-`Tree => Tree` transform or function composition on the handler.
+Placement is tree rewriting. No special-casing — everything is either an
+endofunctor (`Node => Node` convention transform, `HttpRoute => HttpRoute`
+rewriter) or function composition on the handler.
 
 ## `meta.http` shape
 
@@ -123,7 +127,7 @@ On API tree nodes, `meta.http` is an object with:
   `{ kind: "place", path: "*" }`, `{ kind: "response", status: 201 }`, etc.).
   Extensible via declaration merging on the DU.
 
-Convention transforms (`Node => Node` or `HttpRoute => HttpRoute`) fill in
+Convention transforms (`Node => Node`) and rewriters (`HttpRoute => HttpRoute`) fill in
 directives where they're not set. Inline directives take precedence (convention
 transforms skip already-set directives).
 

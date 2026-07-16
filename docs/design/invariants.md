@@ -43,12 +43,16 @@ inferred is a deployment choice, not an architectural fork.
 
 The skeleton (API tree) is organized by domain — children are operations, not
 path segments. Protocol-specific trees (HTTP route tree, CLI command tree) are
-projections produced by `Tree => Tree` transforms. Two operations that share
-an HTTP path are different nodes in the API tree.
+projections produced by `Node => ProtocolType` transforms — they cross a type
+boundary, not endofunctors. Two operations that share an HTTP path are
+different nodes in the API tree.
 
-Tree transforms are plain functions (`Tree => Tree`), chainable. The structural
-primitive is relative node placement — each node specifies where it goes in the
-output tree via a relative path string (stringly-typed, acceptable because it's
+Convention transforms (REST/CRUD reshaping) are plain endofunctors
+(`Node => Node`), chainable, and run on the API tree before projection.
+Rewriters are endofunctors within the protocol type (`ProtocolType =>
+ProtocolType`), applied after projection. The structural primitive is
+relative node placement — each node specifies where it goes in the output
+tree via a relative path string (stringly-typed, acceptable because it's
 transform input, not skeleton structure). `*` marks wildcard segments.
 
 ---

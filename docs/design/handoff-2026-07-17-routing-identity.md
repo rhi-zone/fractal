@@ -23,7 +23,10 @@ This resolved two long-standing open threads:
 
 The skeleton (API tree) is organized by domain — children are operations, not
 path segments. Protocol-specific trees (HTTP route tree, CLI command tree) are
-projections produced by `Tree => Tree` transforms.
+projections produced by `Node => ProtocolType` transforms — they cross a type
+boundary, not endofunctors. Convention transforms (`Node => Node`) and
+rewriters (`ProtocolType => ProtocolType`) are the endofunctors in this
+pipeline.
 
 ### HttpRoute type
 
