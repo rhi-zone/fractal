@@ -126,6 +126,33 @@ describe("union", () => {
   })
 })
 
+describe("intersection", () => {
+  test("uses native Type.Intersect([...]) for any arity", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toTypeBox(ref)).toBe(
+      "Type.Intersect([Type.Object({ id: Type.String() }), Type.Object({ createdAt: Type.String() })])",
+    )
+  })
+
+  test("three-way intersection stays a single flat Type.Intersect([...])", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+        t(types.object({ name: t(types.string) })),
+      ]),
+    )
+    expect(toTypeBox(ref)).toBe(
+      "Type.Intersect([Type.Object({ id: Type.String() }), Type.Object({ createdAt: Type.String() }), Type.Object({ name: Type.String() })])",
+    )
+  })
+})
+
 describe("literal", () => {
   test("string", () => {
     expect(toTypeBox(t(types.literal("active")))).toBe('Type.Literal("active")')

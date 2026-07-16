@@ -145,6 +145,31 @@ describe("union", () => {
   })
 })
 
+describe("intersection", () => {
+  test("uses native t.intersection([...]) for any arity", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toIoTs(ref)).toBe("t.intersection([t.type({ id: t.string }), t.type({ createdAt: t.string })])")
+  })
+
+  test("three-way intersection stays a single flat t.intersection([...])", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+        t(types.object({ name: t(types.string) })),
+      ]),
+    )
+    expect(toIoTs(ref)).toBe(
+      "t.intersection([t.type({ id: t.string }), t.type({ createdAt: t.string }), t.type({ name: t.string })])",
+    )
+  })
+})
+
 describe("literal", () => {
   test("string literal", () => {
     expect(toIoTs(t(types.literal("active")))).toBe('t.literal("active")')

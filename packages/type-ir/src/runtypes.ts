@@ -114,13 +114,12 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
   },
-  // runtypes has `R.Intersect(...)`, but this projector isn't wired to emit
-  // it for a general intersection — lossy fallback: the first member's
-  // schema, dropping the rest.
+  // https://github.com/pelotom/runtypes — R.Intersect(...) (v6) is runtypes'
+  // native variadic intersection constructor.
   intersection: (shape) => {
     const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "R.Unknown" : toRuntypes(first)
+    if (s.members.length === 0) return "R.Unknown"
+    return `R.Intersect(${s.members.map(toRuntypes).join(", ")})`
   },
 }
 

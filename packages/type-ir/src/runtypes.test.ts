@@ -141,6 +141,31 @@ describe("union", () => {
   })
 })
 
+describe("intersection", () => {
+  test("uses native R.Intersect(...) for any arity", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toRuntypes(ref)).toBe("R.Intersect(R.Record({ id: R.String }), R.Record({ createdAt: R.String }))")
+  })
+
+  test("three-way intersection stays a single flat R.Intersect(...)", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+        t(types.object({ name: t(types.string) })),
+      ]),
+    )
+    expect(toRuntypes(ref)).toBe(
+      "R.Intersect(R.Record({ id: R.String }), R.Record({ createdAt: R.String }), R.Record({ name: R.String }))",
+    )
+  })
+})
+
 describe("literal", () => {
   test("string literal", () => {
     expect(toRuntypes(t(types.literal("active")))).toBe('R.Literal("active")')

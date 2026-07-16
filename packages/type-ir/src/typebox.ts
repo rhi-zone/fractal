@@ -107,12 +107,12 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return call("Type.Ref", [s.target], [], meta)
   },
-  // TypeBox has `Type.Intersect`, but this projector isn't wired to emit it —
-  // lossy fallback: the first member's schema, dropping the rest.
-  intersection: (shape) => {
+  // https://github.com/sinclairzx81/typebox — Type.Intersect([...]) is
+  // TypeBox's native intersection combinator, accepting any arity.
+  intersection: (shape, meta) => {
     const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "Type.Unknown()" : toTypeBox(first)
+    if (s.members.length === 0) return "Type.Unknown()"
+    return call("Type.Intersect", [`[${s.members.map(toTypeBox).join(", ")}]`], [], meta)
   },
 }
 
