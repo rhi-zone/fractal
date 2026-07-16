@@ -134,13 +134,20 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
   },
-  // Yup has no intersection combinator (`.concat()` merges two object shapes,
-  // not a general intersection) — lossy fallback: the first member's schema,
-  // dropping the rest.
+  // Yup's `.concat(schema)` merges two schemas of the same underlying type —
+  // https://github.com/jquense/yup#schemaconcatschema-schema-schema — which is
+  // only meaningful here for object shapes (concat-ing e.g. two strings doesn't
+  // produce an intersection). When every intersection member is an object, chain
+  // .concat() left-associatively; otherwise fall back to the first member's
+  // schema, dropping the rest.
   intersection: (shape) => {
     const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "yup.mixed()" : toYup(first)
+    const [first, ...rest] = s.members
+    if (first === undefined) return "yup.mixed()"
+    if (s.members.every((member) => member.shape.kind === "object")) {
+      return rest.reduce((acc, member) => `${acc}.concat(${toYup(member)})`, toYup(first))
+    }
+    return toYup(first)
   },
 }
 

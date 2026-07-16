@@ -111,12 +111,18 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return { text: s.target, mode: "expr" }
   },
-  // ArkType has `type.and()`, but this projector isn't wired to emit it —
-  // lossy fallback: the first member's schema, dropping the rest.
+  // `type.and()` is ArkType's variadic intersection combinator (mirrors `type.or()`
+  // above) — https://arktype.io/docs/type-api. Word-mode members can also use the
+  // string DSL's `&` operator directly, same as `union` does with `|`.
   intersection: (shape) => {
     const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? { text: "unknown", mode: "word" } : emitRef(first)
+    if (s.members.length === 0) return { text: "unknown", mode: "word" }
+    const members = s.members.map(emitRef)
+    if (members.every((m) => m.mode === "word")) {
+      return { text: members.map((m) => m.text).join(" & "), mode: "word" }
+    }
+    const args = members.map((m) => (m.mode === "expr" ? m.text : `type(${asDefArg(m)})`))
+    return { text: `type.and(${args.join(", ")})`, mode: "expr" }
   },
 }
 

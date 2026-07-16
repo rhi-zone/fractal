@@ -69,6 +69,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
   },
+  // JSDoc/Closure Compiler type syntax has no intersection operator (unlike its
+  // union support via `|`) — lossy fallback: the first member's type, dropping
+  // the rest.
+  intersection: (shape) => {
+    const s = shape as TypeShape & { kind: "intersection" }
+    const [first] = s.members
+    return first === undefined ? "*" : toJsDocType(first)
+  },
 }
 
 export function toJsDocType(ref: TypeRef): string {

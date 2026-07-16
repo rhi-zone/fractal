@@ -252,6 +252,22 @@ describe("toJsDocTypedef", () => {
   })
 })
 
+describe("intersection", () => {
+  test("falls back to the first member's type (lossy — JSDoc has no intersection operator)", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toJsDocType(ref)).toBe("{id: string}")
+  })
+
+  test("empty members fall back to *", () => {
+    expect(toJsDocType(t(types.intersection([])))).toBe("*")
+  })
+})
+
 describe("toJsDocTypedefs", () => {
   test("generates multiple typedef blocks joined by blank lines", () => {
     const registry = {

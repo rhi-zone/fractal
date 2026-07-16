@@ -254,6 +254,20 @@ describe("nested", () => {
   })
 })
 
+describe("intersection", () => {
+  test("emits native s.intersection([...])", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toSuperstruct(ref)).toBe(
+      "s.intersection([s.object({ id: s.string() }), s.object({ createdAt: s.string() })])",
+    )
+  })
+})
+
 describe("toSuperstructDeclaration", () => {
   test("emits a const declaration", () => {
     expect(toSuperstructDeclaration("Age", t(types.integer))).toBe("const Age = s.integer();")

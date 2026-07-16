@@ -117,13 +117,21 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
   },
-  // Effect Schema has no general schema-level intersection combinator (struct
-  // merging uses `S.extend`, which requires both sides to be Structs) — lossy
-  // fallback: the first member's schema, dropping the rest.
+  // Effect Schema has no general schema-level intersection combinator — only
+  // `S.extend(a, b)` (https://effect.website/docs/schema/basic-usage/#extending-schemas),
+  // which merges two Structs. When every intersection member is an object, chain
+  // S.extend left-associatively (matching the 3+ member nesting the zod/typebox
+  // projectors use for their binary intersection combinators). If any member is
+  // not an object, S.extend can't merge it — lossy fallback: the first member's
+  // schema, dropping the rest.
   intersection: (shape) => {
     const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "S.Unknown" : toEffectSchema(first)
+    const [first, ...rest] = s.members
+    if (first === undefined) return "S.Unknown"
+    if (s.members.every((member) => member.shape.kind === "object")) {
+      return rest.reduce((acc, member) => `S.extend(${acc}, ${toEffectSchema(member)})`, toEffectSchema(first))
+    }
+    return toEffectSchema(first)
   },
 }
 

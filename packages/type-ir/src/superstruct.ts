@@ -117,12 +117,12 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "ref" }
     return s.target
   },
-  // Superstruct has no intersection combinator — lossy fallback: the first
-  // member's schema, dropping the rest.
+  // Superstruct has a native `s.intersection([...])` combinator (validates that a
+  // value matches all of the given structs) — https://docs.superstructjs.org/api-reference/types,
+  // same shape as `s.union([...])` above.
   intersection: (shape) => {
     const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "s.unknown()" : toSuperstruct(first)
+    return `s.intersection([${s.members.map(toSuperstruct).join(", ")}])`
   },
 }
 

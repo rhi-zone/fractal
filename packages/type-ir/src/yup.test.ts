@@ -248,6 +248,38 @@ describe("nested", () => {
   })
 })
 
+describe("intersection", () => {
+  test("all-object members chain .concat() left-associatively", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toYup(ref)).toBe(
+      "yup.object({ id: yup.string().required() }).concat(yup.object({ createdAt: yup.string().required() }))",
+    )
+  })
+
+  test("three all-object members nest left-associatively", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+        t(types.object({ name: t(types.string) })),
+      ]),
+    )
+    expect(toYup(ref)).toBe(
+      "yup.object({ id: yup.string().required() }).concat(yup.object({ createdAt: yup.string().required() })).concat(yup.object({ name: yup.string().required() }))",
+    )
+  })
+
+  test("non-object member falls back to the first member (lossy)", () => {
+    const ref = t(types.intersection([t(types.string), t(types.object({ id: t(types.string) }))]))
+    expect(toYup(ref)).toBe("yup.string()")
+  })
+})
+
 describe("toYupDeclaration", () => {
   test("emits a const declaration", () => {
     expect(toYupDeclaration("Age", t(types.integer))).toBe("const Age = yup.number().integer();")

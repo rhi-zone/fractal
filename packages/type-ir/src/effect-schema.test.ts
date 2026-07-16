@@ -247,6 +247,38 @@ describe("nested", () => {
   })
 })
 
+describe("intersection", () => {
+  test("all-object members chain S.extend left-associatively", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toEffectSchema(ref)).toBe(
+      "S.extend(S.Struct({ id: S.String }), S.Struct({ createdAt: S.String }))",
+    )
+  })
+
+  test("three all-object members nest left-associatively", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+        t(types.object({ name: t(types.string) })),
+      ]),
+    )
+    expect(toEffectSchema(ref)).toBe(
+      "S.extend(S.extend(S.Struct({ id: S.String }), S.Struct({ createdAt: S.String })), S.Struct({ name: S.String }))",
+    )
+  })
+
+  test("non-object member falls back to the first member (lossy)", () => {
+    const ref = t(types.intersection([t(types.string), t(types.object({ id: t(types.string) }))]))
+    expect(toEffectSchema(ref)).toBe("S.String")
+  })
+})
+
 describe("toEffectSchemaDeclaration", () => {
   test("emits a const declaration", () => {
     expect(toEffectSchemaDeclaration("Age", t(types.integer))).toBe("const Age = S.Int;")

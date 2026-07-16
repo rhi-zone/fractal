@@ -256,6 +256,27 @@ describe("nested", () => {
   })
 })
 
+describe("intersection", () => {
+  test("word-mode members join with &", () => {
+    const ref = t(types.intersection([t(types.string), t(types.number)]))
+    expect(toArkType(ref)).toBe('type("string & number")')
+  })
+
+  test("non-word-mode members use type.and(...)", () => {
+    const ref = t(
+      types.intersection([
+        t(types.object({ id: t(types.string) })),
+        t(types.object({ createdAt: t(types.string) })),
+      ]),
+    )
+    expect(toArkType(ref)).toBe('type.and(type({ id: "string" }), type({ createdAt: "string" }))')
+  })
+
+  test("empty members fall back to unknown", () => {
+    expect(toArkType(t(types.intersection([])))).toBe('type("unknown")')
+  })
+})
+
 describe("toArkTypeDeclaration", () => {
   test("emits a const declaration", () => {
     expect(toArkTypeDeclaration("Age", t(types.integer))).toBe('const Age = type("number.integer");')
