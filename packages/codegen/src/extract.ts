@@ -42,7 +42,10 @@ export type JsonSchema = {
   type?: "string" | "number" | "boolean" | "array" | "object"
   properties?: Record<string, JsonSchema>
   required?: string[]
-  items?: JsonSchema
+  items?: JsonSchema | false
+  prefixItems?: JsonSchema[]
+  additionalProperties?: JsonSchema
+  const?: string | number | boolean | null
   $comment?: string
 }
 
@@ -54,31 +57,75 @@ export type JsonSchema = {
 const puntRef = (reason: string): TypeRef =>
   t(types.unknown, { $comment: `TODO(codegen): unhandled type — ${reason}` })
 
+/** True for symbols with at least one private/protected declaration. */
+function isPrivateOrProtected(prop: ts.Symbol): boolean {
+  return (prop.declarations ?? []).some((decl) => {
+    const mods = ts.getCombinedModifierFlags(decl as ts.Declaration & { kind: ts.SyntaxKind })
+    return (mods & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) !== 0
+  })
+}
+
 /**
  * Lower a resolved `ts.Type` to a TypeRef.
  *
  * Handles the obvious cases; punts everything else to `t(types.unknown, …)`
  * carrying a `$comment` naming the case. `loc` anchors symbol-type resolution.
+ *
+ * `seen` tracks the chain of object-like types currently being descended
+ * (ancestors on this recursion path only — siblings don't share it). Re-entering
+ * a type already on the path means the type is recursive; it lowers to
+ * `t(types.ref(name))` when a name is recoverable, else punts.
  */
 export function typeRefFromType(
   type: ts.Type,
   checker: ts.TypeChecker,
   loc: ts.Node,
+  seen: Set<ts.Type> = new Set(),
 ): TypeRef {
+  if (seen.has(type)) {
+    const typeName = type.aliasSymbol?.name ?? type.symbol?.name
+    return typeName ? t(types.ref(typeName)) : puntRef("recursive type")
+  }
+
   const flags = type.flags
+
+  // ── Literals (checked before the widening StringLike/NumberLike/BooleanLike
+  //    checks below, else `"active"` widens to plain `string`) ───────────────
+  if (flags & ts.TypeFlags.StringLiteral) {
+    return t(types.literal((type as ts.LiteralType).value as string))
+  }
+  if (flags & ts.TypeFlags.NumberLiteral) {
+    return t(types.literal((type as ts.LiteralType).value as number))
+  }
+  if (flags & ts.TypeFlags.BooleanLiteral) {
+    const isTrue =
+      (type as ts.Type & { intrinsicName?: string }).intrinsicName === "true"
+    return t(types.literal(isTrue))
+  }
 
   // ── Primitives ────────────────────────────────────────────────────────────
   if (flags & ts.TypeFlags.StringLike) return t(types.string)
   if (flags & ts.TypeFlags.NumberLike) return t(types.number)
   if (flags & ts.TypeFlags.BooleanLike) return t(types.boolean)
 
+  // ── Tuples (checked before isArrayType — tuples fail that check and would
+  //    otherwise fall through to the object branch as `{"0":…,"1":…,"length":…}`) ──
+  if (checker.isTupleType(type)) {
+    const nextSeen = new Set(seen).add(type)
+    const elements = checker.getTypeArguments(type as ts.TypeReference)
+    return t(
+      types.tuple(elements.map((el) => typeRefFromType(el, checker, loc, nextSeen))),
+    )
+  }
+
   // ── Arrays (T[] / Array<T>) ───────────────────────────────────────────────
   if (checker.isArrayType(type)) {
+    const nextSeen = new Set(seen).add(type)
     const [elem] = checker.getTypeArguments(type as ts.TypeReference)
     return t(
       types.array(
         elem
-          ? typeRefFromType(elem, checker, loc)
+          ? typeRefFromType(elem, checker, loc, nextSeen)
           : puntRef("unknown array element"),
       ),
     )
@@ -99,15 +146,45 @@ export function typeRefFromType(
       return puntRef(`callable/constructable (${checker.typeToString(type)})`)
     }
 
+    const nextSeen = new Set(seen).add(type)
+
+    // Promise<T> in field position: unwrap to T, same as the return-type path.
+    if (type.symbol?.name === "Promise") {
+      const [inner] = checker.getTypeArguments(type as ts.TypeReference)
+      if (inner) return typeRefFromType(inner, checker, loc, nextSeen)
+    }
+
+    const properties = checker.getPropertiesOfType(type)
+
+    // Pure index-signature types (Record<K,V>, `{ [key: string]: V }`) have no
+    // own properties — without this they'd lower to `types.object({})`.
+    const stringIndex = type.getStringIndexType()
+    const numberIndex = type.getNumberIndexType()
+    if (properties.length === 0 && (stringIndex || numberIndex)) {
+      const valueType = stringIndex ?? numberIndex!
+      const keyRef = stringIndex ? t(types.string) : t(types.number)
+      return t(types.map(keyRef, typeRefFromType(valueType, checker, loc, nextSeen)))
+    }
+
     const fields: Record<string, TypeRef> = {}
 
-    for (const prop of checker.getPropertiesOfType(type)) {
+    for (const prop of properties) {
+      // Class instances: skip private/protected members — internal state
+      // isn't part of the public data shape.
+      if (isPrivateOrProtected(prop)) continue
+
       const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0
       // Strip `| undefined` so `field?: string` lowers as a plain string.
       const propType = checker
         .getTypeOfSymbolAtLocation(prop, loc)
         .getNonNullableType()
-      const fieldRef = typeRefFromType(propType, checker, loc)
+
+      // Methods aren't domain data — omit them (mirrors the callable punt above).
+      if (checker.getSignaturesOfType(propType, ts.SignatureKind.Call).length > 0) {
+        continue
+      }
+
+      const fieldRef = typeRefFromType(propType, checker, loc, nextSeen)
       fields[prop.name] = optional
         ? t(fieldRef.shape, { ...fieldRef.meta, optional: true })
         : fieldRef
@@ -123,8 +200,8 @@ export function typeRefFromType(
 /**
  * Lower a resolved `ts.Type` to a JSON-Schema value.
  *
- * Handles the obvious cases; punts everything else to `{ type: "object" }`
- * with a `$comment` naming the case. `loc` anchors symbol-type resolution.
+ * Handles the obvious cases; punts everything else to `unknown` with a
+ * `$comment` naming the case. `loc` anchors symbol-type resolution.
  */
 export function schemaFromType(
   type: ts.Type,
@@ -362,8 +439,8 @@ function structuralResultValueType(
 /**
  * Derive the output schema from a function-typed node by inspecting its return
  * type. Unwraps `Result<T, E>` and `Promise<Result<T, E>>` to yield T's schema.
- * Exotic/unresolvable return types punt to `{ type: "object" }` with a TODO
- * $comment, consistent with the input-side fallback.
+ * Exotic/unresolvable return types punt to `unknown` with a TODO $comment,
+ * consistent with the input-side fallback.
  *
  * Unwrapping uses two paths (see ARCHITECTURE NOTE above):
  *

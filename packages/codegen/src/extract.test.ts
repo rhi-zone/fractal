@@ -4,11 +4,12 @@
 //   1. object type (primitive + optional + array + nested) → correct schema
 //   2. leading JSDoc → description
 //   3. derived schema flows into a real MCP tool's inputSchema (via toTools)
-//   4. exotic type (union) punts to { type: "object" } with a TODO $comment
+//   4. exotic type (union) punts to `unknown` with a TODO $comment
 
 import { describe, expect, it } from "bun:test"
 import { toTools } from "@rhi-zone/fractal-mcp"
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import {
   extractToolSchemas,
   extractToolTypeRefs,
@@ -311,5 +312,123 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
       properties: { total: { type: "number" } },
       required: ["total"],
     })
+  })
+})
+
+// ============================================================================
+// 8. Gap fixes — tuples, index signatures, class filtering, nested Promise,
+//    single literals, recursive types
+// ============================================================================
+
+describe("typeRefFromType gap fixes", () => {
+  const program = createExtractorProgram(TYPEREF_FIXTURE)
+  const checker = program.getTypeChecker()
+  const source = program.getSourceFile(TYPEREF_FIXTURE)!
+
+  /** Resolve a top-level `type X = …` alias or `class X …` to its ts.Type. */
+  function typeOf(name: string): ts.Type {
+    let found: ts.Node | undefined
+    const visit = (n: ts.Node): void => {
+      if (!found && ts.isTypeAliasDeclaration(n) && n.name.text === name) found = n.name
+      if (!found && ts.isClassDeclaration(n) && n.name?.text === name) found = n.name
+      if (!found) ts.forEachChild(n, visit)
+    }
+    visit(source)
+    if (!found) throw new Error(`typeOf: ${name} not found`)
+    return checker.getTypeAtLocation(found)
+  }
+
+  it("lowers a tuple to types.tuple, not an indexed object", () => {
+    const ref = typeRefFromType(typeOf("TupleType"), checker, source)
+    expect(ref.shape.kind).toBe("tuple")
+    const elements = (ref.shape as { kind: "tuple"; elements: TypeRef[] }).elements
+    expect(elements.map((e) => e.shape.kind)).toEqual(["string", "number", "boolean"])
+    expect(toJsonSchema(ref)).toEqual({
+      type: "array",
+      prefixItems: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
+      items: false,
+    })
+  })
+
+  it("lowers Record<string, number> to types.map", () => {
+    const ref = typeRefFromType(typeOf("RecordType"), checker, source)
+    expect(ref.shape.kind).toBe("map")
+    const map = ref.shape as { kind: "map"; key: TypeRef; value: TypeRef }
+    expect(map.key.shape.kind).toBe("string")
+    expect(map.value.shape.kind).toBe("number")
+    expect(toJsonSchema(ref)).toEqual({
+      type: "object",
+      additionalProperties: { type: "number" },
+    })
+  })
+
+  it("lowers an explicit string index signature to types.map", () => {
+    const ref = typeRefFromType(typeOf("IndexSigType"), checker, source)
+    expect(ref.shape.kind).toBe("map")
+    const map = ref.shape as { kind: "map"; key: TypeRef; value: TypeRef }
+    expect(map.key.shape.kind).toBe("string")
+    expect(map.value.shape.kind).toBe("boolean")
+  })
+
+  it("keeps a single string literal as types.literal, not widened to string", () => {
+    const ref = typeRefFromType(typeOf("SingleLiteral"), checker, source)
+    expect(ref.shape.kind).toBe("literal")
+    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe("active")
+  })
+
+  it("keeps a single numeric literal as types.literal", () => {
+    const ref = typeRefFromType(typeOf("NumericLiteral"), checker, source)
+    expect(ref.shape.kind).toBe("literal")
+    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe(42)
+  })
+
+  it("keeps a single boolean literal as types.literal", () => {
+    const ref = typeRefFromType(typeOf("BooleanLiteral"), checker, source)
+    expect(ref.shape.kind).toBe("literal")
+    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe(true)
+  })
+
+  it("still punts a union of literals (LiteralType) — union punt takes precedence", () => {
+    const ref = typeRefFromType(typeOf("LiteralType"), checker, source)
+    expect(ref.shape.kind).toBe("unknown")
+    expect(ref.meta.$comment).toMatch(/union/)
+  })
+
+  it("filters private/protected fields and methods off a class instance", () => {
+    const ref = typeRefFromType(typeOf("ClassInstanceField"), checker, source)
+    expect(ref.shape.kind).toBe("object")
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    const owner = fields.owner!
+    expect(owner.shape.kind).toBe("object")
+    const ownerFields = (owner.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(ownerFields)).toEqual(["name"])
+    expect(ownerFields.name?.shape.kind).toBe("string")
+  })
+
+  it("unwraps a nested Promise<T> field to T's TypeRef", () => {
+    const ref = typeRefFromType(typeOf("PromiseField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.data?.shape.kind).toBe("string")
+  })
+
+  it("does not stack-overflow on an array-mediated recursive type, and refs itself", () => {
+    const ref = typeRefFromType(typeOf("RecursiveType"), checker, source)
+    expect(ref.shape.kind).toBe("object")
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.name?.shape.kind).toBe("string")
+    const children = fields.children!
+    expect(children.shape.kind).toBe("array")
+    const elemRef = (children.shape as { kind: "array"; element: TypeRef }).element
+    expect(elemRef.shape.kind).toBe("ref")
+    expect((elemRef.shape as { kind: "ref"; target: string }).target).toBe("RecursiveType")
+  })
+
+  it("does not stack-overflow on a directly self-referential type, and refs itself", () => {
+    const ref = typeRefFromType(typeOf("DirectRecursive"), checker, source)
+    expect(ref.shape.kind).toBe("object")
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    const self = fields.self!
+    expect(self.shape.kind).toBe("ref")
+    expect((self.shape as { kind: "ref"; target: string }).target).toBe("DirectRecursive")
   })
 })
