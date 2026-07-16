@@ -58,3 +58,20 @@ export class SampleClass {
 
 /** Class instance type, used as a field to exercise the object branch on it. */
 export type ClassInstanceField = { owner: SampleClass }
+
+// ── Branded/opaque type fixtures ────────────────────────────────────────────
+
+/** Branded string — the standard nominal-typing pattern over a primitive. */
+export type LocationId = string & { readonly __brand: "LocationId" }
+
+/** A second branded string, to confirm brand values aren't confused. */
+export type UserId = string & { readonly __brand: "UserId" }
+
+/** Branded number, using the `__tag` spelling instead of `__brand`. */
+export type PositiveInt = number & { readonly __tag: "PositiveInt" }
+
+/** A branded type nested as an object field. */
+export type BrandedField = { locationId: LocationId; name: string }
+
+/** A genuine structural intersection (not a brand pattern) — must still punt. */
+export type PlainIntersection = { a: string } & { b: number }

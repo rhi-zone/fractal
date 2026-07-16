@@ -65,6 +65,48 @@ function isPrivateOrProtected(prop: ts.Symbol): boolean {
   })
 }
 
+/** Property names conventionally used to tag a branded/opaque type. */
+const BRAND_PROP_NAMES = ["__brand", "__tag", "_brand", "_tag"]
+
+/**
+ * Detect `Base & { readonly <brandProp>: "Literal" }` — the standard
+ * branded/opaque type pattern — within an intersection's two constituents.
+ * Tries both orderings (brand marker may appear on either side). Returns the
+ * base constituent's TypeRef with `meta.brand` set to the tag literal, or
+ * `undefined` if the intersection doesn't match the pattern (a genuine
+ * structural intersection, which the caller punts).
+ */
+function brandFromIntersection(
+  type: ts.IntersectionType,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+): TypeRef | undefined {
+  const constituents = type.types
+  if (constituents.length !== 2) return undefined
+
+  for (const [base, tag] of [
+    [constituents[0]!, constituents[1]!],
+    [constituents[1]!, constituents[0]!],
+  ] as const) {
+    for (const prop of checker.getPropertiesOfType(tag)) {
+      const isSymbolKeyed = prop.escapedName.toString().startsWith("__@")
+      const isNamedBrand = BRAND_PROP_NAMES.includes(prop.name)
+      if (!isSymbolKeyed && !isNamedBrand) continue
+
+      const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
+      if (!(propType.flags & ts.TypeFlags.StringLiteral)) continue
+
+      const brandValue = (propType as ts.LiteralType).value as string
+      const nextSeen = new Set(seen).add(type)
+      const baseRef = typeRefFromType(base, checker, loc, nextSeen)
+      return t(baseRef.shape, { ...baseRef.meta, brand: brandValue })
+    }
+  }
+
+  return undefined
+}
+
 /**
  * Lower a resolved `ts.Type` to a TypeRef.
  *
@@ -134,6 +176,22 @@ export function typeRefFromType(
   // ── Genuine unions punt (optional `| undefined` is stripped upstream) ──────
   if (type.isUnion()) {
     return puntRef(`union (${checker.typeToString(type)})`)
+  }
+
+  // ── Intersections: detect the branded/opaque type pattern ─────────────────
+  //
+  // `type LocationId = string & { readonly __brand: "LocationId" }` compiles to
+  // an IntersectionType of a primitive constituent and an object constituent
+  // whose sole property is a brand tag (`__brand`/`__tag`/`_brand`/`_tag`, or a
+  // unique symbol key). When recognized, lower to the primitive's TypeRef with
+  // `meta.brand` set to the tag's literal string value — an open-metadata-bag
+  // annotation (see CLAUDE.md: open metadata over fixed schema) that
+  // brand-aware projectors (zod, typescript, valibot) read and others ignore.
+  // Anything else intersecting is a genuine structural intersection: punt.
+  if (type.isIntersection()) {
+    const brand = brandFromIntersection(type, checker, loc, seen)
+    if (brand) return brand
+    return puntRef(`intersection (${checker.typeToString(type)})`)
   }
 
   // ── Object types: primitive/optional/array/nested fields ──────────────────

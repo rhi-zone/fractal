@@ -229,6 +229,20 @@ describe("nested", () => {
   })
 })
 
+describe("branded types (meta.brand)", () => {
+  test("branded string appends .brand<...>()", () => {
+    expect(toZod(t(types.string, { brand: "LocationId" }))).toBe(
+      'z.string().brand<"LocationId">()',
+    )
+  })
+
+  test("branded number appends .brand<...>() after other constraints", () => {
+    expect(toZod(t(types.integer, { brand: "PositiveInt" }))).toBe(
+      'z.number().int().brand<"PositiveInt">()',
+    )
+  })
+})
+
 describe("toZodDeclaration", () => {
   test("emits a const declaration", () => {
     expect(toZodDeclaration("Age", t(types.integer))).toBe("const Age = z.number().int();")

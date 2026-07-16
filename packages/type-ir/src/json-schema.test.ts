@@ -237,3 +237,11 @@ describe("nested", () => {
     })
   })
 })
+
+describe("unrecognized metadata (open metadata bag)", () => {
+  test("meta.brand is silently ignored — projects to the base type", () => {
+    expect(toJsonSchema(t(types.string, { brand: "LocationId" }))).toEqual({
+      type: "string",
+    })
+  })
+})

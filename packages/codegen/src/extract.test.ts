@@ -431,4 +431,40 @@ describe("typeRefFromType gap fixes", () => {
     expect(self.shape.kind).toBe("ref")
     expect((self.shape as { kind: "ref"; target: string }).target).toBe("DirectRecursive")
   })
+
+  // ── Branded/opaque types ──────────────────────────────────────────────────
+
+  it("lowers a branded string to its base shape with meta.brand set", () => {
+    const ref = typeRefFromType(typeOf("LocationId"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.brand).toBe("LocationId")
+  })
+
+  it("lowers a second branded string with its own distinct brand value", () => {
+    const ref = typeRefFromType(typeOf("UserId"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.brand).toBe("UserId")
+  })
+
+  it("lowers a branded number (using the __tag spelling) with meta.brand set", () => {
+    const ref = typeRefFromType(typeOf("PositiveInt"), checker, source)
+    expect(ref.shape).toEqual({ kind: "number" })
+    expect(ref.meta.brand).toBe("PositiveInt")
+  })
+
+  it("carries brand metadata through a branded field on an object", () => {
+    const ref = typeRefFromType(typeOf("BrandedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.locationId?.shape).toEqual({ kind: "string" })
+    expect(fields.locationId?.meta.brand).toBe("LocationId")
+    expect(fields.name?.shape).toEqual({ kind: "string" })
+    expect(fields.name?.meta.brand).toBeUndefined()
+  })
+
+  it("does not treat a plain (non-branded) intersection as a brand — punts cleanly", () => {
+    const ref = typeRefFromType(typeOf("PlainIntersection"), checker, source)
+    expect(ref.shape.kind).toBe("unknown")
+    expect(ref.meta.$comment).toMatch(/TODO\(codegen\)/)
+    expect(ref.meta.$comment).toMatch(/intersection/)
+  })
 })

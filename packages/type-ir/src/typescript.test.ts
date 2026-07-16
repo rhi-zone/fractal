@@ -140,6 +140,12 @@ test("toTypeDeclarations", () => {
   )
 })
 
+test("branded string emits an intersection with a __brand tag", () => {
+  expect(toTypeScript(t(types.string, { brand: "LocationId" }))).toBe(
+    'string & { readonly __brand: "LocationId" }',
+  )
+})
+
 test("unknown kind fallback", () => {
   const ref = { shape: { kind: "bogus" } as never, meta: {} }
   expect(toTypeScript(ref)).toBe("unknown")

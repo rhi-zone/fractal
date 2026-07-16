@@ -260,3 +260,13 @@ describe("renderProto", () => {
     expect(output).toContain("string city = 1;")
   })
 })
+
+describe("unrecognized metadata (open metadata bag)", () => {
+  test("meta.brand is silently ignored — projects to the base field type", () => {
+    expect(toProtoField(t(types.string, { brand: "LocationId" }))).toEqual({
+      type: "string",
+      repeated: false,
+      optional: false,
+    })
+  })
+})

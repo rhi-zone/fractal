@@ -213,6 +213,14 @@ describe("nested", () => {
   })
 })
 
+describe("branded types (meta.brand)", () => {
+  test("branded string appends v.brand(...) via v.pipe", () => {
+    expect(toValibot(t(types.string, { brand: "LocationId" }))).toBe(
+      'v.pipe(v.string(), v.brand("LocationId"))',
+    )
+  })
+})
+
 describe("declarations", () => {
   test("single declaration", () => {
     expect(toValibotDeclaration("Name", t(types.string))).toBe("const Name = v.string();")

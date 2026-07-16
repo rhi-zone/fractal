@@ -32,6 +32,7 @@ function withMeta(expr: string, meta: Readonly<Record<string, unknown>>, kind: s
   if (meta.nullable === true) result += ".nullable()"
   if (typeof meta.description === "string") result += `.describe(${JSON.stringify(meta.description)})`
   if (meta.default !== undefined) result += `.default(${JSON.stringify(meta.default)})`
+  if (typeof meta.brand === "string") result += `.brand<${JSON.stringify(meta.brand)}>()`
 
   return result
 }

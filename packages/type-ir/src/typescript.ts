@@ -78,7 +78,10 @@ const handlers: Record<string, Converter> = {
 
 export function toTypeScript(ref: TypeRef): string {
   const converter = resolve(ref.shape.kind, handlers)
-  const type = converter === undefined ? "unknown" : converter(ref.shape)
+  let type = converter === undefined ? "unknown" : converter(ref.shape)
+  if (typeof ref.meta.brand === "string") {
+    type = `${type} & { readonly __brand: ${quote(ref.meta.brand)} }`
+  }
   return ref.meta.nullable === true ? `${type} | null` : type
 }
 

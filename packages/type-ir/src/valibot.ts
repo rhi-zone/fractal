@@ -92,6 +92,7 @@ export function toValibot(ref: TypeRef): string {
   const converter = resolve(ref.shape.kind, handlers)
   const { schema, actions: baseActions } = converter === undefined ? { schema: "v.unknown()", actions: [] } : converter(ref.shape)
   const actions = [...baseActions, ...constraintActions(ref.meta)]
+  if (typeof ref.meta.brand === "string") actions.push(`v.brand(${quote(ref.meta.brand)})`)
   let expr = actions.length > 0 ? `v.pipe(${schema}, ${actions.join(", ")})` : schema
 
   if (ref.meta.nullable === true) expr = `v.nullable(${expr})`

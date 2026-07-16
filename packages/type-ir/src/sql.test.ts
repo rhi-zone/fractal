@@ -424,3 +424,12 @@ describe("unknown kind fallback", () => {
     expect(toSqlDdl(ref)).toEqual({ type: "INTEGER", nullable: false })
   })
 })
+
+describe("unrecognized metadata (open metadata bag)", () => {
+  test("meta.brand is silently ignored — projects to the base type's column", () => {
+    expect(toSqlDdl(t(types.string, { brand: "LocationId" }))).toEqual({
+      type: "TEXT",
+      nullable: false,
+    })
+  })
+})
