@@ -220,6 +220,48 @@ describe("applyPlacement", () => {
     expect(route.children?.a?.children?.b?.children?.leaf).toBeUndefined()
     expect(route.children?.admin?.methods?.POST?.handler).toBe(handler)
   })
+
+  it("mkdir-p: a multi-segment place target creates every missing intermediate node", () => {
+    const handler = (_: unknown) => ({})
+    const api = node({
+      children: {
+        leaf: op(handler, { http: { directives: [{ kind: "place", path: "api/v2/users" }] } }),
+      },
+    })
+    const route = applyPlacement(naiveTransform(api))
+    expect(route.children?.leaf).toBeUndefined()
+    expect(route.children?.api?.children?.v2?.children?.users?.methods?.POST?.handler).toBe(handler)
+  })
+
+  it("throws when two placements converge on the same path AND method", () => {
+    const api = node({
+      children: {
+        first: op((_: unknown) => ({ from: "first" }), {
+          http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "GET" }] },
+        }),
+        second: op((_: unknown) => ({ from: "second" }), {
+          http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "GET" }] },
+        }),
+      },
+    })
+    const transform = composeTransforms(applyMethods, applyPlacement)
+    expect(() => transform(naiveTransform(api))).toThrow(/conflict/i)
+  })
+
+  it("does NOT throw when two placements converge on the same path with DIFFERENT methods", () => {
+    const api = node({
+      children: {
+        first: op((_: unknown) => ({ from: "first" }), {
+          http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "GET" }] },
+        }),
+        second: op((_: unknown) => ({ from: "second" }), {
+          http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "PUT" }] },
+        }),
+      },
+    })
+    const transform = composeTransforms(applyMethods, applyPlacement)
+    expect(() => transform(naiveTransform(api))).not.toThrow()
+  })
 })
 
 // ============================================================================
@@ -377,7 +419,7 @@ describe("httpRoute / isHttpRoute", () => {
     expect(isHttpRoute(n)).toBe(false)
   })
 
-  it("makeRouter dispatches an HttpRoute through the new simple dispatcher", async () => {
+  it("makeRouter dispatches an HttpRoute through the simple exact-path/method dispatcher", async () => {
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => ({ via: "route" }), meta: {} } },
       meta: {},
@@ -386,14 +428,6 @@ describe("httpRoute / isHttpRoute", () => {
     const res = await router(new Request("http://localhost/"))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ via: "route" })
-  })
-
-  it("makeRouter still dispatches a plain Node through the legacy tree-walk dispatcher", async () => {
-    const api = op((_: unknown) => ({ via: "node" }), { tags: { readOnly: true } })
-    const router = makeRouter(node({ children: { thing: api } }))
-    const res = await router(new Request("http://localhost/thing"))
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ via: "node" })
   })
 })
 

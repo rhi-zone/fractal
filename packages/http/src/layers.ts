@@ -7,8 +7,9 @@
 //   autoMethodLayer  — HEAD-from-GET, OPTIONS→204+Allow, 405+Allow on wrong method
 //   corsLayer        — minimal CORS / preflight, opt-in
 
-import { allowHeader, candidatesForUrl } from "./project.ts"
-import type { Node } from "@rhi-zone/fractal-core/node"
+import { allowHeader } from "./project.ts"
+import { routeCandidatesForUrl } from "./route.ts"
+import type { HttpRoute } from "./route.ts"
 
 type Fetch = (req: Request) => Promise<Response>
 
@@ -29,19 +30,19 @@ type Fetch = (req: Request) => Promise<Response>
  * Wrap a core fetch handler with HTTP-correctness behaviors.
  *
  * @param inner - The core router produced by `makeRouter`.
- * @param root  - The same Node tree passed to `makeRouter` — re-walked
- *                (guided by the request path, O(depth)) to determine the
- *                verbs available at this exact path.
+ * @param root  - The same `HttpRoute` tree passed to `makeRouter` —
+ *                re-walked (guided by the request path, O(depth)) to
+ *                determine the methods available at this exact path.
  */
-export function autoMethodLayer(inner: Fetch, root: Node): Fetch {
+export function autoMethodLayer(inner: Fetch, root: HttpRoute): Fetch {
   return async (req) => {
-    // Find all candidates whose path matches (ignoring verb/conditions)
-    const pathMatches = candidatesForUrl(root, req.url)
+    // Find all candidates whose path matches (ignoring method)
+    const pathMatches = routeCandidatesForUrl(root, req.url)
 
     // No path match at all — let the inner handler return 404
     if (pathMatches.length === 0) return inner(req)
 
-    const verbs = new Set(pathMatches.map((r) => r.verb))
+    const verbs = new Set(pathMatches.map((r) => r.method))
 
     // OPTIONS: 204 + Allow (HEAD and OPTIONS are always implied)
     if (req.method === "OPTIONS") {

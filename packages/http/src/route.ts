@@ -261,17 +261,44 @@ function detach(
   return httpRoute({ methods: route.methods, children, fallback, meta: route.meta })
 }
 
-function mergeRoutes(target: HttpRoute, incoming: HttpRoute): HttpRoute {
+/**
+ * Merge an incoming subtree into the route already occupying a target
+ * position — this is what makes converging placements (the REST-resource
+ * motivating example: get/update/delete all landing on the same `*`
+ * position) group naturally. Throws when `incoming` and `target` both define
+ * the same HTTP method: two operations placed at the same path+method is a
+ * genuine authoring conflict (which handler would serve the request?), not
+ * something a merge can silently resolve.
+ */
+function mergeRoutes(target: HttpRoute, incoming: HttpRoute, path: readonly string[]): HttpRoute {
+  const targetMethods = target.methods ?? {}
+  const incomingMethods = incoming.methods ?? {}
+  for (const method of Object.keys(incomingMethods)) {
+    if (method in targetMethods) {
+      const displayPath = path.length === 0 ? "/" : `/${path.join("/")}`
+      throw new Error(
+        `applyPlacement: conflicting route — ${method} ${displayPath} is defined by more than one node`,
+      )
+    }
+  }
   return httpRoute({
-    methods: { ...target.methods, ...incoming.methods },
+    methods: { ...targetMethods, ...incomingMethods },
     children: { ...target.children, ...incoming.children },
     fallback: incoming.fallback ?? target.fallback,
     meta: target.meta,
   })
 }
 
-function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpRoute): HttpRoute {
-  if (targetPath.length === 0) return mergeRoutes(root, subtree)
+/**
+ * Insert `subtree` at `targetPath` within `root`, creating intermediate
+ * branch/fallback nodes along the way when they don't already exist
+ * (mkdir-p: `targetPath` may name several segments deep — e.g. resolved from
+ * a `place: "api/v2/users"` directive — and every intermediate segment that
+ * isn't already present in the tree is created as a plain, empty `HttpRoute`
+ * node so the walk can continue).
+ */
+function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpRoute, fullPath: readonly string[]): HttpRoute {
+  if (targetPath.length === 0) return mergeRoutes(root, subtree, fullPath)
   const [head, ...rest] = targetPath as [string, ...string[]]
 
   if (head === "*") {
@@ -280,24 +307,32 @@ function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpR
     return httpRoute({
       methods: root.methods,
       children: root.children,
-      fallback: { name, subtree: insertAt(base, rest, subtree) },
+      fallback: { name, subtree: insertAt(base, rest, subtree, fullPath) },
       meta: root.meta,
     })
   }
 
+  // mkdir-p: create the intermediate node when it doesn't already exist.
   const base = root.children?.[head] ?? httpRoute({ meta: {} })
   return httpRoute({
     methods: root.methods,
-    children: { ...root.children, [head]: insertAt(base, rest, subtree) },
+    children: { ...root.children, [head]: insertAt(base, rest, subtree, fullPath) },
     fallback: root.fallback,
     meta: root.meta,
   })
 }
 
+/**
+ * Applies every `place` directive detached from the tree by `detach`.
+ * Reinserted sequentially via `insertAt`, so conflicts between two DIFFERENT
+ * placed subtrees converging on the same path+method are caught exactly like
+ * a conflict between a placed subtree and a node already sitting at the
+ * target — both funnel through `mergeRoutes`'s check.
+ */
 export function applyPlacement(route: HttpRoute): HttpRoute {
   const moves: PendingMove[] = []
   const stripped = detach(route, [], moves)
-  return moves.reduce((acc, m) => insertAt(acc, m.targetPath, m.subtree), stripped)
+  return moves.reduce((acc, m) => insertAt(acc, m.targetPath, m.subtree, m.targetPath), stripped)
 }
 
 // ============================================================================

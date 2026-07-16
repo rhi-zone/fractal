@@ -1,19 +1,35 @@
-// packages/http/src/project.test.ts — direct tree-walk dispatch tests
+// packages/http/src/project.test.ts — HttpRoute pipeline dispatch tests
+//
+// Covers what the retired direct tree-walk dispatcher's project.test.ts used
+// to cover, ported onto the HttpRoute pipeline (naiveTransform → rewriters →
+// makeRouter, see route.ts and docs/design/routing-and-transforms.md):
+// path dispatch, method dispatch (via `place`), fallback/wildcard, and
+// 405+Allow (via autoMethodLayer). Attribute dispatch (header/query/
+// contentType-based routing at the same path+method) and the `legacyPath`
+// escape hatch are NOT covered here — they were retired along with the old
+// dispatcher and have no equivalent in the HttpRoute pipeline yet; see
+// TODO.md "Attribute dispatch is an open design question".
 
 import { describe, expect, it } from "bun:test"
 import { node, op, service } from "@rhi-zone/fractal-core/node"
-import { candidatesForUrl, makeRouter, verbFromTags } from "./project.ts"
+import { makeRouter, toHttpRoutes, verbFromTags } from "./project.ts"
+import { applyMethods, applyPlacement } from "./route.ts"
+import { autoMethodLayer } from "./layers.ts"
+
+function routes(tree: ReturnType<typeof node>) {
+  return applyPlacement(applyMethods(toHttpRoutes(tree)))
+}
 
 // ============================================================================
-// 1. Path/verb derivation from tree walk (via candidatesForUrl)
+// 1. Path dispatch — tree structure alone determines the address
 // ============================================================================
 
-describe("candidatesForUrl — path from tree walk", () => {
-  it("resolves /invoices/{invoiceId}/checkout from a fallback node", () => {
+describe("path dispatch — tree structure determines the address", () => {
+  it("resolves /invoices/{invoiceId}/checkout from a fallback node", async () => {
     const createCheckoutSession = (_: { invoiceId: string }) => ({
       url: "https://pay.stripe.com/…",
     })
-    const api = node({
+    const tree = node({
       children: {
         invoices: node({
           fallback: {
@@ -21,7 +37,7 @@ describe("candidatesForUrl — path from tree walk", () => {
             subtree: node({
               children: {
                 checkout: op(createCheckoutSession, {
-                  http: { directives: [{ kind: "verb", value: "POST" }, { kind: "segment", value: "checkout" }] },
+                  http: { directives: [{ kind: "method", value: "POST" }] },
                 }),
               },
             }),
@@ -29,140 +45,82 @@ describe("candidatesForUrl — path from tree walk", () => {
         }),
       },
     })
-    const candidates = candidatesForUrl(api, "http://localhost/invoices/inv-42/checkout")
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]!.verb).toBe("POST")
-    expect(candidates[0]!.slugs).toEqual({ invoiceId: "inv-42" })
+    const router = makeRouter(routes(tree))
+    const res = await router(
+      new Request("http://localhost/invoices/inv-42/checkout", { method: "POST" }),
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { url: string }
+    expect(body.url).toContain("stripe")
   })
 
-  it("uses the static child key as the segment", () => {
-    const api = node({
+  it("uses the static child key as the segment", async () => {
+    const tree = node({
       children: {
         users: node({
           children: {
-            list: op((_: unknown) => [], { tags: { readOnly: true } }),
+            list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }),
           },
         }),
       },
     })
-    // static child key "users" → /users; leaf key "list" → /list; inferSegment("list") = "list"
-    expect(candidatesForUrl(api, "http://localhost/users/list")).toHaveLength(1)
-    expect(candidatesForUrl(api, "http://localhost/users/other")).toHaveLength(0)
+    const router = makeRouter(routes(tree))
+    expect((await router(new Request("http://localhost/users/list"))).status).toBe(200)
+    expect((await router(new Request("http://localhost/users/other"))).status).toBe(404)
   })
 
-  it("uses meta.http segment directive to rename a child node segment", () => {
-    const api = node({
+  it("uses a `place` directive to rename a leaf's path segment", async () => {
+    const tree = node({
       children: {
         progressNode: node({
-          meta: { http: { directives: [{ kind: "segment", value: "progress" }] } },
           children: {
             awardProgress: op((_: unknown) => ({}), {
-              http: { directives: [{ kind: "segment", value: "award" }] },
+              http: { directives: [{ kind: "place", path: "../progress/award" }] },
             }),
           },
         }),
       },
     })
-    expect(candidatesForUrl(api, "http://localhost/progress/award")).toHaveLength(1)
+    const router = makeRouter(routes(tree))
+    const res = await router(new Request("http://localhost/progress/award", { method: "POST" }))
+    expect(res.status).toBe(200)
   })
 
-  it("uses meta.http legacyPath directive as full-path override [DEBT]", () => {
-    const api = node({
-      children: {
-        legacyEndpoint: op((_: unknown) => ({}), {
-          http: { directives: [{ kind: "legacyPath", value: "/v1/old/legacy-path" }, { kind: "verb", value: "GET" }] },
-        }),
-      },
-    })
-    const candidates = candidatesForUrl(api, "http://localhost/v1/old/legacy-path")
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]!.verb).toBe("GET")
-  })
-
-  it("collects leaves from multiple children", () => {
-    const api = node({
+  it("collects leaves from multiple children", async () => {
+    const tree = node({
       children: {
         users: node({
-          children: {
-            list: op((_: unknown) => [], { tags: { readOnly: true } }),
-          },
+          children: { list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }) },
         }),
         orders: node({
-          children: {
-            list: op((_: unknown) => [], { tags: { readOnly: true } }),
-          },
+          children: { list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }) },
         }),
       },
     })
-    expect(candidatesForUrl(api, "http://localhost/users/list")).toHaveLength(1)
-    expect(candidatesForUrl(api, "http://localhost/orders/list")).toHaveLength(1)
+    const router = makeRouter(routes(tree))
+    expect((await router(new Request("http://localhost/users/list"))).status).toBe(200)
+    expect((await router(new Request("http://localhost/orders/list"))).status).toBe(200)
   })
 
-  it("service() surface resolves identically to node()", () => {
+  it("service() surface resolves identically to node()", async () => {
     class Svc {
       listItems(_: unknown) {
         return []
       }
     }
-    const n = service(new Svc(), {
-      meta: { listItems: { tags: { readOnly: true } } },
+    const tree = service(new Svc(), {
+      meta: { listItems: { http: { directives: [{ kind: "method", value: "GET" }] } } },
     })
-    // inferSegment("listItems") = "items"
-    const candidates = candidatesForUrl(n, "http://localhost/items")
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]!.verb).toBe("GET")
-  })
-
-  it("leaf tags (own meta only — no ancestor inheritance) drive the verb", () => {
-    const api = node({
-      children: {
-        items: node({
-          children: {
-            list: op((_: unknown) => [], { tags: { readOnly: true } }),
-          },
-        }),
-      },
-    })
-    const candidates = candidatesForUrl(api, "http://localhost/items/list")
-    expect(candidates[0]!.verb).toBe("GET")
-  })
-
-  it("a node-level tag does NOT flow to a leaf with no own tags (inheritance removed)", () => {
-    const api = node({
-      children: {
-        catalog: node({
-          meta: { tags: { readOnly: true } },
-          children: {
-            list: op((_: unknown) => []), // no own tags — does NOT inherit
-          },
-        }),
-      },
-    })
-    const candidates = candidatesForUrl(api, "http://localhost/catalog/list")
-    expect(candidates[0]!.verb).toBe("POST") // conservative default, not GET
+    const router = makeRouter(routes(tree))
+    const res = await router(new Request("http://localhost/listItems"))
+    expect(res.status).toBe(200)
   })
 })
 
 // ============================================================================
-// 1b. Candidate carries leaf meta (including tags)
-// ============================================================================
-
-describe("candidatesForUrl — candidate carries leaf meta", () => {
-  it("includes meta on the candidate so consumers can read tags without fn-identity correlation", () => {
-    const api = node({
-      children: {
-        listItems: op((_: unknown) => [], { tags: { readOnly: true } }),
-      },
-    })
-    // inferSegment("listItems") = "items"
-    const candidates = candidatesForUrl(api, "http://localhost/items")
-    expect(candidates).toHaveLength(1)
-    expect((candidates[0]!.meta.tags as { readOnly?: boolean } | undefined)?.readOnly).toBe(true)
-  })
-})
-
-// ============================================================================
-// 2. Verb from three-valued tag lattice
+// 2. Verb from three-valued tag lattice (verbFromTags — retained utility,
+// used by verb-helper bundles, openapi, and client; NOT consulted by
+// applyMethods, which reads only explicit `{kind:"method"}` directives)
 // ============================================================================
 
 describe("verbFromTags — three-valued dispatch", () => {
@@ -205,28 +163,27 @@ describe("verbFromTags — three-valued dispatch", () => {
   })
 
   it("readOnly = true implies idempotent (lattice: safe ⇒ idempotent)", () => {
-    // readOnly = true always → GET regardless of other tags
     expect(verbFromTags({ tags: { readOnly: true, idempotent: false } })).toBe("GET")
   })
 })
 
 // ============================================================================
-// 4. makeRouter — core dispatch (no auto-method layer)
+// 3. makeRouter — core dispatch (no auto-method layer)
 // ============================================================================
 
 describe("makeRouter — core router (no auto-method layer)", () => {
   const getUser = (_: unknown) => ({ id: 1, name: "Alice" })
-  const api = node({
+  const tree = node({
     children: {
-      getUser: op(getUser, { tags: { readOnly: true }, http: { directives: [{ kind: "segment", value: "user" }] } }),
+      getUser: op(getUser, { http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "user" }] } }),
     },
   })
-  const router = makeRouter(api)
+  const router = makeRouter(routes(tree))
 
   it("dispatches an exact GET match → 200", async () => {
     const res = await router(new Request("http://localhost/user"))
     expect(res.status).toBe(200)
-    const body = await res.json() as unknown
+    const body = (await res.json()) as unknown
     expect(body).toEqual({ id: 1, name: "Alice" })
   })
 
@@ -236,369 +193,121 @@ describe("makeRouter — core router (no auto-method layer)", () => {
   })
 
   it("returns 404 for wrong method (no 405 + Allow without the layer)", async () => {
-    const res = await router(
-      new Request("http://localhost/user", { method: "POST" }),
-    )
+    const res = await router(new Request("http://localhost/user", { method: "POST" }))
     expect(res.status).toBe(404)
-    // Core does NOT add an Allow header — that's the auto-method layer's job
     expect(res.headers.get("Allow")).toBeNull()
   })
 
   it("returns 404 for HEAD (no HEAD-from-GET without the layer)", async () => {
-    const res = await router(
-      new Request("http://localhost/user", { method: "HEAD" }),
-    )
+    const res = await router(new Request("http://localhost/user", { method: "HEAD" }))
     expect(res.status).toBe(404)
   })
 
   it("returns 404 for OPTIONS (no auto-OPTIONS without the layer)", async () => {
-    const res = await router(
-      new Request("http://localhost/user", { method: "OPTIONS" }),
-    )
+    const res = await router(new Request("http://localhost/user", { method: "OPTIONS" }))
     expect(res.status).toBe(404)
   })
 })
 
 // ============================================================================
-// 5. Attribute-dispatch (meta.http.dispatch = {kind:"method"})
+// 4. Method dispatch via `place` — several verbs converging on one path
+// (the retired dispatcher's `dispatch:{kind:"method"}` marker had no
+// HttpRoute-pipeline equivalent; the same co-location is expressed by moving
+// each leaf onto the same target with `place`, see route.ts § applyPlacement
+// and examples/library-api/src/tree.ts for a worked example)
 // ============================================================================
 
-describe("dispatch — attribute-dispatch (method)", () => {
-  it("method-dispatched node: leaf children share parent path, distinct verbs", () => {
-    const api = node({
+describe("method dispatch — several leaves placed at the same path", () => {
+  it("read/replace/remove converge on /books/{bookId}, distinguished by method", async () => {
+    const tree = node({
+      children: {
+        books: node({
+          fallback: { name: "bookId", subtree: node({}) },
+          children: {
+            read: op((_: { bookId: string }) => ({ op: "read" }), {
+              http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "./*" }] },
+            }),
+            replace: op((_: { bookId: string }) => ({ op: "replace" }), {
+              http: { directives: [{ kind: "method", value: "PUT" }, { kind: "place", path: "./*" }] },
+            }),
+            remove: op((_: { bookId: string }) => ({ op: "remove" }), {
+              http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "place", path: "./*" }] },
+            }),
+          },
+        }),
+      },
+    })
+    const router = makeRouter(routes(tree))
+
+    const getRes = await router(new Request("http://localhost/books/book-1"))
+    expect(getRes.status).toBe(200)
+    expect(await getRes.json()).toEqual({ op: "read" })
+
+    const putRes = await router(new Request("http://localhost/books/book-1", { method: "PUT" }))
+    expect(putRes.status).toBe(200)
+    expect(await putRes.json()).toEqual({ op: "replace" })
+
+    const delRes = await router(new Request("http://localhost/books/book-1", { method: "DELETE" }))
+    expect(delRes.status).toBe(200)
+    expect(await delRes.json()).toEqual({ op: "remove" })
+  })
+
+  it("a branch child alongside the placed leaves still contributes its own segment", async () => {
+    const tree = node({
       children: {
         books: node({
           fallback: {
             name: "bookId",
-            subtree: node({
-              meta: { http: { dispatch: { kind: "method" } } },
-              children: {
-                read: op((_: { bookId: string }) => ({}), { tags: { readOnly: true } }),
-                replace: op((_: { bookId: string }) => ({}), { tags: { idempotent: true } }),
-                remove: op((_: { bookId: string }) => ({}), { tags: { idempotent: true, destructive: true } }),
-              },
+            subtree: node({ children: { checkout: op((_: unknown) => ({ ok: true })) } }),
+          },
+          children: {
+            read: op((_: { bookId: string }) => ({ op: "read" }), {
+              http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "./*" }] },
             }),
           },
         }),
       },
     })
-    const candidates = candidatesForUrl(api, "http://localhost/books/book-1")
-    // All three leaves resolve to the SAME path
-    expect(candidates).toHaveLength(3)
-    const verbs = new Set(candidates.map((r) => r.verb))
-    expect(verbs).toEqual(new Set(["GET", "PUT", "DELETE"]))
-  })
+    const router = makeRouter(routes(tree))
 
-  it("method-dispatched: branch child under dispatch node still gets a segment", () => {
-    const api = node({
-      children: {
-        resource: node({
-          meta: { http: { dispatch: { kind: "method" } } },
-          children: {
-            read: op((_: unknown) => ({}), { tags: { readOnly: true } }),
-            actions: node({
-              children: {
-                trigger: op((_: unknown) => ({})),
-              },
-            }),
-          },
-        }),
-      },
-    })
-    // Leaf 'read' → GET /resource (no added segment)
-    const atResource = candidatesForUrl(api, "http://localhost/resource")
-    expect(atResource.find((c) => c.verb === "GET")).toBeDefined()
-    // Branch 'actions' / leaf 'trigger' → POST /resource/actions/trigger
-    const atTrigger = candidatesForUrl(api, "http://localhost/resource/actions/trigger")
-    expect(atTrigger).toHaveLength(1)
-  })
+    const readRes = await router(new Request("http://localhost/books/book-1"))
+    expect(readRes.status).toBe(200)
 
-  it("default (no dispatch marker) = segment-dispatch unchanged", () => {
-    const api = node({
-      children: {
-        items: node({
-          children: {
-            read: op((_: unknown) => ({}), { tags: { readOnly: true } }),
-            remove: op((_: unknown) => ({}), { tags: { idempotent: true, destructive: true } }),
-          },
-        }),
-      },
-    })
-    expect(candidatesForUrl(api, "http://localhost/items/read")[0]?.verb).toBe("GET")
-    expect(candidatesForUrl(api, "http://localhost/items/remove")[0]?.verb).toBe("DELETE")
+    const checkoutRes = await router(
+      new Request("http://localhost/books/book-1/checkout", { method: "POST" }),
+    )
+    expect(checkoutRes.status).toBe(200)
   })
 })
 
 // ============================================================================
-// 6. Arbitrary-attribute dispatch (header / query / contentType)
+// 5. 405 + Allow — autoMethodLayer, over the HttpRoute pipeline
 // ============================================================================
 
-describe("dispatch — arbitrary-attribute dispatch (non-method)", () => {
-  // ── Header dispatch ────────────────────────────────────────────────────────
-
-  it("header-dispatch: children share parent path; conditions carry header check", () => {
-    const api = node({
+describe("autoMethodLayer — 405 + Allow over the HttpRoute pipeline", () => {
+  it("wrong method on a known path → 405 with Allow listing the registered methods", async () => {
+    const tree = node({
       children: {
-        version: node({
-          meta: { http: { dispatch: { kind: "header", name: "X-Api-Version" } } },
+        books: node({
+          fallback: { name: "bookId", subtree: node({}) },
           children: {
-            v1: op((_: unknown) => ({ v: 1 }), { tags: { readOnly: true } }),
-            v2: op((_: unknown) => ({ v: 2 }), { tags: { readOnly: true } }),
-          },
-        }),
-      },
-    })
-    const candidates = candidatesForUrl(api, "http://localhost/version")
-    // Both children resolve to the same path /version — no per-child segment
-    expect(candidates).toHaveLength(2)
-    const c1 = candidates.find((c) => c.conditions.some((cond) => cond.kind === "header" && cond.value === "v1"))
-    const c2 = candidates.find((c) => c.conditions.some((cond) => cond.kind === "header" && cond.value === "v2"))
-    expect(c1).toBeDefined()
-    expect(c2).toBeDefined()
-  })
-
-  it("header-dispatch: makeRouter dispatches by header value", async () => {
-    const api = node({
-      children: {
-        version: node({
-          meta: { http: { dispatch: { kind: "header", name: "X-Api-Version" } } },
-          children: {
-            v1: op((_: unknown) => ({ edition: "classic" }), { tags: { readOnly: true } }),
-            v2: op((_: unknown) => ({ edition: "enhanced" }), { tags: { readOnly: true } }),
-          },
-        }),
-      },
-    })
-    const router = makeRouter(api)
-
-    const resV1 = await router(new Request("http://localhost/version", {
-      headers: { "X-Api-Version": "v1" },
-    }))
-    expect(resV1.status).toBe(200)
-    const bodyV1 = await resV1.json() as { edition: string }
-    expect(bodyV1.edition).toBe("classic")
-
-    const resV2 = await router(new Request("http://localhost/version", {
-      headers: { "X-Api-Version": "v2" },
-    }))
-    expect(resV2.status).toBe(200)
-    const bodyV2 = await resV2.json() as { edition: string }
-    expect(bodyV2.edition).toBe("enhanced")
-  })
-
-  it("header-dispatch: no matching header value → 404 (not 405)", async () => {
-    const api = node({
-      children: {
-        version: node({
-          meta: { http: { dispatch: { kind: "header", name: "X-Api-Version" } } },
-          children: {
-            v1: op((_: unknown) => ({ v: 1 }), { tags: { readOnly: true } }),
-          },
-        }),
-      },
-    })
-    const router = makeRouter(api)
-
-    // Wrong header value → 404 (attribute miss, not method miss)
-    const res = await router(new Request("http://localhost/version", {
-      headers: { "X-Api-Version": "v99" },
-    }))
-    expect(res.status).toBe(404)
-  })
-
-  // ── `when` directive (key ≠ value) ─────────────────────────────────────────
-
-  it("when directive: child key≠value; `when` sets the match value", async () => {
-    const api = node({
-      children: {
-        endpoint: node({
-          meta: { http: { dispatch: { kind: "header", name: "X-Api-Version" } } },
-          children: {
-            // key is "aliasChild" but matches when header value = "v2"
-            aliasChild: op((_: unknown) => ({ matched: "aliasChild" }), {
-              tags: { readOnly: true },
-              http: { directives: [{ kind: "when", value: "v2" }] },
+            read: op((_: { bookId: string }) => ({}), {
+              http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "./*" }] },
+            }),
+            replace: op((_: { bookId: string }) => ({}), {
+              http: { directives: [{ kind: "method", value: "PUT" }, { kind: "place", path: "./*" }] },
+            }),
+            remove: op((_: { bookId: string }) => ({}), {
+              http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "place", path: "./*" }] },
             }),
           },
         }),
       },
     })
-    const router = makeRouter(api)
+    const route = routes(tree)
+    const handler = autoMethodLayer(makeRouter(route), route)
 
-    const res = await router(new Request("http://localhost/endpoint", {
-      headers: { "X-Api-Version": "v2" },
-    }))
-    expect(res.status).toBe(200)
-    const body = await res.json() as { matched: string }
-    expect(body.matched).toBe("aliasChild")
-
-    // The key "aliasChild" does NOT match
-    const resWrong = await router(new Request("http://localhost/endpoint", {
-      headers: { "X-Api-Version": "aliasChild" },
-    }))
-    expect(resWrong.status).toBe(404)
-  })
-
-  // ── Query dispatch ─────────────────────────────────────────────────────────
-
-  it("query-dispatch: dispatches by query param value", async () => {
-    const api = node({
-      children: {
-        resource: node({
-          meta: { http: { dispatch: { kind: "query", name: "mode" } } },
-          children: {
-            fast: op((_: unknown) => ({ mode: "fast" }), { tags: { readOnly: true } }),
-            slow: op((_: unknown) => ({ mode: "slow" }), { tags: { readOnly: true } }),
-          },
-        }),
-      },
-    })
-    const router = makeRouter(api)
-
-    const res = await router(new Request("http://localhost/resource?mode=fast"))
-    expect(res.status).toBe(200)
-    const body = await res.json() as { mode: string }
-    expect(body.mode).toBe("fast")
-
-    const resSlow = await router(new Request("http://localhost/resource?mode=slow"))
-    expect(resSlow.status).toBe(200)
-    const bodySlow = await resSlow.json() as { mode: string }
-    expect(bodySlow.mode).toBe("slow")
-  })
-
-  // ── Method dispatch still works unchanged ──────────────────────────────────
-
-  it("method-dispatch still produces correct verb routes (unchanged behavior)", () => {
-    const api = node({
-      children: {
-        resource: node({
-          meta: { http: { dispatch: { kind: "method" } } },
-          children: {
-            read: op((_: unknown) => ({}), { tags: { readOnly: true } }),
-            remove: op((_: unknown) => ({}), { tags: { idempotent: true, destructive: true } }),
-          },
-        }),
-      },
-    })
-    const candidates = candidatesForUrl(api, "http://localhost/resource")
-    expect(candidates.find((c) => c.verb === "GET")).toBeDefined()
-    expect(candidates.find((c) => c.verb === "DELETE")).toBeDefined()
-  })
-
-  // ── Multi-attribute nesting (header then method) ──────────────────────────
-  //
-  // A header-dispatch node whose branch children are method-dispatch nodes.
-  // The outer header condition (X-Api-Version) is inherited by all leaves
-  // inside each branch, stacked with the inner method condition.
-
-  it("header-then-method nesting: conditions stack (header + method)", async () => {
-    const api = node({
-      children: {
-        items: node({
-          meta: { http: { dispatch: { kind: "header", name: "X-Api-Version" } } },
-          children: {
-            v1: node({
-              meta: { http: { dispatch: { kind: "method" } } },
-              children: {
-                read: op((_: unknown) => ({ version: "v1", method: "GET" }), { tags: { readOnly: true } }),
-                write: op((_: unknown) => ({ version: "v1", method: "POST" })),
-              },
-            }),
-            v2: node({
-              meta: { http: { dispatch: { kind: "method" } } },
-              children: {
-                read: op((_: unknown) => ({ version: "v2", method: "GET" }), { tags: { readOnly: true } }),
-              },
-            }),
-          },
-        }),
-      },
-    })
-    const router = makeRouter(api)
-
-    const resV1Get = await router(new Request("http://localhost/items", {
-      method: "GET",
-      headers: { "X-Api-Version": "v1" },
-    }))
-    expect(resV1Get.status).toBe(200)
-    const bV1Get = await resV1Get.json() as { version: string; method: string }
-    expect(bV1Get.version).toBe("v1")
-    expect(bV1Get.method).toBe("GET")
-
-    const resV1Post = await router(new Request("http://localhost/items", {
-      method: "POST",
-      headers: { "X-Api-Version": "v1" },
-    }))
-    expect(resV1Post.status).toBe(200)
-    const bV1Post = await resV1Post.json() as { version: string; method: string }
-    expect(bV1Post.version).toBe("v1")
-    expect(bV1Post.method).toBe("POST")
-
-    const resV2Get = await router(new Request("http://localhost/items", {
-      method: "GET",
-      headers: { "X-Api-Version": "v2" },
-    }))
-    expect(resV2Get.status).toBe(200)
-    const bV2Get = await resV2Get.json() as { version: string; method: string }
-    expect(bV2Get.version).toBe("v2")
-    expect(bV2Get.method).toBe("GET")
-
-    const resBad = await router(new Request("http://localhost/items", {
-      method: "GET",
-      headers: { "X-Api-Version": "v99" },
-    }))
-    expect(resBad.status).toBe(404)
-  })
-})
-
-// ============================================================================
-// 7. Library-api version node — end-to-end round-trip
-// ============================================================================
-
-describe("library-api version node — header-dispatch round-trip", () => {
-  it("GET /version with X-Api-Version: v1 returns v1 payload", async () => {
-    const { api } = await import("../../../examples/library-api/src/tree.ts")
-    const { createFetch } = await import("./preset.ts")
-    const fetch = createFetch(api)
-
-    const res = await fetch(new Request("http://localhost/version", {
-      headers: { "X-Api-Version": "v1" },
-    }))
-    expect(res.status).toBe(200)
-    const body = await res.json() as { version: string; message: string }
-    expect(body.version).toBe("v1")
-    expect(body.message).toContain("classic")
-  })
-
-  it("GET /version with X-Api-Version: v2 returns v2 payload (when directive: key=v2Alias, value=v2)", async () => {
-    const { api } = await import("../../../examples/library-api/src/tree.ts")
-    const { createFetch } = await import("./preset.ts")
-    const fetch = createFetch(api)
-
-    const res = await fetch(new Request("http://localhost/version", {
-      headers: { "X-Api-Version": "v2" },
-    }))
-    expect(res.status).toBe(200)
-    const body = await res.json() as { version: string; features: string[] }
-    expect(body.version).toBe("v2")
-    expect(body.features).toContain("pagination")
-  })
-
-  it("GET /version with no X-Api-Version header → 404", async () => {
-    const { api } = await import("../../../examples/library-api/src/tree.ts")
-    const { createFetch } = await import("./preset.ts")
-    const fetch = createFetch(api)
-
-    const res = await fetch(new Request("http://localhost/version"))
-    expect(res.status).toBe(404)
-  })
-
-  it("method-dispatch still produces 405+Allow for wrong method at /books/{bookId}", async () => {
-    const { api } = await import("../../../examples/library-api/src/tree.ts")
-    const { createFetch } = await import("./preset.ts")
-    const fetch = createFetch(api)
-
-    const res = await fetch(new Request("http://localhost/books/book-1", { method: "PATCH" }))
+    const res = await handler(new Request("http://localhost/books/book-1", { method: "PATCH" }))
     expect(res.status).toBe(405)
     const allow = res.headers.get("Allow") ?? ""
     expect(allow).toContain("GET")

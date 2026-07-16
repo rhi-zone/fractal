@@ -2,7 +2,8 @@
 
 import { describe, expect, it } from "bun:test"
 import { node, op } from "@rhi-zone/fractal-core/node"
-import { makeRouter } from "./project.ts"
+import { makeRouter, toHttpRoutes } from "./project.ts"
+import { applyMethods, applyPlacement } from "./route.ts"
 import { autoMethodLayer, corsLayer } from "./layers.ts"
 
 // ============================================================================
@@ -10,14 +11,15 @@ import { autoMethodLayer, corsLayer } from "./layers.ts"
 // ============================================================================
 
 describe("autoMethodLayer — proves droppable", () => {
-  const api = node({
+  const tree = node({
     children: {
       getItem: op((_: unknown) => ({ id: 42 }), {
         tags: { readOnly: true },
-        http: { directives: [{ kind: "segment", value: "item" }] },
+        http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "item" }] },
       }),
     },
   })
+  const api = applyPlacement(applyMethods(toHttpRoutes(tree)))
   const coreRouter = makeRouter(api)
 
   // ── Without the layer (core only) ─────────────────────────────────────────
@@ -100,18 +102,19 @@ describe("autoMethodLayer — proves droppable", () => {
 })
 
 describe("autoMethodLayer — multi-verb routes", () => {
-  const api = node({
+  const tree = node({
     children: {
       getItem: op((_: unknown) => ({ id: 1 }), {
         tags: { readOnly: true },
-        http: { directives: [{ kind: "segment", value: "item" }] },
+        http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "item" }] },
       }),
       updateItem: op((_: unknown) => ({ updated: true }), {
         tags: { idempotent: true },
-        http: { directives: [{ kind: "segment", value: "item" }] },
+        http: { directives: [{ kind: "method", value: "PUT" }, { kind: "place", path: "item" }] },
       }),
     },
   })
+  const api = applyPlacement(applyMethods(toHttpRoutes(tree)))
   const handler = autoMethodLayer(makeRouter(api), api)
 
   it("OPTIONS lists all registered verbs for the path", async () => {

@@ -66,10 +66,11 @@ export type VerbBundle = Meta & {
 }
 
 const verbBundle = (verb: string, tags: Record<string, boolean | undefined>): VerbBundle => ({
-  // Carries BOTH the legacy `kind: "verb"` directive (read by `verbFromTags`,
-  // the direct tree-walk dispatcher in project.ts) and the new `kind: "method"`
-  // directive (read by `applyMethods`, the HttpRoute rewriter in route.ts).
-  // Both directives describe the same fact; two projectors read two shapes.
+  // Carries BOTH the `kind: "verb"` directive (read by `verbFromTags` in
+  // tags.ts — also used by openapi/client's own self-contained tree walks)
+  // and the `kind: "method"` directive (read by `applyMethods`, the
+  // HttpRoute rewriter in route.ts). Both directives describe the same
+  // fact; two projectors read two shapes.
   http: { directives: [{ kind: "verb", value: verb }, { kind: "method", value: verb }] },
   tags,
 })
