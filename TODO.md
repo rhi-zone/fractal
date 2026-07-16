@@ -80,7 +80,17 @@ signatures, literals, enums, discriminated unions, intersections, 3 branded-type
 patterns, recursive types, `Promise` unwrapping, and class privacy filtering.
 Full inventory: `docs/design/handoff-2026-07-16-type-layer.md`.
 
-### Built code doesn't match the combinator identity — PRIMARY OPEN THREAD
+### Built code doesn't match the combinator identity — RESOLVED (2026-07-16)
+
+**Resolved**: the "combinator identity gap" was a symptom of unclear
+self-description, not a structural deficiency. Fractal's identity is settled:
+a codebase compression substrate that gives codebases a skeleton (the central
+structure supporting the entire app) as a single source of truth, with
+everything else derived from it. The "Parsec-style combinator composition"
+label was aspirational naming; the actual pattern is inspectable declarations
++ projectors. See `docs/design/invariants.md` § Identity. The operation layer
+design work continues under this framing — see
+`docs/design/operation-layer-design.md`.
 
 The stated identity is "Parsec-style combinator composition," but the built
 code is `node`/`op`/`service`/`param` — data structure construction, not
@@ -221,8 +231,9 @@ Ordered roughly easiest → hardest to decide:
    matches. Remaining question: is there ever more than one fallback?
 9. **One tree for HTTP + CLI** — can one tree drive both projections, or do
    they need separate trees? What are the seams?
-10. **"Is it too general?"** — the perennial question. When does generality
-    become a liability?
+10. ~~**"Is it too general?"**~~ — dissolved by the identity settlement. The
+    scope is bounded by "what your codebase's skeleton needs to express." See
+    invariants.md § Identity.
 
 ---
 

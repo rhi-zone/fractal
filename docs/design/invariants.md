@@ -8,6 +8,24 @@ user's own words; the quotes are load-bearing and preserved verbatim.
 
 ---
 
+## Identity
+
+Fractal is a codebase compression substrate. It gives codebases a skeleton —
+the central structure supporting the entire app — as a single source of truth,
+with everything else derived from it.
+
+The type IR, routing tree, and (future) operation layer are all aspects of this
+skeleton: one declaration IS the truth, and the surfaces (HTTP routes, CLI
+commands, OpenAPI specs, validation schemas, admin UIs, audit logs) flow from it.
+
+The previous label — "Parsec-style combinator composition" — was aspirational
+naming that didn't match the built code. The actual pattern: inspectable
+declarations (data) interpreted by projectors to produce surfaces. The
+combinator identity gap (TODO.md) was a symptom of unclear self-description,
+not a structural deficiency in the code.
+
+---
+
 ## SUPERSEDED / CORRECTED (see [`converged-model.md`](./converged-model.md))
 
 > Added 2026-07 after the operation/projection model converged. The current
