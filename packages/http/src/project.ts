@@ -12,7 +12,7 @@
 // pattern), not a fixed record of named keys:
 //   meta.http.directives  — an array of HttpDirective DU values, each tagged
 //                           by `kind` ("verb" | "segment" | "when" |
-//                           "legacyPath" | "method" | "place" | "response")
+//                           "legacyPath" | "method" | "moveTo" | "response")
 //
 // `dispatch` markers (header/query/contentType attribute dispatch) and the
 // `legacyPath`/`segment`/`when` directives were interpreted by a direct
@@ -35,7 +35,7 @@ export { verbFromTags } from "./tags.ts"
 export type { HttpRoute, Pipeline } from "./route.ts"
 export {
   applyMethods,
-  applyPlacement,
+  applyMoveTo,
   applyResponse,
   composeTransforms,
   httpRoute,
@@ -51,7 +51,7 @@ export type { ResponseOverride } from "./route.ts"
  * Produce the HTTP route tree from an API tree — the naive transform (see
  * route.ts): every child becomes a path-segment child, every handler
  * becomes a single POST entry. The baseline the rewriters (`applyMethods`,
- * `applyPlacement`, `applyResponse`, chained via `composeTransforms`) start
+ * `applyMoveTo`, `applyResponse`, chained via `composeTransforms`) start
  * from.
  */
 export function toHttpRoutes(node: Node): HttpRoute {
@@ -74,10 +74,11 @@ export function toHttpRoutes(node: Node): HttpRoute {
  *
  * - `{ kind: "method", value }` — sets the HTTP method on a route's method
  *   entry (read by `applyMethods`; renames the `methods` key).
- * - `{ kind: "place", path }` — relative node placement in the output route
- *   tree (read by `applyPlacement`; see route.ts for the path algebra — a
- *   plain relative segment doubles as a path/segment rename, since the base
- *   position already excludes the node's own key).
+ * - `{ kind: "moveTo", path }` — relative node placement in the output route
+ *   tree (read by `applyMoveTo`; see route.ts for the path algebra — paths
+ *   resolve relative to the node's own position, using standard
+ *   filesystem-style relative semantics: `..` = parent, `../foo` = sibling
+ *   rename, `*` = wildcard segment).
  * - `{ kind: "response", status?, headers? }` — response overrides,
  *   materialized into the handler via composition (read by `applyResponse`).
  *
@@ -102,7 +103,7 @@ export type HttpDirective =
   | { readonly kind: "when"; readonly value: string }
   | { readonly kind: "legacyPath"; readonly value: string }
   | { readonly kind: "method"; readonly value: string }
-  | { readonly kind: "place"; readonly path: string }
+  | { readonly kind: "moveTo"; readonly path: string }
   | {
       readonly kind: "response"
       readonly status?: number

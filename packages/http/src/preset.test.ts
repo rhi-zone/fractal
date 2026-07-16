@@ -19,15 +19,15 @@ class UserService {
 
 const usersNode = service(new UserService(), {
   meta: {
-    // `place` with a plain relative segment doubles as a path/segment
+    // `moveTo` with a plain relative segment doubles as a path/segment
     // rename (see project.ts's HttpDirective docs) — the base position
-    // `applyPlacement` resolves relative to already excludes the node's own
+    // `applyMoveTo` resolves relative to already excludes the node's own
     // key, so a bare token just replaces it.
     listUsers: {
       tags: { readOnly: true },
-      http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "list" }] },
+      http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../list" }] },
     },
-    createUser: { http: { directives: [{ kind: "place", path: "create" }] } },
+    createUser: { http: { directives: [{ kind: "moveTo", path: "../create" }] } },
   },
 })
 
@@ -36,7 +36,7 @@ const invoicesNode = node({
     name: "invoiceId",
     subtree: node({
       children: {
-        // No `place`/`method` directive needed: naiveTransform already puts
+        // No `moveTo`/`method` directive needed: naiveTransform already puts
         // this leaf at its own key ("checkout") with the default POST method.
         checkout: op(
           (input: { invoiceId: string; currency?: string }) => ({

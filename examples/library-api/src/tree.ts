@@ -1,7 +1,7 @@
 // examples/library-api/src/tree.ts
 //
 // Library API — new-model authoring on the HttpRoute pipeline (naiveTransform
-// + applyMethods/applyPlacement/applyResponse, see packages/http/src/route.ts
+// + applyMethods/applyMoveTo/applyResponse, see packages/http/src/route.ts
 // and docs/design/routing-and-transforms.md). Each leaf carries its OWN tags —
 // there is no ancestor tag inheritance (removed; see docs/design/router-model.md
 // — "Tags"): a node-level tag does not flow down to its descendants.
@@ -48,17 +48,15 @@ export function clearStore(): void {
 // {kind:"method"}` marker on their containing node — a feature of the
 // retired direct tree-walk dispatcher. The HttpRoute pipeline has no
 // dispatch-marker equivalent; the same co-location is expressed instead with
-// the `place` rewriter directive (`applyPlacement`, see route.ts and
+// the `moveTo` rewriter directive (`applyMoveTo`, see route.ts and
 // docs/design/routing-and-transforms.md § "Motivating example"): `read`/
 // `replace`/`remove` stay nested inside the fallback subtree (alongside
 // `checkout` — this is what gives them the `books_bookId_read` etc. MCP/CLI
-// names, since those projections read raw tree position with no placement
-// pass), each with `place: ""` — an empty relative path, i.e. zero
-// displacement from the node's OWN containing position (see the path
-// algebra in route.ts: a path resolves relative to "the position with the
-// node's own key dropped"; the empty path pushes no further segments, so it
-// resolves to exactly that containing position — the fallback subtree's own
-// root). Method assignment is a second, independent directive
+// names, since those projections read raw tree position with no moveTo
+// pass), each with `moveTo: ".."` — go up to the parent position (see the
+// path algebra in route.ts: paths resolve relative to the node's own
+// position; `..` moves up one level to the parent — the fallback subtree's
+// own root). Method assignment is a second, independent directive
 // (`{kind:"method"}`, read by `applyMethods`) — `http.get`/`http.put`/
 // `http.delete` bundle both the verb and the tags that verb implies.
 //
@@ -69,12 +67,12 @@ export function clearStore(): void {
 //   POST /books/{bookId}/checkout/{start,reserve}
 // ============================================================================
 
-// `op(fn, http.get, { http: { directives: [place] } })` can't be used here:
+// `op(fn, http.get, { http: { directives: [moveTo] } })` can't be used here:
 // meta merge (`mergeMeta`) replaces the `http` sub-bag's `directives` array
 // wholesale on collision rather than concatenating it, so a second `http.*`
 // contribution would silently drop the bundle's verb/method directives.
 // Each leaf below spells out its full directive list instead (verb + method
-// from the bundle's own directives, plus `place`).
+// from the bundle's own directives, plus `moveTo`).
 
 /** Get a single book by its ID. GET /books/{bookId} (co-located, no extra segment). */
 const readBook = op(
@@ -85,7 +83,7 @@ const readBook = op(
   },
   {
     tags: http.get.tags,
-    http: { directives: [...http.get.http.directives, { kind: "place", path: "" }] },
+    http: { directives: [...http.get.http.directives, { kind: "moveTo", path: ".." }] },
   },
 )
 
@@ -105,7 +103,7 @@ const replaceBook = op(
   },
   {
     tags: http.put.tags,
-    http: { directives: [...http.put.http.directives, { kind: "place", path: "" }] },
+    http: { directives: [...http.put.http.directives, { kind: "moveTo", path: ".." }] },
   },
 )
 
@@ -114,7 +112,7 @@ const removeBook = op(
   (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
   {
     tags: http.delete.tags,
-    http: { directives: [...http.delete.http.directives, { kind: "place", path: "" }] },
+    http: { directives: [...http.delete.http.directives, { kind: "moveTo", path: ".." }] },
   },
 )
 
@@ -148,15 +146,15 @@ const checkoutNode = node({
 })
 
 /**
- * The per-book subtree: read/replace/remove co-locate onto their own
- * containing position (via each leaf's own `place` directive, read by the
- * HttpRoute pipeline); checkout stays a branch. The `dispatch:{kind:"method"}`
+ * The per-book subtree: read/replace/remove co-locate onto their parent
+ * position (via each leaf's own `moveTo` directive, read by the HttpRoute
+ * pipeline); checkout stays a branch. The `dispatch:{kind:"method"}`
  * node-level marker below is retained meta, NOT interpreted by the HttpRoute
- * pipeline (which reads only `place`/`method` directives) — it's read
+ * pipeline (which reads only `moveTo`/`method` directives) — it's read
  * independently by openapi's and client's own self-contained Node-tree
  * walks (packages/openapi/src/index.ts, packages/client/src/index.ts),
  * which still derive method-co-location from this marker rather than from
- * `place` directives. Two projectors, two encodings of the same fact.
+ * `moveTo` directives. Two projectors, two encodings of the same fact.
  */
 const bookItemNode = node({
   meta: { http: { dispatch: { kind: "method" } } },
@@ -251,7 +249,7 @@ export const api = node({
 
 // ============================================================================
 // HttpRoute projection — the pre-composed pipeline (naiveTransform +
-// applyMethods + applyPlacement + applyResponse, see
+// applyMethods + applyMoveTo + applyResponse, see
 // docs/design/routing-and-transforms.md and packages/http/src/dx.ts). This
 // is the actual route tree `createFetch(api)` dispatches against.
 // ============================================================================

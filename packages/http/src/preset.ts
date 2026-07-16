@@ -4,7 +4,7 @@
 //
 // Pipeline (in order, each independently droppable):
 //   1. httpProjection  — Node => HttpRoute (naiveTransform + applyMethods +
-//                         applyPlacement + applyResponse, see dx.ts)
+//                         applyMoveTo + applyResponse, see dx.ts)
 //   2. makeRouter      — exact path/method dispatcher over the HttpRoute tree
 //   3. autoMethodLayer — HEAD-from-GET, OPTIONS→204+Allow, 405+Allow
 //
@@ -38,7 +38,7 @@ export type PresetOptions = {
   readonly cors?: CorsOptions | boolean
   /**
    * Override the `Node => HttpRoute` rewriter pipeline (see `httpProjection`
-   * in dx.ts). Defaults to `[applyMethods, applyPlacement, applyResponse]`.
+   * in dx.ts). Defaults to `[applyMethods, applyMoveTo, applyResponse]`.
    */
   readonly projection?: HttpProjectionOptions
 }

@@ -5,7 +5,7 @@
 // (extractToolSchemas). Each assertion proves a specific new-model invariant.
 //
 // The byId subtree co-locates three leaves onto the fallback wildcard via
-// `place` directives (see route.ts § applyPlacement):
+// `moveTo` directives (see route.ts § applyMoveTo):
 //   read    → GET  /books/{bookId}
 //   replace → PUT  /books/{bookId}
 //   remove  → DELETE /books/{bookId}

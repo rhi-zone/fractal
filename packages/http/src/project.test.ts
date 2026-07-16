@@ -3,7 +3,7 @@
 // Covers what the retired direct tree-walk dispatcher's project.test.ts used
 // to cover, ported onto the HttpRoute pipeline (naiveTransform → rewriters →
 // makeRouter, see route.ts and docs/design/routing-and-transforms.md):
-// path dispatch, method dispatch (via `place`), fallback/wildcard, and
+// path dispatch, method dispatch (via `moveTo`), fallback/wildcard, and
 // 405+Allow (via autoMethodLayer). Attribute dispatch (header/query/
 // contentType-based routing at the same path+method) and the `legacyPath`
 // escape hatch are NOT covered here — they were retired along with the old
@@ -13,11 +13,11 @@
 import { describe, expect, it } from "bun:test"
 import { node, op, service } from "@rhi-zone/fractal-core/node"
 import { makeRouter, toHttpRoutes, verbFromTags } from "./project.ts"
-import { applyMethods, applyPlacement } from "./route.ts"
+import { applyMethods, applyMoveTo } from "./route.ts"
 import { autoMethodLayer } from "./layers.ts"
 
 function routes(tree: ReturnType<typeof node>) {
-  return applyPlacement(applyMethods(toHttpRoutes(tree)))
+  return applyMoveTo(applyMethods(toHttpRoutes(tree)))
 }
 
 // ============================================================================
@@ -69,13 +69,13 @@ describe("path dispatch — tree structure determines the address", () => {
     expect((await router(new Request("http://localhost/users/other"))).status).toBe(404)
   })
 
-  it("uses a `place` directive to rename a leaf's path segment", async () => {
+  it("uses a `moveTo` directive to rename a leaf's path segment", async () => {
     const tree = node({
       children: {
         progressNode: node({
           children: {
             awardProgress: op((_: unknown) => ({}), {
-              http: { directives: [{ kind: "place", path: "../progress/award" }] },
+              http: { directives: [{ kind: "moveTo", path: "../../progress/award" }] },
             }),
           },
         }),
@@ -175,7 +175,7 @@ describe("makeRouter — core router (no auto-method layer)", () => {
   const getUser = (_: unknown) => ({ id: 1, name: "Alice" })
   const tree = node({
     children: {
-      getUser: op(getUser, { http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "user" }] } }),
+      getUser: op(getUser, { http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../user" }] } }),
     },
   })
   const router = makeRouter(routes(tree))
@@ -210,10 +210,10 @@ describe("makeRouter — core router (no auto-method layer)", () => {
 })
 
 // ============================================================================
-// 4. Method dispatch via `place` — several verbs converging on one path
+// 4. Method dispatch via `moveTo` — several verbs converging on one path
 // (the retired dispatcher's `dispatch:{kind:"method"}` marker had no
 // HttpRoute-pipeline equivalent; the same co-location is expressed by moving
-// each leaf onto the same target with `place`, see route.ts § applyPlacement
+// each leaf onto the same target with `moveTo`, see route.ts § applyMoveTo
 // and examples/library-api/src/tree.ts for a worked example)
 // ============================================================================
 
@@ -225,13 +225,13 @@ describe("method dispatch — several leaves placed at the same path", () => {
           fallback: { name: "bookId", subtree: node({}) },
           children: {
             read: op((_: { bookId: string }) => ({ op: "read" }), {
-              http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "./*" }] },
+              http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
             }),
             replace: op((_: { bookId: string }) => ({ op: "replace" }), {
-              http: { directives: [{ kind: "method", value: "PUT" }, { kind: "place", path: "./*" }] },
+              http: { directives: [{ kind: "method", value: "PUT" }, { kind: "moveTo", path: "../*" }] },
             }),
             remove: op((_: { bookId: string }) => ({ op: "remove" }), {
-              http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "place", path: "./*" }] },
+              http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "moveTo", path: "../*" }] },
             }),
           },
         }),
@@ -262,7 +262,7 @@ describe("method dispatch — several leaves placed at the same path", () => {
           },
           children: {
             read: op((_: { bookId: string }) => ({ op: "read" }), {
-              http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "./*" }] },
+              http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
             }),
           },
         }),
@@ -292,13 +292,13 @@ describe("autoMethodLayer — 405 + Allow over the HttpRoute pipeline", () => {
           fallback: { name: "bookId", subtree: node({}) },
           children: {
             read: op((_: { bookId: string }) => ({}), {
-              http: { directives: [{ kind: "method", value: "GET" }, { kind: "place", path: "./*" }] },
+              http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
             }),
             replace: op((_: { bookId: string }) => ({}), {
-              http: { directives: [{ kind: "method", value: "PUT" }, { kind: "place", path: "./*" }] },
+              http: { directives: [{ kind: "method", value: "PUT" }, { kind: "moveTo", path: "../*" }] },
             }),
             remove: op((_: { bookId: string }) => ({}), {
-              http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "place", path: "./*" }] },
+              http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "moveTo", path: "../*" }] },
             }),
           },
         }),

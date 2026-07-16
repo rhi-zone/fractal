@@ -5,7 +5,7 @@
 //   - `crud(handlers)`    — convention constructor for the 5-op REST-resource
 //                           shape, wiring `http.*` method bundles for you.
 //   - `httpProjection()`  — one-call `Node => HttpRoute` with the standard
-//                           rewriters (`applyMethods`, `applyPlacement`,
+//                           rewriters (`applyMethods`, `applyMoveTo`,
 //                           `applyResponse`) pre-composed, still swappable.
 //
 // See docs/design/routing-and-transforms.md § DX — constructor sugar.
@@ -13,7 +13,7 @@
 import { api, op } from "@rhi-zone/fractal-core"
 import type { Handler, Node } from "@rhi-zone/fractal-core/node"
 import { http } from "./verbs.ts"
-import { applyMethods, applyPlacement, applyResponse, composeTransforms, naiveTransform } from "./route.ts"
+import { applyMethods, applyMoveTo, applyResponse, composeTransforms, naiveTransform } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
 
 // ============================================================================
@@ -61,7 +61,7 @@ export function crud(handlers: CrudHandlers): Node {
 export type HttpProjectionOptions = {
   /**
    * Override the rewriter pipeline applied after `naiveTransform`. Defaults
-   * to `[applyMethods, applyPlacement, applyResponse]`. Order matters —
+   * to `[applyMethods, applyMoveTo, applyResponse]`. Order matters —
    * `composeTransforms` runs them left to right.
    */
   readonly transforms?: ReadonlyArray<(route: HttpRoute) => HttpRoute>
@@ -74,7 +74,7 @@ export type HttpProjectionOptions = {
  * ```ts
  * const routes = httpProjection(apiTree)
  * // Equivalent to:
- * const routes = composeTransforms(applyMethods, applyPlacement, applyResponse)(naiveTransform(apiTree))
+ * const routes = composeTransforms(applyMethods, applyMoveTo, applyResponse)(naiveTransform(apiTree))
  * ```
  *
  * Swap individual transforms via `opts.transforms`:
@@ -86,7 +86,7 @@ export type HttpProjectionOptions = {
  * ```
  */
 export function httpProjection(tree: Node, opts?: HttpProjectionOptions): HttpRoute {
-  const transforms = opts?.transforms ?? [applyMethods, applyPlacement, applyResponse]
+  const transforms = opts?.transforms ?? [applyMethods, applyMoveTo, applyResponse]
   const rewrite = composeTransforms(...transforms)
   return rewrite(naiveTransform(tree))
 }

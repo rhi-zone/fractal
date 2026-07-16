@@ -6,7 +6,7 @@
 
 The old direct tree-walk HTTP dispatcher (`candidatesForUrl`/`makeRouterForNode`
 in `packages/http/src/project.ts`, retired 2026-07-17 in favor of the
-`HttpRoute` pipeline — `naiveTransform` → `applyMethods`/`applyPlacement`/
+`HttpRoute` pipeline — `naiveTransform` → `applyMethods`/`applyMoveTo`/
 `applyResponse` → `makeRouterFromRoute`, see `packages/http/src/route.ts` and
 `docs/design/routing-and-transforms.md`) supported dispatching several leaves
 at the SAME path+method, distinguished by a request attribute other than the
@@ -37,7 +37,7 @@ to reintroduce once this question is settled.
 
 Note: HTTP *method* co-location at one path (e.g. GET/PUT/DELETE all at
 `/books/{bookId}`) is NOT blocked on this — that's expressed today via the
-`place` rewriter directive (see `applyPlacement` in route.ts and the worked
+`moveTo` rewriter directive (see `applyMoveTo` in route.ts and the worked
 example in `examples/library-api/src/tree.ts`'s per-book REST resource).
 Only dispatch on a NON-method attribute at a fixed path+method remains open.
 

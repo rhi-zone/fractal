@@ -8,7 +8,7 @@ import { node, op } from "@rhi-zone/fractal-core/node"
 import type { Meta } from "@rhi-zone/fractal-core/node"
 import {
   applyMethods,
-  applyPlacement,
+  applyMoveTo,
   applyResponse,
   composeTransforms,
   httpRoute,
@@ -110,23 +110,23 @@ describe("applyMethods", () => {
 })
 
 // ============================================================================
-// applyPlacement — node moves under wildcard segment (motivating example)
+// applyMoveTo — node moves under wildcard segment (motivating example)
 // ============================================================================
 
-describe("applyPlacement", () => {
-  it("moves a node down under a new wildcard segment (./*)", () => {
+describe("applyMoveTo", () => {
+  it("moves a node up then down under a new wildcard segment (../*)", () => {
     const getBook = (_: unknown) => ({})
     const api = node({
       children: {
         users: node({
           children: {
             list: op((_: unknown) => []),
-            get: op(getBook, { http: { directives: [{ kind: "place", path: "./*" }] } }),
+            get: op(getBook, { http: { directives: [{ kind: "moveTo", path: "../*" }] } }),
           },
         }),
       },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     // "get" no longer sits at users/get
     expect(route.children?.users?.children?.get).toBeUndefined()
     // "list" untouched
@@ -146,19 +146,19 @@ describe("applyPlacement", () => {
             list: op((_: unknown) => []),
             create: op((_: unknown) => ({})),
             get: op(read, {
-              http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "GET" }] },
+              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
             }),
             update: op(replace, {
-              http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "PUT" }] },
+              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "PUT" }] },
             }),
             del: op(remove, {
-              http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "DELETE" }] },
+              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "DELETE" }] },
             }),
           },
         }),
       },
     })
-    const transform = composeTransforms(applyMethods, applyPlacement)
+    const transform = composeTransforms(applyMethods, applyMoveTo)
     const route = transform(naiveTransform(api))
 
     expect(route.children?.books?.children?.list?.methods?.POST).toBeDefined()
@@ -177,31 +177,31 @@ describe("applyPlacement", () => {
   it("`.` is identity — node stays at its current position", () => {
     const handler = (_: unknown) => ({})
     const api = node({
-      children: { item: op(handler, { http: { directives: [{ kind: "place", path: "." }] } }) },
+      children: { item: op(handler, { http: { directives: [{ kind: "moveTo", path: "." }] } }) },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.item?.methods?.POST?.handler).toBe(handler)
   })
 
-  it("`..` moves a node up one level from its containing position", () => {
-    // itemPath = [admin, ping]; base (containing position) = [admin];
-    // ".." pops one further from base → [] (root) — merges directly into root.
+  it("`../..` moves a node up two levels (to the root)", () => {
+    // itemPath = [admin, ping]; base (self) = [admin, ping];
+    // "../.." pops twice → [] (root) — merges directly into root.
     const handler = (_: unknown) => ({})
     const api = node({
       children: {
         admin: node({
           children: {
-            ping: op(handler, { http: { directives: [{ kind: "place", path: ".." }] } }),
+            ping: op(handler, { http: { directives: [{ kind: "moveTo", path: "../.." }] } }),
           },
         }),
       },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.admin?.children?.ping).toBeUndefined()
     expect(route.methods?.POST?.handler).toBe(handler)
   })
 
-  it("`../../admin` moves a deeply nested node under a new named segment", () => {
+  it("`../../../admin` moves a deeply nested node under a new named segment", () => {
     const handler = (_: unknown) => ({})
     const api = node({
       children: {
@@ -209,26 +209,26 @@ describe("applyPlacement", () => {
           children: {
             b: node({
               children: {
-                leaf: op(handler, { http: { directives: [{ kind: "place", path: "../../admin" }] } }),
+                leaf: op(handler, { http: { directives: [{ kind: "moveTo", path: "../../../admin" }] } }),
               },
             }),
           },
         }),
       },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.a?.children?.b?.children?.leaf).toBeUndefined()
     expect(route.children?.admin?.methods?.POST?.handler).toBe(handler)
   })
 
-  it("mkdir-p: a multi-segment place target creates every missing intermediate node", () => {
+  it("mkdir-p: a multi-segment moveTo target creates every missing intermediate node", () => {
     const handler = (_: unknown) => ({})
     const api = node({
       children: {
-        leaf: op(handler, { http: { directives: [{ kind: "place", path: "api/v2/users" }] } }),
+        leaf: op(handler, { http: { directives: [{ kind: "moveTo", path: "../api/v2/users" }] } }),
       },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.leaf).toBeUndefined()
     expect(route.children?.api?.children?.v2?.children?.users?.methods?.POST?.handler).toBe(handler)
   })
@@ -237,14 +237,14 @@ describe("applyPlacement", () => {
     const api = node({
       children: {
         first: op((_: unknown) => ({ from: "first" }), {
-          http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "GET" }] },
+          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
         }),
         second: op((_: unknown) => ({ from: "second" }), {
-          http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "GET" }] },
+          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
         }),
       },
     })
-    const transform = composeTransforms(applyMethods, applyPlacement)
+    const transform = composeTransforms(applyMethods, applyMoveTo)
     expect(() => transform(naiveTransform(api))).toThrow(/conflict/i)
   })
 
@@ -252,14 +252,14 @@ describe("applyPlacement", () => {
     const api = node({
       children: {
         first: op((_: unknown) => ({ from: "first" }), {
-          http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "GET" }] },
+          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
         }),
         second: op((_: unknown) => ({ from: "second" }), {
-          http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "PUT" }] },
+          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "PUT" }] },
         }),
       },
     })
-    const transform = composeTransforms(applyMethods, applyPlacement)
+    const transform = composeTransforms(applyMethods, applyMoveTo)
     expect(() => transform(naiveTransform(api))).not.toThrow()
   })
 })
@@ -308,7 +308,7 @@ describe("composeTransforms", () => {
   it("applies rewriters left-to-right", () => {
     const handler = (_: unknown) => ({})
     const api = op(handler, { http: { directives: [{ kind: "method", value: "GET" }] } })
-    const pipeline = composeTransforms(applyMethods, applyResponse, applyPlacement)
+    const pipeline = composeTransforms(applyMethods, applyResponse, applyMoveTo)
     const route = pipeline(naiveTransform(api))
     expect(Object.keys(route.methods ?? {})).toEqual(["GET"])
   })
@@ -334,7 +334,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
       children: {
         books: node({
           // Pre-declared fallback supplies the wildcard's parameter name
-          // ("bookId") that applyPlacement reuses when it creates/merges the
+          // ("bookId") that applyMoveTo reuses when it creates/merges the
           // wildcard subtree for `get`/`remove` below.
           fallback: { name: "bookId", subtree: node({}) },
           children: {
@@ -351,7 +351,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
               {
                 http: {
                   directives: [
-                    { kind: "place", path: "./*" },
+                    { kind: "moveTo", path: "../*" },
                     { kind: "method", value: "GET" },
                   ],
                 },
@@ -362,7 +362,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
               {
                 http: {
                   directives: [
-                    { kind: "place", path: "./*" },
+                    { kind: "moveTo", path: "../*" },
                     { kind: "method", value: "DELETE" },
                   ],
                 },
@@ -374,10 +374,10 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
     })
 
     const routes = toHttpRoutes(api)
-    const pipeline = composeTransforms(applyMethods, applyPlacement, applyResponse)
+    const pipeline = composeTransforms(applyMethods, applyMoveTo, applyResponse)
     const router = makeRouter(pipeline(routes))
 
-    // "list" and "create" carry no `place` directive, so they stay at their
+    // "list" and "create" carry no `moveTo` directive, so they stay at their
     // naiveTransform positions: /books/list and /books/create.
     const listRes = await router(new Request("http://localhost/books/list"))
     expect(listRes.status).toBe(200)

@@ -16,7 +16,7 @@
 //      POST entry. No inference, no convention.
 //   3. Rewriters — `HttpRoute => HttpRoute` functions, each reading one kind
 //      of directive from `meta.http.directives` and reshaping the tree:
-//      `applyMethods`, `applyPlacement`, `applyResponse`. `composeTransforms`
+//      `applyMethods`, `applyMoveTo`, `applyResponse`. `composeTransforms`
 //      chains them into a single `HttpRoute => HttpRoute`.
 //   4. `makeRouterFromRoute` — the simple exact-path/method dispatcher over
 //      an `HttpRoute` tree (no attribute dispatch, no match conditions —
@@ -177,27 +177,27 @@ export function applyMethods(route: HttpRoute): HttpRoute {
 }
 
 // ============================================================================
-// 2b. applyPlacement — reads `{ kind: "place", path }` directives and moves
+// 2b. applyMoveTo — reads `{ kind: "moveTo", path }` directives and moves
 // whole route subtrees within the tree, per the relative-path algebra in
 // docs/design/routing-and-transforms.md:
 //
 //   "." (exactly)  — identity, node stays at its current position.
-//   Any other path is resolved relative to the node's CONTAINING position
-//   (its parent, i.e. the position with the node's own key dropped — mirrors
-//   Unix "a file's '.' is the directory containing it"):
-//     "."          (as a path component) — no-op, stays at the parent
-//     ".."         — pop one more level
-//     "*"          — push a wildcard (fallback) segment
-//     any other token — push that literal segment
+//   Any other path is resolved relative to the node's OWN position
+//   (standard filesystem-style semantics):
+//     ".."         — go up to parent
+//     "../newname" — rename (sibling with a different name)
+//     "*"          — push a wildcard (fallback) segment below self
+//     "."          (as a path component) — no-op, stays at self
+//     any other token — push that literal segment below self
 //
 // Two-phase: (1) walk the tree, detaching every subtree that carries a
-// `place` directive on its own top-level meta and recording its resolved
+// `moveTo` directive on its own top-level meta and recording its resolved
 // absolute target path; (2) re-insert each detached subtree at its target,
 // creating intermediate branch/fallback nodes as needed and merging methods
 // when multiple subtrees converge on the same target (the REST-resource
 // motivating example: get/update/delete all move to the same `*` position).
 //
-// [convention] When placement creates a NEW wildcard segment (no existing
+// [convention] When moveTo creates a NEW wildcard segment (no existing
 // `fallback` at that position), the fallback parameter name defaults to
 // `"param"` — the design doc leaves the wildcard's parameter name as coming
 // "from the node's own metadata," which is not yet wired up. Prefer an
@@ -206,10 +206,9 @@ export function applyMethods(route: HttpRoute): HttpRoute {
 
 type PendingMove = { readonly targetPath: readonly string[]; readonly subtree: HttpRoute }
 
-function resolvePlacement(itemPath: readonly string[], path: string): string[] {
+function resolveMoveTo(itemPath: readonly string[], path: string): string[] {
   if (path === ".") return [...itemPath]
-  const base = itemPath.slice(0, -1)
-  const out = [...base]
+  const out = [...itemPath]
   for (const tok of path.split("/").filter((t) => t.length > 0)) {
     if (tok === ".") continue
     else if (tok === "..") out.pop()
@@ -218,8 +217,8 @@ function resolvePlacement(itemPath: readonly string[], path: string): string[] {
   return out
 }
 
-function isPlaceDirective(d: HttpDirective): d is Extract<HttpDirective, { kind: "place" }> {
-  return d.kind === "place"
+function isMoveToDirective(d: HttpDirective): d is Extract<HttpDirective, { kind: "moveTo" }> {
+  return d.kind === "moveTo"
 }
 
 function detach(
@@ -232,9 +231,9 @@ function detach(
     const rebuilt: Record<string, HttpRoute> = {}
     for (const [key, child] of Object.entries(children)) {
       const childPath = [...path, key]
-      const directive = directivesOf(child.meta).find(isPlaceDirective)
+      const directive = directivesOf(child.meta).find(isMoveToDirective)
       if (directive !== undefined) {
-        const target = resolvePlacement(childPath, directive.path)
+        const target = resolveMoveTo(childPath, directive.path)
         const strippedChild = { ...child, meta: withoutDirective(child.meta, directive) }
         moves.push({ targetPath: target, subtree: detach(strippedChild, childPath, moves) })
         continue
@@ -247,9 +246,9 @@ function detach(
   let fallback = route.fallback
   if (fallback !== undefined) {
     const childPath = [...path, "*"]
-    const directive = directivesOf(fallback.subtree.meta).find(isPlaceDirective)
+    const directive = directivesOf(fallback.subtree.meta).find(isMoveToDirective)
     if (directive !== undefined) {
-      const target = resolvePlacement(childPath, directive.path)
+      const target = resolveMoveTo(childPath, directive.path)
       const strippedChild = { ...fallback.subtree, meta: withoutDirective(fallback.subtree.meta, directive) }
       moves.push({ targetPath: target, subtree: detach(strippedChild, childPath, moves) })
       fallback = undefined
@@ -277,7 +276,7 @@ function mergeRoutes(target: HttpRoute, incoming: HttpRoute, path: readonly stri
     if (method in targetMethods) {
       const displayPath = path.length === 0 ? "/" : `/${path.join("/")}`
       throw new Error(
-        `applyPlacement: conflicting route — ${method} ${displayPath} is defined by more than one node`,
+        `applyMoveTo: conflicting route — ${method} ${displayPath} is defined by more than one node`,
       )
     }
   }
@@ -293,7 +292,7 @@ function mergeRoutes(target: HttpRoute, incoming: HttpRoute, path: readonly stri
  * Insert `subtree` at `targetPath` within `root`, creating intermediate
  * branch/fallback nodes along the way when they don't already exist
  * (mkdir-p: `targetPath` may name several segments deep — e.g. resolved from
- * a `place: "api/v2/users"` directive — and every intermediate segment that
+ * a `moveTo: "../api/v2/users"` directive — and every intermediate segment that
  * isn't already present in the tree is created as a plain, empty `HttpRoute`
  * node so the walk can continue).
  */
@@ -323,13 +322,13 @@ function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpR
 }
 
 /**
- * Applies every `place` directive detached from the tree by `detach`.
+ * Applies every `moveTo` directive detached from the tree by `detach`.
  * Reinserted sequentially via `insertAt`, so conflicts between two DIFFERENT
  * placed subtrees converging on the same path+method are caught exactly like
  * a conflict between a placed subtree and a node already sitting at the
  * target — both funnel through `mergeRoutes`'s check.
  */
-export function applyPlacement(route: HttpRoute): HttpRoute {
+export function applyMoveTo(route: HttpRoute): HttpRoute {
   const moves: PendingMove[] = []
   const stripped = detach(route, [], moves)
   return moves.reduce((acc, m) => insertAt(acc, m.targetPath, m.subtree, m.targetPath), stripped)
