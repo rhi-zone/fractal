@@ -75,3 +75,42 @@ export type BrandedField = { locationId: LocationId; name: string }
 
 /** A genuine structural intersection (not a brand pattern) — must still punt. */
 export type PlainIntersection = { a: string } & { b: number }
+
+// ── Enum / literal-union fixtures ───────────────────────────────────────────
+
+/** A string enum — the checker resolves parameter types of this to a union
+ * of its member string literals. */
+export enum Status {
+  Active = "active",
+  Inactive = "inactive",
+}
+
+/** A numeric enum — resolves to a union of its member number literals. */
+export enum Priority {
+  Low = 0,
+  Medium = 1,
+  High = 2,
+}
+
+/** A hand-written string literal union — same shape concern as a string enum. */
+export type StringUnion = "a" | "b" | "c"
+
+/** A union of non-literal primitive types — must still punt. */
+export type MixedUnion = string | number
+
+/** A union mixing literal types of different kinds — union of literals. */
+export type LiteralMixedUnion = "a" | 1 | true
+
+/** A boolean parameter — TS represents `boolean` as `true | false` internally;
+ * must NOT be extracted as `enum(["true", "false"])`. */
+export type BooleanParam = boolean
+
+// Standalone functions, one per fixture type above, so tests can drive them
+// through `typeRefFromFunctionNode` (the checker resolves the parameter type
+// as it would for a real op).
+export const statusFn = (status: Status): void => {}
+export const priorityFn = (priority: Priority): void => {}
+export const stringUnionFn = (u: StringUnion): void => {}
+export const mixedUnionFn = (u: MixedUnion): void => {}
+export const literalMixedUnionFn = (u: LiteralMixedUnion): void => {}
+export const booleanParamFn = (b: BooleanParam): void => {}

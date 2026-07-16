@@ -46,6 +46,7 @@ export type JsonSchema = {
   prefixItems?: JsonSchema[]
   additionalProperties?: JsonSchema
   const?: string | number | boolean | null
+  enum?: string[]
   $comment?: string
 }
 
@@ -173,8 +174,56 @@ export function typeRefFromType(
     )
   }
 
-  // ── Genuine unions punt (optional `| undefined` is stripped upstream) ──────
+  // ── Unions: TS enums + literal unions lower to enum/literal-union shapes;
+  //    everything else genuinely structural still punts ─────────────────────
+  //
+  // (optional `| undefined` is stripped upstream, so a surviving union here is
+  // either a TS enum (which the checker resolves to a union of its member
+  // literals), a hand-written literal union (`"a" | "b"`), or a genuine union
+  // of non-literal types.)
   if (type.isUnion()) {
+    const members = type.types
+
+    // `true | false` collapses to the intrinsic `boolean` type before this
+    // point (TS's `getUnionType` singleton-izes it, so `flags & BooleanLike`
+    // above already catches it) — this check is a defensive backstop in case
+    // a differently-constructed union of the two boolean literals reaches here.
+    if (
+      members.length === 2 &&
+      members.every((m) => (m.flags & ts.TypeFlags.BooleanLiteral) !== 0)
+    ) {
+      const names = new Set(
+        members.map(
+          (m) => (m as ts.Type & { intrinsicName?: string }).intrinsicName,
+        ),
+      )
+      if (names.has("true") && names.has("false")) return t(types.boolean)
+    }
+
+    const allStringLiteral = members.every(
+      (m) => (m.flags & ts.TypeFlags.StringLiteral) !== 0,
+    )
+    if (allStringLiteral) {
+      return t(
+        types.enum(members.map((m) => (m as ts.LiteralType).value as string)),
+      )
+    }
+
+    const isLiteralMember = (m: ts.Type): boolean =>
+      (m.flags &
+        (ts.TypeFlags.StringLiteral |
+          ts.TypeFlags.NumberLiteral |
+          ts.TypeFlags.BooleanLiteral)) !==
+      0
+
+    // All-number-literal (numeric TS enums) and mixed-literal unions both
+    // lower the same way: a union of `types.literal(...)` TypeRefs — the IR's
+    // `enum` kind is `readonly string[]` only, so numeric/mixed cases use
+    // `types.union` of literals instead.
+    if (members.every(isLiteralMember)) {
+      return t(types.union(members.map((m) => typeRefFromType(m, checker, loc, seen))))
+    }
+
     return puntRef(`union (${checker.typeToString(type)})`)
   }
 

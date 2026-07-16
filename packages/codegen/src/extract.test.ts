@@ -388,10 +388,13 @@ describe("typeRefFromType gap fixes", () => {
     expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe(true)
   })
 
-  it("still punts a union of literals (LiteralType) — union punt takes precedence", () => {
+  it("lowers a union of string literals (LiteralType) to types.enum", () => {
     const ref = typeRefFromType(typeOf("LiteralType"), checker, source)
-    expect(ref.shape.kind).toBe("unknown")
-    expect(ref.meta.$comment).toMatch(/union/)
+    expect(ref.shape.kind).toBe("enum")
+    expect((ref.shape as { kind: "enum"; members: readonly string[] }).members).toEqual([
+      "active",
+      "inactive",
+    ])
   })
 
   it("filters private/protected fields and methods off a class instance", () => {
@@ -466,5 +469,74 @@ describe("typeRefFromType gap fixes", () => {
     expect(ref.shape.kind).toBe("unknown")
     expect(ref.meta.$comment).toMatch(/TODO\(codegen\)/)
     expect(ref.meta.$comment).toMatch(/intersection/)
+  })
+
+  // ── Enums / literal unions ────────────────────────────────────────────────
+
+  /** Resolve an exported function's single parameter type by name. */
+  function paramTypeOf(name: string): ts.Type {
+    const fn = findExportedFn(source, name)
+    const fnType = checker.getTypeAtLocation(fn)
+    const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
+    const [param] = sig!.getParameters()
+    return checker.getTypeOfSymbolAtLocation(param!, fn)
+  }
+
+  it("lowers a string enum to types.enum with its member values", () => {
+    const ref = typeRefFromType(paramTypeOf("statusFn"), checker, source)
+    expect(ref.shape.kind).toBe("enum")
+    expect((ref.shape as { kind: "enum"; members: readonly string[] }).members).toEqual([
+      "active",
+      "inactive",
+    ])
+  })
+
+  it("lowers a string literal union type to types.enum", () => {
+    const ref = typeRefFromType(paramTypeOf("stringUnionFn"), checker, source)
+    expect(ref.shape.kind).toBe("enum")
+    expect((ref.shape as { kind: "enum"; members: readonly string[] }).members).toEqual([
+      "a",
+      "b",
+      "c",
+    ])
+  })
+
+  it("lowers a numeric enum to a union of literals", () => {
+    const ref = typeRefFromType(paramTypeOf("priorityFn"), checker, source)
+    expect(ref.shape.kind).toBe("union")
+    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
+    expect(variants.map((v) => v.shape)).toEqual([
+      { kind: "literal", value: 0 },
+      { kind: "literal", value: 1 },
+      { kind: "literal", value: 2 },
+    ])
+  })
+
+  it("lowers a boolean parameter to types.boolean, not an enum", () => {
+    const ref = typeRefFromType(paramTypeOf("booleanParamFn"), checker, source)
+    expect(ref.shape).toEqual({ kind: "boolean" })
+  })
+
+  it("still punts a mixed non-literal union (string | number)", () => {
+    const ref = typeRefFromType(paramTypeOf("mixedUnionFn"), checker, source)
+    expect(ref.shape.kind).toBe("unknown")
+    expect(ref.meta.$comment).toMatch(/TODO\(codegen\)/)
+    expect(ref.meta.$comment).toMatch(/union/)
+  })
+
+  it("lowers a mixed-literal union to a union of literals", () => {
+    const ref = typeRefFromType(paramTypeOf("literalMixedUnionFn"), checker, source)
+    expect(ref.shape.kind).toBe("union")
+    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
+    // TS reorders union constituents internally, so compare as a set rather
+    // than assuming declaration order is preserved.
+    expect(variants.map((v) => v.shape)).toEqual(
+      expect.arrayContaining([
+        { kind: "literal", value: "a" },
+        { kind: "literal", value: 1 },
+        { kind: "literal", value: true },
+      ]),
+    )
+    expect(variants).toHaveLength(3)
   })
 })
