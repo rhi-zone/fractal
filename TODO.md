@@ -42,20 +42,20 @@ should be settled FROM the author's definition rather than guessed:
   `POST /…/new`, not settled).
 - The unresolved **"is it too general?"** tension — never closed.
 
-### Codegen-from-types is not yet built
+### Codegen-from-types — RESOLVED (2026-07-16, see handoff-2026-07-16-type-layer.md)
 
-The current vertical slice authors provisional runtime `Schema` values
-(`str`/`num`/`bool`/`obj`) on the leaf as dispatch-time-validation **scaffolding**.
-The intent is to replace these with codegen-derived validators, where the single
-source of truth is the inferred TS types + JSDoc (not an on-tree schema). The
-on-tree schemas should NOT be mistaken for the model — they're a placeholder until
-codegen-from-types exists. See `docs/design/handoff.md` §"PROVISIONAL / to replace".
-
-Update (2026-07-14–16 session): the type IR design is now settled at the
-principles level — shape hierarchy via subtyping + open metadata bag, documented
-in `docs/design/architecture-layers.md` § Type IR and in CLAUDE.md § Design
-Philosophy. The next step is the concrete hierarchy (see new open thread below),
-not further principle-level design.
+The vertical slice's on-tree `Schema` values (`str`/`num`/`bool`/`obj`) were
+provisional scaffolding pending codegen-derived validators from TS types +
+JSDoc. That codegen now exists: `packages/codegen/src/extract.ts` extracts
+`TypeRef`s from TS source (tuples, index signatures, literals, enums,
+discriminated unions, intersections, 3 branded-type patterns, recursion,
+`Promise` unwrapping, class privacy), and `packages/type-ir` projects those
+`TypeRef`s to 23 format targets (see the two SETTLED sections below). Whether
+the on-tree `Schema` scaffolding in `packages/core`/`packages/http` has
+actually been swapped out for codegen-derived validators is a separate,
+still-open question — see "Integration into the consumer app is not started"
+below, which is about the *consumer app*, not this in-repo scaffolding; that
+in-repo swap has not been verified either way this session.
 
 ### Concrete type hierarchy — SETTLED and BUILT (2026-07-16, see handoff-2026-07-16-type-layer.md)
 
@@ -199,8 +199,12 @@ Ordered roughly easiest → hardest to decide:
    (RFC 9110 §9.2.1); `readOnly` is more intuitive but narrower.
 3. **`openWorld` tag** — is it a tag, a meta field, or something else? What
    does it actually control?
-4. **Codegen hardening** — the current spine infers schemas from TS types at
-   build time; how robust is this, and what are the edges?
+4. ~~**Codegen hardening**~~ — substantially addressed 2026-07-16: the
+   extractor (`packages/codegen/src/extract.ts`) now handles tuples, index
+   signatures, literals, enums, discriminated unions, intersections, 3
+   branded-type patterns, recursive types, `Promise` unwrapping, and class
+   privacy. Whether further edges remain is unknown until the consumer-app
+   integration (below) exercises it against real schemas.
 5. **Versioning patterns** — how do versioning strategies (date-based, semver,
    header) compose with the dispatch model? (dispatch-extensibility.md has
    the date-versioning example; are there others?)
