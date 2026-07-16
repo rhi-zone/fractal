@@ -15,6 +15,10 @@
       "types": "./src/json-schema.ts",
       "import": "./src/json-schema.ts"
     },
+    "./jsdoc": {
+      "types": "./src/jsdoc.ts",
+      "import": "./src/jsdoc.ts"
+    },
     "./json-schema-07": {
       "types": "./src/json-schema-07.ts",
       "import": "./src/json-schema-07.ts"
@@ -35,6 +39,10 @@
       "types": "./src/protobuf.ts",
       "import": "./src/protobuf.ts"
     },
+    "./capnp": {
+      "types": "./src/capnp.ts",
+      "import": "./src/capnp.ts"
+    },
     "./jtd": {
       "types": "./src/jtd.ts",
       "import": "./src/jtd.ts"
@@ -42,6 +50,14 @@
     "./zod": {
       "types": "./src/zod.ts",
       "import": "./src/zod.ts"
+    },
+    "./arktype": {
+      "types": "./src/arktype.ts",
+      "import": "./src/arktype.ts"
+    },
+    "./typebox": {
+      "types": "./src/typebox.ts",
+      "import": "./src/typebox.ts"
     },
     "./valibot": {
       "types": "./src/valibot.ts",
