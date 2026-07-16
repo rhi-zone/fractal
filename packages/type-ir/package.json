@@ -51,6 +51,14 @@
       "types": "./src/zod.ts",
       "import": "./src/zod.ts"
     },
+    "./runtypes": {
+      "types": "./src/runtypes.ts",
+      "import": "./src/runtypes.ts"
+    },
+    "./superstruct": {
+      "types": "./src/superstruct.ts",
+      "import": "./src/superstruct.ts"
+    },
     "./arktype": {
       "types": "./src/arktype.ts",
       "import": "./src/arktype.ts"
@@ -62,6 +70,18 @@
     "./valibot": {
       "types": "./src/valibot.ts",
       "import": "./src/valibot.ts"
+    },
+    "./io-ts": {
+      "types": "./src/io-ts.ts",
+      "import": "./src/io-ts.ts"
+    },
+    "./yup": {
+      "types": "./src/yup.ts",
+      "import": "./src/yup.ts"
+    },
+    "./effect-schema": {
+      "types": "./src/effect-schema.ts",
+      "import": "./src/effect-schema.ts"
     }
   },
   "files": ["src"],
