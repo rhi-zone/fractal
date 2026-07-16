@@ -1,0 +1,253 @@
+import { describe, expect, test } from "bun:test"
+import { registerParent, t, types } from "./index.ts"
+import { toZod, toZodDeclaration, toZodDeclarations } from "./zod.ts"
+
+describe("leaf types", () => {
+  test("boolean", () => {
+    expect(toZod(t(types.boolean))).toBe("z.boolean()")
+  })
+
+  test("number", () => {
+    expect(toZod(t(types.number))).toBe("z.number()")
+  })
+
+  test("integer", () => {
+    expect(toZod(t(types.integer))).toBe("z.number().int()")
+  })
+
+  test("string", () => {
+    expect(toZod(t(types.string))).toBe("z.string()")
+  })
+
+  test("bytes", () => {
+    expect(toZod(t(types.bytes))).toBe("z.string().base64()")
+  })
+
+  test("null", () => {
+    expect(toZod(t(types.null))).toBe("z.null()")
+  })
+
+  test("void", () => {
+    expect(toZod(t(types.void))).toBe("z.void()")
+  })
+
+  test("unknown", () => {
+    expect(toZod(t(types.unknown))).toBe("z.unknown()")
+  })
+
+  test("never", () => {
+    expect(toZod(t(types.never))).toBe("z.never()")
+  })
+})
+
+describe("formatted types", () => {
+  test("int32", () => {
+    expect(toZod(t(types.int32))).toBe("z.number().int()")
+  })
+
+  test("int64", () => {
+    expect(toZod(t(types.int64))).toBe("z.number().int()")
+  })
+
+  test("float32", () => {
+    expect(toZod(t(types.float32))).toBe("z.number()")
+  })
+
+  test("float64", () => {
+    expect(toZod(t(types.float64))).toBe("z.number()")
+  })
+
+  test("uuid", () => {
+    expect(toZod(t(types.uuid))).toBe("z.string().uuid()")
+  })
+
+  test("uri", () => {
+    expect(toZod(t(types.uri))).toBe("z.string().url()")
+  })
+})
+
+describe("temporal types", () => {
+  test("datetime", () => {
+    expect(toZod(t(types.datetime))).toBe("z.string().datetime()")
+  })
+
+  test("date", () => {
+    expect(toZod(t(types.date))).toBe("z.string().date()")
+  })
+
+  test("time", () => {
+    expect(toZod(t(types.time))).toBe("z.string().time()")
+  })
+
+  test("duration", () => {
+    expect(toZod(t(types.duration))).toBe("z.string().duration()")
+  })
+})
+
+describe("object", () => {
+  test("required and optional fields", () => {
+    const ref = t(
+      types.object({
+        name: t(types.string),
+        nickname: t(types.string, { optional: true }),
+      }),
+    )
+    expect(toZod(ref)).toBe("z.object({ name: z.string(), nickname: z.string().optional() })")
+  })
+
+  test("quotes non-identifier field names", () => {
+    const ref = t(types.object({ "not-an-ident": t(types.string) }))
+    expect(toZod(ref)).toBe('z.object({ "not-an-ident": z.string() })')
+  })
+})
+
+describe("array", () => {
+  test("element type", () => {
+    const ref = t(types.array(t(types.integer)))
+    expect(toZod(ref)).toBe("z.array(z.number().int())")
+  })
+})
+
+describe("tuple", () => {
+  test("elements", () => {
+    const ref = t(types.tuple([t(types.string), t(types.integer)]))
+    expect(toZod(ref)).toBe("z.tuple([z.string(), z.number().int()])")
+  })
+})
+
+describe("map", () => {
+  test("record", () => {
+    const ref = t(types.map(t(types.string), t(types.number)))
+    expect(toZod(ref)).toBe("z.record(z.string(), z.number())")
+  })
+})
+
+describe("union", () => {
+  test("union of variants", () => {
+    const ref = t(types.union([t(types.string), t(types.integer)]))
+    expect(toZod(ref)).toBe("z.union([z.string(), z.number().int()])")
+  })
+})
+
+describe("literal", () => {
+  test("string literal", () => {
+    expect(toZod(t(types.literal("active")))).toBe('z.literal("active")')
+  })
+
+  test("number literal", () => {
+    expect(toZod(t(types.literal(42)))).toBe("z.literal(42)")
+  })
+
+  test("boolean literal", () => {
+    expect(toZod(t(types.literal(true)))).toBe("z.literal(true)")
+  })
+
+  test("null literal", () => {
+    expect(toZod(t(types.literal(null)))).toBe("z.literal(null)")
+  })
+})
+
+describe("enum", () => {
+  test("enum members", () => {
+    const ref = t(types.enum(["a", "b", "c"]))
+    expect(toZod(ref)).toBe('z.enum(["a", "b", "c"])')
+  })
+})
+
+describe("ref", () => {
+  test("target name", () => {
+    expect(toZod(t(types.ref("User")))).toBe("User")
+  })
+})
+
+describe("nullable", () => {
+  test("leaf", () => {
+    const ref = t(types.string, { nullable: true })
+    expect(toZod(ref)).toBe("z.string().nullable()")
+  })
+
+  test("complex type", () => {
+    const ref = t(types.array(t(types.string)), { nullable: true })
+    expect(toZod(ref)).toBe("z.array(z.string()).nullable()")
+  })
+})
+
+describe("constraints", () => {
+  test("string minLength/maxLength/pattern", () => {
+    const ref = t(types.string, { minLength: 1, maxLength: 10, pattern: "^[a-z]+$" })
+    expect(toZod(ref)).toBe('z.string().min(1).max(10).regex(/^[a-z]+$/)')
+  })
+
+  test("numeric minimum/maximum/multipleOf", () => {
+    const ref = t(types.integer, { minimum: 0, maximum: 100, multipleOf: 5 })
+    expect(toZod(ref)).toBe("z.number().int().min(0).max(100).multipleOf(5)")
+  })
+
+  test("array minLength/maxLength", () => {
+    const ref = t(types.array(t(types.string)), { minLength: 1, maxLength: 5 })
+    expect(toZod(ref)).toBe("z.array(z.string()).min(1).max(5)")
+  })
+
+  test("description", () => {
+    const ref = t(types.string, { description: "a name" })
+    expect(toZod(ref)).toBe('z.string().describe("a name")')
+  })
+
+  test("default", () => {
+    const ref = t(types.integer, { default: 0 })
+    expect(toZod(ref)).toBe("z.number().int().default(0)")
+  })
+
+  test("regex with forward slash in pattern", () => {
+    const ref = t(types.string, { pattern: "a/b" })
+    expect(toZod(ref)).toBe("z.string().regex(/a\\/b/)")
+  })
+})
+
+describe("unknown kind fallback", () => {
+  test("falls back to nearest ancestor handler", () => {
+    registerParent("int128", "integer")
+    const ref = t({ kind: "int128" } as never)
+    expect(toZod(ref)).toBe("z.number().int()")
+  })
+
+  test("no ancestor handler falls back to z.unknown()", () => {
+    registerParent("mystery", null)
+    const ref = t({ kind: "mystery" } as never)
+    expect(toZod(ref)).toBe("z.unknown()")
+  })
+})
+
+describe("nested", () => {
+  test("object with array of uuid fields", () => {
+    const ref = t(
+      types.object({
+        ids: t(types.array(t(types.uuid))),
+      }),
+    )
+    expect(toZod(ref)).toBe("z.object({ ids: z.array(z.string().uuid()) })")
+  })
+})
+
+describe("toZodDeclaration", () => {
+  test("emits a const declaration", () => {
+    expect(toZodDeclaration("Age", t(types.integer))).toBe("const Age = z.number().int();")
+  })
+})
+
+describe("toZodDeclarations", () => {
+  test("emits import and multiple declarations", () => {
+    const registry = {
+      User: t(types.object({ id: t(types.uuid) })),
+      Age: t(types.integer),
+    }
+    expect(toZodDeclarations(registry)).toBe(
+      [
+        'import { z } from "zod";',
+        "",
+        "const User = z.object({ id: z.string().uuid() });",
+        "const Age = z.number().int();",
+      ].join("\n"),
+    )
+  })
+})

@@ -15,6 +15,14 @@
       "types": "./src/json-schema.ts",
       "import": "./src/json-schema.ts"
     },
+    "./json-schema-07": {
+      "types": "./src/json-schema-07.ts",
+      "import": "./src/json-schema-07.ts"
+    },
+    "./openapi30": {
+      "types": "./src/openapi30.ts",
+      "import": "./src/openapi30.ts"
+    },
     "./typescript": {
       "types": "./src/typescript.ts",
       "import": "./src/typescript.ts"
@@ -30,6 +38,14 @@
     "./jtd": {
       "types": "./src/jtd.ts",
       "import": "./src/jtd.ts"
+    },
+    "./zod": {
+      "types": "./src/zod.ts",
+      "import": "./src/zod.ts"
+    },
+    "./valibot": {
+      "types": "./src/valibot.ts",
+      "import": "./src/valibot.ts"
     }
   },
   "files": ["src"],
