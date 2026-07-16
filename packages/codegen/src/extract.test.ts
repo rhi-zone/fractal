@@ -502,6 +502,20 @@ describe("typeRefFromType gap fixes", () => {
     expect(fields.name?.meta.brand).toBeUndefined()
   })
 
+  // ── Shared-symbol branded types (one `unique symbol` key, literal values) ─
+
+  it("reads the brand name from the literal value when a shared symbol key is tagged with a string literal", () => {
+    const ref = typeRefFromType(typeOf("SharedSymbolLocationId"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.brand).toBe("LocationId")
+  })
+
+  it("distinguishes a second type sharing the same symbol key by its own literal value", () => {
+    const ref = typeRefFromType(typeOf("SharedSymbolUserId"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.brand).toBe("UserId")
+  })
+
   it("does not treat a plain (non-branded) intersection as a brand — lowers to types.intersection", () => {
     const ref = typeRefFromType(typeOf("PlainIntersection"), checker, source)
     expect(ref.shape.kind).toBe("intersection")

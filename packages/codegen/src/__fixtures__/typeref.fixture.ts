@@ -159,3 +159,15 @@ export type SymbolBrandedUserId = number & { readonly [UserIdBrand]: never }
 
 /** A symbol-branded field nested as an object field. */
 export type SymbolBrandedField = { id: SymbolBrandedId; name: string }
+
+// ── Shared-symbol branded type fixtures ─────────────────────────────────────
+// A single `unique symbol` key reused across types, with distinct string-literal
+// values (rather than `never`) distinguishing the brands — as opposed to the
+// per-type-symbol pattern above, where each type declares its own symbol.
+
+declare const BRAND: unique symbol
+/** Branded string via a *shared* `unique symbol` key with a literal value. */
+export type SharedSymbolLocationId = string & { readonly [BRAND]: "LocationId" }
+
+/** A second type sharing the same `BRAND` symbol key, distinguished by value. */
+export type SharedSymbolUserId = string & { readonly [BRAND]: "UserId" }

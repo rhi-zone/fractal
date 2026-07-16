@@ -140,18 +140,19 @@ function brandFromIntersection(
       const isNamedBrand = BRAND_PROP_NAMES.includes(prop.name)
       if (!isSymbolKeyed && !isNamedBrand) continue
 
-      // Symbol-keyed tags carry no literal value (typically `never`) — the
-      // brand name comes from the `unique symbol` declaration's identifier
-      // instead. Named tags (`__brand`/`__tag`/…) carry the name as a string
-      // literal value, as before.
-      const brandValue = isSymbolKeyed
-        ? brandNameFromSymbolKeyedProp(prop, checker)
-        : (() => {
-            const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
-            return propType.flags & ts.TypeFlags.StringLiteral
-              ? ((propType as ts.LiteralType).value as string)
-              : undefined
-          })()
+      // Named tags (`__brand`/`__tag`/…) and shared-symbol tags (one `unique
+      // symbol` key reused across types, e.g. `[BRAND]: "LocationId"`) both
+      // carry the brand name as a string-literal value — check that first.
+      // Only when a symbol-keyed tag carries no literal value (typically
+      // `never`) does the brand name fall back to the `unique symbol`
+      // declaration's own identifier.
+      const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
+      const brandValue =
+        propType.flags & ts.TypeFlags.StringLiteral
+          ? ((propType as ts.LiteralType).value as string)
+          : isSymbolKeyed
+            ? brandNameFromSymbolKeyedProp(prop, checker)
+            : undefined
       if (brandValue === undefined) continue
 
       const nextSeen = new Set(seen).add(type)
