@@ -146,3 +146,11 @@ export function toJsDocTypedefs(registry: Record<string, TypeRef>, options: JsDo
     .map(([name, ref]) => toJsDocTypedef(name, ref, options))
     .join("\n\n")
 }
+
+// Inline `@type` annotation — the value-annotation form (JSDoc spec:
+// https://jsdoc.app/tags-type.html), as opposed to the `@typedef`/`@interface`/`@class`
+// declaration forms above. `meta.optional` is ignored: optionality describes a field in a
+// declaration, not a standalone expression being annotated.
+export function toJsDocInlineType(ref: TypeRef): string {
+  return `/** @type {${toJsDocType(ref)}} */`
+}

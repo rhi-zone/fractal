@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { toJsDocType, toJsDocTypedef, toJsDocTypedefs } from "./jsdoc.ts"
+import { toJsDocInlineType, toJsDocType, toJsDocTypedef, toJsDocTypedefs } from "./jsdoc.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {
@@ -398,6 +398,43 @@ describe("intersection", () => {
 
   test("empty members fall back to *", () => {
     expect(toJsDocType(t(types.intersection([])))).toBe("*")
+  })
+})
+
+describe("toJsDocInlineType", () => {
+  test("primitive string", () => {
+    expect(toJsDocInlineType(t(types.string))).toBe("/** @type {string} */")
+  })
+
+  test("primitive number", () => {
+    expect(toJsDocInlineType(t(types.number))).toBe("/** @type {number} */")
+  })
+
+  test("object uses inline record syntax (double braces overall)", () => {
+    const ref = t(types.object({ name: t(types.string), age: t(types.integer) }))
+    expect(toJsDocInlineType(ref)).toBe("/** @type {{name: string, age: number}} */")
+  })
+
+  test("array", () => {
+    expect(toJsDocInlineType(t(types.array(t(types.string))))).toBe("/** @type {Array.<string>} */")
+  })
+
+  test("nullable", () => {
+    expect(toJsDocInlineType(t(types.string, { nullable: true }))).toBe("/** @type {?string} */")
+  })
+
+  test("optional is ignored — meaningless for a value annotation", () => {
+    expect(toJsDocInlineType(t(types.string, { optional: true }))).toBe("/** @type {string} */")
+  })
+
+  test("union", () => {
+    const ref = t(types.union([t(types.string), t(types.integer)]))
+    expect(toJsDocInlineType(ref)).toBe("/** @type {(string|number)} */")
+  })
+
+  test("tuple", () => {
+    const ref = t(types.tuple([t(types.string), t(types.integer)]))
+    expect(toJsDocInlineType(ref)).toBe("/** @type {Array.<string|number>} */")
   })
 })
 
