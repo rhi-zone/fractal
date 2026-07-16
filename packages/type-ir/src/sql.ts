@@ -1,9 +1,20 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
 
 export type SqlColumn = {
   type: string
   nullable: boolean
   default?: string
+  // CHECK constraint clauses derived from open metadata (minimum/maximum/minLength/
+  // pattern/multipleOf, ...). Each clause contains the literal placeholder token
+  // `{name}` in place of the column name — `columnDef` is the one place that knows
+  // the final column name, so it substitutes it in. Keeps `SqlColumn` itself plain,
+  // name-agnostic, serializable data (no closures), consistent with the "DU is the
+  // contract" pattern used across the other projectors in this package.
+  checks?: string[]
+  // Dialect-appropriate rendering of `meta.description` — MySQL's native inline
+  // `COMMENT '...'` clause, or a `/* ... */` block comment for the others. Already
+  // fully rendered (no `{name}` needed — comments don't reference the column name).
+  comment?: string
 }
 
 export type SqlDialect = "postgres" | "sqlite" | "mysql"
@@ -99,6 +110,52 @@ function sqlLiteral(value: unknown): string {
   return String(value)
 }
 
+function isA(kind: string, target: string): boolean {
+  return kind === target || ancestors(kind).includes(target)
+}
+
+// Builds CHECK constraint clause templates from the same open-metadata constraint
+// vocabulary as the other projectors in this package (zod.ts, json-schema.ts,
+// effect-schema.ts, ...): minimum/maximum/exclusiveMinimum/exclusiveMaximum (numeric),
+// minLength/maxLength/pattern (string), multipleOf (numeric). Each returned clause
+// contains the `{name}` placeholder in place of the column name.
+function buildChecks(kind: string, meta: Readonly<Record<string, unknown>>, dialect: SqlDialect | undefined): string[] {
+  const numberLike = isA(kind, "number")
+  const stringLike = isA(kind, "string")
+  const checks: string[] = []
+
+  if (typeof meta.minimum === "number" && numberLike) checks.push(`CHECK ({name} >= ${meta.minimum})`)
+  if (typeof meta.maximum === "number" && numberLike) checks.push(`CHECK ({name} <= ${meta.maximum})`)
+  if (typeof meta.exclusiveMinimum === "number" && numberLike) checks.push(`CHECK ({name} > ${meta.exclusiveMinimum})`)
+  if (typeof meta.exclusiveMaximum === "number" && numberLike) checks.push(`CHECK ({name} < ${meta.exclusiveMaximum})`)
+  if (typeof meta.minLength === "number" && stringLike) checks.push(`CHECK (LENGTH({name}) >= ${meta.minLength})`)
+  if (typeof meta.maxLength === "number" && stringLike) checks.push(`CHECK (LENGTH({name}) <= ${meta.maxLength})`)
+  if (typeof meta.pattern === "string" && stringLike) {
+    if (dialect === "mysql") {
+      checks.push(`CHECK ({name} REGEXP ${sqlLiteral(meta.pattern)})`)
+    } else if (dialect !== "sqlite") {
+      // Postgres: `~` is the native POSIX regex match operator. SQLite has no native
+      // regex operator — `REGEXP` only works if the host application registers a
+      // user-defined function for it, so emitting a REGEXP/~ clause here would
+      // produce DDL that fails on a stock sqlite3 connection. Skip for sqlite.
+      checks.push(`CHECK ({name} ~ ${sqlLiteral(meta.pattern)})`)
+    }
+  }
+  if (typeof meta.multipleOf === "number" && numberLike) checks.push(`CHECK ({name} % ${meta.multipleOf} = 0)`)
+
+  return checks
+}
+
+// Renders `meta.description` as dialect-appropriate SQL. MySQL has a native inline
+// `COMMENT '...'` column clause. The others don't — a trailing `-- ...` line comment
+// would swallow the trailing comma `toCreateTable` appends after each column in a
+// multi-column CREATE TABLE, so a `/* ... */` block comment is used instead.
+function buildComment(meta: Readonly<Record<string, unknown>>, dialect: SqlDialect | undefined): string | undefined {
+  if (typeof meta.description !== "string") return undefined
+  if (dialect === "mysql") return `COMMENT ${sqlLiteral(meta.description)}`
+  return `/* ${meta.description} */`
+}
+
 const mysqlLiteralHandler: Converter = (shape) => {
   const s = shape as TypeShape & { kind: "literal" }
   if (typeof s.value === "number") return "NUMERIC"
@@ -157,6 +214,13 @@ export function toSqlDdl(ref: TypeRef, opts?: { dialect?: SqlDialect }): SqlColu
 
   const column: SqlColumn = { type, nullable: ref.meta.nullable === true }
   if (ref.meta.default !== undefined) column.default = sqlLiteral(ref.meta.default)
+
+  const checks = buildChecks(ref.shape.kind, ref.meta, opts?.dialect)
+  if (checks.length > 0) column.checks = checks
+
+  const comment = buildComment(ref.meta, opts?.dialect)
+  if (comment !== undefined) column.comment = comment
+
   return column
 }
 
@@ -164,6 +228,8 @@ export function columnDef(name: string, col: SqlColumn): string {
   let ddl = `${name} ${col.type}`
   if (!col.nullable) ddl += " NOT NULL"
   if (col.default !== undefined) ddl += ` DEFAULT ${col.default}`
+  if (col.checks) for (const check of col.checks) ddl += ` ${check.replaceAll("{name}", name)}`
+  if (col.comment !== undefined) ddl += ` ${col.comment}`
   return ddl
 }
 

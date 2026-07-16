@@ -205,3 +205,73 @@ describe("unknown kind fallback", () => {
     expect(toMssqlType(ref)).toBe("INT")
   })
 })
+
+describe("CHECK constraints from metadata", () => {
+  test("numeric minimum/maximum", () => {
+    expect(mssqlColumnDef("age", t(types.int32, { minimum: 0, maximum: 130 }))).toBe(
+      "age INT NOT NULL CHECK (age >= 0) CHECK (age <= 130)",
+    )
+  })
+
+  test("exclusiveMinimum/exclusiveMaximum", () => {
+    expect(mssqlColumnDef("ratio", t(types.number, { exclusiveMinimum: 0, exclusiveMaximum: 1 }))).toBe(
+      "ratio FLOAT NOT NULL CHECK (ratio > 0) CHECK (ratio < 1)",
+    )
+  })
+
+  test("string minLength/maxLength uses LEN, not LENGTH", () => {
+    expect(mssqlColumnDef("name", t(types.string, { minLength: 1, maxLength: 50 }))).toBe(
+      "name NVARCHAR(255) NOT NULL CHECK (LEN(name) >= 1) CHECK (LEN(name) <= 50)",
+    )
+  })
+
+  test("multipleOf", () => {
+    expect(mssqlColumnDef("qty", t(types.integer, { multipleOf: 5 }))).toBe(
+      "qty INT NOT NULL CHECK (qty % 5 = 0)",
+    )
+  })
+
+  test("pattern is skipped (no lossless regex equivalent in T-SQL)", () => {
+    expect(mssqlColumnDef("code", t(types.string, { pattern: "^[a-z]+$" }))).toBe("code NVARCHAR(255) NOT NULL")
+  })
+
+  test("non-numeric/non-string kinds ignore numeric/string constraints", () => {
+    expect(mssqlColumnDef("active", t(types.boolean, { minimum: 0, minLength: 1 }))).toBe("active BIT NOT NULL")
+  })
+
+  test("combined constraints, enum CHECK, and identity all compose", () => {
+    expect(
+      mssqlColumnDef("id", t(types.int32, { identity: true, minimum: 1 })),
+    ).toBe("id INT IDENTITY(1,1) NOT NULL CHECK (id >= 1)")
+  })
+})
+
+describe("description metadata → comment", () => {
+  test("renders as a block comment (MSSQL has no inline COMMENT syntax)", () => {
+    expect(mssqlColumnDef("name", t(types.string, { description: "display name" }))).toBe(
+      "name NVARCHAR(255) NOT NULL /* display name */",
+    )
+  })
+
+  test("comment comes after CHECK constraints", () => {
+    expect(mssqlColumnDef("age", t(types.int32, { minimum: 0, description: "age in years" }))).toBe(
+      "age INT NOT NULL CHECK (age >= 0) /* age in years */",
+    )
+  })
+})
+
+describe("toMssqlCreateTable: comma is preserved, not swallowed by the comment", () => {
+  test("full table DDL with checks and comments", () => {
+    expect(
+      toMssqlCreateTable("users", {
+        id: t(types.int32, { identity: true }),
+        age: t(types.int32, { minimum: 0, description: "age in years" }),
+      }),
+    ).toBe(
+      "CREATE TABLE users (\n" +
+        "  id INT IDENTITY(1,1) NOT NULL,\n" +
+        "  age INT NOT NULL CHECK (age >= 0) /* age in years */\n" +
+        ");",
+    )
+  })
+})

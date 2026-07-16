@@ -433,3 +433,139 @@ describe("unrecognized metadata (open metadata bag)", () => {
     })
   })
 })
+
+describe("CHECK constraints from metadata", () => {
+  test("numeric minimum/maximum", () => {
+    expect(toSqlDdl(t(types.int32, { minimum: 0, maximum: 100 }))).toEqual({
+      type: "INTEGER",
+      nullable: false,
+      checks: ["CHECK ({name} >= 0)", "CHECK ({name} <= 100)"],
+    })
+  })
+
+  test("exclusiveMinimum/exclusiveMaximum", () => {
+    expect(toSqlDdl(t(types.number, { exclusiveMinimum: 0, exclusiveMaximum: 1 }))).toEqual({
+      type: "DOUBLE PRECISION",
+      nullable: false,
+      checks: ["CHECK ({name} > 0)", "CHECK ({name} < 1)"],
+    })
+  })
+
+  test("string minLength/maxLength", () => {
+    expect(toSqlDdl(t(types.string, { minLength: 1, maxLength: 50 }))).toEqual({
+      type: "TEXT",
+      nullable: false,
+      checks: ["CHECK (LENGTH({name}) >= 1)", "CHECK (LENGTH({name}) <= 50)"],
+    })
+  })
+
+  test("multipleOf", () => {
+    expect(toSqlDdl(t(types.integer, { multipleOf: 5 }))).toEqual({
+      type: "INTEGER",
+      nullable: false,
+      checks: ["CHECK ({name} % 5 = 0)"],
+    })
+  })
+
+  test("pattern (postgres uses ~)", () => {
+    expect(toSqlDdl(t(types.string, { pattern: "^[a-z]+$" }))).toEqual({
+      type: "TEXT",
+      nullable: false,
+      checks: ["CHECK ({name} ~ '^[a-z]+$')"],
+    })
+  })
+
+  test("pattern (mysql uses REGEXP)", () => {
+    expect(toSqlDdl(t(types.string, { pattern: "^[a-z]+$" }), { dialect: "mysql" })).toEqual({
+      type: "VARCHAR(255)",
+      nullable: false,
+      checks: ["CHECK ({name} REGEXP '^[a-z]+$')"],
+    })
+  })
+
+  test("pattern is skipped for sqlite (no native regex)", () => {
+    expect(toSqlDdl(t(types.string, { pattern: "^[a-z]+$" }), { dialect: "sqlite" })).toEqual({
+      type: "TEXT",
+      nullable: false,
+    })
+  })
+
+  test("non-numeric/non-string kinds ignore numeric/string constraints", () => {
+    expect(toSqlDdl(t(types.boolean, { minimum: 0, minLength: 1 }))).toEqual({
+      type: "BOOLEAN",
+      nullable: false,
+    })
+  })
+
+  test("combined constraints", () => {
+    expect(toSqlDdl(t(types.int32, { minimum: 0, maximum: 100, multipleOf: 5 }))).toEqual({
+      type: "INTEGER",
+      nullable: false,
+      checks: ["CHECK ({name} >= 0)", "CHECK ({name} <= 100)", "CHECK ({name} % 5 = 0)"],
+    })
+  })
+})
+
+describe("description metadata → comment", () => {
+  test("postgres uses a block comment", () => {
+    expect(toSqlDdl(t(types.string, { description: "the user's handle" }))).toEqual({
+      type: "TEXT",
+      nullable: false,
+      comment: "/* the user's handle */",
+    })
+  })
+
+  test("mysql uses native inline COMMENT", () => {
+    expect(toSqlDdl(t(types.string, { description: "the user's handle" }), { dialect: "mysql" })).toEqual({
+      type: "VARCHAR(255)",
+      nullable: false,
+      comment: "COMMENT 'the user''s handle'",
+    })
+  })
+
+  test("sqlite uses a block comment", () => {
+    expect(toSqlDdl(t(types.string, { description: "note" }), { dialect: "sqlite" })).toEqual({
+      type: "TEXT",
+      nullable: false,
+      comment: "/* note */",
+    })
+  })
+})
+
+describe("columnDef renders checks and comments", () => {
+  test("substitutes {name} into check clauses", () => {
+    expect(columnDef("age", toSqlDdl(t(types.int32, { minimum: 0, maximum: 130 })))).toBe(
+      "age INTEGER NOT NULL CHECK (age >= 0) CHECK (age <= 130)",
+    )
+  })
+
+  test("appends comment after checks", () => {
+    expect(
+      columnDef(
+        "age",
+        toSqlDdl(t(types.int32, { minimum: 0, description: "age in years" })),
+      ),
+    ).toBe("age INTEGER NOT NULL CHECK (age >= 0) /* age in years */")
+  })
+
+  test("mysql: comment renders as native COMMENT clause", () => {
+    expect(
+      columnDef("name", toSqlDdl(t(types.string, { description: "display name" }), { dialect: "mysql" })),
+    ).toBe("name VARCHAR(255) NOT NULL COMMENT 'display name'")
+  })
+
+  test("toCreateTable: comma is preserved, not swallowed by the comment", () => {
+    const ref = t(
+      types.object({
+        id: t(types.uuid),
+        age: t(types.int32, { minimum: 0, description: "age in years" }),
+      }),
+    )
+    expect(toCreateTable("users", ref)).toBe(
+      "CREATE TABLE users (\n" +
+        "  id UUID NOT NULL,\n" +
+        "  age INTEGER NOT NULL CHECK (age >= 0) /* age in years */\n" +
+        ");",
+    )
+  })
+})

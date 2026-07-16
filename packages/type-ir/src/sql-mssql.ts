@@ -1,4 +1,4 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
 
 type Converter = (shape: TypeShape) => string
 
@@ -72,6 +72,46 @@ function enumCheckConstraint(name: string, members: readonly string[]): string {
   return `CHECK (${name} IN (${values}))`
 }
 
+function isA(kind: string, target: string): boolean {
+  return kind === target || ancestors(kind).includes(target)
+}
+
+// Builds CHECK constraint clauses from the same open-metadata constraint vocabulary
+// as sql.ts / zod.ts / json-schema.ts (minimum/maximum/exclusiveMinimum/
+// exclusiveMaximum/minLength/maxLength/multipleOf). Unlike sql.ts's columnDef/toSqlDdl
+// split, `mssqlColumnDef` already has the column name in hand, so clauses are rendered
+// directly (no placeholder token needed).
+function buildMssqlChecks(name: string, kind: string, meta: Readonly<Record<string, unknown>>): string[] {
+  const numberLike = isA(kind, "number")
+  const stringLike = isA(kind, "string")
+  const checks: string[] = []
+
+  if (typeof meta.minimum === "number" && numberLike) checks.push(`CHECK (${name} >= ${meta.minimum})`)
+  if (typeof meta.maximum === "number" && numberLike) checks.push(`CHECK (${name} <= ${meta.maximum})`)
+  if (typeof meta.exclusiveMinimum === "number" && numberLike) checks.push(`CHECK (${name} > ${meta.exclusiveMinimum})`)
+  if (typeof meta.exclusiveMaximum === "number" && numberLike) checks.push(`CHECK (${name} < ${meta.exclusiveMaximum})`)
+  // MSSQL's length function is `LEN`, not `LENGTH` (T-SQL, unlike ANSI SQL/Postgres/MySQL/SQLite).
+  if (typeof meta.minLength === "number" && stringLike) checks.push(`CHECK (LEN(${name}) >= ${meta.minLength})`)
+  if (typeof meta.maxLength === "number" && stringLike) checks.push(`CHECK (LEN(${name}) <= ${meta.maxLength})`)
+  // `pattern` (regex) is intentionally skipped: T-SQL has no regex operator, and
+  // `LIKE` only supports a limited wildcard/character-class syntax, not real regex —
+  // emitting a `LIKE`-based CHECK from a regex pattern would be silently lossy
+  // (accepting/rejecting different values than the regex would). Skip rather than
+  // emit a constraint that lies about what it enforces.
+  if (typeof meta.multipleOf === "number" && numberLike) checks.push(`CHECK (${name} % ${meta.multipleOf} = 0)`)
+
+  return checks
+}
+
+// Renders `meta.description` as a block comment. MSSQL's real column-comment
+// mechanism is `sp_addextendedproperty`, a separate statement too complex to emit
+// inline here; `--` is avoided because it would swallow the trailing comma
+// `toMssqlCreateTable` appends after each column in a multi-column CREATE TABLE.
+function buildMssqlComment(meta: Readonly<Record<string, unknown>>): string | undefined {
+  if (typeof meta.description !== "string") return undefined
+  return `/* ${meta.description} */`
+}
+
 /**
  * Builds a full MSSQL column definition, including nullability, default, IDENTITY
  * (via `meta.identity`), and a CHECK constraint for enum-shaped columns (MSSQL has
@@ -87,10 +127,15 @@ export function mssqlColumnDef(name: string, ref: TypeRef): string {
 
   if (ref.meta.default !== undefined) ddl += ` DEFAULT ${sqlLiteral(ref.meta.default)}`
 
+  for (const check of buildMssqlChecks(name, ref.shape.kind, ref.meta)) ddl += ` ${check}`
+
   if (ref.shape.kind === "enum") {
     const s = ref.shape as TypeShape & { kind: "enum" }
     ddl += ` ${enumCheckConstraint(name, s.members)}`
   }
+
+  const comment = buildMssqlComment(ref.meta)
+  if (comment !== undefined) ddl += ` ${comment}`
 
   return ddl
 }
