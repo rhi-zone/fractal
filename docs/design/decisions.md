@@ -5,6 +5,62 @@ Each entry: what was decided, why, and what evidence or prior work grounds it.
 
 ---
 
+## `kind` is the canonical DU discriminant field name (2026-07-09)
+
+**Context:** The codebase had inconsistent discriminant naming — `DispatchMarker` used
+`by`, other DUs used `type` or ad-hoc names. Needed a single convention.
+
+**Decision:** All tagged-union discriminant fields are named `kind`. Applied concretely
+when `Result<T,E>` moved from `{ok: boolean}` to `{kind: "ok"|"err"}` (commit `f7dd940`,
+2026-07-16). `DispatchMarker.by` was renamed to `kind` in commit `8e8329c`.
+
+**Evidence:** Recorded in `docs/design/invariants.md` line 219.
+
+---
+
+## Projection is a type-crossing map, not an endofunctor (2026-07-16)
+
+**Context:** Prior framing described projection as a tree transform (`Node => Node`).
+This was a framing bug — projection crosses a type boundary.
+
+**Decision:** Projection is `Node => ProtocolType` (e.g. `Node => HttpRoute`). Convention
+transforms are `Node => Node` endofunctors applied before projection. Rewriters are
+`ProtocolType => ProtocolType` endofunctors applied after projection. The three layers are
+independent.
+
+**Evidence:** Corrected across `docs/design/invariants.md` and
+`docs/design/routing-and-transforms.md` (commit `21443d7`).
+
+---
+
+## One API tree drives multiple protocols via independent projections (2026-07-16)
+
+**Context:** Open question whether one agnostic tree could auto-derive both HTTP and CLI,
+given their input models have no 1:1 mapping.
+
+**Decision:** One API tree drives all protocols. The seam is the projection function per
+protocol (`Node => HttpRoute`, `Node => CliCommand`, etc.), not the tree. Each protocol
+gets its own convention transforms and rewriters. The API tree is organized by domain, not
+by protocol.
+
+**Evidence:** Settled in `docs/design/routing-and-transforms.md`. TODO.md open question #9
+struck through.
+
+---
+
+## `place` directive renamed to `moveTo`, self-based path resolution (2026-07-16)
+
+**Context:** The `place` directive used parent-based resolution (empty string `""` meant
+"stay at parent"). User challenged this as the wrong resolution root.
+
+**Decision:** Renamed to `moveTo`. Resolution root changed from parent-based to
+self-based — `moveTo: "."` means stay at current position, `moveTo: ".."` means go up to
+parent. Standard filesystem-style relative path semantics.
+
+**Evidence:** Commit `6796def`. Documented in `docs/design/routing-and-transforms.md`.
+
+---
+
 ## Attribute dispatch is not a routing-tree concern (2026-07-17)
 
 **Context:** The old direct tree-walk dispatcher supported dispatching at the same
