@@ -61,9 +61,10 @@ before acting.
   (`extractRouteTypeRefs`) → compilation → module emission of a
   `ValidatorMap` that `createApplyValidation()` consumes.
   `stubValidatorModuleSource()` emits the empty-map pass-through fallback for
-  dev-time before codegen has run. What's still missing: this is a set of
-  functions (`packages/codegen/src/build.ts`), not yet an actual build-step
-  invocation wired into a project's build (no script/CLI entry calls
+  dev-time before codegen has run. The compile step itself is now fully built
+  and tested (`packages/codegen/src/compile.test.ts`). What's still missing:
+  this is a set of functions (`packages/codegen/src/build.ts`), not yet an actual
+  build-step invocation wired into a project's build (no script/CLI entry calls
   `buildValidatorModuleSource()` and writes its output to disk), and the
   consumer-app-facing "does a real route's validators actually get replaced
   end-to-end" path is unverified.
@@ -89,22 +90,43 @@ before acting.
   `applyResponse`. `applyMoveTo` remains the deliberate erasure boundary —
   runtime string paths from `Meta` are unknowable statically. Type-flow
   tests added (`packages/http/src/type-flow.test.ts`).
-- **Routing performance** — partly addressed 2026-07-17. Micro-optimizations
+- **Routing performance** — substantially addressed 2026-07-17. Micro-optimizations
   landed first (commit e525eb5): `splitPath()` avoids a split+filter double
   allocation, `matchRoute()` does direct method lookup at the leaf instead of
   building a candidate array, and slug accumulation mutates in place instead
   of spreading per dynamic segment (safe because static children always win
-  over fallback). Then `compileRouter()` landed (commit a0f89d5) as an
-  optional drop-in replacement for `makeRouterFromRoute()` with the same
-  `(req) => Promise<Response>` contract: it walks the `HttpRoute` tree once
-  at build time and produces closures that call each other directly (no
-  route object in the per-request path), with pipeline merging
-  (`mergePipelines`) hoisted to compile time and a shared `runPipeline()`
-  extracted for both dispatchers. Still open: `compileRouter` is opt-in, not
-  the default — nothing currently forces callers onto it, and a
-  radix-tree/trie structure (the Hono-style multi-strategy approach) hasn't
-  been built, just the closure-compilation step. Matters more as route count
-  grows; not a current blocker.
+  over fallback). `compileRouter()` then landed (commit a0f89d5) as an
+  optional drop-in replacement for `makeRouterFromRoute()`, walking the
+  `HttpRoute` tree once at build time into direct-calling closures with
+  pipeline merging hoisted to compile time — but this only pre-merged
+  route-level + method-level pipelines, and once the route-level pipeline
+  was removed entirely (commit 7072e2c: pipeline now lives on method entries
+  only, `mergePipelines`/`compileRouter`/`compileNode` all deleted as dead
+  weight) there was nothing left for it to hoist, so it was removed too.
+  In its place, composable route compilers landed (commit b669278,
+  `packages/http/src/compile.ts`): `radixRouter`, `compiledCharRouter`,
+  `mapCharRouter` are independent `HttpRoute → (req) => Promise<Response>`
+  compilers; their underlying matchers (`radixMatcher`, `compiledCharMatcher`,
+  `mapMatcher`) return `RouteMatch | undefined` and compose via
+  `chainMatchers` (first-wins); `toRouter` wraps any `Matcher` with pipeline
+  execution. A benchmark harness (`packages/http/src/route.bench.ts`, 8
+  architectures × 30 cases × path lengths up to 8k chars) backs this with
+  measured results in `docs/design/routing-benchmarks.md` — the hybrid
+  Map+compiled-charFn strategy (#8) wins broadly (13-280ns vs 45-12000ns+ for
+  the segment-trie baseline as path length grows), a regex-per-method
+  approach is uniformly worst. Separately, `fusePipeline` + `skipEmptyInput`
+  (commit a1fe16c) are optional `HttpRoute → HttpRoute` visitors:
+  `fusePipeline` composes each method entry's transform arrays down to at
+  most one function, collapsing `runPipeline`'s per-request loops to a single
+  call; `skipEmptyInput` swaps in a no-op decode/validate for 0-param
+  handlers (detected via runtime `handler.length`). Both compose with either
+  dispatcher. Still open: none of this is wired as a default — a caller must
+  explicitly choose a compiled router and apply the optimization visitors;
+  `makeRouterFromRoute` remains the uncompiled baseline. The benchmark numbers
+  are single-machine (see Hardware table in routing-benchmarks.md) and the
+  crossover points between strategies (when does the hybrid approach's setup
+  cost stop paying for itself vs. the plain segment trie) haven't been tuned
+  into actual selection constants — see new open thread below.
 - **DX helper composition mechanism is undesigned** — the directive *data
   model* is settled (an array of kind-tagged DU objects on `meta.http`), and
   individual helpers exist (`http.get()` sets only the method directive, with
@@ -118,6 +140,58 @@ before acting.
   / `route.ts`'s `Pipeline.sources`) for requests whose input layout doesn't
   match the store conventions — e.g. a payload nested inside a single body
   field rather than spread across top-level keys.
+- **Route-level pipeline removed — architectural simplification** (2026-07-17,
+  commit 7072e2c): `HttpRoute` no longer carries a `pipeline` at the node
+  level, only on individual method entries. `mergePipelines`, `compileRouter`,
+  and `compileNode` were deleted — they existed solely to merge/hoist
+  route-level and method-level pipelines, and with only one level left
+  there's nothing to merge. `matchRoute` and `makeRouterFromRoute` now read
+  `entry.pipeline` directly; `injectValidators` stopped threading
+  `route.pipeline` through. Net effect: a real simplification, not a
+  regression — the compiled-router capability this displaced was rebuilt
+  properly as the composable route compilers (see Routing performance
+  thread above).
+- **ALS (`AsyncLocalStorage`) checked for compatibility with `runPipeline` —
+  verified safe, not yet adopted as a utility** (2026-07-17): `runPipeline`
+  (`packages/http/src/route.ts`) is a plain `async` function that `await`s
+  each pipeline stage in sequence with no branching that would drop or
+  fork the async context — a clean linear await chain. This means wrapping
+  it (or a caller's handler) in `AsyncLocalStorage.run()` for per-request
+  context (e.g. request-scoped logging/tracing) is safe and needs no changes
+  to `runPipeline` itself. No `withALS`-style composable wrapper has been
+  written yet — see new open thread below.
+- **Tuning crossover constants for router strategy selection is unstarted**
+  (2026-07-17): `docs/design/routing-benchmarks.md` shows relative strategy
+  performance (segment trie vs. radix vs. compiled-char vs. hybrid Map+charFn)
+  crossing over at different route counts / path lengths, but no code picks
+  a strategy automatically based on a measured tree shape — a caller must
+  hand-pick one of `radixRouter`/`compiledCharRouter`/`mapCharRouter`/
+  `makeRouterFromRoute`. The benchmark numbers are single-machine (one Ryzen
+  9 9900X, one Bun version — see routing-benchmarks.md's Hardware table), so
+  any crossover constants derived from them would need re-validation on
+  different hardware/runtimes before being trusted as a general default.
+- **Propagating the HTTP architecture to other projections is unstarted**
+  (2026-07-17): `packages/http/src/route.ts` is now the reference pattern —
+  generic `HttpRoute<H>`, `Node ⇒ ProtocolType` projection + rewriter
+  pipeline, composable compiled dispatch, pipeline-fusion visitors. `mcp`,
+  `cli`, `openapi`, and `client` still walk the raw `Node` tree directly (see
+  "Other projection packages still on the old Node-walking pattern" above,
+  carried over unchanged — migrating them is still unstarted, not newly
+  progressed this session).
+- **Sensible HTTP config defaults — what does a default setup look like?**
+  (2026-07-17): with the compiled routers, pipeline-fusion visitors, and
+  validator injection all now built as independently-composable opt-in
+  pieces, there's no single "just give me a working HTTP server" entry point
+  that picks reasonable defaults (which router compiler, whether to fuse
+  pipelines, whether to skip empty input, whether validators are wired) —
+  each is a separate function a caller must know to reach for and compose in
+  the right order. Not yet designed.
+- **`withALS` as a shipped composable wrapper is undesigned** (2026-07-17):
+  see the ALS verification note above — `runPipeline`'s plain-await-chain
+  shape is confirmed safe to wrap in `AsyncLocalStorage.run()`, but no
+  `withALS`-style utility exists in `packages/http` yet to make that
+  request-scoped-context pattern (logging, tracing, per-request caller
+  identity) reusable rather than something each caller hand-rolls.
 
 ### Design model is captured and authoritative in `docs/design/invariants.md`
 
