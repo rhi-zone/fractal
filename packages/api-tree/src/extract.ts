@@ -51,6 +51,18 @@ export type JsonSchema = {
   oneOf?: JsonSchema[]
   discriminator?: { propertyName: string }
   $comment?: string
+  // `description`/`default` ARE emitted by the underlying type-ir projector
+  // (json-schema.ts's `withMeta`) whenever a TypeRef carries
+  // `meta.description`/`meta.default` — but this extractor's own
+  // `typeRefFromType` doesn't populate either from TS source today (no
+  // per-field JSDoc → `meta.description` wiring, no default-value syntax to
+  // read → `meta.default` wiring). Declared here so consumers (e.g. the CLI
+  // projector's help text / default-value application) can read them when a
+  // schema DOES carry them — hand-authored in tests, or once a future
+  // extractor pass fills them in — without an `as Record<string, unknown>`
+  // escape hatch at every read site.
+  description?: string
+  default?: string | number | boolean
 }
 
 // ============================================================================

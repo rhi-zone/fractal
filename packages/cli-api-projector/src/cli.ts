@@ -91,6 +91,12 @@ export type CliOpts = {
    * Defaults to "cli".
    */
   readonly programName?: string
+  /**
+   * Program version string, printed (and returned from) on `--version`/`-V`.
+   * When absent, `--version` falls through to a CliError — there's nothing
+   * to print.
+   */
+  readonly version?: string
 }
 
 // ============================================================================
@@ -140,12 +146,32 @@ type Resolved = {
 }
 
 /**
+ * Find a leaf child of `children` whose `meta.cli.alias` equals `head`.
+ * Returns the child's canonical key (NOT the alias) alongside the node —
+ * schema lookups and help text key off the canonical name, so an alias is
+ * purely an alternate invocation spelling, never a rename.
+ */
+function findLeafByAlias(
+  children: Record<string, Node>,
+  head: string,
+): [string, Node] | undefined {
+  for (const [key, child] of Object.entries(children)) {
+    if (isLeaf(child) && getCliMeta(child.meta).alias === head) return [key, child]
+  }
+  return undefined
+}
+
+/**
  * Walk the node tree along argv segments, resolving:
  *
  *   Static child (no handler) → consume segment, recurse
  *   No static match + `fallback` present → consume current segment as the
  *     slug value directly, bind it as `fallback.name`, recurse into subtree
  *   Leaf child (has handler) at tail → terminal; return resolved
+ *
+ * A leaf child's `meta.cli.alias` (see `CliMeta`) is also accepted at the
+ * terminal position — `head` may name either the leaf's own key or its
+ * alias. The resolved `leafName`/`schemaPath` always use the canonical key.
  *
  * Returns null if no matching path is found.
  */
@@ -161,16 +187,19 @@ function resolveLeaf(
 
   const children = n.children ?? {}
 
-  // Terminal: head should name a leaf child
+  // Terminal: head should name a leaf child, by its own key or its alias
   if (tail.length === 0) {
-    const child = children[head]
+    const direct = children[head]
+    const [key, child] = direct !== undefined
+      ? [head, direct]
+      : (findLeafByAlias(children, head) ?? [head, undefined])
     if (child !== undefined && isLeaf(child)) {
       return {
         handler: child.handler!,
         slugs,
-        leafName: head,
+        leafName: key,
         leafMeta: child.meta,
-        schemaPath: [...schemaPath, head],
+        schemaPath: [...schemaPath, key],
       }
     }
     return null
@@ -237,7 +266,8 @@ function buildHelp(
       if (cliMeta.hidden === true) continue
       const leafDesc = descriptionFrom(child.meta)
       const leafName = typeof cliMeta.name === "string" ? cliMeta.name : key
-      lines.push(`  ${leafName}${leafDesc !== undefined ? `  — ${leafDesc}` : ""}`)
+      const aliasSuffix = typeof cliMeta.alias === "string" ? ` (alias: ${cliMeta.alias})` : ""
+      lines.push(`  ${leafName}${aliasSuffix}${leafDesc !== undefined ? `  — ${leafDesc}` : ""}`)
     }
   }
 
@@ -263,6 +293,7 @@ function buildHelp(
   lines.push("")
   lines.push("Global flags:")
   lines.push("  --help        Show this help text")
+  lines.push("  --version, -V  Print the program version")
   lines.push("  --json        Output result as JSON (default)")
   lines.push("  --yes, --force  Skip confirmation prompts for destructive ops")
   lines.push("")
@@ -303,10 +334,12 @@ function buildLeafHelp(
     const required = toolSchema.inputSchema.required ?? []
     for (const [field, fieldSchema] of Object.entries(props)) {
       const isRequired = required.includes(field)
-      // `description` isn't part of the typed JsonSchema shape emitted today,
-      // but is read defensively in case a future extractor attaches one.
-      const fsDescRaw = (fieldSchema as Record<string, unknown>)["description"]
-      const fsDesc = typeof fsDescRaw === "string" ? fsDescRaw : undefined
+      // Known limitation: `extractToolSchemas` (packages/api-tree/src/extract.ts)
+      // doesn't populate per-field `description` from source today (no
+      // per-field JSDoc extraction wired up) — this reads it defensively so
+      // help text picks it up the moment a schema DOES carry one (hand-authored,
+      // or once a future extractor pass adds JSDoc-per-field support).
+      const fsDesc = fieldSchema.description
       const req = isRequired ? " (required)" : " (optional)"
       const typeHint = describeFieldType(fieldSchema)
       lines.push(`  --${field}${typeHint !== undefined ? `  <${typeHint}>` : ""}${fsDesc !== undefined ? `  ${fsDesc}` : ""}${req}`)
@@ -337,6 +370,7 @@ function describeFieldType(fieldSchema: JsonSchema): string | undefined {
 type ParsedArgv = {
   flags: Record<string, string | string[] | true>
   help: boolean
+  version: boolean
   yes: boolean
   json: boolean
   jsonl: boolean
@@ -346,11 +380,12 @@ type ParsedArgv = {
  * Parse named --flags from argv into a flat object.
  * Boolean flags (no following value, or next arg starts with --) → true.
  * Repeated flags → array.
- * Extracts: --help, --yes/--force, --json, --jsonl.
+ * Extracts: --help, --version/-V, --yes/--force, --json, --jsonl.
  */
 function parseFlags(argv: string[]): ParsedArgv {
   const flags: Record<string, string | string[] | true> = {}
   let help = false
+  let version = false
   let yes = false
   let json = false
   let jsonl = false
@@ -362,6 +397,9 @@ function parseFlags(argv: string[]): ParsedArgv {
 
     if (arg === "--help" || arg === "-h") {
       help = true; i++; continue
+    }
+    if (arg === "--version" || arg === "-V") {
+      version = true; i++; continue
     }
     if (arg === "--yes" || arg === "--force" || arg === "-y") {
       yes = true; i++; continue
@@ -398,7 +436,7 @@ function parseFlags(argv: string[]): ParsedArgv {
     i++
   }
 
-  return { flags, help, yes, json: json || !jsonl, jsonl }
+  return { flags, help, version, yes, json: json || !jsonl, jsonl }
 }
 
 // ============================================================================
@@ -566,6 +604,56 @@ export function coerceInput(
 }
 
 // ============================================================================
+// Defaults + required-field validation
+// ============================================================================
+
+/**
+ * Fill in `schema.properties[field].default` for any field absent from
+ * `input`. Defaults come from the schema pre-typed (e.g. `default: 0` for a
+ * number field) — no coercion is applied to them, unlike argv-sourced string
+ * values. A field already present in `input` (including explicit `false`/
+ * `0`/`""`) is left alone; "absent" means `undefined`, not falsy.
+ */
+export function applyDefaults(
+  input: Record<string, unknown>,
+  schema: JsonSchema | undefined,
+): Record<string, unknown> {
+  const props = schema?.properties
+  if (props === undefined) return input
+
+  const out: Record<string, unknown> = { ...input }
+  for (const [field, fieldSchema] of Object.entries(props)) {
+    if (out[field] === undefined && fieldSchema.default !== undefined) {
+      out[field] = fieldSchema.default
+    }
+  }
+  return out
+}
+
+/**
+ * Validate that every field in `schema.required` is present in `input`
+ * (post-defaults). Throws CliError listing all missing fields at once
+ * (rather than failing on the first) so a user fixing a multi-field miss
+ * doesn't have to re-run once per field.
+ */
+export function validateRequired(
+  input: Record<string, unknown>,
+  schema: JsonSchema | undefined,
+): void {
+  const required = schema?.required
+  if (required === undefined || required.length === 0) return
+
+  const missing = required.filter((field) => input[field] === undefined)
+  if (missing.length > 0) {
+    const flags = missing.map((field) => `--${field}`).join(", ")
+    throw new CliError(
+      `Missing required field${missing.length > 1 ? "s" : ""}: ${flags}`,
+      1,
+    )
+  }
+}
+
+// ============================================================================
 // Default IO (process-backed)
 // ============================================================================
 
@@ -635,7 +723,19 @@ export async function runCli(
     return
   }
 
-  const { flags, help, yes, json: _json, jsonl } = parseFlags(flagArgv)
+  const { flags, help, version, yes, json: _json, jsonl } = parseFlags(flagArgv)
+
+  // --version — print the configured program version and return. Takes
+  // priority over subcommand resolution (mirrors --help), since it's a
+  // program-level query, not a subcommand-scoped one.
+  if (version) {
+    if (opts.version === undefined) {
+      ioResolved.stderr.write("No version configured for this program.\n")
+      throw new CliError("No version configured", 1)
+    }
+    ioResolved.stdout.write(opts.version + "\n")
+    return
+  }
 
   // No subcommand args — show root help
   if (pathSegments.length === 0) {
@@ -674,8 +774,11 @@ export async function runCli(
   // Resolve the leaf handler
   const target = resolveLeaf(n, pathSegments, {})
   if (target === null) {
-    ioResolved.stderr.write(`Unknown command: ${pathSegments.join(" ")}\nRun with --help for usage.\n`)
-    throw new CliError(`Unknown command: ${pathSegments.join(" ")}`, 1)
+    const typed = pathSegments.join(" ")
+    const suggestion = suggestCommand(n, pathSegments)
+    const hint = suggestion !== undefined ? ` Did you mean "${suggestion}"?` : ""
+    ioResolved.stderr.write(`Unknown command: "${typed}".${hint}\nRun with --help for usage.\n`)
+    throw new CliError(`Unknown command: "${typed}".${hint}`, 1)
   }
 
   // Tags are read directly from the leaf's own meta — no ancestor inheritance.
@@ -694,12 +797,17 @@ export async function runCli(
 
   // Build input: flags + slugs (provenance-blind merge), then coerce against
   // the leaf's input schema (number/boolean/array/enum → typed values; a
-  // schema-less field, or no schema at all, passes through unchanged).
+  // schema-less field, or no schema at all, passes through unchanged), then
+  // fill in schema defaults for absent fields, then validate that every
+  // `required` field is present — all BEFORE the handler is ever called.
   const schemaName = target.schemaPath.join("_").replace(/-/g, "_")
+  const inputSchema = schemas[schemaName]?.inputSchema
   const rawInput = buildInput(flags, target.slugs)
   let input: Record<string, unknown>
   try {
-    input = coerceInput(rawInput, schemas[schemaName]?.inputSchema)
+    input = coerceInput(rawInput, inputSchema)
+    input = applyDefaults(input, inputSchema)
+    validateRequired(input, inputSchema)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     ioResolved.stderr.write(`Error: ${msg}\n`)
@@ -795,6 +903,27 @@ export function walkCliCommands(
   }
 
   return out
+}
+
+/**
+ * Suggest the closest reachable full command path to what the user typed,
+ * by edit distance over the space-joined path strings — same
+ * `levenshteinDistance` used for enum near-misses (coerceScalar). Returns
+ * undefined when the tree has no leaf commands at all.
+ */
+function suggestCommand(root: Node, pathSegments: string[]): string | undefined {
+  const typed = pathSegments.join(" ")
+  const candidates = walkCliCommands(root).map((c) => [...c.path, c.leafName].join(" "))
+  let best: string | undefined
+  let bestDist = Infinity
+  for (const candidate of candidates) {
+    const d = levenshteinDistance(typed, candidate)
+    if (d < bestDist) {
+      bestDist = d
+      best = candidate
+    }
+  }
+  return best
 }
 
 // Re-export types for consumers
