@@ -14,6 +14,7 @@
   },
   "files": ["src"],
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@rhi-zone/fractal-api-tree": "workspace:*"
   },
   "devDependencies": {

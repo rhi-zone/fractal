@@ -33,7 +33,7 @@
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 
 // ============================================================================
 // Types
@@ -149,8 +149,19 @@ export function getMcpMeta(meta: Meta): McpMeta {
 // Tree walk
 // ============================================================================
 
+/** `toTools`'s full result: the flat descriptor array plus a name→handler
+ * map for dispatch (server.ts's `createMcpServer` resolves tool calls
+ * through this map instead of re-walking the tree per call). */
+export type ProjectToolsResult = {
+  readonly tools: McpTool[]
+  readonly handlers: ReadonlyMap<string, Handler>
+}
+
 /**
- * Walk a Node tree and produce a flat array of MCP tool descriptors.
+ * Walk a Node tree and produce a flat array of MCP tool descriptors, plus
+ * the name→handler map used to dispatch tool calls (server.ts). Single
+ * walk, single source of truth for name construction — `toTools` is a thin
+ * projection of this onto just the `tools` array.
  *
  * Name construction (tree-position namespacing, underscore-joined):
  *   root leaf "get"                    → "get"
@@ -170,8 +181,9 @@ export function getMcpMeta(meta: Meta): McpMeta {
  * @param n     - The root node to walk.
  * @param opts  - Optional derived `schemas` map (from @rhi-zone/fractal-type-ir).
  */
-export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
+export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsResult {
   const schemas = opts.schemas ?? {}
+  const handlers = new Map<string, Handler>()
 
   const walk = (n: Node, prefix: string): McpTool[] => {
     const out: McpTool[] = []
@@ -226,6 +238,7 @@ export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
           inputSchema: derived?.inputSchema ?? { type: "object" },
           ...(annotations !== undefined ? { annotations } : {}),
         })
+        handlers.set(name, child.handler as Handler)
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         // Static child: use meta.mcp.segment override or the tree key
@@ -245,5 +258,18 @@ export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
     return out
   }
 
-  return walk(n, "")
+  const tools = walk(n, "")
+  return { tools, handlers }
+}
+
+/**
+ * Walk a Node tree and produce a flat array of MCP tool descriptors. See
+ * `projectTools` for the full walk (name construction, tag/annotation
+ * derivation) — `toTools` is a thin projection onto just the `tools` array.
+ *
+ * @param n     - The root node to walk.
+ * @param opts  - Optional derived `schemas` map (from @rhi-zone/fractal-type-ir).
+ */
+export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
+  return projectTools(n, opts).tools
 }
