@@ -130,6 +130,10 @@ before acting.
   cost stop paying for itself vs. the plain segment trie) haven't been tuned
   into actual selection constants, nor would `createFetch` pick a strategy
   automatically even if they were.
+  Update (2026-07-17): router auto-selection is a non-issue — the
+  static/dynamic split already covers the performance space; `createFetch`
+  defaults to the zero-cost `makeRouterFromRoute` and the compiled strategies
+  are opt-in for users who want them.
 - **DX helper composition mechanism is undesigned** — the directive *data
   model* is settled (an array of kind-tagged DU objects on `meta.http`), and
   individual helpers exist (`http.get()` sets only the method directive, with
@@ -137,12 +141,13 @@ before acting.
   how these helpers compose together to build up a directive array (e.g.
   chaining vs. spreading vs. some builder) hasn't been designed. This is
   separate from, and downstream of, the settled data model.
-- **Input transform escape hatch not yet on the pipeline type** — designed
-  but not implemented: an optional `transform: (bag: Record<string, unknown>)
-  => Record<string, unknown>` step in the decode pipeline (`packages/http/src/decode.ts`
-  / `route.ts`'s `Pipeline.sources`) for requests whose input layout doesn't
-  match the store conventions — e.g. a payload nested inside a single body
-  field rather than spread across top-level keys.
+- ~~**Input transform escape hatch not yet on the pipeline type**~~ —
+  RESOLVED: `Pipeline.sources.transform` already exists in `route.ts` and is
+  wired into `defaultDecode` (landed as part of commit cc10c04, the
+  stores-based input extraction). An optional
+  `transform: (bag: Record<string, unknown>) => Record<string, unknown>`
+  step runs after assembly, before the handler sees the input — exactly the
+  designed escape hatch for non-conventional payload shapes.
 - **Route-level pipeline removed — architectural simplification** (2026-07-17,
   commit 7072e2c): `HttpRoute` no longer carries a `pipeline` at the node
   level, only on individual method entries. `mergePipelines`, `compileRouter`,
