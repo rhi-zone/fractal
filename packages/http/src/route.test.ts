@@ -8,7 +8,7 @@ import { node, op } from "@rhi-zone/fractal-core/node"
 import type { Meta } from "@rhi-zone/fractal-core/node"
 import {
   applyMethods,
-  applyPlacement,
+  applyMoveTo,
   applyResponse,
   composeTransforms,
   httpRoute,
@@ -110,23 +110,23 @@ describe("applyMethods", () => {
 })
 
 // ============================================================================
-// applyPlacement — node moves under wildcard segment (motivating example)
+// applyMoveTo — node moves under wildcard segment (motivating example)
 // ============================================================================
 
-describe("applyPlacement", () => {
-  it("moves a node down under a new wildcard segment (./*)", () => {
+describe("applyMoveTo", () => {
+  it("moves a node up then down under a new wildcard segment (../*)", () => {
     const getBook = (_: unknown) => ({})
     const api = node({
       children: {
         users: node({
           children: {
             list: op((_: unknown) => []),
-            get: op(getBook, { http: { directives: [{ kind: "place", path: "./*" }] } }),
+            get: op(getBook, { http: { directives: [{ kind: "moveTo", path: "../*" }] } }),
           },
         }),
       },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     // "get" no longer sits at users/get
     expect(route.children?.users?.children?.get).toBeUndefined()
     // "list" untouched
@@ -146,19 +146,19 @@ describe("applyPlacement", () => {
             list: op((_: unknown) => []),
             create: op((_: unknown) => ({})),
             get: op(read, {
-              http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "GET" }] },
+              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
             }),
             update: op(replace, {
-              http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "PUT" }] },
+              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "PUT" }] },
             }),
             del: op(remove, {
-              http: { directives: [{ kind: "place", path: "./*" }, { kind: "method", value: "DELETE" }] },
+              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "DELETE" }] },
             }),
           },
         }),
       },
     })
-    const transform = composeTransforms(applyMethods, applyPlacement)
+    const transform = composeTransforms(applyMethods, applyMoveTo)
     const route = transform(naiveTransform(api))
 
     expect(route.children?.books?.children?.list?.methods?.POST).toBeDefined()
@@ -177,31 +177,31 @@ describe("applyPlacement", () => {
   it("`.` is identity — node stays at its current position", () => {
     const handler = (_: unknown) => ({})
     const api = node({
-      children: { item: op(handler, { http: { directives: [{ kind: "place", path: "." }] } }) },
+      children: { item: op(handler, { http: { directives: [{ kind: "moveTo", path: "." }] } }) },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.item?.methods?.POST?.handler).toBe(handler)
   })
 
-  it("`..` moves a node up one level from its containing position", () => {
-    // itemPath = [admin, ping]; base (containing position) = [admin];
-    // ".." pops one further from base → [] (root) — merges directly into root.
+  it("`../..` moves a node up two levels (to the root)", () => {
+    // itemPath = [admin, ping]; base (self) = [admin, ping];
+    // "../.." pops twice → [] (root) — merges directly into root.
     const handler = (_: unknown) => ({})
     const api = node({
       children: {
         admin: node({
           children: {
-            ping: op(handler, { http: { directives: [{ kind: "place", path: ".." }] } }),
+            ping: op(handler, { http: { directives: [{ kind: "moveTo", path: "../.." }] } }),
           },
         }),
       },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.admin?.children?.ping).toBeUndefined()
     expect(route.methods?.POST?.handler).toBe(handler)
   })
 
-  it("`../../admin` moves a deeply nested node under a new named segment", () => {
+  it("`../../../admin` moves a deeply nested node under a new named segment", () => {
     const handler = (_: unknown) => ({})
     const api = node({
       children: {
@@ -209,16 +209,58 @@ describe("applyPlacement", () => {
           children: {
             b: node({
               children: {
-                leaf: op(handler, { http: { directives: [{ kind: "place", path: "../../admin" }] } }),
+                leaf: op(handler, { http: { directives: [{ kind: "moveTo", path: "../../../admin" }] } }),
               },
             }),
           },
         }),
       },
     })
-    const route = applyPlacement(naiveTransform(api))
+    const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.a?.children?.b?.children?.leaf).toBeUndefined()
     expect(route.children?.admin?.methods?.POST?.handler).toBe(handler)
+  })
+
+  it("mkdir-p: a multi-segment moveTo target creates every missing intermediate node", () => {
+    const handler = (_: unknown) => ({})
+    const api = node({
+      children: {
+        leaf: op(handler, { http: { directives: [{ kind: "moveTo", path: "../api/v2/users" }] } }),
+      },
+    })
+    const route = applyMoveTo(naiveTransform(api))
+    expect(route.children?.leaf).toBeUndefined()
+    expect(route.children?.api?.children?.v2?.children?.users?.methods?.POST?.handler).toBe(handler)
+  })
+
+  it("throws when two placements converge on the same path AND method", () => {
+    const api = node({
+      children: {
+        first: op((_: unknown) => ({ from: "first" }), {
+          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
+        }),
+        second: op((_: unknown) => ({ from: "second" }), {
+          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
+        }),
+      },
+    })
+    const transform = composeTransforms(applyMethods, applyMoveTo)
+    expect(() => transform(naiveTransform(api))).toThrow(/conflict/i)
+  })
+
+  it("does NOT throw when two placements converge on the same path with DIFFERENT methods", () => {
+    const api = node({
+      children: {
+        first: op((_: unknown) => ({ from: "first" }), {
+          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
+        }),
+        second: op((_: unknown) => ({ from: "second" }), {
+          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "PUT" }] },
+        }),
+      },
+    })
+    const transform = composeTransforms(applyMethods, applyMoveTo)
+    expect(() => transform(naiveTransform(api))).not.toThrow()
   })
 })
 
@@ -266,7 +308,7 @@ describe("composeTransforms", () => {
   it("applies rewriters left-to-right", () => {
     const handler = (_: unknown) => ({})
     const api = op(handler, { http: { directives: [{ kind: "method", value: "GET" }] } })
-    const pipeline = composeTransforms(applyMethods, applyResponse, applyPlacement)
+    const pipeline = composeTransforms(applyMethods, applyResponse, applyMoveTo)
     const route = pipeline(naiveTransform(api))
     expect(Object.keys(route.methods ?? {})).toEqual(["GET"])
   })
@@ -292,7 +334,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
       children: {
         books: node({
           // Pre-declared fallback supplies the wildcard's parameter name
-          // ("bookId") that applyPlacement reuses when it creates/merges the
+          // ("bookId") that applyMoveTo reuses when it creates/merges the
           // wildcard subtree for `get`/`remove` below.
           fallback: { name: "bookId", subtree: node({}) },
           children: {
@@ -309,7 +351,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
               {
                 http: {
                   directives: [
-                    { kind: "place", path: "./*" },
+                    { kind: "moveTo", path: "../*" },
                     { kind: "method", value: "GET" },
                   ],
                 },
@@ -320,7 +362,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
               {
                 http: {
                   directives: [
-                    { kind: "place", path: "./*" },
+                    { kind: "moveTo", path: "../*" },
                     { kind: "method", value: "DELETE" },
                   ],
                 },
@@ -332,10 +374,10 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
     })
 
     const routes = toHttpRoutes(api)
-    const pipeline = composeTransforms(applyMethods, applyPlacement, applyResponse)
+    const pipeline = composeTransforms(applyMethods, applyMoveTo, applyResponse)
     const router = makeRouter(pipeline(routes))
 
-    // "list" and "create" carry no `place` directive, so they stay at their
+    // "list" and "create" carry no `moveTo` directive, so they stay at their
     // naiveTransform positions: /books/list and /books/create.
     const listRes = await router(new Request("http://localhost/books/list"))
     expect(listRes.status).toBe(200)
@@ -377,7 +419,7 @@ describe("httpRoute / isHttpRoute", () => {
     expect(isHttpRoute(n)).toBe(false)
   })
 
-  it("makeRouter dispatches an HttpRoute through the new simple dispatcher", async () => {
+  it("makeRouter dispatches an HttpRoute through the simple exact-path/method dispatcher", async () => {
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => ({ via: "route" }), meta: {} } },
       meta: {},
@@ -386,14 +428,6 @@ describe("httpRoute / isHttpRoute", () => {
     const res = await router(new Request("http://localhost/"))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ via: "route" })
-  })
-
-  it("makeRouter still dispatches a plain Node through the legacy tree-walk dispatcher", async () => {
-    const api = op((_: unknown) => ({ via: "node" }), { tags: { readOnly: true } })
-    const router = makeRouter(node({ children: { thing: api } }))
-    const res = await router(new Request("http://localhost/thing"))
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ via: "node" })
   })
 })
 
@@ -612,5 +646,141 @@ describe("Pipeline", () => {
       "encode",
       "resTransform",
     ])
+  })
+})
+
+// ============================================================================
+// Validate slot — after inputTransforms, before handler
+// ============================================================================
+
+describe("Pipeline — validate slot", () => {
+  it("validate returning ok → handler receives validated value", async () => {
+    let capturedInput: unknown
+    const pipeline: Pipeline = {
+      validate: (bag) => ({ kind: "ok", value: { name: String(bag.name).toUpperCase() } }),
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?name=alice"))
+    expect(capturedInput).toEqual({ name: "ALICE" })
+  })
+
+  it("validate returning err → 400 response with error body", async () => {
+    const pipeline: Pipeline = {
+      validate: (bag) => {
+        if (typeof bag.age !== "string" || isNaN(Number(bag.age))) {
+          return { kind: "err", error: { field: "age", message: "must be a number" } }
+        }
+        return { kind: "ok", value: { age: Number(bag.age) } }
+      },
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (_: unknown) => ({ ok: true }),
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const res = await router(new Request("http://localhost/?age=not-a-number"))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: { field: string; message: string } }
+    expect(body.error.field).toBe("age")
+    expect(body.error.message).toBe("must be a number")
+  })
+
+  it("no validate → input passes through unchanged (backward compat)", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?x=1"))
+    expect(capturedInput).toEqual({ x: "1" })
+  })
+
+  it("validate with async (Promise<Result>)", async () => {
+    let capturedInput: unknown
+    const pipeline: Pipeline = {
+      validate: async (bag) => {
+        // Simulate async validation (e.g., DB lookup)
+        await Promise.resolve()
+        return { kind: "ok", value: { validated: true, original: bag } }
+      },
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?key=val"))
+    expect(capturedInput).toEqual({ validated: true, original: { key: "val" } })
+  })
+
+  it("validate runs after inputTransforms", async () => {
+    const order: string[] = []
+    const pipeline: Pipeline = {
+      inputTransforms: [(input) => { order.push("inputTransform"); return input }],
+      validate: (bag) => { order.push("validate"); return { kind: "ok", value: bag } },
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (_: unknown) => { order.push("handler"); return {} },
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/"))
+    expect(order).toEqual(["inputTransform", "validate", "handler"])
+  })
+
+  it("method-level validate overrides node-level", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          pipeline: {
+            validate: (bag) => ({ kind: "ok", value: { from: "method", ...bag } }),
+          },
+        },
+      },
+      pipeline: {
+        validate: (bag) => ({ kind: "ok", value: { from: "node", ...bag } }),
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?x=1"))
+    expect(capturedInput).toEqual({ from: "method", x: "1" })
   })
 })

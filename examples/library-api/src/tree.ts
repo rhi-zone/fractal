@@ -1,16 +1,16 @@
 // examples/library-api/src/tree.ts
 //
-// Library API — new-model authoring: both service class and standalone node(),
-// a `fallback` field for per-book routes, meta.tags spanning
-// readOnly/idempotent/destructive. Each leaf carries its OWN tags — there is
-// no ancestor tag inheritance (removed; see docs/design/router-model.md —
-// "Tags"): a node-level tag no longer flows down to its descendants.
+// Library API — new-model authoring on the HttpRoute pipeline (naiveTransform
+// + applyMethods/applyMoveTo/applyResponse, see packages/http/src/route.ts
+// and docs/design/routing-and-transforms.md). Each leaf carries its OWN tags —
+// there is no ancestor tag inheritance (removed; see docs/design/router-model.md
+// — "Tags"): a node-level tag does not flow down to its descendants.
 //
 // In the new node model, callables are leaf nodes stored in `children` via
-// `op(fn, meta?)`. The `ops` map is gone — a leaf child IS a Node with handler.
-// `service()` still works: methods become leaf node children automatically;
-// an instance field literally named `fallback` (shape `{ name, subtree }`)
-// becomes the resulting node's `fallback` (replaces the former `param()`).
+// `op(fn, meta?)`. `service()` still works: methods become leaf node children
+// automatically; an instance field literally named `fallback` (shape
+// `{ name, subtree }`) becomes the resulting node's `fallback` (replaces the
+// former `param()`).
 //
 // This file is also the codegen entry-point: extractToolSchemas walks the
 // exported `api` node() call and derives input schemas for inline ops.
@@ -19,7 +19,7 @@
 
 import { node, op, service } from "@rhi-zone/fractal-core/node"
 import { http } from "@rhi-zone/fractal-http/verbs"
-import { toHttpRoutes } from "@rhi-zone/fractal-http/project"
+import { httpProjection } from "@rhi-zone/fractal-http/dx"
 
 // ============================================================================
 // Domain types + in-memory store
@@ -42,83 +42,127 @@ export function clearStore(): void {
 }
 
 // ============================================================================
-// Per-book subtree — REST resource via attribute-dispatch
+// Per-book REST resource — GET/PUT/DELETE co-located at /books/{bookId}
 //
-// `meta.http.dispatch === {kind:"method"}` makes all LEAF children co-locate
-// at the node's own path (/books/{bookId}), distinguished by HTTP verb derived
-// from their tags. Branch children (checkout) still contribute a segment as
-// normal.
+// The old model co-located these three leaves via a `meta.http.dispatch =
+// {kind:"method"}` marker on their containing node — a feature of the
+// retired direct tree-walk dispatcher. The HttpRoute pipeline has no
+// dispatch-marker equivalent; the same co-location is expressed instead with
+// the `moveTo` rewriter directive (`applyMoveTo`, see route.ts and
+// docs/design/routing-and-transforms.md § "Motivating example"): `read`/
+// `replace`/`remove` stay nested inside the fallback subtree (alongside
+// `checkout` — this is what gives them the `books_bookId_read` etc. MCP/CLI
+// names, since those projections read raw tree position with no moveTo
+// pass), each with `moveTo: ".."` — go up to the parent position (see the
+// path algebra in route.ts: paths resolve relative to the node's own
+// position; `..` moves up one level to the parent — the fallback subtree's
+// own root). Method assignment is a second, independent directive
+// (`{kind:"method"}`, read by `applyMethods`) — `http.get`/`http.put`/
+// `http.delete` bundle both the verb and the tags that verb implies.
 //
-// read   → readOnly → GET    /books/{bookId}
-// replace → idempotent → PUT  /books/{bookId}
+// read   → readOnly              → GET    /books/{bookId}
+// replace → idempotent            → PUT    /books/{bookId}
 // remove  → idempotent+destructive → DELETE /books/{bookId}
-// checkout (branch/action) → POST /books/{bookId}/checkout  (segment-dispatch)
+// checkout (branch/action, no placement — stays at its own key) →
+//   POST /books/{bookId}/checkout/{start,reserve}
 // ============================================================================
 
+// `op(fn, http.get, { http: { directives: [moveTo] } })` can't be used here:
+// meta merge (`mergeMeta`) replaces the `http` sub-bag's `directives` array
+// wholesale on collision rather than concatenating it, so a second `http.*`
+// contribution would silently drop the bundle's verb/method directives.
+// Each leaf below spells out its full directive list instead (verb + method
+// from the bundle's own directives, plus `moveTo`).
+
+/** Get a single book by its ID. GET /books/{bookId} (co-located, no extra segment). */
+const readBook = op(
+  (input: { bookId: string }) => {
+    const book = store.get(input.bookId)
+    if (book === undefined) throw new Error(`Not Found: ${input.bookId}`)
+    return book
+  },
+  {
+    tags: http.get.tags,
+    http: { directives: [...http.get.http.directives, { kind: "moveTo", path: ".." }] },
+  },
+)
+
+/** Replace book metadata wholesale. Idempotent. PUT /books/{bookId}. */
+const replaceBook = op(
+  (input: { bookId: string; title?: string; author?: string; genre?: string }) => {
+    const existing = store.get(input.bookId)
+    if (existing === undefined) throw new Error(`Not Found: ${input.bookId}`)
+    const updated: Book = {
+      id: existing.id,
+      title: input.title !== undefined ? input.title : existing.title,
+      author: input.author !== undefined ? input.author : existing.author,
+      genre: input.genre !== undefined ? input.genre : existing.genre,
+    }
+    store.set(input.bookId, updated)
+    return updated
+  },
+  {
+    tags: http.put.tags,
+    http: { directives: [...http.put.http.directives, { kind: "moveTo", path: ".." }] },
+  },
+)
+
+/** Permanently delete a book. Destructive and irreversible. DELETE /books/{bookId}. */
+const removeBook = op(
+  (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
+  {
+    tags: http.delete.tags,
+    http: { directives: [...http.delete.http.directives, { kind: "moveTo", path: ".." }] },
+  },
+)
+
+/**
+ * Checkout action subtree — nested directly under the fallback (no
+ * placement needed).
+ *
+ * Initiate a checkout session for a book reservation.
+ * Authored with `http.post` verb helper — bundles POST directive (no implied tags).
+ * POST /books/{bookId}/checkout/start
+ *
+ * Reserve a book for a patron — idempotent (same patron+book = same reservation).
+ * Authored with `http.put` verb helper — bundles PUT directive + idempotent:true.
+ * The bundled `idempotent` tag flows to MCP (idempotentHint) for free.
+ * PUT /books/{bookId}/checkout/reserve
+ */
+const checkoutNode = node({
+  children: {
+    start: op(
+      (input: { bookId: string }) => ({ sessionId: `checkout-${input.bookId}` }),
+      http.post,
+    ),
+    reserve: op(
+      (input: { bookId: string; patronId: string }) => ({
+        reservationId: `res-${input.bookId}-${input.patronId}`,
+        patronId: input.patronId,
+      }),
+      http.put,
+    ),
+  },
+})
+
+/**
+ * The per-book subtree: read/replace/remove co-locate onto their parent
+ * position (via each leaf's own `moveTo` directive, read by the HttpRoute
+ * pipeline); checkout stays a branch. The `dispatch:{kind:"method"}`
+ * node-level marker below is retained meta, NOT interpreted by the HttpRoute
+ * pipeline (which reads only `moveTo`/`method` directives) — it's read
+ * independently by openapi's and client's own self-contained Node-tree
+ * walks (packages/openapi/src/index.ts, packages/client/src/index.ts),
+ * which still derive method-co-location from this marker rather than from
+ * `moveTo` directives. Two projectors, two encodings of the same fact.
+ */
 const bookItemNode = node({
   meta: { http: { dispatch: { kind: "method" } } },
   children: {
-    /** Get a single book by its ID. GET /books/{bookId} */
-    read: op(
-      (input: { bookId: string }) => {
-        const book = store.get(input.bookId)
-        if (book === undefined) throw new Error(`Not Found: ${input.bookId}`)
-        return book
-      },
-      { tags: { readOnly: true } },
-    ),
-
-    /** Replace book metadata wholesale. Idempotent. PUT /books/{bookId} */
-    replace: op(
-      (input: { bookId: string; title?: string; author?: string; genre?: string }) => {
-        const existing = store.get(input.bookId)
-        if (existing === undefined) throw new Error(`Not Found: ${input.bookId}`)
-        const updated: Book = {
-          id: existing.id,
-          title: input.title !== undefined ? input.title : existing.title,
-          author: input.author !== undefined ? input.author : existing.author,
-          genre: input.genre !== undefined ? input.genre : existing.genre,
-        }
-        store.set(input.bookId, updated)
-        return updated
-      },
-      { tags: { idempotent: true } },
-    ),
-
-    /** Permanently delete a book. Destructive and irreversible. DELETE /books/{bookId} */
-    remove: op(
-      (_: { bookId: string }) => ({ deleted: store.delete(_.bookId) }),
-      { tags: { destructive: true, idempotent: true } },
-    ),
-
-    /** Checkout action — a named action kept as a segment-child (branch node). */
-    checkout: node({
-      children: {
-        /**
-         * Initiate a checkout session for a book reservation.
-         * Authored with `http.post` verb helper — bundles POST directive (no implied tags).
-         * POST /books/{bookId}/checkout/start
-         */
-        start: op(
-          (input: { bookId: string }) => ({ sessionId: `checkout-${input.bookId}` }),
-          http.post,
-        ),
-
-        /**
-         * Reserve a book for a patron — idempotent (same patron+book = same reservation).
-         * Authored with `http.put` verb helper — bundles PUT directive + idempotent:true.
-         * The bundled `idempotent` tag flows to MCP (idempotentHint) for free.
-         * PUT /books/{bookId}/checkout/reserve
-         */
-        reserve: op(
-          (input: { bookId: string; patronId: string }) => ({
-            reservationId: `res-${input.bookId}-${input.patronId}`,
-            patronId: input.patronId,
-          }),
-          http.put,
-        ),
-      },
-    }),
+    read: readBook,
+    replace: replaceBook,
+    remove: removeBook,
+    checkout: checkoutNode,
   },
 })
 
@@ -129,17 +173,16 @@ const bookItemNode = node({
 class BooksService {
   /**
    * A field literally named `fallback` (shape `{ name, subtree }`): service()
-   * picks this up as the resulting node's `fallback` (wildcard-capture),
-   * replacing the former `param()`-constructed ParamNode child.
+   * picks this up as the resulting node's `fallback` (wildcard-capture).
    */
   fallback = { name: "bookId", subtree: bookItemNode }
 
-  /** List all books in the library. */
+  /** List all books in the library. GET /books/list */
   list(_: unknown): Book[] {
     return [...store.values()]
   }
 
-  /** Add a new book to the collection. */
+  /** Add a new book to the collection. POST /books/add */
   add(input: { title: string; author: string; genre: string }): Book {
     const id = `book-${++_seq}`
     const book: Book = { id, ...input }
@@ -154,47 +197,27 @@ class BooksService {
 // Exported as `api` so extractToolSchemas (codegen) can walk the node() call.
 // The inline `catalog: node({...})` is found by the codegen walker; the
 // `books: service(...)` child is not a node() call and is skipped.
-// ============================================================================
-
-// ============================================================================
-// API version node — header-dispatch demo
 //
-// `meta.http.dispatch = {kind: "header", name: "X-Api-Version"}` makes the
-// leaf children distinguish themselves by the X-Api-Version header value.
-// Child keyed `v1` matches when the header value is exactly `"v1"`.
-// Child keyed `v2` matches when the header value is exactly `"v2"`.
-// Both live at the same path (GET /version); no path segment per child.
-//
-// Both v1 and v2 are readOnly → GET /version. The X-Api-Version header
-// selects which child's handler runs.
+// A header-dispatch API-versioning demo (`X-Api-Version` selecting a
+// response body at `GET /version`) previously lived here, exercising the
+// retired direct tree-walk dispatcher's attribute-dispatch feature. The
+// HttpRoute pipeline has no attribute-dispatch equivalent yet — reintroducing
+// this demo is blocked on that open design question (see TODO.md
+// "Attribute dispatch (header/query/contentType) is an open design
+// question").
 // ============================================================================
-
-const versionNode = node({
-  meta: { http: { dispatch: { kind: "header", name: "X-Api-Version" } } },
-  children: {
-    /** API version 1 response. Dispatched when X-Api-Version: v1. */
-    v1: op((_: unknown) => ({ version: "v1", message: "Library API — classic edition" }), {
-      tags: { readOnly: true },
-    }),
-
-    /**
-     * API version 2 response. Dispatched when X-Api-Version: v2.
-     * Uses a `when` directive to demonstrate key≠value: the child key is
-     * `v2Alias` but the match value is still `"v2"` (the header value to match).
-     */
-    v2Alias: op((_: unknown) => ({ version: "v2", message: "Library API — enhanced edition", features: ["pagination", "filtering"] }), {
-      tags: { readOnly: true },
-      http: { directives: [{ kind: "when", value: "v2" }] },
-    }),
-  },
-})
 
 export const api = node({
   children: {
+    // `service()`'s `opts.meta[name]` REPLACES that leaf's whole meta bag
+    // (it isn't merged with anything else) — so the `http.get`/`http.post`
+    // bundles (verb + method directives + implied tags) are spread in
+    // directly here, the same composition `op(fn, http.get, extra)` would
+    // do for a `node()`-authored leaf.
     books: service(new BooksService(), {
       meta: {
-        list: { tags: { readOnly: true }, description: "List all books in the library." },
-        add: { description: "Add a new book to the collection." },
+        list: { ...http.get, description: "List all books in the library." },
+        add: { ...http.post, description: "Add a new book to the collection." },
       },
     }),
 
@@ -211,31 +234,24 @@ export const api = node({
               b.title.toLowerCase().includes(q) ||
               b.author.toLowerCase().includes(q),
           )
-        }, { tags: { readOnly: true } }),
+        }, http.get),
 
         /** List all genres in the catalog, optionally filtered to those starting with a prefix. */
         genres: op((input: { prefix?: string }) => {
           const all = [...new Set([...store.values()].map((b) => b.genre))]
           const { prefix } = input
           return prefix !== undefined ? all.filter((g) => g.startsWith(prefix)) : all
-        }, { tags: { readOnly: true } }),
+        }, http.get),
       },
     }),
-
-    // Header-dispatch demo: X-Api-Version header selects the version handler
-    version: versionNode,
   },
 })
 
 // ============================================================================
-// HttpRoute projection — the naive Node => HttpRoute transform (see
-// docs/design/routing-and-transforms.md and packages/http/src/route.ts).
-// This is the baseline route tree the rewriters (applyMethods,
-// applyPlacement, applyResponse) would start from; the API's HTTP surface
-// itself still runs through `createFetch(api)` (the direct tree-walk
-// dispatcher), which additionally supports attribute dispatch, fallback
-// slugs, and match conditions that the simple HttpRoute model does not yet
-// cover.
+// HttpRoute projection — the pre-composed pipeline (naiveTransform +
+// applyMethods + applyMoveTo + applyResponse, see
+// docs/design/routing-and-transforms.md and packages/http/src/dx.ts). This
+// is the actual route tree `createFetch(api)` dispatches against.
 // ============================================================================
 
-export const httpRoutes = toHttpRoutes(api)
+export const httpRoutes = httpProjection(api)

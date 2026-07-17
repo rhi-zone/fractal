@@ -62,7 +62,7 @@ export const tree = node({
       children: {
         compute: op(
           (_input: { x: number }): Result<{ answer: number }, string> =>
-            ({ ok: true, value: { answer: _input.x } }),
+            ({ kind: "ok", value: { answer: _input.x } }),
         ),
       },
     }),
@@ -73,7 +73,7 @@ export const tree = node({
       children: {
         query: op(
           (_input: { term: string }): ResultFromBarrel<{ count: number }, string> =>
-            ({ ok: true, value: { count: 0 } }),
+            ({ kind: "ok", value: { count: 0 } }),
         ),
       },
     }),
@@ -83,7 +83,7 @@ export const tree = node({
       children: {
         search: op(
           (_input: { q: string }): ApiResult<{ items: string[] }> =>
-            ({ ok: true, value: { items: [] } }),
+            ({ kind: "ok", value: { items: [] } }),
         ),
       },
     }),
@@ -92,7 +92,7 @@ export const tree = node({
       children: {
         load: op(
           async (_input: { id: string }): Promise<Result<{ name: string }, string>> =>
-            ({ ok: true, value: { name: "Alice" } }),
+            ({ kind: "ok", value: { name: "Alice" } }),
         ),
       },
     }),

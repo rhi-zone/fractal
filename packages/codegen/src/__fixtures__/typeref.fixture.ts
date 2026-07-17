@@ -10,7 +10,7 @@ export const sample = (input: {
   age?: number
   tags: string[]
 }): Result<{ total: number }, string> => ({
-  ok: true,
+  kind: "ok",
   value: { total: input.tags.length },
 })
 

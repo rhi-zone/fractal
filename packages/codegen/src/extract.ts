@@ -504,14 +504,14 @@ export function schemaFromFunctionNode(
 //   2. STRUCTURAL PATH (fallback, for INFERRED returns or fully-resolved types):
 //      When the return type IS a proper union (rare in this extractor's usage but
 //      possible when types resolve fully), check the exact DU shape:
-//        `{ ok: true; value: T } | { ok: false; error: E }`
+//        `{ kind: "ok"; value: T } | { kind: "err"; error: E }`
 //      This fires when the type was genuinely expanded to a union.
 //
 //   3. FALSE-POSITIVE GUARD:
 //      The name check ("Result") is the primary discriminant. Arbitrary unions
 //      without an alias named "Result" never trigger path 1.
-//      The structural path (2) matches the exact DU fields (ok/value/error with
-//      boolean literal discriminants) — too specific for accidental collisions.
+//      The structural path (2) matches the exact DU fields (kind/value/error with
+//      string literal discriminants "ok"/"err") — too specific for accidental collisions.
 
 /**
  * Given a TypeReferenceNode (possibly `Promise<ResultRef<T,E>>`), try to find
@@ -610,13 +610,13 @@ function resultTypeArgNodeFrom(
  * types stay "unresolved" under this extractor's program configuration).
  *
  * Exact shape from packages/core/src/index.ts:
- *   `{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: E }`
+ *   `{ readonly kind: "ok"; readonly value: T } | { readonly kind: "err"; readonly error: E }`
  *
  * Match criteria (all must hold to avoid false positives on arbitrary unions):
  *   1. Union of exactly 2 members
- *   2. Each member has property `ok` typed as a BooleanLiteral (true or false)
- *   3. The `ok: true` member has a `value` property → T extracted from it
- *   4. The `ok: false` member has an `error` property (guards against accidental matches)
+ *   2. Each member has property `kind` typed as a StringLiteral ("ok" or "err")
+ *   3. The `kind: "ok"` member has a `value` property → T extracted from it
+ *   4. The `kind: "err"` member has an `error` property (guards against accidental matches)
  *
  * Returns the type of the `value` property (T), or undefined on mismatch.
  */
@@ -629,28 +629,27 @@ function structuralResultValueType(
   const members = type.types
   if (members.length !== 2) return undefined
 
-  let okTrueMember: ts.Type | undefined
-  let okFalseMember: ts.Type | undefined
+  let okMember: ts.Type | undefined
+  let errMember: ts.Type | undefined
 
   for (const member of members) {
-    const okProp = member.getProperty("ok")
-    if (!okProp) return undefined
-    const okType = checker.getTypeOfSymbolAtLocation(okProp, loc)
-    if (!(okType.flags & ts.TypeFlags.BooleanLiteral)) return undefined
-    const isTrue =
-      (okType as ts.Type & { intrinsicName?: string }).intrinsicName === "true"
-    if (isTrue) okTrueMember = member
-    else okFalseMember = member
+    const kindProp = member.getProperty("kind")
+    if (!kindProp) return undefined
+    const kindType = checker.getTypeOfSymbolAtLocation(kindProp, loc)
+    if (!kindType.isStringLiteral()) return undefined
+    if (kindType.value === "ok") okMember = member
+    else if (kindType.value === "err") errMember = member
+    else return undefined
   }
 
-  if (!okTrueMember || !okFalseMember) return undefined
+  if (!okMember || !errMember) return undefined
 
-  // ok:true branch must have `value` (T)
-  const valueProp = okTrueMember.getProperty("value")
+  // kind:"ok" branch must have `value` (T)
+  const valueProp = okMember.getProperty("value")
   if (!valueProp) return undefined
 
-  // ok:false branch must have `error` (E) — guards against accidental matches
-  const errorProp = okFalseMember.getProperty("error")
+  // kind:"err" branch must have `error` (E) — guards against accidental matches
+  const errorProp = errMember.getProperty("error")
   if (!errorProp) return undefined
 
   return checker.getTypeOfSymbolAtLocation(valueProp, loc)

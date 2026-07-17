@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { node, op } from "@rhi-zone/fractal-core/node"
-import { candidatesForUrl } from "@rhi-zone/fractal-http/project"
+import { verbFromTags } from "@rhi-zone/fractal-http/project"
 import { toTools } from "./project.ts"
 
 // ============================================================================
@@ -15,58 +15,42 @@ import { toTools } from "./project.ts"
 describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", () => {
   it("readOnly:true → readOnlyHint:true (MCP) + GET (HTTP)", () => {
     // Single authored node — meta.tags authored ONCE
-    const n = node({
-      children: {
-        get: op((_: unknown) => "result", { tags: { readOnly: true } }),
-      },
-    })
+    const leaf = op((_: unknown) => "result", { tags: { readOnly: true } })
+    const n = node({ children: { get: leaf } })
 
     // MCP surface: readOnlyHint derives from meta.tags.readOnly
     const tools = toTools(n)
     expect(tools).toHaveLength(1)
     expect(tools[0]!.annotations?.readOnlyHint).toBe(true)
 
-    // HTTP surface: same meta.tags → GET (safe method); default segment
-    // dispatch: inferSegment("get") = "get"
-    const candidates = candidatesForUrl(n, "http://localhost/get")
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]!.verb).toBe("GET")
+    // HTTP surface: same meta.tags → GET (safe method)
+    expect(verbFromTags(leaf.meta)).toBe("GET")
   })
 
   it("destructive:true → destructiveHint:true (MCP) + non-GET verb (HTTP)", () => {
-    const n = node({
-      children: {
-        delete: op((_: unknown) => null, { tags: { destructive: true } }),
-      },
-    })
+    const leaf = op((_: unknown) => null, { tags: { destructive: true } })
+    const n = node({ children: { delete: leaf } })
 
     // MCP surface: destructiveHint derives from meta.tags.destructive
     const tools = toTools(n)
     expect(tools[0]!.annotations?.destructiveHint).toBe(true)
 
     // HTTP surface: same meta.tags → POST (destructive without idempotent = conservative)
-    // inferSegment("delete") = "delete"
-    const candidates = candidatesForUrl(n, "http://localhost/delete")
-    expect(candidates[0]!.verb).toBe("POST") // not GET — a mutating verb
-    expect(candidates[0]!.verb).not.toBe("GET")
+    expect(verbFromTags(leaf.meta)).toBe("POST") // not GET — a mutating verb
+    expect(verbFromTags(leaf.meta)).not.toBe("GET")
   })
 
   it("idempotent:true + destructive:true → idempotentHint:true + destructiveHint:true (MCP) + DELETE (HTTP)", () => {
-    const n = node({
-      children: {
-        remove: op((_: unknown) => null, {
-          tags: { idempotent: true, destructive: true },
-        }),
-      },
+    const leaf = op((_: unknown) => null, {
+      tags: { idempotent: true, destructive: true },
     })
+    const n = node({ children: { remove: leaf } })
 
     const tools = toTools(n)
     expect(tools[0]!.annotations?.idempotentHint).toBe(true)
     expect(tools[0]!.annotations?.destructiveHint).toBe(true)
 
-    // inferSegment("remove") = "remove"
-    const candidates = candidatesForUrl(n, "http://localhost/remove")
-    expect(candidates[0]!.verb).toBe("DELETE")
+    expect(verbFromTags(leaf.meta)).toBe("DELETE")
   })
 })
 
@@ -95,15 +79,14 @@ describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
   })
 
   it("a leaf's own tags drive its annotations regardless of ancestor meta", () => {
+    const leaf = op((_: unknown) => ({}), {
+      tags: { readOnly: false, idempotent: true, destructive: true },
+    })
     const api = node({
       children: {
         items: node({
           meta: { tags: { readOnly: true } }, // node-level tag — has no bearing
-          children: {
-            delete: op((_: unknown) => ({}), {
-              tags: { readOnly: false, idempotent: true, destructive: true },
-            }),
-          },
+          children: { delete: leaf },
         }),
       },
     })
@@ -113,9 +96,7 @@ describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
     expect(tools[0]!.annotations?.idempotentHint).toBe(true)
 
     // HTTP surface consistent: same leaf-only read → DELETE
-    // default segment dispatch: inferSegment("delete") = "delete"
-    const candidates = candidatesForUrl(api, "http://localhost/items/delete")
-    expect(candidates[0]!.verb).toBe("DELETE")
+    expect(verbFromTags(leaf.meta)).toBe("DELETE")
   })
 })
 

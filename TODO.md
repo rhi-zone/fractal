@@ -1,5 +1,46 @@
 # fractal — TODO
 
+## Open design questions
+
+### Attribute dispatch (header/query/contentType) is an open design question
+
+The old direct tree-walk HTTP dispatcher (`candidatesForUrl`/`makeRouterForNode`
+in `packages/http/src/project.ts`, retired 2026-07-17 in favor of the
+`HttpRoute` pipeline — `naiveTransform` → `applyMethods`/`applyMoveTo`/
+`applyResponse` → `makeRouterFromRoute`, see `packages/http/src/route.ts` and
+`docs/design/routing-and-transforms.md`) supported dispatching several leaves
+at the SAME path+method, distinguished by a request attribute other than the
+path or method itself: a header value, a query parameter value, or the
+Content-Type. The `HttpRoute` pipeline has no equivalent — `HttpRoute`'s
+`methods` record is keyed purely by HTTP method; there's no second axis.
+
+Open questions this needs settled from the author's own definition (not
+invented) before it's rebuilt on the new pipeline:
+- Where in the `HttpRoute`/`Pipeline` shape does an attribute-dispatch
+  decision live — a new DU on `HttpRoute` (mirroring the retired
+  `DispatchMarker`), or something else?
+- **Key constraint**: attribute dispatch must be resolved BEFORE `decode` in
+  the interceptable pipeline (see `docs/design/routing-and-transforms.md` §
+  "Interceptable pipeline") — different branches may need different `decode`
+  logic (e.g. a v1 vs v2 API-version branch parsing different request
+  shapes), so this can't be bolted on as a post-decode `inputTransform`.
+- No-match behavior for attribute dispatch was 404 (not 405) in the old
+  model, since the attribute isn't part of the HTTP-visible address the way
+  path+method are — does that still hold?
+
+**Motivating use case**: `examples/library-api` previously demonstrated
+header-dispatch API versioning (`X-Api-Version: v1` vs `v2` selecting a
+different response body at `GET /version`) — this demo was removed from
+`examples/library-api/src/tree.ts` during the 2026-07-17 dispatch-path
+migration because it has no equivalent on the new pipeline; it's a candidate
+to reintroduce once this question is settled.
+
+Note: HTTP *method* co-location at one path (e.g. GET/PUT/DELETE all at
+`/books/{bookId}`) is NOT blocked on this — that's expressed today via the
+`moveTo` rewriter directive (see `applyMoveTo` in route.ts and the worked
+example in `examples/library-api/src/tree.ts`'s per-book REST resource).
+Only dispatch on a NON-method attribute at a fixed path+method remains open.
+
 ## Open threads (advisory)
 
 > *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*

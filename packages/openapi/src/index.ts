@@ -28,9 +28,8 @@
 //   packages/core/src/tags.ts    — resolveTags
 
 import { isLeaf } from "@rhi-zone/fractal-core/node"
-import { resolveTags } from "@rhi-zone/fractal-core/tags"
-import type { Tags } from "@rhi-zone/fractal-core/tags"
 import type { Meta, Node } from "@rhi-zone/fractal-core/node"
+import { verbFromTags } from "@rhi-zone/fractal-http/project"
 import type { SchemaMap } from "@rhi-zone/fractal-codegen"
 
 // ============================================================================
@@ -106,20 +105,6 @@ export type OpenApiDoc = {
     readonly version: string
   }
   readonly paths: Record<string, Record<string, OpenApiOperation>>
-}
-
-// ============================================================================
-// Internal: verb derivation (mirrors packages/http/src/project.ts exactly)
-// ============================================================================
-
-function verbFromTags(meta: Meta): string {
-  const httpVerb = getHttpMeta(meta).verb
-  if (httpVerb !== undefined) return httpVerb.toUpperCase()
-  const tags = resolveTags((meta.tags ?? {}) as Tags)
-  if (tags.readOnly === true) return "GET"
-  if (tags.idempotent === true && tags.destructive === true) return "DELETE"
-  if (tags.idempotent === true) return "PUT"
-  return "POST"
 }
 
 // ============================================================================

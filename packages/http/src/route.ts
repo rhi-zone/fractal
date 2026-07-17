@@ -16,7 +16,7 @@
 //      POST entry. No inference, no convention.
 //   3. Rewriters — `HttpRoute => HttpRoute` functions, each reading one kind
 //      of directive from `meta.http.directives` and reshaping the tree:
-//      `applyMethods`, `applyPlacement`, `applyResponse`. `composeTransforms`
+//      `applyMethods`, `applyMoveTo`, `applyResponse`. `composeTransforms`
 //      chains them into a single `HttpRoute => HttpRoute`.
 //   4. `makeRouterFromRoute` — the simple exact-path/method dispatcher over
 //      an `HttpRoute` tree (no attribute dispatch, no match conditions —
@@ -24,7 +24,10 @@
 
 import { isLeaf } from "@rhi-zone/fractal-core/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
+import type { Result } from "@rhi-zone/fractal-core"
 import type { HttpDirective } from "./project.ts"
+import { bulkCollect, httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
+import type { SourceMap } from "./decode.ts"
 
 // ============================================================================
 // Pipeline — interceptable request/response stages (docs/design/
@@ -48,8 +51,35 @@ import type { HttpDirective } from "./project.ts"
 
 export type Pipeline = {
   reqTransforms?: Array<(req: Request, meta: Meta) => Request | Promise<Request>>
+  /**
+   * Full custom decode override — when provided, the stores-based system is
+   * bypassed entirely and this function is responsible for producing the
+   * handler's input from the raw request. Backward-compatible: existing
+   * `decode: (req, meta) => input` pipelines continue to work unchanged.
+   */
   decode?: (req: Request, meta: Meta) => unknown | Promise<unknown>
+  /**
+   * Declarative source configuration for the stores-based decode system.
+   * Only takes effect when `decode` is NOT set (the function override wins).
+   *
+   * - `sourceMap`: per-param overrides — e.g. `{ apiKey: { store: "header", key: "x-api-key" } }`
+   * - `paramNames`: explicit list of param names to extract (when absent,
+   *    bulk-collects all available values — backward compat with old defaultDecode)
+   * - `transform`: optional reshape after assembly, before the handler sees the input
+   */
+  sources?: {
+    readonly sourceMap?: SourceMap
+    readonly paramNames?: readonly string[]
+    readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>
+  }
   inputTransforms?: Array<(input: unknown, meta: Meta) => unknown | Promise<unknown>>
+  /**
+   * Validate + coerce the assembled input bag after inputTransforms run.
+   * Returns a Result: `kind: "ok"` passes `value` to the handler;
+   * `kind: "err"` short-circuits with a 400 response containing the error.
+   * When absent, input passes through to the handler unchanged.
+   */
+  validate?: (input: Record<string, unknown>) => Result<unknown, unknown> | Promise<Result<unknown, unknown>>
   outputTransforms?: Array<(output: unknown, meta: Meta) => unknown | Promise<unknown>>
   encode?: (output: unknown, meta: Meta) => Response | Promise<Response>
   resTransforms?: Array<(res: Response, meta: Meta) => Response | Promise<Response>>
@@ -177,27 +207,27 @@ export function applyMethods(route: HttpRoute): HttpRoute {
 }
 
 // ============================================================================
-// 2b. applyPlacement — reads `{ kind: "place", path }` directives and moves
+// 2b. applyMoveTo — reads `{ kind: "moveTo", path }` directives and moves
 // whole route subtrees within the tree, per the relative-path algebra in
 // docs/design/routing-and-transforms.md:
 //
 //   "." (exactly)  — identity, node stays at its current position.
-//   Any other path is resolved relative to the node's CONTAINING position
-//   (its parent, i.e. the position with the node's own key dropped — mirrors
-//   Unix "a file's '.' is the directory containing it"):
-//     "."          (as a path component) — no-op, stays at the parent
-//     ".."         — pop one more level
-//     "*"          — push a wildcard (fallback) segment
-//     any other token — push that literal segment
+//   Any other path is resolved relative to the node's OWN position
+//   (standard filesystem-style semantics):
+//     ".."         — go up to parent
+//     "../newname" — rename (sibling with a different name)
+//     "*"          — push a wildcard (fallback) segment below self
+//     "."          (as a path component) — no-op, stays at self
+//     any other token — push that literal segment below self
 //
 // Two-phase: (1) walk the tree, detaching every subtree that carries a
-// `place` directive on its own top-level meta and recording its resolved
+// `moveTo` directive on its own top-level meta and recording its resolved
 // absolute target path; (2) re-insert each detached subtree at its target,
 // creating intermediate branch/fallback nodes as needed and merging methods
 // when multiple subtrees converge on the same target (the REST-resource
 // motivating example: get/update/delete all move to the same `*` position).
 //
-// [convention] When placement creates a NEW wildcard segment (no existing
+// [convention] When moveTo creates a NEW wildcard segment (no existing
 // `fallback` at that position), the fallback parameter name defaults to
 // `"param"` — the design doc leaves the wildcard's parameter name as coming
 // "from the node's own metadata," which is not yet wired up. Prefer an
@@ -206,10 +236,9 @@ export function applyMethods(route: HttpRoute): HttpRoute {
 
 type PendingMove = { readonly targetPath: readonly string[]; readonly subtree: HttpRoute }
 
-function resolvePlacement(itemPath: readonly string[], path: string): string[] {
+function resolveMoveTo(itemPath: readonly string[], path: string): string[] {
   if (path === ".") return [...itemPath]
-  const base = itemPath.slice(0, -1)
-  const out = [...base]
+  const out = [...itemPath]
   for (const tok of path.split("/").filter((t) => t.length > 0)) {
     if (tok === ".") continue
     else if (tok === "..") out.pop()
@@ -218,8 +247,8 @@ function resolvePlacement(itemPath: readonly string[], path: string): string[] {
   return out
 }
 
-function isPlaceDirective(d: HttpDirective): d is Extract<HttpDirective, { kind: "place" }> {
-  return d.kind === "place"
+function isMoveToDirective(d: HttpDirective): d is Extract<HttpDirective, { kind: "moveTo" }> {
+  return d.kind === "moveTo"
 }
 
 function detach(
@@ -232,9 +261,9 @@ function detach(
     const rebuilt: Record<string, HttpRoute> = {}
     for (const [key, child] of Object.entries(children)) {
       const childPath = [...path, key]
-      const directive = directivesOf(child.meta).find(isPlaceDirective)
+      const directive = directivesOf(child.meta).find(isMoveToDirective)
       if (directive !== undefined) {
-        const target = resolvePlacement(childPath, directive.path)
+        const target = resolveMoveTo(childPath, directive.path)
         const strippedChild = { ...child, meta: withoutDirective(child.meta, directive) }
         moves.push({ targetPath: target, subtree: detach(strippedChild, childPath, moves) })
         continue
@@ -247,9 +276,9 @@ function detach(
   let fallback = route.fallback
   if (fallback !== undefined) {
     const childPath = [...path, "*"]
-    const directive = directivesOf(fallback.subtree.meta).find(isPlaceDirective)
+    const directive = directivesOf(fallback.subtree.meta).find(isMoveToDirective)
     if (directive !== undefined) {
-      const target = resolvePlacement(childPath, directive.path)
+      const target = resolveMoveTo(childPath, directive.path)
       const strippedChild = { ...fallback.subtree, meta: withoutDirective(fallback.subtree.meta, directive) }
       moves.push({ targetPath: target, subtree: detach(strippedChild, childPath, moves) })
       fallback = undefined
@@ -261,17 +290,44 @@ function detach(
   return httpRoute({ methods: route.methods, children, fallback, meta: route.meta })
 }
 
-function mergeRoutes(target: HttpRoute, incoming: HttpRoute): HttpRoute {
+/**
+ * Merge an incoming subtree into the route already occupying a target
+ * position — this is what makes converging placements (the REST-resource
+ * motivating example: get/update/delete all landing on the same `*`
+ * position) group naturally. Throws when `incoming` and `target` both define
+ * the same HTTP method: two operations placed at the same path+method is a
+ * genuine authoring conflict (which handler would serve the request?), not
+ * something a merge can silently resolve.
+ */
+function mergeRoutes(target: HttpRoute, incoming: HttpRoute, path: readonly string[]): HttpRoute {
+  const targetMethods = target.methods ?? {}
+  const incomingMethods = incoming.methods ?? {}
+  for (const method of Object.keys(incomingMethods)) {
+    if (method in targetMethods) {
+      const displayPath = path.length === 0 ? "/" : `/${path.join("/")}`
+      throw new Error(
+        `applyMoveTo: conflicting route — ${method} ${displayPath} is defined by more than one node`,
+      )
+    }
+  }
   return httpRoute({
-    methods: { ...target.methods, ...incoming.methods },
+    methods: { ...targetMethods, ...incomingMethods },
     children: { ...target.children, ...incoming.children },
     fallback: incoming.fallback ?? target.fallback,
     meta: target.meta,
   })
 }
 
-function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpRoute): HttpRoute {
-  if (targetPath.length === 0) return mergeRoutes(root, subtree)
+/**
+ * Insert `subtree` at `targetPath` within `root`, creating intermediate
+ * branch/fallback nodes along the way when they don't already exist
+ * (mkdir-p: `targetPath` may name several segments deep — e.g. resolved from
+ * a `moveTo: "../api/v2/users"` directive — and every intermediate segment that
+ * isn't already present in the tree is created as a plain, empty `HttpRoute`
+ * node so the walk can continue).
+ */
+function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpRoute, fullPath: readonly string[]): HttpRoute {
+  if (targetPath.length === 0) return mergeRoutes(root, subtree, fullPath)
   const [head, ...rest] = targetPath as [string, ...string[]]
 
   if (head === "*") {
@@ -280,24 +336,32 @@ function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpR
     return httpRoute({
       methods: root.methods,
       children: root.children,
-      fallback: { name, subtree: insertAt(base, rest, subtree) },
+      fallback: { name, subtree: insertAt(base, rest, subtree, fullPath) },
       meta: root.meta,
     })
   }
 
+  // mkdir-p: create the intermediate node when it doesn't already exist.
   const base = root.children?.[head] ?? httpRoute({ meta: {} })
   return httpRoute({
     methods: root.methods,
-    children: { ...root.children, [head]: insertAt(base, rest, subtree) },
+    children: { ...root.children, [head]: insertAt(base, rest, subtree, fullPath) },
     fallback: root.fallback,
     meta: root.meta,
   })
 }
 
-export function applyPlacement(route: HttpRoute): HttpRoute {
+/**
+ * Applies every `moveTo` directive detached from the tree by `detach`.
+ * Reinserted sequentially via `insertAt`, so conflicts between two DIFFERENT
+ * placed subtrees converging on the same path+method are caught exactly like
+ * a conflict between a placed subtree and a node already sitting at the
+ * target — both funnel through `mergeRoutes`'s check.
+ */
+export function applyMoveTo(route: HttpRoute): HttpRoute {
   const moves: PendingMove[] = []
   const stripped = detach(route, [], moves)
-  return moves.reduce((acc, m) => insertAt(acc, m.targetPath, m.subtree), stripped)
+  return moves.reduce((acc, m) => insertAt(acc, m.targetPath, m.subtree, m.targetPath), stripped)
 }
 
 // ============================================================================
@@ -403,11 +467,15 @@ function mergePipelines(node: Pipeline | undefined, method: Pipeline | undefined
   if (node === undefined) return method ?? {}
   if (method === undefined) return node
   const decode = method.decode ?? node.decode
+  const sources = method.sources ?? node.sources
+  const validate = method.validate ?? node.validate
   const encode = method.encode ?? node.encode
   return {
     reqTransforms: [...(node.reqTransforms ?? []), ...(method.reqTransforms ?? [])],
     ...(decode !== undefined ? { decode } : {}),
+    ...(sources !== undefined ? { sources } : {}),
     inputTransforms: [...(node.inputTransforms ?? []), ...(method.inputTransforms ?? [])],
+    ...(validate !== undefined ? { validate } : {}),
     outputTransforms: [...(node.outputTransforms ?? []), ...(method.outputTransforms ?? [])],
     ...(encode !== undefined ? { encode } : {}),
     resTransforms: [...(node.resTransforms ?? []), ...(method.resTransforms ?? [])],
@@ -456,31 +524,77 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
 }
 
 /**
- * Default `decode`: merges fallback slugs and query params into the input
- * object (unconditionally — they're part of the request's address, not its
- * body), then adds the JSON body for methods that conventionally carry one.
- * `GET`/`HEAD`/`DELETE` never attempt to read a body. [placeholder] — real
- * input parsing (headers, cookies, richer body negotiation) is still open;
- * see docs/design/routing-and-transforms.md § "Interceptable pipeline".
+ * Stores-based default decode: exposes the request as named stores (path,
+ * query, header, body), then assembles the handler's input bag using
+ * conventions (method → primary store) + optional per-param overrides.
+ *
+ * When `sources.paramNames` is provided, the assembler reads exactly those
+ * params from the appropriate stores. When absent (the common case until
+ * codegen-derived param lists are wired in), falls back to bulk-collecting
+ * all available values — producing the same flat bag the old defaultDecode
+ * returned.
+ *
+ * The body is parsed once here and passed to the stores factory. Methods
+ * that conventionally carry no body (GET/HEAD/DELETE) skip body parsing
+ * entirely.
  */
-async function defaultDecode(req: Request, slugs: Readonly<Record<string, string>>): Promise<unknown> {
-  const input: Record<string, unknown> = { ...slugs }
+async function defaultDecode(
+  req: Request,
+  slugs: Readonly<Record<string, string>>,
+  sources?: Pipeline["sources"],
+): Promise<unknown> {
   const url = new URL(req.url)
-  for (const [k, v] of url.searchParams) input[k] = v
+  const primary = primaryStoreForMethod(req.method)
 
-  if (req.method === "GET" || req.method === "HEAD" || req.method === "DELETE") return input
-
-  const ct = req.headers.get("Content-Type") ?? ""
-  if (ct.includes("application/json")) {
-    const body: unknown = await req.json()
-    if (typeof body === "object" && body !== null) Object.assign(input, body)
+  // Parse body for methods that conventionally carry one
+  let parsedBody: unknown = undefined
+  if (primary === "body") {
+    const ct = req.headers.get("Content-Type") ?? ""
+    if (ct.includes("application/json")) {
+      parsedBody = await req.json()
+    }
   }
-  return input
+
+  let bag: Record<string, unknown>
+
+  if (sources?.paramNames !== undefined && sources.paramNames.length > 0) {
+    // Declarative path: assemble from named stores using explicit param list
+    const stores = httpStores(req, slugs, parsedBody)
+    const pathParamNames = Object.keys(slugs)
+    bag = assemble(stores, sources.paramNames, sources.sourceMap ?? {}, primary, pathParamNames)
+  } else {
+    // Bulk-collect path: backward compat — merge all available values
+    bag = bulkCollect(slugs, url.searchParams, parsedBody, primary)
+  }
+
+  // Optional transform after assembly
+  if (sources?.transform !== undefined) {
+    bag = sources.transform(bag)
+  }
+
+  return bag
 }
 
 /** Default `encode`: a 200 JSON response. */
 function defaultEncode(output: unknown): Response {
   return jsonRouteResponse(output, { status: 200 })
+}
+
+/** Default error encode: a 400 JSON response wrapping the error value. */
+function defaultEncodeError(error: unknown): Response {
+  return jsonRouteResponse({ error }, { status: 400 })
+}
+
+/**
+ * Exact Result<T, E> check: matches the core `Result` DU shape
+ * `{ kind: "ok", value } | { kind: "err", error }`. Only triggers when
+ * `kind` is exactly `"ok"` or `"err"` — user data with an unrelated
+ * `kind` field won't false-positive.
+ */
+function isResult(v: unknown): v is { kind: "ok"; value: unknown } | { kind: "err"; error: unknown } {
+  if (typeof v !== "object" || v === null || !("kind" in v)) return false
+  const kind = (v as { kind: unknown }).kind
+  return kind === "ok" || kind === "err"
 }
 
 export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<Response> {
@@ -502,7 +616,7 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
     try {
       input = pipeline.decode !== undefined
         ? await pipeline.decode(request, meta)
-        : await defaultDecode(request, matched.slugs)
+        : await defaultDecode(request, matched.slugs, pipeline.sources)
     } catch {
       return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
     }
@@ -510,8 +624,34 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
     try {
       for (const transform of inputTransforms) input = await transform(input, meta)
 
+      // Validate slot: runs after inputTransforms, before handler.
+      // Ok → pass value to handler; Err → 400 response.
+      if (pipeline.validate !== undefined) {
+        const result = await pipeline.validate(input as Record<string, unknown>)
+        if (result.kind === "err") {
+          return jsonRouteResponse({ error: result.error }, { status: 400 })
+        }
+        input = result.value
+      }
+
       let output: unknown = await (matched.handler(input) as Promise<unknown>)
       for (const transform of outputTransforms) output = await transform(output, meta)
+
+      // Result unwrapping: if the handler returned a Result<T, E>, separate
+      // the success and error paths before encoding. The check is exact —
+      // typeof + boolean — to avoid false-positives on user data that happens
+      // to have an `ok` field with a non-boolean value.
+      if (isResult(output)) {
+        if (output.kind === "ok") {
+          output = output.value
+        } else {
+          let response: Response = pipeline.encode !== undefined
+            ? await pipeline.encode(output.error, meta)
+            : defaultEncodeError(output.error)
+          for (const transform of resTransforms) response = await transform(response, meta)
+          return response
+        }
+      }
 
       let response: Response = isResponseOverride(output)
         ? jsonRouteResponse(output.body, output.init)
@@ -522,8 +662,8 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
       for (const transform of resTransforms) response = await transform(response, meta)
 
       return response
-    } catch (e: unknown) {
-      return jsonRouteResponse({ error: String(e) }, { status: 500 })
+    } catch {
+      return jsonRouteResponse({ error: "internal server error" }, { status: 500 })
     }
   }
 }

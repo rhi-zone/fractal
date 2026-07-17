@@ -47,7 +47,7 @@ type HttpRoute = {
 1. **Naive transform** (`Node => HttpRoute`): every child → path segment,
    every handler → POST. Mechanical shape change.
 2. **Rewriters** (`HttpRoute => HttpRoute`): DU-based, read directives from
-   `meta.http.directives` — `applyMethods`, `applyPlacement`, `applyResponse`.
+   `meta.http.directives` — `applyMethods`, `applyMoveTo`, `applyResponse`.
 3. Response overrides materialized as handler wrapping (composition).
 
 ### meta.http shape
@@ -77,7 +77,7 @@ access. Pipeline lives on HttpRoute.
 ### Code (committed)
 
 - `packages/http/src/route.ts` — `HttpRoute` type, `naiveTransform`,
-  `applyMethods`, `applyPlacement`, `applyResponse`, `composeTransforms`,
+  `applyMethods`, `applyMoveTo`, `applyResponse`, `composeTransforms`,
   `makeRouterFromRoute`. 23 tests, all passing. Commit `d0f1329`.
 - Design docs updated: `invariants.md` (Identity section),
   `routing-and-transforms.md` (full routing model + DX),

@@ -102,7 +102,7 @@ the route tree accordingly:
 
 - **Method rewriter**: reads `{ kind: "method", value: "GET" }` directives,
   changes the method key in `methods`
-- **Placement rewriter**: reads `{ kind: "place", path: "*" }` directives,
+- **MoveTo rewriter**: reads `{ kind: "moveTo", path: "../*" }` directives,
   moves nodes in the route tree
 - **Response rewriter**: reads `{ kind: "response", status: 201 }` directives,
   wraps the handler to produce the correct HTTP response (function composition,
@@ -124,7 +124,7 @@ On API tree nodes, `meta.http` is an object with:
   Open via declaration merging.
 - **`directives` array** (DU): transform instructions for the rewriters.
   Each directive is a DU variant (`{ kind: "method", value: "GET" }`,
-  `{ kind: "place", path: "*" }`, `{ kind: "response", status: 201 }`, etc.).
+  `{ kind: "moveTo", path: "../*" }`, `{ kind: "response", status: 201 }`, etc.).
   Extensible via declaration merging on the DU.
 
 Convention transforms (`Node => Node`) and rewriters (`HttpRoute => HttpRoute`) fill in
@@ -251,7 +251,7 @@ const routes = httpProjection(apiTree)
 const routes = pipe(
   naiveTransform(apiTree),
   applyMethods,
-  applyPlacement,
+  applyMoveTo,
   applyResponse,
 )
 ```

@@ -27,9 +27,9 @@ describe("Result", () => {
   it("map / bind short-circuit on error", () => {
     const half = (n: number): Result<number, string> =>
       n % 2 === 0 ? ok(n / 2) : err("odd");
-    expect(map(ok(4), (n) => n + 1)).toEqual({ ok: true, value: 5 });
-    expect(bind(ok(8), half)).toEqual({ ok: true, value: 4 });
-    expect(bind(ok(7), half)).toEqual({ ok: false, error: "odd" });
+    expect(map(ok(4), (n) => n + 1)).toEqual({ kind: "ok", value: 5 });
+    expect(bind(ok(8), half)).toEqual({ kind: "ok", value: 4 });
+    expect(bind(ok(7), half)).toEqual({ kind: "err", error: "odd" });
     expect(match(err<string>("x"), { ok: () => 1, err: () => 2 })).toBe(2);
   });
 
@@ -39,9 +39,9 @@ describe("Result", () => {
     const recip = (n: number): Result<number, string> =>
       n === 0 ? err("div0") : ok(1 / n);
     const f = composeK(parse)(recip);
-    expect(f("4")).toEqual({ ok: true, value: 0.25 });
-    expect(f("0")).toEqual({ ok: false, error: "div0" });
-    expect(f("x")).toEqual({ ok: false, error: "nan" });
+    expect(f("4")).toEqual({ kind: "ok", value: 0.25 });
+    expect(f("0")).toEqual({ kind: "err", error: "div0" });
+    expect(f("x")).toEqual({ kind: "err", error: "nan" });
   });
 });
 
@@ -61,8 +61,8 @@ describe("collect (applicative)", () => {
       a: (i) => ok(i.x.length),
       b: (i) => (i.x === "" ? err("empty") : ok(i.x[0]!)),
     });
-    expect(run({ x: "hi" })).toEqual({ ok: true, value: { a: 2, b: "h" } });
-    expect(run({ x: "" })).toEqual({ ok: false, error: "empty" });
+    expect(run({ x: "hi" })).toEqual({ kind: "ok", value: { a: 2, b: "h" } });
+    expect(run({ x: "" })).toEqual({ kind: "err", error: "empty" });
   });
 });
 

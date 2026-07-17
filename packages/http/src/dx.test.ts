@@ -92,10 +92,10 @@ describe("httpProjection() with default transforms", () => {
     expect(Object.keys(routes.children?.create?.methods ?? {})).toEqual(["POST"])
   })
 
-  it("is equivalent to composeTransforms(applyMethods, applyPlacement, applyResponse)(naiveTransform(tree))", async () => {
-    const { applyMethods, applyPlacement, applyResponse, composeTransforms } = await import("./route.ts")
+  it("is equivalent to composeTransforms(applyMethods, applyMoveTo, applyResponse)(naiveTransform(tree))", async () => {
+    const { applyMethods, applyMoveTo, applyResponse, composeTransforms } = await import("./route.ts")
     const tree = crud({ list, create })
-    const expected = composeTransforms(applyMethods, applyPlacement, applyResponse)(naiveTransform(tree))
+    const expected = composeTransforms(applyMethods, applyMoveTo, applyResponse)(naiveTransform(tree))
     expect(httpProjection(tree)).toEqual(expected)
   })
 })

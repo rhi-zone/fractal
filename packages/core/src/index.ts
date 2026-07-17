@@ -48,36 +48,36 @@ export function pipe(a: unknown, ...fns: Fn<unknown, unknown>[]): unknown {
 // ============================================================================
 
 export type Result<T, E> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: E };
+  | { readonly kind: "ok"; readonly value: T }
+  | { readonly kind: "err"; readonly error: E };
 
-export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
-export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+export const ok = <T>(value: T): Result<T, never> => ({ kind: "ok", value });
+export const err = <E>(error: E): Result<never, E> => ({ kind: "err", error });
 
 export const isOk = <T, E>(
   r: Result<T, E>,
-): r is { ok: true; value: T } => r.ok;
+): r is { kind: "ok"; value: T } => r.kind === "ok";
 export const isErr = <T, E>(
   r: Result<T, E>,
-): r is { ok: false; error: E } => !r.ok;
+): r is { kind: "err"; error: E } => r.kind === "err";
 
 /** Map the success value; pass an error through untouched. */
 export const map = <T, E, U>(r: Result<T, E>, f: (t: T) => U): Result<U, E> =>
-  r.ok ? ok(f(r.value)) : r;
+  r.kind === "ok" ? ok(f(r.value)) : r;
 
 /** Monadic bind: run `f` on the success value, short-circuit on error. The
  *  primitive Kleisli composition is built from. */
 export const bind = <T, E, U>(
   r: Result<T, E>,
   f: (t: T) => Result<U, E>,
-): Result<U, E> => (r.ok ? f(r.value) : r);
+): Result<U, E> => (r.kind === "ok" ? f(r.value) : r);
 
 /** Fold a Result into a single value by matching both arms. The final encode
  *  stage `Result<T, E> => Response` is exactly `match(r, { ok, err })`. */
 export const match = <T, E, R>(
   r: Result<T, E>,
   arms: { ok: (t: T) => R; err: (e: E) => R },
-): R => (r.ok ? arms.ok(r.value) : arms.err(r.error));
+): R => (r.kind === "ok" ? arms.ok(r.value) : arms.err(r.error));
 
 // ============================================================================
 // Derived combinators — Kleisli + applicative. NEVER the base.
@@ -114,7 +114,7 @@ export function collect<
     const out: Record<string, unknown> = {};
     for (const k of keys) {
       const r = producers[k]!(i);
-      if (!r.ok) return r as Result<never, E>;
+      if (r.kind === "err") return r as Result<never, E>;
       out[k] = r.value;
     }
     return ok(
