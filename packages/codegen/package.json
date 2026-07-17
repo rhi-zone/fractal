@@ -16,7 +16,8 @@
   },
   "devDependencies": {
     "@rhi-zone/fractal-core": "workspace:*",
-    "@rhi-zone/fractal-mcp": "workspace:*"
+    "@rhi-zone/fractal-mcp": "workspace:*",
+    "@sinclair/typebox": "^0.34.41"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -18,6 +18,7 @@ export {
 } from "./extract.ts"
 
 export {
+  extractRouteTypeRefs,
   extractToolSchemas,
   extractToolTypeRefs,
   type SchemaMap,
@@ -25,3 +26,12 @@ export {
   type ToolTypeInfo,
   type TypeRefMap,
 } from "./tree.ts"
+
+export { buildSchema, compileValidator, compileValidatorModule } from "./compile.ts"
+
+export {
+  buildValidatorModuleSource,
+  stubValidatorModuleSource,
+  writeValidatorModule,
+  writeStubValidatorModule,
+} from "./build.ts"

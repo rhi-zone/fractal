@@ -104,10 +104,18 @@ function resolveApiLocalName(source: ts.SourceFile): string {
  * children that are `api(...)` calls are static branch nodes; a sibling
  * `opts.fallback: { name, subtree }` property is the wildcard-capture subtree.
  */
+/**
+ * `onLeaf` receives both the underscore-joined MCP tool name (`name`, mirrors
+ * `toTools`) and the raw path-segment array (`path`) it was built from — a
+ * fallback segment appears in `path` as `:name` (e.g. `":bookId"`), matching
+ * the convention `route.ts`'s `pathKey`/`injectValidators` use at runtime over
+ * the `HttpRoute` tree.
+ */
 function walkTree(
   entryFile: string,
   onLeaf: (
     name: string,
+    path: readonly string[],
     fn: ts.Node,
     childProp: ts.ObjectLiteralElementLike,
     checker: ts.TypeChecker,
@@ -119,7 +127,7 @@ function walkTree(
   if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
   const apiLocalName = resolveApiLocalName(source)
 
-  const walkNodeCall = (call: ts.CallExpression, prefix: string): void => {
+  const walkNodeCall = (call: ts.CallExpression, prefix: string, path: readonly string[]): void => {
     const childrenArg = call.arguments[0]
     if (!childrenArg || !ts.isObjectLiteralExpression(childrenArg)) return
 
@@ -136,10 +144,10 @@ function walkTree(
         if (firstArg === undefined) continue
         const fn = opFunctionNode(firstArg)
         if (!fn) continue
-        onLeaf(join(prefix, childKey), fn, childProp, checker)
+        onLeaf(join(prefix, childKey), [...path, childKey], fn, childProp, checker)
       } else {
         // static branch child: api(...) or other constructor
-        walkNodeCall(init, join(prefix, childKey))
+        walkNodeCall(init, join(prefix, childKey), [...path, childKey])
       }
     }
 
@@ -162,7 +170,7 @@ function walkTree(
             }
           }
           if (fallbackName !== undefined && subtreeCall !== undefined) {
-            walkNodeCall(subtreeCall, join(prefix, fallbackName))
+            walkNodeCall(subtreeCall, join(prefix, fallbackName), [...path, `:${fallbackName}`])
           }
         }
       }
@@ -177,7 +185,7 @@ function walkTree(
       for (const decl of n.declarationList.declarations) {
         const init = decl.initializer
         if (init && ts.isCallExpression(init) && calleeName(init) === apiLocalName) {
-          walkNodeCall(init, "")
+          walkNodeCall(init, "", [])
         }
       }
     }
@@ -193,7 +201,7 @@ function walkTree(
  */
 export function extractToolSchemas(entryFile: string): SchemaMap {
   const out: SchemaMap = {}
-  walkTree(entryFile, (name, fn, childProp, checker) => {
+  walkTree(entryFile, (name, _path, fn, childProp, checker) => {
     const description = extractJsDoc(childProp)
     out[name] = {
       inputSchema: schemaFromFunctionNode(fn, checker),
@@ -212,9 +220,31 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
  */
 export function extractToolTypeRefs(entryFile: string): TypeRefMap {
   const out: TypeRefMap = {}
-  walkTree(entryFile, (name, fn, childProp, checker) => {
+  walkTree(entryFile, (name, _path, fn, childProp, checker) => {
     const description = extractJsDoc(childProp)
     out[name] = {
+      input: typeRefFromFunctionNode(fn, checker),
+      output: typeRefFromReturnType(fn, checker),
+      ...(description !== undefined ? { description } : {}),
+    }
+  })
+  return out
+}
+
+/**
+ * Extract the ROUTE-PATH → TypeRef map for every exported `api(children,
+ * opts?)` tree in a source file — same walk as `extractToolTypeRefs`, but
+ * keyed by the `"/"`-joined path-segment string `route.ts`'s
+ * `pathKey`/`injectValidators` use (fallback segments rendered as `:name`)
+ * instead of the underscore-joined MCP tool name. This is the key shape
+ * `createApplyValidation`'s `ValidatorMap` inner map expects.
+ */
+export function extractRouteTypeRefs(entryFile: string): TypeRefMap {
+  const out: TypeRefMap = {}
+  walkTree(entryFile, (_name, path, fn, childProp, checker) => {
+    const description = extractJsDoc(childProp)
+    const key = path.join("/")
+    out[key] = {
       input: typeRefFromFunctionNode(fn, checker),
       output: typeRefFromReturnType(fn, checker),
       ...(description !== undefined ? { description } : {}),
