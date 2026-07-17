@@ -221,13 +221,14 @@ mistakes. Worth reading those before proposing anything in this area.
 From invariants.md §open — these were explicitly left open and (per the guardrails)
 should be settled FROM the author's definition rather than guessed:
 
-- The full **verb/method model**: method dispatch is not a tree concern —
-  it's metadata on operations, interpreted by the HTTP projector. The API
-  tree is organized by domain (operations), not by HTTP method. Two
-  operations at the same HTTP path are different nodes in the API tree.
-  See `docs/design/routing-and-transforms.md`. The remaining open question
-  is the convention transforms: which name→verb mappings ship as builtins,
-  and how does the user override them?
+- ~~The full **verb/method model**~~: RESOLVED (2026-07-17) — the system is
+  complete: seven builtin verb helpers (`get`/`post`/`put`/`patch`/`delete`/
+  `head`/`options`), `verbFromTags` tag-lattice dispatch, an extensible
+  `HttpMethods` interface via declaration merging, and `httpVerbBundle`
+  exported from `packages/http-api-projector/src/index.ts` as the shared
+  constructor each verb helper is built from. The only remaining gap — a
+  `customVerb()` convenience helper — is non-blocking and can be added on
+  demand; reopen if it turns out to block something.
 - Whether **one agnostic tree can auto-derive both HTTP and CLI**, given HTTP
   paths/headers and CLI subcommands/env vars have no 1:1 mapping —
   reframed (2026-07-16): structure is optionally part of the skeleton
@@ -241,8 +242,11 @@ should be settled FROM the author's definition rather than guessed:
 - ~~**Authoring form for bespoke verb/path overrides**~~: settled — `meta.http`
   is a DU interpreted by the projector (interpreter pattern). No named keys.
   See `docs/design/router-model.md` § HTTP metadata.
-- **Creation / non-record output encoding** (author leans toward an explicit
-  `POST /…/new`, not settled).
+- ~~**Creation / non-record output encoding**~~: CLOSED (2026-07-17) —
+  purely theoretical, no concrete need. Nothing in the codebase implements
+  or references a creation semantic: no directive, no tag, no rewriter, no
+  test, no example. The `examples/library-api` `add` endpoint is a plain
+  `http.post`. Reopen if a real use case surfaces.
 - The unresolved **"is it too general?"** tension — never closed.
 
 ### Codegen-from-types — RESOLVED (2026-07-16, see handoff-2026-07-16-type-layer.md)
