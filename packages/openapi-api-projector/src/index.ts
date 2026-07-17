@@ -1,42 +1,48 @@
 // packages/openapi-api-projector/src/index.ts — @rhi-zone/fractal-openapi-api-projector
 //
-// OpenAPI 3.1 projection for the function-core tree.
+// OpenAPI 3.1 projection — now built directly on the HTTP projector's own
+// `HttpRoute` tree instead of re-walking the raw `Node` tree.
 //
-// Walks a Node tree once, computing for each leaf node (node with handler):
-//   - the codegen-style underscore name (for extractToolSchemas lookup)
-//   - the HTTP path + verb (same logic as the direct tree-walk dispatch in
-//     packages/http-api-projector/src/project.ts)
-//   - the leaf's OWN tags (for verb derivation and documentation — no
-//     ancestor inheritance; see docs/design/router-model.md — "Tags")
+// Previously this module re-derived verb/segment/path from `meta.http`
+// directives and `meta.tags` via its own self-contained tree walk (mirroring
+// the retired direct dispatcher). That duplicated exactly what the HttpRoute
+// pipeline (`naiveTransform` → `applyMethods`/`applyMoveTo`/`applyResponse`,
+// see packages/http-api-projector/src/route.ts) already computes: after the
+// rewriters run, the tree's structure IS the URL structure — children keys
+// are path segments, `fallback` is the wildcard segment, and `methods` is
+// already keyed by the resolved HTTP verb. Walking `HttpRoute` needs no
+// segment inference, no verb derivation, no dispatch-marker interpretation.
 //
-// In the new node model, leaf nodes (nodes with `handler`) live in `children`
-// alongside branch nodes. A leaf child keyed `k` behaves exactly as an op
-// keyed `k` did: its key contributes to path/name, its meta drives verb.
-// A `fallback` (wildcard-capture) contributes `{name}` as a path segment,
-// same as the HTTP projection.
-//
-// SELF-CONTAINED TREE WALK: OpenAPI walks the tree itself computing
-// name+path+verb+schema together (mirroring the pattern used by toTools in
-// packages/mcp), rather than depending on http/project.ts's dispatch
-// internals. The path/verb derivation copies the same logic
-// (inferSegment, verbFromTags) to guarantee paths match exactly.
+// Two entry points:
+//   - `toOpenApiFromRoute(route, opts)` — the core: walks an already-
+//     projected `HttpRoute` tree. Operation naming falls back to a
+//     path-derived name when no better name is available (see
+//     `nameFromPath` below) — a `Node`-derived name map produces more
+//     conventional dotted names (see `toOpenApi`).
+//   - `toOpenApi(node, opts)` — convenience: projects `node` via
+//     `httpProjection` (the standard rewriter pipeline) and also walks the
+//     raw `Node` tree once to build a handler → codegen-name map (the same
+//     underscore-joined name `extractToolSchemas` and the old tree-walk
+//     produced), so operationId/schema-lookup naming is unchanged from
+//     before this migration.
 //
 // See:
-//   packages/http-api-projector/src/project.ts — verbFromTags, meta.http DU (dispatch/directives)
-//   packages/api-tree/src/tree.ts — extractToolSchemas, SchemaMap
-//   packages/api-tree/src/node.ts    — Node, Handler, fallback
-//   packages/api-tree/src/tags.ts    — resolveTags
+//   packages/http-api-projector/src/route.ts    — HttpRoute, naiveTransform, rewriters
+//   packages/http-api-projector/src/dx.ts       — httpProjection preset
+//   packages/api-tree/src/tree.ts               — extractToolSchemas, SchemaMap
+//   packages/api-tree/src/node.ts               — Node, Handler, fallback
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { getHttpMeta, verbFromTags } from "@rhi-zone/fractal-http-api-projector/project"
+import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
+import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 
 // ============================================================================
 // Types
 // ============================================================================
 
-/** Options for toOpenApi. */
+/** Options for toOpenApi / toOpenApiFromRoute. */
 export type OpenApiOpts = {
   /** Document title (info.title). Defaults to "API". */
   readonly title?: string
@@ -108,19 +114,6 @@ export type OpenApiDoc = {
 }
 
 // ============================================================================
-// Internal: segment inference (mirrors packages/http-api-projector/src/project.ts exactly)
-// ============================================================================
-
-function inferSegment(name: string): string {
-  const stripped = name
-    .replace(/^(get|list|find|read|create|send|award|delete|remove)/i, "")
-    .replace(/([a-z])([A-Z])/g, "$1-$2")
-    .replace(/^-/, "")
-    .toLowerCase()
-  return stripped.length > 0 ? stripped : name.toLowerCase()
-}
-
-// ============================================================================
 // Internal: extract path parameters from an OpenAPI path string
 // ============================================================================
 
@@ -156,91 +149,151 @@ function getOpenApiMeta(meta: Meta): OpenApiMeta {
 }
 
 // ============================================================================
-// Internal: tree walk — computes (codenName, httpPath, verb, leafMeta) per leaf
+// Internal: handler → codegen-name map, built from the raw Node tree
+//
+// Mirrors extractToolSchemas'/the pre-migration walkTree's underscore-joined
+// name construction, but keyed by handler IDENTITY rather than tree
+// position — because after `applyMoveTo` runs, a handler's position in the
+// final HttpRoute tree is no longer its authored tree position (e.g.
+// read/replace/remove co-locate onto their parent's fallback position). This
+// is what lets `toOpenApi(node, ...)` keep producing the same
+// `books.bookId.read`-style operationIds and codegen schema-map lookups as
+// before this migration, without the OpenAPI walk itself re-deriving path.
+//
+// Degrades gracefully when a handler isn't found in the map (e.g. it was
+// re-wrapped by `applyResponse`, which produces a new function — response
+// overrides are rare and this only affects that operation's default name,
+// never correctness of path/verb): callers fall back to a path-derived name.
+// ============================================================================
+
+function nameLeaves(n: Node, prefix: string, out: Map<Handler, string>): void {
+  for (const [key, child] of Object.entries(n.children ?? {})) {
+    const seg = prefix.length > 0 ? `${prefix}_${key}` : key
+    if (isLeaf(child)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      out.set(child.handler!, seg)
+    } else {
+      nameLeaves(child, seg, out)
+    }
+  }
+  if (n.fallback !== undefined) {
+    const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
+    nameLeaves(n.fallback.subtree, seg, out)
+  }
+}
+
+/** Build the handler → codegen-name map for a Node tree — see module doc above. */
+function buildNameMap(n: Node): Map<Handler, string> {
+  const out = new Map<Handler, string>()
+  nameLeaves(n, "", out)
+  return out
+}
+
+/** Fallback name derived purely from path + verb, for handlers absent from a name map. */
+function nameFromPath(path: string, verb: string): string {
+  const base = path === "/"
+    ? "root"
+    : path
+        .split("/")
+        .filter((s) => s.length > 0)
+        .map((s) => (s.startsWith("{") && s.endsWith("}") ? s.slice(1, -1) : s))
+        .join("_")
+  return `${base}_${verb.toLowerCase()}`
+}
+
+// ============================================================================
+// Internal: HttpRoute walk — computes (codenName, path, verb, meta) per method
 // ============================================================================
 
 type RouteEntry = {
-  readonly codenName: string  // underscore-joined tree position (for schema lookup)
-  readonly path: string       // HTTP path string e.g. /books/{bookId}/details
-  readonly verb: string       // HTTP method in uppercase
-  readonly meta: Meta         // leaf's own meta bag
+  readonly codenName: string // underscore-joined name (for schema lookup + default operationId)
+  readonly path: string // HTTP path string e.g. /books/{bookId}/details
+  readonly verb: string // HTTP method in uppercase
+  readonly meta: Meta // the method entry's own meta bag
 }
 
-function walkTree(
-  n: Node,
-  httpPrefix: string,
-  namePrefix: string,
+function walkRoute(
+  route: HttpRoute,
+  path: string,
+  names: ReadonlyMap<Handler, string> | undefined,
 ): RouteEntry[] {
   const out: RouteEntry[] = []
 
-  // Attribute-dispatch: if this node has dispatch:"method", its leaf children
-  // share the node's own HTTP path rather than getting a per-child segment.
-  // Non-method dispatch (dispatch:"attr") is treated as segment-dispatch in
-  // OpenAPI: each child gets a path segment equal to its key or segment rename.
-  const thisHttp = getHttpMeta(n.meta)
-  const methodDispatch = thisHttp.dispatch?.kind === "method"
-  // "attr" dispatch → OpenAPI treats children as segment-dispatched (approximation)
-
-  for (const [key, child] of Object.entries(n.children ?? {})) {
-    if (isLeaf(child)) {
-      // Leaf node: build a route entry for it. Tags are read directly from
-      // the leaf's own meta — no ancestor inheritance.
-      const verb = verbFromTags(child.meta)
-      const http = getHttpMeta(child.meta)
-
-      const codenName = namePrefix.length > 0 ? `${namePrefix}_${key}` : key
-
-      if (http.legacyPath !== undefined) {
-        out.push({ codenName, path: http.legacyPath, verb, meta: child.meta })
-      } else if (methodDispatch) {
-        // Method-dispatch: leaf resolves to the parent's own path
-        const path = httpPrefix === "" ? "/" : httpPrefix
-        out.push({ codenName, path, verb, meta: child.meta })
-      } else {
-        // Segment-dispatch (default) or attr-dispatch (treated as segment for OpenAPI)
-        const seg = http.segment ?? inferSegment(key)
-        const path = `${httpPrefix}/${seg}`
-        out.push({ codenName, path, verb, meta: child.meta })
-      }
-    } else {
-      // Branch child
-      const seg = getHttpMeta(child.meta).segment ?? key
-      const newHttpPrefix = `${httpPrefix}/${seg}`
-      const newNamePrefix = namePrefix.length > 0 ? `${namePrefix}_${key}` : key
-      out.push(...walkTree(child, newHttpPrefix, newNamePrefix))
-    }
+  for (const [verb, entry] of Object.entries(route.methods ?? {})) {
+    const codenName = names?.get(entry.handler) ?? nameFromPath(path === "" ? "/" : path, verb)
+    out.push({ codenName, path: path === "" ? "/" : path, verb, meta: entry.meta })
   }
 
-  if (n.fallback !== undefined) {
-    const newHttpPrefix = `${httpPrefix}/{${n.fallback.name}}`
-    const newNamePrefix = namePrefix.length > 0 ? `${namePrefix}_${n.fallback.name}` : n.fallback.name
-    out.push(...walkTree(n.fallback.subtree, newHttpPrefix, newNamePrefix))
+  for (const [key, child] of Object.entries(route.children ?? {})) {
+    out.push(...walkRoute(child, `${path}/${key}`, names))
+  }
+
+  if (route.fallback !== undefined) {
+    out.push(...walkRoute(route.fallback.subtree, `${path}/{${route.fallback.name}}`, names))
   }
 
   return out
 }
 
 // ============================================================================
-// toOpenApi — public API
+// toOpenApiFromRoute — public API (core)
 // ============================================================================
 
 /**
- * Project a Node tree to an OpenAPI 3.1 document object.
+ * Project an already-projected `HttpRoute` tree to an OpenAPI 3.1 document
+ * object. Each `methods` entry becomes one path item method entry — path and
+ * verb come directly from the route tree's own structure (children keys,
+ * `fallback`, `methods` keys), exactly matching what `makeRouterFromRoute`
+ * dispatches against.
  *
- * Each leaf node in the tree becomes one path item method entry. The path and
- * HTTP verb are derived by the same logic as the direct tree-walk dispatch in
- * packages/http — so the OpenAPI paths exactly match the live HTTP router.
- * Input/output schemas
+ * Operation naming (operationId default + codegen schema-map lookup) falls
+ * back to a path-derived name (`nameFromPath`) since a bare `HttpRoute` has
+ * no memory of the authored tree position a moved handler started at. Use
+ * `toOpenApi(node, opts)` when the original `Node` tree is available for
+ * conventional dotted operationIds.
+ *
+ * meta.openapi on a method entry carries per-operation OpenAPI overrides:
+ * operationId, summary, description, tags, deprecated. Any unrecognised keys
+ * pass through.
+ *
+ * @param route - The (already rewritten) HttpRoute tree to project.
+ * @param opts  - Options: title, version, sourceFile, schemas.
+ */
+export async function toOpenApiFromRoute(route: HttpRoute, opts: OpenApiOpts = {}): Promise<OpenApiDoc> {
+  return buildDoc(route, opts, undefined)
+}
+
+// ============================================================================
+// toOpenApi — public API (Node convenience wrapper)
+// ============================================================================
+
+/**
+ * Project a `Node` tree to an OpenAPI 3.1 document object. Internally
+ * projects `n` via `httpProjection` (the standard `naiveTransform` +
+ * `applyMethods`/`applyMoveTo`/`applyResponse` pipeline — the same one
+ * `createFetch`/`httpRoutes` use) and walks the resulting `HttpRoute`, so
+ * the emitted paths exactly match the live HTTP router. Input/output schemas
  * come from extractToolSchemas (codegen) when a sourceFile or schemas map is
  * supplied; otherwise they degrade to `{ type: "object" }` placeholders.
- *
- * meta.openapi on a leaf carries per-operation OpenAPI overrides: operationId,
- * summary, description, tags, deprecated. Any unrecognised keys pass through.
  *
  * @param n    - The root node to project.
  * @param opts - Options: title, version, sourceFile, schemas.
  */
 export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenApiDoc> {
+  const route = httpProjection(n)
+  const names = buildNameMap(n)
+  return buildDoc(route, opts, names)
+}
+
+// ============================================================================
+// Shared doc builder
+// ============================================================================
+
+async function buildDoc(
+  route: HttpRoute,
+  opts: OpenApiOpts,
+  names: ReadonlyMap<Handler, string> | undefined,
+): Promise<OpenApiDoc> {
   const title = opts.title ?? "API"
   const version = opts.version ?? "0.1.0"
 
@@ -251,7 +304,7 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
     schemas = extractToolSchemas(opts.sourceFile)
   }
 
-  const entries = walkTree(n, "", "")
+  const entries = walkRoute(route, "", names)
 
   const paths: Record<string, Record<string, OpenApiOperation>> = {}
 

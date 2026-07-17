@@ -220,9 +220,15 @@ describe("operationId", () => {
 describe("meta.openapi overrides", () => {
   it("meta.openapi.operationId overrides inferred operationId", async () => {
     const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const { http } = await import("@rhi-zone/fractal-http-api-projector/verbs")
+    // Verb comes from the http.get bundle's `{kind:"method"}` directive (read
+    // by applyMethods) — the HttpRoute pipeline resolves verbs from explicit
+    // method directives, not from tags alone (tags-only verb inference was
+    // an openapi/client-specific approximation of the retired direct
+    // dispatcher; it doesn't reflect what the live HTTP router actually does
+    // for a tags-only leaf, which stays POST — see verbFromTags in tags.ts).
     const n = api_({
-        list: op((_: unknown) => [], {
-          tags: { readOnly: true },
+        list: op((_: unknown) => [], http.get, {
           openapi: { operationId: "listAllItems", summary: "List every item" },
         }),
       })
