@@ -77,6 +77,14 @@ describe("schema derivation from op input type", () => {
     })
   })
 
+  it("follows a named-constant op referenced by identifier (not just inline op() calls)", () => {
+    expect(schemas["widgets_list"]?.inputSchema).toEqual({
+      type: "object",
+      properties: { limit: { type: "number" } },
+    })
+    expect(schemas["widgets_list"]?.description).toBe("List all widgets in the catalog.")
+  })
+
   it("threads a param-node op's input type into its namespaced tool name", () => {
     expect(schemas["users_userId_get"]?.inputSchema).toEqual({
       type: "object",

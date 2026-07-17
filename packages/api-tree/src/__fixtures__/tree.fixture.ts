@@ -22,7 +22,23 @@ import type { Result as ResultFromBarrel } from "./result-reexport.fixture.ts"
 // site maps to T.
 type ApiResult<T> = Result<T, string>
 
+// Named-constant op — declared separately and referenced by identifier in the
+// tree literal below, exercising the walker's identifier-resolution path
+// (not just inline `op(...)` calls). Mirrors examples/library-api's
+// `const listBooks = op(...); api({ list: listBooks })` pattern.
+/** List all widgets in the catalog. */
+const listWidgetsOp = op((_input: { limit?: number }) => ({ widgets: [] as string[] }))
+
+// A named-constant branch — an `api(...)` call assigned to a const and
+// referenced by identifier, exercising identifier resolution for branch
+// children (not just leaves).
+const widgetsBranch = api({
+    list: listWidgetsOp,
+  })
+
 export const tree = api({
+    // Named-constant branch referenced by identifier.
+    widgets: widgetsBranch,
     users: api({
         /** Create a new user account. */
         create: op(

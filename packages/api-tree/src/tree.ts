@@ -72,6 +72,31 @@ const calleeName = (call: ts.CallExpression): string | undefined =>
 const join = (prefix: string, seg: string): string =>
   prefix.length > 0 ? `${prefix}_${seg}` : seg
 
+/** Cap on identifier-chain resolution depth — guards against reference cycles. */
+const MAX_RESOLVE_DEPTH = 10
+
+/**
+ * Resolve an expression to the `op(...)`/`api(...)` call expression it
+ * denotes, following `Identifier` references to their declaration's
+ * initializer transitively (capped at `MAX_RESOLVE_DEPTH`). This lets the
+ * walker follow named-constant ops/subtrees —
+ * `const listOp = op(fn, meta); api({ list: listOp })` — not just inline
+ * `op(...)` calls.
+ */
+function resolveCallExpression(
+  node: ts.Expression,
+  checker: ts.TypeChecker,
+  depth = 0,
+): ts.CallExpression | undefined {
+  if (ts.isCallExpression(node)) return node
+  if (depth >= MAX_RESOLVE_DEPTH) return undefined
+  if (!ts.isIdentifier(node)) return undefined
+  const symbol = checker.getSymbolAtLocation(node)
+  const decl = symbol?.declarations?.[0]
+  if (!decl || !ts.isVariableDeclaration(decl) || !decl.initializer) return undefined
+  return resolveCallExpression(decl.initializer, checker, depth + 1)
+}
+
 /**
  * Resolve the LOCAL identifier a source file binds `api` to when importing
  * it from "@rhi-zone/fractal-api-tree/node" — `import { api } from "..."` binds
@@ -134,8 +159,8 @@ function walkTree(
     for (const childProp of childrenArg.properties) {
       const childKey = propName(childProp)
       if (!ts.isPropertyAssignment(childProp) || childKey === undefined) continue
-      const init = childProp.initializer
-      if (!ts.isCallExpression(init)) continue
+      const init = resolveCallExpression(childProp.initializer, checker)
+      if (!init) continue
       const callee = calleeName(init)
 
       if (callee === "op") {
@@ -165,8 +190,8 @@ function walkTree(
             if (!ts.isPropertyAssignment(fbProp) || fbKey === undefined) continue
             if (fbKey === "name" && ts.isStringLiteral(fbProp.initializer)) {
               fallbackName = fbProp.initializer.text
-            } else if (fbKey === "subtree" && ts.isCallExpression(fbProp.initializer)) {
-              subtreeCall = fbProp.initializer
+            } else if (fbKey === "subtree") {
+              subtreeCall = resolveCallExpression(fbProp.initializer, checker)
             }
           }
           if (fallbackName !== undefined && subtreeCall !== undefined) {
@@ -202,7 +227,11 @@ function walkTree(
 export function extractToolSchemas(entryFile: string): SchemaMap {
   const out: SchemaMap = {}
   walkTree(entryFile, (name, _path, fn, childProp, checker) => {
-    const description = extractJsDoc(childProp)
+    // JSDoc on the property assignment itself (inline `key: op(...)`) wins;
+    // for a named-constant leaf (`key: someOp`), the property carries no
+    // comment, so fall back to the JSDoc on `fn`'s own declaration chain
+    // (climbs to the `const someOp = op(...)` statement).
+    const description = extractJsDoc(childProp) ?? extractJsDoc(fn) ?? extractJsDoc(fn)
     out[name] = {
       inputSchema: schemaFromFunctionNode(fn, checker),
       outputSchema: schemaFromReturnType(fn, checker),
@@ -221,7 +250,7 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
 export function extractToolTypeRefs(entryFile: string): TypeRefMap {
   const out: TypeRefMap = {}
   walkTree(entryFile, (name, _path, fn, childProp, checker) => {
-    const description = extractJsDoc(childProp)
+    const description = extractJsDoc(childProp) ?? extractJsDoc(fn)
     out[name] = {
       input: typeRefFromFunctionNode(fn, checker),
       output: typeRefFromReturnType(fn, checker),
@@ -242,7 +271,7 @@ export function extractToolTypeRefs(entryFile: string): TypeRefMap {
 export function extractRouteTypeRefs(entryFile: string): TypeRefMap {
   const out: TypeRefMap = {}
   walkTree(entryFile, (_name, path, fn, childProp, checker) => {
-    const description = extractJsDoc(childProp)
+    const description = extractJsDoc(childProp) ?? extractJsDoc(fn)
     const key = path.join("/")
     out[key] = {
       input: typeRefFromFunctionNode(fn, checker),
