@@ -14,3 +14,14 @@ export { crud, httpProjection } from "./dx.ts"
 export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
 export { createApplyValidation } from "./route.ts"
 export type { Validator, ValidatorMap } from "./route.ts"
+export {
+  chainMatchers,
+  compiledCharMatcher,
+  compiledCharRouter,
+  mapCharRouter,
+  mapMatcher,
+  radixMatcher,
+  radixRouter,
+  toRouter,
+} from "./compile.ts"
+export type { CompiledRouter, Matcher, RouteMatch } from "./compile.ts"

@@ -684,7 +684,7 @@ type RouteCandidate = {
  * double allocation (`"/".split()` then `.filter(s => s.length > 0)` builds
  * two arrays; this builds one).
  */
-function splitPath(pathname: string): string[] {
+export function splitPath(pathname: string): string[] {
   const segs: string[] = []
   let start = 0
   for (let i = 0; i <= pathname.length; i++) {
@@ -852,7 +852,7 @@ function isResult(v: unknown): v is { kind: "ok"; value: unknown } | { kind: "er
  * Runs the interceptable request/response pipeline (see module doc at the
  * top of the file) for a single matched `(handler, meta, pipeline, slugs)`.
  */
-async function runPipeline(
+export async function runPipeline(
   req: Request,
   handler: Handler,
   meta: Meta,
