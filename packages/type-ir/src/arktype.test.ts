@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toArkType, toArkTypeDeclaration, toArkTypeDeclarations } from "./arktype.ts"
 
 describe("leaf types", () => {
@@ -20,7 +21,7 @@ describe("leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toArkType(t(types.bytes))).toBe('type("string")')
+    expect(toArkType(bytes())).toBe('type("string")')
   })
 
   test("null", () => {
@@ -42,45 +43,45 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toArkType(t(types.int32))).toBe('type("number.integer")')
+    expect(toArkType(int32())).toBe('type("number.integer")')
   })
 
   test("int64", () => {
-    expect(toArkType(t(types.int64))).toBe('type("number.integer")')
+    expect(toArkType(int64())).toBe('type("number.integer")')
   })
 
   test("float32", () => {
-    expect(toArkType(t(types.float32))).toBe('type("number")')
+    expect(toArkType(float32())).toBe('type("number")')
   })
 
   test("float64", () => {
-    expect(toArkType(t(types.float64))).toBe('type("number")')
+    expect(toArkType(float64())).toBe('type("number")')
   })
 
   test("uuid", () => {
-    expect(toArkType(t(types.uuid))).toBe('type("string")')
+    expect(toArkType(uuid())).toBe('type("string")')
   })
 
   test("uri", () => {
-    expect(toArkType(t(types.uri))).toBe('type("string")')
+    expect(toArkType(uri())).toBe('type("string")')
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toArkType(t(types.datetime))).toBe('type("string")')
+    expect(toArkType(datetime())).toBe('type("string")')
   })
 
   test("date", () => {
-    expect(toArkType(t(types.date))).toBe('type("string")')
+    expect(toArkType(date())).toBe('type("string")')
   })
 
   test("time", () => {
-    expect(toArkType(t(types.time))).toBe('type("string")')
+    expect(toArkType(time())).toBe('type("string")')
   })
 
   test("duration", () => {
-    expect(toArkType(t(types.duration))).toBe('type("string")')
+    expect(toArkType(duration())).toBe('type("string")')
   })
 })
 
@@ -96,7 +97,7 @@ describe("object", () => {
   })
 
   test("no optional marker when all fields required", () => {
-    const ref = t(types.object({ id: t(types.uuid) }))
+    const ref = t(types.object({ id: uuid() }))
     expect(toArkType(ref)).toBe('type({ id: "string" })')
   })
 
@@ -299,7 +300,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toArkType(ref)).toBe('type({ ids: "string[]" })')
@@ -336,7 +337,7 @@ describe("toArkTypeDeclaration", () => {
 describe("toArkTypeDeclarations", () => {
   test("emits import and multiple declarations", () => {
     const registry = {
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Age: t(types.integer),
     }
     expect(toArkTypeDeclarations(registry)).toBe(

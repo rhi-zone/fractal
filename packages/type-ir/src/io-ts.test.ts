@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toIoTs, toIoTsDeclaration, toIoTsDeclarations } from "./io-ts.ts"
 
 describe("leaf types", () => {
@@ -38,49 +39,49 @@ describe("number subtypes fall back to t.number with a comment", () => {
   })
 
   test("int32", () => {
-    expect(toIoTs(t(types.int32))).toBe("t.number /* int32 */")
+    expect(toIoTs(int32())).toBe("t.number /* int32 */")
   })
 
   test("int64", () => {
-    expect(toIoTs(t(types.int64))).toBe("t.number /* int64 */")
+    expect(toIoTs(int64())).toBe("t.number /* int64 */")
   })
 
   test("float32", () => {
-    expect(toIoTs(t(types.float32))).toBe("t.number /* float32 */")
+    expect(toIoTs(float32())).toBe("t.number /* float32 */")
   })
 
   test("float64", () => {
-    expect(toIoTs(t(types.float64))).toBe("t.number /* float64 */")
+    expect(toIoTs(float64())).toBe("t.number /* float64 */")
   })
 })
 
 describe("string subtypes fall back to t.string with a comment", () => {
   test("uuid", () => {
-    expect(toIoTs(t(types.uuid))).toBe("t.string /* uuid */")
+    expect(toIoTs(uuid())).toBe("t.string /* uuid */")
   })
 
   test("uri", () => {
-    expect(toIoTs(t(types.uri))).toBe("t.string /* uri */")
+    expect(toIoTs(uri())).toBe("t.string /* uri */")
   })
 
   test("datetime", () => {
-    expect(toIoTs(t(types.datetime))).toBe("t.string /* datetime */")
+    expect(toIoTs(datetime())).toBe("t.string /* datetime */")
   })
 
   test("date", () => {
-    expect(toIoTs(t(types.date))).toBe("t.string /* date */")
+    expect(toIoTs(date())).toBe("t.string /* date */")
   })
 
   test("time", () => {
-    expect(toIoTs(t(types.time))).toBe("t.string /* time */")
+    expect(toIoTs(time())).toBe("t.string /* time */")
   })
 
   test("duration", () => {
-    expect(toIoTs(t(types.duration))).toBe("t.string /* duration */")
+    expect(toIoTs(duration())).toBe("t.string /* duration */")
   })
 
   test("bytes", () => {
-    expect(toIoTs(t(types.bytes))).toBe("t.string /* bytes */")
+    expect(toIoTs(bytes())).toBe("t.string /* bytes */")
   })
 })
 
@@ -218,7 +219,7 @@ describe("nullable", () => {
   })
 
   test("combines with a subtype comment", () => {
-    const ref = t(types.uuid, { nullable: true })
+    const ref = uuid({ nullable: true })
     expect(toIoTs(ref)).toBe("t.union([t.string /* uuid */, t.null])")
   })
 })
@@ -273,7 +274,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toIoTs(ref)).toBe("t.type({ ids: t.array(t.string /* uuid */) })")
@@ -289,7 +290,7 @@ describe("toIoTsDeclaration", () => {
 describe("toIoTsDeclarations", () => {
   test("emits import and multiple declarations", () => {
     const registry = {
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Age: t(types.integer),
     }
     expect(toIoTsDeclarations(registry)).toBe(

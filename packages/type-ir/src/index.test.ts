@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { ancestors, registerParent, resolve, t, types } from "./index.ts"
+import "./kinds/common.ts"
 
 describe("ancestors", () => {
   test("walks integer -> number", () => {

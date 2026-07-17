@@ -1,5 +1,18 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
+import {
+  bytes,
+  date,
+  datetime,
+  duration,
+  float32,
+  float64,
+  int32,
+  int64,
+  time,
+  uri,
+  uuid,
+} from "./kinds/common.ts"
 import { toTypeDeclaration, toTypeDeclarations, toTypeScript } from "./typescript.ts"
 
 describe("leaf types", () => {
@@ -17,23 +30,38 @@ describe("leaf types", () => {
 })
 
 describe("numeric subtypes", () => {
-  for (const kind of ["integer", "int32", "int64", "float32", "float64"] as const) {
+  const cases: Record<string, () => ReturnType<typeof t>> = {
+    integer: () => t(types.integer),
+    int32: () => int32(),
+    int64: () => int64(),
+    float32: () => float32(),
+    float64: () => float64(),
+  }
+  for (const [kind, make] of Object.entries(cases)) {
     test(kind, () => {
-      expect(toTypeScript(t(types[kind]))).toBe("number")
+      expect(toTypeScript(make())).toBe("number")
     })
   }
 })
 
 describe("string subtypes", () => {
-  for (const kind of ["uuid", "uri", "datetime", "date", "time", "duration"] as const) {
+  const cases: Record<string, () => ReturnType<typeof t>> = {
+    uuid: () => uuid(),
+    uri: () => uri(),
+    datetime: () => datetime(),
+    date: () => date(),
+    time: () => time(),
+    duration: () => duration(),
+  }
+  for (const [kind, make] of Object.entries(cases)) {
     test(kind, () => {
-      expect(toTypeScript(t(types[kind]))).toBe("string")
+      expect(toTypeScript(make())).toBe("string")
     })
   }
 })
 
 test("bytes", () => {
-  expect(toTypeScript(t(types.bytes))).toBe("Uint8Array")
+  expect(toTypeScript(bytes())).toBe("Uint8Array")
 })
 
 describe("boundary types", () => {

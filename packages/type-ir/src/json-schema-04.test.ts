@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toJsonSchema04, toJsonSchema04Document } from "./json-schema-04.ts"
 
 describe("draft-04 differences", () => {
@@ -95,7 +96,7 @@ describe("shared: leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toJsonSchema04(t(types.bytes))).toEqual({ type: "string", contentEncoding: "base64" })
+    expect(toJsonSchema04(bytes())).toEqual({ type: "string", contentEncoding: "base64" })
   })
 
   test("null", () => {
@@ -113,45 +114,45 @@ describe("shared: leaf types", () => {
 
 describe("shared: formatted types", () => {
   test("int32", () => {
-    expect(toJsonSchema04(t(types.int32))).toEqual({ type: "integer", format: "int32" })
+    expect(toJsonSchema04(int32())).toEqual({ type: "integer", format: "int32" })
   })
 
   test("int64", () => {
-    expect(toJsonSchema04(t(types.int64))).toEqual({ type: "integer", format: "int64" })
+    expect(toJsonSchema04(int64())).toEqual({ type: "integer", format: "int64" })
   })
 
   test("float32", () => {
-    expect(toJsonSchema04(t(types.float32))).toEqual({ type: "number", format: "float" })
+    expect(toJsonSchema04(float32())).toEqual({ type: "number", format: "float" })
   })
 
   test("float64", () => {
-    expect(toJsonSchema04(t(types.float64))).toEqual({ type: "number", format: "double" })
+    expect(toJsonSchema04(float64())).toEqual({ type: "number", format: "double" })
   })
 
   test("uuid", () => {
-    expect(toJsonSchema04(t(types.uuid))).toEqual({ type: "string", format: "uuid" })
+    expect(toJsonSchema04(uuid())).toEqual({ type: "string", format: "uuid" })
   })
 
   test("uri", () => {
-    expect(toJsonSchema04(t(types.uri))).toEqual({ type: "string", format: "uri" })
+    expect(toJsonSchema04(uri())).toEqual({ type: "string", format: "uri" })
   })
 })
 
 describe("shared: temporal types", () => {
   test("datetime", () => {
-    expect(toJsonSchema04(t(types.datetime))).toEqual({ type: "string", format: "date-time" })
+    expect(toJsonSchema04(datetime())).toEqual({ type: "string", format: "date-time" })
   })
 
   test("date", () => {
-    expect(toJsonSchema04(t(types.date))).toEqual({ type: "string", format: "date" })
+    expect(toJsonSchema04(date())).toEqual({ type: "string", format: "date" })
   })
 
   test("time", () => {
-    expect(toJsonSchema04(t(types.time))).toEqual({ type: "string", format: "time" })
+    expect(toJsonSchema04(time())).toEqual({ type: "string", format: "time" })
   })
 
   test("duration", () => {
-    expect(toJsonSchema04(t(types.duration))).toEqual({ type: "string", format: "duration" })
+    expect(toJsonSchema04(duration())).toEqual({ type: "string", format: "duration" })
   })
 })
 
@@ -291,7 +292,7 @@ describe("document wrapper", () => {
   test("definitions map is projected", () => {
     const doc = toJsonSchema04Document(t(types.ref("User")), {
       definitions: {
-        User: t(types.object({ id: t(types.uuid) })),
+        User: t(types.object({ id: uuid() })),
       },
     })
     expect(doc).toEqual({

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toJsonSchema07 } from "./json-schema-07.ts"
 
 describe("draft-07 differences", () => {
@@ -39,7 +40,7 @@ describe("shared: leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toJsonSchema07(t(types.bytes))).toEqual({ type: "string", contentEncoding: "base64" })
+    expect(toJsonSchema07(bytes())).toEqual({ type: "string", contentEncoding: "base64" })
   })
 
   test("null", () => {
@@ -57,45 +58,45 @@ describe("shared: leaf types", () => {
 
 describe("shared: formatted types", () => {
   test("uuid", () => {
-    expect(toJsonSchema07(t(types.uuid))).toEqual({ type: "string", format: "uuid" })
+    expect(toJsonSchema07(uuid())).toEqual({ type: "string", format: "uuid" })
   })
 
   test("uri", () => {
-    expect(toJsonSchema07(t(types.uri))).toEqual({ type: "string", format: "uri" })
+    expect(toJsonSchema07(uri())).toEqual({ type: "string", format: "uri" })
   })
 
   test("int32", () => {
-    expect(toJsonSchema07(t(types.int32))).toEqual({ type: "integer", format: "int32" })
+    expect(toJsonSchema07(int32())).toEqual({ type: "integer", format: "int32" })
   })
 
   test("int64", () => {
-    expect(toJsonSchema07(t(types.int64))).toEqual({ type: "integer", format: "int64" })
+    expect(toJsonSchema07(int64())).toEqual({ type: "integer", format: "int64" })
   })
 
   test("float32", () => {
-    expect(toJsonSchema07(t(types.float32))).toEqual({ type: "number", format: "float" })
+    expect(toJsonSchema07(float32())).toEqual({ type: "number", format: "float" })
   })
 
   test("float64", () => {
-    expect(toJsonSchema07(t(types.float64))).toEqual({ type: "number", format: "double" })
+    expect(toJsonSchema07(float64())).toEqual({ type: "number", format: "double" })
   })
 })
 
 describe("shared: temporal types", () => {
   test("datetime", () => {
-    expect(toJsonSchema07(t(types.datetime))).toEqual({ type: "string", format: "date-time" })
+    expect(toJsonSchema07(datetime())).toEqual({ type: "string", format: "date-time" })
   })
 
   test("date", () => {
-    expect(toJsonSchema07(t(types.date))).toEqual({ type: "string", format: "date" })
+    expect(toJsonSchema07(date())).toEqual({ type: "string", format: "date" })
   })
 
   test("time", () => {
-    expect(toJsonSchema07(t(types.time))).toEqual({ type: "string", format: "time" })
+    expect(toJsonSchema07(time())).toEqual({ type: "string", format: "time" })
   })
 
   test("duration", () => {
-    expect(toJsonSchema07(t(types.duration))).toEqual({ type: "string", format: "duration" })
+    expect(toJsonSchema07(duration())).toEqual({ type: "string", format: "duration" })
   })
 })
 
@@ -290,7 +291,7 @@ describe("shared: nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toJsonSchema07(ref)).toEqual({

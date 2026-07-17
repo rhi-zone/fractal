@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toSuperstruct, toSuperstructDeclaration, toSuperstructDeclarations } from "./superstruct.ts"
 
 describe("leaf types", () => {
@@ -20,7 +21,7 @@ describe("leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toSuperstruct(t(types.bytes))).toBe("s.string() /* base64 */")
+    expect(toSuperstruct(bytes())).toBe("s.string() /* base64 */")
   })
 
   test("null", () => {
@@ -42,45 +43,45 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toSuperstruct(t(types.int32))).toBe("s.integer()")
+    expect(toSuperstruct(int32())).toBe("s.integer()")
   })
 
   test("int64", () => {
-    expect(toSuperstruct(t(types.int64))).toBe("s.integer()")
+    expect(toSuperstruct(int64())).toBe("s.integer()")
   })
 
   test("float32", () => {
-    expect(toSuperstruct(t(types.float32))).toBe("s.number()")
+    expect(toSuperstruct(float32())).toBe("s.number()")
   })
 
   test("float64", () => {
-    expect(toSuperstruct(t(types.float64))).toBe("s.number()")
+    expect(toSuperstruct(float64())).toBe("s.number()")
   })
 
   test("uuid falls back to string with comment", () => {
-    expect(toSuperstruct(t(types.uuid))).toBe("s.string() /* uuid */")
+    expect(toSuperstruct(uuid())).toBe("s.string() /* uuid */")
   })
 
   test("uri falls back to string with comment", () => {
-    expect(toSuperstruct(t(types.uri))).toBe("s.string() /* uri */")
+    expect(toSuperstruct(uri())).toBe("s.string() /* uri */")
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toSuperstruct(t(types.datetime))).toBe("s.string() /* datetime */")
+    expect(toSuperstruct(datetime())).toBe("s.string() /* datetime */")
   })
 
   test("date", () => {
-    expect(toSuperstruct(t(types.date))).toBe("s.string() /* date */")
+    expect(toSuperstruct(date())).toBe("s.string() /* date */")
   })
 
   test("time", () => {
-    expect(toSuperstruct(t(types.time))).toBe("s.string() /* time */")
+    expect(toSuperstruct(time())).toBe("s.string() /* time */")
   })
 
   test("duration", () => {
-    expect(toSuperstruct(t(types.duration))).toBe("s.string() /* duration */")
+    expect(toSuperstruct(duration())).toBe("s.string() /* duration */")
   })
 })
 
@@ -247,7 +248,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toSuperstruct(ref)).toBe("s.object({ ids: s.array(s.string() /* uuid */) })")
@@ -277,7 +278,7 @@ describe("toSuperstructDeclaration", () => {
 describe("toSuperstructDeclarations", () => {
   test("emits import and multiple declarations", () => {
     const registry = {
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Age: t(types.integer),
     }
     expect(toSuperstructDeclarations(registry)).toBe(

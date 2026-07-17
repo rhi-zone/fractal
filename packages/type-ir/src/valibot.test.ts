@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toValibot, toValibotDeclaration, toValibotDeclarations } from "./valibot.ts"
 
 describe("leaf types", () => {
@@ -20,7 +21,7 @@ describe("leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toValibot(t(types.bytes))).toBe("v.pipe(v.string(), v.base64())")
+    expect(toValibot(bytes())).toBe("v.pipe(v.string(), v.base64())")
   })
 
   test("null", () => {
@@ -42,45 +43,45 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toValibot(t(types.int32))).toBe("v.pipe(v.number(), v.integer())")
+    expect(toValibot(int32())).toBe("v.pipe(v.number(), v.integer())")
   })
 
   test("int64", () => {
-    expect(toValibot(t(types.int64))).toBe("v.pipe(v.number(), v.integer())")
+    expect(toValibot(int64())).toBe("v.pipe(v.number(), v.integer())")
   })
 
   test("float32", () => {
-    expect(toValibot(t(types.float32))).toBe("v.number()")
+    expect(toValibot(float32())).toBe("v.number()")
   })
 
   test("float64", () => {
-    expect(toValibot(t(types.float64))).toBe("v.number()")
+    expect(toValibot(float64())).toBe("v.number()")
   })
 
   test("uuid", () => {
-    expect(toValibot(t(types.uuid))).toBe("v.pipe(v.string(), v.uuid())")
+    expect(toValibot(uuid())).toBe("v.pipe(v.string(), v.uuid())")
   })
 
   test("uri", () => {
-    expect(toValibot(t(types.uri))).toBe("v.pipe(v.string(), v.url())")
+    expect(toValibot(uri())).toBe("v.pipe(v.string(), v.url())")
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toValibot(t(types.datetime))).toBe("v.pipe(v.string(), v.isoDateTime())")
+    expect(toValibot(datetime())).toBe("v.pipe(v.string(), v.isoDateTime())")
   })
 
   test("date", () => {
-    expect(toValibot(t(types.date))).toBe("v.pipe(v.string(), v.isoDate())")
+    expect(toValibot(date())).toBe("v.pipe(v.string(), v.isoDate())")
   })
 
   test("time", () => {
-    expect(toValibot(t(types.time))).toBe("v.pipe(v.string(), v.isoTime())")
+    expect(toValibot(time())).toBe("v.pipe(v.string(), v.isoTime())")
   })
 
   test("duration", () => {
-    expect(toValibot(t(types.duration))).toBe("v.string()")
+    expect(toValibot(duration())).toBe("v.string()")
   })
 })
 
@@ -267,7 +268,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toValibot(ref)).toBe("v.object({ ids: v.array(v.pipe(v.string(), v.uuid())) })")
@@ -289,7 +290,7 @@ describe("declarations", () => {
 
   test("registry produces import and declarations", () => {
     const registry = {
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Status: t(types.enum(["active", "inactive"])),
     }
     expect(toValibotDeclarations(registry)).toBe(

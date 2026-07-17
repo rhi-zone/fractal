@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toOpenApi20, toOpenApi20Definitions } from "./openapi20.ts"
 
 describe("leaf types", () => {
@@ -20,7 +21,7 @@ describe("leaf types", () => {
   })
 
   test("bytes uses format byte", () => {
-    expect(toOpenApi20(t(types.bytes))).toEqual({ type: "string", format: "byte" })
+    expect(toOpenApi20(bytes())).toEqual({ type: "string", format: "byte" })
   })
 
   test("null uses x-nullable extension, no nullable keyword", () => {
@@ -44,45 +45,45 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toOpenApi20(t(types.int32))).toEqual({ type: "integer", format: "int32" })
+    expect(toOpenApi20(int32())).toEqual({ type: "integer", format: "int32" })
   })
 
   test("int64", () => {
-    expect(toOpenApi20(t(types.int64))).toEqual({ type: "integer", format: "int64" })
+    expect(toOpenApi20(int64())).toEqual({ type: "integer", format: "int64" })
   })
 
   test("float32", () => {
-    expect(toOpenApi20(t(types.float32))).toEqual({ type: "number", format: "float" })
+    expect(toOpenApi20(float32())).toEqual({ type: "number", format: "float" })
   })
 
   test("float64", () => {
-    expect(toOpenApi20(t(types.float64))).toEqual({ type: "number", format: "double" })
+    expect(toOpenApi20(float64())).toEqual({ type: "number", format: "double" })
   })
 
   test("uuid", () => {
-    expect(toOpenApi20(t(types.uuid))).toEqual({ type: "string", format: "uuid" })
+    expect(toOpenApi20(uuid())).toEqual({ type: "string", format: "uuid" })
   })
 
   test("uri", () => {
-    expect(toOpenApi20(t(types.uri))).toEqual({ type: "string", format: "uri" })
+    expect(toOpenApi20(uri())).toEqual({ type: "string", format: "uri" })
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toOpenApi20(t(types.datetime))).toEqual({ type: "string", format: "date-time" })
+    expect(toOpenApi20(datetime())).toEqual({ type: "string", format: "date-time" })
   })
 
   test("date", () => {
-    expect(toOpenApi20(t(types.date))).toEqual({ type: "string", format: "date" })
+    expect(toOpenApi20(date())).toEqual({ type: "string", format: "date" })
   })
 
   test("time", () => {
-    expect(toOpenApi20(t(types.time))).toEqual({ type: "string", format: "time" })
+    expect(toOpenApi20(time())).toEqual({ type: "string", format: "time" })
   })
 
   test("duration has no standard format", () => {
-    expect(toOpenApi20(t(types.duration))).toEqual({ type: "string" })
+    expect(toOpenApi20(duration())).toEqual({ type: "string" })
   })
 })
 
@@ -194,7 +195,7 @@ describe("ref", () => {
 describe("definitions map", () => {
   test("builds a definitions object keyed by name", () => {
     const defs = toOpenApi20Definitions({
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Status: t(types.enum(["active", "inactive"])),
     })
     expect(defs).toEqual({
@@ -310,7 +311,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toOpenApi20(ref)).toEqual({

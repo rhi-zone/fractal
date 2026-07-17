@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { columnDef, toCreateTable, toSqlDdl } from "./sql.ts"
 
 describe("leaf types (postgres)", () => {
@@ -16,19 +17,19 @@ describe("leaf types (postgres)", () => {
   })
 
   test("int32", () => {
-    expect(toSqlDdl(t(types.int32))).toEqual({ type: "INTEGER", nullable: false })
+    expect(toSqlDdl(int32())).toEqual({ type: "INTEGER", nullable: false })
   })
 
   test("int64", () => {
-    expect(toSqlDdl(t(types.int64))).toEqual({ type: "BIGINT", nullable: false })
+    expect(toSqlDdl(int64())).toEqual({ type: "BIGINT", nullable: false })
   })
 
   test("float32", () => {
-    expect(toSqlDdl(t(types.float32))).toEqual({ type: "REAL", nullable: false })
+    expect(toSqlDdl(float32())).toEqual({ type: "REAL", nullable: false })
   })
 
   test("float64", () => {
-    expect(toSqlDdl(t(types.float64))).toEqual({ type: "DOUBLE PRECISION", nullable: false })
+    expect(toSqlDdl(float64())).toEqual({ type: "DOUBLE PRECISION", nullable: false })
   })
 
   test("string", () => {
@@ -36,31 +37,31 @@ describe("leaf types (postgres)", () => {
   })
 
   test("uuid", () => {
-    expect(toSqlDdl(t(types.uuid))).toEqual({ type: "UUID", nullable: false })
+    expect(toSqlDdl(uuid())).toEqual({ type: "UUID", nullable: false })
   })
 
   test("uri", () => {
-    expect(toSqlDdl(t(types.uri))).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(uri())).toEqual({ type: "TEXT", nullable: false })
   })
 
   test("datetime", () => {
-    expect(toSqlDdl(t(types.datetime))).toEqual({ type: "TIMESTAMPTZ", nullable: false })
+    expect(toSqlDdl(datetime())).toEqual({ type: "TIMESTAMPTZ", nullable: false })
   })
 
   test("date", () => {
-    expect(toSqlDdl(t(types.date))).toEqual({ type: "DATE", nullable: false })
+    expect(toSqlDdl(date())).toEqual({ type: "DATE", nullable: false })
   })
 
   test("time", () => {
-    expect(toSqlDdl(t(types.time))).toEqual({ type: "TIME", nullable: false })
+    expect(toSqlDdl(time())).toEqual({ type: "TIME", nullable: false })
   })
 
   test("duration", () => {
-    expect(toSqlDdl(t(types.duration))).toEqual({ type: "INTERVAL", nullable: false })
+    expect(toSqlDdl(duration())).toEqual({ type: "INTERVAL", nullable: false })
   })
 
   test("bytes", () => {
-    expect(toSqlDdl(t(types.bytes))).toEqual({ type: "BYTEA", nullable: false })
+    expect(toSqlDdl(bytes())).toEqual({ type: "BYTEA", nullable: false })
   })
 
   test("null", () => {
@@ -182,39 +183,39 @@ describe("metadata", () => {
 
 describe("sqlite dialect overrides", () => {
   test("uuid", () => {
-    expect(toSqlDdl(t(types.uuid), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(uuid(), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
   })
 
   test("datetime", () => {
-    expect(toSqlDdl(t(types.datetime), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(datetime(), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
   })
 
   test("date", () => {
-    expect(toSqlDdl(t(types.date), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(date(), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
   })
 
   test("time", () => {
-    expect(toSqlDdl(t(types.time), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(time(), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
   })
 
   test("duration", () => {
-    expect(toSqlDdl(t(types.duration), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(duration(), { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
   })
 
   test("bytes", () => {
-    expect(toSqlDdl(t(types.bytes), { dialect: "sqlite" })).toEqual({ type: "BLOB", nullable: false })
+    expect(toSqlDdl(bytes(), { dialect: "sqlite" })).toEqual({ type: "BLOB", nullable: false })
   })
 
   test("int64", () => {
-    expect(toSqlDdl(t(types.int64), { dialect: "sqlite" })).toEqual({ type: "INTEGER", nullable: false })
+    expect(toSqlDdl(int64(), { dialect: "sqlite" })).toEqual({ type: "INTEGER", nullable: false })
   })
 
   test("float32", () => {
-    expect(toSqlDdl(t(types.float32), { dialect: "sqlite" })).toEqual({ type: "REAL", nullable: false })
+    expect(toSqlDdl(float32(), { dialect: "sqlite" })).toEqual({ type: "REAL", nullable: false })
   })
 
   test("float64", () => {
-    expect(toSqlDdl(t(types.float64), { dialect: "sqlite" })).toEqual({ type: "REAL", nullable: false })
+    expect(toSqlDdl(float64(), { dialect: "sqlite" })).toEqual({ type: "REAL", nullable: false })
   })
 
   test("object", () => {
@@ -250,19 +251,19 @@ describe("mysql dialect", () => {
   })
 
   test("int32", () => {
-    expect(toSqlDdl(t(types.int32), { dialect: "mysql" })).toEqual({ type: "INT", nullable: false })
+    expect(toSqlDdl(int32(), { dialect: "mysql" })).toEqual({ type: "INT", nullable: false })
   })
 
   test("int64", () => {
-    expect(toSqlDdl(t(types.int64), { dialect: "mysql" })).toEqual({ type: "BIGINT", nullable: false })
+    expect(toSqlDdl(int64(), { dialect: "mysql" })).toEqual({ type: "BIGINT", nullable: false })
   })
 
   test("float32", () => {
-    expect(toSqlDdl(t(types.float32), { dialect: "mysql" })).toEqual({ type: "FLOAT", nullable: false })
+    expect(toSqlDdl(float32(), { dialect: "mysql" })).toEqual({ type: "FLOAT", nullable: false })
   })
 
   test("float64", () => {
-    expect(toSqlDdl(t(types.float64), { dialect: "mysql" })).toEqual({ type: "DOUBLE", nullable: false })
+    expect(toSqlDdl(float64(), { dialect: "mysql" })).toEqual({ type: "DOUBLE", nullable: false })
   })
 
   test("string", () => {
@@ -270,31 +271,31 @@ describe("mysql dialect", () => {
   })
 
   test("uuid", () => {
-    expect(toSqlDdl(t(types.uuid), { dialect: "mysql" })).toEqual({ type: "CHAR(36)", nullable: false })
+    expect(toSqlDdl(uuid(), { dialect: "mysql" })).toEqual({ type: "CHAR(36)", nullable: false })
   })
 
   test("uri", () => {
-    expect(toSqlDdl(t(types.uri), { dialect: "mysql" })).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(uri(), { dialect: "mysql" })).toEqual({ type: "TEXT", nullable: false })
   })
 
   test("datetime", () => {
-    expect(toSqlDdl(t(types.datetime), { dialect: "mysql" })).toEqual({ type: "DATETIME", nullable: false })
+    expect(toSqlDdl(datetime(), { dialect: "mysql" })).toEqual({ type: "DATETIME", nullable: false })
   })
 
   test("date", () => {
-    expect(toSqlDdl(t(types.date), { dialect: "mysql" })).toEqual({ type: "DATE", nullable: false })
+    expect(toSqlDdl(date(), { dialect: "mysql" })).toEqual({ type: "DATE", nullable: false })
   })
 
   test("time", () => {
-    expect(toSqlDdl(t(types.time), { dialect: "mysql" })).toEqual({ type: "TIME", nullable: false })
+    expect(toSqlDdl(time(), { dialect: "mysql" })).toEqual({ type: "TIME", nullable: false })
   })
 
   test("duration", () => {
-    expect(toSqlDdl(t(types.duration), { dialect: "mysql" })).toEqual({ type: "VARCHAR(255)", nullable: false })
+    expect(toSqlDdl(duration(), { dialect: "mysql" })).toEqual({ type: "VARCHAR(255)", nullable: false })
   })
 
   test("bytes", () => {
-    expect(toSqlDdl(t(types.bytes), { dialect: "mysql" })).toEqual({ type: "BLOB", nullable: false })
+    expect(toSqlDdl(bytes(), { dialect: "mysql" })).toEqual({ type: "BLOB", nullable: false })
   })
 
   test("null", () => {
@@ -359,10 +360,10 @@ describe("mysql dialect", () => {
   test("toCreateTable builds full table DDL", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid),
+        id: uuid(),
         name: t(types.string),
         nickname: t(types.string, { nullable: true }),
-        age: t(types.int32, { default: 0 }),
+        age: int32({ default: 0 }),
       }),
     )
     expect(toCreateTable("users", ref, { dialect: "mysql" })).toBe(
@@ -396,10 +397,10 @@ describe("toCreateTable", () => {
   test("builds full table DDL", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid),
+        id: uuid(),
         name: t(types.string),
         nickname: t(types.string, { nullable: true }),
-        age: t(types.int32, { default: 0 }),
+        age: int32({ default: 0 }),
       }),
     )
     expect(toCreateTable("users", ref)).toBe(
@@ -436,7 +437,7 @@ describe("unrecognized metadata (open metadata bag)", () => {
 
 describe("CHECK constraints from metadata", () => {
   test("numeric minimum/maximum", () => {
-    expect(toSqlDdl(t(types.int32, { minimum: 0, maximum: 100 }))).toEqual({
+    expect(toSqlDdl(int32({ minimum: 0, maximum: 100 }))).toEqual({
       type: "INTEGER",
       nullable: false,
       checks: ["CHECK ({name} >= 0)", "CHECK ({name} <= 100)"],
@@ -498,7 +499,7 @@ describe("CHECK constraints from metadata", () => {
   })
 
   test("combined constraints", () => {
-    expect(toSqlDdl(t(types.int32, { minimum: 0, maximum: 100, multipleOf: 5 }))).toEqual({
+    expect(toSqlDdl(int32({ minimum: 0, maximum: 100, multipleOf: 5 }))).toEqual({
       type: "INTEGER",
       nullable: false,
       checks: ["CHECK ({name} >= 0)", "CHECK ({name} <= 100)", "CHECK ({name} % 5 = 0)"],
@@ -534,7 +535,7 @@ describe("description metadata → comment", () => {
 
 describe("columnDef renders checks and comments", () => {
   test("substitutes {name} into check clauses", () => {
-    expect(columnDef("age", toSqlDdl(t(types.int32, { minimum: 0, maximum: 130 })))).toBe(
+    expect(columnDef("age", toSqlDdl(int32({ minimum: 0, maximum: 130 })))).toBe(
       "age INTEGER NOT NULL CHECK (age >= 0) CHECK (age <= 130)",
     )
   })
@@ -543,7 +544,7 @@ describe("columnDef renders checks and comments", () => {
     expect(
       columnDef(
         "age",
-        toSqlDdl(t(types.int32, { minimum: 0, description: "age in years" })),
+        toSqlDdl(int32({ minimum: 0, description: "age in years" })),
       ),
     ).toBe("age INTEGER NOT NULL CHECK (age >= 0) /* age in years */")
   })
@@ -557,8 +558,8 @@ describe("columnDef renders checks and comments", () => {
   test("toCreateTable: comma is preserved, not swallowed by the comment", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid),
-        age: t(types.int32, { minimum: 0, description: "age in years" }),
+        id: uuid(),
+        age: int32({ minimum: 0, description: "age in years" }),
       }),
     )
     expect(toCreateTable("users", ref)).toBe(

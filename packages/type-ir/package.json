@@ -98,6 +98,42 @@
     "./derive": {
       "types": "./src/derive.ts",
       "import": "./src/derive.ts"
+    },
+    "./kinds/int-widths": {
+      "types": "./src/kinds/int-widths.ts",
+      "import": "./src/kinds/int-widths.ts"
+    },
+    "./kinds/float-widths": {
+      "types": "./src/kinds/float-widths.ts",
+      "import": "./src/kinds/float-widths.ts"
+    },
+    "./kinds/wire-numerics": {
+      "types": "./src/kinds/wire-numerics.ts",
+      "import": "./src/kinds/wire-numerics.ts"
+    },
+    "./kinds/date-time": {
+      "types": "./src/kinds/date-time.ts",
+      "import": "./src/kinds/date-time.ts"
+    },
+    "./kinds/duration": {
+      "types": "./src/kinds/duration.ts",
+      "import": "./src/kinds/duration.ts"
+    },
+    "./kinds/temporal": {
+      "types": "./src/kinds/temporal.ts",
+      "import": "./src/kinds/temporal.ts"
+    },
+    "./kinds/semantic-strings": {
+      "types": "./src/kinds/semantic-strings.ts",
+      "import": "./src/kinds/semantic-strings.ts"
+    },
+    "./kinds/bytes": {
+      "types": "./src/kinds/bytes.ts",
+      "import": "./src/kinds/bytes.ts"
+    },
+    "./kinds/common": {
+      "types": "./src/kinds/common.ts",
+      "import": "./src/kinds/common.ts"
     }
   },
   "files": ["src"],

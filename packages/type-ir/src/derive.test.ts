@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { deepPartial, deepRequired, extend, nullable, omit, partial, pick, required, withMeta } from "./derive.ts"
 import { t, types } from "./index.ts"
+import { uuid } from "./kinds/common.ts"
 
 const user = t(
   types.object({
-    id: t(types.uuid),
+    id: uuid(),
     name: t(types.string),
     email: t(types.string, { description: "primary email" }),
     age: t(types.integer, { optional: true }),
@@ -264,7 +265,7 @@ describe("deepPartial", () => {
     const ref = deepPartial(
       t(
         types.object({
-          items: t(types.array(t(types.object({ id: t(types.uuid), label: t(types.string) })))),
+          items: t(types.array(t(types.object({ id: uuid(), label: t(types.string) })))),
         }),
       ),
     )
@@ -287,7 +288,7 @@ describe("deepPartial", () => {
               t(
                 types.object({
                   name: t(types.string),
-                  members: t(types.array(t(types.object({ id: t(types.uuid) })))),
+                  members: t(types.array(t(types.object({ id: uuid() })))),
                 }),
               ),
             ),
@@ -365,7 +366,7 @@ describe("deepRequired", () => {
   test("array of objects: element fields lose optional", () => {
     const original = t(
       types.object({
-        items: t(types.array(t(types.object({ id: t(types.uuid), label: t(types.string) })))),
+        items: t(types.array(t(types.object({ id: uuid(), label: t(types.string) })))),
       }),
     )
     const ref = deepRequired(deepPartial(original))
@@ -387,7 +388,7 @@ describe("deepRequired", () => {
             t(
               types.object({
                 name: t(types.string),
-                members: t(types.array(t(types.object({ id: t(types.uuid) })))),
+                members: t(types.array(t(types.object({ id: uuid() })))),
               }),
             ),
           ),

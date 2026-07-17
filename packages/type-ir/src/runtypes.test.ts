@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toRuntypes, toRuntypesDeclaration, toRuntypesDeclarations } from "./runtypes.ts"
 
 describe("leaf types", () => {
@@ -22,7 +23,7 @@ describe("leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toRuntypes(t(types.bytes))).toBe("R.String /* bytes, base64 */")
+    expect(toRuntypes(bytes())).toBe("R.String /* bytes, base64 */")
   })
 
   test("null", () => {
@@ -44,49 +45,49 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toRuntypes(t(types.int32))).toBe(
+    expect(toRuntypes(int32())).toBe(
       'R.Number.withConstraint((n) => Number.isInteger(n) || "must be an integer")',
     )
   })
 
   test("int64", () => {
-    expect(toRuntypes(t(types.int64))).toBe(
+    expect(toRuntypes(int64())).toBe(
       'R.Number.withConstraint((n) => Number.isInteger(n) || "must be an integer")',
     )
   })
 
   test("float32", () => {
-    expect(toRuntypes(t(types.float32))).toBe("R.Number")
+    expect(toRuntypes(float32())).toBe("R.Number")
   })
 
   test("float64", () => {
-    expect(toRuntypes(t(types.float64))).toBe("R.Number")
+    expect(toRuntypes(float64())).toBe("R.Number")
   })
 
   test("uuid", () => {
-    expect(toRuntypes(t(types.uuid))).toBe("R.String /* uuid */")
+    expect(toRuntypes(uuid())).toBe("R.String /* uuid */")
   })
 
   test("uri", () => {
-    expect(toRuntypes(t(types.uri))).toBe("R.String /* uri */")
+    expect(toRuntypes(uri())).toBe("R.String /* uri */")
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toRuntypes(t(types.datetime))).toBe("R.String /* datetime */")
+    expect(toRuntypes(datetime())).toBe("R.String /* datetime */")
   })
 
   test("date", () => {
-    expect(toRuntypes(t(types.date))).toBe("R.String /* date */")
+    expect(toRuntypes(date())).toBe("R.String /* date */")
   })
 
   test("time", () => {
-    expect(toRuntypes(t(types.time))).toBe("R.String /* time */")
+    expect(toRuntypes(time())).toBe("R.String /* time */")
   })
 
   test("duration", () => {
-    expect(toRuntypes(t(types.duration))).toBe("R.String /* duration */")
+    expect(toRuntypes(duration())).toBe("R.String /* duration */")
   })
 })
 
@@ -284,7 +285,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toRuntypes(ref)).toBe("R.Record({ ids: R.Array(R.String /* uuid */) })")
@@ -302,7 +303,7 @@ describe("toRuntypesDeclaration", () => {
 describe("toRuntypesDeclarations", () => {
   test("emits import and multiple declarations", () => {
     const registry = {
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Age: t(types.integer),
     }
     expect(toRuntypesDeclarations(registry)).toBe(

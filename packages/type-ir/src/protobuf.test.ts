@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { renderProto, toProtoField, toProtoMessage } from "./protobuf.ts"
 
 describe("leaf types", () => {
@@ -8,7 +9,7 @@ describe("leaf types", () => {
   })
 
   test("int32", () => {
-    expect(toProtoField(t(types.int32))).toEqual({ type: "int32", repeated: false, optional: false })
+    expect(toProtoField(int32())).toEqual({ type: "int32", repeated: false, optional: false })
   })
 
   test("string", () => {
@@ -16,39 +17,39 @@ describe("leaf types", () => {
   })
 
   test("float64", () => {
-    expect(toProtoField(t(types.float64))).toEqual({ type: "double", repeated: false, optional: false })
+    expect(toProtoField(float64())).toEqual({ type: "double", repeated: false, optional: false })
   })
 
   test("bytes", () => {
-    expect(toProtoField(t(types.bytes))).toEqual({ type: "bytes", repeated: false, optional: false })
+    expect(toProtoField(bytes())).toEqual({ type: "bytes", repeated: false, optional: false })
   })
 })
 
 describe("string subtypes fall back to string", () => {
   test("uuid", () => {
-    expect(toProtoField(t(types.uuid)).type).toBe("string")
+    expect(toProtoField(uuid()).type).toBe("string")
   })
 
   test("uri", () => {
-    expect(toProtoField(t(types.uri)).type).toBe("string")
+    expect(toProtoField(uri()).type).toBe("string")
   })
 
   test("date", () => {
-    expect(toProtoField(t(types.date)).type).toBe("string")
+    expect(toProtoField(date()).type).toBe("string")
   })
 
   test("time", () => {
-    expect(toProtoField(t(types.time)).type).toBe("string")
+    expect(toProtoField(time()).type).toBe("string")
   })
 })
 
 describe("well-known types", () => {
   test("datetime -> google.protobuf.Timestamp", () => {
-    expect(toProtoField(t(types.datetime)).type).toBe("google.protobuf.Timestamp")
+    expect(toProtoField(datetime()).type).toBe("google.protobuf.Timestamp")
   })
 
   test("duration -> google.protobuf.Duration", () => {
-    expect(toProtoField(t(types.duration)).type).toBe("google.protobuf.Duration")
+    expect(toProtoField(duration()).type).toBe("google.protobuf.Duration")
   })
 
   test("unknown -> google.protobuf.Any", () => {
@@ -76,7 +77,7 @@ describe("array", () => {
 
 describe("map", () => {
   test("map<key, value>", () => {
-    const field = toProtoField(t(types.map(t(types.string), t(types.int64))))
+    const field = toProtoField(t(types.map(t(types.string), int64())))
     expect(field.type).toBe("map<string, int64>")
     expect(field.mapKey).toBe("string")
     expect(field.mapValue).toBe("int64")
@@ -85,12 +86,12 @@ describe("map", () => {
 
 describe("tuple", () => {
   test("uniform elements collapse to repeated of that type", () => {
-    const field = toProtoField(t(types.tuple([t(types.int32), t(types.int32)])))
+    const field = toProtoField(t(types.tuple([int32(), int32()])))
     expect(field).toEqual({ type: "int32", repeated: true, optional: false })
   })
 
   test("heterogeneous elements degrade to repeated Any", () => {
-    const field = toProtoField(t(types.tuple([t(types.int32), t(types.string)])))
+    const field = toProtoField(t(types.tuple([int32(), t(types.string)])))
     expect(field.type).toBe("google.protobuf.Any")
     expect(field.repeated).toBe(true)
   })
@@ -98,7 +99,7 @@ describe("tuple", () => {
 
 describe("union", () => {
   test("degrades to google.protobuf.Any", () => {
-    expect(toProtoField(t(types.union([t(types.string), t(types.int32)]))).type).toBe("google.protobuf.Any")
+    expect(toProtoField(t(types.union([t(types.string), int32()]))).type).toBe("google.protobuf.Any")
   })
 })
 
@@ -195,9 +196,9 @@ describe("toProtoMessage", () => {
   test("flat object with auto-numbered fields", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid),
+        id: uuid(),
         name: t(types.string),
-        age: t(types.int32, { optional: true }),
+        age: int32({ optional: true }),
       }),
     )
     const message = toProtoMessage("Person", ref)
@@ -254,8 +255,8 @@ describe("renderProto", () => {
       "Person",
       t(
         types.object({
-          id: t(types.uuid),
-          age: t(types.int32, { optional: true }),
+          id: uuid(),
+          age: int32({ optional: true }),
         }),
       ),
     )

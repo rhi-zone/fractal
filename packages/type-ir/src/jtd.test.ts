@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toJtd } from "./jtd.ts"
 
 describe("leaf types", () => {
@@ -12,19 +13,19 @@ describe("leaf types", () => {
   })
 
   test("float32", () => {
-    expect(toJtd(t(types.float32))).toEqual({ type: "float32" })
+    expect(toJtd(float32())).toEqual({ type: "float32" })
   })
 
   test("float64", () => {
-    expect(toJtd(t(types.float64))).toEqual({ type: "float64" })
+    expect(toJtd(float64())).toEqual({ type: "float64" })
   })
 
   test("int32", () => {
-    expect(toJtd(t(types.int32))).toEqual({ type: "int32" })
+    expect(toJtd(int32())).toEqual({ type: "int32" })
   })
 
   test("datetime maps to timestamp", () => {
-    expect(toJtd(t(types.datetime))).toEqual({ type: "timestamp" })
+    expect(toJtd(datetime())).toEqual({ type: "timestamp" })
   })
 
   test("unknown is the empty form", () => {
@@ -54,33 +55,33 @@ describe("closest-fit degradation", () => {
   })
 
   test("int64 has no JTD equivalent, degrades to empty + metadata", () => {
-    expect(toJtd(t(types.int64))).toEqual({ metadata: { type: "int64" } })
+    expect(toJtd(int64())).toEqual({ metadata: { type: "int64" } })
   })
 })
 
 describe("string subtypes", () => {
   test("uuid", () => {
-    expect(toJtd(t(types.uuid))).toEqual({ type: "string", metadata: { format: "uuid" } })
+    expect(toJtd(uuid())).toEqual({ type: "string", metadata: { format: "uuid" } })
   })
 
   test("uri", () => {
-    expect(toJtd(t(types.uri))).toEqual({ type: "string", metadata: { format: "uri" } })
+    expect(toJtd(uri())).toEqual({ type: "string", metadata: { format: "uri" } })
   })
 
   test("date", () => {
-    expect(toJtd(t(types.date))).toEqual({ type: "string", metadata: { format: "date" } })
+    expect(toJtd(date())).toEqual({ type: "string", metadata: { format: "date" } })
   })
 
   test("time", () => {
-    expect(toJtd(t(types.time))).toEqual({ type: "string", metadata: { format: "time" } })
+    expect(toJtd(time())).toEqual({ type: "string", metadata: { format: "time" } })
   })
 
   test("duration", () => {
-    expect(toJtd(t(types.duration))).toEqual({ type: "string", metadata: { format: "duration" } })
+    expect(toJtd(duration())).toEqual({ type: "string", metadata: { format: "duration" } })
   })
 
   test("bytes", () => {
-    expect(toJtd(t(types.bytes))).toEqual({
+    expect(toJtd(bytes())).toEqual({
       type: "string",
       metadata: { contentEncoding: "base64" },
     })
@@ -207,7 +208,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toJtd(ref)).toEqual({

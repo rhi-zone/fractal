@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { mssqlColumnDef, toMssqlCreateTable, toMssqlType } from "./sql-mssql.ts"
 
 describe("leaf types", () => {
@@ -16,19 +17,19 @@ describe("leaf types", () => {
   })
 
   test("int32", () => {
-    expect(toMssqlType(t(types.int32))).toBe("INT")
+    expect(toMssqlType(int32())).toBe("INT")
   })
 
   test("int64", () => {
-    expect(toMssqlType(t(types.int64))).toBe("BIGINT")
+    expect(toMssqlType(int64())).toBe("BIGINT")
   })
 
   test("float32", () => {
-    expect(toMssqlType(t(types.float32))).toBe("REAL")
+    expect(toMssqlType(float32())).toBe("REAL")
   })
 
   test("float64", () => {
-    expect(toMssqlType(t(types.float64))).toBe("FLOAT")
+    expect(toMssqlType(float64())).toBe("FLOAT")
   })
 
   test("string", () => {
@@ -36,31 +37,31 @@ describe("leaf types", () => {
   })
 
   test("uuid", () => {
-    expect(toMssqlType(t(types.uuid))).toBe("UNIQUEIDENTIFIER")
+    expect(toMssqlType(uuid())).toBe("UNIQUEIDENTIFIER")
   })
 
   test("uri", () => {
-    expect(toMssqlType(t(types.uri))).toBe("NVARCHAR(MAX)")
+    expect(toMssqlType(uri())).toBe("NVARCHAR(MAX)")
   })
 
   test("datetime", () => {
-    expect(toMssqlType(t(types.datetime))).toBe("DATETIME2")
+    expect(toMssqlType(datetime())).toBe("DATETIME2")
   })
 
   test("date", () => {
-    expect(toMssqlType(t(types.date))).toBe("DATE")
+    expect(toMssqlType(date())).toBe("DATE")
   })
 
   test("time", () => {
-    expect(toMssqlType(t(types.time))).toBe("TIME")
+    expect(toMssqlType(time())).toBe("TIME")
   })
 
   test("duration", () => {
-    expect(toMssqlType(t(types.duration))).toBe("NVARCHAR(255)")
+    expect(toMssqlType(duration())).toBe("NVARCHAR(255)")
   })
 
   test("bytes", () => {
-    expect(toMssqlType(t(types.bytes))).toBe("VARBINARY(MAX)")
+    expect(toMssqlType(bytes())).toBe("VARBINARY(MAX)")
   })
 
   test("null", () => {
@@ -154,11 +155,11 @@ describe("mssqlColumnDef", () => {
   })
 
   test("identity column", () => {
-    expect(mssqlColumnDef("id", t(types.int32, { identity: true }))).toBe("id INT IDENTITY(1,1) NOT NULL")
+    expect(mssqlColumnDef("id", int32({ identity: true }))).toBe("id INT IDENTITY(1,1) NOT NULL")
   })
 
   test("uuid column", () => {
-    expect(mssqlColumnDef("id", t(types.uuid))).toBe("id UNIQUEIDENTIFIER NOT NULL")
+    expect(mssqlColumnDef("id", uuid())).toBe("id UNIQUEIDENTIFIER NOT NULL")
   })
 
   test("enum column gets CHECK constraint", () => {
@@ -178,11 +179,11 @@ describe("toMssqlCreateTable", () => {
   test("builds full table DDL", () => {
     expect(
       toMssqlCreateTable("users", {
-        id: t(types.int32, { identity: true }),
-        externalId: t(types.uuid),
+        id: int32({ identity: true }),
+        externalId: uuid(),
         name: t(types.string),
         nickname: t(types.string, { nullable: true }),
-        age: t(types.int32, { default: 0 }),
+        age: int32({ default: 0 }),
         status: t(types.enum(["active", "inactive"])),
       }),
     ).toBe(
@@ -208,7 +209,7 @@ describe("unknown kind fallback", () => {
 
 describe("CHECK constraints from metadata", () => {
   test("numeric minimum/maximum", () => {
-    expect(mssqlColumnDef("age", t(types.int32, { minimum: 0, maximum: 130 }))).toBe(
+    expect(mssqlColumnDef("age", int32({ minimum: 0, maximum: 130 }))).toBe(
       "age INT NOT NULL CHECK (age >= 0) CHECK (age <= 130)",
     )
   })
@@ -241,7 +242,7 @@ describe("CHECK constraints from metadata", () => {
 
   test("combined constraints, enum CHECK, and identity all compose", () => {
     expect(
-      mssqlColumnDef("id", t(types.int32, { identity: true, minimum: 1 })),
+      mssqlColumnDef("id", int32({ identity: true, minimum: 1 })),
     ).toBe("id INT IDENTITY(1,1) NOT NULL CHECK (id >= 1)")
   })
 })
@@ -254,7 +255,7 @@ describe("description metadata → comment", () => {
   })
 
   test("comment comes after CHECK constraints", () => {
-    expect(mssqlColumnDef("age", t(types.int32, { minimum: 0, description: "age in years" }))).toBe(
+    expect(mssqlColumnDef("age", int32({ minimum: 0, description: "age in years" }))).toBe(
       "age INT NOT NULL CHECK (age >= 0) /* age in years */",
     )
   })
@@ -264,8 +265,8 @@ describe("toMssqlCreateTable: comma is preserved, not swallowed by the comment",
   test("full table DDL with checks and comments", () => {
     expect(
       toMssqlCreateTable("users", {
-        id: t(types.int32, { identity: true }),
-        age: t(types.int32, { minimum: 0, description: "age in years" }),
+        id: int32({ identity: true }),
+        age: int32({ minimum: 0, description: "age in years" }),
       }),
     ).toBe(
       "CREATE TABLE users (\n" +

@@ -1,19 +1,15 @@
+// Core structural + universal-primitive kinds only. Semantic refinements
+// (int32/int64, float32/float64, uuid/uri, datetime/date/time, duration,
+// bytes, …) are independently importable extension modules under
+// src/kinds/* that augment this interface via declaration merging and
+// register their parent relationship with registerParent() below — see
+// src/kinds/common.ts for the full pre-1.0 vocabulary bundled with this
+// package.
 export interface TypeKinds {
   boolean: { readonly kind: "boolean" }
   number: { readonly kind: "number" }
   integer: { readonly kind: "integer" }
-  int32: { readonly kind: "int32" }
-  int64: { readonly kind: "int64" }
-  float32: { readonly kind: "float32" }
-  float64: { readonly kind: "float64" }
   string: { readonly kind: "string" }
-  uuid: { readonly kind: "uuid" }
-  uri: { readonly kind: "uri" }
-  datetime: { readonly kind: "datetime" }
-  date: { readonly kind: "date" }
-  time: { readonly kind: "time" }
-  duration: { readonly kind: "duration" }
-  bytes: { readonly kind: "bytes" }
   null: { readonly kind: "null" }
   void: { readonly kind: "void" }
   unknown: { readonly kind: "unknown" }
@@ -40,18 +36,7 @@ const parents: Record<string, string | null> = {
   boolean: null,
   number: null,
   integer: "number",
-  int32: "integer",
-  int64: "integer",
-  float32: "number",
-  float64: "number",
   string: null,
-  uuid: "string",
-  uri: "string",
-  datetime: "string",
-  date: "string",
-  time: "string",
-  duration: "string",
-  bytes: null,
   null: null,
   void: null,
   unknown: null,
@@ -100,18 +85,7 @@ export const types = {
   boolean: { kind: "boolean" } as const,
   number: { kind: "number" } as const,
   integer: { kind: "integer" } as const,
-  int32: { kind: "int32" } as const,
-  int64: { kind: "int64" } as const,
-  float32: { kind: "float32" } as const,
-  float64: { kind: "float64" } as const,
   string: { kind: "string" } as const,
-  uuid: { kind: "uuid" } as const,
-  uri: { kind: "uri" } as const,
-  datetime: { kind: "datetime" } as const,
-  date: { kind: "date" } as const,
-  time: { kind: "time" } as const,
-  duration: { kind: "duration" } as const,
-  bytes: { kind: "bytes" } as const,
   null: { kind: "null" } as const,
   void: { kind: "void" } as const,
   unknown: { kind: "unknown" } as const,

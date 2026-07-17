@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toEffectSchema, toEffectSchemaDeclaration, toEffectSchemaDeclarations } from "./effect-schema.ts"
 
 describe("leaf types", () => {
@@ -20,7 +21,7 @@ describe("leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toEffectSchema(t(types.bytes))).toBe("S.String")
+    expect(toEffectSchema(bytes())).toBe("S.String")
   })
 
   test("null", () => {
@@ -42,45 +43,45 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toEffectSchema(t(types.int32))).toBe("S.Int")
+    expect(toEffectSchema(int32())).toBe("S.Int")
   })
 
   test("int64", () => {
-    expect(toEffectSchema(t(types.int64))).toBe("S.Int")
+    expect(toEffectSchema(int64())).toBe("S.Int")
   })
 
   test("float32", () => {
-    expect(toEffectSchema(t(types.float32))).toBe("S.Number")
+    expect(toEffectSchema(float32())).toBe("S.Number")
   })
 
   test("float64", () => {
-    expect(toEffectSchema(t(types.float64))).toBe("S.Number")
+    expect(toEffectSchema(float64())).toBe("S.Number")
   })
 
   test("uuid", () => {
-    expect(toEffectSchema(t(types.uuid))).toBe("S.UUID")
+    expect(toEffectSchema(uuid())).toBe("S.UUID")
   })
 
   test("uri", () => {
-    expect(toEffectSchema(t(types.uri))).toBe("S.String")
+    expect(toEffectSchema(uri())).toBe("S.String")
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toEffectSchema(t(types.datetime))).toBe("S.DateFromString")
+    expect(toEffectSchema(datetime())).toBe("S.DateFromString")
   })
 
   test("date", () => {
-    expect(toEffectSchema(t(types.date))).toBe("S.DateFromString")
+    expect(toEffectSchema(date())).toBe("S.DateFromString")
   })
 
   test("time", () => {
-    expect(toEffectSchema(t(types.time))).toBe("S.String")
+    expect(toEffectSchema(time())).toBe("S.String")
   })
 
   test("duration", () => {
-    expect(toEffectSchema(t(types.duration))).toBe("S.String")
+    expect(toEffectSchema(duration())).toBe("S.String")
   })
 })
 
@@ -245,7 +246,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toEffectSchema(ref)).toBe("S.Struct({ ids: S.Array(S.UUID) })")
@@ -293,7 +294,7 @@ describe("toEffectSchemaDeclaration", () => {
 describe("toEffectSchemaDeclarations", () => {
   test("emits import and multiple declarations", () => {
     const registry = {
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Age: t(types.integer),
     }
     expect(toEffectSchemaDeclarations(registry)).toBe(

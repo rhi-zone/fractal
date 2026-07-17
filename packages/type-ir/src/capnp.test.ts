@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { renderCapnp, toCapnpStruct, toCapnpType } from "./capnp.ts"
 
 describe("leaf types", () => {
@@ -8,7 +9,7 @@ describe("leaf types", () => {
   })
 
   test("int32", () => {
-    expect(toCapnpType(t(types.int32))).toBe("Int32")
+    expect(toCapnpType(int32())).toBe("Int32")
   })
 
   test("string", () => {
@@ -16,39 +17,39 @@ describe("leaf types", () => {
   })
 
   test("float64", () => {
-    expect(toCapnpType(t(types.float64))).toBe("Float64")
+    expect(toCapnpType(float64())).toBe("Float64")
   })
 
   test("bytes", () => {
-    expect(toCapnpType(t(types.bytes))).toBe("Data")
+    expect(toCapnpType(bytes())).toBe("Data")
   })
 })
 
 describe("string subtypes fall back to Text", () => {
   test("uuid", () => {
-    expect(toCapnpType(t(types.uuid))).toBe("Text")
+    expect(toCapnpType(uuid())).toBe("Text")
   })
 
   test("uri", () => {
-    expect(toCapnpType(t(types.uri))).toBe("Text")
+    expect(toCapnpType(uri())).toBe("Text")
   })
 
   test("date", () => {
-    expect(toCapnpType(t(types.date))).toBe("Text")
+    expect(toCapnpType(date())).toBe("Text")
   })
 
   test("time", () => {
-    expect(toCapnpType(t(types.time))).toBe("Text")
+    expect(toCapnpType(time())).toBe("Text")
   })
 })
 
 describe("well-known conventions", () => {
   test("datetime -> Int64 (unix timestamp)", () => {
-    expect(toCapnpType(t(types.datetime))).toBe("Int64")
+    expect(toCapnpType(datetime())).toBe("Int64")
   })
 
   test("duration -> Int64", () => {
-    expect(toCapnpType(t(types.duration))).toBe("Int64")
+    expect(toCapnpType(duration())).toBe("Int64")
   })
 
   test("unknown -> AnyPointer", () => {
@@ -74,25 +75,25 @@ describe("array", () => {
   })
 
   test("nested array", () => {
-    expect(toCapnpType(t(types.array(t(types.array(t(types.int32))))))).toBe("List(List(Int32))")
+    expect(toCapnpType(t(types.array(t(types.array(int32())))))).toBe("List(List(Int32))")
   })
 })
 
 describe("map", () => {
   test("standalone map type collapses to List(Entry)", () => {
-    expect(toCapnpType(t(types.map(t(types.string), t(types.int64))))).toBe("List(Entry)")
+    expect(toCapnpType(t(types.map(t(types.string), int64())))).toBe("List(Entry)")
   })
 })
 
 describe("tuple", () => {
   test("degrades to List(AnyPointer)", () => {
-    expect(toCapnpType(t(types.tuple([t(types.int32), t(types.string)])))).toBe("List(AnyPointer)")
+    expect(toCapnpType(t(types.tuple([int32(), t(types.string)])))).toBe("List(AnyPointer)")
   })
 })
 
 describe("union", () => {
   test("degrades to AnyPointer", () => {
-    expect(toCapnpType(t(types.union([t(types.string), t(types.int32)])))).toBe("AnyPointer")
+    expect(toCapnpType(t(types.union([t(types.string), int32()])))).toBe("AnyPointer")
   })
 })
 
@@ -178,9 +179,9 @@ describe("toCapnpStruct", () => {
   test("flat object with auto-numbered ordinals starting at 0", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid),
+        id: uuid(),
         name: t(types.string),
-        age: t(types.int32),
+        age: int32(),
       }),
     )
     const struct = toCapnpStruct("Person", ref)
@@ -227,7 +228,7 @@ describe("toCapnpStruct", () => {
   test("map field produces a helper Entry struct", () => {
     const ref = t(
       types.object({
-        props: t(types.map(t(types.string), t(types.int64))),
+        props: t(types.map(t(types.string), int64())),
       }),
     )
     const struct = toCapnpStruct("Widget", ref)
@@ -250,8 +251,8 @@ describe("renderCapnp", () => {
       "Person",
       t(
         types.object({
-          id: t(types.uuid),
-          age: t(types.int32),
+          id: uuid(),
+          age: int32(),
         }),
       ),
     )

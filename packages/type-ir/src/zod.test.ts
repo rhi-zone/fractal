@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toZod, toZodDeclaration, toZodDeclarations } from "./zod.ts"
 
 describe("leaf types", () => {
@@ -20,7 +21,7 @@ describe("leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toZod(t(types.bytes))).toBe("z.string().base64()")
+    expect(toZod(bytes())).toBe("z.string().base64()")
   })
 
   test("null", () => {
@@ -42,45 +43,45 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toZod(t(types.int32))).toBe("z.number().int()")
+    expect(toZod(int32())).toBe("z.number().int()")
   })
 
   test("int64", () => {
-    expect(toZod(t(types.int64))).toBe("z.number().int()")
+    expect(toZod(int64())).toBe("z.number().int()")
   })
 
   test("float32", () => {
-    expect(toZod(t(types.float32))).toBe("z.number()")
+    expect(toZod(float32())).toBe("z.number()")
   })
 
   test("float64", () => {
-    expect(toZod(t(types.float64))).toBe("z.number()")
+    expect(toZod(float64())).toBe("z.number()")
   })
 
   test("uuid", () => {
-    expect(toZod(t(types.uuid))).toBe("z.string().uuid()")
+    expect(toZod(uuid())).toBe("z.string().uuid()")
   })
 
   test("uri", () => {
-    expect(toZod(t(types.uri))).toBe("z.string().url()")
+    expect(toZod(uri())).toBe("z.string().url()")
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toZod(t(types.datetime))).toBe("z.string().datetime()")
+    expect(toZod(datetime())).toBe("z.string().datetime()")
   })
 
   test("date", () => {
-    expect(toZod(t(types.date))).toBe("z.string().date()")
+    expect(toZod(date())).toBe("z.string().date()")
   })
 
   test("time", () => {
-    expect(toZod(t(types.time))).toBe("z.string().time()")
+    expect(toZod(time())).toBe("z.string().time()")
   })
 
   test("duration", () => {
-    expect(toZod(t(types.duration))).toBe("z.string().duration()")
+    expect(toZod(duration())).toBe("z.string().duration()")
   })
 })
 
@@ -263,7 +264,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toZod(ref)).toBe("z.object({ ids: z.array(z.string().uuid()) })")
@@ -293,7 +294,7 @@ describe("toZodDeclaration", () => {
 describe("toZodDeclarations", () => {
   test("emits import and multiple declarations", () => {
     const registry = {
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Age: t(types.integer),
     }
     expect(toZodDeclarations(registry)).toBe(

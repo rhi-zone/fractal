@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toJsDocInlineType, toJsDocType, toJsDocTypedef, toJsDocTypedefs } from "./jsdoc.ts"
 
 describe("leaf types", () => {
@@ -16,19 +17,19 @@ describe("leaf types", () => {
   })
 
   test("int32", () => {
-    expect(toJsDocType(t(types.int32))).toBe("number")
+    expect(toJsDocType(int32())).toBe("number")
   })
 
   test("int64", () => {
-    expect(toJsDocType(t(types.int64))).toBe("number")
+    expect(toJsDocType(int64())).toBe("number")
   })
 
   test("float32", () => {
-    expect(toJsDocType(t(types.float32))).toBe("number")
+    expect(toJsDocType(float32())).toBe("number")
   })
 
   test("float64", () => {
-    expect(toJsDocType(t(types.float64))).toBe("number")
+    expect(toJsDocType(float64())).toBe("number")
   })
 
   test("string", () => {
@@ -36,31 +37,31 @@ describe("leaf types", () => {
   })
 
   test("uuid", () => {
-    expect(toJsDocType(t(types.uuid))).toBe("string")
+    expect(toJsDocType(uuid())).toBe("string")
   })
 
   test("uri", () => {
-    expect(toJsDocType(t(types.uri))).toBe("string")
+    expect(toJsDocType(uri())).toBe("string")
   })
 
   test("datetime", () => {
-    expect(toJsDocType(t(types.datetime))).toBe("string")
+    expect(toJsDocType(datetime())).toBe("string")
   })
 
   test("date", () => {
-    expect(toJsDocType(t(types.date))).toBe("string")
+    expect(toJsDocType(date())).toBe("string")
   })
 
   test("time", () => {
-    expect(toJsDocType(t(types.time))).toBe("string")
+    expect(toJsDocType(time())).toBe("string")
   })
 
   test("duration", () => {
-    expect(toJsDocType(t(types.duration))).toBe("string")
+    expect(toJsDocType(duration())).toBe("string")
   })
 
   test("bytes", () => {
-    expect(toJsDocType(t(types.bytes))).toBe("string")
+    expect(toJsDocType(bytes())).toBe("string")
   })
 
   test("null", () => {
@@ -183,7 +184,7 @@ describe("unknown kind fallback", () => {
 
 describe("nested", () => {
   test("object with array of uuid fields", () => {
-    const ref = t(types.object({ ids: t(types.array(t(types.uuid))) }))
+    const ref = t(types.object({ ids: t(types.array(uuid())) }))
     expect(toJsDocType(ref)).toBe("{ids: Array.<string>}")
   })
 
@@ -195,7 +196,7 @@ describe("nested", () => {
 
 describe("toJsDocTypedef", () => {
   test("non-object type produces single-line typedef", () => {
-    expect(toJsDocTypedef("UserId", t(types.uuid))).toBe("/** @typedef {string} UserId */")
+    expect(toJsDocTypedef("UserId", uuid())).toBe("/** @typedef {string} UserId */")
   })
 
   test("non-object type with description", () => {
@@ -226,7 +227,7 @@ describe("toJsDocTypedef", () => {
   test("object typedef with description on the typedef and a field", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid, { description: "primary key" }),
+        id: uuid({ description: "primary key" }),
       }),
       { description: "A widget." },
     )
@@ -252,7 +253,7 @@ describe("toJsDocTypedef", () => {
   })
 
   test("deprecated non-object type expands to multi-line with @deprecated tag", () => {
-    const ref = t(types.uuid, { deprecated: true })
+    const ref = uuid({ deprecated: true })
     expect(toJsDocTypedef("UserId", ref)).toBe(
       ["/**", " * @typedef {string} UserId", " * @deprecated", " */"].join("\n"),
     )
@@ -306,7 +307,7 @@ describe("toJsDocTypedef interface mode", () => {
   test("nested objects", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid),
+        id: uuid(),
         address: t(types.object({ city: t(types.string) })),
       }),
     )
@@ -324,7 +325,7 @@ describe("toJsDocTypedef interface mode", () => {
   test("with description metadata", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid, { description: "primary key" }),
+        id: uuid({ description: "primary key" }),
       }),
       { description: "A widget." },
     )
@@ -364,7 +365,7 @@ describe("toJsDocTypedef class mode", () => {
   test("nested objects", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid),
+        id: uuid(),
         address: t(types.object({ city: t(types.string) })),
       }),
     )
@@ -383,7 +384,7 @@ describe("toJsDocTypedef class mode", () => {
   test("with description metadata", () => {
     const ref = t(
       types.object({
-        id: t(types.uuid, { description: "primary key" }),
+        id: uuid({ description: "primary key" }),
       }),
       { description: "A widget." },
     )
@@ -455,7 +456,7 @@ describe("toJsDocInlineType", () => {
 describe("toJsDocTypedefs", () => {
   test("generates multiple typedef blocks joined by blank lines", () => {
     const registry = {
-      UserId: t(types.uuid),
+      UserId: uuid(),
       User: t(types.object({ id: t(types.ref("UserId")) })),
     }
     expect(toJsDocTypedefs(registry)).toBe(

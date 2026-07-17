@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toTypeBox, toTypeBoxDeclaration, toTypeBoxDeclarations } from "./typebox.ts"
 
 describe("leaf types", () => {
@@ -20,7 +21,7 @@ describe("leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toTypeBox(t(types.bytes))).toBe('Type.String({ contentEncoding: "base64" })')
+    expect(toTypeBox(bytes())).toBe('Type.String({ contentEncoding: "base64" })')
   })
 
   test("null", () => {
@@ -42,45 +43,45 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toTypeBox(t(types.int32))).toBe('Type.Integer({ format: "int32" })')
+    expect(toTypeBox(int32())).toBe('Type.Integer({ format: "int32" })')
   })
 
   test("int64", () => {
-    expect(toTypeBox(t(types.int64))).toBe('Type.Integer({ format: "int64" })')
+    expect(toTypeBox(int64())).toBe('Type.Integer({ format: "int64" })')
   })
 
   test("float32", () => {
-    expect(toTypeBox(t(types.float32))).toBe('Type.Number({ format: "float" })')
+    expect(toTypeBox(float32())).toBe('Type.Number({ format: "float" })')
   })
 
   test("float64", () => {
-    expect(toTypeBox(t(types.float64))).toBe('Type.Number({ format: "double" })')
+    expect(toTypeBox(float64())).toBe('Type.Number({ format: "double" })')
   })
 
   test("uuid", () => {
-    expect(toTypeBox(t(types.uuid))).toBe('Type.String({ format: "uuid" })')
+    expect(toTypeBox(uuid())).toBe('Type.String({ format: "uuid" })')
   })
 
   test("uri", () => {
-    expect(toTypeBox(t(types.uri))).toBe('Type.String({ format: "uri" })')
+    expect(toTypeBox(uri())).toBe('Type.String({ format: "uri" })')
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toTypeBox(t(types.datetime))).toBe('Type.String({ format: "date-time" })')
+    expect(toTypeBox(datetime())).toBe('Type.String({ format: "date-time" })')
   })
 
   test("date", () => {
-    expect(toTypeBox(t(types.date))).toBe('Type.String({ format: "date" })')
+    expect(toTypeBox(date())).toBe('Type.String({ format: "date" })')
   })
 
   test("time", () => {
-    expect(toTypeBox(t(types.time))).toBe('Type.String({ format: "time" })')
+    expect(toTypeBox(time())).toBe('Type.String({ format: "time" })')
   })
 
   test("duration", () => {
-    expect(toTypeBox(t(types.duration))).toBe('Type.String({ format: "duration" })')
+    expect(toTypeBox(duration())).toBe('Type.String({ format: "duration" })')
   })
 })
 
@@ -253,7 +254,7 @@ describe("options object", () => {
   })
 
   test("format combined with meta constraints", () => {
-    const ref = t(types.uuid, { description: "the id" })
+    const ref = uuid({ description: "the id" })
     expect(toTypeBox(ref)).toBe('Type.String({ format: "uuid", description: "the id" })')
   })
 
@@ -275,7 +276,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toTypeBox(ref)).toBe('Type.Object({ ids: Type.Array(Type.String({ format: "uuid" })) })')

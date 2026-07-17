@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { t, types, type TypeShape } from "./index.ts"
+import { uuid } from "./kinds/common.ts"
 import { buildSchema, compileValidator, compileValidatorModule } from "./compile.ts"
 
 /** TypeBox TSchema objects carry a non-JSON `Symbol(TypeBox.Kind)` tag — strip
@@ -47,7 +48,7 @@ describe("buildSchema — leaf kinds", () => {
   })
 
   it("uuid carries the format option", () => {
-    expect(buildSchema(t(types.uuid))).toMatchObject({ type: "string", format: "uuid" })
+    expect(buildSchema(uuid())).toMatchObject({ type: "string", format: "uuid" })
   })
 
   it("null", () => {

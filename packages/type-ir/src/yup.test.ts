@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
+import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toYup, toYupDeclaration, toYupDeclarations } from "./yup.ts"
 
 describe("leaf types", () => {
@@ -20,7 +21,7 @@ describe("leaf types", () => {
   })
 
   test("bytes", () => {
-    expect(toYup(t(types.bytes))).toBe("yup.string() /* no native base64 validation in Yup */")
+    expect(toYup(bytes())).toBe("yup.string() /* no native base64 validation in Yup */")
   })
 
   test("null", () => {
@@ -42,47 +43,47 @@ describe("leaf types", () => {
 
 describe("formatted types", () => {
   test("int32", () => {
-    expect(toYup(t(types.int32))).toBe("yup.number().integer()")
+    expect(toYup(int32())).toBe("yup.number().integer()")
   })
 
   test("int64", () => {
-    expect(toYup(t(types.int64))).toBe("yup.number().integer()")
+    expect(toYup(int64())).toBe("yup.number().integer()")
   })
 
   test("float32", () => {
-    expect(toYup(t(types.float32))).toBe("yup.number()")
+    expect(toYup(float32())).toBe("yup.number()")
   })
 
   test("float64", () => {
-    expect(toYup(t(types.float64))).toBe("yup.number()")
+    expect(toYup(float64())).toBe("yup.number()")
   })
 
   test("uuid", () => {
-    expect(toYup(t(types.uuid))).toBe(
+    expect(toYup(uuid())).toBe(
       "yup.string().matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)",
     )
   })
 
   test("uri", () => {
-    expect(toYup(t(types.uri))).toBe("yup.string().url()")
+    expect(toYup(uri())).toBe("yup.string().url()")
   })
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toYup(t(types.datetime))).toBe("yup.date()")
+    expect(toYup(datetime())).toBe("yup.date()")
   })
 
   test("date", () => {
-    expect(toYup(t(types.date))).toBe("yup.date()")
+    expect(toYup(date())).toBe("yup.date()")
   })
 
   test("time", () => {
-    expect(toYup(t(types.time))).toBe("yup.string() /* no native time type in Yup */")
+    expect(toYup(time())).toBe("yup.string() /* no native time type in Yup */")
   })
 
   test("duration", () => {
-    expect(toYup(t(types.duration))).toBe("yup.string() /* no native duration type in Yup */")
+    expect(toYup(duration())).toBe("yup.string() /* no native duration type in Yup */")
   })
 })
 
@@ -239,7 +240,7 @@ describe("nested", () => {
   test("object with array of uuid fields", () => {
     const ref = t(
       types.object({
-        ids: t(types.array(t(types.uuid))),
+        ids: t(types.array(uuid())),
       }),
     )
     expect(toYup(ref)).toBe(
@@ -289,7 +290,7 @@ describe("toYupDeclaration", () => {
 describe("toYupDeclarations", () => {
   test("emits import and multiple declarations", () => {
     const registry = {
-      User: t(types.object({ id: t(types.uuid) })),
+      User: t(types.object({ id: uuid() })),
       Age: t(types.integer),
     }
     expect(toYupDeclarations(registry)).toBe(
