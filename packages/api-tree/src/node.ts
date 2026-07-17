@@ -202,10 +202,23 @@ export function op<H extends Handler>(
  *
  * Generic in `F` (the exact fallback shape) the same way: `opts.fallback`'s
  * literal `{ name, subtree }` — subtree included — survives into the
- * result's `fallback`, instead of widening `subtree` to the erased `Node`.
- * Defaults to `undefined` (no `fallback` key on the result at all) when
- * `opts.fallback` isn't passed, so a plain `api(children)` call doesn't grow
- * a spurious optional `fallback` field.
+ * result's `fallback`, instead of widening `subtree` to the erased `Node`
+ * OR widening `name` to plain `string`. Defaults to `undefined` (no
+ * `fallback` key on the result at all) when `opts.fallback` isn't passed, so
+ * a plain `api(children)` call doesn't grow a spurious optional `fallback`
+ * field.
+ *
+ * `F` is a `const` type parameter (TS 5.0+) — without `const`, TS widens a
+ * literal it infers for an object property whose declared type, at the
+ * generic-inference site, is a bare (non-generic) `string`; `name: string`
+ * inside `F`'s constraint is exactly that site, so `api(children, {
+ * fallback: { name: "bookId", subtree } })` would infer `F["name"]` as
+ * `string`, not `"bookId"`. `const F` tells inference to keep the argument's
+ * literal types (as if every literal in it were written `as const`) rather
+ * than widening to their base types — the same effect `as const` has on a
+ * value, applied automatically to this parameter's inference. With it,
+ * `fallback.name` survives as a literal all the way through `checker
+ * .getTypeOfSymbolAtLocation` in tree.ts's walker, no AST fallback needed.
  *
  * See docs/design/routing-and-transforms.md § DX — constructor sugar.
  */
@@ -213,7 +226,7 @@ export function api<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   C extends Readonly<Record<string, Node<any>>>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  F extends { readonly name: string; readonly subtree: Node<any> } | undefined = undefined,
+  const F extends { readonly name: string; readonly subtree: Node<any> } | undefined = undefined,
 >(
   children: C,
   opts?: { meta?: Meta; fallback?: F },

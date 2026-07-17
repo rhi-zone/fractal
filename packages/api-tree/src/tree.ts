@@ -17,32 +17,26 @@
 // type leaves `handler` at Node's declared-optional — that required/optional
 // split is the structural leaf/branch discriminator this walker uses.
 //
-// This walker still touches a SMALL amount of AST, for two things the type
-// system provably cannot give back:
-//   1. A leaf's underlying function NODE (needed by extract.ts's
-//      `typeRefFromFunctionNode`/`typeRefFromReturnType`, which read parameter/
-//      return type annotations and JSDoc off an actual node) — recovered via
-//      the handler's call signature's own `.declaration`, which TypeScript
-//      preserves back to the original arrow/function-expression node
-//      regardless of how many identifiers it was threaded through.
-//   2. A `fallback.name` STRING LITERAL — `api()`'s `F` type parameter is
-//      inferred against the declared constraint `{ readonly name: string;
-//      readonly subtree: Node<any> }`; because `name`'s constraint position is
-//      the plain (non-generic) `string`, TypeScript widens the literal during
-//      inference, so `checker.getTypeOfSymbolAtLocation` on the resolved
-//      `fallback.name` property yields `string`, not `"userId"` (verified:
-//      `subtree` DOES stay fully structural — only the sibling `name` widens).
-//      The literal is recovered by reading the property symbol's own
-//      declaration — a real `PropertyAssignment` in source when the branch is
-//      inline, or (for a named-constant branch) by following one level of
-//      identifier reference to that constant's own initializer — and lifting
-//      the string-literal AST node's own type (`checker.getTypeAtLocation` on
-//      the literal expression itself, not the property, stays un-widened).
+// This walker still touches a SMALL amount of AST, for one thing the type
+// system provably cannot give back: a leaf's underlying function NODE
+// (needed by extract.ts's `typeRefFromFunctionNode`/`typeRefFromReturnType`,
+// which read parameter/return type annotations and JSDoc off an actual
+// node) — recovered via the handler's call signature's own `.declaration`,
+// which TypeScript preserves back to the original arrow/function-expression
+// node regardless of how many identifiers it was threaded through.
 //
-// Everything else — which children exist, which are leaves vs. branches,
-// each leaf's real input/output types, whether a branch has a fallback at
-// all — comes from the checker, not from matching `op(...)`/`api(...)` call
-// shapes or following identifier chains through the AST.
+// `fallback.name` no longer needs an AST fallback: `api()`'s fallback type
+// parameter `F` is a `const` type parameter (TS 5.0+; see node.ts's doc
+// comment), which keeps TS from widening the inferred literal, so
+// `checker.getTypeOfSymbolAtLocation` on the resolved `fallback.name`
+// property yields the literal (e.g. `"bookId"`) directly — read via the
+// property symbol's own type, no AST needed.
+//
+// Everything — which children exist, which are leaves vs. branches, each
+// leaf's real input/output types, whether a branch has a fallback at all,
+// and now the fallback's own name — comes from the checker, not from
+// matching `op(...)`/`api(...)` call shapes or following identifier chains
+// through the AST.
 //
 // meta.mcp.name / meta.mcp.segment overrides are NOT yet mirrored here.
 //   TODO(api-tree): honor meta.mcp.name / meta.mcp.segment when reconstructing
@@ -83,9 +77,6 @@ export type TypeRefMap = Record<string, ToolTypeInfo>
 const join = (prefix: string, seg: string): string =>
   prefix.length > 0 ? `${prefix}_${seg}` : seg
 
-/** Cap on identifier-chain resolution depth — guards against reference cycles. */
-const MAX_RESOLVE_DEPTH = 10
-
 /** True when a property symbol resolved off a type is REQUIRED (not optional). */
 function isRequiredProperty(prop: ts.Symbol): boolean {
   return (prop.flags & ts.SymbolFlags.Optional) === 0
@@ -106,75 +97,24 @@ function functionNodeOfHandler(
 }
 
 /**
- * Resolve an expression to the object-literal expression it denotes,
- * following `Identifier` references to their declaration's initializer
- * transitively (capped at `MAX_RESOLVE_DEPTH`). Used ONLY to recover the
- * `fallback.name` string literal that TypeScript's generic inference widens
- * away at the type level (see the module doc comment) — not for tree
- * structure, which comes entirely from the checker.
- */
-function resolveObjectLiteral(
-  node: ts.Expression,
-  checker: ts.TypeChecker,
-  depth = 0,
-): ts.ObjectLiteralExpression | undefined {
-  if (ts.isObjectLiteralExpression(node)) return node
-  if (depth >= MAX_RESOLVE_DEPTH || !ts.isIdentifier(node)) return undefined
-  const symbol = checker.getSymbolAtLocation(node)
-  const decl = symbol?.declarations?.[0]
-  if (!decl || !ts.isVariableDeclaration(decl) || !decl.initializer) return undefined
-  return resolveObjectLiteral(decl.initializer, checker, depth + 1)
-}
-
-const objectLiteralProp = (
-  obj: ts.ObjectLiteralExpression,
-  name: string,
-): ts.PropertyAssignment | undefined =>
-  obj.properties.find(
-    (p): p is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === name,
-  )
-
-/** The initializer expression of a property-assignment or variable declaration node. */
-function initializerOf(decl: ts.Node): ts.Expression | undefined {
-  if (ts.isPropertyAssignment(decl)) return decl.initializer
-  if (ts.isVariableDeclaration(decl)) return decl.initializer
-  return undefined
-}
-
-/**
- * Read a fallback branch's `name` string literal off source. `branchDecl` is
- * the branch node's own declaration — a property-assignment (`key: api(...)`
- * or `key: someNamedBranch`) for a nested branch, or a variable declaration
- * for a root export; its initializer is either the `api(children, opts)`
- * call directly, or (for a named-constant branch) an identifier that
- * resolves to one. Returns `undefined` if no literal `fallback.name` is
- * found — the caller then has no name to key the fallback subtree under and
- * skips it.
+ * Read a fallback's `name` string literal off its resolved TYPE. Works now
+ * that `api()`'s `F` is a `const` type parameter (node.ts), which defeats
+ * literal-widening during inference — so the property's own type is the
+ * string-literal type itself, not the widened `string`. Returns `undefined`
+ * if it isn't a literal (e.g. a caller passed a non-literal `string`
+ * expression for `name`, which `F`'s constraint still structurally accepts)
+ * — the caller then has no name to key the fallback subtree under and skips
+ * it.
  */
 function fallbackNameLiteral(
-  branchDecl: ts.Node,
+  fallbackType: ts.Type,
+  loc: ts.Node,
   checker: ts.TypeChecker,
 ): string | undefined {
-  const initial = initializerOf(branchDecl)
-  if (!initial) return undefined
-  let init: ts.Expression = initial
-  if (ts.isIdentifier(init)) {
-    const symbol = checker.getSymbolAtLocation(init)
-    const decl = symbol?.declarations?.[0]
-    if (!decl || !ts.isVariableDeclaration(decl) || !decl.initializer) return undefined
-    init = decl.initializer
-  }
-  if (!ts.isCallExpression(init)) return undefined
-  const optsArg = init.arguments[1]
-  if (!optsArg || !ts.isObjectLiteralExpression(optsArg)) return undefined
-  const fallbackProp = objectLiteralProp(optsArg, "fallback")
-  if (!fallbackProp) return undefined
-  const fallbackLiteral = resolveObjectLiteral(fallbackProp.initializer, checker)
-  if (!fallbackLiteral) return undefined
-  const nameProp = objectLiteralProp(fallbackLiteral, "name")
-  if (!nameProp || !ts.isStringLiteral(nameProp.initializer)) return undefined
-  return nameProp.initializer.text
+  const nameProp = checker.getPropertyOfType(fallbackType, "name")
+  if (!nameProp) return undefined
+  const nameType = checker.getTypeOfSymbolAtLocation(nameProp, loc)
+  return nameType.isStringLiteral() ? nameType.value : undefined
 }
 
 /**
@@ -199,14 +139,11 @@ type OnLeaf = (
  * i.e. produced by `api()`) and — when present — its `fallback.subtree`.
  *
  * `nodeType` is the resolved type of a Node value (root export or any
- * descendant); `nodeDecl`, when available, is that value's own
- * property-assignment declaration in source, used only to recover the
- * `fallback.name` literal (see module doc comment) — never to re-derive tree
- * structure, which comes entirely from `nodeType`.
+ * descendant) — tree structure, including the fallback's own name, comes
+ * entirely from it; no source declaration is needed.
  */
 function walkNodeType(
   nodeType: ts.Type,
-  nodeDecl: ts.Node | undefined,
   prefix: string,
   path: readonly string[],
   loc: ts.Node,
@@ -235,7 +172,6 @@ function walkNodeType(
       // Branch: api(...) — children is required on api()'s return type.
       walkNodeType(
         childType,
-        childDecl,
         join(prefix, childKey),
         [...path, childKey],
         loc,
@@ -246,16 +182,15 @@ function walkNodeType(
   }
 
   const fallbackProp = checker.getPropertyOfType(nodeType, "fallback")
-  if (fallbackProp && nodeDecl) {
-    const fallbackName = fallbackNameLiteral(nodeDecl, checker)
+  if (fallbackProp) {
+    const fallbackType = checker.getTypeOfSymbolAtLocation(fallbackProp, loc)
+    const fallbackName = fallbackNameLiteral(fallbackType, loc, checker)
     if (fallbackName !== undefined) {
-      const fallbackType = checker.getTypeOfSymbolAtLocation(fallbackProp, loc)
       const subtreeProp = checker.getPropertyOfType(fallbackType, "subtree")
       if (subtreeProp) {
         const subtreeType = checker.getTypeOfSymbolAtLocation(subtreeProp, loc)
         walkNodeType(
           subtreeType,
-          subtreeProp.declarations?.[0],
           join(prefix, fallbackName),
           [...path, `:${fallbackName}`],
           loc,
@@ -294,7 +229,7 @@ function walkTree(entryFile: string, onLeaf: OnLeaf): void {
       // A Node value always carries `meta`; skip exports that aren't trees
       // (plain re-exported types, unrelated constants, …).
       if (!checker.getPropertyOfType(nodeType, "meta")) continue
-      walkNodeType(nodeType, decl, "", [], decl.name, checker, onLeaf)
+      walkNodeType(nodeType, "", [], decl.name, checker, onLeaf)
     }
   }
 }
