@@ -144,3 +144,29 @@ verification workflows across both committed-output and gitignored-output setups
   watchers.
 
 **Evidence:** Implemented in commit `fa681b2`.
+
+---
+
+## Package naming convention (2026-07-17)
+
+**Context:** Package names didn't communicate the architectural relationships.
+`core` was opaque — it's specifically the API tree model, not generic "core
+utilities." The protocol packages (`http`, `mcp`, `cli`, `openapi`, `client`)
+didn't indicate they're all the same kind of thing: projectors of the API tree
+into protocol surfaces.
+
+**Decision:** Rename packages to reflect what they are:
+- `core` → `api-tree` — the tree model (`Node`, `Op`, `Meta`, `mergeMeta`,
+  `Result`, combinators)
+- Protocol projectors get a `-api-projector` suffix: `http-api-projector`,
+  `mcp-api-projector`, `cli-api-projector`, `openapi-api-projector`,
+  `client-api-projector`
+- `type-ir` and `codegen` stay as-is — they're build-time type tooling, not
+  API tree projectors
+
+The qualifier `api-` distinguishes these from type projectors (`type-ir`
+projects `TypeRef` into format targets, not the API tree into protocols).
+
+**Evidence:** `api-tree` matches `api()` as the primary tree constructor.
+The `-api-projector` suffix makes the package family visible and communicates
+the input (API tree) and the role (projector).
