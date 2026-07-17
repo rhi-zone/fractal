@@ -76,7 +76,7 @@ const readBook = op(
     return book
   },
   http.get,
-  { http: { directives: [{ kind: "moveTo", path: ".." }] } },
+  http.moveTo(".."),
 )
 
 /** Replace book metadata wholesale. Idempotent. PUT /books/{bookId}. */
@@ -94,14 +94,14 @@ const replaceBook = op(
     return updated
   },
   http.put,
-  { http: { directives: [{ kind: "moveTo", path: ".." }] } },
+  http.moveTo(".."),
 )
 
 /** Permanently delete a book. Destructive and irreversible. DELETE /books/{bookId}. */
 const removeBook = op(
   (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
   http.delete,
-  { http: { directives: [{ kind: "moveTo", path: ".." }] } },
+  http.moveTo(".."),
 )
 
 /**

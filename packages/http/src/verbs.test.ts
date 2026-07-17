@@ -12,7 +12,7 @@
 //   7. head / options helpers exist and carry readOnly
 
 import { describe, expect, it } from "bun:test"
-import { op } from "@rhi-zone/fractal-core/node"
+import { mergeMeta, op } from "@rhi-zone/fractal-core/node"
 import { resolveTags } from "@rhi-zone/fractal-core/tags"
 import type { Tags } from "@rhi-zone/fractal-core/tags"
 import { http } from "./verbs.ts"
@@ -259,5 +259,37 @@ describe("http.* bundles carry a method directive alongside the verb directive",
 
   it("http.delete: method directive is DELETE", () => {
     expect(methodDirective(op(noop, http.delete))).toBe("DELETE")
+  })
+})
+
+// ============================================================================
+// 9. http.moveTo(path) — DX helper returning a plain Meta with a single
+// `moveTo` directive, designed to compose with a verb bundle via mergeMeta
+// (see route.ts § applyMoveTo for the directive itself).
+// ============================================================================
+
+describe("http.moveTo", () => {
+  it("returns the expected Meta shape", () => {
+    expect(http.moveTo("..")).toEqual({
+      http: { directives: [{ kind: "moveTo", path: ".." }] },
+    })
+  })
+
+  it("mergeMeta(http.get, http.moveTo('..')) carries verb + method + moveTo directives", () => {
+    const merged = mergeMeta(http.get, http.moveTo(".."))
+    const directives = (merged.http as { directives: readonly HttpDirective[] }).directives
+    expect(directives).toEqual([
+      { kind: "verb", value: "GET" },
+      { kind: "method", value: "GET" },
+      { kind: "moveTo", path: ".." },
+    ])
+  })
+
+  it("op(fn, http.get, http.moveTo('..')) yields the same meta as manual directive construction", () => {
+    const n = op(noop, http.get, http.moveTo(".."))
+    expect(methodDirective(n)).toBe("GET")
+    expect(verbDirective(n)).toBe("GET")
+    const directives = (n.meta.http as { directives: readonly HttpDirective[] }).directives
+    expect(directives.find((d) => d.kind === "moveTo")).toEqual({ kind: "moveTo", path: ".." })
   })
 })

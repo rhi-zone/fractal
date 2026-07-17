@@ -122,6 +122,22 @@ const head: VerbBundle = httpVerbBundle("HEAD", { readOnly: true })
  */
 const options: VerbBundle = httpVerbBundle("OPTIONS", { readOnly: true })
 
+/**
+ * `http.moveTo(path)` — DX helper for the `{ kind: "moveTo", path }` directive
+ * (see project.ts § HttpDirective and route.ts § applyMoveTo). Returns a
+ * plain `Meta` (no verb, no tags) so it composes with a verb bundle via
+ * `mergeMeta`'s array-concatenation of `http.directives`:
+ *
+ * ```ts
+ * op(fn, http.get, http.moveTo(".."))
+ * // Equivalent to:
+ * op(fn, http.get, { http: { directives: [{ kind: "moveTo", path: ".." }] } })
+ * ```
+ */
+export const moveTo = (path: string): Meta => ({
+  http: { directives: [{ kind: "moveTo" as const, path }] },
+})
+
 // ============================================================================
 // Exported namespace
 // ============================================================================
@@ -145,6 +161,11 @@ const options: VerbBundle = httpVerbBundle("OPTIONS", { readOnly: true })
  * op(fn, http.put, { tags: { openWorld: true } })
  * // → verb PUT, idempotent:true (from bundle), openWorld:true (from extra)
  * ```
+ *
+ * `http.moveTo(path)` composes the same way for repositioning a leaf:
+ * ```ts
+ * op(fn, http.get, http.moveTo(".."))
+ * ```
  */
 export const http = {
   get,
@@ -154,4 +175,5 @@ export const http = {
   delete: _delete,
   head,
   options,
-} as const satisfies Record<string, VerbBundle>
+  moveTo,
+} as const satisfies Record<string, VerbBundle | ((path: string) => Meta)>
