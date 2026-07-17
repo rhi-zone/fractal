@@ -878,75 +878,178 @@ function isResult(v: unknown): v is { kind: "ok"; value: unknown } | { kind: "er
   return kind === "ok" || kind === "err"
 }
 
+/**
+ * Runs the interceptable request/response pipeline (see module doc at the
+ * top of the file) for a single matched `(handler, meta, pipeline, slugs)`.
+ * Shared by both dispatchers — `makeRouterFromRoute` (runtime tree walk) and
+ * `compileRouter` (build-time compiled dispatch) — so the two only differ in
+ * how they find this quadruple, never in what happens once they have it.
+ */
+async function runPipeline(
+  req: Request,
+  handler: Handler,
+  meta: Meta,
+  pipeline: Pipeline,
+  slugs: Readonly<Record<string, string>>,
+): Promise<Response> {
+  const reqTransforms = pipeline.reqTransforms ?? []
+  const inputTransforms = pipeline.inputTransforms ?? []
+  const outputTransforms = pipeline.outputTransforms ?? []
+  const resTransforms = pipeline.resTransforms ?? []
+
+  let request = req
+  for (const transform of reqTransforms) request = await transform(request, meta)
+
+  let input: unknown
+  try {
+    input = pipeline.decode !== undefined
+      ? await pipeline.decode(request, meta)
+      : await defaultDecode(request, slugs, pipeline.sources)
+  } catch {
+    return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
+  }
+
+  try {
+    for (const transform of inputTransforms) input = await transform(input, meta)
+
+    // Validate slot: runs after inputTransforms, before handler. Sequential
+    // — each validator's Ok value feeds the next validator's input; the
+    // first Err short-circuits the whole chain with a 400 response.
+    for (const validator of pipeline.validate ?? []) {
+      const result = await validator(input as Record<string, unknown>)
+      if (result.kind === "err") {
+        return jsonRouteResponse({ error: result.error }, { status: 400 })
+      }
+      input = result.value
+    }
+
+    let output: unknown = await (handler(input) as Promise<unknown>)
+    for (const transform of outputTransforms) output = await transform(output, meta)
+
+    // Result unwrapping: if the handler returned a Result<T, E>, separate
+    // the success and error paths before encoding. The check is exact —
+    // typeof + boolean — to avoid false-positives on user data that happens
+    // to have an `ok` field with a non-boolean value.
+    if (isResult(output)) {
+      if (output.kind === "ok") {
+        output = output.value
+      } else {
+        let response: Response = pipeline.encode !== undefined
+          ? await pipeline.encode(output.error, meta)
+          : defaultEncodeError(output.error)
+        for (const transform of resTransforms) response = await transform(response, meta)
+        return response
+      }
+    }
+
+    let response: Response = isResponseOverride(output)
+      ? jsonRouteResponse(output.body, output.init)
+      : pipeline.encode !== undefined
+        ? await pipeline.encode(output, meta)
+        : defaultEncode(output)
+
+    for (const transform of resTransforms) response = await transform(response, meta)
+
+    return response
+  } catch {
+    return jsonRouteResponse({ error: "internal server error" }, { status: 500 })
+  }
+}
+
 export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<Response> {
   return async (req) => {
     const segs = splitPath(new URL(req.url).pathname)
     const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    const meta = matched.entry.meta
     const pipeline = mergePipelines(matched.routePipeline, matched.entry.pipeline)
-    const reqTransforms = pipeline.reqTransforms ?? []
-    const inputTransforms = pipeline.inputTransforms ?? []
-    const outputTransforms = pipeline.outputTransforms ?? []
-    const resTransforms = pipeline.resTransforms ?? []
+    return runPipeline(req, matched.entry.handler, matched.entry.meta, pipeline, matched.slugs)
+  }
+}
 
-    let request = req
-    for (const transform of reqTransforms) request = await transform(request, meta)
+// ============================================================================
+// 5. compileRouter — build-time compiled drop-in replacement for
+// `makeRouterFromRoute`. Same input (`HttpRoute`) and output
+// (`(req) => Promise<Response>`) contract, same request pipeline
+// (`runPipeline` above) — the only thing that differs is how the match is
+// found: instead of a generic recursive walk over `route.children`/
+// `route.fallback` re-read on every request, `compileNode` walks the tree
+// ONCE, at build time, and returns a closure-specialized matcher per node:
+//
+//   - each node's own `children`/`fallback` are captured directly in the
+//     closure instead of being re-read off the live `HttpRoute` value, so
+//     there is no `route` object flowing through the per-request call chain
+//     at all — just the pre-built matcher functions calling each other;
+//   - each leaf's `methods[method]` entry has its pipeline PRE-MERGED
+//     (`mergePipelines`) once here, not recomputed on every request the way
+//     `makeRouterFromRoute` recomputes it in its hot path.
+// ============================================================================
 
-    let input: unknown
-    try {
-      input = pipeline.decode !== undefined
-        ? await pipeline.decode(request, meta)
-        : await defaultDecode(request, matched.slugs, pipeline.sources)
-    } catch {
-      return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
+type CompiledLeaf = { readonly handler: Handler; readonly meta: Meta; readonly pipeline: Pipeline }
+
+type CompiledMatch = { readonly leaf: CompiledLeaf; readonly slugs: Readonly<Record<string, string>> }
+
+type CompiledMatcher = (
+  segs: readonly string[],
+  idx: number,
+  method: string,
+  slugs: Record<string, string>,
+) => CompiledMatch | undefined
+
+/**
+ * Compile one `HttpRoute` node into a matcher closure. Recurses into
+ * `children`/`fallback` at compile time — `matchHere`'s body, once built,
+ * touches only the values captured here (`leaves`, `children`, `fallback`),
+ * never the original `route` — the tree shape is baked into which closures
+ * call which, not re-derived from `HttpRoute` data per request.
+ */
+function compileNode(route: HttpRoute): CompiledMatcher {
+  const leaves: Record<string, CompiledLeaf> | undefined = route.methods !== undefined
+    ? Object.fromEntries(
+        Object.entries(route.methods).map(([method, entry]) => [
+          method,
+          { handler: entry.handler, meta: entry.meta, pipeline: mergePipelines(route.pipeline, entry.pipeline) },
+        ]),
+      )
+    : undefined
+
+  const children: Record<string, CompiledMatcher> | undefined = route.children !== undefined
+    ? Object.fromEntries(Object.entries(route.children).map(([seg, child]) => [seg, compileNode(child)]))
+    : undefined
+
+  const fallback = route.fallback !== undefined
+    ? { name: route.fallback.name, matcher: compileNode(route.fallback.subtree) }
+    : undefined
+
+  return function matchHere(segs, idx, method, slugs) {
+    if (idx === segs.length) {
+      const leaf = leaves?.[method]
+      return leaf !== undefined ? { leaf, slugs } : undefined
     }
-
-    try {
-      for (const transform of inputTransforms) input = await transform(input, meta)
-
-      // Validate slot: runs after inputTransforms, before handler. Sequential
-      // — each validator's Ok value feeds the next validator's input; the
-      // first Err short-circuits the whole chain with a 400 response.
-      for (const validator of pipeline.validate ?? []) {
-        const result = await validator(input as Record<string, unknown>)
-        if (result.kind === "err") {
-          return jsonRouteResponse({ error: result.error }, { status: 400 })
-        }
-        input = result.value
-      }
-
-      let output: unknown = await (matched.entry.handler(input) as Promise<unknown>)
-      for (const transform of outputTransforms) output = await transform(output, meta)
-
-      // Result unwrapping: if the handler returned a Result<T, E>, separate
-      // the success and error paths before encoding. The check is exact —
-      // typeof + boolean — to avoid false-positives on user data that happens
-      // to have an `ok` field with a non-boolean value.
-      if (isResult(output)) {
-        if (output.kind === "ok") {
-          output = output.value
-        } else {
-          let response: Response = pipeline.encode !== undefined
-            ? await pipeline.encode(output.error, meta)
-            : defaultEncodeError(output.error)
-          for (const transform of resTransforms) response = await transform(response, meta)
-          return response
-        }
-      }
-
-      let response: Response = isResponseOverride(output)
-        ? jsonRouteResponse(output.body, output.init)
-        : pipeline.encode !== undefined
-          ? await pipeline.encode(output, meta)
-          : defaultEncode(output)
-
-      for (const transform of resTransforms) response = await transform(response, meta)
-
-      return response
-    } catch {
-      return jsonRouteResponse({ error: "internal server error" }, { status: 500 })
+    const seg = segs[idx]!
+    const child = children?.[seg]
+    if (child !== undefined) return child(segs, idx + 1, method, slugs)
+    if (fallback !== undefined) {
+      slugs[fallback.name] = seg
+      return fallback.matcher(segs, idx + 1, method, slugs)
     }
+    return undefined
+  }
+}
+
+/**
+ * Build-time compiled drop-in replacement for `makeRouterFromRoute` — same
+ * `(req: Request) => Promise<Response>` contract, same request pipeline, but
+ * dispatch is compiled once (`compileNode`) instead of walked fresh on every
+ * request.
+ */
+export function compileRouter(root: HttpRoute): (req: Request) => Promise<Response> {
+  const matcher = compileNode(root)
+  return async (req) => {
+    const segs = splitPath(new URL(req.url).pathname)
+    const matched = matcher(segs, 0, req.method, {})
+    if (matched === undefined) return new Response("Not Found", { status: 404 })
+
+    return runPipeline(req, matched.leaf.handler, matched.leaf.meta, matched.leaf.pipeline, matched.slugs)
   }
 }
