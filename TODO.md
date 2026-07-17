@@ -31,6 +31,80 @@ still tools-only relative to the full MCP spec. Known gaps, not yet started:
 Tools-only is sufficient for many use cases. Resources/prompts/streaming are
 protocol features that can be added incrementally.
 
+## Session wrap-up: DX build-out + extractor rewrite — DONE (2026-07-18)
+
+Same session as the two merges below, later commits. `bun test` — 1701 pass,
+0 fail, 2262 assertions, 51 files (verified end of session).
+
+- **`service()` removed** (commit ba9f9d9) — `service()` reflected class
+  instances into `Node` trees to mirror Rust's `impl`-block namespacing
+  model; TS already has modules for that, so the pattern added no value.
+  `examples/library-api`'s `BooksService` was converted to `api()`/`op()`
+  with module-level functions.
+- **Stale guide fixed** (commit 82cf56b) — `docs/guide/index.md` referenced
+  removed APIs (`path`, `methods`, `body`, `validate`, `serve`, `leaf`, …);
+  rewritten for the current authoring surface (`api`, `op`, `http.get`/
+  `post`, `createFetch`).
+- **OpenAPI and client migrated to consume `HttpRoute`** (commits d7fd295,
+  96f4635) — both projectors used to re-walk the raw `Node` tree, duplicating
+  verb/segment/path derivation that `http-api-projector`'s own rewriters
+  (`applyMethods`, `applyMoveTo`, etc.) already do. Both now take the
+  already-projected `HttpRoute` tree instead (`createClientFromRoute(route,
+  opts)` is the new core entry point for the client; `createClient(node,
+  opts)` wraps it). This landed *before* the two merges below folded both
+  packages into `http-api-projector` — see "Other projection packages still
+  on the old Node-walking pattern" further down, now updated to reflect only
+  `mcp` and `cli` remain unmigrated.
+- **`createDirectApi` added to `api-tree`** (commit 79416a2,
+  `packages/api-tree/src/direct.ts`) — builds a nested proxy from a `Node`
+  tree where each leaf is a direct in-process handler call (`api.books.list()`
+  invokes the handler with no HTTP layer at all) — the same shape as the
+  client projector but with zero protocol involved.
+- **`createMcpServer` preset added** (commit fd5eb22,
+  `packages/mcp-api-projector/src/server.ts`) — one-call MCP server
+  construction wrapping the official `@modelcontextprotocol/sdk`: registers
+  tools derived from `toTools()` and dispatches `tools/call` to `Node`
+  handlers, the same DX pattern `createFetch` established for HTTP. Runtime
+  input validation against each tool's `inputSchema` (commit ca34f12) landed
+  on top of this preset — see the MCP protocol gaps section above.
+- **CLI DX parity work** (commits 489e2e1, c46555c) — `cli-api-projector`
+  gained: type coercion of flag values to their schema type (number,
+  boolean, enum) before handler invocation; generated shell completion
+  scripts (bash/zsh/fish) from the command tree
+  (`packages/cli-api-projector/src/completions.ts`); `--version`/`-V`;
+  required-field validation before handler invocation; schema default values
+  applied to absent fields; `CliMeta.alias` wired into dispatch + help text;
+  Levenshtein "did you mean?" suggestions for unknown subcommands.
+- **Meta type consolidation** (commit 5533c21) — `HttpMeta` + `getHttpMeta`
+  now live in `http-api-projector` only; `openapi` and `client` (at the time
+  still separate packages, pre-merge) import instead of maintaining
+  divergent local copies. Each projector now exports its own typed meta
+  interface for consumers: `HttpMeta`, `McpMeta`, `CliMeta`, `OpenApiMeta`.
+  Builds on the `Meta`-as-`interface` declaration-merging change from
+  2026-07-17 (see the "Meta typing pattern" thread below) — this session's
+  work is the dedup + per-projector exports, not the interface conversion
+  itself.
+- **Extractor rewritten from AST pattern matching to type-system traversal**
+  (commits f6f8621, 6617769, 0ef8175, 9874090) — `packages/api-tree/src/tree.ts`'s
+  walker used to detect `op()`/`api()` call shapes and follow identifier
+  references through the AST to recover tree structure. It's now driven
+  entirely by the TypeScript checker: `api()`/`op()` already preserve
+  concrete handler types (settled 2026-07-17), so the checker resolves
+  children, leaf/branch discrimination, and each leaf's real input/output
+  types directly, no AST walking needed for structure. The one remaining
+  AST touch — recovering a leaf's underlying function node for JSDoc/param
+  reads — stayed, since the type system has no way to hand back a source
+  node. The last AST *fallback* (recovering a literal `fallback.name`
+  string, which generic inference was widening to plain `string`) was
+  eliminated in the final commit (9874090) by making `api()`'s `F` type
+  parameter a `const` type parameter (TS 5.0+) — this stops the widening at
+  its source, so `fallback.name` survives as a literal through the checker
+  with no AST needed at all. Per-field JSDoc descriptions and
+  variable-reference following (commits f6f8621, 6617769) landed as
+  incremental hardening just before the full rewrite subsumed them. Verified
+  byte-identical codegen output against the old AST-based path on
+  `examples/library-api`.
+
 ## client-api-projector merged into http-api-projector — DONE (2026-07-18)
 
 `packages/client-api-projector` was merged into `packages/http-api-projector`
@@ -154,7 +228,9 @@ before acting.
   `ValidatorMap` that `createApplyValidation()` consumes.
   `stubValidatorModuleSource()` emits the empty-map pass-through fallback for
   dev-time before codegen has run. A real CLI entry now exists
-  (`packages/type-ir/src/cli.ts`, `fractal-type-ir <command>`) with four
+  (`packages/type-ir/src/cli.ts` at the time; moved to
+  `packages/api-tree/src/cli.ts` as `fractal-api-tree` 2026-07-18, see
+  "tree/extract/cli moved" above) with four
   subcommands: `build <entry> -o <output>` (skip if up to date),
   `watch <entry> -o <output>` (rebuild on change, debounced), `stub -o <output>`
   (write the empty pass-through stub), and `check <entry> -o <output>` (verify
@@ -172,12 +248,23 @@ before acting.
   `declare module '@rhi-zone/fractal-api-tree' { interface Meta extends HttpMeta,
   McpMeta {} }`. No package touches another package's or core's types
   directly.
+  Follow-up (2026-07-18, commit 5533c21): consolidated the duplication this
+  pattern left behind — `HttpMeta`/`getHttpMeta` had diverging local copies
+  in `openapi` and `client` (at the time still separate packages); both now
+  import from `http-api-projector` instead. `OpenApiMeta` and `CliMeta` are
+  exported alongside `HttpMeta`/`McpMeta` as of the same commit. `OpenApiMeta`
+  now lives in `http-api-projector` too, post-merge.
 - **Other projection packages still on the old Node-walking pattern** —
-  `openapi`, `mcp`, `cli`, and `client` all still directly walk the raw
-  `Node` tree rather than going through a `Node ⇒ ProtocolType` projection +
-  rewriter pipeline the way `packages/http-api-projector/src/route.ts` and
-  `packages/type-ir` now do. `type-ir` is the reference implementation of the
-  correct pattern. Migrating the other four is unstarted.
+  narrowed (2026-07-18): `openapi` and `client` (commits d7fd295, 96f4635)
+  now consume the already-projected `HttpRoute` tree instead of re-walking
+  raw `Node` — both live inside `http-api-projector` now (see the merge
+  entries above), so this only applies within that one package's internal
+  structure, not as a cross-package gap anymore. `mcp` and `cli` still
+  directly walk the raw `Node` tree rather than going through a
+  `Node ⇒ ProtocolType` projection + rewriter pipeline the way
+  `packages/http-api-projector/src/route.ts` and `packages/type-ir` now do.
+  `type-ir` is the reference implementation of the correct pattern.
+  Migrating `mcp`/`cli` is unstarted.
 - ~~**Projection pipeline generics don't reach HTTP's route projection**~~ —
   RESOLVED (2026-07-17, commit 1f63e1c): `HttpRoute<H>` is now generic;
   `op()`'s return type marks the handler as required (not optional),
@@ -273,15 +360,17 @@ before acting.
   `preset.test.ts`. Open question carried forward: whether a plain wrapper is
   all `withALS` ever needs to be, or whether request-scoped-context users hit
   cases (e.g. nested/derived contexts) that want more — unexercised so far.
-- **Propagating the HTTP architecture to other projections is unstarted**
-  (2026-07-17): `packages/http-api-projector/src/route.ts` is now the reference pattern —
-  generic `HttpRoute<H>`, `Node ⇒ ProtocolType` projection + rewriter
-  pipeline, composable compiled dispatch, pipeline-fusion visitors, and now
-  a shared `mapRoute` tree-visitor (see below). `mcp`, `cli`, `openapi`, and
-  `client` still walk the raw `Node` tree directly (see "Other projection
-  packages still on the old Node-walking pattern" above, carried over
-  unchanged — migrating them is still unstarted, not newly progressed this
-  session).
+- **Propagating the HTTP architecture to other projections — partly done**
+  (updated 2026-07-18): `packages/http-api-projector/src/route.ts` is the
+  reference pattern — generic `HttpRoute<H>`, `Node ⇒ ProtocolType`
+  projection + rewriter pipeline, composable compiled dispatch,
+  pipeline-fusion visitors, and a shared `mapRoute` tree-visitor. `openapi`
+  and `client` were migrated to this pattern this session (commits d7fd295,
+  96f4635 — consume `HttpRoute` instead of re-walking `Node`) and then
+  folded into `http-api-projector` itself (see the merge entries above).
+  `mcp` and `cli` still walk the raw `Node` tree directly (see "Other
+  projection packages still on the old Node-walking pattern" above) —
+  migrating those two is still unstarted.
 - **Sensible HTTP config defaults — built, verified end-to-end against a real
   app** (built 2026-07-17 commit ed29b51; verified 2026-07-18): `createFetch`
   (`packages/http-api-projector/src/preset.ts`) is the single "just give me a
@@ -370,7 +459,7 @@ should be settled FROM the author's definition rather than guessed:
 
 The vertical slice's on-tree `Schema` values (`str`/`num`/`bool`/`obj`) were
 provisional scaffolding pending codegen-derived validators from TS types +
-JSDoc. That codegen now exists: `packages/type-ir/src/extract.ts` extracts
+JSDoc. That codegen now exists: `packages/api-tree/src/extract.ts` extracts
 `TypeRef`s from TS source (tuples, index signatures, literals, enums,
 discriminated unions, intersections, 3 branded-type patterns, recursion,
 `Promise` unwrapping, class privacy), and `packages/type-ir` projects those
@@ -380,6 +469,12 @@ actually been swapped out for codegen-derived validators is a separate,
 still-open question — see "Integration into the consumer app is not started"
 below, which is about the *consumer app*, not this in-repo scaffolding; that
 in-repo swap has not been verified either way this session.
+`extract.ts` moved from `type-ir` to `api-tree` 2026-07-18 (see "tree/extract/cli
+moved" above) and the *tree walker* it feeds, `packages/api-tree/src/tree.ts`,
+was fully rewritten the same session from AST pattern-matching to
+type-system traversal (see "Session wrap-up" above) — `extract.ts`'s own
+`TypeRef` extraction from a function node is unaffected by that rewrite,
+only how the walker finds the function nodes changed.
 
 ### Concrete type hierarchy — SETTLED and BUILT (2026-07-16, see handoff-2026-07-16-type-layer.md)
 
@@ -399,7 +494,8 @@ inventory.
 Protobuf, Cap'n Proto, JTD, JSDoc, and 9 runtime validator libraries: Zod,
 Valibot, TypeBox, ArkType, runtypes, Superstruct, io-ts, Yup, Effect Schema),
 all following the `handlers` + `resolve()` fallback pattern. The extractor
-(`packages/type-ir/src/extract.ts`) was hardened for tuples, index
+(`packages/type-ir/src/extract.ts` at the time; now `packages/api-tree/src/extract.ts`,
+moved 2026-07-18) was hardened for tuples, index
 signatures, literals, enums, discriminated unions, intersections, 3 branded-type
 patterns, recursive types, `Promise` unwrapping, and class privacy filtering.
 Full inventory: `docs/design/handoff-2026-07-16-type-layer.md`.
@@ -537,11 +633,16 @@ Ordered roughly easiest → hardest to decide:
 3. **`openWorld` tag** — is it a tag, a meta field, or something else? What
    does it actually control?
 4. ~~**Codegen hardening**~~ — substantially addressed 2026-07-16: the
-   extractor (`packages/type-ir/src/extract.ts`) now handles tuples, index
+   extractor (`packages/type-ir/src/extract.ts` at the time; now
+   `packages/api-tree/src/extract.ts`) now handles tuples, index
    signatures, literals, enums, discriminated unions, intersections, 3
    branded-type patterns, recursive types, `Promise` unwrapping, and class
    privacy. Whether further edges remain is unknown until the consumer-app
-   integration (below) exercises it against real schemas.
+   integration (below) exercises it against real schemas. The *tree walker*
+   this feeds was separately rewritten 2026-07-18 from AST pattern-matching
+   to type-system traversal (see "Session wrap-up" near the top) — a
+   different concern from the extractor's own `TypeRef`-from-node logic,
+   which this item covers.
 5. **Versioning patterns** — how do versioning strategies (date-based, semver,
    header) compose with the dispatch model? (dispatch-extensibility.md has
    the date-versioning example; are there others?)
