@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "codegen": "bun ../../packages/api-tree/src/cli.ts build src/tree.ts -o src/generated/validators.ts",
-    "codegen:check": "bun ../../packages/api-tree/src/cli.ts check src/tree.ts -o src/generated/validators.ts"
+    "codegen:check": "bun ../../packages/api-tree/src/cli.ts check src/tree.ts -o src/generated/validators.ts",
+    "codegen:client": "bun scripts/generate-client.ts"
   },
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
