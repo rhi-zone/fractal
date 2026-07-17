@@ -23,11 +23,16 @@ Schema (draft 04/07, 2020-12) or OpenAPI 3.0 schema objects.
 - `partial`, `required`, `pick`, `omit`, `extend`, `nullable`, `withMeta`, `deepPartial`, `deepRequired` — structural derive helpers
 - `./json-schema`, `./json-schema-07`, `./json-schema-04`, `./openapi30` — target projections
 - `./jsdoc` — JSDoc-derived metadata helpers
-- `createExtractorProgram`, `typeRefFromType`, `typeRefFromFunctionNode`, `typeRefFromReturnType`, `schemaFromType`, `extractJsDoc` — the TS-source → `TypeRef` extractor (`./extract`)
-- `extractToolSchemas`, `extractRouteTypeRefs`, `extractToolTypeRefs` — whole-tree walkers over an authored `api()`/`op()` tree, producing a `SchemaMap`/`TypeRefMap` (`./tree`)
 - `buildSchema`, `compileValidator`, `compileValidatorModule` — `TypeRef` → TypeBox validator code, a build-time projector (`./compile`)
-- `buildValidatorModuleSource`, `writeValidatorModule` — emit a standalone validator module to disk (`./build`)
-- `fractal-type-ir` (alias `fractal-codegen`) — CLI binary (`./cli.ts`) with `build`/`watch`/`stub`/`check` subcommands
+
+The build-time extractor (`createExtractorProgram`, `typeRefFromType`,
+`schemaFromType`, `extractJsDoc`, ...), the whole-tree walkers
+(`extractToolSchemas`, `extractRouteTypeRefs`, `extractToolTypeRefs`), the
+build orchestrator (`buildValidatorModuleSource`, `writeValidatorModule`),
+and the `fractal-api-tree` CLI (`build`/`watch`/`stub`/`check`) live in
+`@rhi-zone/fractal-api-tree` (`./tree`, `./extract`) — they walk `api()`/
+`op()` AUTHORING source, which is api-tree's concern. `compile.ts` (this
+package) is the projector they hand `TypeRef`s to.
 
 ## Usage
 

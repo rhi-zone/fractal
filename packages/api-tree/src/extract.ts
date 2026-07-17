@@ -1,4 +1,4 @@
-// packages/type-ir/src/extract.ts — @rhi-zone/fractal-type-ir
+// packages/api-tree/src/extract.ts — @rhi-zone/fractal-api-tree
 //
 // BUILD-TIME EXTRACTOR: types + JSDoc are the truth. This module reads op
 // source (via the TypeScript compiler API — read-only analysis, NOT a
@@ -25,8 +25,8 @@
 //   packages/mcp-api-projector/src/project.ts  — the consumer (toTools inputSchema/description)
 
 import ts from "typescript"
-import { t, types, type TypeRef } from "./index.ts"
-import { toJsonSchema } from "./json-schema.ts"
+import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir"
+import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
 
 // ============================================================================
 // JSON-Schema value (structural subset we emit)

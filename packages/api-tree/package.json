@@ -18,9 +18,28 @@
     "./tags": {
       "types": "./src/tags.ts",
       "import": "./src/tags.ts"
+    },
+    "./tree": {
+      "types": "./src/tree.ts",
+      "import": "./src/tree.ts"
+    },
+    "./extract": {
+      "types": "./src/extract.ts",
+      "import": "./src/extract.ts"
     }
   },
   "files": ["src"],
+  "bin": {
+    "fractal-api-tree": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@rhi-zone/fractal-type-ir": "workspace:*"
+  },
+  "devDependencies": {
+    "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
+    "@sinclair/typebox": "^0.34.41",
+    "typescript": "^6.0.3"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",

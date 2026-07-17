@@ -13,13 +13,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "codegen": "bun ../../packages/type-ir/src/cli.ts build src/tree.ts -o src/generated/validators.ts",
-    "codegen:check": "bun ../../packages/type-ir/src/cli.ts check src/tree.ts -o src/generated/validators.ts"
+    "codegen": "bun ../../packages/api-tree/src/cli.ts build src/tree.ts -o src/generated/validators.ts",
+    "codegen:check": "bun ../../packages/api-tree/src/cli.ts check src/tree.ts -o src/generated/validators.ts"
   },
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
     "@rhi-zone/fractal-http-api-projector": "workspace:*",
-    "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
-    "@rhi-zone/fractal-type-ir": "workspace:*"
+    "@rhi-zone/fractal-mcp-api-projector": "workspace:*"
   }
 }

@@ -10,13 +10,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "types": ["bun-types"],
-    "paths": {
-      "@rhi-zone/fractal-api-tree": ["../api-tree/src/index.ts"],
-      "@rhi-zone/fractal-api-tree/node": ["../api-tree/src/node.ts"],
-      "@rhi-zone/fractal-api-tree/tags": ["../api-tree/src/tags.ts"],
-      "@rhi-zone/fractal-mcp-api-projector": ["../mcp-api-projector/src/index.ts"]
-    }
+    "types": ["bun-types"]
   },
   "include": ["src"]
 }

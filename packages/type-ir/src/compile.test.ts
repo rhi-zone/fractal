@@ -7,12 +7,14 @@
 //      Validator: `(bag) => Result<unknown, unknown>`
 //   3. compileValidatorModule emits a full module whose `validators` map
 //      actually validates/rejects per-entry
-//   4. the build orchestrator wires extraction -> compiled module end-to-end
+//
+// The build orchestrator (entryFile -> compiled module, end-to-end) lives in
+// @rhi-zone/fractal-api-tree's build.test.ts — it wires this package's
+// compileValidatorModule to api-tree's own extractor/tree-walker.
 
 import { describe, expect, it } from "bun:test"
 import { t, types, type TypeShape } from "./index.ts"
 import { buildSchema, compileValidator, compileValidatorModule } from "./compile.ts"
-import { buildValidatorModuleSource, stubValidatorModuleSource } from "./build.ts"
 
 /** TypeBox TSchema objects carry a non-JSON `Symbol(TypeBox.Kind)` tag — strip
  * it via a JSON round-trip before comparing plain schema shapes with toEqual. */
@@ -208,30 +210,5 @@ describe("compileValidatorModule — full module emission", () => {
   it("emits an empty validators map for no entries (the stub case)", () => {
     const source = compileValidatorModule([])
     expect(evalModule(source)).toEqual({})
-  })
-})
-
-describe("build orchestrator — entryFile -> compiled module, end-to-end", () => {
-  const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`
-
-  it("builds a validator module from the tree fixture, keyed by route path", () => {
-    const source = buildValidatorModuleSource(FIXTURE)
-    expect(source).toContain('"users/create"')
-    expect(source).toContain('"users/:userId/get"')
-
-    const validators = evalModule(source)
-    expect(
-      validators["users/create"]!({
-        name: "Alice",
-        roles: ["admin"],
-        address: { street: "Main" },
-      }).kind,
-    ).toBe("ok")
-    expect(validators["users/create"]!({}).kind).toBe("err")
-    expect(validators["users/:userId/get"]!({ userId: "u1" }).kind).toBe("ok")
-  })
-
-  it("stubValidatorModuleSource emits an empty validators map", () => {
-    expect(evalModule(stubValidatorModuleSource())).toEqual({})
   })
 })

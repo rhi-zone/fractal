@@ -21,6 +21,13 @@ subtyping relationships (e.g. `idempotent` implies nothing destructive).
 - `api`, `op` (re-exported from `./node`) — tree constructors
 - `./node` — `Node`, `Handler`, `Meta`, `isLeaf`, `service`, `mergeMeta`
 - `./tags` — tag lattice / `resolveTags`
+- `./tree` — `extractToolSchemas`, `extractRouteTypeRefs`, `extractToolTypeRefs`, `SchemaMap`, `TypeRefMap` — whole-tree walkers over an authored `api()`/`op()` tree at the SOURCE level (via the TypeScript compiler), producing per-leaf input/output schemas
+- `./extract` — `createExtractorProgram`, `typeRefFromType`, `typeRefFromFunctionNode`, `typeRefFromReturnType`, `schemaFromType`, `schemaFromFunctionNode`, `schemaFromReturnType`, `extractJsDoc` — the lower-level TS-source → `TypeRef`/`JsonSchema` extractor `./tree` is built on
+- `fractal-api-tree` CLI (`./cli.ts`, `build`/`watch`/`stub`/`check` subcommands) — orchestrates `./tree`'s extraction into a standalone validator module via `@rhi-zone/fractal-type-ir`'s `compileValidatorModule` (`./build.ts`)
+
+`./tree` and `./extract` pull in the TypeScript compiler and are separate
+subpaths from the package root so runtime consumers of the base `Node`/
+`Result` model don't pay for it.
 
 ## Usage
 

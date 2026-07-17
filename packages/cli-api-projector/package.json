@@ -14,8 +14,7 @@
   },
   "files": ["src"],
   "dependencies": {
-    "@rhi-zone/fractal-api-tree": "workspace:*",
-    "@rhi-zone/fractal-type-ir": "workspace:*"
+    "@rhi-zone/fractal-api-tree": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

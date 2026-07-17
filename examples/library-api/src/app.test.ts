@@ -28,7 +28,7 @@ import { op } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
-import { extractToolSchemas } from "@rhi-zone/fractal-type-ir"
+import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
 
 /** Candidate methods reachable at `path` in the library-api's HttpRoute tree. */
 function methodsAt(path: string): string[] {

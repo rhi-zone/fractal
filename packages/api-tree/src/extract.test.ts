@@ -1,4 +1,4 @@
-// packages/type-ir/src/extract.test.ts — build-time extractor tests
+// packages/api-tree/src/extract.test.ts — build-time extractor tests
 //
 // Covers the four contracts of the slice:
 //   1. object type (primitive + optional + array + nested) → correct schema
@@ -8,20 +8,20 @@
 
 import { describe, expect, it } from "bun:test"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
-import { toJsonSchema } from "./json-schema.ts"
-import type { TypeRef } from "./index.ts"
+import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+import { extractToolSchemas, extractToolTypeRefs } from "./tree.ts"
 import {
-  extractToolSchemas,
-  extractToolTypeRefs,
+  createExtractorProgram,
+  opFunctionNode,
   schemaFromFunctionNode,
   schemaFromReturnType,
   schemaFromType,
   typeRefFromFunctionNode,
   typeRefFromReturnType,
   typeRefFromType,
-} from "./index.ts"
+} from "./extract.ts"
 import { tree } from "./__fixtures__/tree.fixture.ts"
-import { createExtractorProgram, opFunctionNode } from "./extract.ts"
 import ts from "typescript"
 
 const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`

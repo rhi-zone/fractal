@@ -1,4 +1,4 @@
-// packages/type-ir/src/__fixtures__/tree.fixture.ts
+// packages/api-tree/src/__fixtures__/tree.fixture.ts
 //
 // A real Node tree used by extract.test.ts as BOTH the extractor's source input
 // (parsed via the compiler API for its leaf handler input types + JSDoc) and the
@@ -8,9 +8,9 @@
 // `op(fn, meta?)` calls. The codegen walker recognises `op(...)` children as
 // leaves and extracts their input schemas.
 
-import { api, op } from "@rhi-zone/fractal-api-tree/node"
+import { api, op } from "../node.ts"
 // (a) Direct import from core's package root.
-import type { Result } from "@rhi-zone/fractal-api-tree"
+import type { Result } from "../index.ts"
 // (b) Barrel re-export: Result re-exported through a local barrel FILE, name
 // unchanged. TypeScript sees the same identifier "Result" — the syntax path
 // matches it by name and extracts the first type argument.

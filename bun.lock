@@ -17,19 +17,28 @@
         "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-http-api-projector": "workspace:*",
         "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
-        "@rhi-zone/fractal-type-ir": "workspace:*",
       },
     },
     "packages/api-tree": {
       "name": "@rhi-zone/fractal-api-tree",
       "version": "0.1.0-alpha.0",
+      "bin": {
+        "fractal-api-tree": "./src/cli.ts",
+      },
+      "dependencies": {
+        "@rhi-zone/fractal-type-ir": "workspace:*",
+      },
+      "devDependencies": {
+        "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
+        "@sinclair/typebox": "^0.34.41",
+        "typescript": "^6.0.3",
+      },
     },
     "packages/cli-api-projector": {
       "name": "@rhi-zone/fractal-cli-api-projector",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
-        "@rhi-zone/fractal-type-ir": "workspace:*",
       },
     },
     "packages/client-api-projector": {
@@ -64,22 +73,12 @@
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-http-api-projector": "workspace:*",
-        "@rhi-zone/fractal-type-ir": "workspace:*",
       },
     },
     "packages/type-ir": {
       "name": "@rhi-zone/fractal-type-ir",
       "version": "0.1.0-alpha.0",
-      "bin": {
-        "fractal-type-ir": "./src/cli.ts",
-        "fractal-codegen": "./src/cli.ts",
-      },
-      "dependencies": {
-        "typescript": "^6.0.3",
-      },
       "devDependencies": {
-        "@rhi-zone/fractal-api-tree": "workspace:*",
-        "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
         "@sinclair/typebox": "^0.34.41",
       },
     },

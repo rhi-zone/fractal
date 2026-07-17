@@ -20,14 +20,15 @@
 // segment (node-level) / annotations (per-hint overrides).
 //
 // inputSchema and the JSDoc description fallback come from a derived-from-type
-// SchemaMap (built by @rhi-zone/fractal-type-ir). When no schema is supplied
-// for a tool, inputSchema degrades to the MCP spec minimum `{ type: "object" }`.
+// SchemaMap (built by @rhi-zone/fractal-api-tree's tree.ts). When no schema is
+// supplied for a tool, inputSchema degrades to the MCP spec minimum
+// `{ type: "object" }`.
 //
 // See:
 //   docs/artifacts/fc-op-kinds/projection-mcp.md — MCP concept list + classification
 //   packages/api-tree/src/tags.ts                    — tag lattice (resolveTags)
 //   packages/http-api-projector/src/project.ts                 — sibling projection (structural mirror)
-//   packages/type-ir/src/tree.ts                 — extractToolSchemas (schema source)
+//   packages/api-tree/src/tree.ts                 — extractToolSchemas (schema source)
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
@@ -61,7 +62,7 @@ export type McpAnnotations = {
  * MCP Tool descriptor — one per leaf node in the Node tree.
  *
  * inputSchema is a real JSON-Schema when a derived schema map is supplied to
- * `toTools` (see @rhi-zone/fractal-type-ir's `extractToolSchemas`, which lowers
+ * `toTools` (see @rhi-zone/fractal-api-tree's `extractToolSchemas`, which lowers
  * leaf handler input types via the TypeScript compiler API). Absent a match it
  * degrades to the MCP spec minimum `{ type: "object" }` — never a hand-authored
  * second source.
@@ -75,8 +76,9 @@ export type McpTool = {
 
 /**
  * Derived-from-type facts for one tool, keyed by tool name. Produced at build
- * time by @rhi-zone/fractal-type-ir; consumed here to fill inputSchema and the
- * JSDoc-derived description fallback. No hand-authored schema is involved.
+ * time by @rhi-zone/fractal-api-tree's tree.ts; consumed here to fill
+ * inputSchema and the JSDoc-derived description fallback. No hand-authored
+ * schema is involved.
  */
 export type ToolSchema = {
   readonly inputSchema?: Record<string, unknown>

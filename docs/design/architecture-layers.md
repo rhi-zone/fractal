@@ -100,8 +100,8 @@ Types are not APIs. The routing DU/combinators handle API structure (how
 requests find handlers). Type projection is a separate concern: deriving
 data-layer artifacts from TypeScript types.
 
-Fractal already does type projection — `schemaFromType` in `@rhi-zone/fractal-type-ir`
-derives JSON schemas from TS function parameter types for MCP input schemas.
+Fractal already does type projection — `schemaFromType` in `@rhi-zone/fractal-api-tree`
+(`./extract`) derives JSON schemas from TS function parameter types for MCP input schemas.
 A valibot codegen spike also exists. This is not new scope; it's recognizing
 an existing capability as a deliberate, first-class concern.
 

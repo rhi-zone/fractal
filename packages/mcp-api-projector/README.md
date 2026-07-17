@@ -7,7 +7,7 @@ MCP (Model Context Protocol) tool projection for the function-core tree.
 Walks an `api()`/`op()` tree and produces a flat list of MCP tools, one per
 leaf handler. Each tool's name is derived from its tree position
 (underscore-joined path), its input schema comes from a pre-computed
-`SchemaMap` (see `@rhi-zone/fractal-type-ir`) when provided, and its
+`SchemaMap` (see `@rhi-zone/fractal-api-tree/tree`) when provided, and its
 annotation hints (`readOnlyHint`, `idempotentHint`, `destructiveHint`) are
 derived automatically from the leaf's `meta.tags` — so `http.get`/`http.put`/
 `http.delete` bundles light these up for free with no separate MCP-specific

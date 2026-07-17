@@ -1,9 +1,9 @@
-// packages/type-ir/src/__fixtures__/typeref.fixture.ts
+// packages/api-tree/src/__fixtures__/typeref.fixture.ts
 //
 // Standalone functions used to exercise typeRefFromType / typeRefFromFunctionNode
 // / typeRefFromReturnType directly (not through the tree walker).
 
-import type { Result } from "@rhi-zone/fractal-api-tree"
+import type { Result } from "../index.ts"
 
 export const sample = (input: {
   name: string

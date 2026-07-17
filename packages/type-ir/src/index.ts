@@ -130,45 +130,15 @@ export const types = {
 export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial, deepRequired } from "./derive.ts"
 
 // ============================================================================
-// Extractor (TS source -> TypeRef) + AOT validator codegen
+// AOT validator codegen projector
 //
-// Merged in from the former @rhi-zone/fractal-codegen package: extract.ts
-// (TS type -> TypeRef, the extractor input adapter), tree.ts (source-level
-// api()/op() tree walker), compile.ts (TypeRef -> TypeBox validator code,
-// a type-ir projector), and cli.ts (the `fractal-type-ir` build/watch/stub/
-// check CLI). These are type-ir concerns — an extractor feeding TypeRefs in,
-// and a projector emitting validator code out — so they live alongside the
-// other 20+ projectors rather than in a separate package.
+// compile.ts (TypeRef -> TypeBox validator code) is a type-ir projector, so
+// it lives alongside the other 20+ projectors. The extractor (extract.ts,
+// TS source -> TypeRef), the tree walker (tree.ts, source-level api()/op()
+// walk), the build orchestrator (build.ts), and the `fractal-api-tree`
+// build/watch/stub/check CLI (cli.ts) live in @rhi-zone/fractal-api-tree
+// instead — they walk api()/op() AUTHORING source, which is api-tree's
+// concern, not type-ir's.
 // ============================================================================
 
-export {
-  createExtractorProgram,
-  extractJsDoc,
-  opFunctionNode,
-  schemaFromFunctionNode,
-  schemaFromReturnType,
-  schemaFromType,
-  typeRefFromFunctionNode,
-  typeRefFromReturnType,
-  typeRefFromType,
-  type JsonSchema,
-} from "./extract.ts"
-
-export {
-  extractRouteTypeRefs,
-  extractToolSchemas,
-  extractToolTypeRefs,
-  type SchemaMap,
-  type ToolSchema,
-  type ToolTypeInfo,
-  type TypeRefMap,
-} from "./tree.ts"
-
 export { buildSchema, compileValidator, compileValidatorModule } from "./compile.ts"
-
-export {
-  buildValidatorModuleSource,
-  stubValidatorModuleSource,
-  writeValidatorModule,
-  writeStubValidatorModule,
-} from "./build.ts"

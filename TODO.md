@@ -1,5 +1,21 @@
 # fractal — TODO
 
+## tree/extract/cli moved from type-ir to api-tree — DONE (2026-07-18)
+
+`tree.ts`, `extract.ts`, `cli.ts`, and `build.ts` (plus their tests and
+`__fixtures__`) moved from `packages/type-ir/src` to `packages/api-tree/src`.
+Rationale: they walk `api()`/`op()` source AST — api-tree dev tooling that
+happens to use the TypeScript compiler, not type-ir concerns. `compile.ts`
+(`TypeRef` → TypeBox validator code) stayed in type-ir as a projector
+alongside the other 20+. type-ir dropped its `typescript` dependency and
+`bin` field; api-tree gained both, plus new `./tree`/`./extract` subpath
+exports (kept off the package root so runtime consumers of the base
+`Node`/`Result` model don't pull in the TS compiler) and a `fractal-api-tree`
+CLI bin (renamed from `fractal-type-ir`/`fractal-codegen`). All external
+call sites (`openapi-api-projector`, `cli-api-projector`,
+`examples/library-api`) updated to import `extractToolSchemas`/`SchemaMap`
+from `@rhi-zone/fractal-api-tree/tree` instead of `@rhi-zone/fractal-type-ir`.
+
 ## Package renames — DONE (2026-07-17)
 
 `core` → `api-tree`, and the protocol projector packages took a `-api-projector`

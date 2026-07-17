@@ -16,6 +16,13 @@
 // two modules are merged.
 export { api, mergeMeta, op } from "./node.ts"
 
+// Dev tooling — the build-time extractor (extract.ts, TS source -> TypeRef)
+// and the source-level api()/op() tree walker (tree.ts) it feeds — lives on
+// "./extract" and "./tree" subpaths, NOT the package root: they pull in the
+// TypeScript compiler, which the base runtime model has no reason to force
+// on every consumer. The `fractal-api-tree` build/watch/stub/check CLI
+// (cli.ts) wires them to @rhi-zone/fractal-type-ir's validator codegen.
+
 // ============================================================================
 // The function category — the base
 // ============================================================================

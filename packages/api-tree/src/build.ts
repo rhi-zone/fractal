@@ -1,8 +1,8 @@
-// packages/type-ir/src/build.ts — @rhi-zone/fractal-type-ir
+// packages/api-tree/src/build.ts — @rhi-zone/fractal-api-tree
 //
 // BUILD ORCHESTRATOR: wires the extractor (extract.ts/tree.ts) to the AOT
-// validator compiler (compile.ts), producing the standalone,
-// zero-runtime-dependency validator MODULE SOURCE that
+// validator compiler (@rhi-zone/fractal-type-ir's compile.ts), producing the
+// standalone, zero-runtime-dependency validator MODULE SOURCE that
 // `createApplyValidation()` (packages/http-api-projector/src/route.ts) consumes.
 //
 //   entryFile --extractRouteTypeRefs--> path -> TypeRef
@@ -14,7 +14,7 @@
 // no-op passthrough for every route until real codegen runs (see route.ts's
 // `createApplyValidation` doc comment).
 
-import { compileValidatorModule } from "./compile.ts"
+import { compileValidatorModule } from "@rhi-zone/fractal-type-ir"
 import { extractRouteTypeRefs } from "./tree.ts"
 
 /**
