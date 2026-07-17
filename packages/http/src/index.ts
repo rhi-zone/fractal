@@ -23,5 +23,6 @@ export {
   radixMatcher,
   radixRouter,
   toRouter,
+  withALS,
 } from "./compile.ts"
 export type { CompiledRouter, Matcher, RouteMatch } from "./compile.ts"

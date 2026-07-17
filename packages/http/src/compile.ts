@@ -18,6 +18,7 @@
 // `radixRouter`/`compiledCharRouter`/`mapCharRouter` are `toRouter(matcher)`
 // convenience wrappers for the three benchmarked shapes.
 
+import type { AsyncLocalStorage } from "node:async_hooks"
 import type { Handler, Meta } from "@rhi-zone/fractal-core/node"
 import { runPipeline, splitPath } from "./route.ts"
 import type { HttpRoute, Pipeline } from "./route.ts"
@@ -406,4 +407,29 @@ export function mapCharRouter(route: HttpRoute): CompiledRouter {
   const staticMatcher = buildMapMatcher(routes.filter((r) => !isDynamicPath(r.path)))
   const dynamicMatcher = buildCompiledCharMatcher(routes.filter((r) => isDynamicPath(r.path)))
   return toRouter(chainMatchers(staticMatcher, dynamicMatcher))
+}
+
+// ============================================================================
+// withALS — per-request AsyncLocalStorage context, composable over any
+// `CompiledRouter`. `runPipeline` (route.ts) is a clean linear `await` chain
+// with no concurrent branches in flight, so a context entered once per
+// request via `storage.run` stays correctly scoped to that request's whole
+// pipeline — no leakage across concurrent requests, no manual propagation
+// needed at each stage.
+// ============================================================================
+
+/**
+ * Wrap `router` so every request runs inside its own `AsyncLocalStorage`
+ * context. `init` computes the per-request context value from the incoming
+ * `Request`; `router` (and everything it calls, transitively) can then read
+ * it via `storage.getStore()`. Composable: since the return type is itself a
+ * `CompiledRouter`, `withALS` can wrap the output of `radixRouter`,
+ * `toRouter`, `makeRouterFromRoute`, or another `withALS` layer.
+ */
+export function withALS<T>(
+  router: CompiledRouter,
+  storage: AsyncLocalStorage<T>,
+  init: (req: Request) => T,
+): CompiledRouter {
+  return (req) => storage.run(init(req), () => router(req))
 }

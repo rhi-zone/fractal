@@ -1,8 +1,11 @@
 // packages/http/src/preset.test.ts — OOTB preset end-to-end tests
 
+import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
 import { api as api_, op, service } from "@rhi-zone/fractal-core/node"
 import { createFetch } from "./preset.ts"
+import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts"
+import type { HttpRoute, ValidatorMap } from "./route.ts"
 
 // ============================================================================
 // Mixed API fixture
@@ -181,5 +184,176 @@ describe("OOTB preset — CORS opt-in", () => {
   it("default preset (no cors option) does NOT include CORS headers", async () => {
     const res = await fetch(new Request("http://localhost/users/list"))
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull()
+  })
+})
+
+// ============================================================================
+// 5. directives toggle
+// ============================================================================
+
+describe("OOTB preset — directives: false", () => {
+  it("skips method/moveTo/response directives — naiveTransform baseline (POST at own key)", async () => {
+    const f = createFetch(api, { directives: false })
+
+    // The `moveTo`-placed "users/list" and "users/create" paths are never
+    // created; the naive-transform baseline uses the node's OWN key
+    // ("listUsers"/"createUser") and always POST.
+    const moved = await f(new Request("http://localhost/users/list"))
+    expect(moved.status).toBe(404)
+
+    const naive = await f(
+      new Request("http://localhost/users/listUsers", { method: "POST" }),
+    )
+    expect(naive.status).toBe(200)
+  })
+})
+
+// ============================================================================
+// 6. validators
+// ============================================================================
+
+describe("OOTB preset — validators", () => {
+  it("applies a validator keyed by outer map key at the matching route path", async () => {
+    const echoNode = api_({
+      widgets: op((input: Record<string, unknown>) => input, {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+
+    const validators: ValidatorMap = {
+      gen: {
+        widgets: (bag) => ({ kind: "ok", value: { ...bag, validated: true } }),
+      },
+    }
+
+    const f = createFetch(echoNode, { validators })
+    const res = await f(new Request("http://localhost/widgets"))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ validated: true })
+  })
+
+  it("a failing validator short-circuits with 400", async () => {
+    const echoNode = api_({
+      widgets: op((input: Record<string, unknown>) => input, {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+
+    const validators: ValidatorMap = {
+      gen: {
+        widgets: () => ({ kind: "err", error: "nope" }),
+      },
+    }
+
+    const f = createFetch(echoNode, { validators })
+    const res = await f(new Request("http://localhost/widgets"))
+    expect(res.status).toBe(400)
+  })
+})
+
+// ============================================================================
+// 7. fusePipeline / skipEmptyInput toggles
+// ============================================================================
+
+describe("OOTB preset — fusePipeline / skipEmptyInput default on, toggleable", () => {
+  it("still dispatches correctly with defaults (both on)", async () => {
+    const res = await fetch(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+  })
+
+  it("still dispatches correctly with both explicitly off", async () => {
+    const f = createFetch(api, { fusePipeline: false, skipEmptyInput: false })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+  })
+})
+
+// ============================================================================
+// 8. custom rewriters — applied after built-ins, before router compilation
+// ============================================================================
+
+describe("OOTB preset — custom rewriters", () => {
+  it("a user-supplied HttpRoute => HttpRoute pass runs and its effect is observable", async () => {
+    let sawRoute: HttpRoute | undefined
+    const markerRewriter = (route: HttpRoute): HttpRoute => {
+      sawRoute = route
+      return route
+    }
+    const f = createFetch(api, { rewriters: [markerRewriter] })
+    await f(new Request("http://localhost/users/list"))
+    expect(sawRoute).toBeDefined()
+    // The rewriter saw the fully-projected tree — directives already applied
+    // (moveTo placed "list" as a child of "users").
+    expect(sawRoute?.children?.users?.children?.list).toBeDefined()
+  })
+})
+
+// ============================================================================
+// 9. custom router
+// ============================================================================
+
+describe("OOTB preset — custom router selection", () => {
+  it("radixRouter compiles and dispatches identically to the default", async () => {
+    const f = createFetch(api, { router: radixRouter })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([{ id: 1, name: "Alice" }])
+  })
+
+  it("compiledCharRouter compiles and dispatches identically to the default", async () => {
+    const f = createFetch(api, { router: compiledCharRouter })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+  })
+
+  it("mapCharRouter compiles and dispatches identically to the default", async () => {
+    const f = createFetch(api, { router: mapCharRouter })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+  })
+})
+
+// ============================================================================
+// 10. ALS
+// ============================================================================
+
+describe("OOTB preset — als", () => {
+  it("handler-invoking requests run inside the AsyncLocalStorage context", async () => {
+    const storage = new AsyncLocalStorage<{ requestId: string }>()
+    let observedInsideHandler: string | undefined
+
+    const alsNode = api_({
+      whoami: op((_: unknown) => {
+        observedInsideHandler = storage.getStore()?.requestId
+        return { ok: true }
+      }, { http: { directives: [{ kind: "method", value: "GET" }] } }),
+    })
+
+    const f = createFetch(alsNode, {
+      als: { storage, init: () => ({ requestId: "req-123" }) },
+    })
+
+    await f(new Request("http://localhost/whoami"))
+    expect(observedInsideHandler).toBe("req-123")
+  })
+
+  it("HEAD-as-GET (autoMethodLayer) also runs inside the ALS context", async () => {
+    const storage = new AsyncLocalStorage<{ requestId: string }>()
+    let observedInsideHandler: string | undefined
+
+    const alsNode = api_({
+      whoami: op((_: unknown) => {
+        observedInsideHandler = storage.getStore()?.requestId
+        return { ok: true }
+      }, { http: { directives: [{ kind: "method", value: "GET" }] } }),
+    })
+
+    const f = createFetch(alsNode, {
+      als: { storage, init: () => ({ requestId: "req-head" }) },
+    })
+
+    const res = await f(new Request("http://localhost/whoami", { method: "HEAD" }))
+    expect(res.status).toBe(200)
+    expect(observedInsideHandler).toBe("req-head")
   })
 })

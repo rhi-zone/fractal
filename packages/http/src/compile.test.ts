@@ -5,6 +5,7 @@
 // the same `HttpRoute` tree, plus targeted coverage of `chainMatchers`
 // composition, slug extraction, and 404 handling.
 
+import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
 import {
   chainMatchers,
@@ -15,6 +16,7 @@ import {
   radixMatcher,
   radixRouter,
   toRouter,
+  withALS,
 } from "./compile.ts"
 import { httpRoute, makeRouterFromRoute } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
@@ -218,5 +220,88 @@ describe("404 handling", () => {
     const router = toRouter(() => undefined)
     const res = await router(new Request("http://localhost/anything"))
     expect(res.status).toBe(404)
+  })
+})
+
+// ============================================================================
+// withALS — per-request AsyncLocalStorage context
+// ============================================================================
+
+describe("withALS", () => {
+  type RequestContext = { readonly requestId: string }
+
+  it("makes ALS context accessible inside a handler", async () => {
+    const storage = new AsyncLocalStorage<RequestContext>()
+    let observedDuringHandler: string | undefined
+
+    const route = httpRoute({
+      meta: {},
+      methods: {
+        GET: {
+          handler: () => {
+            observedDuringHandler = storage.getStore()?.requestId
+            return { ok: true }
+          },
+          meta: {},
+        },
+      },
+    })
+
+    const router = withALS(makeRouterFromRoute(route), storage, () => ({ requestId: "req-1" }))
+    const res = await router(new Request("http://localhost/"))
+
+    expect(res.status).toBe(200)
+    expect(observedDuringHandler).toBe("req-1")
+  })
+
+  it("gives each concurrent request its own isolated context", async () => {
+    const storage = new AsyncLocalStorage<RequestContext>()
+    const observed: string[] = []
+
+    const route = httpRoute({
+      meta: {},
+      methods: {
+        GET: {
+          handler: async () => {
+            // Yield a few times so concurrent requests interleave — a
+            // context leak between requests would show up as the wrong
+            // requestId being observed after the await.
+            await Promise.resolve()
+            await Promise.resolve()
+            const id = storage.getStore()?.requestId
+            if (id !== undefined) observed.push(id)
+            return { ok: true }
+          },
+          meta: {},
+        },
+      },
+    })
+
+    let counter = 0
+    const router = withALS(makeRouterFromRoute(route), storage, () => ({
+      requestId: `req-${counter++}`,
+    }))
+
+    await Promise.all(
+      Array.from({ length: 10 }, () => router(new Request("http://localhost/"))),
+    )
+
+    expect(observed.sort()).toEqual(
+      Array.from({ length: 10 }, (_, i) => `req-${i}`).sort(),
+    )
+  })
+
+  it("produces the same responses as the unwrapped router", async () => {
+    const storage = new AsyncLocalStorage<RequestContext>()
+    const route = buildFixture()
+    const plain = makeRouterFromRoute(route)
+    const wrapped = withALS(makeRouterFromRoute(route), storage, () => ({ requestId: "same" }))
+
+    for (const path of ["/", "/users", "/users/42", "/static/docs/guides"]) {
+      const plainRes = await plain(new Request(`http://localhost${path}`))
+      const wrappedRes = await wrapped(new Request(`http://localhost${path}`))
+      expect(wrappedRes.status).toBe(plainRes.status)
+      expect(await wrappedRes.json()).toEqual(await plainRes.json())
+    }
   })
 })
