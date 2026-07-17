@@ -1,5 +1,35 @@
 # fractal — TODO
 
+## Next session (handoff)
+
+Pick up from:
+- MCP protocol features (resources, prompts, streaming, logging, transport presets, sampling) — see "MCP protocol gaps" section below
+- Open threads in "Open threads" section — start with the discovery notes from 2026-07-18 session
+
+---
+
+## Type-safe proxies, type-ir modularization, client codegen — DONE (2026-07-18)
+
+- **Type-safe direct API proxy** — `createDirectApi` now returns `DirectApi<N>`,
+  a recursive mapped type computing the proxy shape from the tree's node type.
+  Slug subtraction: fallback-captured fields are `Omit`'d from handler inputs,
+  collapsing to zero args when fully covered.
+- **Type-ir vocabulary modularization** — Semantic type kinds (int32/int64,
+  float32/float64, datetime/date/time, duration, uuid/uri, bytes) moved from
+  core TypeKinds into independently importable extension modules under
+  `src/kinds/`. Core retains only structural + universal-primitive kinds. Each
+  extension uses declaration merging + `registerParent`; composite modules
+  (wire-numerics, temporal, common) re-export for convenience.
+- **fromJsonSchema converter** — JSON Schema → TypeRef reverse conversion,
+  enabling consumption of external schemas. Round-trip tested against all
+  existing toJsonSchema cases.
+- **Client codegen** — `generateClient(route, schemas)` and
+  `generateClientFromNode(node, schemas)` emit standalone typed TypeScript
+  clients from HttpRoute + SchemaMap. No fractal imports in generated code.
+  Nested structure mirrors the tree, path-param fields stripped from inputs,
+  GET query params preserved. End-to-end tested with library-api example
+  (generate script, generated client, live HTTP tests).
+
 ## MCP protocol gaps (mcp-api-projector) — OPEN (2026-07-18)
 
 `createMcpServer` (`packages/mcp-api-projector/src/server.ts`) now validates
@@ -214,6 +244,23 @@ as a framework primitive. If a real consumer need surfaces, revisit then.
 These are starting context for a future session, not a task list. Each points at
 the design docs for detail rather than restating them; verify each is still live
 before acting.
+
+### New threads from the 2026-07-18 proxies/codegen session
+
+- **TypeRef semantic types cleanup** — the current type-kind groupings in
+  `packages/type-ir/src/kinds/*.ts` work but were designed quickly. Candidates
+  for further refinement: composition/orthogonality of extension modules, naming
+  consistency across int/float/temporal groups, whether the current split (core
+  structurals + universals vs. optional semantics) is the right granularity.
+  Not blocking; designed-fast beats over-engineered. Revisit if the extension
+  API gets extended consumers beyond the existing wire-numerics/temporal/common
+  modules.
+- **OpenAPI-based codegen superseded** — commit 561c5fd (the old OpenAPI→client
+  reverse-projection path) is now dead code in the history, superseded by
+  commit a294f66's HttpRoute-based client codegen rewrite and the subsequent
+  merge of both openapi and client into http-api-projector (2026-07-18).
+  The old path is technically still on-disk but unreachable from the working tree.
+  No action needed; noted for historical clarity.
 
 ### New threads from the 2026-07-17 validation/decode session (not yet built)
 
