@@ -93,3 +93,68 @@ describe("createMcpServer — tools/call", () => {
     expect(content[0]!.text).toContain("does_not_exist")
   })
 })
+
+// ============================================================================
+// 4. Runtime input validation against inputSchema
+// ============================================================================
+
+const validatedTree = api_({
+  users: api_({
+    get: op((input: { id: string }) => ({ id: input.id, name: "Alice" }), {
+      tags: { readOnly: true },
+    }),
+  }),
+})
+
+const validatedSchemas = {
+  users_get: {
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
+    },
+  },
+}
+
+async function connectedValidatedClient() {
+  const server = createMcpServer(validatedTree, {
+    name: "validated-test-server",
+    version: "1.0.0",
+    schemas: validatedSchemas,
+  })
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: "test-client", version: "1.0.0" })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  return { server, client }
+}
+
+describe("createMcpServer — input validation", () => {
+  it("valid input passes through to the handler", async () => {
+    const { client } = await connectedValidatedClient()
+    const result = await client.callTool({ name: "users_get", arguments: { id: "42" } })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(JSON.parse(content[0]!.text)).toEqual({ id: "42", name: "Alice" })
+  })
+
+  it("missing required field returns an isError response without invoking the handler", async () => {
+    const { client } = await connectedValidatedClient()
+    const result = await client.callTool({ name: "users_get", arguments: {} })
+
+    expect(result.isError).toBe(true)
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content[0]!.text).toContain("id")
+    expect(content[0]!.text.toLowerCase()).toContain("required")
+  })
+
+  it("wrong field type returns an isError response without invoking the handler", async () => {
+    const { client } = await connectedValidatedClient()
+    const result = await client.callTool({ name: "users_get", arguments: { id: 42 } })
+
+    expect(result.isError).toBe(true)
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content[0]!.text).toContain("id")
+    expect(content[0]!.text.toLowerCase()).toContain("type")
+  })
+})

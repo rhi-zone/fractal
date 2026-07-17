@@ -1,5 +1,36 @@
 # fractal — TODO
 
+## MCP protocol gaps (mcp-api-projector) — OPEN (2026-07-18)
+
+`createMcpServer` (`packages/mcp-api-projector/src/server.ts`) now validates
+`tools/call` arguments against the tool's `inputSchema` before invoking the
+handler (`validateAgainstSchema` — checks `required` and `properties[key].type`
+only, not a full JSON Schema validator; returns `isError: true` with a
+descriptive message on a missing required field or a type mismatch). That
+closes the "unvalidated input reaches handlers" gap, but the projector is
+still tools-only relative to the full MCP spec. Known gaps, not yet started:
+
+- **Resources** (`resources/list`, `resources/read`, `resources/subscribe`)
+  — not implemented. No `Node` concept currently maps to an MCP resource.
+- **Prompts** (`prompts/list`, `prompts/get`) — not implemented.
+- **Rich content types** — tool results are always `{ type: "text", text:
+  JSON.stringify(result) }` (`server.ts`'s `CallToolRequestSchema` handler).
+  No `image`, `audio`, or `embedded resource` content types.
+- **Streaming / progress notifications** — not implemented. No support for
+  `notifications/progress` during a long-running tool call.
+- **Logging** — not implemented. No `notifications/message` / log-level
+  negotiation.
+- **Transport presets** — not implemented. `createMcpServer` returns an
+  unconnected `Server`; the caller wires `StdioServerTransport`,
+  `SSEServerTransport`, `StreamableHTTPServerTransport`, etc. themselves.
+  No `createStdioMcpServer`/`createHttpMcpServer` convenience preset exists
+  (unlike `http-api-projector`'s `createFetch`, which owns its transport).
+- **Sampling, roots, notifications** (the remaining client↔server MCP
+  features beyond tools) — not implemented.
+
+Tools-only is sufficient for many use cases. Resources/prompts/streaming are
+protocol features that can be added incrementally.
+
 ## client-api-projector merged into http-api-projector — DONE (2026-07-18)
 
 `packages/client-api-projector` was merged into `packages/http-api-projector`

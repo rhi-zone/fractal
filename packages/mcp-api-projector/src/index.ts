@@ -9,5 +9,5 @@ export type {
   ToToolsOptions,
 } from "./project.ts"
 export { getMcpMeta, projectTools, toTools } from "./project.ts"
-export type { CreateMcpServerOptions } from "./server.ts"
-export { createMcpServer } from "./server.ts"
+export type { CreateMcpServerOptions, ValidationResult } from "./server.ts"
+export { createMcpServer, validateAgainstSchema } from "./server.ts"
