@@ -92,9 +92,18 @@ export type Pipeline = {
 // HttpRoute type + constructor
 // ============================================================================
 
-export type HttpRoute = {
+/**
+ * Generic in `H` (a method entry's own handler type), defaulting to the
+ * erased `Handler` — same convention as `Node<H>` (see node.ts). Plain
+ * `HttpRoute` (no type argument) keeps working everywhere it's used as an
+ * erased type (dispatch, `Record<string, HttpRoute>`, etc.); only the
+ * type-preserving rewriters below (`naiveTransform`, `applyMethods`,
+ * `applyResponse`, `createApplyValidation`) lean on the generic via their own
+ * recursively-computed return types — nothing else has to opt in.
+ */
+export type HttpRoute<H extends Handler = Handler> = {
   readonly methods?: Readonly<
-    Record<string, { readonly handler: Handler; readonly meta: Meta; readonly pipeline?: Pipeline }>
+    Record<string, { readonly handler: H; readonly meta: Meta; readonly pipeline?: Pipeline }>
   >
   readonly children?: Readonly<Record<string, HttpRoute>>
   readonly fallback?: { readonly name: string; readonly subtree: HttpRoute }
@@ -162,7 +171,41 @@ function withoutDirective(meta: Meta, directive: HttpDirective): Meta {
 // POST entry in `methods`. Meta is copied through unchanged. Recursive.
 // ============================================================================
 
-export function naiveTransform(node: Node): HttpRoute {
+/**
+ * The precise `HttpRoute` shape `naiveTransform` produces for a given input
+ * tree type `N` — computed recursively from `N`'s own children/fallback,
+ * mirroring the actual leaf-into-`methods.POST`, branch-into-`children`
+ * mechanics below at the type level. This is what lets `getBook`'s real
+ * `(input: {id:string}) => Book` signature survive `naiveTransform` as
+ * `route.children.getBook.methods.POST.handler`, instead of widening to the
+ * erased `Handler`.
+ *
+ * Each branch below is a plain conditional (not `infer ... : never`) so a
+ * node that is neither/both leaf-and-branch contributes exactly the fields it
+ * has — `Node`'s own optional fields never leak in as "present but any",
+ * because `op()`'s return type marks `handler` as present (not optional)
+ * when it truly is a leaf; a pure branch's type has no `handler` key at all
+ * to match against.
+ *
+ * `fallback.subtree`'s precision is only as good as what `api()` was handed —
+ * `api()`'s own return type doesn't thread a generic through `opts.fallback`
+ * (see node.ts), so a fallback subtree is typically already the erased `Node`
+ * by the time it reaches here; this type still recurses correctly in that
+ * case, just inherits that upstream limitation rather than papering over it.
+ */
+export type NaiveRoute<N extends Node> =
+  & (N extends { readonly handler: infer H extends Handler }
+      ? { readonly methods: { readonly POST: { readonly handler: H; readonly meta: Meta } } }
+      : {})
+  & (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+      ? { readonly children: { readonly [K in keyof C]: NaiveRoute<C[K]> } }
+      : {})
+  & (N extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends Node } }
+      ? { readonly fallback: { readonly name: Nm; readonly subtree: NaiveRoute<S> } }
+      : {})
+  & { readonly meta: Meta }
+
+export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
   const methods = isLeaf(node)
     ? { POST: { handler: node.handler!, meta: node.meta } }
     : undefined
@@ -174,7 +217,7 @@ export function naiveTransform(node: Node): HttpRoute {
   const fallback = node.fallback !== undefined
     ? { name: node.fallback.name, subtree: naiveTransform(node.fallback.subtree) }
     : undefined
-  return httpRoute({ methods, children, fallback, meta: node.meta })
+  return httpRoute({ methods, children, fallback, meta: node.meta }) as NaiveRoute<N>
 }
 
 // ============================================================================
@@ -183,7 +226,31 @@ export function naiveTransform(node: Node): HttpRoute {
 // naiveTransform default, becomes GET/PUT/DELETE/…).
 // ============================================================================
 
-export function applyMethods(route: HttpRoute): HttpRoute {
+/**
+ * The `HttpRoute` shape after `applyMethods` rewrites a tree of type `R`.
+ * The rename target (`directive.value`) comes out of the open `meta` bag as
+ * a plain runtime `string` — never a literal type (see `HttpDirective` in
+ * project.ts and `Meta` in node.ts) — so the resulting method KEY can't be
+ * tracked statically; only the entry's VALUE (its handler type) survives.
+ * `methods` is therefore widened to `Record<string, ...>` over the union of
+ * the input methods' entry types — for the common case of a single method
+ * entry (e.g. straight out of `naiveTransform`) that union has exactly one
+ * member, so the handler type comes through with full precision even though
+ * the key is no longer tracked.
+ */
+export type ApplyMethodsRoute<R extends HttpRoute> =
+  & (R extends { readonly methods: infer M extends Readonly<Record<string, { readonly handler: Handler; readonly meta: Meta }>> }
+      ? { readonly methods: Readonly<Record<string, M[keyof M]>> }
+      : {})
+  & (R extends { readonly children: infer C extends Readonly<Record<string, HttpRoute>> }
+      ? { readonly children: { readonly [K in keyof C]: ApplyMethodsRoute<C[K]> } }
+      : {})
+  & (R extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute } }
+      ? { readonly fallback: { readonly name: Nm; readonly subtree: ApplyMethodsRoute<S> } }
+      : {})
+  & { readonly meta: Meta }
+
+export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R> {
   let methods = route.methods
   if (methods !== undefined) {
     const rebuilt: Record<string, { handler: Handler; meta: Meta }> = {}
@@ -206,7 +273,7 @@ export function applyMethods(route: HttpRoute): HttpRoute {
   const fallback = route.fallback !== undefined
     ? { name: route.fallback.name, subtree: applyMethods(route.fallback.subtree) }
     : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta })
+  return httpRoute({ methods, children, fallback, meta: route.meta }) as ApplyMethodsRoute<R>
 }
 
 // ============================================================================
@@ -360,6 +427,19 @@ function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpR
  * placed subtrees converging on the same path+method are caught exactly like
  * a conflict between a placed subtree and a node already sitting at the
  * target — both funnel through `mergeRoutes`'s check.
+ *
+ * Unlike `naiveTransform`/`applyMethods`/`applyResponse`, this is NOT
+ * generic over the input's handler type(s) — deliberately, not by omission.
+ * `directive.path` (the move target) is a plain runtime `string` read out of
+ * the open `meta` bag; TypeScript has no way to know, for a given input tree
+ * type, WHERE a subtree ends up without parsing that string as a type-level
+ * template literal and re-deriving the whole tree shape from it. Doing that
+ * would need `HttpDirective`/`Meta` to carry a typed, literal directive
+ * language instead of today's open `{ [key: string]: unknown }` bag — a
+ * separate, much larger design question (typed directives), not a narrower
+ * fix within this rewriter. `applyMoveTo` returns the erased `HttpRoute`
+ * because moved subtrees' positions are genuinely unknowable statically, not
+ * because threading the generic through was skipped.
  */
 export function applyMoveTo(route: HttpRoute): HttpRoute {
   const moves: PendingMove[] = []
@@ -403,7 +483,33 @@ function wrapResponse(
   }
 }
 
-export function applyResponse(route: HttpRoute): HttpRoute {
+/**
+ * The `HttpRoute` shape after `applyResponse` rewrites a tree of type `R`.
+ * Whether a given method entry's handler gets wrapped depends on whether a
+ * `response` directive is present in its `meta` — a runtime fact, unknowable
+ * statically (see `ApplyMethodsRoute` above and `applyMoveTo`'s doc comment)
+ * — so each entry's resulting handler type is honestly a union of
+ * "unwrapped, original type" and "wrapped, `ResponseOverride`-producing
+ * type" rather than one or the other. Unlike `applyMethods`, this rewriter
+ * never renames a method key, so — different from `ApplyMethodsRoute` —
+ * `methods` keeps the exact key set of `M` instead of widening to
+ * `Record<string, ...>`.
+ */
+type ResponseWrappedHandler = (input: unknown) => Promise<ResponseOverride>
+
+export type ApplyResponseRoute<R extends HttpRoute> =
+  & (R extends { readonly methods: infer M extends Readonly<Record<string, { readonly handler: Handler; readonly meta: Meta }>> }
+      ? { readonly methods: { readonly [K in keyof M]: { readonly handler: M[K]["handler"] | ResponseWrappedHandler; readonly meta: Meta } } }
+      : {})
+  & (R extends { readonly children: infer C extends Readonly<Record<string, HttpRoute>> }
+      ? { readonly children: { readonly [K in keyof C]: ApplyResponseRoute<C[K]> } }
+      : {})
+  & (R extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute } }
+      ? { readonly fallback: { readonly name: Nm; readonly subtree: ApplyResponseRoute<S> } }
+      : {})
+  & { readonly meta: Meta }
+
+export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute<R> {
   let methods = route.methods
   if (methods !== undefined) {
     const rebuilt: Record<string, { handler: Handler; meta: Meta }> = {}
@@ -430,7 +536,7 @@ export function applyResponse(route: HttpRoute): HttpRoute {
   const fallback = route.fallback !== undefined
     ? { name: route.fallback.name, subtree: applyResponse(route.fallback.subtree) }
     : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta })
+  return httpRoute({ methods, children, fallback, meta: route.meta }) as ApplyResponseRoute<R>
 }
 
 // ============================================================================
@@ -471,11 +577,20 @@ function pathKey(path: readonly string[]): string {
   return path.join("/")
 }
 
-function injectValidators(
-  route: HttpRoute,
+/**
+ * Generic identity in `R` — unlike `applyMethods`/`applyResponse`,
+ * `injectValidators` never renames a method key or replaces a handler; it
+ * only appends to `entry.pipeline.validate`, whose type (`Pipeline`) is the
+ * same whether or not a validator actually matched at a given tree position
+ * (itself a dynamic lookup — see `forKey[pathKey(path)]` below). So the
+ * input's precise type, whatever it is, is exactly the output's type; no
+ * recomputed mapped type is needed the way `naiveTransform` et al. need one.
+ */
+function injectValidators<R extends HttpRoute>(
+  route: R,
   forKey: Readonly<Record<string, Validator>>,
   path: readonly string[],
-): HttpRoute {
+): R {
   const validator = forKey[pathKey(path)]
   let methods = route.methods
   if (methods !== undefined && validator !== undefined) {
@@ -509,7 +624,7 @@ function injectValidators(
         subtree: injectValidators(route.fallback.subtree, forKey, [...path, `:${route.fallback.name}`]),
       }
     : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta, pipeline: route.pipeline })
+  return httpRoute({ methods, children, fallback, meta: route.meta, pipeline: route.pipeline }) as R
 }
 
 /**
@@ -529,9 +644,9 @@ function injectValidators(
  */
 export function createApplyValidation(
   validators: ValidatorMap,
-): (key: string, route: HttpRoute) => HttpRoute {
+): <R extends HttpRoute>(key: string, route: R) => R {
   const usedKeys = new Set<string>()
-  return (key: string, route: HttpRoute): HttpRoute => {
+  return <R extends HttpRoute>(key: string, route: R): R => {
     if (usedKeys.has(key)) {
       throw new Error(`applyValidation: key "${key}" has already been used`)
     }

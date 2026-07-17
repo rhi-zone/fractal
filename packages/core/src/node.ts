@@ -144,15 +144,23 @@ export function mergeMeta(...metas: Array<Meta | undefined>): Meta {
  * detect a leaf by `node.handler !== undefined`.
  *
  * Generic in `H` (the exact handler type): `op(fn)`'s result carries `fn`'s
- * real signature as `Node<H>["handler"]`, not the erased `Handler`. This is
+ * real signature as `["handler"]`, not the erased `Handler`. This is
  * what lets `api({ getBook: op((input: {id: string}) => ...) })` produce a
  * tree whose `children.getBook.handler` still has `fn`'s real input/output
  * types instead of `Handler`'s `(input: any) => any`.
+ *
+ * The return type marks `handler` as present (not the optional `handler?`
+ * `Node<H>` declares) — `op()` always sets it, and callers that need to
+ * distinguish a leaf from a branch generically (e.g. a recursive projection
+ * over an arbitrary tree, computing its own return type from the input's
+ * shape) can key a conditional type off "does this type have a required
+ * `handler`," which a branch produced by `api()` alone never structurally
+ * satisfies.
  */
 export function op<H extends Handler>(
   fn: H,
   ...contributions: Array<Meta>
-): Node<H> {
+): Omit<Node, "handler"> & { readonly handler: H } {
   const meta = contributions.length === 0
     ? {}
     : contributions.length === 1
@@ -177,18 +185,29 @@ export function op<H extends Handler>(
  * widening to `Record<string, Node>`. So `api({ getBook: op(fn) })` yields a
  * `Node` whose `children.getBook.handler` is still `fn`'s real type.
  *
+ * Generic in `F` (the exact fallback shape) the same way: `opts.fallback`'s
+ * literal `{ name, subtree }` — subtree included — survives into the
+ * result's `fallback`, instead of widening `subtree` to the erased `Node`.
+ * Defaults to `undefined` (no `fallback` key on the result at all) when
+ * `opts.fallback` isn't passed, so a plain `api(children)` call doesn't grow
+ * a spurious optional `fallback` field.
+ *
  * See docs/design/routing-and-transforms.md § DX — constructor sugar.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function api<C extends Readonly<Record<string, Node<any>>>>(
+export function api<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  C extends Readonly<Record<string, Node<any>>>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  F extends { readonly name: string; readonly subtree: Node<any> } | undefined = undefined,
+>(
   children: C,
-  opts?: { meta?: Meta; fallback?: { name: string; subtree: Node } },
-): Omit<Node, "children"> & { readonly children: C } {
+  opts?: { meta?: Meta; fallback?: F },
+): Omit<Node, "children" | "fallback"> & { readonly children: C } & (F extends undefined ? object : { readonly fallback: F }) {
   return {
     ...(children !== undefined ? { children } : {}),
     ...(opts?.fallback !== undefined ? { fallback: opts.fallback } : {}),
     meta: opts?.meta ?? {},
-  } as Omit<Node, "children"> & { readonly children: C }
+  } as Omit<Node, "children" | "fallback"> & { readonly children: C } & (F extends undefined ? object : { readonly fallback: F })
 }
 
 /** Duck-type check for the `{ name, subtree }` fallback shape. */

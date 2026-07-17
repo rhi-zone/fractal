@@ -17,7 +17,7 @@ import {
   makeRouterFromRoute,
   naiveTransform,
 } from "./route.ts"
-import type { Pipeline, Validator, ValidatorMap } from "./route.ts"
+import type { HttpRoute, Pipeline, Validator, ValidatorMap } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 
 // ============================================================================
@@ -43,7 +43,10 @@ describe("naiveTransform", () => {
             create: op(create),
           }),
       })
-    const route = naiveTransform(api)
+    // Widened to the erased HttpRoute here — this assertion is exercising the
+    // branch-node shape generically (no methods key at all, at any depth),
+    // not the type-preservation naiveTransform now offers for leaves.
+    const route: HttpRoute = naiveTransform(api)
     expect(route.methods).toBeUndefined()
     expect(route.children?.users).toBeDefined()
     expect(route.children?.users?.children?.list?.methods?.POST?.handler).toBe(list)
