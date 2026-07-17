@@ -49,6 +49,61 @@ These are starting context for a future session, not a task list. Each points at
 the design docs for detail rather than restating them; verify each is still live
 before acting.
 
+### New threads from the 2026-07-17 validation/decode session (not yet built)
+
+- **TypeBox AOT validator codegen** — the chain is almost fully wired but not
+  yet assembled into a build step: TS types + JSDoc → `packages/codegen`'s
+  extractor produces a `TypeRef` → `packages/type-ir`'s `toTypeBox()`
+  projects it to a TypeBox schema → `TypeCompiler.Code()` compiles that to a
+  standalone JS validator function (zero runtime TypeBox dependency). JSDoc
+  constraint tags (`@minimum`, `@maximum`, `@pattern`, etc.) are read from
+  type declarations, not AST nodes. What's missing: the build-step
+  orchestration of this chain, and wiring its generated-file output through
+  `createApplyValidation` (see `packages/http/src/route.ts`, commit
+  ad8b921) so the generated validators actually populate
+  `Pipeline.validate`. A pass-through stub should be generated at project
+  setup so dev-time behavior is sane before codegen has run.
+- **Meta typing pattern** — settled design, not yet implemented: `packages/core`
+  defines `interface Meta { tags?: Tags }`. Each protocol package (http, mcp,
+  ...) exports its own meta type (e.g. `HttpMeta`) rather than mutating core's
+  `Meta`. The consuming project does declaration merging:
+  `declare module '@rhi-zone/fractal-core' { interface Meta extends HttpMeta,
+  McpMeta {} }`. No package touches another package's or core's types
+  directly.
+- **Other projection packages still on the old Node-walking pattern** —
+  `openapi`, `mcp`, `cli`, and `client` all still directly walk the raw
+  `Node` tree rather than going through a `Node ⇒ ProtocolType` projection +
+  rewriter pipeline the way `packages/http/src/route.ts` and
+  `packages/type-ir` now do. `type-ir` is the reference implementation of the
+  correct pattern. Migrating the other four is unstarted.
+- **Projection pipeline generics don't reach HTTP's route projection** —
+  commit ff7c579 made `op()`/`api()` generic so handler types survive tree
+  construction, but `naiveTransform`, `applyMethods`, and `applyMoveTo` in
+  `packages/http/src/route.ts` still operate on the erased `Node` type. This
+  is the follow-up the ff7c579 commit message flags explicitly.
+- **Routing performance is unaddressed but not urgent** — current HTTP
+  dispatch is a tree walk. Prior art: radix trees are the standard approach
+  (dispatch cost scales with path length, not route count); Hono uses a
+  multi-strategy dispatcher (compiled regex for static routes, a trie for
+  dynamic ones). Below roughly 100 routes the architecture choice barely
+  matters in practice. One option worth keeping in mind: since fractal
+  already has a codegen step, static paths could in principle be compiled at
+  build time rather than walked at request time. Matters more as route count
+  grows; not a current blocker.
+- **DX helper composition mechanism is undesigned** — the directive *data
+  model* is settled (an array of kind-tagged DU objects on `meta.http`), and
+  individual helpers exist (`http.get()` sets only the method directive, with
+  no implicit `moveTo`; `http.moveTo("..")` adds a `moveTo` directive) — but
+  how these helpers compose together to build up a directive array (e.g.
+  chaining vs. spreading vs. some builder) hasn't been designed. This is
+  separate from, and downstream of, the settled data model.
+- **Input transform escape hatch not yet on the pipeline type** — designed
+  but not implemented: an optional `transform: (bag: Record<string, unknown>)
+  => Record<string, unknown>` step in the decode pipeline (`packages/http/src/decode.ts`
+  / `route.ts`'s `Pipeline.sources`) for requests whose input layout doesn't
+  match the store conventions — e.g. a payload nested inside a single body
+  field rather than spread across top-level keys.
+
 ### Design model is captured and authoritative in `docs/design/invariants.md`
 
 The settled model was mined from the design conversation (with the original
@@ -267,12 +322,15 @@ Ordered roughly easiest → hardest to decide:
    the date-versioning example; are there others?)
 6. **Decorator / metadata layer** — is there a need for a decorator-like
    pattern for cross-cutting metadata (auth, rate-limit, caching)?
-7. **Per-param HTTP location** — where does each handler parameter come from
-   (path, query, body, header)? Currently implicit; should it be explicit?
-   Reframed (2026-07-14–16 session): this is understood as metadata
-   conventions on the type IR / routing metadata, not a separate mechanism.
-   Still open, but now scoped as an instance of the type-IR-metadata question
-   rather than an HTTP-specific one.
+7. ~~**Per-param HTTP location**~~ — largely built (2026-07-17, commit
+   cc10c04): `packages/http/src/decode.ts` makes this explicit via named
+   stores (`path`/`query`/`header`/`body`) plus a `primaryStoreForMethod`
+   convention and a per-param `sourceMap` override on `Pipeline.sources`, so
+   a param's source is either convention-derived or explicitly declared, not
+   silently implicit. Still open: this is HTTP-specific, not yet generalized
+   as a type-IR-level metadata convention the way the 2026-07-14–16 reframing
+   anticipated, and CLI has no equivalent (params/env sourcing for CLI is
+   still undesigned).
 8. ~~**Node disambiguation**~~ — reframed: the API tree is keyed by operation
    name (unique by construction). Path-level disambiguation (wildcard vs
    keyed dispatch) only arises in the HTTP route tree, which is a projection.
@@ -286,10 +344,13 @@ Ordered roughly easiest → hardest to decide:
 10. ~~**"Is it too general?"**~~ — dissolved by the identity settlement. The
     scope is bounded by "what your codebase's skeleton needs to express." See
     invariants.md § Identity.
-11. **Constructor sugar / DX** — direction settled: `api(children, opts?)`
-    as the primary constructor, `http.*` meta bundles, `crud()` convention
-    helper, `httpProjection()` pre-composed preset, `HttpMethods` extensible
-    interface. Implementation pending. See
+11. ~~**Constructor sugar / DX**~~ — built (2026-07-17): `api(children, opts?)`
+    is now the single constructor (`node()` retired, commit ebc0064);
+    `http.*` method directives, `crud()`, `httpProjection()` preset landed
+    earlier (commit eee3c66). `op()`/`api()` are now generic and preserve
+    handler types through tree construction instead of erasing to `Handler`
+    (commit ff7c579) — though downstream `route.ts` projections still
+    operate on the erased `Node` type (open thread below). See
     `docs/design/routing-and-transforms.md` § DX.
 
 ---
@@ -376,6 +437,27 @@ open. They're separate from the structural routing model settled in
 `docs/design/routing-and-transforms.md` — that doc covers tree structure and
 transforms only, not input binding.
 
+**Further update (2026-07-17, later)**: HTTP input extraction is now built,
+not just designed. `packages/http/src/decode.ts` (commit cc10c04) introduces
+a stores-based model — a request is exposed as uniform named key-value stores
+(`path`, `query`, `header`, `body`); `httpStores()` builds them, and
+`assemble()` reads each declared param from the right store by convention
+(`primaryStoreForMethod`: GET/HEAD/DELETE → query, POST/PUT/PATCH → body)
+with per-param source overrides. `Pipeline.sources` (`route.ts`) wires this
+in; an explicit `decode` function still wins when set (full override,
+backward compatible with the old `defaultDecode`/`bulkCollect` behavior).
+Validation is also built: `Pipeline.validate` is an array of
+`(input) => Result<unknown, unknown>` validators, run sequentially after
+`inputTransforms` and before the handler — first `Err` short-circuits with a
+400, node-level and method-level validators concatenate (commits 8bf72e2,
+ad8b921). `createApplyValidation(validators)` is a rewriter that injects
+codegen-generated validators into the route tree by key + path, with
+duplicate-key detection and pass-through when a path has no matching
+generated validator (the pre-codegen stub case) — see open thread below on
+wiring the actual TypeBox codegen output through this. Still open: CLI-side
+input sources (params, env) and the general "input transform escape hatch"
+for non-conventional payload shapes (open thread below).
+
 ### Output formatting
 
 How to turn `U` into a protocol response. Currently hardcoded: JSON + 200 OK.
@@ -432,6 +514,19 @@ callers), and HTTP's `buildRoutes`/`makeRouter(routes)`/`Route[]` were replaced
 by direct tree-walk dispatch at request time (`candidatesForUrl` +
 `makeRouter(node)`, O(depth)). There is now a single dispatch mechanism, not
 two.
+
+**Superseded (2026-07-17, commit 18c5195)**: that single mechanism
+(`candidatesForUrl`/`makeRouterForNode`/`collectCandidates`/`findLegacyPath`/
+`MatchCondition`) was itself retired in favor of the `HttpRoute` pipeline —
+`makeRouter` in `packages/http/src/project.ts` now only accepts an
+`HttpRoute` (built via `naiveTransform` → `applyMethods`/`applyMoveTo`/
+`applyResponse` → `makeRouterFromRoute`, see `packages/http/src/route.ts`).
+`autoMethodLayer` and `createFetch` migrated to the same pipeline.
+`verbFromTags` was extracted out of `project.ts` into the HTTP-specific
+`packages/http/src/tags.ts` in the same commit (it's not a core concern);
+`project.ts`, `openapi`, and `client` re-import it from there without
+changing their import paths. There is still a single dispatch mechanism —
+this is a further consolidation, not a new fork.
 
 ---
 
