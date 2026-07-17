@@ -2,9 +2,13 @@
 export type {
   McpAnnotations,
   McpMeta,
+  McpPrompt,
+  McpPromptArgument,
   McpResource,
   McpResourceTemplate,
   McpTool,
+  ProjectPromptsOptions,
+  ProjectPromptsResult,
   ProjectResourcesOptions,
   ProjectResourcesResult,
   ProjectToolsResult,
@@ -13,6 +17,8 @@ export type {
   ToolSchema,
   ToToolsOptions,
 } from "./project.ts"
-export { getMcpMeta, projectResources, projectTools, toTools } from "./project.ts"
+export { getMcpMeta, projectPrompts, projectResources, projectTools, toTools } from "./project.ts"
 export type { CreateMcpServerOptions, ValidationResult } from "./server.ts"
 export { createMcpServer, validateAgainstSchema } from "./server.ts"
+export type { CreateHttpMcpServerOptions, CreateStdioMcpServerOptions } from "./presets.ts"
+export { createHttpMcpServer, createStdioMcpServer } from "./presets.ts"

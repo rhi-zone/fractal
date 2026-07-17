@@ -137,9 +137,8 @@ export type McpMeta = {
   readonly annotations?: McpAnnotations
   /**
    * Leaf discriminator: "tool" (default, omitted = "tool") | "resource" | "prompt".
-   * Only "tool" and "resource" are projected today — see project.ts's two
-   * walks (`projectTools`, `projectResources`), each skipping leaves not
-   * tagged for its own surface.
+   * See project.ts's three walks (`projectTools`, `projectResources`,
+   * `projectPrompts`), each skipping leaves not tagged for its own surface.
    */
   readonly as?: "tool" | "resource" | "prompt"
   /** Full resource URI override (derived-from-tree-position URI ignored when set). */
@@ -461,4 +460,145 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
 
   const { resources, resourceTemplates } = walk(n, [], false)
   return { resources, resourceTemplates, handlers, templateHandlers }
+}
+
+// ============================================================================
+// Prompt projection
+// ============================================================================
+//
+// A leaf tagged `meta.mcp.as: "prompt"` is projected as an MCP Prompt instead
+// of a tool or resource. Name construction mirrors `projectTools` exactly
+// (underscore-joined tree position, `meta.mcp.name` override) — prompts are
+// identified by name, not URI, same as tools. `arguments` is derived from the
+// SAME `SchemaMap` `projectTools` consumes: each JSON-Schema `properties`
+// entry becomes one `PromptArgument`, `required` mirroring the schema's own
+// `required` array. No hint/annotation derivation here — MCP prompts carry no
+// ToolAnnotations-equivalent.
+
+/** One argument an MCP prompt accepts. */
+export type McpPromptArgument = {
+  readonly name: string
+  readonly description?: string
+  readonly required?: boolean
+}
+
+/** An MCP prompt descriptor — one per leaf tagged `meta.mcp.as: "prompt"`. */
+export type McpPrompt = {
+  readonly name: string
+  readonly description: string
+  readonly arguments?: McpPromptArgument[]
+}
+
+/** Options for `projectPrompts`. */
+export type ProjectPromptsOptions = {
+  /** Prompt-name → derived input schema + JSDoc description (from codegen). Same shape `projectTools` consumes. */
+  readonly schemas?: SchemaMap
+}
+
+/** `projectPrompts`'s full result: the flat descriptor array plus a name→handler map for dispatch. */
+export type ProjectPromptsResult = {
+  readonly prompts: McpPrompt[]
+  readonly handlers: ReadonlyMap<string, Handler>
+}
+
+/**
+ * Derive MCP `PromptArgument[]` from a JSON-Schema `inputSchema`'s
+ * `properties`/`required` — one argument per property, `required` mirroring
+ * the schema's own `required` array. Returns `undefined` when the schema has
+ * no `properties` (e.g. the `{ type: "object" }` placeholder, or no schema
+ * supplied at all).
+ */
+function argumentsFromSchema(schema: Record<string, unknown> | undefined): McpPromptArgument[] | undefined {
+  const properties = schema?.properties as Record<string, Record<string, unknown>> | undefined
+  if (properties === undefined || typeof properties !== "object") return undefined
+
+  const required = Array.isArray(schema?.required) ? (schema.required as unknown[]) : []
+
+  const args = Object.entries(properties).map(([name, propSchema]) => {
+    const description = typeof propSchema.description === "string" ? propSchema.description : undefined
+    return {
+      name,
+      ...(description !== undefined ? { description } : {}),
+      ...(required.includes(name) ? { required: true } : {}),
+    }
+  })
+
+  return args.length > 0 ? args : undefined
+}
+
+/**
+ * Walk a Node tree and produce a flat array of MCP prompt descriptors, plus
+ * the name→handler map used to dispatch `prompts/get` calls (server.ts).
+ * Name construction (tree-position namespacing, underscore-joined) mirrors
+ * `projectTools` exactly — see that function's doc for the full scheme.
+ *
+ * Per-projection overrides via meta.mcp (open bag):
+ *   name        — override full prompt name (prefix ignored when set)
+ *   description — override description text
+ *
+ * @param n     - The root node to walk.
+ * @param opts  - Optional derived `schemas` map (same shape `projectTools` consumes).
+ */
+export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): ProjectPromptsResult {
+  const schemas = opts.schemas ?? {}
+  const handlers = new Map<string, Handler>()
+
+  const walk = (n: Node, prefix: string): McpPrompt[] => {
+    const out: McpPrompt[] = []
+
+    for (const [key, child] of Object.entries(n.children ?? {})) {
+      if (isLeaf(child)) {
+        const mcp = getMcpMeta(child.meta)
+
+        // Only leaves explicitly tagged for the prompt surface are projected here.
+        if (mcp.as !== "prompt") continue
+
+        // Name: meta.mcp.name wins; else underscore-join prefix + leaf key (same as projectTools).
+        const name =
+          typeof mcp.name === "string"
+            ? mcp.name
+            : prefix.length > 0
+              ? `${prefix}_${key}`
+              : key
+
+        const derived = schemas[name]
+
+        // Description: meta.mcp.description > meta.description > JSDoc-derived
+        // (from codegen) > leaf key.
+        const description =
+          typeof mcp.description === "string"
+            ? mcp.description
+            : typeof child.meta.description === "string"
+              ? child.meta.description
+              : typeof derived?.description === "string"
+                ? derived.description
+                : key
+
+        const args = argumentsFromSchema(derived?.inputSchema)
+
+        out.push({
+          name,
+          description,
+          ...(args !== undefined ? { arguments: args } : {}),
+        })
+        handlers.set(name, child.handler as Handler)
+      } else {
+        // ── Branch child ────────────────────────────────────────────────────
+        const childMcp = getMcpMeta(child.meta)
+        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
+        const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg
+        out.push(...walk(child, seg))
+      }
+    }
+
+    if (n.fallback !== undefined) {
+      const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
+      out.push(...walk(n.fallback.subtree, seg))
+    }
+
+    return out
+  }
+
+  const prompts = walk(n, "")
+  return { prompts, handlers }
 }

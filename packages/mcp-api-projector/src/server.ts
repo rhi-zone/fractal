@@ -13,18 +13,22 @@
 // contains any leaf tagged `meta.mcp.as: "resource"`, it additionally
 // registers `resources/list`, `resources/templates/list`, and
 // `resources/read` (and advertises the `resources` capability — see
-// `hasResources` below). Everything else (initialize handshake, transport
+// `hasResources` below); when the tree contains any leaf tagged
+// `meta.mcp.as: "prompt"`, it additionally registers `prompts/list` and
+// `prompts/get` (and advertises the `prompts` capability — see
+// `hasPrompts` below). Everything else (initialize handshake, transport
 // framing, protocol version negotiation) is left to the SDK.
 //
-// Handler resolution: `projectTools`/`projectResources` each walk the tree
-// ONCE and return both their flat descriptor array and a dispatch table
-// built during that same walk (project.ts's `ProjectToolsResult` /
-// `ProjectResourcesResult`) — no second tree walk per call, and no risk of
-// the name/URI-construction logic drifting between the list and the
-// dispatch table. Fixed resources dispatch by an exact `uri` map lookup;
-// resource templates (URIs with `{var}` placeholders, from fallback nodes)
-// dispatch by trying each compiled `RegExp` in turn and binding captured
-// segments to named handler input fields.
+// Handler resolution: `projectTools`/`projectResources`/`projectPrompts`
+// each walk the tree ONCE and return both their flat descriptor array and a
+// dispatch table built during that same walk (project.ts's
+// `ProjectToolsResult` / `ProjectResourcesResult` / `ProjectPromptsResult`)
+// — no second tree walk per call, and no risk of the name/URI-construction
+// logic drifting between the list and the dispatch table. Fixed resources
+// dispatch by an exact `uri` map lookup; resource templates (URIs with
+// `{var}` placeholders, from fallback nodes) dispatch by trying each
+// compiled `RegExp` in turn and binding captured segments to named handler
+// input fields. Prompts dispatch by an exact `name` map lookup, same as tools.
 //
 // Transport-agnostic by design: `createMcpServer` returns the `Server`
 // instance unconnected. The caller picks a transport
@@ -41,6 +45,8 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import {
   CallToolRequestSchema,
   ErrorCode,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
@@ -49,13 +55,14 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import type {
   CallToolResult,
+  GetPromptResult,
   Implementation,
   ReadResourceResult,
   ServerCapabilities,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import { projectResources, projectTools } from "./project.ts"
-import type { ProjectResourcesOptions, SchemaMap } from "./project.ts"
+import { projectPrompts, projectResources, projectTools } from "./project.ts"
+import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "./project.ts"
 
 // ============================================================================
 // Minimal JSON Schema validation (required + property types only)
@@ -160,10 +167,14 @@ export type CreateMcpServerOptions = {
   readonly schemas?: SchemaMap
   /** URI scheme for derived resource URIs (see `projectResources`). Forwarded as-is. */
   readonly resources?: ProjectResourcesOptions
+  /** Prompt projection options (see `projectPrompts`). Forwarded as-is. */
+  readonly prompts?: ProjectPromptsOptions
   /**
    * Additional capabilities to advertise beyond `{ tools: {} }` (always
-   * included — this preset always registers tool handlers) and `{ resources: {} }`
-   * (added automatically when the tree contains any resource leaves).
+   * included — this preset always registers tool handlers), `{ resources: {} }`
+   * (added automatically when the tree contains any resource leaves), and
+   * `{ prompts: {} }` (added automatically when the tree contains any prompt
+   * leaves).
    */
   readonly capabilities?: ServerCapabilities
 }
@@ -196,6 +207,9 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
   } = projectResources(tree, opts.resources ?? {})
   const hasResources = resources.length > 0 || resourceTemplates.length > 0
 
+  const { prompts, handlers: promptHandlers } = projectPrompts(tree, opts.prompts ?? {})
+  const hasPrompts = prompts.length > 0
+
   const implementation: Implementation = {
     name: opts.name,
     version: opts.version,
@@ -208,6 +222,7 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       ...opts.capabilities,
       tools: { ...opts.capabilities?.tools },
       ...(hasResources ? { resources: { ...opts.capabilities?.resources } } : {}),
+      ...(hasPrompts ? { prompts: { ...opts.capabilities?.prompts } } : {}),
     },
   })
 
@@ -282,6 +297,36 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       }
 
       throw new McpError(ErrorCode.InvalidParams, `Resource not found: ${uri}`)
+    })
+  }
+
+  if (hasPrompts) {
+    server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }))
+
+    server.setRequestHandler(GetPromptRequestSchema, async (request): Promise<GetPromptResult> => {
+      const { name, arguments: args } = request.params
+      const handler = promptHandlers.get(name)
+
+      if (handler === undefined) {
+        throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
+      }
+
+      const result = await handler(args ?? {})
+
+      // A handler may already return a well-formed GetPromptResult (has a
+      // `messages` array) — pass it through as-is. Otherwise wrap the plain
+      // return value as a single assistant text message.
+      if (
+        typeof result === "object" &&
+        result !== null &&
+        Array.isArray((result as { messages?: unknown }).messages)
+      ) {
+        return result as GetPromptResult
+      }
+
+      return {
+        messages: [{ role: "assistant", content: { type: "text", text: JSON.stringify(result) } }],
+      }
     })
   }
 

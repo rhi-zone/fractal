@@ -213,6 +213,105 @@ describe("createMcpServer — resource capability advertisement", () => {
   })
 })
 
+// ============================================================================
+// 6. Prompt projection — prompts/list, prompts/get
+// ============================================================================
+
+const promptTree = api_({
+  summarize: op((input: { text: string }) => `summary of: ${input.text}`, {
+    mcp: { as: "prompt" },
+  }),
+  docs: api_({
+    critique: op((input: { text: string }) => ({
+      messages: [{ role: "user", content: { type: "text", text: `critique this: ${input.text}` } }],
+    }), {
+      mcp: { as: "prompt" },
+    }),
+  }),
+})
+
+const promptSchemas = {
+  summarize: {
+    inputSchema: {
+      type: "object",
+      properties: { text: { type: "string", description: "the text to summarize" } },
+      required: ["text"],
+    },
+  },
+}
+
+async function connectedPromptClient() {
+  const server = createMcpServer(promptTree, {
+    name: "prompt-test-server",
+    version: "1.0.0",
+    prompts: { schemas: promptSchemas },
+  })
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: "test-client", version: "1.0.0" })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  return { server, client }
+}
+
+describe("createMcpServer — prompts/list", () => {
+  it("lists prompts derived from the Node tree", async () => {
+    const { client } = await connectedPromptClient()
+    const { prompts } = await client.listPrompts()
+
+    expect(prompts).toHaveLength(2)
+    const names = prompts.map((p) => p.name).sort()
+    expect(names).toEqual(["docs_critique", "summarize"])
+  })
+
+  it("derives arguments from the schema map", async () => {
+    const { client } = await connectedPromptClient()
+    const { prompts } = await client.listPrompts()
+
+    const summarize = prompts.find((p) => p.name === "summarize")!
+    expect(summarize.arguments).toEqual([
+      { name: "text", description: "the text to summarize", required: true },
+    ])
+  })
+})
+
+describe("createMcpServer — prompts/get", () => {
+  it("dispatches to the resolved handler and wraps a plain return value as a text message", async () => {
+    const { client } = await connectedPromptClient()
+    const result = await client.getPrompt({ name: "summarize", arguments: { text: "hello" } })
+
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]!.role).toBe("assistant")
+    expect(result.messages[0]!.content).toEqual({
+      type: "text",
+      text: JSON.stringify("summary of: hello"),
+    })
+  })
+
+  it("passes through a handler-returned GetPromptResult shape as-is", async () => {
+    const { client } = await connectedPromptClient()
+    const result = await client.getPrompt({ name: "docs_critique", arguments: { text: "hello" } })
+
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]!.role).toBe("user")
+    expect(result.messages[0]!.content).toEqual({ type: "text", text: "critique this: hello" })
+  })
+
+  it("an unknown prompt name rejects with an error", async () => {
+    const { client } = await connectedPromptClient()
+    await expect(client.getPrompt({ name: "does_not_exist", arguments: {} })).rejects.toThrow()
+  })
+})
+
+describe("createMcpServer — prompt capability advertisement", () => {
+  it("does not advertise prompts capability when the tree has no prompt leaves", async () => {
+    const server = createMcpServer(tree, { name: "no-prompts-server", version: "1.0.0" })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    await expect(client.listPrompts()).rejects.toThrow()
+  })
+})
+
 describe("createMcpServer — input validation", () => {
   it("valid input passes through to the handler", async () => {
     const { client } = await connectedValidatedClient()

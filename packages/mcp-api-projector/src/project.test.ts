@@ -3,7 +3,7 @@
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { verbFromTags } from "@rhi-zone/fractal-http-api-projector/project"
-import { projectResources, toTools } from "./project.ts"
+import { projectPrompts, projectResources, toTools } from "./project.ts"
 
 // ============================================================================
 // 1. Cross-surface payoff: one meta.tags → MCP annotations + HTTP verb
@@ -396,5 +396,143 @@ describe("resource description resolution", () => {
       })
     const { resources } = projectResources(n)
     expect(resources[0]!.description).toBe("app configuration")
+  })
+})
+
+// ============================================================================
+// 9. Prompt projection — meta.mcp.as: "prompt"
+// ============================================================================
+
+describe("meta.mcp.as: \"prompt\" projects a prompt, not a tool", () => {
+  it("a leaf tagged as: \"prompt\" is excluded from toTools", () => {
+    const n = api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) })
+    expect(toTools(n)).toHaveLength(0)
+  })
+
+  it("a leaf tagged as: \"prompt\" is excluded from projectResources", () => {
+    const n = api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) })
+    const { resources } = projectResources(n)
+    expect(resources).toHaveLength(0)
+  })
+
+  it("the same leaf appears in projectPrompts' prompts array", () => {
+    const n = api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) })
+    const { prompts } = projectPrompts(n)
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]!.name).toBe("summarize")
+  })
+
+  it("default behavior (no `as`) still produces a tool, not a prompt", () => {
+    const n = api_({ create: op((_: unknown) => ({})) })
+    expect(toTools(n)).toHaveLength(1)
+    const { prompts } = projectPrompts(n)
+    expect(prompts).toHaveLength(0)
+  })
+})
+
+describe("prompt name derivation from tree position", () => {
+  it("root-level leaf name is just the leaf key", () => {
+    const n = api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) })
+    const { prompts } = projectPrompts(n)
+    expect(prompts[0]!.name).toBe("summarize")
+  })
+
+  it("nested leaf name is underscore-joined: parent_key", () => {
+    const api = api_({
+        docs: api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) }),
+      })
+    const { prompts } = projectPrompts(api)
+    expect(prompts[0]!.name).toBe("docs_summarize")
+  })
+
+  it("fallback contributes its name to the prompt name prefix", () => {
+    const api = api_({
+        docs: api_({}, { fallback: {
+            name: "docId",
+            subtree: api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) }),
+          } }),
+      })
+    const { prompts } = projectPrompts(api)
+    expect(prompts[0]!.name).toBe("docs_docId_summarize")
+  })
+
+  it("meta.mcp.name overrides the inferred name", () => {
+    const n = api_({
+        summarize: op((_: unknown) => ({}), { mcp: { as: "prompt", name: "doc_summary" } }),
+      })
+    const { prompts } = projectPrompts(n)
+    expect(prompts[0]!.name).toBe("doc_summary")
+  })
+})
+
+describe("prompt description resolution", () => {
+  it("meta.mcp.description overrides meta.description and the leaf key", () => {
+    const n = api_({
+        summarize: op((_: unknown) => ({}), {
+          description: "agnostic description",
+          mcp: { as: "prompt", description: "MCP-specific description" },
+        }),
+      })
+    const { prompts } = projectPrompts(n)
+    expect(prompts[0]!.description).toBe("MCP-specific description")
+  })
+
+  it("meta.description is used when meta.mcp.description is absent", () => {
+    const n = api_({
+        summarize: op((_: unknown) => ({}), {
+          description: "summarizes a document",
+          mcp: { as: "prompt" },
+        }),
+      })
+    const { prompts } = projectPrompts(n)
+    expect(prompts[0]!.description).toBe("summarizes a document")
+  })
+
+  it("falls back to the leaf key when no description is available anywhere", () => {
+    const n = api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) })
+    const { prompts } = projectPrompts(n)
+    expect(prompts[0]!.description).toBe("summarize")
+  })
+})
+
+describe("prompt arguments derived from schema", () => {
+  it("no schema supplied → no arguments array", () => {
+    const n = api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) })
+    const { prompts } = projectPrompts(n)
+    expect(prompts[0]!.arguments).toBeUndefined()
+  })
+
+  it("a derived inputSchema's properties become PromptArgument entries", () => {
+    const n = api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) })
+    const { prompts } = projectPrompts(n, {
+      schemas: {
+        summarize: {
+          inputSchema: {
+            type: "object",
+            properties: {
+              text: { type: "string", description: "the text to summarize" },
+              length: { type: "number" },
+            },
+            required: ["text"],
+          },
+        },
+      },
+    })
+    const args = prompts[0]!.arguments!
+    expect(args).toHaveLength(2)
+    const text = args.find((a) => a.name === "text")!
+    expect(text.description).toBe("the text to summarize")
+    expect(text.required).toBe(true)
+    const length = args.find((a) => a.name === "length")!
+    expect(length.required).toBeUndefined()
+    expect(length.description).toBeUndefined()
+  })
+
+  it("the MCP spec minimum schema ({ type: 'object' }, no properties) yields no arguments", () => {
+    const n = api_({ summarize: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) })
+    const { prompts } = projectPrompts(n, {
+      schemas: { summarize: { inputSchema: { type: "object" } } },
+    })
+    expect(prompts[0]!.arguments).toBeUndefined()
   })
 })
