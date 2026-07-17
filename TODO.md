@@ -32,34 +32,53 @@ Pick up from:
 
 ## MCP protocol gaps (mcp-api-projector) — OPEN (2026-07-18)
 
-`createMcpServer` (`packages/mcp-api-projector/src/server.ts`) now validates
-`tools/call` arguments against the tool's `inputSchema` before invoking the
-handler (`validateAgainstSchema` — checks `required` and `properties[key].type`
-only, not a full JSON Schema validator; returns `isError: true` with a
-descriptive message on a missing required field or a type mismatch). That
-closes the "unvalidated input reaches handlers" gap, but the projector is
-still tools-only relative to the full MCP spec. Known gaps, not yet started:
+Input validation — DONE (2026-07-18). `createMcpServer`
+(`packages/mcp-api-projector/src/server.ts`) validates `tools/call` arguments
+against each tool's `inputSchema` before invoking the handler
+(`validateAgainstSchema` — checks `required` and `properties[key].type` only,
+not a full JSON Schema validator; returns `isError: true` with a descriptive
+message on a missing required field or a type mismatch). This closes the
+"unvalidated input reaches handlers" gap.
 
-- **Resources** (`resources/list`, `resources/read`, `resources/subscribe`)
-  — not implemented. No `Node` concept currently maps to an MCP resource.
-- **Prompts** (`prompts/list`, `prompts/get`) — not implemented.
-- **Rich content types** — tool results are always `{ type: "text", text:
-  JSON.stringify(result) }` (`server.ts`'s `CallToolRequestSchema` handler).
-  No `image`, `audio`, or `embedded resource` content types.
-- **Streaming / progress notifications** — not implemented. No support for
-  `notifications/progress` during a long-running tool call.
-- **Logging** — not implemented. No `notifications/message` / log-level
-  negotiation.
-- **Transport presets** — not implemented. `createMcpServer` returns an
-  unconnected `Server`; the caller wires `StdioServerTransport`,
-  `SSEServerTransport`, `StreamableHTTPServerTransport`, etc. themselves.
-  No `createStdioMcpServer`/`createHttpMcpServer` convenience preset exists
-  (unlike `http-api-projector`'s `createFetch`, which owns its transport).
-- **Sampling, roots, notifications** (the remaining client↔server MCP
-  features beyond tools) — not implemented.
+The projector is currently tools-only; resources, prompts, and streaming are
+the next layers. Design decisions are settled; implementation roadmap follows:
 
-Tools-only is sufficient for many use cases. Resources/prompts/streaming are
-protocol features that can be added incrementally.
+### Design decisions (settled)
+
+- **Type discriminator**: `meta.mcp.as: "tool" | "resource" | "prompt"`
+  (single value, not array). Omitting defaults to `"tool"` (backward compatible).
+  `as: "tool"` is valid but redundant.
+- **Endpoint model**: Resources and prompts are endpoints (handlers), not static
+  metadata — they attach to nodes in the tree, same as tools. The projector
+  projects them into the appropriate MCP shape based on `as`.
+- **URI derivation**: Tree position maps to URI path (like tool names map to
+  underscore-joined names). Fallback nodes map to URI template variables
+  (`{variableName}`). URI scheme is configurable.
+- **Content type**: `meta.mcp.mimeType` declares resource content type.
+- **Single projection**: One leaf = one MCP primitive (no multi-projection).
+
+### Implementation roadmap
+
+**Tier 1** — Natural extensions of tree→projection:
+1. Resources (`resources/list`, `resources/read`, `resources/subscribe`) —
+   `meta.mcp.as: "resource"`, URI from tree position, fallback→URI template
+   vars, mimeType meta.
+2. Prompts (`prompts/list`, `prompts/get`) — `meta.mcp.as: "prompt"`, handler
+   returns messages.
+3. Rich content types — handler return type drives content type instead of
+   always `JSON.stringify`.
+
+**Tier 2** — Server-level features:
+4. Transport presets — `createStdioMcpServer`, `createHttpMcpServer`
+   convenience wrappers.
+5. Logging — `notifications/message` + log-level negotiation.
+6. Streaming/progress — `notifications/progress`, handler receives context
+   with `reportProgress` callback.
+
+**Tier 3** — Client↔server (speculative until concrete use case):
+7. Sampling.
+8. Roots.
+9. Subscriptions (change notifications for resources).
 
 ## Session wrap-up: DX build-out + extractor rewrite — DONE (2026-07-18)
 
