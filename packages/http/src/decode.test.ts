@@ -1,7 +1,7 @@
 // packages/http/src/decode.test.ts — stores-based input extraction tests
 
 import { describe, expect, it } from "bun:test"
-import { node, op } from "@rhi-zone/fractal-core/node"
+import { api, op } from "@rhi-zone/fractal-core/node"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 import { applyMethods, applyMoveTo, composeTransforms, httpRoute } from "./route.ts"
 import type { Pipeline } from "./route.ts"

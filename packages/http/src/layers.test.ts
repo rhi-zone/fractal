@@ -1,7 +1,7 @@
 // packages/http/src/layers.test.ts — composable layer tests
 
 import { describe, expect, it } from "bun:test"
-import { node, op } from "@rhi-zone/fractal-core/node"
+import { api as api_, op } from "@rhi-zone/fractal-core/node"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 import { applyMethods, applyMoveTo } from "./route.ts"
 import { autoMethodLayer, corsLayer } from "./layers.ts"
@@ -11,14 +11,12 @@ import { autoMethodLayer, corsLayer } from "./layers.ts"
 // ============================================================================
 
 describe("autoMethodLayer — proves droppable", () => {
-  const tree = node({
-    children: {
+  const tree = api_({
       getItem: op((_: unknown) => ({ id: 42 }), {
         tags: { readOnly: true },
         http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../item" }] },
       }),
-    },
-  })
+    })
   const api = applyMoveTo(applyMethods(toHttpRoutes(tree)))
   const coreRouter = makeRouter(api)
 
@@ -102,8 +100,7 @@ describe("autoMethodLayer — proves droppable", () => {
 })
 
 describe("autoMethodLayer — multi-verb routes", () => {
-  const tree = node({
-    children: {
+  const tree = api_({
       getItem: op((_: unknown) => ({ id: 1 }), {
         tags: { readOnly: true },
         http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../item" }] },
@@ -112,8 +109,7 @@ describe("autoMethodLayer — multi-verb routes", () => {
         tags: { idempotent: true },
         http: { directives: [{ kind: "method", value: "PUT" }, { kind: "moveTo", path: "../item" }] },
       }),
-    },
-  })
+    })
   const api = applyMoveTo(applyMethods(toHttpRoutes(tree)))
   const handler = autoMethodLayer(makeRouter(api), api)
 

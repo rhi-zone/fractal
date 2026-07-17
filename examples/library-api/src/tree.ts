@@ -13,11 +13,12 @@
 // former `param()`).
 //
 // This file is also the codegen entry-point: extractToolSchemas walks the
-// exported `api` node() call and derives input schemas for inline ops.
-// The booksNode is authored via service() (not node()), so codegen skips it —
-// its ops degrade to the MCP spec-minimum `{ type: "object" }` placeholder.
+// exported `api` value's api() call and derives input schemas for inline
+// ops. The booksNode is authored via service() (not api()), so codegen
+// skips it — its ops degrade to the MCP spec-minimum `{ type: "object" }`
+// placeholder.
 
-import { node, op, service } from "@rhi-zone/fractal-core/node"
+import { api as api_, op, service } from "@rhi-zone/fractal-core/node"
 import { http } from "@rhi-zone/fractal-http/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http/dx"
 
@@ -129,8 +130,7 @@ const removeBook = op(
  * The bundled `idempotent` tag flows to MCP (idempotentHint) for free.
  * PUT /books/{bookId}/checkout/reserve
  */
-const checkoutNode = node({
-  children: {
+const checkoutNode = api_({
     start: op(
       (input: { bookId: string }) => ({ sessionId: `checkout-${input.bookId}` }),
       http.post,
@@ -142,8 +142,7 @@ const checkoutNode = node({
       }),
       http.put,
     ),
-  },
-})
+  })
 
 /**
  * The per-book subtree: read/replace/remove co-locate onto their parent
@@ -156,15 +155,12 @@ const checkoutNode = node({
  * which still derive method-co-location from this marker rather than from
  * `moveTo` directives. Two projectors, two encodings of the same fact.
  */
-const bookItemNode = node({
-  meta: { http: { dispatch: { kind: "method" } } },
-  children: {
+const bookItemNode = api_({
     read: readBook,
     replace: replaceBook,
     remove: removeBook,
     checkout: checkoutNode,
-  },
-})
+  }, { meta: { http: { dispatch: { kind: "method" } } } })
 
 // ============================================================================
 // BooksService — service class authoring surface
@@ -194,9 +190,9 @@ class BooksService {
 // ============================================================================
 // API root
 //
-// Exported as `api` so extractToolSchemas (codegen) can walk the node() call.
-// The inline `catalog: node({...})` is found by the codegen walker; the
-// `books: service(...)` child is not a node() call and is skipped.
+// Exported as `api` so extractToolSchemas (codegen) can walk the api() call.
+// The inline `catalog: api(...)` is found by the codegen walker; the
+// `books: service(...)` child is not an api() call and is skipped.
 //
 // A header-dispatch API-versioning demo (`X-Api-Version` selecting a
 // response body at `GET /version`) previously lived here, exercising the
@@ -207,13 +203,12 @@ class BooksService {
 // question").
 // ============================================================================
 
-export const api = node({
-  children: {
+export const api = api_({
     // `service()`'s `opts.meta[name]` REPLACES that leaf's whole meta bag
     // (it isn't merged with anything else) — so the `http.get`/`http.post`
     // bundles (verb + method directives + implied tags) are spread in
     // directly here, the same composition `op(fn, http.get, extra)` would
-    // do for a `node()`-authored leaf.
+    // do for an `api()`-authored leaf.
     books: service(new BooksService(), {
       meta: {
         list: { ...http.get, description: "List all books in the library." },
@@ -223,8 +218,7 @@ export const api = node({
 
     // Each leaf carries its OWN readOnly tag — tags do not inherit from the
     // node (removed; see docs/design/router-model.md — "Tags").
-    catalog: node({
-      children: {
+    catalog: api_({
         /** Search the library catalog by title or author keyword. */
         search: op((input: { q?: string }) => {
           const q = input.q !== undefined ? input.q.toLowerCase() : undefined
@@ -242,10 +236,8 @@ export const api = node({
           const { prefix } = input
           return prefix !== undefined ? all.filter((g) => g.startsWith(prefix)) : all
         }, http.get),
-      },
-    }),
-  },
-})
+      }),
+  })
 
 // ============================================================================
 // HttpRoute projection — the pre-composed pipeline (naiveTransform +

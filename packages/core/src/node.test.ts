@@ -3,7 +3,6 @@
 import { describe, expect, it } from "bun:test"
 import {
   op,
-  node,
   service,
   api,
   isNode,
@@ -23,11 +22,11 @@ import {
 } from "./tags.ts"
 
 // ============================================================================
-// 1. Lowering equivalence: service() ≡ node() — both surfaces, one value
+// 1. Lowering equivalence: service() ≡ api() — both surfaces, one value
 // ============================================================================
 
-describe("lowering equivalence: service ≡ node", () => {
-  it("produces deep-equal Node values from service() and node()", () => {
+describe("lowering equivalence: service ≡ api", () => {
+  it("produces deep-equal Node values from service() and api()", () => {
     const handler = (input: { userId: string }) => ({ ok: true, userId: input.userId })
     const meta: Meta = { http: { verb: "POST" } }
 
@@ -40,11 +39,9 @@ describe("lowering equivalence: service ≡ node", () => {
     const fromService = service(new UserService(), { meta: { getUser: meta } })
 
     // Surface B: standalone function
-    const fromNode = node({
-      children: {
+    const fromNode = api({
         getUser: op(handler, meta),
-      },
-    })
+      })
 
     // Both lower to the same shape
     expect(fromService.children?.["getUser"] !== undefined).toBe(true)
@@ -61,7 +58,7 @@ describe("lowering equivalence: service ≡ node", () => {
 
   it("op(fn) produces a leaf node with empty meta", () => {
     const bare = (input: { n: number }) => input.n * 2
-    const n = node({ children: { double: op(bare) } })
+    const n = api({ double: op(bare) })
     const child = n.children?.["double"] as Node
     expect(child.meta).toEqual({})
     expect(child.handler!({ n: 3 })).toBe(6)
@@ -73,17 +70,17 @@ describe("lowering equivalence: service ≡ node", () => {
 // 2. fallback field — wildcard-capture subtree shape
 // ============================================================================
 
-describe("fallback field on node()", () => {
-  it("node({ fallback }) carries the fallback shape", () => {
-    const subtree = node({ children: { checkout: op((_: { invoiceId: string }) => ({})) } })
-    const invoicesNode = node({ fallback: { name: "invoiceId", subtree } })
+describe("fallback field on api()", () => {
+  it("api({}, { fallback }) carries the fallback shape", () => {
+    const subtree = api({ checkout: op((_: { invoiceId: string }) => ({})) })
+    const invoicesNode = api({}, { fallback: { name: "invoiceId", subtree } })
     expect(invoicesNode.fallback?.name).toBe("invoiceId")
     expect(invoicesNode.fallback?.subtree).toBe(subtree)
   })
 
   it("a node can carry both children and a fallback", () => {
-    const subtree = node({})
-    const n = node({ children: { list: op(() => []) }, fallback: { name: "id", subtree } })
+    const subtree = api({})
+    const n = api({ list: op(() => []) }, { fallback: { name: "id", subtree } })
     expect(n.children?.["list"]).toBeDefined()
     expect(n.fallback?.name).toBe("id")
   })
@@ -160,7 +157,7 @@ describe("open metadata", () => {
   })
 
   it("arbitrary/unknown meta keys are preserved on node", () => {
-    const n = node({ meta: { internalFlag: true, analytics: { track: "pageview" } } })
+    const n = api({}, { meta: { internalFlag: true, analytics: { track: "pageview" } } })
     expect(n.meta["internalFlag"]).toBe(true)
     expect(n.meta["analytics"]).toEqual({ track: "pageview" })
   })
@@ -221,7 +218,7 @@ describe("op surfaces", () => {
   })
 
   it("isNode / isLeaf discriminators are correct", () => {
-    const n = node({})
+    const n = api({})
     const leaf = op(() => "x")
     expect(isNode(n)).toBe(true)
     expect(isNode(leaf)).toBe(true)   // a leaf IS a node (has meta)
@@ -240,11 +237,8 @@ describe("mapNodes", () => {
   it("visits every node pre-order via children and fallback.subtree", async () => {
     const { mapNodes } = await import("./tags.ts")
     const leaf = op(() => "x")
-    const subtree = node({ children: { get: leaf } })
-    const tree = node({
-      children: { list: op(() => []) },
-      fallback: { name: "id", subtree },
-    })
+    const subtree = api({ get: leaf })
+    const tree = api({ list: op(() => []) }, { fallback: { name: "id", subtree } })
 
     const visited: unknown[] = []
     mapNodes(tree, (n) => {
@@ -259,12 +253,10 @@ describe("mapNodes", () => {
 
   it("a transform can tag every leaf node without mutating the original tree", async () => {
     const { mapNodes } = await import("./tags.ts")
-    const tree = node({
-      children: {
+    const tree = api({
         list: op(() => []),
-        detail: node({ children: { read: op(() => ({})) } }),
-      },
-    })
+        detail: api({ read: op(() => ({})) }),
+      })
 
     const tagged = mapNodes(tree, (n) =>
       isLeaf(n) ? { ...n, meta: { ...n.meta, tags: { readOnly: true } } } : n,
@@ -321,21 +313,21 @@ describe("mergeMeta", () => {
 })
 
 // ============================================================================
-// 8. api() — DX sugar over node({ children, ...opts })
+// 8. api() — the branch-node constructor
 // ============================================================================
 
 describe("api()", () => {
-  it("api(children) produces the same Node as node({ children })", () => {
+  it("api(children) produces a Node whose children are exactly what was passed", () => {
     const children = { users: op(() => []) }
-    expect(api(children)).toEqual(node({ children }))
+    expect(api(children)).toEqual({ children, meta: {} })
   })
 
-  it("api(children, opts) forwards meta and fallback exactly as node({...}) would", () => {
+  it("api(children, opts) forwards meta and fallback exactly as given", () => {
     const children = { users: op(() => []) }
     const meta: Meta = { tags: { readOnly: true } }
     const fallback = { name: "id", subtree: op(() => ({})) }
     expect(api(children, { meta, fallback })).toEqual(
-      node({ children, meta, fallback }),
+      { children, meta, fallback },
     )
   })
 

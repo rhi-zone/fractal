@@ -10,8 +10,8 @@
 // Schema validators (str/num/bool/obj) are retired; use a real validation
 // library (Standard Schema compatible) from the host instead.
 
-// `api()` — the primary authoring-surface constructor (sugar over `node()`)
-// — is re-exported here so it's reachable from the package root, alongside
+// `api()` — the primary authoring-surface constructor — is re-exported
+// here so it's reachable from the package root, alongside
 // the rest of the Node/Op/Meta model which stays on "./node.ts" until the
 // two modules are merged.
 export { api, op } from "./node.ts"

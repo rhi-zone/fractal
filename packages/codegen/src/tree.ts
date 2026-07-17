@@ -11,13 +11,16 @@
 //
 // In the new node model:
 //   - Leaf nodes are authored as `op(fn, meta?)` calls stored in `children`.
-//   - Branch nodes are authored as `node({ children?, fallback?, meta? })` calls.
+//   - Branch nodes are authored as `api(children, opts?)` calls, where
+//     `children` is an object literal passed positionally (first argument)
+//     and `opts` (second argument, optional) may carry `fallback`/`meta`.
 //   - The `ops` key no longer exists in the authoring API.
 //
-// Supported structure: `node({ children, fallback })` where:
-//   - `children` values are: `op(fn, meta?)` or bare arrow → leaf (callable);
-//     `node({…})` → static branch child.
-//   - `fallback: { name: "...", subtree: node({…}) }` → wildcard-capture
+// Supported structure: `api(children, opts?)` where:
+//   - `children` (the first argument, an object literal) values are:
+//     `op(fn, meta?)` or bare arrow → leaf (callable); `api(...)` → static
+//     branch child.
+//   - `opts.fallback: { name: "...", subtree: api(...) }` → wildcard-capture
 //     subtree, namespaced by `name` (replaces the former `param(name, subtree)`).
 // meta.mcp.name / meta.mcp.segment overrides are NOT yet mirrored here.
 //   TODO(codegen): honor meta.mcp.name / meta.mcp.segment when reconstructing
@@ -63,13 +66,6 @@ const propName = (p: ts.ObjectLiteralElementLike): string | undefined => {
   return undefined
 }
 
-const objectArgOf = (
-  call: ts.CallExpression,
-): ts.ObjectLiteralExpression | undefined => {
-  const [arg] = call.arguments
-  return arg && ts.isObjectLiteralExpression(arg) ? arg : undefined
-}
-
 const calleeName = (call: ts.CallExpression): string | undefined =>
   ts.isIdentifier(call.expression) ? call.expression.text : undefined
 
@@ -77,12 +73,36 @@ const join = (prefix: string, seg: string): string =>
   prefix.length > 0 ? `${prefix}_${seg}` : seg
 
 /**
- * Walk every exported `node({…})` tree in a source file, mirroring toTools'
- * name construction, and invoke `onLeaf` for each `op(fn, meta?)` leaf found.
+ * Resolve the LOCAL identifier a source file binds `api` to when importing
+ * it from "@rhi-zone/fractal-core/node" — `import { api } from "..."` binds
+ * "api", but `import { api as api_ } from "..."` (used when the file also
+ * declares its own `const api = ...` tree) binds "api_". Falls back to
+ * "api" when no such import is found, so entry-point detection still works
+ * on the common unaliased case.
+ */
+function resolveApiLocalName(source: ts.SourceFile): string {
+  for (const stmt of source.statements) {
+    if (!ts.isImportDeclaration(stmt)) continue
+    if (!ts.isStringLiteral(stmt.moduleSpecifier)) continue
+    if (stmt.moduleSpecifier.text !== "@rhi-zone/fractal-core/node") continue
+    const namedBindings = stmt.importClause?.namedBindings
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue
+    for (const el of namedBindings.elements) {
+      const importedName = (el.propertyName ?? el.name).text
+      if (importedName === "api") return el.name.text
+    }
+  }
+  return "api"
+}
+
+/**
+ * Walk every exported `api(children, opts?)` tree in a source file, mirroring
+ * toTools' name construction, and invoke `onLeaf` for each `op(fn, meta?)`
+ * leaf found.
  *
  * In the new node model, children that are `op(...)` calls are leaf nodes;
- * children that are `node(...)` calls are static branch nodes; a sibling
- * `fallback: { name, subtree }` property is the wildcard-capture subtree.
+ * children that are `api(...)` calls are static branch nodes; a sibling
+ * `opts.fallback: { name, subtree }` property is the wildcard-capture subtree.
  */
 function walkTree(
   entryFile: string,
@@ -97,50 +117,53 @@ function walkTree(
   const checker = program.getTypeChecker()
   const source = program.getSourceFile(entryFile)
   if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
+  const apiLocalName = resolveApiLocalName(source)
 
   const walkNodeCall = (call: ts.CallExpression, prefix: string): void => {
-    const obj = objectArgOf(call)
-    if (!obj) return
+    const childrenArg = call.arguments[0]
+    if (!childrenArg || !ts.isObjectLiteralExpression(childrenArg)) return
 
-    for (const prop of obj.properties) {
-      const key = propName(prop)
-      if (!ts.isPropertyAssignment(prop) || key === undefined) continue
+    for (const childProp of childrenArg.properties) {
+      const childKey = propName(childProp)
+      if (!ts.isPropertyAssignment(childProp) || childKey === undefined) continue
+      const init = childProp.initializer
+      if (!ts.isCallExpression(init)) continue
+      const callee = calleeName(init)
 
-      if (key === "children" && ts.isObjectLiteralExpression(prop.initializer)) {
-        for (const childProp of prop.initializer.properties) {
-          const childKey = propName(childProp)
-          if (!ts.isPropertyAssignment(childProp) || childKey === undefined) continue
-          const init = childProp.initializer
-          if (!ts.isCallExpression(init)) continue
-          const callee = calleeName(init)
+      if (callee === "op") {
+        // Leaf node: op(fn, meta?) — extract input schema from fn's first arg
+        const firstArg = init.arguments[0]
+        if (firstArg === undefined) continue
+        const fn = opFunctionNode(firstArg)
+        if (!fn) continue
+        onLeaf(join(prefix, childKey), fn, childProp, checker)
+      } else {
+        // static branch child: api(...) or other constructor
+        walkNodeCall(init, join(prefix, childKey))
+      }
+    }
 
-          if (callee === "op") {
-            // Leaf node: op(fn, meta?) — extract input schema from fn's first arg
-            const firstArg = init.arguments[0]
-            if (firstArg === undefined) continue
-            const fn = opFunctionNode(firstArg)
-            if (!fn) continue
-            onLeaf(join(prefix, childKey), fn, childProp, checker)
-          } else {
-            // static branch child: node({…}) or other constructor
-            walkNodeCall(init, join(prefix, childKey))
+    const optsArg = call.arguments[1]
+    if (optsArg && ts.isObjectLiteralExpression(optsArg)) {
+      for (const prop of optsArg.properties) {
+        const key = propName(prop)
+        if (!ts.isPropertyAssignment(prop) || key === undefined) continue
+        if (key === "fallback" && ts.isObjectLiteralExpression(prop.initializer)) {
+          // fallback: { name: "...", subtree: api(...) }
+          let fallbackName: string | undefined
+          let subtreeCall: ts.CallExpression | undefined
+          for (const fbProp of prop.initializer.properties) {
+            const fbKey = propName(fbProp)
+            if (!ts.isPropertyAssignment(fbProp) || fbKey === undefined) continue
+            if (fbKey === "name" && ts.isStringLiteral(fbProp.initializer)) {
+              fallbackName = fbProp.initializer.text
+            } else if (fbKey === "subtree" && ts.isCallExpression(fbProp.initializer)) {
+              subtreeCall = fbProp.initializer
+            }
           }
-        }
-      } else if (key === "fallback" && ts.isObjectLiteralExpression(prop.initializer)) {
-        // fallback: { name: "...", subtree: node({…}) }
-        let fallbackName: string | undefined
-        let subtreeCall: ts.CallExpression | undefined
-        for (const fbProp of prop.initializer.properties) {
-          const fbKey = propName(fbProp)
-          if (!ts.isPropertyAssignment(fbProp) || fbKey === undefined) continue
-          if (fbKey === "name" && ts.isStringLiteral(fbProp.initializer)) {
-            fallbackName = fbProp.initializer.text
-          } else if (fbKey === "subtree" && ts.isCallExpression(fbProp.initializer)) {
-            subtreeCall = fbProp.initializer
+          if (fallbackName !== undefined && subtreeCall !== undefined) {
+            walkNodeCall(subtreeCall, join(prefix, fallbackName))
           }
-        }
-        if (fallbackName !== undefined && subtreeCall !== undefined) {
-          walkNodeCall(subtreeCall, join(prefix, fallbackName))
         }
       }
     }
@@ -153,7 +176,7 @@ function walkTree(
     ) {
       for (const decl of n.declarationList.declarations) {
         const init = decl.initializer
-        if (init && ts.isCallExpression(init) && calleeName(init) === "node") {
+        if (init && ts.isCallExpression(init) && calleeName(init) === apiLocalName) {
           walkNodeCall(init, "")
         }
       }
@@ -165,8 +188,8 @@ function walkTree(
 }
 
 /**
- * Extract the tool-name → schema map for every exported `node({…})` tree in a
- * source file. Mirrors toTools' name construction.
+ * Extract the tool-name → schema map for every exported `api(children, opts?)`
+ * tree in a source file. Mirrors toTools' name construction.
  */
 export function extractToolSchemas(entryFile: string): SchemaMap {
   const out: SchemaMap = {}
@@ -182,8 +205,8 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
 }
 
 /**
- * Extract the tool-name → TypeRef map for every exported `node({…})` tree in
- * a source file. Mirrors toTools' name construction. Same tree walk as
+ * Extract the tool-name → TypeRef map for every exported `api(children, opts?)`
+ * tree in a source file. Mirrors toTools' name construction. Same tree walk as
  * `extractToolSchemas`, but yields TypeRefs (pre-projection) instead of
  * JSON Schema.
  */

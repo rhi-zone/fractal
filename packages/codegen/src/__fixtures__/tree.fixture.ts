@@ -8,7 +8,7 @@
 // `op(fn, meta?)` calls. The codegen walker recognises `op(...)` children as
 // leaves and extracts their input schemas.
 
-import { node, op } from "@rhi-zone/fractal-core/node"
+import { api, op } from "@rhi-zone/fractal-core/node"
 // (a) Direct import from core's package root.
 import type { Result } from "@rhi-zone/fractal-core"
 // (b) Barrel re-export: Result re-exported through a local barrel FILE, name
@@ -22,10 +22,8 @@ import type { Result as ResultFromBarrel } from "./result-reexport.fixture.ts"
 // site maps to T.
 type ApiResult<T> = Result<T, string>
 
-export const tree = node({
-  children: {
-    users: node({
-      children: {
+export const tree = api({
+    users: api({
         /** Create a new user account. */
         create: op(
           (_input: {
@@ -35,76 +33,57 @@ export const tree = node({
             address: { street: string; zip?: string }
           }) => ({ id: "u1" }),
         ),
-      },
-      fallback: {
+      }, { fallback: {
         name: "userId",
-        subtree: node({
-          children: {
+        subtree: api({
             get: op((input: { userId: string }) => ({ userId: input.userId })),
-          },
-        }),
-      },
-    }),
+          }),
+      } }),
     // Union input → exercises the punt path.
-    search: node({
-      children: {
+    search: api({
         run: op((_input: { q: string | number }) => ({ hits: 0 })),
-      },
-    }),
+      }),
     // Promise<T> return → output schema should unwrap to T's schema.
-    async: node({
-      children: {
+    async: api({
         fetch: op(async (_input: { id: string }) => ({ value: 42 })),
-      },
-    }),
+      }),
     // (a) Direct import: Result<T,E> — syntax path extracts T by name + 2 typeArgs.
-    fallible: node({
-      children: {
+    fallible: api({
         compute: op(
           (_input: { x: number }): Result<{ answer: number }, string> =>
             ({ kind: "ok", value: { answer: _input.x } }),
         ),
-      },
-    }),
+      }),
     // (b) Barrel re-export: same "Result" name imported through a local barrel.
     // The syntax path checks the identifier name, not the origin file, so it
     // correctly extracts T from `ResultFromBarrel<{count:number}>`.
-    barrel: node({
-      children: {
+    barrel: api({
         query: op(
           (_input: { term: string }): ResultFromBarrel<{ count: number }, string> =>
             ({ kind: "ok", value: { count: 0 } }),
         ),
-      },
-    }),
+      }),
     // (c) Further-generic alias: ApiResult<T> = Result<T, string>.
     // Syntax path walks the local TypeAliasDeclaration and recognizes the pattern.
-    generic: node({
-      children: {
+    generic: api({
         search: op(
           (_input: { q: string }): ApiResult<{ items: string[] }> =>
             ({ kind: "ok", value: { items: [] } }),
         ),
-      },
-    }),
+      }),
     // Promise<Result<T,E>> → syntax path strips Promise first, then unwraps Result.
-    promiseResult: node({
-      children: {
+    promiseResult: api({
         load: op(
           async (_input: { id: string }): Promise<Result<{ name: string }, string>> =>
             ({ kind: "ok", value: { name: "Alice" } }),
         ),
-      },
-    }),
+      }),
     // Genuinely-different union that must NOT be false-positived.
     // This is a 2-member union but does NOT have the Result name or DU shape.
-    differentUnion: node({
-      children: {
+    differentUnion: api({
         ping: op(
           (_input: { x: number }): { kind: "a"; x: number } | { kind: "b"; y: string } =>
             ({ kind: "a", x: _input.x }),
         ),
-      },
-    }),
-  },
-})
+      }),
+  })

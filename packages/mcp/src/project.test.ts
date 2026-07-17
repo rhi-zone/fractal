@@ -1,7 +1,7 @@
 // packages/mcp/src/project.test.ts — MCP tool projection tests
 
 import { describe, expect, it } from "bun:test"
-import { node, op } from "@rhi-zone/fractal-core/node"
+import { api as api_, op } from "@rhi-zone/fractal-core/node"
 import { verbFromTags } from "@rhi-zone/fractal-http/project"
 import { toTools } from "./project.ts"
 
@@ -16,7 +16,7 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
   it("readOnly:true → readOnlyHint:true (MCP) + GET (HTTP)", () => {
     // Single authored node — meta.tags authored ONCE
     const leaf = op((_: unknown) => "result", { tags: { readOnly: true } })
-    const n = node({ children: { get: leaf } })
+    const n = api_({ get: leaf })
 
     // MCP surface: readOnlyHint derives from meta.tags.readOnly
     const tools = toTools(n)
@@ -29,7 +29,7 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
 
   it("destructive:true → destructiveHint:true (MCP) + non-GET verb (HTTP)", () => {
     const leaf = op((_: unknown) => null, { tags: { destructive: true } })
-    const n = node({ children: { delete: leaf } })
+    const n = api_({ delete: leaf })
 
     // MCP surface: destructiveHint derives from meta.tags.destructive
     const tools = toTools(n)
@@ -44,7 +44,7 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
     const leaf = op((_: unknown) => null, {
       tags: { idempotent: true, destructive: true },
     })
-    const n = node({ children: { remove: leaf } })
+    const n = api_({ remove: leaf })
 
     const tools = toTools(n)
     expect(tools[0]!.annotations?.idempotentHint).toBe(true)
@@ -60,17 +60,12 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
 
 describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
   it("a node-level tag does NOT flow to leaf children with no own tags", () => {
-    const api = node({
-      children: {
-        catalog: node({
-          meta: { tags: { readOnly: true } },
-          children: {
+    const api = api_({
+        catalog: api_({
             list: op((_: unknown) => []), // no own tags — does NOT inherit
             search: op((_: unknown) => []), // no own tags — does NOT inherit
-          },
-        }),
-      },
-    })
+          }, { meta: { tags: { readOnly: true } } }),
+      })
     const tools = toTools(api)
     expect(tools).toHaveLength(2)
     for (const t of tools) {
@@ -82,14 +77,9 @@ describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
     const leaf = op((_: unknown) => ({}), {
       tags: { readOnly: false, idempotent: true, destructive: true },
     })
-    const api = node({
-      children: {
-        items: node({
-          meta: { tags: { readOnly: true } }, // node-level tag — has no bearing
-          children: { delete: leaf },
-        }),
-      },
-    })
+    const api = api_({
+        items: api_({ delete: leaf }, { meta: { tags: { readOnly: true } } }),
+      })
     const tools = toTools(api)
     expect(tools[0]!.annotations?.readOnlyHint).toBe(false)
     expect(tools[0]!.annotations?.destructiveHint).toBe(true)
@@ -106,25 +96,23 @@ describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
 
 describe("unknown tags omit hints", () => {
   it("no meta.tags → no annotations object at all", () => {
-    const n = node({ children: { create: op((_: unknown) => ({})) } })
+    const n = api_({ create: op((_: unknown) => ({})) })
     const tools = toTools(n)
     expect(tools[0]!.annotations).toBeUndefined()
   })
 
   it("empty meta.tags → no annotations object", () => {
-    const n = node({ children: { create: op((_: unknown) => ({}), { tags: {} }) } })
+    const n = api_({ create: op((_: unknown) => ({}), { tags: {} }) })
     const tools = toTools(n)
     expect(tools[0]!.annotations).toBeUndefined()
   })
 
   it("tags present for some hints only — absent hints are omitted, not false", () => {
-    const n = node({
-      children: {
+    const n = api_({
         fetch: op((_: unknown) => ({}), {
           tags: { readOnly: true, openWorld: true },
         }),
-      },
-    })
+      })
     const tools = toTools(n)
     const ann = tools[0]!.annotations!
     expect(ann.readOnlyHint).toBe(true)
@@ -137,9 +125,7 @@ describe("unknown tags omit hints", () => {
   })
 
   it("idempotent explicitly unknown (undefined) with no readOnly → hint omitted", () => {
-    const n = node({
-      children: { update: op((_: unknown) => ({}), { tags: { destructive: true } }) },
-    })
+    const n = api_({ update: op((_: unknown) => ({}), { tags: { destructive: true } }) })
     const tools = toTools(n)
     const ann = tools[0]!.annotations!
     expect(ann.destructiveHint).toBe(true)
@@ -154,63 +140,44 @@ describe("unknown tags omit hints", () => {
 
 describe("name namespacing from tree position", () => {
   it("root-level leaf name is just the leaf key", () => {
-    const n = node({ children: { create: op((_: unknown) => ({})) } })
+    const n = api_({ create: op((_: unknown) => ({})) })
     const tools = toTools(n)
     expect(tools[0]!.name).toBe("create")
   })
 
   it("nested leaf name is underscore-joined: parent_key", () => {
-    const api = node({
-      children: {
-        users: node({
-          children: { list: op((_: unknown) => []) },
-        }),
-      },
-    })
+    const api = api_({
+        users: api_({ list: op((_: unknown) => []) }),
+      })
     const tools = toTools(api)
     expect(tools[0]!.name).toBe("users_list")
   })
 
   it("deeply nested leaf name: grandparent_parent_leaf", () => {
-    const api = node({
-      children: {
-        invoices: node({
-          children: {
-            items: node({
-              children: { get: op((_: unknown) => ({})) },
-            }),
-          },
-        }),
-      },
-    })
+    const api = api_({
+        invoices: api_({
+            items: api_({ get: op((_: unknown) => ({})) }),
+          }),
+      })
     const tools = toTools(api)
     expect(tools[0]!.name).toBe("invoices_items_get")
   })
 
   it("fallback contributes its name to the tool name prefix", () => {
-    const api = node({
-      children: {
-        users: node({
-          fallback: {
+    const api = api_({
+        users: api_({}, { fallback: {
             name: "userId",
-            subtree: node({ children: { profile: op((_: unknown) => ({})) } }),
-          },
-        }),
-      },
-    })
+            subtree: api_({ profile: op((_: unknown) => ({})) }),
+          } }),
+      })
     const tools = toTools(api)
     expect(tools[0]!.name).toBe("users_userId_profile")
   })
 
   it("meta.mcp.segment on a child node overrides its segment contribution", () => {
-    const api = node({
-      children: {
-        usersNode: node({
-          meta: { mcp: { segment: "users" } },
-          children: { list: op((_: unknown) => []) },
-        }),
-      },
-    })
+    const api = api_({
+        usersNode: api_({ list: op((_: unknown) => []) }, { meta: { mcp: { segment: "users" } } }),
+      })
     const tools = toTools(api)
     expect(tools[0]!.name).toBe("users_list")
   })
@@ -222,58 +189,48 @@ describe("name namespacing from tree position", () => {
 
 describe("meta.mcp per-projection overrides", () => {
   it("meta.mcp.name overrides the inferred name", () => {
-    const n = node({
-      children: {
+    const n = api_({
         list: op((_: unknown) => [], { mcp: { name: "catalog_search" } }),
-      },
-    })
+      })
     const tools = toTools(n)
     expect(tools[0]!.name).toBe("catalog_search")
   })
 
   it("meta.mcp.description overrides description", () => {
-    const n = node({
-      children: {
+    const n = api_({
         list: op((_: unknown) => [], {
           description: "agnostic description",
           mcp: { description: "MCP-specific description for model planning" },
         }),
-      },
-    })
+      })
     const tools = toTools(n)
     expect(tools[0]!.description).toBe("MCP-specific description for model planning")
   })
 
   it("meta.description is used when meta.mcp.description is absent", () => {
-    const n = node({
-      children: {
+    const n = api_({
         list: op((_: unknown) => [], { description: "lists all items" }),
-      },
-    })
+      })
     const tools = toTools(n)
     expect(tools[0]!.description).toBe("lists all items")
   })
 
   it("meta.mcp.title emits annotations.title", () => {
-    const n = node({
-      children: {
+    const n = api_({
         get: op((_: unknown) => ({}), { mcp: { title: "Get Item" } }),
-      },
-    })
+      })
     const tools = toTools(n)
     expect(tools[0]!.annotations?.title).toBe("Get Item")
   })
 
   it("meta.mcp.annotations overrides individual hint keys", () => {
-    const n = node({
-      children: {
+    const n = api_({
         // tag says readOnly, but MCP projection overrides readOnlyHint to false
         get: op((_: unknown) => ({}), {
           tags: { readOnly: true },
           mcp: { annotations: { readOnlyHint: false } },
         }),
-      },
-    })
+      })
     const tools = toTools(n)
     expect(tools[0]!.annotations?.readOnlyHint).toBe(false)
   })
@@ -285,22 +242,16 @@ describe("meta.mcp per-projection overrides", () => {
 
 describe("fallback-subtree leaves produce a tool", () => {
   it("produces a tool for a leaf inside a fallback subtree", () => {
-    const api = node({
-      children: {
-        invoices: node({
-          fallback: {
+    const api = api_({
+        invoices: api_({}, { fallback: {
             name: "invoiceId",
-            subtree: node({
-              children: {
+            subtree: api_({
                 checkout: op((_: { invoiceId: string }) => ({ url: "…" }), {
                   tags: { idempotent: true },
                 }),
-              },
-            }),
-          },
-        }),
-      },
-    })
+              }),
+          } }),
+      })
     const tools = toTools(api)
     expect(tools).toHaveLength(1)
     expect(tools[0]!.name).toBe("invoices_invoiceId_checkout")
@@ -315,12 +266,10 @@ describe("fallback-subtree leaves produce a tool", () => {
 
 describe("inputSchema placeholder", () => {
   it("every tool has inputSchema: { type: 'object' }", () => {
-    const api = node({
-      children: {
+    const api = api_({
         a: op((_: unknown) => ({})),
         b: op((_: unknown) => ({}), { tags: { readOnly: true } }),
-      },
-    })
+      })
     const tools = toTools(api)
     for (const t of tools) {
       expect(t.inputSchema).toEqual({ type: "object" })

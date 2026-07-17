@@ -11,12 +11,12 @@
 // TODO.md "Attribute dispatch is an open design question".
 
 import { describe, expect, it } from "bun:test"
-import { node, op, service } from "@rhi-zone/fractal-core/node"
+import { api, op, service } from "@rhi-zone/fractal-core/node"
 import { makeRouter, toHttpRoutes, verbFromTags } from "./project.ts"
 import { applyMethods, applyMoveTo } from "./route.ts"
 import { autoMethodLayer } from "./layers.ts"
 
-function routes(tree: ReturnType<typeof node>) {
+function routes(tree: ReturnType<typeof api>) {
   return applyMoveTo(applyMethods(toHttpRoutes(tree)))
 }
 
@@ -29,22 +29,16 @@ describe("path dispatch — tree structure determines the address", () => {
     const createCheckoutSession = (_: { invoiceId: string }) => ({
       url: "https://pay.stripe.com/…",
     })
-    const tree = node({
-      children: {
-        invoices: node({
-          fallback: {
+    const tree = api({
+        invoices: api({}, { fallback: {
             name: "invoiceId",
-            subtree: node({
-              children: {
+            subtree: api({
                 checkout: op(createCheckoutSession, {
                   http: { directives: [{ kind: "method", value: "POST" }] },
                 }),
-              },
-            }),
-          },
-        }),
-      },
-    })
+              }),
+          } }),
+      })
     const router = makeRouter(routes(tree))
     const res = await router(
       new Request("http://localhost/invoices/inv-42/checkout", { method: "POST" }),
@@ -55,54 +49,40 @@ describe("path dispatch — tree structure determines the address", () => {
   })
 
   it("uses the static child key as the segment", async () => {
-    const tree = node({
-      children: {
-        users: node({
-          children: {
+    const tree = api({
+        users: api({
             list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }),
-          },
-        }),
-      },
-    })
+          }),
+      })
     const router = makeRouter(routes(tree))
     expect((await router(new Request("http://localhost/users/list"))).status).toBe(200)
     expect((await router(new Request("http://localhost/users/other"))).status).toBe(404)
   })
 
   it("uses a `moveTo` directive to rename a leaf's path segment", async () => {
-    const tree = node({
-      children: {
-        progressNode: node({
-          children: {
+    const tree = api({
+        progressNode: api({
             awardProgress: op((_: unknown) => ({}), {
               http: { directives: [{ kind: "moveTo", path: "../../progress/award" }] },
             }),
-          },
-        }),
-      },
-    })
+          }),
+      })
     const router = makeRouter(routes(tree))
     const res = await router(new Request("http://localhost/progress/award", { method: "POST" }))
     expect(res.status).toBe(200)
   })
 
   it("collects leaves from multiple children", async () => {
-    const tree = node({
-      children: {
-        users: node({
-          children: { list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }) },
-        }),
-        orders: node({
-          children: { list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }) },
-        }),
-      },
-    })
+    const tree = api({
+        users: api({ list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }) }),
+        orders: api({ list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }) }),
+      })
     const router = makeRouter(routes(tree))
     expect((await router(new Request("http://localhost/users/list"))).status).toBe(200)
     expect((await router(new Request("http://localhost/orders/list"))).status).toBe(200)
   })
 
-  it("service() surface resolves identically to node()", async () => {
+  it("service() surface resolves identically to api()", async () => {
     class Svc {
       listItems(_: unknown) {
         return []
@@ -173,11 +153,9 @@ describe("verbFromTags — three-valued dispatch", () => {
 
 describe("makeRouter — core router (no auto-method layer)", () => {
   const getUser = (_: unknown) => ({ id: 1, name: "Alice" })
-  const tree = node({
-    children: {
+  const tree = api({
       getUser: op(getUser, { http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../user" }] } }),
-    },
-  })
+    })
   const router = makeRouter(routes(tree))
 
   it("dispatches an exact GET match → 200", async () => {
@@ -219,11 +197,8 @@ describe("makeRouter — core router (no auto-method layer)", () => {
 
 describe("method dispatch — several leaves placed at the same path", () => {
   it("read/replace/remove converge on /books/{bookId}, distinguished by method", async () => {
-    const tree = node({
-      children: {
-        books: node({
-          fallback: { name: "bookId", subtree: node({}) },
-          children: {
+    const tree = api({
+        books: api({
             read: op((_: { bookId: string }) => ({ op: "read" }), {
               http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
             }),
@@ -233,10 +208,8 @@ describe("method dispatch — several leaves placed at the same path", () => {
             remove: op((_: { bookId: string }) => ({ op: "remove" }), {
               http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "moveTo", path: "../*" }] },
             }),
-          },
-        }),
-      },
-    })
+          }, { fallback: { name: "bookId", subtree: api({}) } }),
+      })
     const router = makeRouter(routes(tree))
 
     const getRes = await router(new Request("http://localhost/books/book-1"))
@@ -253,21 +226,16 @@ describe("method dispatch — several leaves placed at the same path", () => {
   })
 
   it("a branch child alongside the placed leaves still contributes its own segment", async () => {
-    const tree = node({
-      children: {
-        books: node({
-          fallback: {
-            name: "bookId",
-            subtree: node({ children: { checkout: op((_: unknown) => ({ ok: true })) } }),
-          },
-          children: {
+    const tree = api({
+        books: api({
             read: op((_: { bookId: string }) => ({ op: "read" }), {
               http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
             }),
-          },
-        }),
-      },
-    })
+          }, { fallback: {
+            name: "bookId",
+            subtree: api({ checkout: op((_: unknown) => ({ ok: true })) }),
+          } }),
+      })
     const router = makeRouter(routes(tree))
 
     const readRes = await router(new Request("http://localhost/books/book-1"))
@@ -286,11 +254,8 @@ describe("method dispatch — several leaves placed at the same path", () => {
 
 describe("autoMethodLayer — 405 + Allow over the HttpRoute pipeline", () => {
   it("wrong method on a known path → 405 with Allow listing the registered methods", async () => {
-    const tree = node({
-      children: {
-        books: node({
-          fallback: { name: "bookId", subtree: node({}) },
-          children: {
+    const tree = api({
+        books: api({
             read: op((_: { bookId: string }) => ({}), {
               http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
             }),
@@ -300,10 +265,8 @@ describe("autoMethodLayer — 405 + Allow over the HttpRoute pipeline", () => {
             remove: op((_: { bookId: string }) => ({}), {
               http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "moveTo", path: "../*" }] },
             }),
-          },
-        }),
-      },
-    })
+          }, { fallback: { name: "bookId", subtree: api({}) } }),
+      })
     const route = routes(tree)
     const handler = autoMethodLayer(makeRouter(route), route)
 

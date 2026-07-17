@@ -1,7 +1,7 @@
 // packages/core/src/node.ts — @rhi-zone/fractal-core  (new model, alongside legacy spine)
 //
 // The new fractal authoring model: Node / Handler / Meta + constructors
-// (op / node / service) + mergeMeta.
+// (op / api / service) + mergeMeta.
 //
 // Node shape:
 //   - A LEAF node carries `handler` (the bare fn) and may have no `children`.
@@ -14,7 +14,7 @@
 //     children always win; fallback fires only when no child matches.
 //
 // `op(fn, meta?)` produces a leaf node.
-// `node({ children?, fallback?, meta? })` produces a branch node.
+// `api(children, opts?)` produces a branch node.
 // `service(instance, opts?)` walks a class → children that are leaf nodes.
 //   An instance field literally named `fallback` (shape `{ name, subtree }`)
 //   becomes the resulting node's `fallback` rather than a keyed child.
@@ -145,25 +145,11 @@ export function op<I, O>(
  * Leaf nodes (callables) belong in `children` keyed by name — they ARE nodes,
  * created with `op()`.
  *
- * `node({ children?, fallback?, meta? })`.
- */
-export const node = (def: {
-  children?: Record<string, Node>
-  fallback?: { name: string; subtree: Node }
-  meta?: Meta
-}): Node => ({
-  ...(def.children !== undefined ? { children: def.children } : {}),
-  ...(def.fallback !== undefined ? { fallback: def.fallback } : {}),
-  meta: def.meta ?? {},
-})
-
-/**
- * Sugar over `node()`: positional children for the common case, an options
- * object for the rare stuff (meta, fallback). `api(children, opts?)` is
- * exactly `node({ children, ...opts })` — same Node value, shorter call.
+ * `api(children, opts?)` — positional children for the common case, an
+ * options object for the rare stuff (meta, fallback).
  *
- * `api()` is the primary authoring-surface constructor; `node()` stays as
- * the low-level form both `api()` and `service()` lower to.
+ * `api()` is the (only) branch-node constructor; `service()` is the other
+ * authoring surface and lowers to the same Node shape.
  *
  * See docs/design/routing-and-transforms.md § DX — constructor sugar.
  */
@@ -171,7 +157,11 @@ export function api(
   children: Record<string, Node>,
   opts?: { meta?: Meta; fallback?: { name: string; subtree: Node } },
 ): Node {
-  return node({ children, ...opts })
+  return {
+    ...(children !== undefined ? { children } : {}),
+    ...(opts?.fallback !== undefined ? { fallback: opts.fallback } : {}),
+    meta: opts?.meta ?? {},
+  }
 }
 
 /** Duck-type check for the `{ name, subtree }` fallback shape. */
@@ -189,7 +179,7 @@ const isFallbackShape = (v: unknown): v is { name: string; subtree: Node } =>
  *    with shape `{ name, subtree }`      → the resulting node's `fallback`
  *  - opts.meta[name]                     → that child leaf node's metadata bag
  *
- * Both `node()` and `service()` produce the identical `{handler?, children?,
+ * Both `api()` and `service()` produce the identical `{handler?, children?,
  * fallback?, meta}` value — there is one Node primitive; both surfaces lower
  * to it.
  */

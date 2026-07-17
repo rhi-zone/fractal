@@ -1,7 +1,7 @@
 // packages/http/src/preset.test.ts — OOTB preset end-to-end tests
 
 import { describe, expect, it } from "bun:test"
-import { node, op, service } from "@rhi-zone/fractal-core/node"
+import { api as api_, op, service } from "@rhi-zone/fractal-core/node"
 import { createFetch } from "./preset.ts"
 
 // ============================================================================
@@ -31,11 +31,9 @@ const usersNode = service(new UserService(), {
   },
 })
 
-const invoicesNode = node({
-  fallback: {
+const invoicesNode = api_({}, { fallback: {
     name: "invoiceId",
-    subtree: node({
-      children: {
+    subtree: api_({
         // No `moveTo`/`method` directive needed: naiveTransform already puts
         // this leaf at its own key ("checkout") with the default POST method.
         checkout: op(
@@ -44,17 +42,13 @@ const invoicesNode = node({
             currency: input.currency ?? "usd",
           }),
         ),
-      },
-    }),
-  },
-})
+      }),
+  } })
 
-const api = node({
-  children: {
+const api = api_({
     users: usersNode,
     invoices: invoicesNode,
-  },
-})
+  })
 
 const fetch = createFetch(api)
 
@@ -109,13 +103,10 @@ describe("OOTB preset — slug threading (provenance-blind)", () => {
 
   it("path slug and body fields both arrive in input at the same level", async () => {
     let capturedInput: Record<string, unknown> = {}
-    const spyNode = node({
-      children: {
-        items: node({
-          fallback: {
+    const spyNode = api_({
+        items: api_({}, { fallback: {
             name: "itemId",
-            subtree: node({
-              children: {
+            subtree: api_({
                 update: op(
                   (input: Record<string, unknown>) => {
                     capturedInput = input
@@ -123,12 +114,9 @@ describe("OOTB preset — slug threading (provenance-blind)", () => {
                   },
                   { tags: { idempotent: true }, http: { directives: [{ kind: "method", value: "PUT" }] } },
                 ),
-              },
-            }),
-          },
-        }),
-      },
-    })
+              }),
+          } }),
+      })
     const f = createFetch(spyNode)
     await f(
       new Request("http://localhost/items/item-99/update", {

@@ -4,7 +4,7 @@
 //   Node --naiveTransform--> HttpRoute --rewriters--> HttpRoute --makeRouter--> Fetch
 
 import { describe, expect, it } from "bun:test"
-import { node, op } from "@rhi-zone/fractal-core/node"
+import { api as api_, op } from "@rhi-zone/fractal-core/node"
 import type { Meta } from "@rhi-zone/fractal-core/node"
 import {
   applyMethods,
@@ -35,16 +35,12 @@ describe("naiveTransform", () => {
   it("turns each child into a path-segment child, recursively", () => {
     const list = (_: unknown) => []
     const create = (_: unknown) => ({})
-    const api = node({
-      children: {
-        users: node({
-          children: {
+    const api = api_({
+        users: api_({
             list: op(list),
             create: op(create),
-          },
-        }),
-      },
-    })
+          }),
+      })
     const route = naiveTransform(api)
     expect(route.methods).toBeUndefined()
     expect(route.children?.users).toBeDefined()
@@ -59,9 +55,7 @@ describe("naiveTransform", () => {
   })
 
   it("carries fallback subtrees through", () => {
-    const api = node({
-      fallback: { name: "bookId", subtree: op((_: { bookId: string }) => ({})) },
-    })
+    const api = api_({}, { fallback: { name: "bookId", subtree: op((_: { bookId: string }) => ({})) } })
     const route = naiveTransform(api)
     expect(route.fallback?.name).toBe("bookId")
     expect(route.fallback?.subtree.methods?.POST).toBeDefined()
@@ -94,15 +88,12 @@ describe("applyMethods", () => {
   })
 
   it("recurses into children and fallback", () => {
-    const api = node({
-      children: {
+    const api = api_({
         items: op((_: unknown) => ({}), { http: { directives: [{ kind: "method", value: "GET" }] } }),
-      },
-      fallback: {
+      }, { fallback: {
         name: "id",
         subtree: op((_: unknown) => ({}), { http: { directives: [{ kind: "method", value: "PUT" }] } }),
-      },
-    })
+      } })
     const route = applyMethods(naiveTransform(api))
     expect(Object.keys(route.children?.items?.methods ?? {})).toEqual(["GET"])
     expect(Object.keys(route.fallback?.subtree.methods ?? {})).toEqual(["PUT"])
@@ -116,16 +107,12 @@ describe("applyMethods", () => {
 describe("applyMoveTo", () => {
   it("moves a node up then down under a new wildcard segment (../*)", () => {
     const getBook = (_: unknown) => ({})
-    const api = node({
-      children: {
-        users: node({
-          children: {
+    const api = api_({
+        users: api_({
             list: op((_: unknown) => []),
             get: op(getBook, { http: { directives: [{ kind: "moveTo", path: "../*" }] } }),
-          },
-        }),
-      },
-    })
+          }),
+      })
     const route = applyMoveTo(naiveTransform(api))
     // "get" no longer sits at users/get
     expect(route.children?.users?.children?.get).toBeUndefined()
@@ -139,10 +126,8 @@ describe("applyMoveTo", () => {
     const read = (_: unknown) => ({ op: "read" })
     const replace = (_: unknown) => ({ op: "replace" })
     const remove = (_: unknown) => ({ op: "remove" })
-    const api = node({
-      children: {
-        books: node({
-          children: {
+    const api = api_({
+        books: api_({
             list: op((_: unknown) => []),
             create: op((_: unknown) => ({})),
             get: op(read, {
@@ -154,10 +139,8 @@ describe("applyMoveTo", () => {
             del: op(remove, {
               http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "DELETE" }] },
             }),
-          },
-        }),
-      },
-    })
+          }),
+      })
     const transform = composeTransforms(applyMethods, applyMoveTo)
     const route = transform(naiveTransform(api))
 
@@ -176,9 +159,7 @@ describe("applyMoveTo", () => {
 
   it("`.` is identity — node stays at its current position", () => {
     const handler = (_: unknown) => ({})
-    const api = node({
-      children: { item: op(handler, { http: { directives: [{ kind: "moveTo", path: "." }] } }) },
-    })
+    const api = api_({ item: op(handler, { http: { directives: [{ kind: "moveTo", path: "." }] } }) })
     const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.item?.methods?.POST?.handler).toBe(handler)
   })
@@ -187,15 +168,11 @@ describe("applyMoveTo", () => {
     // itemPath = [admin, ping]; base (self) = [admin, ping];
     // "../.." pops twice → [] (root) — merges directly into root.
     const handler = (_: unknown) => ({})
-    const api = node({
-      children: {
-        admin: node({
-          children: {
+    const api = api_({
+        admin: api_({
             ping: op(handler, { http: { directives: [{ kind: "moveTo", path: "../.." }] } }),
-          },
-        }),
-      },
-    })
+          }),
+      })
     const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.admin?.children?.ping).toBeUndefined()
     expect(route.methods?.POST?.handler).toBe(handler)
@@ -203,19 +180,13 @@ describe("applyMoveTo", () => {
 
   it("`../../../admin` moves a deeply nested node under a new named segment", () => {
     const handler = (_: unknown) => ({})
-    const api = node({
-      children: {
-        a: node({
-          children: {
-            b: node({
-              children: {
+    const api = api_({
+        a: api_({
+            b: api_({
                 leaf: op(handler, { http: { directives: [{ kind: "moveTo", path: "../../../admin" }] } }),
-              },
-            }),
-          },
-        }),
-      },
-    })
+              }),
+          }),
+      })
     const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.a?.children?.b?.children?.leaf).toBeUndefined()
     expect(route.children?.admin?.methods?.POST?.handler).toBe(handler)
@@ -223,42 +194,36 @@ describe("applyMoveTo", () => {
 
   it("mkdir-p: a multi-segment moveTo target creates every missing intermediate node", () => {
     const handler = (_: unknown) => ({})
-    const api = node({
-      children: {
+    const api = api_({
         leaf: op(handler, { http: { directives: [{ kind: "moveTo", path: "../api/v2/users" }] } }),
-      },
-    })
+      })
     const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.leaf).toBeUndefined()
     expect(route.children?.api?.children?.v2?.children?.users?.methods?.POST?.handler).toBe(handler)
   })
 
   it("throws when two placements converge on the same path AND method", () => {
-    const api = node({
-      children: {
+    const api = api_({
         first: op((_: unknown) => ({ from: "first" }), {
           http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
         }),
         second: op((_: unknown) => ({ from: "second" }), {
           http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
         }),
-      },
-    })
+      })
     const transform = composeTransforms(applyMethods, applyMoveTo)
     expect(() => transform(naiveTransform(api))).toThrow(/conflict/i)
   })
 
   it("does NOT throw when two placements converge on the same path with DIFFERENT methods", () => {
-    const api = node({
-      children: {
+    const api = api_({
         first: op((_: unknown) => ({ from: "first" }), {
           http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
         }),
         second: op((_: unknown) => ({ from: "second" }), {
           http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "PUT" }] },
         }),
-      },
-    })
+      })
     const transform = composeTransforms(applyMethods, applyMoveTo)
     expect(() => transform(naiveTransform(api))).not.toThrow()
   })
@@ -330,14 +295,8 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
     const store = new Map<string, { id: string; title: string }>()
     store.set("book-1", { id: "book-1", title: "Dune" })
 
-    const api = node({
-      children: {
-        books: node({
-          // Pre-declared fallback supplies the wildcard's parameter name
-          // ("bookId") that applyMoveTo reuses when it creates/merges the
-          // wildcard subtree for `get`/`remove` below.
-          fallback: { name: "bookId", subtree: node({}) },
-          children: {
+    const api = api_({
+        books: api_({
             list: op((_: unknown) => [...store.values()], {
               http: { directives: [{ kind: "method", value: "GET" }] },
             }),
@@ -368,10 +327,8 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
                 },
               },
             ),
-          },
-        }),
-      },
-    })
+          }, { fallback: { name: "bookId", subtree: api_({}) } }),
+      })
 
     const routes = toHttpRoutes(api)
     const pipeline = composeTransforms(applyMethods, applyMoveTo, applyResponse)
@@ -415,7 +372,7 @@ describe("httpRoute / isHttpRoute", () => {
   })
 
   it("a plain Node value is not recognized as an HttpRoute", () => {
-    const n = node({ children: {} })
+    const n = api_({})
     expect(isHttpRoute(n)).toBe(false)
   })
 
