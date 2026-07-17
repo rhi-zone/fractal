@@ -24,50 +24,65 @@ This constraint is load-bearing: composability alone does not yield a small ment
 
 | Package | Role |
 |---------|------|
-| `@rhi-zone/fractal-api-tree` | `Node<P,Res>`, `Handler`, `Req`, `Pass`, `choice`, `pipe`, `capture`, `typed`, `leaf`, `run`, `resolveSchema`, Standard Schema types |
-| `@rhi-zone/fractal-http-api-projector` | HTTP kit: `path`, `methods`, `param`, `query`, `header`, `body`, `validate`, `serve` |
-| `@rhi-zone/fractal-worker` | Worker/in-process kit: `procedure`, `field`, `dispatch` |
-| `@rhi-zone/fractal-openapi-api-projector` | OpenAPI 3.0 / JSON-Schema projection: `toOpenApi`, `toJsonSchema` |
+| `@rhi-zone/fractal-api-tree` | `api`, `op`, `mergeMeta`, `Node`, `Meta`, `Handler` — the protocol-agnostic tree model |
+| `@rhi-zone/fractal-http-api-projector` | HTTP kit: `http.get`/`post`/`put`/`patch`/`delete`, `httpProjection`, `createFetch`, `makeRouterFromRoute`, `crud` |
+| `@rhi-zone/fractal-openapi-api-projector` | OpenAPI 3.0 / JSON-Schema projection: `toOpenApi` |
+| `@rhi-zone/fractal-mcp-api-projector` | MCP tool projection: `toTools` |
+| `@rhi-zone/fractal-cli-api-projector` | CLI projection over the same tree |
+| `@rhi-zone/fractal-client-api-projector` | typed client projection over the same tree |
 
 ## Quick Start
 
 ```ts
-import { path, methods, param, body, validate, serve, leaf } from '@rhi-zone/fractal-http-api-projector'
+import { api, op } from '@rhi-zone/fractal-api-tree/node'
+import { http } from '@rhi-zone/fractal-http-api-projector/verbs'
+import { createFetch } from '@rhi-zone/fractal-http-api-projector'
 
-const app = path({
-  todos: methods({
-    GET: leaf(async () => todos),
-    POST: body(validate(todoSchema, async (req) => create(req.body))),
+const todos: Record<string, { id: string; title: string }> = {}
+
+const app = api({
+  todos: api({
+    list: op(() => Object.values(todos), http.get),
+    add: op((input: { title: string }) => {
+      const id = `todo-${Object.keys(todos).length + 1}`
+      const todo = { id, ...input }
+      todos[id] = todo
+      return todo
+    }, http.post),
   }),
 })
 
-// Serve an HTTP request
-const response = await serve(app, { method: 'GET', url: '/todos' })
+// Serve HTTP requests — GET /todos/list, POST /todos/add
+const fetch = createFetch(app)
+const response = await fetch(new Request('http://localhost/todos/list'))
 
-// Project to OpenAPI — same node, no re-description
+// Project to OpenAPI — same tree, no re-description
 import { toOpenApi } from '@rhi-zone/fractal-openapi-api-projector'
-const doc = toOpenApi(app, { title: 'Todos API', version: '1.0.0' })
+const doc = await toOpenApi(app, { title: 'Todos API', version: '1.0.0' })
 ```
 
-`validate` accepts a `StandardSchemaV1` — validation and the emitted OpenAPI schema both come from the same object. No hand-rolling schemas twice.
+`op(fn, ...contributions)` attaches metadata (verb bundles, tags, custom
+fields) to a handler; `api(children, opts?)` groups nodes into a branch.
+Both return the same `Node` value — projections dispatch on `node.handler`
+vs. `node.children`, not on a separate wrapper type.
 
 ## Protocol-agnostic core
 
-The core (`fractal-api-tree`) knows nothing about HTTP verbs, URL paths, or procedure names. Protocol-specific combinators live in per-protocol kits that consume and produce the same `Node<P,Res>` type:
+The core (`@rhi-zone/fractal-api-tree`) knows nothing about HTTP verbs, URL paths, or procedure names — `Node`, `Meta`, `op`, and `api` are the entire surface. Protocol-specific combinators live in per-protocol kits that consume and produce that same `Node` type:
 
-- **HTTP kit** (`fractal-http-api-projector`): `methods`, `path`, `param`, `query`, `header`, `body`, `validate`, `serve`
-- **Worker kit** (`fractal-worker`): `procedure`, `field`, `dispatch`
+- **HTTP kit** (`@rhi-zone/fractal-http-api-projector`): `http.get`/`post`/`put`/`patch`/`delete` verb bundles, `httpProjection` (Node → HttpRoute), `createFetch` (OOTB fetch handler)
+- **MCP kit** (`@rhi-zone/fractal-mcp-api-projector`): `toTools` (Node → MCP tool definitions)
 
-`NodeMiddleware = (n: Node<P,Res>) => Node<P,Res>` is the extension point for cross-cutting concerns: an auth middleware wraps a node, contributes a security descriptor to `meta`, and enforces at request time. Business logic and core combinators transfer unchanged across kits.
+A verb bundle like `http.get` is just a `Meta` value — `{ http: { directives: [...] }, tags: { readOnly: true } }` — passed as a contribution to `op`. Business logic and the core `api`/`op` combinators transfer unchanged across kits; only the metadata attached to each leaf differs per projection.
 
 ## Reflection built in
 
-Every `Node` carries a `meta: Meta` descriptor built during route construction. After construction:
+Every `Node` carries a `meta: Meta` descriptor built during tree construction. After construction:
 
 ```ts
 import { toOpenApi } from '@rhi-zone/fractal-openapi-api-projector'
-const doc = toOpenApi(app, { title: 'My API', version: '1.0.0' })
-// doc.paths has every route, parameter, requestBody schema, and security requirement
+const doc = await toOpenApi(app, { title: 'My API', version: '1.0.0' })
+// doc.paths has every route, parameter, and requestBody schema
 // derived from the same node tree that runs requests
 ```
 
