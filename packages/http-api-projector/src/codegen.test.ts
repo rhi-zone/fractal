@@ -1,10 +1,18 @@
 // packages/http-api-projector/src/codegen.test.ts — client codegen tests
 //
-// Two kinds of coverage:
-//   1. Structural: assert the generated source string contains the expected
-//      type/client shapes for the library-api example tree (the same
-//      canonical fixture openapi.test.ts uses).
-//   2. Eval (end-to-end): write the generated source to a temp file, import
+// Three kinds of coverage:
+//   1. Structural (Node-driven): assert the generated source string contains
+//      the expected type/client shapes for the library-api example tree (the
+//      same canonical fixture openapi.test.ts uses), generated via
+//      `generateClientFromNode` — this is the path that recovers authored
+//      member names (`.read()`/`.replace()`/`.remove()`) and exact
+//      `extractToolSchemas` codegen-name matches for co-located routes.
+//   2. Structural (HttpRoute-driven): `generateClient(route, schemas)` called
+//      directly on an already-projected `HttpRoute`, no `Node` involved —
+//      proves the core entry point works standalone and exercises its
+//      degraded naming (lowercased verb as member name) when no name maps
+//      are available.
+//   3. Eval (end-to-end): write the generated source to a temp file, import
 //      it as a real module, spin up the library-api tree on a real Bun
 //      server, and drive the generated `createClient` against it over HTTP —
 //      proving the emitted code is not just plausible-looking text but an
@@ -15,22 +23,23 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
-import { generateClient } from "./codegen.ts"
-import { toOpenApi, type OpenApiDoc } from "./openapi.ts"
+import { generateClient, generateClientFromNode } from "./codegen.ts"
+import { httpProjection } from "./dx.ts"
 import { createFetch } from "./preset.ts"
 import { serveBun } from "./adapter.ts"
 import { api, clearStore, type Book } from "../../../examples/library-api/src/tree.ts"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
+import { http } from "./verbs.ts"
 
 const treePath = new URL("../../../examples/library-api/src/tree.ts", import.meta.url).pathname
 const schemas = extractToolSchemas(treePath)
 
-let spec: OpenApiDoc
 let source: string
 
-beforeAll(async () => {
-  spec = await toOpenApi(api, { title: "Library API", version: "1.0.0", schemas })
-  source = generateClient(spec)
+beforeAll(() => {
+  source = generateClientFromNode(api, schemas, { clientName: "Client" })
 })
 
 beforeEach(() => {
@@ -38,15 +47,15 @@ beforeEach(() => {
 })
 
 // ============================================================================
-// 1. Structural assertions on the generated source
+// 1. Structural assertions — generateClientFromNode (Node-driven naming)
 // ============================================================================
 
-describe("generateClient — structure", () => {
+describe("generateClientFromNode — structure", () => {
   it("emits no imports (standalone)", () => {
     expect(source).not.toMatch(/^\s*import /m)
   })
 
-  it("emits Input/Output type aliases named from the operationId", () => {
+  it("emits Input/Output type aliases named from the codegen name", () => {
     expect(source).toContain("export type BooksAddInput")
     expect(source).toContain("export type BooksAddOutput")
     expect(source).toContain("export type BooksListOutput")
@@ -59,8 +68,18 @@ describe("generateClient — structure", () => {
     expect(source).toMatch(/BooksAddInput = \{[^}]*readonly genre: string/s)
   })
 
-  it("read (GET) has no Input type — GET never carries a requestBody in the spec", () => {
+  it("read has no Input type — its only field (bookId) is supplied via the path-param call chain", () => {
     expect(source).not.toContain("export type BooksBookIdReadInput")
+  })
+
+  it("remove has no Input type — same reasoning as read (bookId-only input)", () => {
+    expect(source).not.toContain("export type BooksBookIdRemoveInput")
+  })
+
+  it("catalog.search (GET) DOES get an Input type — the GET query-params fix", () => {
+    expect(source).toContain("export type CatalogSearchInput")
+    expect(source).toMatch(/CatalogSearchInput = \{[^}]*readonly q\?: string/s)
+    expect(source).toMatch(/readonly search: \(input: CatalogSearchInput\) => Promise<CatalogSearchOutput>/)
   })
 
   it("emits a Client type with a nested books branch", () => {
@@ -76,7 +95,7 @@ describe("generateClient — structure", () => {
     expect(source).toMatch(/readonly list: \(\) => Promise<BooksListOutput>/)
     expect(source).toMatch(/readonly add: \(input: BooksAddInput\) => Promise<BooksAddOutput>/)
     expect(source).toMatch(/readonly read: \(\) => Promise<BooksBookIdReadOutput>/)
-    expect(source).toMatch(/readonly remove: \(input: BooksBookIdRemoveInput\) => Promise<BooksBookIdRemoveOutput>/)
+    expect(source).toMatch(/readonly remove: \(\) => Promise<BooksBookIdRemoveOutput>/)
   })
 
   it("emits createClient and ClientError", () => {
@@ -85,17 +104,75 @@ describe("generateClient — structure", () => {
   })
 
   it("respects a custom clientName option", () => {
-    const named = generateClient(spec, { clientName: "LibraryClient" })
+    const named = generateClientFromNode(api, schemas, { clientName: "LibraryClient" })
     expect(named).toContain("export type LibraryClient =")
     expect(named).toContain("): LibraryClient {")
+  })
+
+  it("degrades to unknown input/output when no SchemaMap is supplied", () => {
+    const untyped = generateClientFromNode(api)
+    expect(untyped).not.toContain("export type BooksAddInput")
+    expect(untyped).toMatch(/readonly add: \(\) => Promise<unknown>/)
   })
 })
 
 // ============================================================================
-// 2. Eval test — real server, real generated module, real HTTP calls
+// 2. Structural assertions — generateClient (HttpRoute-driven, no Node)
 // ============================================================================
 
-describe("generateClient — eval end-to-end", () => {
+describe("generateClient — HttpRoute + SchemaMap directly, no Node", () => {
+  it("walks a plain HttpRoute tree with no name maps, degrading co-located names to the lowercased verb", () => {
+    const tree = api_({
+      widgets: api_({
+        list: op((_: unknown): { id: string }[] => [], http.get),
+      }, { fallback: { name: "widgetId", subtree: api_({
+        get: op((input: { widgetId: string }): { id: string } => ({ id: input.widgetId }), http.get, http.moveTo("..")),
+      }) } }),
+    })
+    const route = httpProjection(tree)
+
+    // No SchemaMap: still produces a complete, working (untyped) client.
+    const untyped = generateClient(route)
+    expect(untyped).not.toMatch(/^\s*import /m)
+    expect(untyped).toContain("export function createClient(baseUrl: string")
+    expect(untyped).toMatch(/readonly widgets: \{/)
+    expect(untyped).toMatch(/readonly widgetId: \(widgetId: string\) => \{/)
+    // Co-located single GET at the fallback position has no Node-derived
+    // name available, so it degrades to the lowercased verb.
+    expect(untyped).toMatch(/readonly get: \(\) => Promise<unknown>/)
+  })
+
+  it("types operations from a manually-built SchemaMap keyed by the path-derived codegen name", () => {
+    const tree = api_({
+      widgets: op((input: { q?: string }): { id: string }[] => [], http.get),
+    })
+    const route = httpProjection(tree)
+
+    // generateClient's degraded naming (no Node) keys schema lookups as
+    // `<path-segments>_<verb>` — see codegen.ts's `nameFromPath`.
+    const manualSchemas: SchemaMap = {
+      widgets_get: {
+        inputSchema: { type: "object", properties: { q: { type: "string" } } },
+        outputSchema: {
+          type: "array",
+          items: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+        },
+      },
+    }
+
+    const typed = generateClient(route, manualSchemas)
+    expect(typed).toContain("export type WidgetsGetInput")
+    expect(typed).toContain("export type WidgetsGetOutput")
+    expect(typed).toMatch(/WidgetsGetInput = \{[^}]*readonly q\?: string/s)
+    expect(typed).toMatch(/readonly widgets: \(input: WidgetsGetInput\) => Promise<WidgetsGetOutput>/)
+  })
+})
+
+// ============================================================================
+// 3. Eval test — real server, real generated module, real HTTP calls
+// ============================================================================
+
+describe("generateClientFromNode — eval end-to-end", () => {
   let server: { port: number; stop(closeActiveConnections?: boolean): void } | undefined
   let tmpDir: string | undefined
 
