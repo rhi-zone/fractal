@@ -709,11 +709,36 @@ function mergePipelines(node: Pipeline | undefined, method: Pipeline | undefined
   }
 }
 
+/**
+ * Split a URL pathname into non-empty segments without the split+filter
+ * double allocation (`"/".split()` then `.filter(s => s.length > 0)` builds
+ * two arrays; this builds one).
+ */
+function splitPath(pathname: string): string[] {
+  const segs: string[] = []
+  let start = 0
+  for (let i = 0; i <= pathname.length; i++) {
+    if (i === pathname.length || pathname.charCodeAt(i) === 47 /* "/" */) {
+      if (i > start) segs.push(pathname.slice(start, i))
+      start = i + 1
+    }
+  }
+  return segs
+}
+
+/**
+ * `segs`/`idx`/`slugs` walk a single path through the tree — static children
+ * always win over `fallback` (see module doc), so there is never more than
+ * one branch in flight at a time. That makes `slugs` safe to mutate in place
+ * across the whole descent instead of spreading a fresh object per dynamic
+ * segment: no sibling call ever observes a stale or partially-built copy,
+ * because there is no sibling call.
+ */
 function collectRouteCandidates(
   route: HttpRoute,
   segs: readonly string[],
   idx: number,
-  slugs: Readonly<Record<string, string>>,
+  slugs: Record<string, string>,
 ): RouteCandidate[] {
   if (idx === segs.length) {
     return Object.entries(route.methods ?? {}).map(([method, entry]) => ({
@@ -730,18 +755,47 @@ function collectRouteCandidates(
     return collectRouteCandidates(child, segs, idx + 1, slugs)
   }
   if (route.fallback !== undefined) {
-    return collectRouteCandidates(route.fallback.subtree, segs, idx + 1, {
-      ...slugs,
-      [route.fallback.name]: seg,
-    })
+    slugs[route.fallback.name] = seg
+    return collectRouteCandidates(route.fallback.subtree, segs, idx + 1, slugs)
   }
   return []
 }
 
 /** All candidate methods reachable at the exact path of `url`. */
 export function routeCandidatesForUrl(root: HttpRoute, url: string): RouteCandidate[] {
-  const segs = new URL(url).pathname.split("/").filter((s) => s.length > 0)
+  const segs = splitPath(new URL(url).pathname)
   return collectRouteCandidates(root, segs, 0, {})
+}
+
+/**
+ * Single-method match for the exact path of `segs`, looked up directly from
+ * the leaf's `methods` map instead of building the full candidate array and
+ * filtering by method afterward — the hot path `makeRouterFromRoute` runs on
+ * every request. Same single-path-descent argument as
+ * `collectRouteCandidates` justifies mutating `slugs` in place.
+ */
+function matchRoute(
+  route: HttpRoute,
+  segs: readonly string[],
+  idx: number,
+  method: string,
+  slugs: Record<string, string>,
+): { entry: { handler: Handler; meta: Meta; pipeline?: Pipeline }; routePipeline: Pipeline | undefined; slugs: Record<string, string> } | undefined {
+  if (idx === segs.length) {
+    const entry = route.methods?.[method]
+    if (entry === undefined) return undefined
+    return { entry, routePipeline: route.pipeline, slugs }
+  }
+  const seg = segs[idx]!
+  const child = route.children?.[seg]
+  if (child !== undefined) {
+    return matchRoute(child, segs, idx + 1, method, slugs)
+  }
+  if (route.fallback !== undefined) {
+    slugs[route.fallback.name] = seg
+    return matchRoute(route.fallback.subtree, segs, idx + 1, method, slugs)
+  }
+  return undefined
 }
 
 function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
@@ -826,11 +880,12 @@ function isResult(v: unknown): v is { kind: "ok"; value: unknown } | { kind: "er
 
 export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<Response> {
   return async (req) => {
-    const candidates = routeCandidatesForUrl(root, req.url)
-    const matched = candidates.find((c) => c.method === req.method)
+    const segs = splitPath(new URL(req.url).pathname)
+    const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    const { meta, pipeline } = matched
+    const meta = matched.entry.meta
+    const pipeline = mergePipelines(matched.routePipeline, matched.entry.pipeline)
     const reqTransforms = pipeline.reqTransforms ?? []
     const inputTransforms = pipeline.inputTransforms ?? []
     const outputTransforms = pipeline.outputTransforms ?? []
@@ -862,7 +917,7 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
         input = result.value
       }
 
-      let output: unknown = await (matched.handler(input) as Promise<unknown>)
+      let output: unknown = await (matched.entry.handler(input) as Promise<unknown>)
       for (const transform of outputTransforms) output = await transform(output, meta)
 
       // Result unwrapping: if the handler returned a Result<T, E>, separate
