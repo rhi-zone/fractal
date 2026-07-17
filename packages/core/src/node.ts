@@ -100,29 +100,45 @@ export const isLeaf = (n: Node): boolean => n.handler !== undefined
 // ============================================================================
 
 /**
+ * Recursively merge two record-like values with precedence: `value` wins
+ * per key. Plain objects merge deeper; arrays concatenate; anything else
+ * (including a type mismatch) resolves to `value`.
+ */
+function mergeRecords(
+  existing: Record<string, unknown>,
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...existing }
+  for (const [key, v] of Object.entries(value)) {
+    if (v === undefined) continue
+    const e = out[key]
+    if (Array.isArray(e) && Array.isArray(v)) {
+      out[key] = [...e, ...v]
+    } else if (
+      typeof e === "object" && e !== null && !Array.isArray(e) &&
+      typeof v === "object" && v !== null && !Array.isArray(v)
+    ) {
+      out[key] = mergeRecords(e as Record<string, unknown>, v as Record<string, unknown>)
+    } else {
+      out[key] = v
+    }
+  }
+  return out
+}
+
+/**
  * Deep-merge meta bags with precedence: later bags win per key;
  * `undefined` defers (does not override a previously-set value).
  *
- * Per sub-bag (tags, http, …): keys are merged one level deep. Later wins.
+ * Merge is fully recursive: plain objects merge deeper (e.g. tags, http
+ * sub-bags), arrays concatenate (e.g. `http.directives`), and scalars are
+ * overwritten by the later bag.
  */
 export function mergeMeta(...metas: Array<Meta | undefined>): Meta {
-  const out: Record<string, unknown> = {}
+  let out: Record<string, unknown> = {}
   for (const m of metas) {
     if (m === undefined) continue
-    for (const [key, value] of Object.entries(m)) {
-      if (value === undefined) continue
-      const existing = out[key]
-      if (
-        typeof existing === "object" && existing !== null &&
-        typeof value === "object" && value !== null &&
-        !Array.isArray(existing) && !Array.isArray(value)
-      ) {
-        // Both are plain objects: merge one level deeper (e.g. tags sub-bag)
-        out[key] = { ...(existing as Record<string, unknown>), ...(value as Record<string, unknown>) }
-      } else {
-        out[key] = value
-      }
-    }
+    out = mergeRecords(out, m as Record<string, unknown>)
   }
   return out as Meta
 }

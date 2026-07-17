@@ -68,13 +68,6 @@ export function clearStore(): void {
 //   POST /books/{bookId}/checkout/{start,reserve}
 // ============================================================================
 
-// `op(fn, http.get, { http: { directives: [moveTo] } })` can't be used here:
-// meta merge (`mergeMeta`) replaces the `http` sub-bag's `directives` array
-// wholesale on collision rather than concatenating it, so a second `http.*`
-// contribution would silently drop the bundle's verb/method directives.
-// Each leaf below spells out its full directive list instead (verb + method
-// from the bundle's own directives, plus `moveTo`).
-
 /** Get a single book by its ID. GET /books/{bookId} (co-located, no extra segment). */
 const readBook = op(
   (input: { bookId: string }) => {
@@ -82,10 +75,8 @@ const readBook = op(
     if (book === undefined) throw new Error(`Not Found: ${input.bookId}`)
     return book
   },
-  {
-    tags: http.get.tags,
-    http: { directives: [...http.get.http.directives, { kind: "moveTo", path: ".." }] },
-  },
+  http.get,
+  { http: { directives: [{ kind: "moveTo", path: ".." }] } },
 )
 
 /** Replace book metadata wholesale. Idempotent. PUT /books/{bookId}. */
@@ -102,19 +93,15 @@ const replaceBook = op(
     store.set(input.bookId, updated)
     return updated
   },
-  {
-    tags: http.put.tags,
-    http: { directives: [...http.put.http.directives, { kind: "moveTo", path: ".." }] },
-  },
+  http.put,
+  { http: { directives: [{ kind: "moveTo", path: ".." }] } },
 )
 
 /** Permanently delete a book. Destructive and irreversible. DELETE /books/{bookId}. */
 const removeBook = op(
   (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
-  {
-    tags: http.delete.tags,
-    http: { directives: [...http.delete.http.directives, { kind: "moveTo", path: ".." }] },
-  },
+  http.delete,
+  { http: { directives: [{ kind: "moveTo", path: ".." }] } },
 )
 
 /**

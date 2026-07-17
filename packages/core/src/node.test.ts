@@ -295,9 +295,9 @@ describe("mergeMeta", () => {
     expect((m.tags as Tags).openWorld).toBe(true)   // inherited
   })
 
-  it("arrays are NOT merged — later replaces", () => {
+  it("arrays are concatenated, not replaced", () => {
     const m = mergeMeta({ roles: ["a"] }, { roles: ["b", "c"] })
-    expect(m["roles"]).toEqual(["b", "c"])
+    expect(m["roles"]).toEqual(["a", "b", "c"])
   })
 
   it("undefined metas are skipped", () => {
@@ -309,6 +309,38 @@ describe("mergeMeta", () => {
     const m = mergeMeta({ a: 1, b: 2 }, { b: 3 })
     expect(m["a"]).toBe(1)
     expect(m["b"]).toBe(3)
+  })
+
+  it("arrays at depth 2 (e.g. http.directives) concatenate", () => {
+    const a = { kind: "verb", method: "GET" }
+    const b = { kind: "moveTo", path: ".." }
+    const m = mergeMeta(
+      { http: { directives: [a] } },
+      { http: { directives: [b] } },
+    )
+    expect((m.http as { directives: unknown[] }).directives).toEqual([a, b])
+  })
+
+  it("scalar keys nested in sub-bags still overwrite (later wins)", () => {
+    const m = mergeMeta(
+      { tags: { readOnly: true } },
+      { tags: { readOnly: false } },
+    )
+    expect((m.tags as Tags).readOnly).toBe(false)
+  })
+
+  it("composing a verb bundle with an extra http contribution preserves both directive sets", () => {
+    const verbGet = {
+      tags: { readOnly: true },
+      http: { directives: [{ kind: "verb", method: "GET" }, { kind: "method" }] },
+    }
+    const m = mergeMeta(verbGet, { http: { directives: [{ kind: "moveTo", path: ".." }] } })
+    expect((m.http as { directives: unknown[] }).directives).toEqual([
+      { kind: "verb", method: "GET" },
+      { kind: "method" },
+      { kind: "moveTo", path: ".." },
+    ])
+    expect((m.tags as Tags).readOnly).toBe(true)
   })
 })
 
