@@ -179,6 +179,54 @@ The pipeline lives on `HttpRoute` (and equivalently on each projection's
 route type). Each stage is a typed function; transforms are arrays of
 functions composed in order.
 
+### `createApplyValidation` — generated validators, wired at runtime
+
+The `validate` slot (`Pipeline["validate"]`) is populated by codegen, not by
+hand. `packages/http/src/route.ts` exports the runtime half of that wiring —
+`createApplyValidation(validators: ValidatorMap)` — which closes over a full
+key → path → validator map and returns an `applyValidation(key, route)`
+rewriter:
+
+```typescript
+import { createApplyValidation } from "@rhi-zone/fractal-http/route"
+
+const applyValidation = createApplyValidation({
+  books: {
+    "books": bookListValidator,       // GET/POST /books
+    "books/:bookId": bookItemValidator, // co-located GET/PUT/DELETE /books/{bookId}
+  },
+})
+
+const routes = applyValidation("books", httpProjection(api))
+```
+
+- `key` not present in the map → `route` returned unchanged. This is the
+  pass-through/stub case: codegen can emit `createApplyValidation({})` before
+  any validator source exists for a tree, and callers keep working unchanged.
+- Route-tree paths are the inner map's keys, path segments joined with `/`;
+  a fallback (wildcard-capture) segment renders as `:name` — the same
+  `:id`-style convention used throughout this document.
+- Each `key` may be consumed once per `createApplyValidation(...)` instance —
+  a second `applyValidation(sameKey, ...)` call throws, catching accidental
+  double registration (e.g. codegen run twice against the same tree).
+- `pipeline.validate` is an array, run sequentially — each validator's `Ok`
+  value feeds the next validator's input; the first `Err` short-circuits the
+  chain with a 400 response. Injection APPENDS the generated validator onto
+  that array rather than replacing it, so it composes alongside any
+  hand-authored validators already on the method instead of clobbering them.
+  Every other pipeline field (`decode`, `sources`, `inputTransforms`, …) on
+  that method is preserved untouched.
+
+Example of what codegen would generate before any validators are authored
+for a tree (the stub case exercised in `packages/http/src/route.test.ts`):
+
+```typescript
+// GENERATED — codegen output placeholder, no validators yet for this tree.
+import { createApplyValidation } from "@rhi-zone/fractal-http/route"
+
+export const applyValidation = createApplyValidation({}) // empty = pass-through
+```
+
 ## DX — constructor sugar
 
 ### `api(children, opts?)`

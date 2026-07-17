@@ -75,11 +75,14 @@ export type Pipeline = {
   inputTransforms?: Array<(input: unknown, meta: Meta) => unknown | Promise<unknown>>
   /**
    * Validate + coerce the assembled input bag after inputTransforms run.
-   * Returns a Result: `kind: "ok"` passes `value` to the handler;
-   * `kind: "err"` short-circuits with a 400 response containing the error.
-   * When absent, input passes through to the handler unchanged.
+   * Run sequentially, in array order: each validator's `Ok` value feeds the
+   * next validator's input; the first `Err` short-circuits the whole chain
+   * with a 400 response containing that error (later validators do not run).
+   * When absent or empty, input passes through to the handler unchanged.
    */
-  validate?: (input: Record<string, unknown>) => Result<unknown, unknown> | Promise<Result<unknown, unknown>>
+  validate?: Array<
+    (input: Record<string, unknown>) => Result<unknown, unknown> | Promise<Result<unknown, unknown>>
+  >
   outputTransforms?: Array<(output: unknown, meta: Meta) => unknown | Promise<unknown>>
   encode?: (output: unknown, meta: Meta) => Response | Promise<Response>
   resTransforms?: Array<(res: Response, meta: Meta) => Response | Promise<Response>>
@@ -431,6 +434,115 @@ export function applyResponse(route: HttpRoute): HttpRoute {
 }
 
 // ============================================================================
+// 2d. createApplyValidation — runtime injection of generated validators into
+// a route tree's `pipeline.validate` slot.
+//
+// Unlike the other rewriters above (each a plain `HttpRoute => HttpRoute`),
+// validator wiring is keyed: codegen owns a namespace of route-path →
+// validator functions and hands it a KEY (typically the module/file that
+// generated it), so multiple independent codegen runs can each register
+// their own validator set without colliding. `createApplyValidation`
+// closes over the full `ValidatorMap` and returns the `applyValidation(key,
+// route)` rewriter codegen actually calls at each call site:
+//
+//   const applyValidation = createApplyValidation(generatedValidators)
+//   const routed = applyValidation("books", httpProjection(api))
+//
+// A `key` not present in the map is a no-op passthrough — this is what lets
+// codegen emit a stub (`createApplyValidation({})`) before any validators
+// exist for a given tree, per docs/design/routing-and-transforms.md.
+// ============================================================================
+
+/** A single leaf's validator: same shape as `Pipeline["validate"]`. */
+export type Validator = (
+  bag: Record<string, unknown>,
+) => Result<unknown, unknown> | Promise<Result<unknown, unknown>>
+
+/**
+ * outer key = the string key passed to `applyValidation(key, route)`.
+ * inner key = route path (path segments joined with `/`; a fallback segment
+ * is rendered as `:name` — e.g. `"books/:bookId"` — matching the `:id`-style
+ * convention used throughout the design docs).
+ */
+export type ValidatorMap = Record<string, Record<string, Validator>>
+
+/** Route-path string for a tree position, fallback segments rendered as `:name`. */
+function pathKey(path: readonly string[]): string {
+  return path.join("/")
+}
+
+function injectValidators(
+  route: HttpRoute,
+  forKey: Readonly<Record<string, Validator>>,
+  path: readonly string[],
+): HttpRoute {
+  const validator = forKey[pathKey(path)]
+  let methods = route.methods
+  if (methods !== undefined && validator !== undefined) {
+    methods = Object.fromEntries(
+      Object.entries(methods).map(([method, entry]) => [
+        method,
+        {
+          ...entry,
+          pipeline: {
+            ...entry.pipeline,
+            // Append — a generated validator composes alongside any
+            // hand-authored ones already on this method, it never clobbers
+            // them.
+            validate: [...(entry.pipeline?.validate ?? []), validator],
+          },
+        },
+      ]),
+    )
+  }
+  const children = route.children !== undefined
+    ? Object.fromEntries(
+        Object.entries(route.children).map(([key, child]) => [
+          key,
+          injectValidators(child, forKey, [...path, key]),
+        ]),
+      )
+    : undefined
+  const fallback = route.fallback !== undefined
+    ? {
+        name: route.fallback.name,
+        subtree: injectValidators(route.fallback.subtree, forKey, [...path, `:${route.fallback.name}`]),
+      }
+    : undefined
+  return httpRoute({ methods, children, fallback, meta: route.meta, pipeline: route.pipeline })
+}
+
+/**
+ * Build an `applyValidation(key, route)` rewriter over a fixed `ValidatorMap`.
+ *
+ * - `key` not present in `validators` → `route` is returned unchanged (the
+ *   stub/pass-through case — see `docs/design/routing-and-transforms.md`).
+ * - Otherwise walks `route`, and for every leaf method whose tree position
+ *   matches a path in `validators[key]`, APPENDS that validator onto the
+ *   method's `pipeline.validate` array — composing alongside (not clobbering)
+ *   any validators already there, hand-authored or from a prior
+ *   `applyValidation` call. Other pipeline fields are untouched.
+ * - Each `key` may be used at most once across the lifetime of the returned
+ *   function — a second `applyValidation(sameKey, ...)` call throws. This
+ *   catches accidental double-registration of the same generated validator
+ *   set (e.g. codegen run twice, or two trees both claiming the same key).
+ */
+export function createApplyValidation(
+  validators: ValidatorMap,
+): (key: string, route: HttpRoute) => HttpRoute {
+  const usedKeys = new Set<string>()
+  return (key: string, route: HttpRoute): HttpRoute => {
+    if (usedKeys.has(key)) {
+      throw new Error(`applyValidation: key "${key}" has already been used`)
+    }
+    usedKeys.add(key)
+    const forKey = validators[key]
+    if (forKey === undefined) return route
+    return injectValidators(route, forKey, [])
+  }
+}
+
+// ============================================================================
 // 3. composeTransforms — chain rewriters into a single Tree => Tree
 // ============================================================================
 
@@ -459,23 +571,23 @@ type RouteCandidate = {
 
 /**
  * Merge a route node's pipeline with a method entry's pipeline. Transform
- * arrays concatenate (node-level transforms run first, method-level after);
- * single-valued stages (`decode`/`encode`) take the more specific
- * (method-level) value when both are configured.
+ * arrays concatenate (node-level transforms run first, method-level after) —
+ * `validate` is one of these array stages (node-level validators run before
+ * method-level ones); single-valued stages (`decode`/`encode`) take the more
+ * specific (method-level) value when both are configured.
  */
 function mergePipelines(node: Pipeline | undefined, method: Pipeline | undefined): Pipeline {
   if (node === undefined) return method ?? {}
   if (method === undefined) return node
   const decode = method.decode ?? node.decode
   const sources = method.sources ?? node.sources
-  const validate = method.validate ?? node.validate
   const encode = method.encode ?? node.encode
   return {
     reqTransforms: [...(node.reqTransforms ?? []), ...(method.reqTransforms ?? [])],
     ...(decode !== undefined ? { decode } : {}),
     ...(sources !== undefined ? { sources } : {}),
     inputTransforms: [...(node.inputTransforms ?? []), ...(method.inputTransforms ?? [])],
-    ...(validate !== undefined ? { validate } : {}),
+    validate: [...(node.validate ?? []), ...(method.validate ?? [])],
     outputTransforms: [...(node.outputTransforms ?? []), ...(method.outputTransforms ?? [])],
     ...(encode !== undefined ? { encode } : {}),
     resTransforms: [...(node.resTransforms ?? []), ...(method.resTransforms ?? [])],
@@ -624,10 +736,11 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
     try {
       for (const transform of inputTransforms) input = await transform(input, meta)
 
-      // Validate slot: runs after inputTransforms, before handler.
-      // Ok → pass value to handler; Err → 400 response.
-      if (pipeline.validate !== undefined) {
-        const result = await pipeline.validate(input as Record<string, unknown>)
+      // Validate slot: runs after inputTransforms, before handler. Sequential
+      // — each validator's Ok value feeds the next validator's input; the
+      // first Err short-circuits the whole chain with a 400 response.
+      for (const validator of pipeline.validate ?? []) {
+        const result = await validator(input as Record<string, unknown>)
         if (result.kind === "err") {
           return jsonRouteResponse({ error: result.error }, { status: 400 })
         }

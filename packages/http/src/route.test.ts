@@ -11,11 +11,13 @@ import {
   applyMoveTo,
   applyResponse,
   composeTransforms,
+  createApplyValidation,
   httpRoute,
   isHttpRoute,
+  makeRouterFromRoute,
   naiveTransform,
 } from "./route.ts"
-import type { Pipeline } from "./route.ts"
+import type { Pipeline, Validator, ValidatorMap } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 
 // ============================================================================
@@ -614,7 +616,7 @@ describe("Pipeline — validate slot", () => {
   it("validate returning ok → handler receives validated value", async () => {
     let capturedInput: unknown
     const pipeline: Pipeline = {
-      validate: (bag) => ({ kind: "ok", value: { name: String(bag.name).toUpperCase() } }),
+      validate: [(bag) => ({ kind: "ok", value: { name: String(bag.name).toUpperCase() } })],
     }
     const route = httpRoute({
       methods: {
@@ -633,12 +635,12 @@ describe("Pipeline — validate slot", () => {
 
   it("validate returning err → 400 response with error body", async () => {
     const pipeline: Pipeline = {
-      validate: (bag) => {
+      validate: [(bag) => {
         if (typeof bag.age !== "string" || isNaN(Number(bag.age))) {
           return { kind: "err", error: { field: "age", message: "must be a number" } }
         }
         return { kind: "ok", value: { age: Number(bag.age) } }
-      },
+      }],
     }
     const route = httpRoute({
       methods: {
@@ -674,14 +676,31 @@ describe("Pipeline — validate slot", () => {
     expect(capturedInput).toEqual({ x: "1" })
   })
 
+  it("empty validate array → input passes through unchanged", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          pipeline: { validate: [] },
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?x=1"))
+    expect(capturedInput).toEqual({ x: "1" })
+  })
+
   it("validate with async (Promise<Result>)", async () => {
     let capturedInput: unknown
     const pipeline: Pipeline = {
-      validate: async (bag) => {
+      validate: [async (bag) => {
         // Simulate async validation (e.g., DB lookup)
         await Promise.resolve()
         return { kind: "ok", value: { validated: true, original: bag } }
-      },
+      }],
     }
     const route = httpRoute({
       methods: {
@@ -702,7 +721,7 @@ describe("Pipeline — validate slot", () => {
     const order: string[] = []
     const pipeline: Pipeline = {
       inputTransforms: [(input) => { order.push("inputTransform"); return input }],
-      validate: (bag) => { order.push("validate"); return { kind: "ok", value: bag } },
+      validate: [(bag) => { order.push("validate"); return { kind: "ok", value: bag } }],
     }
     const route = httpRoute({
       methods: {
@@ -719,7 +738,58 @@ describe("Pipeline — validate slot", () => {
     expect(order).toEqual(["inputTransform", "validate", "handler"])
   })
 
-  it("method-level validate overrides node-level", async () => {
+  it("multiple validators run sequentially, each Ok value feeding the next", async () => {
+    let capturedInput: unknown
+    const pipeline: Pipeline = {
+      validate: [
+        (bag) => ({ kind: "ok", value: { ...bag, step1: true } }),
+        (bag) => ({ kind: "ok", value: { ...bag, step2: true } }),
+        (bag) => ({ kind: "ok", value: { ...bag, step3: true } }),
+      ],
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?x=1"))
+    expect(capturedInput).toEqual({ x: "1", step1: true, step2: true, step3: true })
+  })
+
+  it("first Err short-circuits — later validators do not run", async () => {
+    let thirdRan = false
+    const pipeline: Pipeline = {
+      validate: [
+        (bag) => ({ kind: "ok", value: bag }),
+        () => ({ kind: "err", error: { message: "second validator rejects" } }),
+        (bag) => { thirdRan = true; return { kind: "ok", value: bag } },
+      ],
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (_: unknown) => ({ ok: true }),
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const res = await router(new Request("http://localhost/?x=1"))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: { message: string } }
+    expect(body.error.message).toBe("second validator rejects")
+    expect(thirdRan).toBe(false)
+  })
+
+  it("node-level and method-level validators compose — node-level runs first", async () => {
     let capturedInput: unknown
     const route = httpRoute({
       methods: {
@@ -727,17 +797,185 @@ describe("Pipeline — validate slot", () => {
           handler: (input: unknown) => { capturedInput = input; return {} },
           meta: {},
           pipeline: {
-            validate: (bag) => ({ kind: "ok", value: { from: "method", ...bag } }),
+            validate: [(bag) => ({ kind: "ok", value: { ...bag, from: [...(bag.from as string[] ?? []), "method"] } })],
           },
         },
       },
       pipeline: {
-        validate: (bag) => ({ kind: "ok", value: { from: "node", ...bag } }),
+        validate: [(bag) => ({ kind: "ok", value: { ...bag, from: [...(bag.from as string[] ?? []), "node"] } })],
       },
       meta: {},
     })
     const router = makeRouter(route)
     await router(new Request("http://localhost/?x=1"))
-    expect(capturedInput).toEqual({ from: "method", x: "1" })
+    expect(capturedInput).toEqual({ x: "1", from: ["node", "method"] })
+  })
+})
+
+// ============================================================================
+// createApplyValidation — runtime injection of generated validators
+// ============================================================================
+
+describe("createApplyValidation", () => {
+  it("pass-through when key not in map (stub case)", () => {
+    const applyValidation = createApplyValidation({})
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => ({}), meta: {} } },
+      meta: {},
+    })
+    const result = applyValidation("books", route)
+    expect(result).toBe(route)
+  })
+
+  it("injects the validator at the correct path", async () => {
+    const validators: ValidatorMap = {
+      books: {
+        "books": (bag) => ({ kind: "ok", value: { from: "list-validator", ...bag } }),
+        "books/:bookId": (bag) => ({ kind: "ok", value: { from: "item-validator", ...bag } }),
+      },
+    }
+    const applyValidation = createApplyValidation(validators)
+
+    const route = httpRoute({
+      meta: {},
+      children: {
+        books: httpRoute({
+          meta: {},
+          methods: { GET: { handler: (input: unknown) => input, meta: {} } },
+          fallback: {
+            name: "bookId",
+            subtree: httpRoute({
+              meta: {},
+              methods: { GET: { handler: (input: unknown) => input, meta: {} } },
+            }),
+          },
+        }),
+      },
+    })
+
+    const result = applyValidation("books", route)
+
+    const listRouter = makeRouterFromRoute(result)
+    const listRes = await listRouter(new Request("http://localhost/books"))
+    expect(await listRes.json()).toEqual({ from: "list-validator" })
+
+    const itemRouter = makeRouterFromRoute(result)
+    const itemRes = await itemRouter(new Request("http://localhost/books/42"))
+    expect(await itemRes.json()).toEqual({ bookId: "42", from: "item-validator" })
+  })
+
+  it("does not touch leaf methods whose path has no validator entry", async () => {
+    const validators: ValidatorMap = {
+      books: {
+        "books": (bag) => ({ kind: "ok", value: { validated: true, ...bag } }),
+      },
+    }
+    const applyValidation = createApplyValidation(validators)
+
+    const route = httpRoute({
+      meta: {},
+      children: {
+        books: httpRoute({
+          meta: {},
+          methods: { GET: { handler: (input: unknown) => input, meta: {} } },
+        }),
+        authors: httpRoute({
+          meta: {},
+          methods: { GET: { handler: (input: unknown) => input, meta: {} } },
+        }),
+      },
+    })
+
+    const result = applyValidation("books", route)
+    expect(result.children?.authors?.methods?.GET?.pipeline).toBeUndefined()
+
+    const router = makeRouterFromRoute(result)
+    const res = await router(new Request("http://localhost/authors?x=1"))
+    expect(await res.json()).toEqual({ x: "1" })
+  })
+
+  it("duplicate key throws", () => {
+    const applyValidation = createApplyValidation({
+      books: { "books": (bag) => ({ kind: "ok", value: bag }) },
+    })
+    const route = httpRoute({ meta: {} })
+    applyValidation("books", route)
+    expect(() => applyValidation("books", route)).toThrow(
+      'applyValidation: key "books" has already been used',
+    )
+  })
+
+  it("preserves existing pipeline config — doesn't clobber other pipeline fields", async () => {
+    const reqTransform = (req: Request, _meta: Meta) => req
+    const validators: ValidatorMap = {
+      books: {
+        "books": (bag) => ({ kind: "ok", value: { validated: true, ...bag } }),
+      },
+    }
+    const applyValidation = createApplyValidation(validators)
+
+    const route = httpRoute({
+      meta: {},
+      children: {
+        books: httpRoute({
+          meta: {},
+          methods: {
+            GET: {
+              handler: (input: unknown) => input,
+              meta: {},
+              pipeline: {
+                reqTransforms: [reqTransform],
+                sources: { paramNames: ["x"] },
+              },
+            },
+          },
+        }),
+      },
+    })
+
+    const result = applyValidation("books", route)
+    const pipeline = result.children?.books?.methods?.GET?.pipeline
+    expect(pipeline?.reqTransforms).toEqual([reqTransform])
+    expect(pipeline?.sources).toEqual({ paramNames: ["x"] })
+    expect(pipeline?.validate).toBeDefined()
+
+    const router = makeRouterFromRoute(result)
+    const res = await router(new Request("http://localhost/books?x=1"))
+    expect(await res.json()).toEqual({ validated: true, x: "1" })
+  })
+
+  it("appends onto an existing validate array — composes rather than clobbers", async () => {
+    const handAuthored: Validator = (bag) => ({ kind: "ok", value: { ...bag, handAuthored: true } })
+    const validators: ValidatorMap = {
+      books: {
+        "books": (bag) => ({ kind: "ok", value: { ...bag, generated: true } }),
+      },
+    }
+    const applyValidation = createApplyValidation(validators)
+
+    const route = httpRoute({
+      meta: {},
+      children: {
+        books: httpRoute({
+          meta: {},
+          methods: {
+            GET: {
+              handler: (input: unknown) => input,
+              meta: {},
+              pipeline: { validate: [handAuthored] },
+            },
+          },
+        }),
+      },
+    })
+
+    const result = applyValidation("books", route)
+    const pipeline = result.children?.books?.methods?.GET?.pipeline
+    expect(pipeline?.validate).toHaveLength(2)
+    expect(pipeline?.validate?.[0]).toBe(handAuthored)
+
+    const router = makeRouterFromRoute(result)
+    const res = await router(new Request("http://localhost/books"))
+    expect(await res.json()).toEqual({ handAuthored: true, generated: true })
   })
 })
