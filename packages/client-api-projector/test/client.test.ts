@@ -13,8 +13,9 @@
 
 import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore } from "@rhi-zone/fractal-example-library-api/tree"
+import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
 import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
-import { createClient } from "../src/index.ts"
+import { createClient, createClientFromRoute } from "../src/index.ts"
 import { ClientError } from "../src/client-error.ts"
 
 // In-process fetch handler — the server-side stack for round-trip tests
@@ -199,5 +200,46 @@ describe("verb-correctness spy", () => {
       method: "GET",
       pathname: "/catalog/search",
     })
+  })
+})
+
+// ============================================================================
+// 6. createClientFromRoute — core entry point, no Node available
+//
+// Same path/verb correctness as createClient, but co-located operations
+// (read/replace/remove, all placed onto the same fallback position by
+// applyMoveTo) degrade to their lowercased HTTP verb as the client member
+// name, since a bare HttpRoute has no memory of the authored Node child key.
+// ============================================================================
+
+describe("createClientFromRoute", () => {
+  it("plain (non-co-located) ops keep working identically to createClient", async () => {
+    const route = httpProjection(api)
+    const client = createClientFromRoute(route, { baseUrl: "http://localhost", fetch: createFetch(api) })
+
+    await client.books.add({ title: "Route Test", author: "Someone", genre: "Test" })
+    const books = await client.books.list() as Array<{ title: string }>
+    expect(books.map((b) => b.title)).toContain("Route Test")
+  })
+
+  it("co-located methods degrade to lowercased verb names (.get/.put/.delete)", async () => {
+    const route = httpProjection(api)
+    const serverFetch = createFetch(api)
+    const client = createClientFromRoute(route, { baseUrl: "http://localhost", fetch: serverFetch })
+
+    const created = await client.books.add({
+      title: "Verb Named",
+      author: "Someone",
+      genre: "Test",
+    }) as { id: string }
+
+    const sub = client.books.bookId(created.id) as Record<string, unknown>
+    expect(typeof sub.get).toBe("function")
+    expect(typeof sub.put).toBe("function")
+    expect(typeof sub.delete).toBe("function")
+    expect(sub.read).toBeUndefined()
+
+    const fetched = await (sub.get as () => Promise<{ title: string }>)()
+    expect(fetched.title).toBe("Verb Named")
   })
 })

@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-client-api-projector",
   "version": "0.1.0-alpha.0",
-  "description": "Runtime HTTP client derived from the function-core tree — method/path mirror the server's tree-walk dispatch (verbFromTags) so routes match exactly",
+  "description": "Runtime HTTP client derived from the HttpRoute tree — method/path mirror the server's route dispatch exactly, since both walk the same projected tree",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
