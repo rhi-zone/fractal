@@ -65,7 +65,7 @@ export type VerbBundle = Meta & {
   readonly tags: Record<string, boolean | undefined>
 }
 
-const verbBundle = (verb: string, tags: Record<string, boolean | undefined>): VerbBundle => ({
+export const httpVerbBundle = (verb: string, tags: Record<string, boolean | undefined>): VerbBundle => ({
   // Carries BOTH the `kind: "verb"` directive (read by `verbFromTags` in
   // tags.ts — also used by openapi/client's own self-contained tree walks)
   // and the `kind: "method"` directive (read by `applyMethods`, the
@@ -84,43 +84,43 @@ const verbBundle = (verb: string, tags: Record<string, boolean | undefined>): Ve
  * readOnly ⇒ idempotent (via lattice in resolveTags).
  * Lights up: MCP readOnlyHint, CLI no-confirm, HTTP GET.
  */
-const get: VerbBundle = verbBundle("GET", { readOnly: true })
+const get: VerbBundle = httpVerbBundle("GET", { readOnly: true })
 
 /**
  * `http.post` — verb POST, no implied tags (plain mutation).
  * Conservative: unknown idempotency, unknown destructiveness.
  */
-const post: VerbBundle = verbBundle("POST", {})
+const post: VerbBundle = httpVerbBundle("POST", {})
 
 /**
  * `http.put` — verb PUT + idempotent tag.
  * Lights up: MCP idempotentHint, gRPC idempotency, HTTP PUT.
  */
-const put: VerbBundle = verbBundle("PUT", { idempotent: true })
+const put: VerbBundle = httpVerbBundle("PUT", { idempotent: true })
 
 /**
  * `http.patch` — verb PATCH, no implied tags (plain mutation).
  * Conservative: unknown idempotency.
  */
-const patch: VerbBundle = verbBundle("PATCH", {})
+const patch: VerbBundle = httpVerbBundle("PATCH", {})
 
 /**
  * `http.delete` — verb DELETE + destructive and idempotent tags.
  * Lights up: MCP destructiveHint + idempotentHint, CLI confirm, HTTP DELETE.
  */
-const _delete: VerbBundle = verbBundle("DELETE", { destructive: true, idempotent: true })
+const _delete: VerbBundle = httpVerbBundle("DELETE", { destructive: true, idempotent: true })
 
 /**
  * `http.head` — verb HEAD + readOnly tag (semantically identical to GET).
  * Rarely needed directly — autoMethodLayer derives HEAD from GET automatically.
  */
-const head: VerbBundle = verbBundle("HEAD", { readOnly: true })
+const head: VerbBundle = httpVerbBundle("HEAD", { readOnly: true })
 
 /**
  * `http.options` — verb OPTIONS + readOnly tag.
  * Rarely needed directly — autoMethodLayer handles OPTIONS automatically.
  */
-const options: VerbBundle = verbBundle("OPTIONS", { readOnly: true })
+const options: VerbBundle = httpVerbBundle("OPTIONS", { readOnly: true })
 
 // ============================================================================
 // Exported namespace
