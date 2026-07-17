@@ -137,7 +137,7 @@ const checkoutNode = api_({
  * node-level marker below is retained meta, NOT interpreted by the HttpRoute
  * pipeline (which reads only `moveTo`/`method` directives) — it's read
  * independently by openapi's and client's own self-contained Node-tree
- * walks (packages/http-api-projector/src/openapi.ts, packages/client-api-projector/src/index.ts),
+ * walks (packages/http-api-projector/src/openapi.ts, packages/http-api-projector/src/client.ts),
  * which still derive method-co-location from this marker rather than from
  * `moveTo` directives. Two projectors, two encodings of the same fact.
  */

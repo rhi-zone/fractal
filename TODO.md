@@ -1,5 +1,33 @@
 # fractal — TODO
 
+## client-api-projector merged into http-api-projector — DONE (2026-07-18)
+
+`packages/client-api-projector` was merged into `packages/http-api-projector`
+as `src/client.ts` (+ `src/client-error.ts`, `src/client.test.ts`) — the
+runtime client builds HTTP requests and derives verbs/paths from `HttpRoute`,
+so it's inherently an HTTP concern, not a separate projection package. Same
+reasoning as the OpenAPI merge below. Full rationale in
+`docs/design/decisions.md` § Merge client-api-projector into
+http-api-projector.
+
+- `createClient`/`createClientFromRoute`, `ClientError`, and the
+  `ClientOptions`/`AnyClient` types are now re-exported from
+  `http-api-projector`'s package root and a `./client` subpath; the module's
+  former cross-package imports of `@rhi-zone/fractal-http-api-projector/dx`
+  and `/route` became relative (`./dx.ts`, `./route.ts`).
+- `client.test.ts`'s round-trip tests still use `createFetch(api)` (now from
+  the same package) for in-process dispatch — no network, no server process;
+  they pass unchanged, now exercising a same-package round trip.
+- Root `package.json` `workspaces` and the fencing `comment` field, `README.md`,
+  `docs/guide/index.md`, `docs/api/index.md`, the `api-tree`/`examples/library-api`
+  cross-reference comments, and the `spike/` tsconfig path maps were all
+  updated; no `.ts`/`.json`/`.md` reference to `client-api-projector` or
+  `@rhi-zone/fractal-client-api-projector` remains outside historical/superseded
+  design docs (`roadmap.md`, `converged-model.md`, `handler-model.md` — already
+  marked stale/superseded — and this file's own history below this entry).
+- `packages/client-api-projector` deleted. `bun run typecheck` and `bun test`
+  pass across the whole workspace.
+
 ## openapi-api-projector merged into http-api-projector — DONE (2026-07-18)
 
 `packages/openapi-api-projector` was merged into `packages/http-api-projector`

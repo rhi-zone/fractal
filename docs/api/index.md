@@ -4,16 +4,15 @@ The full API reference is in [`docs/design/handler-model.md`](../design/handler-
 
 ## Packages
 
-All 6 packages built and passing tests. `@rhi-zone/fractal-codegen` was merged into `@rhi-zone/fractal-type-ir` 2026-07-18, then its extractor/tree-walker/CLI (`extract.ts`/`tree.ts`/`cli.ts`/`build.ts`) moved on to `@rhi-zone/fractal-api-tree` the same day — they walk `api()`/`op()` authoring source, an api-tree concern, not type-ir's. `compile.ts` (`TypeRef` → validator code) stayed in type-ir as one of its 20+ projectors. `@rhi-zone/fractal-openapi-api-projector` was merged into `@rhi-zone/fractal-http-api-projector` the same day — OpenAPI only ever describes HTTP APIs, so it's an HTTP concern, not a separate projection package; `createFetch` now auto-serves the generated document at `/openapi.json`.
+All 5 packages built and passing tests. `@rhi-zone/fractal-codegen` was merged into `@rhi-zone/fractal-type-ir` 2026-07-18, then its extractor/tree-walker/CLI (`extract.ts`/`tree.ts`/`cli.ts`/`build.ts`) moved on to `@rhi-zone/fractal-api-tree` the same day — they walk `api()`/`op()` authoring source, an api-tree concern, not type-ir's. `compile.ts` (`TypeRef` → validator code) stayed in type-ir as one of its 20+ projectors. `@rhi-zone/fractal-openapi-api-projector` and `@rhi-zone/fractal-client-api-projector` were both merged into `@rhi-zone/fractal-http-api-projector` the same day — OpenAPI only ever describes HTTP APIs and the runtime client only ever builds HTTP requests, so both are HTTP concerns, not separate projection packages; `createFetch` now auto-serves the generated OpenAPI document at `/openapi.json`.
 
 | Package | Status | Description |
 |---------|--------|-------------|
 | `@rhi-zone/fractal-api-tree` | Built & green | Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in `./node`; Tags lattice in `./tags`; build-time extractor + source-level tree walker in `./extract`/`./tree`; `fractal-api-tree` build/watch/stub/check CLI |
-| `@rhi-zone/fractal-http-api-projector` | Built & green | WHATWG renderer for the function-core tree — direct tree-walk `makeRouter`, `autoMethodLayer`, `corsLayer`, `createFetch`, `serveBun`/`serveNode`; OpenAPI 3.1 projection (`toOpenApi`/`toOpenApiFromRoute`) from routes + tags + codegen schemas, auto-served at `/openapi.json` by `createFetch` |
+| `@rhi-zone/fractal-http-api-projector` | Built & green | WHATWG renderer for the function-core tree — direct tree-walk `makeRouter`, `autoMethodLayer`, `corsLayer`, `createFetch`, `serveBun`/`serveNode`; OpenAPI 3.1 projection (`toOpenApi`/`toOpenApiFromRoute`) from routes + tags + codegen schemas, auto-served at `/openapi.json` by `createFetch`; runtime HTTP client (`createClient`/`createClientFromRoute`) whose verb/path derivation walks the same `HttpRoute` tree the router dispatches against |
 | `@rhi-zone/fractal-type-ir` | Built & green | Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.), plus AOT validator codegen (`compile.ts`) |
 | `@rhi-zone/fractal-mcp-api-projector` | Built & green | MCP tool projection for the function-core tree — `toTools`, annotation hints derived from `meta.tags` |
 | `@rhi-zone/fractal-cli-api-projector` | Built & green | CLI projection for the function-core tree — subcommand dispatch, tag-driven confirm, codegen args |
-| `@rhi-zone/fractal-client-api-projector` | Built & green | Runtime HTTP client derived from the function-core tree — method/path mirror the server's tree-walk dispatch (`verbFromTags`) so routes match exactly |
 
 ## Core: `@rhi-zone/fractal-api-tree`
 
@@ -111,10 +110,11 @@ Walks a `Node` tree and projects each leaf into an MCP tool descriptor, deriving
 
 Tag-driven behavior mirrors the other projections: `destructive`/non-`readOnly` ops get an interactive confirm prompt; codegen'd schemas drive argument parsing.
 
-## HTTP client: `@rhi-zone/fractal-client-api-projector`
+## HTTP client: `@rhi-zone/fractal-http-api-projector`
 
 ```ts
 createClient(tree: Node, opts?: ClientOptions): AnyClient
+createClientFromRoute(route: HttpRoute, opts?: ClientOptions): AnyClient
 ```
 
-Builds a nested proxy object mirroring the `Node` tree's shape: branch children become nested client objects, a `fallback` becomes a function keyed by its capture name (e.g. `client.books.bookId("book-1").read()`), and leaves become async callables that fire the matching HTTP request. Verb/path derivation duplicates the same self-contained tree-walk used by `@rhi-zone/fractal-http-api-projector`'s OpenAPI projection, so client and server routes always agree. `ClientError` wraps a non-OK response (status + parsed body).
+The runtime HTTP client only ever builds HTTP requests, so it lives in `@rhi-zone/fractal-http-api-projector` (merged in from the former `@rhi-zone/fractal-client-api-projector`, 2026-07-18) and is built directly on this package's own `HttpRoute` tree, exactly like the OpenAPI projection — `createClientFromRoute(route, opts?)` walks an already-projected route tree; `createClient(node, opts?)` is the `Node`-tree convenience wrapper. It builds a nested proxy object mirroring the route tree's shape: branch children become nested client objects, a `fallback` becomes a function keyed by its capture name (e.g. `client.books.bookId("book-1").read()`), and leaves become async callables that fire the matching HTTP request. Because both walk the same `HttpRoute` tree `makeRouterFromRoute` dispatches against, client and server routes always agree. `ClientError` wraps a non-OK response (status + parsed body).

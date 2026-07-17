@@ -1,4 +1,4 @@
-// packages/client-api-projector/test/client.test.ts — @rhi-zone/fractal-client-api-projector
+// packages/http-api-projector/src/client.test.ts — @rhi-zone/fractal-http-api-projector
 //
 // Round-trip tests for createClient against the library-api example tree.
 // All tests use `fetch: createFetch(api)` for in-process dispatch — no
@@ -12,11 +12,11 @@
 // MCP/CLI keep the agnostic child names; only HTTP changes (path assignment).
 
 import { beforeEach, describe, expect, it } from "bun:test"
-import { api, clearStore } from "@rhi-zone/fractal-example-library-api/tree"
-import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
-import { createClient, createClientFromRoute } from "../src/index.ts"
-import { ClientError } from "../src/client-error.ts"
+import { api, clearStore } from "../../../examples/library-api/src/tree.ts"
+import { httpProjection } from "./dx.ts"
+import { createFetch } from "./preset.ts"
+import { createClient, createClientFromRoute } from "./client.ts"
+import { ClientError } from "./client-error.ts"
 
 // In-process fetch handler — the server-side stack for round-trip tests
 const serverFetch = createFetch(api)

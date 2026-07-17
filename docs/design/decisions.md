@@ -204,3 +204,38 @@ monorepo (root `package.json` workspaces, README, docs, examples,
 `TODO.md`) were updated; `packages/openapi-api-projector` was deleted.
 `bun run typecheck` and `bun test` pass across the whole workspace after the
 merge.
+
+---
+
+## Merge client-api-projector into http-api-projector (2026-07-18)
+
+**Context:** `client-api-projector` was a separate package from
+`http-api-projector`, even though the runtime client only ever builds HTTP
+requests — it has no meaning apart from an HTTP surface (it derives each
+leaf's method and path from `HttpRoute` and fires a `fetch` call against
+them). Same reasoning as the OpenAPI merge earlier the same day: keeping it
+separate meant a cross-package dependency and manual wiring in every
+consuming app, for a projection that is definitionally HTTP-shaped.
+`createClient`/`createClientFromRoute` already walked `http-api-projector`'s
+own `HttpRoute` tree (a prior consolidation, see `client.ts`'s module doc),
+so the only thing separating the packages was the workspace boundary itself.
+
+**Decision:** Merge `packages/client-api-projector` into
+`packages/http-api-projector` as `src/client.ts` (+ `src/client-error.ts`,
+`src/client.test.ts`), re-exported from the package root (`createClient`,
+`createClientFromRoute`, `ClientError`, and the `ClientOptions`/`AnyClient`
+types) and from a `./client` subpath, matching the `./openapi` pattern.
+
+**Evidence:** `client-api-projector`'s former cross-package imports
+(`@rhi-zone/fractal-http-api-projector/dx`, `/route`) became relative imports
+now that the code lives in the same package; its test's package-name import
+of the library-api fixture became the same relative path
+(`../../../examples/library-api/src/tree.ts`) `openapi.test.ts` already uses.
+The client's in-process round-trip tests (using `createFetch` from this same
+package for the injected `fetch`) still pass — they now exercise a
+same-package round trip instead of a cross-package one. All references
+across the monorepo (root `package.json` workspaces, README, docs, the
+`api-tree`/`examples/library-api` cross-reference comments, and the `spike/`
+tsconfig path maps) were updated; `packages/client-api-projector` was
+deleted. `bun run typecheck` and `bun test` pass across the whole workspace
+after the merge.

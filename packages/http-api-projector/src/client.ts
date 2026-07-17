@@ -1,7 +1,11 @@
-// packages/client-api-projector/src/index.ts — @rhi-zone/fractal-client-api-projector
+// packages/http-api-projector/src/client.ts — @rhi-zone/fractal-http-api-projector
 //
-// Runtime HTTP client — now built directly on the HTTP projector's own
-// `HttpRoute` tree instead of re-walking the raw `Node` tree.
+// Runtime HTTP client — merged into http-api-projector (2026-07-18): the
+// client builds HTTP requests and derives verbs/paths from `HttpRoute`, so
+// it's inherently an HTTP concern rather than a separate projection package
+// (same reasoning as the OpenAPI merge — see `openapi.ts`'s module doc).
+// Built directly on this package's own `HttpRoute` tree instead of
+// re-walking the raw `Node` tree.
 //
 // Previously this module re-derived verb/segment/path from `meta.http`
 // directives (via `verbFromTags`/a locally-duplicated `inferSegment`) with
@@ -62,8 +66,8 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
-import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
-import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
+import { httpProjection } from "./dx.ts"
+import type { HttpRoute } from "./route.ts"
 import { ClientError } from "./client-error.ts"
 
 export { ClientError } from "./client-error.ts"

@@ -15,7 +15,7 @@
     "paths": {
       "@rhi-zone/fractal-api-tree": ["../../packages/api-tree/src/index.ts"],
       "@rhi-zone/fractal-http-api-projector": ["../../packages/http-api-projector/src/index.ts"],
-      "@rhi-zone/fractal-client-api-projector": ["../../packages/client-api-projector/src/index.ts"]
+      "@rhi-zone/fractal-http-api-projector/client": ["../../packages/http-api-projector/src/client.ts"]
     }
   },
   "include": ["router.ts", "http.ts", "client.ts", "openapi.ts", "demo.ts", "negatives.ts", "sample.ts"]

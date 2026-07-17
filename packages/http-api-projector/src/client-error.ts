@@ -1,4 +1,4 @@
-// packages/client-api-projector/src/client-error.ts — @rhi-zone/fractal-client-api-projector
+// packages/http-api-projector/src/client-error.ts — @rhi-zone/fractal-http-api-projector
 //
 // Typed error thrown when the server returns a non-2xx response.
 

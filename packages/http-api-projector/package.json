@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-http-api-projector",
   "version": "0.1.0-alpha.0",
-  "description": "WHATWG renderer for the function-core tree — direct tree-walk makeRouter, autoMethodLayer, corsLayer, createFetch, serveBun/serveNode, toOpenApi",
+  "description": "WHATWG renderer for the function-core tree — direct tree-walk makeRouter, autoMethodLayer, corsLayer, createFetch, serveBun/serveNode, toOpenApi, createClient",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -42,6 +42,10 @@
     "./openapi": {
       "types": "./src/openapi.ts",
       "import": "./src/openapi.ts"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "import": "./src/client.ts"
     }
   },
   "files": ["src"],

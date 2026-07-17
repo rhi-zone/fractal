@@ -25,10 +25,9 @@ This constraint is load-bearing: composability alone does not yield a small ment
 | Package | Role |
 |---------|------|
 | `@rhi-zone/fractal-api-tree` | `api`, `op`, `mergeMeta`, `Node`, `Meta`, `Handler` — the protocol-agnostic tree model |
-| `@rhi-zone/fractal-http-api-projector` | HTTP kit: `http.get`/`post`/`put`/`patch`/`delete`, `httpProjection`, `createFetch`, `makeRouterFromRoute`, `crud`, `toOpenApi` (OpenAPI 3.1 projection, auto-served at `/openapi.json` by `createFetch`) |
+| `@rhi-zone/fractal-http-api-projector` | HTTP kit: `http.get`/`post`/`put`/`patch`/`delete`, `httpProjection`, `createFetch`, `makeRouterFromRoute`, `crud`, `toOpenApi` (OpenAPI 3.1 projection, auto-served at `/openapi.json` by `createFetch`), `createClient` (runtime HTTP client) |
 | `@rhi-zone/fractal-mcp-api-projector` | MCP tool projection: `toTools` |
 | `@rhi-zone/fractal-cli-api-projector` | CLI projection over the same tree |
-| `@rhi-zone/fractal-client-api-projector` | typed client projection over the same tree |
 
 ## Quick Start
 

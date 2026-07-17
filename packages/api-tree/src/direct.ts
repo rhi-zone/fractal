@@ -2,8 +2,8 @@
 //
 // createDirectApi(tree) — the zero-protocol-overhead projection.
 //
-// Same nested-proxy shape as the HTTP client (packages/client-api-projector/
-// src/index.ts): branch nodes become nested objects, a `fallback` becomes a
+// Same nested-proxy shape as the HTTP client (packages/http-api-projector/
+// src/client.ts): branch nodes become nested objects, a `fallback` becomes a
 // `(slugValue) => subApi` function, and a leaf becomes an async callable.
 // Unlike the client, this walks the raw `Node` tree directly — there is no
 // HttpRoute pipeline, no verb/path derivation, no fetch/serialization.
@@ -27,7 +27,7 @@
 //
 // See:
 //   packages/api-tree/src/node.ts                 — Node, Handler, fallback, isLeaf
-//   packages/client-api-projector/src/index.ts     — the HTTP-backed analogue
+//   packages/http-api-projector/src/client.ts     — the HTTP-backed analogue
 //   packages/http-api-projector/src/decode.ts      — bulkCollect (slug-seeding precedent)
 
 import { isLeaf } from "./node.ts"
@@ -37,7 +37,7 @@ import type { Node } from "./node.ts"
 // object form are structurally incompatible as a TS union for property
 // access (`api.books.list()` needs `AnyApi` to be indexable at every level,
 // including the callable-with-attached-children case) — same shape/tradeoff
-// as `AnyClient` in client-api-projector. Callers index into it dynamically;
+// as `AnyClient` in http-api-projector's client.ts. Callers index into it dynamically;
 // internal builders cast to `AnyApi` at each return site (mirrors
 // `buildClientNode`'s own `as AnyClient` casts).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

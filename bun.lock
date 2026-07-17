@@ -41,15 +41,6 @@
         "@rhi-zone/fractal-api-tree": "workspace:*",
       },
     },
-    "packages/client-api-projector": {
-      "name": "@rhi-zone/fractal-client-api-projector",
-      "version": "0.1.0-alpha.0",
-      "dependencies": {
-        "@rhi-zone/fractal-api-tree": "workspace:*",
-        "@rhi-zone/fractal-example-library-api": "workspace:*",
-        "@rhi-zone/fractal-http-api-projector": "workspace:*",
-      },
-    },
     "packages/http-api-projector": {
       "name": "@rhi-zone/fractal-http-api-projector",
       "version": "0.1.0-alpha.0",
@@ -84,8 +75,6 @@
     "@rhi-zone/fractal-api-tree": ["@rhi-zone/fractal-api-tree@workspace:packages/api-tree"],
 
     "@rhi-zone/fractal-cli-api-projector": ["@rhi-zone/fractal-cli-api-projector@workspace:packages/cli-api-projector"],
-
-    "@rhi-zone/fractal-client-api-projector": ["@rhi-zone/fractal-client-api-projector@workspace:packages/client-api-projector"],
 
     "@rhi-zone/fractal-example-library-api": ["@rhi-zone/fractal-example-library-api@workspace:examples/library-api"],
 

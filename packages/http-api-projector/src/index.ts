@@ -2,11 +2,17 @@
 //
 // Package root entry point. Re-exports the DX authoring surface: `http.*`
 // method bundles, `HttpMethods`/`Method`, `crud()`, and `httpProjection()`.
-// Lower-level pieces (the direct tree-walk projector, the HttpRoute rewriter
-// pipeline, layers, the OOTB preset) stay reachable via their own subpath
-// exports (`./project`, `./route`, `./layers`, `./preset`, `./verbs`,
-// `./adapter`) — this root re-exports only the DX sugar described in
-// docs/design/routing-and-transforms.md § DX — constructor sugar.
+// Also re-exports the OpenAPI projection (`toOpenApi`/`toOpenApiFromRoute`)
+// and the runtime HTTP client (`createClient`/`createClientFromRoute`,
+// `ClientError`) — both are inherently HTTP concerns (see `openapi.ts` and
+// `client.ts` module docs) merged into this package rather than kept as
+// separate projection packages. Lower-level pieces (the direct tree-walk
+// projector, the HttpRoute rewriter pipeline, layers, the OOTB preset) stay
+// reachable via their own subpath exports (`./project`, `./route`,
+// `./layers`, `./preset`, `./verbs`, `./adapter`, `./openapi`, `./client`) —
+// this root re-exports the DX sugar described in
+// docs/design/routing-and-transforms.md § DX — constructor sugar, plus the
+// two HTTP-derived projections.
 
 export { http, httpVerbBundle } from "./verbs.ts"
 export type { HttpMethods, Method, VerbBundle } from "./verbs.ts"
@@ -37,3 +43,6 @@ export type {
   OpenApiParameter,
   OpenApiSchema,
 } from "./openapi.ts"
+export { createClient, createClientFromRoute } from "./client.ts"
+export type { AnyClient, ClientOptions } from "./client.ts"
+export { ClientError } from "./client-error.ts"
