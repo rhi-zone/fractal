@@ -12,11 +12,12 @@
 
 import { describe, expect, it } from "bun:test"
 import { api, op, service } from "@rhi-zone/fractal-core/node"
+import type { Node } from "@rhi-zone/fractal-core/node"
 import { makeRouter, toHttpRoutes, verbFromTags } from "./project.ts"
 import { applyMethods, applyMoveTo } from "./route.ts"
 import { autoMethodLayer } from "./layers.ts"
 
-function routes(tree: ReturnType<typeof api>) {
+function routes(tree: Node) {
   return applyMoveTo(applyMethods(toHttpRoutes(tree)))
 }
 

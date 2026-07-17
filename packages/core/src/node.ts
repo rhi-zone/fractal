@@ -62,9 +62,24 @@ export type Handler<I = any, O = any> = (input: I) => O | Promise<O>
  *   consumes that value, binds it as `fallback.name` in the handler input,
  *   and continues into `fallback.subtree`. Static children always win.
  * - `meta` is always present.
+ *
+ * Generic over `H` (this node's own handler type), defaulting to the erased
+ * `Handler` so `Node` keeps working everywhere it's used as a plain type
+ * (projections, `Record<string, Node>`, etc.) — only `op()` call sites that
+ * want the concrete handler type preserved need to lean on the generic;
+ * nothing downstream has to opt in.
+ *
+ * `children`'s declared type here is intentionally the erased
+ * `Record<string, Node>` — a `children` map keyed to each child's own exact
+ * `Node<H>` can't be expressed as a *default* on a second type parameter
+ * without TS rejecting it as a circular default (a generic parameter
+ * defaulting to a map of the enclosing type is a known TS limitation, unlike
+ * ordinary recursive aliases). `api()` instead preserves the concrete
+ * children map by intersecting it onto its return type at the call site —
+ * see `api()`'s own doc comment.
  */
-export type Node = {
-  readonly handler?: Handler
+export type Node<H extends Handler = Handler> = {
+  readonly handler?: H
   readonly children?: Readonly<Record<string, Node>>
   readonly fallback?: { readonly name: string; readonly subtree: Node }
   readonly meta: Meta
@@ -127,17 +142,23 @@ export function mergeMeta(...metas: Array<Meta | undefined>): Meta {
  *
  * The result IS a Node (not a separate `{fn, meta}` record). Projections
  * detect a leaf by `node.handler !== undefined`.
+ *
+ * Generic in `H` (the exact handler type): `op(fn)`'s result carries `fn`'s
+ * real signature as `Node<H>["handler"]`, not the erased `Handler`. This is
+ * what lets `api({ getBook: op((input: {id: string}) => ...) })` produce a
+ * tree whose `children.getBook.handler` still has `fn`'s real input/output
+ * types instead of `Handler`'s `(input: any) => any`.
  */
-export function op<I, O>(
-  fn: (input: I) => O | Promise<O>,
+export function op<H extends Handler>(
+  fn: H,
   ...contributions: Array<Meta>
-): Node {
+): Node<H> {
   const meta = contributions.length === 0
     ? {}
     : contributions.length === 1
       ? contributions[0]!
       : mergeMeta(...contributions)
-  return { handler: fn as Handler, meta }
+  return { handler: fn, meta }
 }
 
 /**
@@ -151,17 +172,23 @@ export function op<I, O>(
  * `api()` is the (only) branch-node constructor; `service()` is the other
  * authoring surface and lowers to the same Node shape.
  *
+ * Generic in `C` (the exact children map): the input `children` object's
+ * per-key `Node<H>` types survive into the result's `children`, instead of
+ * widening to `Record<string, Node>`. So `api({ getBook: op(fn) })` yields a
+ * `Node` whose `children.getBook.handler` is still `fn`'s real type.
+ *
  * See docs/design/routing-and-transforms.md § DX — constructor sugar.
  */
-export function api(
-  children: Record<string, Node>,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function api<C extends Readonly<Record<string, Node<any>>>>(
+  children: C,
   opts?: { meta?: Meta; fallback?: { name: string; subtree: Node } },
-): Node {
+): Omit<Node, "children"> & { readonly children: C } {
   return {
     ...(children !== undefined ? { children } : {}),
     ...(opts?.fallback !== undefined ? { fallback: opts.fallback } : {}),
     meta: opts?.meta ?? {},
-  }
+  } as Omit<Node, "children"> & { readonly children: C }
 }
 
 /** Duck-type check for the `{ name, subtree }` fallback shape. */
