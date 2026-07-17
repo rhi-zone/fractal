@@ -16,6 +16,12 @@
 // two modules are merged.
 export { api, mergeMeta, op } from "./node.ts"
 
+// `createDirectApi` — the zero-protocol-overhead projection: a nested proxy
+// that calls tree handlers in-process (no HTTP, no serialization). See
+// "./direct.ts" for the full doc.
+export { createDirectApi } from "./direct.ts"
+export type { AnyApi } from "./direct.ts"
+
 // Dev tooling — the build-time extractor (extract.ts, TS source -> TypeRef)
 // and the source-level api()/op() tree walker (tree.ts) it feeds — lives on
 // "./extract" and "./tree" subpaths, NOT the package root: they pull in the
