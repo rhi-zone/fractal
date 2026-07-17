@@ -24,6 +24,7 @@
 
 import { isLeaf } from "@rhi-zone/fractal-core/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
+import type { Result } from "@rhi-zone/fractal-core"
 import type { HttpDirective } from "./project.ts"
 import { bulkCollect, httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"
@@ -72,6 +73,13 @@ export type Pipeline = {
     readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>
   }
   inputTransforms?: Array<(input: unknown, meta: Meta) => unknown | Promise<unknown>>
+  /**
+   * Validate + coerce the assembled input bag after inputTransforms run.
+   * Returns a Result: `kind: "ok"` passes `value` to the handler;
+   * `kind: "err"` short-circuits with a 400 response containing the error.
+   * When absent, input passes through to the handler unchanged.
+   */
+  validate?: (input: Record<string, unknown>) => Result<unknown, unknown> | Promise<Result<unknown, unknown>>
   outputTransforms?: Array<(output: unknown, meta: Meta) => unknown | Promise<unknown>>
   encode?: (output: unknown, meta: Meta) => Response | Promise<Response>
   resTransforms?: Array<(res: Response, meta: Meta) => Response | Promise<Response>>
@@ -460,12 +468,14 @@ function mergePipelines(node: Pipeline | undefined, method: Pipeline | undefined
   if (method === undefined) return node
   const decode = method.decode ?? node.decode
   const sources = method.sources ?? node.sources
+  const validate = method.validate ?? node.validate
   const encode = method.encode ?? node.encode
   return {
     reqTransforms: [...(node.reqTransforms ?? []), ...(method.reqTransforms ?? [])],
     ...(decode !== undefined ? { decode } : {}),
     ...(sources !== undefined ? { sources } : {}),
     inputTransforms: [...(node.inputTransforms ?? []), ...(method.inputTransforms ?? [])],
+    ...(validate !== undefined ? { validate } : {}),
     outputTransforms: [...(node.outputTransforms ?? []), ...(method.outputTransforms ?? [])],
     ...(encode !== undefined ? { encode } : {}),
     resTransforms: [...(node.resTransforms ?? []), ...(method.resTransforms ?? [])],
@@ -613,6 +623,16 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
 
     try {
       for (const transform of inputTransforms) input = await transform(input, meta)
+
+      // Validate slot: runs after inputTransforms, before handler.
+      // Ok → pass value to handler; Err → 400 response.
+      if (pipeline.validate !== undefined) {
+        const result = await pipeline.validate(input as Record<string, unknown>)
+        if (result.kind === "err") {
+          return jsonRouteResponse({ error: result.error }, { status: 400 })
+        }
+        input = result.value
+      }
 
       let output: unknown = await (matched.handler(input) as Promise<unknown>)
       for (const transform of outputTransforms) output = await transform(output, meta)

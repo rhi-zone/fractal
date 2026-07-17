@@ -648,3 +648,139 @@ describe("Pipeline", () => {
     ])
   })
 })
+
+// ============================================================================
+// Validate slot — after inputTransforms, before handler
+// ============================================================================
+
+describe("Pipeline — validate slot", () => {
+  it("validate returning ok → handler receives validated value", async () => {
+    let capturedInput: unknown
+    const pipeline: Pipeline = {
+      validate: (bag) => ({ kind: "ok", value: { name: String(bag.name).toUpperCase() } }),
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?name=alice"))
+    expect(capturedInput).toEqual({ name: "ALICE" })
+  })
+
+  it("validate returning err → 400 response with error body", async () => {
+    const pipeline: Pipeline = {
+      validate: (bag) => {
+        if (typeof bag.age !== "string" || isNaN(Number(bag.age))) {
+          return { kind: "err", error: { field: "age", message: "must be a number" } }
+        }
+        return { kind: "ok", value: { age: Number(bag.age) } }
+      },
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (_: unknown) => ({ ok: true }),
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const res = await router(new Request("http://localhost/?age=not-a-number"))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: { field: string; message: string } }
+    expect(body.error.field).toBe("age")
+    expect(body.error.message).toBe("must be a number")
+  })
+
+  it("no validate → input passes through unchanged (backward compat)", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?x=1"))
+    expect(capturedInput).toEqual({ x: "1" })
+  })
+
+  it("validate with async (Promise<Result>)", async () => {
+    let capturedInput: unknown
+    const pipeline: Pipeline = {
+      validate: async (bag) => {
+        // Simulate async validation (e.g., DB lookup)
+        await Promise.resolve()
+        return { kind: "ok", value: { validated: true, original: bag } }
+      },
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?key=val"))
+    expect(capturedInput).toEqual({ validated: true, original: { key: "val" } })
+  })
+
+  it("validate runs after inputTransforms", async () => {
+    const order: string[] = []
+    const pipeline: Pipeline = {
+      inputTransforms: [(input) => { order.push("inputTransform"); return input }],
+      validate: (bag) => { order.push("validate"); return { kind: "ok", value: bag } },
+    }
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (_: unknown) => { order.push("handler"); return {} },
+          meta: {},
+          pipeline,
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/"))
+    expect(order).toEqual(["inputTransform", "validate", "handler"])
+  })
+
+  it("method-level validate overrides node-level", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          pipeline: {
+            validate: (bag) => ({ kind: "ok", value: { from: "method", ...bag } }),
+          },
+        },
+      },
+      pipeline: {
+        validate: (bag) => ({ kind: "ok", value: { from: "node", ...bag } }),
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/?x=1"))
+    expect(capturedInput).toEqual({ from: "method", x: "1" })
+  })
+})
