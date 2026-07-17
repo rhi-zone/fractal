@@ -27,10 +27,19 @@ export const tree = api({
         /** Create a new user account. */
         create: op(
           (_input: {
+            /** The user's display name. */
             name: string
+            /**
+             * Age in years.
+             * @default 18
+             */
             age?: number
             roles: string[]
-            address: { street: string; zip?: string }
+            address: {
+              /** Street address line. */
+              street: string
+              zip?: string
+            }
           }) => ({ id: "u1" }),
         ),
       }, { fallback: {

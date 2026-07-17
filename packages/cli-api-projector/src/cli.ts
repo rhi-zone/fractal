@@ -334,11 +334,8 @@ function buildLeafHelp(
     const required = toolSchema.inputSchema.required ?? []
     for (const [field, fieldSchema] of Object.entries(props)) {
       const isRequired = required.includes(field)
-      // Known limitation: `extractToolSchemas` (packages/api-tree/src/extract.ts)
-      // doesn't populate per-field `description` from source today (no
-      // per-field JSDoc extraction wired up) — this reads it defensively so
-      // help text picks it up the moment a schema DOES carry one (hand-authored,
-      // or once a future extractor pass adds JSDoc-per-field support).
+      // `extractToolSchemas` (packages/api-tree/src/extract.ts) populates
+      // per-field `description` from each property's leading JSDoc comment.
       const fsDesc = fieldSchema.description
       const req = isRequired ? " (required)" : " (optional)"
       const typeHint = describeFieldType(fieldSchema)

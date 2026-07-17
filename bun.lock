@@ -29,6 +29,7 @@
         "@rhi-zone/fractal-type-ir": "workspace:*",
       },
       "devDependencies": {
+        "@rhi-zone/fractal-cli-api-projector": "workspace:*",
         "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
         "@sinclair/typebox": "^0.34.41",
         "typescript": "^6.0.3",

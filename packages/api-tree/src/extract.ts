@@ -51,16 +51,14 @@ export type JsonSchema = {
   oneOf?: JsonSchema[]
   discriminator?: { propertyName: string }
   $comment?: string
-  // `description`/`default` ARE emitted by the underlying type-ir projector
+  // `description`/`default` are emitted by the underlying type-ir projector
   // (json-schema.ts's `withMeta`) whenever a TypeRef carries
-  // `meta.description`/`meta.default` — but this extractor's own
-  // `typeRefFromType` doesn't populate either from TS source today (no
-  // per-field JSDoc → `meta.description` wiring, no default-value syntax to
-  // read → `meta.default` wiring). Declared here so consumers (e.g. the CLI
-  // projector's help text / default-value application) can read them when a
-  // schema DOES carry them — hand-authored in tests, or once a future
-  // extractor pass fills them in — without an `as Record<string, unknown>`
-  // escape hatch at every read site.
+  // `meta.description`/`meta.default`. `typeRefFromType` populates both per
+  // object-type property from source JSDoc: a leading `/** … */` comment →
+  // `description`, an `@default` tag → `default` (see `propertyDescriptionOf`
+  // / `propertyDefaultOf` above). Declared here so consumers (e.g. the CLI
+  // projector's help text / default-value application) can read them without
+  // an `as Record<string, unknown>` escape hatch at every read site.
   description?: string
   default?: string | number | boolean
 }
@@ -79,6 +77,43 @@ function isPrivateOrProtected(prop: ts.Symbol): boolean {
     const mods = ts.getCombinedModifierFlags(decl as ts.Declaration & { kind: ts.SyntaxKind })
     return (mods & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) !== 0
   })
+}
+
+/**
+ * A property symbol's own JSDoc comment (the `/** … *\/` text, excluding
+ * `@tag` lines), flattened to a single trimmed string. Uses
+ * `Symbol.getDocumentationComment`, the TS compiler API's dedicated
+ * accessor for a symbol's doc comment — distinct from `extractJsDoc` below,
+ * which walks AST nodes for an op's own leading JSDoc rather than a
+ * property symbol's.
+ */
+function propertyDescriptionOf(prop: ts.Symbol, checker: ts.TypeChecker): string | undefined {
+  const text = ts.displayPartsToString(prop.getDocumentationComment(checker)).trim()
+  return text.length > 0 ? text : undefined
+}
+
+/**
+ * A property symbol's `@default` JSDoc tag value, if present. The tag text
+ * is parsed as JSON first (`@default 10` → `10`, `@default true` → `true`,
+ * `@default "x"` → `"x"`) so numeric/boolean defaults come through typed;
+ * text that isn't valid JSON (`@default someValue`) is kept as a raw string.
+ */
+function propertyDefaultOf(prop: ts.Symbol, checker: ts.TypeChecker): string | number | boolean | undefined {
+  for (const tag of prop.getJsDocTags(checker)) {
+    if (tag.name !== "default") continue
+    const text = tag.text ? ts.displayPartsToString(tag.text).trim() : ""
+    if (text.length === 0) return undefined
+    try {
+      const parsed: unknown = JSON.parse(text)
+      if (typeof parsed === "string" || typeof parsed === "number" || typeof parsed === "boolean") {
+        return parsed
+      }
+      return text
+    } catch {
+      return text
+    }
+  }
+  return undefined
 }
 
 /** Property names conventionally used to tag a branded/opaque type. */
@@ -421,9 +456,23 @@ export function typeRefFromType(
       }
 
       const fieldRef = typeRefFromType(propType, checker, loc, nextSeen)
-      fields[prop.name] = optional
-        ? t(fieldRef.shape, { ...fieldRef.meta, optional: true })
-        : fieldRef
+
+      // Per-field JSDoc: `/** … */` above a property → `meta.description`;
+      // `@default` tag → `meta.default`. Both flow through the type-ir
+      // json-schema projector's `withMeta` unchanged, surfacing in CLI
+      // --help, OpenAPI specs, and MCP tool schemas.
+      const description = propertyDescriptionOf(prop, checker)
+      const defaultValue = propertyDefaultOf(prop, checker)
+
+      const extraMeta: Record<string, unknown> = {}
+      if (optional) extraMeta.optional = true
+      if (description !== undefined) extraMeta.description = description
+      if (defaultValue !== undefined) extraMeta.default = defaultValue
+
+      fields[prop.name] =
+        Object.keys(extraMeta).length > 0
+          ? t(fieldRef.shape, { ...fieldRef.meta, ...extraMeta })
+          : fieldRef
     }
 
     return t(types.object(fields))

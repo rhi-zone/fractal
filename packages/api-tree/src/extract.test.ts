@@ -60,13 +60,14 @@ describe("schema derivation from op input type", () => {
     expect(schemas["users_create"]?.inputSchema).toEqual({
       type: "object",
       properties: {
-        name: { type: "string" },
-        age: { type: "number" }, // optional → present but not required
+        name: { type: "string", description: "The user's display name." },
+        // optional → present but not required; JSDoc + @default both carried.
+        age: { type: "number", description: "Age in years.", default: 18 },
         roles: { type: "array", items: { type: "string" } },
         address: {
           type: "object",
           properties: {
-            street: { type: "string" },
+            street: { type: "string", description: "Street address line." },
             zip: { type: "string" }, // optional → not required
           },
           required: ["street"],
@@ -82,6 +83,37 @@ describe("schema derivation from op input type", () => {
       properties: { userId: { type: "string" } },
       required: ["userId"],
     })
+  })
+})
+
+// ============================================================================
+// 1b. Per-field JSDoc → property `description` (+ `@default` → `default`)
+// ============================================================================
+
+describe("per-field description extraction (property JSDoc)", () => {
+  it("populates description on a top-level property with a leading JSDoc comment", () => {
+    const name = schemas["users_create"]?.inputSchema.properties?.name
+    expect(name?.description).toBe("The user's display name.")
+  })
+
+  it("populates description + default from a JSDoc comment with an @default tag", () => {
+    const age = schemas["users_create"]?.inputSchema.properties?.age
+    expect(age?.description).toBe("Age in years.")
+    expect(age?.default).toBe(18)
+  })
+
+  it("omits description for a property without JSDoc", () => {
+    const roles = schemas["users_create"]?.inputSchema.properties?.roles
+    expect(roles?.description).toBeUndefined()
+    const userId = schemas["users_userId_get"]?.inputSchema.properties?.userId
+    expect(userId?.description).toBeUndefined()
+  })
+
+  it("propagates description on nested object properties", () => {
+    const address = schemas["users_create"]?.inputSchema.properties?.address
+    expect(address?.properties?.street?.description).toBe("Street address line.")
+    // sibling nested field with no JSDoc stays undefined
+    expect(address?.properties?.zip?.description).toBeUndefined()
   })
 })
 
@@ -113,6 +145,7 @@ describe("MCP tool carries the derived inputSchema + description", () => {
     expect(t.inputSchema).not.toEqual({ type: "object" })
     expect((t.inputSchema.properties as Record<string, unknown>).name).toEqual({
       type: "string",
+      description: "The user's display name.",
     })
   })
 
@@ -646,5 +679,28 @@ describe("typeRefFromType gap fixes", () => {
     const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
     expect(variants).toHaveLength(2)
     expect(variants.every((v) => v.shape.kind === "object")).toBe(true)
+  })
+})
+
+// ============================================================================
+// 9. End-to-end: extracted per-field descriptions actually reach CLI --help
+//    text (packages/cli-api-projector/src/cli.ts's buildLeafHelp already reads
+//    `fieldSchema.description` — this proves the field is now populated, not
+//    just that the reader is wired up).
+// ============================================================================
+
+describe("end-to-end: CLI --help renders JSDoc-derived field descriptions", () => {
+  it("users create --help lists each field's description (top-level + nested)", async () => {
+    const { runCli } = await import("@rhi-zone/fractal-cli-api-projector")
+    const out: string[] = []
+    const io = {
+      stdout: { write: (s: string) => { out.push(s) } },
+      stderr: { write: (_s: string) => {} },
+      confirm: async () => true,
+    }
+    await runCli(tree, ["users", "create", "--help"], io, { schemas })
+    const help = out.join("")
+    expect(help).toContain("The user's display name.")
+    expect(help).toContain("Age in years.")
   })
 })
