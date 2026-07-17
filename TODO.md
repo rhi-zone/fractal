@@ -181,17 +181,30 @@ before acting.
   packages still on the old Node-walking pattern" above, carried over
   unchanged — migrating them is still unstarted, not newly progressed this
   session).
-- **Sensible HTTP config defaults — built, unverified against a real app**
-  (2026-07-17, commit ed29b51): `createFetch` (`packages/http-api-projector/src/preset.ts`)
-  is now the single "just give me a working HTTP server" entry point —
-  `PresetOptions` exposes toggles for `directives`, `validators`,
-  `fusePipeline`/`skipEmptyInput` (both default `true`), `rewriters`,
-  `router` (a plain function value, default `makeRouterFromRoute` — zero
-  build cost), and `als` (opt-in). Defaults were chosen to be sensible
-  (directives on, free perf optimizations on, no build-time router compile
-  unless asked for). Covered by `preset.test.ts` in isolation. Still open:
-  this hasn't been exercised end-to-end in a real consumer app, so whether
-  the chosen defaults and option shapes hold up under actual use is unverified.
+- **Sensible HTTP config defaults — built, verified end-to-end against a real
+  app** (built 2026-07-17 commit ed29b51; verified 2026-07-18): `createFetch`
+  (`packages/http-api-projector/src/preset.ts`) is the single "just give me a
+  working HTTP server" entry point — `PresetOptions` exposes toggles for
+  `directives`, `validators`, `fusePipeline`/`skipEmptyInput` (both default
+  `true`), `rewriters`, `router` (a plain function value, default
+  `makeRouterFromRoute` — zero build cost), `cors`, and `als` (opt-in).
+  `examples/library-api` was already using `createFetch(api)` (default
+  config) as its sole HTTP entry point (`src/tree.ts`/`src/app.test.ts`) —
+  confirmed by re-reading, not assumed. What was actually missing was
+  coverage of the *toggleable* options against that real tree specifically
+  (`preset.test.ts` only exercised them against a synthetic fixture); added a
+  `describe("createFetch preset options against the real tree")` block to
+  `examples/library-api/src/app.test.ts` exercising `cors`, a custom
+  `router` (`radixRouter`), `als` (via a `mapRoute`-built spy rewriter
+  wrapping every handler, proving the whole real dispatch — including
+  `autoMethodLayer`'s HEAD short-circuit — runs inside the
+  `AsyncLocalStorage` context), `fusePipeline`/`skipEmptyInput: false`,
+  `directives: false`, and option composition (`cors` + custom `router` +
+  codegen-generated validators together) against the actual book/catalog
+  routes. All defaults and option shapes held up with no code changes needed
+  to `preset.ts` itself — `bun run typecheck` and `bun test` pass across the
+  whole workspace (37/37 in the example package, 266/266 in
+  http-api-projector).
 - **`mapRoute` — shared tree-visitor extracted for rewriters** (2026-07-17,
   commit 7b4b9cc): `mapRoute(route, fn)` in `packages/http-api-projector/src/route.ts` is a
   pre-order visitor that applies `fn` to each node and handles

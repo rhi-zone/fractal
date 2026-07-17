@@ -11,10 +11,18 @@
 //   remove  → DELETE /books/{bookId}
 // CLI/MCP name these by their agnostic child keys (read, replace, remove).
 
+import { AsyncLocalStorage } from "node:async_hooks"
 import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore, httpRoutes } from "./tree.ts"
 import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
-import { makeRouterFromRoute, routeCandidatesForUrl } from "@rhi-zone/fractal-http-api-projector/route"
+import {
+  httpRoute,
+  makeRouterFromRoute,
+  mapRoute,
+  routeCandidatesForUrl,
+} from "@rhi-zone/fractal-http-api-projector/route"
+import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
+import { radixRouter } from "@rhi-zone/fractal-http-api-projector"
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { op } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
@@ -326,5 +334,132 @@ describe("library-api — codegen-generated validators", () => {
     const router = makeRouterFromRoute(httpRoutes)
     const res = await router(new Request("http://localhost/catalog/genres"))
     expect(res.status).toBe(200)
+  })
+})
+
+// ============================================================================
+// createFetch preset options — exercised against the real library-api tree
+// (`api`, tree.ts), not a synthetic fixture. `preset.test.ts` covers each
+// option in isolation against a minimal fixture; this section confirms the
+// same toggles hold up against the actual example app the top-level `fetch`
+// (createFetch(api), used throughout this file) is built from.
+// ============================================================================
+
+describe("library-api — createFetch preset options against the real tree", () => {
+  beforeEach(() => {
+    clearStore()
+  })
+
+  it("cors: true adds Access-Control-Allow-Origin; default fetch has none", async () => {
+    const withCors = createFetch(api, { cors: true })
+    const res = await withCors(new Request("http://localhost/catalog/genres"))
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
+
+    const plain = await fetch(new Request("http://localhost/catalog/genres"))
+    expect(plain.headers.get("Access-Control-Allow-Origin")).toBeNull()
+  })
+
+  it("router: radixRouter dispatches the full tree identically to the default makeRouterFromRoute", async () => {
+    const withRadix = createFetch(api, { router: radixRouter })
+
+    const addRes = await withRadix(
+      jsonReq("POST", "http://localhost/books/add", {
+        title: "Domain-Driven Design",
+        author: "Eric Evans",
+        genre: "Engineering",
+      }),
+    )
+    expect(addRes.status).toBe(200)
+    const book = (await addRes.json()) as { id: string }
+
+    const readRes = await withRadix(
+      new Request(`http://localhost/books/${book.id}`),
+    )
+    expect(readRes.status).toBe(200)
+    expect((await readRes.json() as { title: string }).title).toBe(
+      "Domain-Driven Design",
+    )
+
+    // fallback co-location (GET/PUT/DELETE at the same /books/{bookId})
+    // still resolves through the radix compiler
+    const delRes = await withRadix(
+      new Request(`http://localhost/books/${book.id}`, { method: "DELETE" }),
+    )
+    expect(delRes.status).toBe(200)
+  })
+
+  it("als: whole request (including autoMethodLayer short-circuits) runs inside the AsyncLocalStorage context", async () => {
+    const storage = new AsyncLocalStorage<{ requestId: string }>()
+    let observed: string | undefined
+
+    // A spy rewriter, built on the exported `mapRoute` tree-visitor, wraps
+    // every method handler across the real tree so we can observe the
+    // AsyncLocalStorage context from inside an actual library-api handler.
+    const spyRewriter = (route: HttpRoute) =>
+      mapRoute(route, (node) => {
+        if (node.methods === undefined) return node
+        const wrapped = Object.fromEntries(
+          Object.entries(node.methods).map(([method, entry]) => [
+            method,
+            {
+              ...entry,
+              handler: (input: unknown) => {
+                observed = storage.getStore()?.requestId
+                return entry.handler(input)
+              },
+            },
+          ]),
+        )
+        return httpRoute({ methods: wrapped, children: node.children, fallback: node.fallback, meta: node.meta })
+      })
+
+    const withAls = createFetch(api, {
+      als: { storage, init: () => ({ requestId: "req-lib-1" }) },
+      rewriters: [spyRewriter],
+    })
+
+    const res = await withAls(new Request("http://localhost/catalog/search"))
+    expect(res.status).toBe(200)
+    expect(observed).toBe("req-lib-1")
+
+    // HEAD-as-GET (autoMethodLayer) also runs inside the ALS context
+    const headRes = await withAls(
+      new Request("http://localhost/catalog/search", { method: "HEAD" }),
+    )
+    const observedOnHead: string | undefined = observed
+    expect(headRes.status).toBe(200)
+    expect(observedOnHead).toBe("req-lib-1")
+  })
+
+  it("fusePipeline/skipEmptyInput: disabling both still dispatches the real tree correctly", async () => {
+    const unfused = createFetch(api, { fusePipeline: false, skipEmptyInput: false })
+
+    const listRes = await unfused(new Request("http://localhost/books/list"))
+    expect(listRes.status).toBe(200)
+
+    const genresRes = await unfused(new Request("http://localhost/catalog/genres"))
+    expect(genresRes.status).toBe(200)
+  })
+
+  it("directives: false — naiveTransform baseline; moveTo-placed /books/{id} routes disappear", async () => {
+    const naive = createFetch(api, { directives: false })
+
+    // read/replace/remove are moveTo-placed onto the fallback wildcard by
+    // default; with directives off, that placement never runs.
+    const moved = await naive(new Request("http://localhost/books/book-1"))
+    expect(moved.status).toBe(404)
+  })
+
+  it("codegen-generated validators still run when combined with cors + a custom router", async () => {
+    const combined = createFetch(api, { cors: true, router: radixRouter })
+
+    const withQuery = await combined(
+      new Request("http://localhost/catalog/search?q=hobbit"),
+    )
+    expect(withQuery.status).toBe(200)
+    expect(withQuery.headers.get("Access-Control-Allow-Origin")).toBe("*")
+
+    const withoutQuery = await combined(new Request("http://localhost/catalog/search"))
+    expect(withoutQuery.status).toBe(200)
   })
 })
