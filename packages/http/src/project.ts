@@ -46,6 +46,8 @@ export {
   routeCandidatesForUrl,
 } from "./route.ts"
 export type { ResponseOverride } from "./route.ts"
+export type { Store, Stores, ParamSource, SourceMap } from "./decode.ts"
+export { assemble, bulkCollect, httpStores, primaryStoreForMethod } from "./decode.ts"
 
 /**
  * Produce the HTTP route tree from an API tree — the naive transform (see

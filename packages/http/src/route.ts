@@ -25,6 +25,8 @@
 import { isLeaf } from "@rhi-zone/fractal-core/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
 import type { HttpDirective } from "./project.ts"
+import { bulkCollect, httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
+import type { SourceMap } from "./decode.ts"
 
 // ============================================================================
 // Pipeline — interceptable request/response stages (docs/design/
@@ -48,7 +50,27 @@ import type { HttpDirective } from "./project.ts"
 
 export type Pipeline = {
   reqTransforms?: Array<(req: Request, meta: Meta) => Request | Promise<Request>>
+  /**
+   * Full custom decode override — when provided, the stores-based system is
+   * bypassed entirely and this function is responsible for producing the
+   * handler's input from the raw request. Backward-compatible: existing
+   * `decode: (req, meta) => input` pipelines continue to work unchanged.
+   */
   decode?: (req: Request, meta: Meta) => unknown | Promise<unknown>
+  /**
+   * Declarative source configuration for the stores-based decode system.
+   * Only takes effect when `decode` is NOT set (the function override wins).
+   *
+   * - `sourceMap`: per-param overrides — e.g. `{ apiKey: { store: "header", key: "x-api-key" } }`
+   * - `paramNames`: explicit list of param names to extract (when absent,
+   *    bulk-collects all available values — backward compat with old defaultDecode)
+   * - `transform`: optional reshape after assembly, before the handler sees the input
+   */
+  sources?: {
+    readonly sourceMap?: SourceMap
+    readonly paramNames?: readonly string[]
+    readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>
+  }
   inputTransforms?: Array<(input: unknown, meta: Meta) => unknown | Promise<unknown>>
   outputTransforms?: Array<(output: unknown, meta: Meta) => unknown | Promise<unknown>>
   encode?: (output: unknown, meta: Meta) => Response | Promise<Response>
@@ -437,10 +459,12 @@ function mergePipelines(node: Pipeline | undefined, method: Pipeline | undefined
   if (node === undefined) return method ?? {}
   if (method === undefined) return node
   const decode = method.decode ?? node.decode
+  const sources = method.sources ?? node.sources
   const encode = method.encode ?? node.encode
   return {
     reqTransforms: [...(node.reqTransforms ?? []), ...(method.reqTransforms ?? [])],
     ...(decode !== undefined ? { decode } : {}),
+    ...(sources !== undefined ? { sources } : {}),
     inputTransforms: [...(node.inputTransforms ?? []), ...(method.inputTransforms ?? [])],
     outputTransforms: [...(node.outputTransforms ?? []), ...(method.outputTransforms ?? [])],
     ...(encode !== undefined ? { encode } : {}),
@@ -490,26 +514,55 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
 }
 
 /**
- * Default `decode`: merges fallback slugs and query params into the input
- * object (unconditionally — they're part of the request's address, not its
- * body), then adds the JSON body for methods that conventionally carry one.
- * `GET`/`HEAD`/`DELETE` never attempt to read a body. [placeholder] — real
- * input parsing (headers, cookies, richer body negotiation) is still open;
- * see docs/design/routing-and-transforms.md § "Interceptable pipeline".
+ * Stores-based default decode: exposes the request as named stores (path,
+ * query, header, body), then assembles the handler's input bag using
+ * conventions (method → primary store) + optional per-param overrides.
+ *
+ * When `sources.paramNames` is provided, the assembler reads exactly those
+ * params from the appropriate stores. When absent (the common case until
+ * codegen-derived param lists are wired in), falls back to bulk-collecting
+ * all available values — producing the same flat bag the old defaultDecode
+ * returned.
+ *
+ * The body is parsed once here and passed to the stores factory. Methods
+ * that conventionally carry no body (GET/HEAD/DELETE) skip body parsing
+ * entirely.
  */
-async function defaultDecode(req: Request, slugs: Readonly<Record<string, string>>): Promise<unknown> {
-  const input: Record<string, unknown> = { ...slugs }
+async function defaultDecode(
+  req: Request,
+  slugs: Readonly<Record<string, string>>,
+  sources?: Pipeline["sources"],
+): Promise<unknown> {
   const url = new URL(req.url)
-  for (const [k, v] of url.searchParams) input[k] = v
+  const primary = primaryStoreForMethod(req.method)
 
-  if (req.method === "GET" || req.method === "HEAD" || req.method === "DELETE") return input
-
-  const ct = req.headers.get("Content-Type") ?? ""
-  if (ct.includes("application/json")) {
-    const body: unknown = await req.json()
-    if (typeof body === "object" && body !== null) Object.assign(input, body)
+  // Parse body for methods that conventionally carry one
+  let parsedBody: unknown = undefined
+  if (primary === "body") {
+    const ct = req.headers.get("Content-Type") ?? ""
+    if (ct.includes("application/json")) {
+      parsedBody = await req.json()
+    }
   }
-  return input
+
+  let bag: Record<string, unknown>
+
+  if (sources?.paramNames !== undefined && sources.paramNames.length > 0) {
+    // Declarative path: assemble from named stores using explicit param list
+    const stores = httpStores(req, slugs, parsedBody)
+    const pathParamNames = Object.keys(slugs)
+    bag = assemble(stores, sources.paramNames, sources.sourceMap ?? {}, primary, pathParamNames)
+  } else {
+    // Bulk-collect path: backward compat — merge all available values
+    bag = bulkCollect(slugs, url.searchParams, parsedBody, primary)
+  }
+
+  // Optional transform after assembly
+  if (sources?.transform !== undefined) {
+    bag = sources.transform(bag)
+  }
+
+  return bag
 }
 
 /** Default `encode`: a 200 JSON response. */
@@ -553,7 +606,7 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
     try {
       input = pipeline.decode !== undefined
         ? await pipeline.decode(request, meta)
-        : await defaultDecode(request, matched.slugs)
+        : await defaultDecode(request, matched.slugs, pipeline.sources)
     } catch {
       return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
     }
