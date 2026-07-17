@@ -5,8 +5,8 @@
 > The tags/metadata sub-bag design and projection principles below still hold.
 
 > Most of the originating session was exploratory thrash; the durable result is
-> small. Evidence trail: `docs/artifacts/fc-api-grouping/` and
-> `docs/artifacts/fc-op-kinds/`. Provenance tags: **[CERTIFIED]** = user stated or
+> small. Evidence trail: `docs/archive/fc-api-grouping/` and
+> `docs/archive/fc-op-kinds/`. Provenance tags: **[CERTIFIED]** = user stated or
 > explicitly affirmed; **[SYNTHESIS]** = assistant's synthesis, plausible but not
 > user-ratified; **[OPEN]** = genuinely unresolved.
 

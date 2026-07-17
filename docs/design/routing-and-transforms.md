@@ -323,3 +323,37 @@ const routes = httpProjection(apiTree, {
 | JSON-RPC | rewrite everything | same tree, new projector |
 | CLI | can't | same tree, new projector |
 | Custom methods | not supported | declaration merging, free |
+
+## Build-time optimizations (2026-07-17)
+
+Two optional `HttpRoute => HttpRoute` visitors, both composable with the
+rewriters above via `composeTransforms`:
+
+- **`fusePipeline`** — composes each method entry's transform arrays
+  (`reqTransforms`, `inputTransforms`, `outputTransforms`, `resTransforms`,
+  `validate`) down to at most one entry, so `runPipeline`'s per-request
+  loops degrade to a single call. `decode`/`encode`/`sources` are untouched.
+
+- **`skipEmptyInput`** — for handlers declaring zero parameters
+  (`handler.length === 0`), swaps in a no-op `decode`/`validate` so decode +
+  validation are skipped entirely.
+
+Both are default-on in `createFetch` (see `packages/http/src/preset.ts`).
+
+## Composable route compilers (2026-07-17)
+
+`packages/http/src/compile.ts` provides independent `HttpRoute => (req) =>
+Promise<Response>` compilers:
+
+- `radixRouter` — radix-trie-based path matching
+- `compiledCharRouter` — compiled character-function matching
+- `mapCharRouter` — Map + compiled character hybrid (best broad performance)
+
+Their underlying matchers compose via `chainMatchers` (first-wins).
+`makeRouterFromRoute` remains the zero-build-cost default in `createFetch`.
+
+## AsyncLocalStorage integration (2026-07-17)
+
+`withALS(router, storage, init)` wraps any `CompiledRouter` so every request
+runs inside its own `AsyncLocalStorage.run()` context. Opt-in via
+`createFetch`'s `als` option.

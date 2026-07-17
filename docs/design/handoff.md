@@ -1,5 +1,11 @@
 # Handoff — 2026-07-16
 
+> **Outdated (2026-07-16)**: This handoff predates the routing infrastructure
+> work of 2026-07-17 (HttpRoute pipeline, composable routers, stores-based
+> decode, codegen CLI, createFetch preset). See the more recent handoffs:
+> `handoff-2026-07-16-type-layer.md` and `handoff-2026-07-17-routing-identity.md`,
+> and `decisions.md` for settled decisions.
+
 ## What happened this session
 
 Design session covering value prop, architecture layers, type IR design, and

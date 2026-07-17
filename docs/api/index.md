@@ -4,12 +4,18 @@ The full API reference is in [`docs/design/handler-model.md`](../design/handler-
 
 ## Packages
 
-| Package | Status | Key exports |
+All 8 packages built and passing tests (1589 tests, 0 failures verified this session).
+
+| Package | Status | Description |
 |---------|--------|-------------|
-| `@rhi-zone/fractal-core` | Built & green | `Node`, `Handler`, `Req`, `Pass`, `pass`, `leaf`, `choice`, `pipe`, `capture`, `typed`, `run`, `resolveSchema`, `NodeMiddleware`, `StandardSchemaV1`, `StandardJSONSchemaV1` |
-| `@rhi-zone/fractal-http` | Built & green | `path`, `methods`, `param`, `query`, `header`, `body`, `validate`, `serve`; re-exports all of core |
-| `@rhi-zone/fractal-worker` | Built & green | `procedure`, `field`, `dispatch`; re-exports all of core |
-| `@rhi-zone/fractal-openapi` | Built & green | `toOpenApi(node, info): OpenApiDocument`, `toJsonSchema(node, opts?): JsonSchemaFragment` |
+| `@rhi-zone/fractal-core` | Built & green | Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in `./node`; Tags lattice in `./tags` |
+| `@rhi-zone/fractal-http` | Built & green | WHATWG renderer for the function-core tree — direct tree-walk `makeRouter`, `autoMethodLayer`, `corsLayer`, `createFetch`, `serveBun`/`serveNode` |
+| `@rhi-zone/fractal-codegen` | Built & green | Build-time extractor — derive runtime JSON-Schema + descriptions from op input types and JSDoc via the TypeScript compiler API (obvious cases; punts exotics) |
+| `@rhi-zone/fractal-type-ir` | Built & green | Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.) |
+| `@rhi-zone/fractal-mcp` | Built & green | MCP tool projection for the function-core tree — `toTools`, annotation hints derived from `meta.tags` |
+| `@rhi-zone/fractal-cli` | Built & green | CLI projection for the function-core tree — subcommand dispatch, tag-driven confirm, codegen args |
+| `@rhi-zone/fractal-openapi` | Built & green | OpenAPI 3.1 projection for the function-core tree — `toOpenApi` from routes + tags + codegen schemas |
+| `@rhi-zone/fractal-client` | Built & green | Runtime HTTP client derived from the function-core tree — method/path mirror the server's tree-walk dispatch (`verbFromTags`) so routes match exactly |
 
 ## Core: `@rhi-zone/fractal-core`
 
