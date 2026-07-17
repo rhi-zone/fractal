@@ -10,7 +10,6 @@ import {
   applyMethods,
   applyMoveTo,
   applyResponse,
-  compileRouter,
   composeTransforms,
   createApplyValidation,
   httpRoute,
@@ -412,8 +411,7 @@ describe("Pipeline", () => {
       },
     }
     const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({}), meta: {} } },
-      pipeline,
+      methods: { GET: { handler: (_: unknown) => ({}), meta: {}, pipeline } },
       meta: {},
     })
     const router = makeRouter(route)
@@ -434,9 +432,9 @@ describe("Pipeline", () => {
             return {}
           },
           meta: {},
+          pipeline,
         },
       },
-      pipeline,
       meta: {},
     })
     const router = makeRouter(route)
@@ -449,8 +447,7 @@ describe("Pipeline", () => {
       outputTransforms: [(output) => ({ data: output })],
     }
     const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({ id: 1 }), meta: {} } },
-      pipeline,
+      methods: { GET: { handler: (_: unknown) => ({ id: 1 }), meta: {}, pipeline } },
       meta: {},
     })
     const router = makeRouter(route)
@@ -469,8 +466,7 @@ describe("Pipeline", () => {
       ],
     }
     const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({ ok: true }), meta: {} } },
-      pipeline,
+      methods: { GET: { handler: (_: unknown) => ({ ok: true }), meta: {}, pipeline } },
       meta: {},
     })
     const router = makeRouter(route)
@@ -488,9 +484,9 @@ describe("Pipeline", () => {
         POST: {
           handler: (input: unknown) => input,
           meta: {},
+          pipeline,
         },
       },
-      pipeline,
       meta: {},
     })
     const router = makeRouter(route)
@@ -521,28 +517,6 @@ describe("Pipeline", () => {
 
     await router(new Request("http://localhost/"))
     expect(seenGet).toEqual({})
-  })
-
-  it("merges node-level and method-level pipelines, method transforms running last", async () => {
-    const order: string[] = []
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => input,
-          meta: {},
-          pipeline: {
-            inputTransforms: [(input) => { order.push("method"); return input }],
-          },
-        },
-      },
-      pipeline: {
-        inputTransforms: [(input) => { order.push("node"); return input }],
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/"))
-    expect(order).toEqual(["node", "method"])
   })
 
   it("runs the full pipeline (all stages) in the documented order", async () => {
@@ -592,9 +566,9 @@ describe("Pipeline", () => {
             return input
           },
           meta: {},
+          pipeline,
         },
       },
-      pipeline,
       meta: {},
     })
     const router = makeRouter(route)
@@ -793,182 +767,6 @@ describe("Pipeline — validate slot", () => {
     expect(thirdRan).toBe(false)
   })
 
-  it("node-level and method-level validators compose — node-level runs first", async () => {
-    let capturedInput: unknown
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
-          meta: {},
-          pipeline: {
-            validate: [(bag) => ({ kind: "ok", value: { ...bag, from: [...(bag.from as string[] ?? []), "method"] } })],
-          },
-        },
-      },
-      pipeline: {
-        validate: [(bag) => ({ kind: "ok", value: { ...bag, from: [...(bag.from as string[] ?? []), "node"] } })],
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/?x=1"))
-    expect(capturedInput).toEqual({ x: "1", from: ["node", "method"] })
-  })
-})
-
-// ============================================================================
-// compileRouter — build-time compiled drop-in replacement for
-// makeRouterFromRoute. Same HttpRoute in, same Request => Response contract
-// out; these tests check behavioral parity against makeRouterFromRoute
-// across static children, fallback/slug capture, method dispatch, 404s, and
-// the full interceptable pipeline.
-// ============================================================================
-
-describe("compileRouter", () => {
-  function buildTree() {
-    const store = new Map<string, { id: string; title: string }>()
-    store.set("book-1", { id: "book-1", title: "Dune" })
-    return httpRoute({
-      meta: {},
-      children: {
-        books: httpRoute({
-          meta: {},
-          methods: {
-            GET: { handler: (_: unknown) => [...store.values()], meta: {} },
-            POST: {
-              handler: (input: { title: string }) => {
-                const book = { id: "book-2", title: input.title }
-                store.set(book.id, book)
-                return book
-              },
-              meta: {},
-            },
-          },
-          fallback: {
-            name: "bookId",
-            subtree: httpRoute({
-              meta: {},
-              methods: {
-                GET: { handler: (input: { bookId: string }) => store.get(input.bookId), meta: {} },
-                DELETE: {
-                  handler: (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
-                  meta: {},
-                },
-              },
-            }),
-          },
-        }),
-      },
-    })
-  }
-
-  it("dispatches static children identically to makeRouterFromRoute", async () => {
-    const runtime = makeRouterFromRoute(buildTree())
-    const compiled = compileRouter(buildTree())
-    const runtimeRes = await runtime(new Request("http://localhost/books"))
-    const compiledRes = await compiled(new Request("http://localhost/books"))
-    expect(compiledRes.status).toBe(runtimeRes.status)
-    expect(await compiledRes.json()).toEqual(await runtimeRes.json())
-  })
-
-  it("dispatches fallback/slug-captured segments identically", async () => {
-    const runtime = makeRouterFromRoute(buildTree())
-    const compiled = compileRouter(buildTree())
-    const runtimeRes = await runtime(new Request("http://localhost/books/book-1"))
-    const compiledRes = await compiled(new Request("http://localhost/books/book-1"))
-    expect(compiledRes.status).toBe(runtimeRes.status)
-    expect(await compiledRes.json()).toEqual(await runtimeRes.json())
-  })
-
-  it("dispatches by method at the same path identically", async () => {
-    const compiled = compileRouter(buildTree())
-    const delRes = await compiled(new Request("http://localhost/books/book-1", { method: "DELETE" }))
-    expect(delRes.status).toBe(200)
-    expect(await delRes.json()).toEqual({ deleted: true })
-  })
-
-  it("returns 404 for an unmatched path, same as makeRouterFromRoute", async () => {
-    const runtime = makeRouterFromRoute(buildTree())
-    const compiled = compileRouter(buildTree())
-    const runtimeRes = await runtime(new Request("http://localhost/nope"))
-    const compiledRes = await compiled(new Request("http://localhost/nope"))
-    expect(compiledRes.status).toBe(runtimeRes.status)
-    expect(compiledRes.status).toBe(404)
-  })
-
-  it("returns 404 for an unmatched method at a matched path", async () => {
-    const compiled = compileRouter(buildTree())
-    const res = await compiled(new Request("http://localhost/books", { method: "DELETE" }))
-    expect(res.status).toBe(404)
-  })
-
-  it("runs the full pipeline (reqTransforms, decode, validate, handler, encode, resTransforms)", async () => {
-    const order: string[] = []
-    const pipeline: Pipeline = {
-      reqTransforms: [(req) => { order.push("reqTransform"); return req }],
-      inputTransforms: [(input) => { order.push("inputTransform"); return input }],
-      validate: [(bag) => { order.push("validate"); return { kind: "ok", value: bag } }],
-      outputTransforms: [(output) => { order.push("outputTransform"); return output }],
-      resTransforms: [(res) => { order.push("resTransform"); return res }],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { order.push("handler"); return input },
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = compileRouter(route)
-    const res = await router(new Request("http://localhost/?x=1"))
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ x: "1" })
-    expect(order).toEqual([
-      "reqTransform",
-      "inputTransform",
-      "validate",
-      "handler",
-      "outputTransform",
-      "resTransform",
-    ])
-  })
-
-  it("merges node-level and method-level pipelines at compile time, method transforms running last", async () => {
-    const order: string[] = []
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => input,
-          meta: {},
-          pipeline: { inputTransforms: [(input) => { order.push("method"); return input }] },
-        },
-      },
-      pipeline: { inputTransforms: [(input) => { order.push("node"); return input }] },
-      meta: {},
-    })
-    const router = compileRouter(route)
-    await router(new Request("http://localhost/"))
-    expect(order).toEqual(["node", "method"])
-  })
-
-  it("propagates a validate error as a 400, matching makeRouterFromRoute", async () => {
-    const pipeline: Pipeline = {
-      validate: [() => ({ kind: "err", error: { message: "nope" } })],
-    }
-    const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({ ok: true }), meta: {}, pipeline } },
-      meta: {},
-    })
-    const runtime = makeRouterFromRoute(route)
-    const compiled = compileRouter(route)
-    const runtimeRes = await runtime(new Request("http://localhost/"))
-    const compiledRes = await compiled(new Request("http://localhost/"))
-    expect(compiledRes.status).toBe(runtimeRes.status)
-    expect(compiledRes.status).toBe(400)
-    expect(await compiledRes.json()).toEqual(await runtimeRes.json())
-  })
 })
 
 // ============================================================================

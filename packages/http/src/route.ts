@@ -44,9 +44,7 @@ import type { SourceMap } from "./decode.ts"
 //   Response
 //
 // `decode`/`encode` are the symmetric protocol boundary; every stage sees the
-// operation's `Meta`. Configurable per-route (on an `HttpRoute` node) or
-// per-method (on a method entry) — `makeRouterFromRoute` merges the two when
-// both are present, method-level transforms running after node-level ones.
+// operation's `Meta`. Configurable per-method (on a method entry).
 // ============================================================================
 
 export type Pipeline = {
@@ -108,7 +106,6 @@ export type HttpRoute<H extends Handler = Handler> = {
   readonly children?: Readonly<Record<string, HttpRoute>>
   readonly fallback?: { readonly name: string; readonly subtree: HttpRoute }
   readonly meta: Meta
-  readonly pipeline?: Pipeline
 }
 
 /**
@@ -126,13 +123,11 @@ export function httpRoute(def: {
   children?: Record<string, HttpRoute> | undefined
   fallback?: { name: string; subtree: HttpRoute } | undefined
   meta?: Meta | undefined
-  pipeline?: Pipeline | undefined
 }): HttpRoute {
   const route: HttpRoute = {
     ...(def.methods !== undefined ? { methods: def.methods } : {}),
     ...(def.children !== undefined ? { children: def.children } : {}),
     ...(def.fallback !== undefined ? { fallback: def.fallback } : {}),
-    ...(def.pipeline !== undefined ? { pipeline: def.pipeline } : {}),
     meta: def.meta ?? {},
   }
   routeBrand.add(route)
@@ -624,7 +619,7 @@ function injectValidators<R extends HttpRoute>(
         subtree: injectValidators(route.fallback.subtree, forKey, [...path, `:${route.fallback.name}`]),
       }
     : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta, pipeline: route.pipeline }) as R
+  return httpRoute({ methods, children, fallback, meta: route.meta }) as R
 }
 
 /**
@@ -685,31 +680,6 @@ type RouteCandidate = {
 }
 
 /**
- * Merge a route node's pipeline with a method entry's pipeline. Transform
- * arrays concatenate (node-level transforms run first, method-level after) —
- * `validate` is one of these array stages (node-level validators run before
- * method-level ones); single-valued stages (`decode`/`encode`) take the more
- * specific (method-level) value when both are configured.
- */
-function mergePipelines(node: Pipeline | undefined, method: Pipeline | undefined): Pipeline {
-  if (node === undefined) return method ?? {}
-  if (method === undefined) return node
-  const decode = method.decode ?? node.decode
-  const sources = method.sources ?? node.sources
-  const encode = method.encode ?? node.encode
-  return {
-    reqTransforms: [...(node.reqTransforms ?? []), ...(method.reqTransforms ?? [])],
-    ...(decode !== undefined ? { decode } : {}),
-    ...(sources !== undefined ? { sources } : {}),
-    inputTransforms: [...(node.inputTransforms ?? []), ...(method.inputTransforms ?? [])],
-    validate: [...(node.validate ?? []), ...(method.validate ?? [])],
-    outputTransforms: [...(node.outputTransforms ?? []), ...(method.outputTransforms ?? [])],
-    ...(encode !== undefined ? { encode } : {}),
-    resTransforms: [...(node.resTransforms ?? []), ...(method.resTransforms ?? [])],
-  }
-}
-
-/**
  * Split a URL pathname into non-empty segments without the split+filter
  * double allocation (`"/".split()` then `.filter(s => s.length > 0)` builds
  * two arrays; this builds one).
@@ -746,7 +716,7 @@ function collectRouteCandidates(
       handler: entry.handler,
       meta: entry.meta,
       slugs,
-      pipeline: mergePipelines(route.pipeline, entry.pipeline),
+      pipeline: entry.pipeline ?? {},
     }))
   }
   const seg = segs[idx]!
@@ -780,11 +750,11 @@ function matchRoute(
   idx: number,
   method: string,
   slugs: Record<string, string>,
-): { entry: { handler: Handler; meta: Meta; pipeline?: Pipeline }; routePipeline: Pipeline | undefined; slugs: Record<string, string> } | undefined {
+): { entry: { handler: Handler; meta: Meta; pipeline?: Pipeline }; slugs: Record<string, string> } | undefined {
   if (idx === segs.length) {
     const entry = route.methods?.[method]
     if (entry === undefined) return undefined
-    return { entry, routePipeline: route.pipeline, slugs }
+    return { entry, slugs }
   }
   const seg = segs[idx]!
   const child = route.children?.[seg]
@@ -881,9 +851,6 @@ function isResult(v: unknown): v is { kind: "ok"; value: unknown } | { kind: "er
 /**
  * Runs the interceptable request/response pipeline (see module doc at the
  * top of the file) for a single matched `(handler, meta, pipeline, slugs)`.
- * Shared by both dispatchers — `makeRouterFromRoute` (runtime tree walk) and
- * `compileRouter` (build-time compiled dispatch) — so the two only differ in
- * how they find this quadruple, never in what happens once they have it.
  */
 async function runPipeline(
   req: Request,
@@ -962,94 +929,6 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
     const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    const pipeline = mergePipelines(matched.routePipeline, matched.entry.pipeline)
-    return runPipeline(req, matched.entry.handler, matched.entry.meta, pipeline, matched.slugs)
-  }
-}
-
-// ============================================================================
-// 5. compileRouter — build-time compiled drop-in replacement for
-// `makeRouterFromRoute`. Same input (`HttpRoute`) and output
-// (`(req) => Promise<Response>`) contract, same request pipeline
-// (`runPipeline` above) — the only thing that differs is how the match is
-// found: instead of a generic recursive walk over `route.children`/
-// `route.fallback` re-read on every request, `compileNode` walks the tree
-// ONCE, at build time, and returns a closure-specialized matcher per node:
-//
-//   - each node's own `children`/`fallback` are captured directly in the
-//     closure instead of being re-read off the live `HttpRoute` value, so
-//     there is no `route` object flowing through the per-request call chain
-//     at all — just the pre-built matcher functions calling each other;
-//   - each leaf's `methods[method]` entry has its pipeline PRE-MERGED
-//     (`mergePipelines`) once here, not recomputed on every request the way
-//     `makeRouterFromRoute` recomputes it in its hot path.
-// ============================================================================
-
-type CompiledLeaf = { readonly handler: Handler; readonly meta: Meta; readonly pipeline: Pipeline }
-
-type CompiledMatch = { readonly leaf: CompiledLeaf; readonly slugs: Readonly<Record<string, string>> }
-
-type CompiledMatcher = (
-  segs: readonly string[],
-  idx: number,
-  method: string,
-  slugs: Record<string, string>,
-) => CompiledMatch | undefined
-
-/**
- * Compile one `HttpRoute` node into a matcher closure. Recurses into
- * `children`/`fallback` at compile time — `matchHere`'s body, once built,
- * touches only the values captured here (`leaves`, `children`, `fallback`),
- * never the original `route` — the tree shape is baked into which closures
- * call which, not re-derived from `HttpRoute` data per request.
- */
-function compileNode(route: HttpRoute): CompiledMatcher {
-  const leaves: Record<string, CompiledLeaf> | undefined = route.methods !== undefined
-    ? Object.fromEntries(
-        Object.entries(route.methods).map(([method, entry]) => [
-          method,
-          { handler: entry.handler, meta: entry.meta, pipeline: mergePipelines(route.pipeline, entry.pipeline) },
-        ]),
-      )
-    : undefined
-
-  const children: Record<string, CompiledMatcher> | undefined = route.children !== undefined
-    ? Object.fromEntries(Object.entries(route.children).map(([seg, child]) => [seg, compileNode(child)]))
-    : undefined
-
-  const fallback = route.fallback !== undefined
-    ? { name: route.fallback.name, matcher: compileNode(route.fallback.subtree) }
-    : undefined
-
-  return function matchHere(segs, idx, method, slugs) {
-    if (idx === segs.length) {
-      const leaf = leaves?.[method]
-      return leaf !== undefined ? { leaf, slugs } : undefined
-    }
-    const seg = segs[idx]!
-    const child = children?.[seg]
-    if (child !== undefined) return child(segs, idx + 1, method, slugs)
-    if (fallback !== undefined) {
-      slugs[fallback.name] = seg
-      return fallback.matcher(segs, idx + 1, method, slugs)
-    }
-    return undefined
-  }
-}
-
-/**
- * Build-time compiled drop-in replacement for `makeRouterFromRoute` — same
- * `(req: Request) => Promise<Response>` contract, same request pipeline, but
- * dispatch is compiled once (`compileNode`) instead of walked fresh on every
- * request.
- */
-export function compileRouter(root: HttpRoute): (req: Request) => Promise<Response> {
-  const matcher = compileNode(root)
-  return async (req) => {
-    const segs = splitPath(new URL(req.url).pathname)
-    const matched = matcher(segs, 0, req.method, {})
-    if (matched === undefined) return new Response("Not Found", { status: 404 })
-
-    return runPipeline(req, matched.leaf.handler, matched.leaf.meta, matched.leaf.pipeline, matched.slugs)
+    return runPipeline(req, matched.entry.handler, matched.entry.meta, matched.entry.pipeline ?? {}, matched.slugs)
   }
 }
