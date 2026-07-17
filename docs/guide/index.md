@@ -25,8 +25,7 @@ This constraint is load-bearing: composability alone does not yield a small ment
 | Package | Role |
 |---------|------|
 | `@rhi-zone/fractal-api-tree` | `api`, `op`, `mergeMeta`, `Node`, `Meta`, `Handler` — the protocol-agnostic tree model |
-| `@rhi-zone/fractal-http-api-projector` | HTTP kit: `http.get`/`post`/`put`/`patch`/`delete`, `httpProjection`, `createFetch`, `makeRouterFromRoute`, `crud` |
-| `@rhi-zone/fractal-openapi-api-projector` | OpenAPI 3.0 / JSON-Schema projection: `toOpenApi` |
+| `@rhi-zone/fractal-http-api-projector` | HTTP kit: `http.get`/`post`/`put`/`patch`/`delete`, `httpProjection`, `createFetch`, `makeRouterFromRoute`, `crud`, `toOpenApi` (OpenAPI 3.1 projection, auto-served at `/openapi.json` by `createFetch`) |
 | `@rhi-zone/fractal-mcp-api-projector` | MCP tool projection: `toTools` |
 | `@rhi-zone/fractal-cli-api-projector` | CLI projection over the same tree |
 | `@rhi-zone/fractal-client-api-projector` | typed client projection over the same tree |
@@ -57,8 +56,9 @@ const fetch = createFetch(app)
 const response = await fetch(new Request('http://localhost/todos/list'))
 
 // Project to OpenAPI — same tree, no re-description
-import { toOpenApi } from '@rhi-zone/fractal-openapi-api-projector'
+import { toOpenApi } from '@rhi-zone/fractal-http-api-projector'
 const doc = await toOpenApi(app, { title: 'Todos API', version: '1.0.0' })
+// ...or just GET /openapi.json — createFetch auto-serves it by default
 ```
 
 `op(fn, ...contributions)` attaches metadata (verb bundles, tags, custom
@@ -80,7 +80,7 @@ A verb bundle like `http.get` is just a `Meta` value — `{ http: { directives: 
 Every `Node` carries a `meta: Meta` descriptor built during tree construction. After construction:
 
 ```ts
-import { toOpenApi } from '@rhi-zone/fractal-openapi-api-projector'
+import { toOpenApi } from '@rhi-zone/fractal-http-api-projector'
 const doc = await toOpenApi(app, { title: 'My API', version: '1.0.0' })
 // doc.paths has every route, parameter, and requestBody schema
 // derived from the same node tree that runs requests

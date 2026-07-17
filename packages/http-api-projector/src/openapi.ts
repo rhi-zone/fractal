@@ -1,7 +1,9 @@
-// packages/openapi-api-projector/src/index.ts — @rhi-zone/fractal-openapi-api-projector
+// packages/http-api-projector/src/openapi.ts — @rhi-zone/fractal-http-api-projector
 //
-// OpenAPI 3.1 projection — now built directly on the HTTP projector's own
-// `HttpRoute` tree instead of re-walking the raw `Node` tree.
+// OpenAPI 3.1 projection — merged into http-api-projector (2026-07-18):
+// OpenAPI only ever describes HTTP APIs, so it's inherently an HTTP concern
+// rather than a separate projection package. Built directly on this
+// package's own `HttpRoute` tree instead of re-walking the raw `Node` tree.
 //
 // Previously this module re-derived verb/segment/path from `meta.http`
 // directives and `meta.tags` via its own self-contained tree walk (mirroring
@@ -34,8 +36,8 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
-import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
+import { httpProjection } from "./dx.ts"
+import type { HttpRoute } from "./route.ts"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 
 // ============================================================================

@@ -170,3 +170,37 @@ projects `TypeRef` into format targets, not the API tree into protocols).
 **Evidence:** `api-tree` matches `api()` as the primary tree constructor.
 The `-api-projector` suffix makes the package family visible and communicates
 the input (API tree) and the role (projector).
+
+---
+
+## Merge openapi-api-projector into http-api-projector (2026-07-18)
+
+**Context:** `openapi-api-projector` was a separate package from
+`http-api-projector`, even though OpenAPI only ever describes HTTP APIs — it
+has no meaning apart from an HTTP surface (paths, verbs, request/response
+bodies over HTTP). Keeping it separate meant `toOpenApi` re-derived its own
+copy of path/verb logic (later consolidated onto walking `http-api-projector`'s
+own `HttpRoute` tree instead of the raw `Node` tree — see `openapi.ts`'s module
+doc), required a cross-package dependency and manual wiring in every consuming
+app, and gave `createFetch` no way to auto-serve the spec it was already
+positioned to generate: `createFetch` builds the exact `HttpRoute` tree the
+OpenAPI projection walks, so serving `/openapi.json` from inside the preset is
+free — the alternative is every app hand-wiring a route that calls `toOpenApi`
+itself.
+
+**Decision:** Merge `packages/openapi-api-projector` into
+`packages/http-api-projector` as `src/openapi.ts`, re-exported from the
+package root (`toOpenApi`, `toOpenApiFromRoute`, and the `OpenApi*` types) and
+from a `./openapi` subpath. `createFetch` (`preset.ts`) gained an `openapi`
+option — `true` by default — that auto-mounts a `GET /openapi.json` handler
+serving a lazily-built, cached document derived from the same route tree the
+router dispatches against. Pass `{ path, title, version, schemas, sourceFile }`
+to configure it, or `false` to disable.
+
+**Evidence:** `openapi-api-projector`'s former cross-package imports
+(`@rhi-zone/fractal-http-api-projector/dx`, `/route`) became relative imports
+now that the code lives in the same package. All references across the
+monorepo (root `package.json` workspaces, README, docs, examples,
+`TODO.md`) were updated; `packages/openapi-api-projector` was deleted.
+`bun run typecheck` and `bun test` pass across the whole workspace after the
+merge.

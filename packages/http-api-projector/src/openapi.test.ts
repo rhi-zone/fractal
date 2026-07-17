@@ -1,10 +1,10 @@
-// packages/openapi-api-projector/src/index.test.ts — OpenAPI 3.1 projection tests
+// packages/http-api-projector/src/openapi.test.ts — OpenAPI 3.1 projection tests
 //
 // Tests run against examples/library-api/src/tree.ts — the canonical
 // cross-surface fixture. Every test asserts a specific OpenAPI invariant.
 
 import { describe, expect, it, beforeAll } from "bun:test"
-import { toOpenApi, type OpenApiDoc } from "./index.ts"
+import { toOpenApi, type OpenApiDoc } from "./openapi.ts"
 import { api } from "../../../examples/library-api/src/tree.ts"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
 
@@ -220,7 +220,7 @@ describe("operationId", () => {
 describe("meta.openapi overrides", () => {
   it("meta.openapi.operationId overrides inferred operationId", async () => {
     const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
-    const { http } = await import("@rhi-zone/fractal-http-api-projector/verbs")
+    const { http } = await import("./verbs.ts")
     // Verb comes from the http.get bundle's `{kind:"method"}` directive (read
     // by applyMethods) — the HttpRoute pipeline resolves verbs from explicit
     // method directives, not from tags alone (tags-only verb inference was

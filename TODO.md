@@ -1,5 +1,31 @@
 # fractal — TODO
 
+## openapi-api-projector merged into http-api-projector — DONE (2026-07-18)
+
+`packages/openapi-api-projector` was merged into `packages/http-api-projector`
+as `src/openapi.ts` (+ `src/openapi.test.ts`) — OpenAPI only ever describes
+HTTP APIs, so it's inherently an HTTP concern, not a separate projection
+package. Full rationale in `docs/design/decisions.md` § Merge
+openapi-api-projector into http-api-projector.
+
+- `toOpenApi`/`toOpenApiFromRoute` and the `OpenApi*` types are now re-exported
+  from `http-api-projector`'s package root and a `./openapi` subpath; the
+  module's former cross-package imports of `@rhi-zone/fractal-http-api-projector/dx`
+  and `/route` became relative (`./dx.ts`, `./route.ts`).
+- `createFetch` (`preset.ts`) gained a `PresetOptions.openapi` toggle
+  (`boolean | (OpenApiOpts & { path? })`, default `true`) that auto-mounts a
+  `GET /openapi.json` handler — the spec is built lazily on first request from
+  the same `HttpRoute` tree the router dispatches against, then cached.
+- Root `package.json` `workspaces` and the fencing `comment` field, `README.md`,
+  `docs/guide/index.md`, `docs/api/index.md`, and the two `spike/` tsconfig
+  path maps were all updated; no `.ts`/`.json`/`.md` reference to
+  `openapi-api-projector` or `@rhi-zone/fractal-openapi-api-projector` remains
+  outside historical/superseded design docs (`roadmap.md`, `converged-model.md`,
+  `handler-model.md` — already marked stale/superseded — and this file's own
+  history above this entry).
+- `packages/openapi-api-projector` deleted. `bun run typecheck` and `bun test`
+  pass across the whole workspace.
+
 ## tree/extract/cli moved from type-ir to api-tree — DONE (2026-07-18)
 
 `tree.ts`, `extract.ts`, `cli.ts`, and `build.ts` (plus their tests and

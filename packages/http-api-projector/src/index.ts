@@ -28,3 +28,12 @@ export {
   withALS,
 } from "./compile.ts"
 export type { CompiledRouter, Matcher, RouteMatch } from "./compile.ts"
+export { toOpenApi, toOpenApiFromRoute } from "./openapi.ts"
+export type {
+  OpenApiDoc,
+  OpenApiMeta,
+  OpenApiOperation,
+  OpenApiOpts,
+  OpenApiParameter,
+  OpenApiSchema,
+} from "./openapi.ts"

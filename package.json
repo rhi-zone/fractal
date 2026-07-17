@@ -2,13 +2,12 @@
   "name": "fractal-monorepo",
   "private": true,
   "type": "module",
-  "comment": "Workspaces fenced to the function-core spine slice. packages/{openapi-api-projector,client-api-projector} and examples/{todo-api,dogfood} are FENCED OUT pending migration to the function-core model — see TODO.md. packages/codegen (types+JSDoc → runtime schema extractor) was merged into packages/type-ir — extract/tree/compile/cli are type-ir concerns.",
+  "comment": "packages/codegen (types+JSDoc → runtime schema extractor) was merged into packages/type-ir — extract/tree/compile/cli are type-ir concerns. packages/openapi-api-projector was merged into packages/http-api-projector (2026-07-18) — OpenAPI only ever describes HTTP APIs, so it's an HTTP concern, not a separate projection; see TODO.md.",
   "workspaces": [
     "packages/api-tree",
     "packages/type-ir",
     "packages/http-api-projector",
     "packages/mcp-api-projector",
-    "packages/openapi-api-projector",
     "packages/cli-api-projector",
     "packages/client-api-projector",
     "examples/library-api"

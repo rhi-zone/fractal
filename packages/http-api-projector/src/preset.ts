@@ -55,8 +55,16 @@ import { withALS } from "./compile.ts"
 import type { CompiledRouter } from "./compile.ts"
 import { autoMethodLayer, corsLayer } from "./layers.ts"
 import type { CorsOptions } from "./layers.ts"
+import { toOpenApiFromRoute } from "./openapi.ts"
+import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts"
 
 export type { CorsOptions }
+
+/** `PresetOptions.openapi` object form — `OpenApiOpts` plus the mount path. */
+export type OpenApiPresetOptions = OpenApiOpts & {
+  /** URL path to serve the generated document at. Defaults to `/openapi.json`. */
+  readonly path?: string
+}
 
 export type PresetOptions<T = unknown> = {
   /**
@@ -126,6 +134,50 @@ export type PresetOptions<T = unknown> = {
     readonly storage: AsyncLocalStorage<T>
     readonly init: (req: Request) => T
   }
+  /**
+   * Auto-serve a generated OpenAPI 3.1 document — OpenAPI only ever
+   * describes HTTP APIs, so `createFetch` mounts it with zero extra setup.
+   * `true` (the default) mounts a `GET /openapi.json` handler that derives
+   * the spec from the same (fully-rewritten) `HttpRoute` tree the router
+   * dispatches against, via `toOpenApiFromRoute`. Pass an
+   * `OpenApiPresetOptions` object (`OpenApiOpts` plus `path`) to set
+   * `title`/`version`/`schemas`/`sourceFile` or change the mount path, or
+   * `false` to disable entirely. The document is built lazily — on the
+   * first request to the mount path — and cached for the life of the
+   * handler.
+   */
+  readonly openapi?: boolean | OpenApiPresetOptions
+}
+
+/**
+ * Wrap `handler` with a `GET <path>` short-circuit that serves a lazily-
+ * built, cached OpenAPI 3.1 document derived from `routes` — see
+ * `PresetOptions.openapi`.
+ */
+function withOpenApi(
+  handler: CompiledRouter,
+  routes: HttpRoute,
+  opts: boolean | OpenApiPresetOptions | undefined,
+): CompiledRouter {
+  if (opts === false) return handler
+
+  const { path = "/openapi.json", ...openApiOpts }: OpenApiPresetOptions =
+    opts === true || opts === undefined ? {} : opts
+
+  let specPromise: Promise<OpenApiDoc> | undefined
+
+  return async (req: Request) => {
+    const url = new URL(req.url)
+    if (req.method === "GET" && url.pathname === path) {
+      specPromise ??= toOpenApiFromRoute(routes, openApiOpts)
+      const spec = await specPromise
+      return new Response(JSON.stringify(spec), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+    return handler(req)
+  }
 }
 
 /**
@@ -169,10 +221,12 @@ export function createFetch<T = unknown>(
 
   const withMethods = autoMethodLayer(withContext, routes)
 
+  const withOpenApiDoc = withOpenApi(withMethods, routes, opts.openapi)
+
   if (opts.cors !== undefined && opts.cors !== false) {
     const corsOpts: CorsOptions = typeof opts.cors === "boolean" ? {} : opts.cors
-    return corsLayer(corsOpts)(withMethods)
+    return corsLayer(corsOpts)(withOpenApiDoc)
   }
 
-  return withMethods
+  return withOpenApiDoc
 }
