@@ -7,18 +7,14 @@
 // — "Tags"): a node-level tag does not flow down to its descendants.
 //
 // In the new node model, callables are leaf nodes stored in `children` via
-// `op(fn, meta?)`. `service()` still works: methods become leaf node children
-// automatically; an instance field literally named `fallback` (shape
-// `{ name, subtree }`) becomes the resulting node's `fallback` (replaces the
-// former `param()`).
+// `op(fn, meta?)`. A node's `fallback` option (shape `{ name, subtree }`)
+// captures the wildcard-capture subtree (replaces the former `param()`).
 //
 // This file is also the codegen entry-point: extractToolSchemas walks the
 // exported `api` value's api() call and derives input schemas for inline
-// ops. The booksNode is authored via service() (not api()), so codegen
-// skips it — its ops degrade to the MCP spec-minimum `{ type: "object" }`
-// placeholder.
+// ops, including the `books` subtree below (also authored via api()).
 
-import { api as api_, op, service } from "@rhi-zone/fractal-api-tree/node"
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
 import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
@@ -153,36 +149,44 @@ const bookItemNode = api_({
   }, { meta: { http: { dispatch: { kind: "method" } } } })
 
 // ============================================================================
-// BooksService — service class authoring surface
+// Books — list/add ops, plus the per-book fallback subtree
 // ============================================================================
 
-class BooksService {
-  /**
-   * A field literally named `fallback` (shape `{ name, subtree }`): service()
-   * picks this up as the resulting node's `fallback` (wildcard-capture).
-   */
-  fallback = { name: "bookId", subtree: bookItemNode }
+/** List all books in the library. GET /books/list */
+const listBooks = op(
+  (_: unknown): Book[] => [...store.values()],
+  http.get,
+  { description: "List all books in the library." },
+)
 
-  /** List all books in the library. GET /books/list */
-  list(_: unknown): Book[] {
-    return [...store.values()]
-  }
-
-  /** Add a new book to the collection. POST /books/add */
-  add(input: { title: string; author: string; genre: string }): Book {
+/** Add a new book to the collection. POST /books/add */
+const addBook = op(
+  (input: { title: string; author: string; genre: string }): Book => {
     const id = `book-${++_seq}`
     const book: Book = { id, ...input }
     store.set(id, book)
     return book
-  }
-}
+  },
+  http.post,
+  { description: "Add a new book to the collection." },
+)
+
+/**
+ * Books subtree: `list`/`add` are static children; the per-book fallback
+ * (`fallback: { name, subtree }`) captures any other path segment as
+ * `bookId` and continues into `bookItemNode` (read/replace/remove/checkout).
+ */
+const booksNode = api_({
+    list: listBooks,
+    add: addBook,
+  }, { fallback: { name: "bookId", subtree: bookItemNode } })
 
 // ============================================================================
 // API root
 //
 // Exported as `api` so extractToolSchemas (codegen) can walk the api() call.
-// The inline `catalog: api(...)` is found by the codegen walker; the
-// `books: service(...)` child is not an api() call and is skipped.
+// Both the inline `catalog: api(...)` and `books: booksNode` (also api()) are
+// found by the codegen walker.
 //
 // A header-dispatch API-versioning demo (`X-Api-Version` selecting a
 // response body at `GET /version`) previously lived here, exercising the
@@ -194,17 +198,7 @@ class BooksService {
 // ============================================================================
 
 export const api = api_({
-    // `service()`'s `opts.meta[name]` REPLACES that leaf's whole meta bag
-    // (it isn't merged with anything else) — so the `http.get`/`http.post`
-    // bundles (verb + method directives + implied tags) are spread in
-    // directly here, the same composition `op(fn, http.get, extra)` would
-    // do for an `api()`-authored leaf.
-    books: service(new BooksService(), {
-      meta: {
-        list: { ...http.get, description: "List all books in the library." },
-        add: { ...http.post, description: "Add a new book to the collection." },
-      },
-    }),
+    books: booksNode,
 
     // Each leaf carries its OWN readOnly tag — tags do not inherit from the
     // node (removed; see docs/design/router-model.md — "Tags").
@@ -233,10 +227,9 @@ export const api = api_({
 // Validator wiring — createApplyValidation injects the codegen-generated
 // `catalog/*` validators (examples/library-api/src/generated/validators.ts,
 // produced by `bun run codegen`, see package.json) into the route tree's
-// `pipeline.validate` slot. The `books` service subtree has no generated
-// validators (codegen skips service()-authored leaves — see the file-level
-// comment above) and is untouched: a key not present in the map is a no-op
-// passthrough (route.ts's `createApplyValidation` doc comment).
+// `pipeline.validate` slot. The `books` subtree has no entry in `validatorMap`
+// and is untouched: a key not present in the map is a no-op passthrough
+// (route.ts's `createApplyValidation` doc comment).
 // ============================================================================
 
 // The generated module is a `@ts-nocheck` build artifact (see cli.ts's

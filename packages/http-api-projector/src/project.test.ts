@@ -11,7 +11,7 @@
 // TODO.md "Attribute dispatch is an open design question".
 
 import { describe, expect, it } from "bun:test"
-import { api, op, service } from "@rhi-zone/fractal-api-tree/node"
+import { api, op } from "@rhi-zone/fractal-api-tree/node"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { makeRouter, toHttpRoutes, verbFromTags } from "./project.ts"
 import { applyMethods, applyMoveTo } from "./route.ts"
@@ -81,20 +81,6 @@ describe("path dispatch — tree structure determines the address", () => {
     const router = makeRouter(routes(tree))
     expect((await router(new Request("http://localhost/users/list"))).status).toBe(200)
     expect((await router(new Request("http://localhost/orders/list"))).status).toBe(200)
-  })
-
-  it("service() surface resolves identically to api()", async () => {
-    class Svc {
-      listItems(_: unknown) {
-        return []
-      }
-    }
-    const tree = service(new Svc(), {
-      meta: { listItems: { http: { directives: [{ kind: "method", value: "GET" }] } } },
-    })
-    const router = makeRouter(routes(tree))
-    const res = await router(new Request("http://localhost/listItems"))
-    expect(res.status).toBe(200)
   })
 })
 

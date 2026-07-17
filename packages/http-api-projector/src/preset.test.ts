@@ -2,7 +2,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
-import { api as api_, op, service } from "@rhi-zone/fractal-api-tree/node"
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { createFetch } from "./preset.ts"
 import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts"
 import type { HttpRoute, ValidatorMap } from "./route.ts"
@@ -11,27 +11,18 @@ import type { HttpRoute, ValidatorMap } from "./route.ts"
 // Mixed API fixture
 // ============================================================================
 
-class UserService {
-  listUsers(_: unknown) {
-    return [{ id: 1, name: "Alice" }]
-  }
-  createUser(input: { name: string }) {
-    return { id: 2, name: input.name }
-  }
-}
-
-const usersNode = service(new UserService(), {
-  meta: {
-    // `moveTo` with a plain relative segment doubles as a path/segment
-    // rename (see project.ts's HttpDirective docs) — the base position
-    // `applyMoveTo` resolves relative to already excludes the node's own
-    // key, so a bare token just replaces it.
-    listUsers: {
-      tags: { readOnly: true },
-      http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../list" }] },
-    },
-    createUser: { http: { directives: [{ kind: "moveTo", path: "../create" }] } },
-  },
+const usersNode = api_({
+  // `moveTo` with a plain relative segment doubles as a path/segment
+  // rename (see project.ts's HttpDirective docs) — the base position
+  // `applyMoveTo` resolves relative to already excludes the node's own
+  // key, so a bare token just replaces it.
+  listUsers: op((_: unknown) => [{ id: 1, name: "Alice" }], {
+    tags: { readOnly: true },
+    http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../list" }] },
+  }),
+  createUser: op((input: { name: string }) => ({ id: 2, name: input.name }), {
+    http: { directives: [{ kind: "moveTo", path: "../create" }] },
+  }),
 })
 
 const invoicesNode = api_({}, { fallback: {

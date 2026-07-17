@@ -3,7 +3,6 @@
 import { describe, expect, it } from "bun:test"
 import {
   op,
-  service,
   api,
   isNode,
   isLeaf,
@@ -22,40 +21,10 @@ import {
 } from "./tags.ts"
 
 // ============================================================================
-// 1. Lowering equivalence: service() ≡ api() — both surfaces, one value
+// 1. op() — leaf-node constructor
 // ============================================================================
 
-describe("lowering equivalence: service ≡ api", () => {
-  it("produces deep-equal Node values from service() and api()", () => {
-    const handler = (input: { userId: string }) => ({ ok: true, userId: input.userId })
-    const meta: Meta = { http: { verb: "POST" } }
-
-    // Surface A: class / service
-    class UserService {
-      getUser(input: { userId: string }) {
-        return handler(input)
-      }
-    }
-    const fromService = service(new UserService(), { meta: { getUser: meta } })
-
-    // Surface B: standalone function
-    const fromNode = api({
-        getUser: op(handler, meta),
-      })
-
-    // Both lower to the same shape
-    expect(fromService.children?.["getUser"] !== undefined).toBe(true)
-    expect(fromNode.children?.["getUser"] !== undefined).toBe(true)
-    expect(fromService.meta).toEqual(fromNode.meta)
-    // children are structurally equivalent: same keys, same meta; handler identity differs (bind)
-    expect(Object.keys(fromService.children ?? {})).toEqual(Object.keys(fromNode.children ?? {}))
-    const svcChild = fromService.children?.["getUser"] as Node
-    const nodeChild = fromNode.children?.["getUser"] as Node
-    expect(svcChild.meta).toEqual(nodeChild.meta)
-    // both handlers produce the same output
-    expect(svcChild.handler!({ userId: "u1" })).toEqual(nodeChild.handler!({ userId: "u1" }))
-  })
-
+describe("op()", () => {
   it("op(fn) produces a leaf node with empty meta", () => {
     const bare = (input: { n: number }) => input.n * 2
     const n = api({ double: op(bare) })
@@ -180,7 +149,7 @@ describe("open metadata", () => {
 })
 
 // ============================================================================
-// 5. Standalone-function op and method op both work
+// 5. Standalone-function op
 // ============================================================================
 
 describe("op surfaces", () => {
@@ -200,21 +169,6 @@ describe("op surfaces", () => {
     expect(await leaf.handler!({ id: "x" })).toEqual({ found: true, id: "x" })
     expect(leaf.meta.tags?.[TAG_READ_ONLY]).toBe(true)
     expect(leaf.meta["http"]).toEqual({ segment: "detail" })
-  })
-
-  it("method op (from service) produces a leaf node child and is bound", async () => {
-    class Greeter {
-      private prefix = "Hi"
-      greet(input: { name: string }) {
-        return `${this.prefix}, ${input.name}!`
-      }
-    }
-    const n = service(new Greeter())
-    const greetLeaf = n.children?.["greet"] as Node
-    expect(greetLeaf).toBeDefined()
-    expect(isLeaf(greetLeaf)).toBe(true)
-    // Call without receiver — binding must have captured `this`
-    expect(await greetLeaf.handler!({ name: "Alice" })).toBe("Hi, Alice!")
   })
 
   it("isNode / isLeaf discriminators are correct", () => {

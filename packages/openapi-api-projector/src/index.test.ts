@@ -140,13 +140,10 @@ describe("requestBody from codegen schemas", () => {
   })
 
   it("books/add (POST) has requestBody with non-empty input schema", () => {
-    // books is a service() child — codegen skips it — so inputSchema degrades
-    // to the placeholder { type: "object" } which has no properties key.
-    // The requestBody should still be absent for placeholder schemas (no properties).
+    // books is authored via api()/op(), so codegen derives its real input
+    // schema (title/author/genre) rather than degrading to a placeholder.
     const op = docWithSchemas.paths["/books/add"]?.["post"]
     expect(op).toBeDefined()
-    // Service-sourced ops degrade gracefully — either no requestBody or placeholder
-    // This assertion documents the graceful degradation:
     if (op!.requestBody !== undefined) {
       expect(op!.requestBody.content["application/json"].schema).toBeDefined()
     }
@@ -204,7 +201,7 @@ describe("operationId", () => {
     expect(op?.operationId).toBe("catalog.search")
   })
 
-  it("operationId for books list is books.list (service child)", () => {
+  it("operationId for books list is books.list", () => {
     const op = doc.paths["/books/list"]?.["get"]
     expect(op?.operationId).toBe("books.list")
   })

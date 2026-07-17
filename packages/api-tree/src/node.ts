@@ -1,7 +1,7 @@
 // packages/api-tree/src/node.ts — @rhi-zone/fractal-api-tree  (new model, alongside legacy spine)
 //
 // The new fractal authoring model: Node / Handler / Meta + constructors
-// (op / api / service) + mergeMeta.
+// (op / api) + mergeMeta.
 //
 // Node shape:
 //   - A LEAF node carries `handler` (the bare fn) and may have no `children`.
@@ -15,9 +15,6 @@
 //
 // `op(fn, meta?)` produces a leaf node.
 // `api(children, opts?)` produces a branch node.
-// `service(instance, opts?)` walks a class → children that are leaf nodes.
-//   An instance field literally named `fallback` (shape `{ name, subtree }`)
-//   becomes the resulting node's `fallback` rather than a keyed child.
 //
 // This module is SEPARATE from the legacy function-core spine in index.ts.
 // Import directly from "./node.ts" until the two are merged.
@@ -55,7 +52,7 @@ export type Handler<I = any, O = any> = (input: I) => O | Promise<O>
 /**
  * [CERTIFIED] One tree = grouping AND addressing.
  * A node's key IS its address segment; behavior (`handler`) carries none.
- * Both authoring surfaces (service / standalone) lower to this value.
+ * Both `op()` and `api()` lower to this value.
  *
  * - LEAF: `handler` is present (a callable). May have no `children`.
  * - BRANCH: `children` is present. May have no `handler`.
@@ -196,8 +193,7 @@ export function op<H extends Handler>(
  * `api(children, opts?)` — positional children for the common case, an
  * options object for the rare stuff (meta, fallback).
  *
- * `api()` is the (only) branch-node constructor; `service()` is the other
- * authoring surface and lowers to the same Node shape.
+ * `api()` is the (only) branch-node constructor.
  *
  * Generic in `C` (the exact children map): the input `children` object's
  * per-key `Node<H>` types survive into the result's `children`, instead of
@@ -227,56 +223,4 @@ export function api<
     ...(opts?.fallback !== undefined ? { fallback: opts.fallback } : {}),
     meta: opts?.meta ?? {},
   } as Omit<Node, "children" | "fallback"> & { readonly children: C } & (F extends undefined ? object : { readonly fallback: F })
-}
-
-/** Duck-type check for the `{ name, subtree }` fallback shape. */
-const isFallbackShape = (v: unknown): v is { name: string; subtree: Node } =>
-  typeof v === "object" &&
-  v !== null &&
-  typeof (v as { name?: unknown }).name === "string" &&
-  isNode((v as { subtree?: unknown }).subtree)
-
-/**
- * Lower a service instance to a Node (the `impl`-block / method surface).
- *  - each method                        → children[name]  (a LEAF node — has handler)
- *  - each Node-valued field              → children[name]  (static mount)
- *  - a field literally named `fallback`
- *    with shape `{ name, subtree }`      → the resulting node's `fallback`
- *  - opts.meta[name]                     → that child leaf node's metadata bag
- *
- * Both `api()` and `service()` produce the identical `{handler?, children?,
- * fallback?, meta}` value — there is one Node primitive; both surfaces lower
- * to it.
- */
-export const service = (
-  instance: object,
-  opts: { meta?: Record<string, Meta> } = {},
-): Node => {
-  const children: Record<string, Node> = {}
-  let fallback: { name: string; subtree: Node } | undefined
-  const proto = Object.getPrototypeOf(instance) as object
-  for (const key of Object.getOwnPropertyNames(proto)) {
-    if (key === "constructor") continue
-    const val = (instance as Record<string, unknown>)[key]
-    if (typeof val === "function") {
-      // Each method becomes a leaf node child
-      children[key] = {
-        handler: (val as Handler).bind(instance),
-        meta: opts.meta?.[key] ?? {},
-      }
-    }
-  }
-  for (const key of Object.getOwnPropertyNames(instance)) {
-    const val = (instance as Record<string, unknown>)[key]
-    if (key === "fallback" && isFallbackShape(val)) {
-      fallback = val
-    } else if (isNode(val)) {
-      children[key] = val
-    }
-  }
-  return {
-    children,
-    ...(fallback !== undefined ? { fallback } : {}),
-    meta: {},
-  }
 }
