@@ -125,16 +125,27 @@ function hintsFromTags(tags: Tags): Record<string, boolean> {
  * not a fixed schema — see the DU + interpreter design philosophy).
  */
 export type McpMeta = {
-  /** Full tool-name override (prefix ignored when set). */
+  /** Full tool-name override (prefix ignored when set), or resource name override. */
   readonly name?: string
   /** Description text override. */
   readonly description?: string
   /** Emits `annotations.title`. */
   readonly title?: string
-  /** This node's contribution to the tool-name prefix (branch nodes only). */
+  /** This node's contribution to the tool-name/resource-URI prefix (branch nodes only). */
   readonly segment?: string
-  /** Merged over tag-derived hints (override wins per key). */
+  /** Merged over tag-derived hints (override wins per key). Tools only. */
   readonly annotations?: McpAnnotations
+  /**
+   * Leaf discriminator: "tool" (default, omitted = "tool") | "resource" | "prompt".
+   * Only "tool" and "resource" are projected today — see project.ts's two
+   * walks (`projectTools`, `projectResources`), each skipping leaves not
+   * tagged for its own surface.
+   */
+  readonly as?: "tool" | "resource" | "prompt"
+  /** Full resource URI override (derived-from-tree-position URI ignored when set). */
+  readonly uri?: string
+  /** Resource MIME type override; defaults to "application/json". Resources only. */
+  readonly mimeType?: string
   readonly [key: string]: unknown
 }
 
@@ -192,6 +203,11 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
       if (isLeaf(child)) {
         // ── Leaf node: this is a callable → build an MCP tool ──────────────
         const mcp = getMcpMeta(child.meta)
+
+        // meta.mcp.as discriminates the leaf's target surface. Omitted or
+        // "tool" → project as a tool (this walk); "resource" / "prompt" →
+        // skip here (projected by projectResources / a future prompt walk).
+        if (mcp.as !== undefined && mcp.as !== "tool") continue
 
         // Name: meta.mcp.name wins; else underscore-join prefix + leaf key
         const name =
@@ -272,4 +288,177 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
  */
 export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
   return projectTools(n, opts).tools
+}
+
+// ============================================================================
+// Resource projection
+// ============================================================================
+//
+// A leaf tagged `meta.mcp.as: "resource"` is projected as an MCP Resource
+// (fixed URI) or ResourceTemplate (URI carries `{var}` placeholders) instead
+// of a tool. URI derivation mirrors `projectTools`' name derivation, but
+// joins tree-position segments with "/" (not "_") and prefixes a URI scheme
+// — a fallback node's `name` (e.g. "userId") becomes a `{userId}` template
+// variable rather than a literal segment, since its value is only known at
+// read time.
+//
+// No annotation-hint derivation here (see module doc — MCP resources carry
+// no ToolAnnotations-equivalent), and no inputSchema — a resource read takes
+// no arguments beyond the URI's own template variables.
+
+/** A fixed MCP resource — one concrete, addressable URI. */
+export type McpResource = {
+  readonly uri: string
+  readonly name: string
+  readonly description: string
+  readonly mimeType: string
+}
+
+/** An MCP resource template — a URI carrying `{var}` placeholders bound at read time. */
+export type McpResourceTemplate = {
+  readonly uriTemplate: string
+  readonly name: string
+  readonly description: string
+  readonly mimeType: string
+}
+
+/** A compiled URI template: matches a concrete read URI and binds its captured segments. */
+export type ResourceTemplateHandler = {
+  readonly uriTemplate: string
+  readonly paramNames: readonly string[]
+  readonly pattern: RegExp
+  readonly mimeType: string
+  readonly handler: Handler
+}
+
+/** Options for `projectResources`. */
+export type ProjectResourcesOptions = {
+  /** URI scheme prefix for derived URIs. Defaults to `"resource://"`. */
+  readonly scheme?: string
+}
+
+/** `projectResources`'s full result: descriptor arrays plus dispatch tables. */
+export type ProjectResourcesResult = {
+  readonly resources: McpResource[]
+  readonly resourceTemplates: McpResourceTemplate[]
+  /** Fixed-resource dispatch: URI → handler (no template variables to bind). */
+  readonly handlers: ReadonlyMap<string, Handler>
+  /** Template-resource dispatch: tried in order against a concrete read URI. */
+  readonly templateHandlers: readonly ResourceTemplateHandler[]
+}
+
+/** Escape a string for literal inclusion inside a `RegExp` pattern. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/**
+ * Compile a `{var}`-templated URI (e.g. `resource://users/{userId}/profile`)
+ * into a matching `RegExp` (one capture group per variable, in order) plus
+ * the ordered list of variable names — used at read time to bind a concrete
+ * URI's captured segments back to named handler input fields.
+ */
+function compileUriTemplate(uriTemplate: string): { pattern: RegExp; paramNames: string[] } {
+  const paramNames: string[] = []
+  let patternSource = ""
+  let lastIndex = 0
+  const varPattern = /\{([^}]+)\}/g
+  let match: RegExpExecArray | null
+  while ((match = varPattern.exec(uriTemplate)) !== null) {
+    patternSource += escapeRegExp(uriTemplate.slice(lastIndex, match.index))
+    patternSource += "([^/]+)"
+    paramNames.push(match[1]!)
+    lastIndex = match.index + match[0].length
+  }
+  patternSource += escapeRegExp(uriTemplate.slice(lastIndex))
+  return { pattern: new RegExp(`^${patternSource}$`), paramNames }
+}
+
+/**
+ * Walk a Node tree and produce a flat array of MCP resource/resource-template
+ * descriptors, plus the dispatch tables `server.ts`'s `resources/read`
+ * handler resolves reads through (mirrors `projectTools`' handler map — a
+ * single walk, no drift between the listed descriptors and dispatch).
+ *
+ * URI construction (tree-position namespacing, slash-joined, scheme-prefixed):
+ *   root leaf "config"                        → "resource://config"
+ *   child "users" / leaf "list"                → "resource://users/list"
+ *   fallback name "userId" / leaf "profile"    → "resource://users/{userId}/profile" (template)
+ *   meta.mcp.uri on leaf                       → full override
+ *   meta.mcp.segment on a child node           → that node's URI-segment contribution
+ *
+ * Per-projection overrides via meta.mcp (open bag):
+ *   name        — override the resource/template `name` (else the leaf key)
+ *   description — override description text (else meta.description, else leaf key)
+ *   mimeType    — override MIME type (else `"application/json"`)
+ *   uri         — override the derived URI/URI-template entirely
+ *
+ * @param n     - The root node to walk.
+ * @param opts  - Optional URI `scheme` (defaults to `"resource://"`).
+ */
+export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): ProjectResourcesResult {
+  const scheme = opts.scheme ?? "resource://"
+  const handlers = new Map<string, Handler>()
+  const templateHandlers: ResourceTemplateHandler[] = []
+
+  const walk = (
+    n: Node,
+    segments: readonly string[],
+    hasFallback: boolean,
+  ): { resources: McpResource[]; resourceTemplates: McpResourceTemplate[] } => {
+    const resources: McpResource[] = []
+    const resourceTemplates: McpResourceTemplate[] = []
+
+    for (const [key, child] of Object.entries(n.children ?? {})) {
+      if (isLeaf(child)) {
+        const mcp = getMcpMeta(child.meta)
+
+        // Only leaves explicitly tagged for the resource surface are projected here.
+        if (mcp.as !== "resource") continue
+
+        const leafSegments = [...segments, key]
+        const derivedUri = `${scheme}${leafSegments.join("/")}`
+        const uri = typeof mcp.uri === "string" ? mcp.uri : derivedUri
+
+        const name = typeof mcp.name === "string" ? mcp.name : key
+
+        const description =
+          typeof mcp.description === "string"
+            ? mcp.description
+            : typeof child.meta.description === "string"
+              ? child.meta.description
+              : key
+
+        const mimeType = typeof mcp.mimeType === "string" ? mcp.mimeType : "application/json"
+
+        if (hasFallback) {
+          const { pattern, paramNames } = compileUriTemplate(uri)
+          resourceTemplates.push({ uriTemplate: uri, name, description, mimeType })
+          templateHandlers.push({ uriTemplate: uri, paramNames, pattern, mimeType, handler: child.handler as Handler })
+        } else {
+          resources.push({ uri, name, description, mimeType })
+          handlers.set(uri, child.handler as Handler)
+        }
+      } else {
+        // ── Branch child ────────────────────────────────────────────────────
+        const childMcp = getMcpMeta(child.meta)
+        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
+        const sub = walk(child, [...segments, rawSeg], hasFallback)
+        resources.push(...sub.resources)
+        resourceTemplates.push(...sub.resourceTemplates)
+      }
+    }
+
+    if (n.fallback !== undefined) {
+      // fallback: contribute its name as a `{var}` template segment
+      const sub = walk(n.fallback.subtree, [...segments, `{${n.fallback.name}}`], true)
+      resources.push(...sub.resources)
+      resourceTemplates.push(...sub.resourceTemplates)
+    }
+
+    return { resources, resourceTemplates }
+  }
+
+  const { resources, resourceTemplates } = walk(n, [], false)
+  return { resources, resourceTemplates, handlers, templateHandlers }
 }

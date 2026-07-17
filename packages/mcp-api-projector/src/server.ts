@@ -9,15 +9,22 @@
 // per tool (derived-from-type via `SchemaMap`, see project.ts) — the
 // high-level `McpServer.registerTool` wants a Zod raw shape instead, which
 // would mean re-deriving a second schema representation for no benefit.
-// `Server` registers exactly two request handlers (`tools/list`,
-// `tools/call`) and defers to the SDK for everything else (initialize
-// handshake, transport framing, protocol version negotiation).
+// `Server` always registers `tools/list` and `tools/call`; when the tree
+// contains any leaf tagged `meta.mcp.as: "resource"`, it additionally
+// registers `resources/list`, `resources/templates/list`, and
+// `resources/read` (and advertises the `resources` capability — see
+// `hasResources` below). Everything else (initialize handshake, transport
+// framing, protocol version negotiation) is left to the SDK.
 //
-// Handler resolution: `projectTools` walks the tree ONCE and returns both
-// the flat `McpTool[]` and a `name → Handler` map built during that same
-// walk (project.ts's `ProjectToolsResult`) — no second tree walk per call,
-// and no risk of the name-construction logic drifting between the tools
-// list and the dispatch table.
+// Handler resolution: `projectTools`/`projectResources` each walk the tree
+// ONCE and return both their flat descriptor array and a dispatch table
+// built during that same walk (project.ts's `ProjectToolsResult` /
+// `ProjectResourcesResult`) — no second tree walk per call, and no risk of
+// the name/URI-construction logic drifting between the list and the
+// dispatch table. Fixed resources dispatch by an exact `uri` map lookup;
+// resource templates (URIs with `{var}` placeholders, from fallback nodes)
+// dispatch by trying each compiled `RegExp` in turn and binding captured
+// segments to named handler input fields.
 //
 // Transport-agnostic by design: `createMcpServer` returns the `Server`
 // instance unconnected. The caller picks a transport
@@ -27,22 +34,28 @@
 // worker wiring to the caller.
 //
 // See:
-//   packages/mcp-api-projector/src/project.ts   — toTools / projectTools (tool descriptors + handler map)
+//   packages/mcp-api-projector/src/project.ts   — toTools/projectTools/projectResources (descriptors + dispatch tables)
 //   packages/http-api-projector/src/preset.ts   — sibling preset (createFetch, structural mirror)
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import {
   CallToolRequestSchema,
+  ErrorCode,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
+  McpError,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import type {
   CallToolResult,
   Implementation,
+  ReadResourceResult,
   ServerCapabilities,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import { projectTools } from "./project.ts"
-import type { SchemaMap } from "./project.ts"
+import { projectResources, projectTools } from "./project.ts"
+import type { ProjectResourcesOptions, SchemaMap } from "./project.ts"
 
 // ============================================================================
 // Minimal JSON Schema validation (required + property types only)
@@ -145,11 +158,12 @@ export type CreateMcpServerOptions = {
   readonly description?: string
   /** Tool-name → derived input schema + JSDoc description (from codegen). Forwarded to `projectTools`. */
   readonly schemas?: SchemaMap
+  /** URI scheme for derived resource URIs (see `projectResources`). Forwarded as-is. */
+  readonly resources?: ProjectResourcesOptions
   /**
    * Additional capabilities to advertise beyond `{ tools: {} }` (always
-   * included — this preset always registers tool handlers). Merged under
-   * `tools`, so `{ resources: {} }` adds resource support without
-   * disturbing the tool capability this preset wires up.
+   * included — this preset always registers tool handlers) and `{ resources: {} }`
+   * (added automatically when the tree contains any resource leaves).
    */
   readonly capabilities?: ServerCapabilities
 }
@@ -174,6 +188,13 @@ export type CreateMcpServerOptions = {
  */
 export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Server {
   const { tools, handlers } = projectTools(tree, opts.schemas !== undefined ? { schemas: opts.schemas } : {})
+  const {
+    resources,
+    resourceTemplates,
+    handlers: resourceHandlers,
+    templateHandlers,
+  } = projectResources(tree, opts.resources ?? {})
+  const hasResources = resources.length > 0 || resourceTemplates.length > 0
 
   const implementation: Implementation = {
     name: opts.name,
@@ -183,7 +204,11 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
   }
 
   const server = new Server(implementation, {
-    capabilities: { ...opts.capabilities, tools: { ...opts.capabilities?.tools } },
+    capabilities: {
+      ...opts.capabilities,
+      tools: { ...opts.capabilities?.tools },
+      ...(hasResources ? { resources: { ...opts.capabilities?.resources } } : {}),
+    },
   })
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }))
@@ -227,6 +252,38 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       }
     }
   })
+
+  if (hasResources) {
+    server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources }))
+    server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({ resourceTemplates }))
+
+    const resourcesByUri = new Map(resources.map((r) => [r.uri, r] as const))
+
+    server.setRequestHandler(ReadResourceRequestSchema, async (request): Promise<ReadResourceResult> => {
+      const { uri } = request.params
+
+      // Fixed resources first (exact URI match), then templates (pattern match).
+      const fixedHandler = resourceHandlers.get(uri)
+      if (fixedHandler !== undefined) {
+        const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json"
+        const result = await fixedHandler({})
+        return { contents: [{ uri, mimeType, text: JSON.stringify(result) }] }
+      }
+
+      for (const template of templateHandlers) {
+        const match = template.pattern.exec(uri)
+        if (match === null) continue
+        const input: Record<string, string> = {}
+        template.paramNames.forEach((name, i) => {
+          input[name] = match[i + 1] as string
+        })
+        const result = await template.handler(input)
+        return { contents: [{ uri, mimeType: template.mimeType, text: JSON.stringify(result) }] }
+      }
+
+      throw new McpError(ErrorCode.InvalidParams, `Resource not found: ${uri}`)
+    })
+  }
 
   return server
 }

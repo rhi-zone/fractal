@@ -3,7 +3,7 @@
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { verbFromTags } from "@rhi-zone/fractal-http-api-projector/project"
-import { toTools } from "./project.ts"
+import { projectResources, toTools } from "./project.ts"
 
 // ============================================================================
 // 1. Cross-surface payoff: one meta.tags → MCP annotations + HTTP verb
@@ -274,5 +274,127 @@ describe("inputSchema placeholder", () => {
     for (const t of tools) {
       expect(t.inputSchema).toEqual({ type: "object" })
     }
+  })
+})
+
+// ============================================================================
+// 8. Resource projection — meta.mcp.as: "resource"
+// ============================================================================
+
+describe("meta.mcp.as: \"resource\" projects a resource, not a tool", () => {
+  it("a leaf tagged as: \"resource\" is excluded from toTools", () => {
+    const n = api_({ config: op((_: unknown) => ({}), { mcp: { as: "resource" } }) })
+    expect(toTools(n)).toHaveLength(0)
+  })
+
+  it("the same leaf appears in projectResources' resources array", () => {
+    const n = api_({ config: op((_: unknown) => ({}), { mcp: { as: "resource" } }) })
+    const { resources } = projectResources(n)
+    expect(resources).toHaveLength(1)
+    expect(resources[0]!.name).toBe("config")
+  })
+
+  it("default behavior (no `as`) still produces a tool, not a resource", () => {
+    const n = api_({ create: op((_: unknown) => ({})) })
+    expect(toTools(n)).toHaveLength(1)
+    const { resources, resourceTemplates } = projectResources(n)
+    expect(resources).toHaveLength(0)
+    expect(resourceTemplates).toHaveLength(0)
+  })
+})
+
+describe("resource URI derivation from tree position", () => {
+  it("root-level leaf URI is scheme + leaf key", () => {
+    const n = api_({ config: op((_: unknown) => ({}), { mcp: { as: "resource" } }) })
+    const { resources } = projectResources(n)
+    expect(resources[0]!.uri).toBe("resource://config")
+  })
+
+  it("nested leaf URI is slash-joined: scheme + parent/leaf", () => {
+    const api = api_({
+        users: api_({ list: op((_: unknown) => [], { mcp: { as: "resource" } }) }),
+      })
+    const { resources } = projectResources(api)
+    expect(resources[0]!.uri).toBe("resource://users/list")
+  })
+
+  it("a custom scheme option is used as the URI prefix", () => {
+    const n = api_({ config: op((_: unknown) => ({}), { mcp: { as: "resource" } }) })
+    const { resources } = projectResources(n, { scheme: "myapp://" })
+    expect(resources[0]!.uri).toBe("myapp://config")
+  })
+})
+
+describe("fallback nodes produce URI templates", () => {
+  it("a leaf inside a fallback subtree becomes a ResourceTemplate with {var}", () => {
+    const api = api_({
+        users: api_({}, { fallback: {
+            name: "userId",
+            subtree: api_({ profile: op((_: unknown) => ({}), { mcp: { as: "resource" } }) }),
+          } }),
+      })
+    const { resources, resourceTemplates } = projectResources(api)
+    expect(resources).toHaveLength(0)
+    expect(resourceTemplates).toHaveLength(1)
+    expect(resourceTemplates[0]!.uriTemplate).toBe("resource://users/{userId}/profile")
+  })
+
+  it("a non-fallback leaf at the same tree depth is a fixed resource, not a template", () => {
+    const api = api_({
+        users: api_({ list: op((_: unknown) => [], { mcp: { as: "resource" } }) }),
+      })
+    const { resources, resourceTemplates } = projectResources(api)
+    expect(resources).toHaveLength(1)
+    expect(resourceTemplates).toHaveLength(0)
+  })
+})
+
+describe("meta.mcp.uri overrides the derived URI", () => {
+  it("a fixed resource's derived URI is replaced entirely", () => {
+    const n = api_({
+        config: op((_: unknown) => ({}), { mcp: { as: "resource", uri: "custom://settings" } }),
+      })
+    const { resources } = projectResources(n)
+    expect(resources[0]!.uri).toBe("custom://settings")
+  })
+})
+
+describe("meta.mcp.mimeType is passed through", () => {
+  it("defaults to application/json when absent", () => {
+    const n = api_({ config: op((_: unknown) => ({}), { mcp: { as: "resource" } }) })
+    const { resources } = projectResources(n)
+    expect(resources[0]!.mimeType).toBe("application/json")
+  })
+
+  it("an explicit meta.mcp.mimeType overrides the default", () => {
+    const n = api_({
+        report: op((_: unknown) => ({}), { mcp: { as: "resource", mimeType: "text/csv" } }),
+      })
+    const { resources } = projectResources(n)
+    expect(resources[0]!.mimeType).toBe("text/csv")
+  })
+})
+
+describe("resource description resolution", () => {
+  it("meta.mcp.description overrides meta.description and the leaf key", () => {
+    const n = api_({
+        config: op((_: unknown) => ({}), {
+          description: "agnostic description",
+          mcp: { as: "resource", description: "MCP-specific description" },
+        }),
+      })
+    const { resources } = projectResources(n)
+    expect(resources[0]!.description).toBe("MCP-specific description")
+  })
+
+  it("meta.description is used when meta.mcp.description is absent", () => {
+    const n = api_({
+        config: op((_: unknown) => ({}), {
+          description: "app configuration",
+          mcp: { as: "resource" },
+        }),
+      })
+    const { resources } = projectResources(n)
+    expect(resources[0]!.description).toBe("app configuration")
   })
 })

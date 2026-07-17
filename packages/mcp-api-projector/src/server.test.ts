@@ -128,6 +128,91 @@ async function connectedValidatedClient() {
   return { server, client }
 }
 
+// ============================================================================
+// 5. Resource projection — resources/list, resources/templates/list, resources/read
+// ============================================================================
+
+const resourceTree = api_({
+  config: op((_: unknown) => ({ theme: "dark" }), {
+    mcp: { as: "resource", mimeType: "application/json" },
+  }),
+  users: api_({}, {
+    fallback: {
+      name: "userId",
+      subtree: api_({
+        profile: op((input: { userId: string }) => ({ id: input.userId, name: "Alice" }), {
+          mcp: { as: "resource" },
+        }),
+      }),
+    },
+  }),
+})
+
+async function connectedResourceClient() {
+  const server = createMcpServer(resourceTree, { name: "resource-test-server", version: "1.0.0" })
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: "test-client", version: "1.0.0" })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  return { server, client }
+}
+
+describe("createMcpServer — resources/list", () => {
+  it("lists fixed resources derived from the Node tree", async () => {
+    const { client } = await connectedResourceClient()
+    const { resources } = await client.listResources()
+
+    expect(resources).toHaveLength(1)
+    expect(resources[0]!.uri).toBe("resource://config")
+    expect(resources[0]!.name).toBe("config")
+  })
+
+  it("lists resource templates for fallback-derived leaves", async () => {
+    const { client } = await connectedResourceClient()
+    const { resourceTemplates } = await client.listResourceTemplates()
+
+    expect(resourceTemplates).toHaveLength(1)
+    expect(resourceTemplates[0]!.uriTemplate).toBe("resource://users/{userId}/profile")
+    expect(resourceTemplates[0]!.name).toBe("profile")
+  })
+})
+
+describe("createMcpServer — resources/read", () => {
+  it("dispatches a fixed-resource read to its handler", async () => {
+    const { client } = await connectedResourceClient()
+    const result = await client.readResource({ uri: "resource://config" })
+
+    expect(result.contents).toHaveLength(1)
+    const content = result.contents[0] as { uri: string; mimeType?: string; text: string }
+    expect(content.mimeType).toBe("application/json")
+    expect(JSON.parse(content.text)).toEqual({ theme: "dark" })
+  })
+
+  it("dispatches a template-resource read, binding the captured URI variable", async () => {
+    const { client } = await connectedResourceClient()
+    const result = await client.readResource({ uri: "resource://users/42/profile" })
+
+    expect(result.contents).toHaveLength(1)
+    const content = result.contents[0] as { uri: string; mimeType?: string; text: string }
+    expect(JSON.parse(content.text)).toEqual({ id: "42", name: "Alice" })
+  })
+
+  it("an unknown resource URI rejects with an error", async () => {
+    const { client } = await connectedResourceClient()
+    await expect(client.readResource({ uri: "resource://does/not/exist" })).rejects.toThrow()
+  })
+})
+
+describe("createMcpServer — resource capability advertisement", () => {
+  it("does not advertise resources capability when the tree has no resource leaves", async () => {
+    const server = createMcpServer(tree, { name: "no-resources-server", version: "1.0.0" })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    await expect(client.listResources()).rejects.toThrow()
+  })
+})
+
 describe("createMcpServer — input validation", () => {
   it("valid input passes through to the handler", async () => {
     const { client } = await connectedValidatedClient()
