@@ -1,5 +1,16 @@
 # fractal — TODO
 
+## Package renames — DONE (2026-07-17)
+
+`core` → `api-tree`, and the protocol projector packages took a `-api-projector`
+suffix (`http` → `http-api-projector`, `mcp` → `mcp-api-projector`, `cli` →
+`cli-api-projector`, `openapi` → `openapi-api-projector`, `client` →
+`client-api-projector`). The naming convention and rationale are settled and
+recorded in `docs/design/decisions.md` § Package naming convention. Verified
+(2026-07-17): no stale unsuffixed references remain anywhere in `.ts`/`.json`/
+`.md` sources (checked via grep across the repo, excluding `node_modules`);
+all 1600 tests across the monorepo pass.
+
 ## Open design questions
 
 ### ~~Attribute dispatch (header/query/contentType) is an open design question~~
@@ -31,23 +42,25 @@ before acting.
 
 ### New threads from the 2026-07-17 validation/decode session (not yet built)
 
-- **TypeBox AOT validator codegen** — the compile step landed 2026-07-17
-  (commit c30b5cb): `packages/codegen/src/compile.ts`'s `buildSchema()`
-  converts a `TypeRef` to TypeBox `TSchema` objects, `compileValidator()`
-  feeds those through `TypeCompiler.Code()` to produce standalone JS
-  validator functions (no runtime TypeBox dependency in the emitted output —
-  `@sinclair/typebox` is a build-time-only devDependency of `packages/codegen`),
-  and `buildValidatorModuleSource()` orchestrates extraction
-  (`extractRouteTypeRefs`) → compilation → module emission of a
+- ~~**TypeBox AOT validator codegen**~~ — RESOLVED (2026-07-17): the compile
+  step landed 2026-07-17 (commit c30b5cb): `packages/codegen/src/compile.ts`'s
+  `buildSchema()` converts a `TypeRef` to TypeBox `TSchema` objects,
+  `compileValidator()` feeds those through `TypeCompiler.Code()` to produce
+  standalone JS validator functions (no runtime TypeBox dependency in the
+  emitted output — `@sinclair/typebox` is a build-time-only devDependency of
+  `packages/codegen`), and `buildValidatorModuleSource()` orchestrates
+  extraction (`extractRouteTypeRefs`) → compilation → module emission of a
   `ValidatorMap` that `createApplyValidation()` consumes.
   `stubValidatorModuleSource()` emits the empty-map pass-through fallback for
-  dev-time before codegen has run. The compile step itself is now fully built
-  and tested (`packages/codegen/src/compile.test.ts`). What's still missing:
-  this is a set of functions (`packages/codegen/src/build.ts`), not yet an actual
-  build-step invocation wired into a project's build (no script/CLI entry calls
-  `buildValidatorModuleSource()` and writes its output to disk), and the
-  consumer-app-facing "does a real route's validators actually get replaced
-  end-to-end" path is unverified.
+  dev-time before codegen has run. A real CLI entry now exists
+  (`packages/codegen/src/cli.ts`, `fractal-codegen <command>`) with four
+  subcommands: `build <entry> -o <output>` (skip if up to date),
+  `watch <entry> -o <output>` (rebuild on change, debounced), `stub -o <output>`
+  (write the empty pass-through stub), and `check <entry> -o <output>` (verify
+  output is current, exit 1 if stale — CI-friendly). And `createApplyValidation`
+  is wired end-to-end in `examples/library-api` (`src/tree.ts`, exercised in
+  `src/app.test.ts`) — the consumer-app-facing "does a real route's validators
+  actually get replaced" path is verified, not just designed.
 - **Meta typing pattern** — settled design, not yet implemented: `packages/api-tree`
   defines `interface Meta { tags?: Tags }`. Each protocol package (http, mcp,
   ...) exports its own meta type (e.g. `HttpMeta`) rather than mutating core's
@@ -117,10 +130,14 @@ before acting.
 - **DX helper composition mechanism is undesigned** — the directive *data
   model* is settled (an array of kind-tagged DU objects on `meta.http`), and
   individual helpers exist (`http.get()` sets only the method directive, with
-  no implicit `moveTo`; `http.moveTo("..")` adds a `moveTo` directive) — but
-  how these helpers compose together to build up a directive array (e.g.
-  chaining vs. spreading vs. some builder) hasn't been designed. This is
-  separate from, and downstream of, the settled data model.
+  no implicit `moveTo`; `http.moveTo("..")` adds a `moveTo` directive;
+  `httpVerbBundle(verb, tags)` — exported from `packages/http-api-projector/src/index.ts`
+  — is the underlying constructor each verb helper (`get`/`post`/`put`/
+  `patch`/`delete`/`head`/`options`) is built from, bundling a method
+  directive with its conventional tags in one call) — but how these helpers
+  compose together to build up a directive array (e.g. chaining vs.
+  spreading vs. some builder) hasn't been designed. This is separate from,
+  and downstream of, the settled data model.
 - ~~**Input transform escape hatch not yet on the pipeline type**~~ —
   RESOLVED: `Pipeline.sources.transform` already exists in `route.ts` and is
   wired into `defaultDecode` (landed as part of commit cc10c04, the
@@ -438,6 +455,14 @@ Ordered roughly easiest → hardest to decide:
     remaining erasure boundary is `applyMoveTo`, deliberately, since its
     runtime string paths are unknowable statically. See
     `docs/design/routing-and-transforms.md` § DX.
+12. ~~**`mergeMeta` shallow-merge bug**~~ — FIXED (2026-07-17): `mergeMeta`
+    (`packages/api-tree/src/node.ts`) is now a fully recursive deep-merge —
+    plain objects (e.g. `tags`, `http` sub-bags) merge deeper instead of the
+    later bag clobbering the earlier one wholesale, arrays concatenate (e.g.
+    `http.directives`, so a verb-bundle's directive and a caller's extra
+    directive both survive instead of the second call overwriting the
+    first), and scalars are overwritten by the later bag as before. `undefined`
+    still defers rather than overriding a previously-set value.
 
 ---
 
@@ -637,6 +662,7 @@ would require a reactive client library to exist first.
 
 - **Authoritative model: `docs/design/invariants.md`** (mined, verbatim; wins on conflict)
 - **Next-session handoff: `docs/design/handoff.md`**
+- Settled decisions log (naming conventions, etc.): `docs/design/decisions.md`
 - Fuller (partly superseded) design: `docs/design/function-core-and-projection.md`
 - Commit history: `git log --oneline` in this repo
 - Scorecard vs Hono/Elysia: `docs/design/vs-hono-elysia.md`
