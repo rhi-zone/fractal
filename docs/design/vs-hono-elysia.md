@@ -235,7 +235,7 @@ annotations** without a separate declaration; fractal requires an explicit
 
 *Drift guard:* The generated `client.ts` embeds `AssertExact<RouteUnion<typeof app>,
 GenUnion>`, which is a `tsc` error the moment the app's route structure diverges from
-the generated artifacts. Verified: `packages/codegen/test/drift.test.ts` — planted
+the generated artifacts. Verified: `packages/type-ir/test/drift.test.ts` — planted
 drift (added route, changed body field type) is caught by both tsgo and stock tsc
 with a `__drift__` error; restored app is green on both. Rivals' pure inference
 cannot drift (the type IS the inference), but it also cannot survive at scale (see
@@ -288,8 +288,8 @@ honest gap (declared response schema required vs Eden's inferred response types)
   - `packages/api-tree/src/index.ts` — `Handler<P>`, combinators, `.meta` types
   - `packages/http-api-projector/src/index.ts` — `toFetch`, `validated`, `returns`, response builders
   - `packages/http-api-projector/src/index.test.ts` — HTTP correctness tests (30 pass)
-  - `packages/codegen/test/drift.test.ts` — drift guard pipeline (4 pass, both compilers)
-  - `packages/codegen/src/cli.ts` — `fractal watch` implementation
+  - `packages/type-ir/test/drift.test.ts` — drift guard pipeline (4 pass, both compilers)
+  - `packages/type-ir/src/cli.ts` — `fractal watch` implementation
   - `examples/todo-api/src/app.ts` — full working example (16 pass)
   - `spike/drift-guard/logs/table.md` — linearity numbers at 99–900 routes
   - `spike/scale/logs/stock-tsc-crossval.md` — stock tsc crash at 600 routes (chained inference)

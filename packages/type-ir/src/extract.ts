@@ -1,4 +1,4 @@
-// packages/codegen/src/extract.ts — @rhi-zone/fractal-codegen
+// packages/type-ir/src/extract.ts — @rhi-zone/fractal-type-ir
 //
 // BUILD-TIME EXTRACTOR: types + JSDoc are the truth. This module reads op
 // source (via the TypeScript compiler API — read-only analysis, NOT a
@@ -25,8 +25,8 @@
 //   packages/mcp-api-projector/src/project.ts  — the consumer (toTools inputSchema/description)
 
 import ts from "typescript"
-import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir"
-import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
+import { t, types, type TypeRef } from "./index.ts"
+import { toJsonSchema } from "./json-schema.ts"
 
 // ============================================================================
 // JSON-Schema value (structural subset we emit)
@@ -59,7 +59,7 @@ export type JsonSchema = {
 
 /** The TypeRef punt: `unknown` tagged with the unhandled case. */
 const puntRef = (reason: string): TypeRef =>
-  t(types.unknown, { $comment: `TODO(codegen): unhandled type — ${reason}` })
+  t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` })
 
 /** True for symbols with at least one private/protected declaration. */
 function isPrivateOrProtected(prop: ts.Symbol): boolean {

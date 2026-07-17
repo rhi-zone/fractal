@@ -16,7 +16,7 @@
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
     "@rhi-zone/fractal-http-api-projector": "workspace:*",
-    "@rhi-zone/fractal-codegen": "workspace:*"
+    "@rhi-zone/fractal-type-ir": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

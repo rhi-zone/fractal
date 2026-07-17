@@ -10,7 +10,7 @@ HTTP path/verb/name that `@rhi-zone/fractal-http-api-projector`'s tree-walk disp
 it duplicates the segment/verb logic rather than depending on http's
 private dispatch internals, so it stays decoupled but stays in sync by
 convention). Request/response schemas come from a `SchemaMap` (see
-`@rhi-zone/fractal-codegen`) when a source file or pre-computed map is
+`@rhi-zone/fractal-type-ir`) when a source file or pre-computed map is
 given; otherwise they degrade to `{ type: "object" }` placeholders.
 
 ## Key exports

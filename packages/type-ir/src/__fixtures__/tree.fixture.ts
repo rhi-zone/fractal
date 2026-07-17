@@ -1,4 +1,4 @@
-// packages/codegen/src/__fixtures__/tree.fixture.ts
+// packages/type-ir/src/__fixtures__/tree.fixture.ts
 //
 // A real Node tree used by extract.test.ts as BOTH the extractor's source input
 // (parsed via the compiler API for its leaf handler input types + JSDoc) and the

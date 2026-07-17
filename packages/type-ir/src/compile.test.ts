@@ -1,4 +1,4 @@
-// packages/codegen/src/compile.test.ts — AOT validator codegen tests
+// packages/type-ir/src/compile.test.ts — AOT validator codegen tests
 //
 // Covers:
 //   1. buildSchema produces correct TSchema shapes (leaf / object / array /
@@ -10,7 +10,7 @@
 //   4. the build orchestrator wires extraction -> compiled module end-to-end
 
 import { describe, expect, it } from "bun:test"
-import { t, types, type TypeShape } from "@rhi-zone/fractal-type-ir"
+import { t, types, type TypeShape } from "./index.ts"
 import { buildSchema, compileValidator, compileValidatorModule } from "./compile.ts"
 import { buildValidatorModuleSource, stubValidatorModuleSource } from "./build.ts"
 

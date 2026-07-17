@@ -45,9 +45,9 @@
   nested objects and array elements and are cycle-safe (a `seen` set keyed on
   shape identity).
 
-### `packages/codegen` — the extractor
+### `packages/type-ir` — the extractor
 
-Hardened TS → `TypeRef` extraction (`packages/codegen/src/extract.ts`):
+Hardened TS → `TypeRef` extraction (`packages/type-ir/src/extract.ts`):
 tuples, index signatures, literal types, TS enums and literal unions
 (projected as `enum`/union-of-literals), discriminated unions, intersections
 (native intersection support extended across io-ts, TypeBox, runtypes,
@@ -72,7 +72,7 @@ format targets above.
   bounds).
 - Test suite, run this session (`bun test` per workspace):
   - `packages/type-ir`: **1118 tests / 23 files, 0 failures**
-  - `packages/codegen`: 93 tests / 4 files
+  - `packages/type-ir`: 93 tests / 4 files
   - full monorepo across all 8 workspaces (`core`, `type-ir`, `http`, `mcp`,
     `codegen`, `openapi`, `cli`, `client`): **1365 tests, 0 failures**
     (measured directly this session by running `bun test` in each package
@@ -146,7 +146,7 @@ Previous sessions contain design discussion, rationale, and rejected alternative
 
 - Type IR entry point: `packages/type-ir/src/index.ts`
 - Derivation operators: `packages/type-ir/src/derive.ts`
-- Extractor: `packages/codegen/src/extract.ts`
+- Extractor: `packages/type-ir/src/extract.ts`
 - Operation layer requirements: `docs/design/operation-layer-spec.md`
 - Architecture layers (prior session): `docs/design/architecture-layers.md`
 - Type IR survey (prior session): `docs/design/type-ir-survey.md`

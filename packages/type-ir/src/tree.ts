@@ -1,4 +1,4 @@
-// packages/codegen/src/tree.ts — @rhi-zone/fractal-codegen
+// packages/type-ir/src/tree.ts — @rhi-zone/fractal-type-ir
 //
 // Walk an authored Node tree AT THE SOURCE LEVEL and produce a tool-name →
 // { inputSchema, description } map — the artifact the MCP projection consumes.
@@ -23,11 +23,11 @@
 //   - `opts.fallback: { name: "...", subtree: api(...) }` → wildcard-capture
 //     subtree, namespaced by `name` (replaces the former `param(name, subtree)`).
 // meta.mcp.name / meta.mcp.segment overrides are NOT yet mirrored here.
-//   TODO(codegen): honor meta.mcp.name / meta.mcp.segment when reconstructing
+//   TODO(type-ir): honor meta.mcp.name / meta.mcp.segment when reconstructing
 //   tool names, matching packages/mcp-api-projector/src/project.ts.
 
 import ts from "typescript"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+import type { TypeRef } from "./index.ts"
 import {
   createExtractorProgram,
   extractJsDoc,

@@ -270,7 +270,7 @@ All projections are generated at **build time** from `types + JSDoc + structure`
 **Graceful degradation is mandatory.** Codegen must **not hard-throw** on an
 unhandled type construct — it degrades to `unknown` and continues. (Hard-throwing on
 unhandled constructs was a known failure mode of the prior-art emitter; the existing
-`jsonSchemaToTs` in `packages/codegen` already follows the never-throw discipline
+`jsonSchemaToTs` in `packages/type-ir` already follows the never-throw discipline
 and is salvageable as a projection helper, with its direction reversed: types → schema.)
 
 **Rationale.** Build-time projection of concrete types is what keeps tsc cost ~linear

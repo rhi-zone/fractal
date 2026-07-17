@@ -1,4 +1,4 @@
-// packages/codegen/src/__fixtures__/typeref.fixture.ts
+// packages/type-ir/src/__fixtures__/typeref.fixture.ts
 //
 // Standalone functions used to exercise typeRefFromType / typeRefFromFunctionNode
 // / typeRefFromReturnType directly (not through the tree walker).

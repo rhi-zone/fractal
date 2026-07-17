@@ -43,17 +43,17 @@ before acting.
 ### New threads from the 2026-07-17 validation/decode session (not yet built)
 
 - ~~**TypeBox AOT validator codegen**~~ — RESOLVED (2026-07-17): the compile
-  step landed 2026-07-17 (commit c30b5cb): `packages/codegen/src/compile.ts`'s
+  step landed 2026-07-17 (commit c30b5cb): `packages/type-ir/src/compile.ts`'s
   `buildSchema()` converts a `TypeRef` to TypeBox `TSchema` objects,
   `compileValidator()` feeds those through `TypeCompiler.Code()` to produce
   standalone JS validator functions (no runtime TypeBox dependency in the
   emitted output — `@sinclair/typebox` is a build-time-only devDependency of
-  `packages/codegen`), and `buildValidatorModuleSource()` orchestrates
+  `packages/type-ir`), and `buildValidatorModuleSource()` orchestrates
   extraction (`extractRouteTypeRefs`) → compilation → module emission of a
   `ValidatorMap` that `createApplyValidation()` consumes.
   `stubValidatorModuleSource()` emits the empty-map pass-through fallback for
   dev-time before codegen has run. A real CLI entry now exists
-  (`packages/codegen/src/cli.ts`, `fractal-codegen <command>`) with four
+  (`packages/type-ir/src/cli.ts`, `fractal-type-ir <command>`) with four
   subcommands: `build <entry> -o <output>` (skip if up to date),
   `watch <entry> -o <output>` (rebuild on change, debounced), `stub -o <output>`
   (write the empty pass-through stub), and `check <entry> -o <output>` (verify
@@ -269,7 +269,7 @@ should be settled FROM the author's definition rather than guessed:
 
 The vertical slice's on-tree `Schema` values (`str`/`num`/`bool`/`obj`) were
 provisional scaffolding pending codegen-derived validators from TS types +
-JSDoc. That codegen now exists: `packages/codegen/src/extract.ts` extracts
+JSDoc. That codegen now exists: `packages/type-ir/src/extract.ts` extracts
 `TypeRef`s from TS source (tuples, index signatures, literals, enums,
 discriminated unions, intersections, 3 branded-type patterns, recursion,
 `Promise` unwrapping, class privacy), and `packages/type-ir` projects those
@@ -298,7 +298,7 @@ inventory.
 Protobuf, Cap'n Proto, JTD, JSDoc, and 9 runtime validator libraries: Zod,
 Valibot, TypeBox, ArkType, runtypes, Superstruct, io-ts, Yup, Effect Schema),
 all following the `handlers` + `resolve()` fallback pattern. The extractor
-(`packages/codegen/src/extract.ts`) was hardened for tuples, index
+(`packages/type-ir/src/extract.ts`) was hardened for tuples, index
 signatures, literals, enums, discriminated unions, intersections, 3 branded-type
 patterns, recursive types, `Promise` unwrapping, and class privacy filtering.
 Full inventory: `docs/design/handoff-2026-07-16-type-layer.md`.
@@ -341,7 +341,8 @@ still needs the author's own definition, not invention from the evidence.
 
 ### Type projection as a deliberate capability, not incidental to MCP
 
-`fractal-codegen` already does type projection (TS types → JSON Schema for MCP
+`@rhi-zone/fractal-type-ir` (formerly the separate `fractal-codegen` package,
+merged 2026-07-18) already does type projection (TS types → JSON Schema for MCP
 input schemas), and a valibot codegen spike exists in `the consumer app`. The
 2026-07-14–16 session recognized this should be a first-class concern —
 separate from routing — rather than something that happens to exist because
@@ -400,13 +401,15 @@ example directory is `examples/library-api`; `examples/todo-api` and
 `examples/dogfood` also do not exist on disk).
 
 Root `package.json` `workspaces` (verified 2026-07-11) is now:
-`packages/api-tree`, `packages/http-api-projector`, `packages/mcp-api-projector`, `packages/codegen`,
+`packages/api-tree`, `packages/http-api-projector`, `packages/mcp-api-projector`, `packages/codegen`
+(later merged into `packages/type-ir`, 2026-07-18),
 `packages/openapi-api-projector`, `packages/cli-api-projector`, `packages/client-api-projector`, `examples/library-api`.
 **Every package in `packages/` is in the workspace — none are fenced out.**
 `packages/openapi-api-projector` and `packages/client-api-projector` were previously fenced but are back
 in; `packages/mcp-api-projector` and `packages/cli-api-projector` are new packages not mentioned in the
 original fencing note at all. `examples/library-api` imports
-`@rhi-zone/fractal-mcp-api-projector` and `@rhi-zone/fractal-codegen` directly, so at least
+`@rhi-zone/fractal-mcp-api-projector` and `@rhi-zone/fractal-codegen` (later
+merged into `@rhi-zone/fractal-type-ir`, 2026-07-18) directly, so at least
 those two are active, not just present.
 
 The open question this left — whether `openapi` and `client` had actually
@@ -433,7 +436,7 @@ Ordered roughly easiest → hardest to decide:
 3. **`openWorld` tag** — is it a tag, a meta field, or something else? What
    does it actually control?
 4. ~~**Codegen hardening**~~ — substantially addressed 2026-07-16: the
-   extractor (`packages/codegen/src/extract.ts`) now handles tuples, index
+   extractor (`packages/type-ir/src/extract.ts`) now handles tuples, index
    signatures, literals, enums, discriminated unions, intersections, 3
    branded-type patterns, recursive types, `Promise` unwrapping, and class
    privacy. Whether further edges remain is unknown until the consumer-app

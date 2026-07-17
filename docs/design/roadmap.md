@@ -75,7 +75,7 @@ route does not change its client signature.**
 ```
 handler tree (truth: typeof app, .meta)
    → toOpenApi  (packages/openapi-api-projector, walks .meta)        → OpenAPI 3.x doc
-   → codegen generate() (packages/codegen)             → client.ts + server.ts + DRIFT GUARD
+   → codegen generate() (packages/type-ir)             → client.ts + server.ts + DRIFT GUARD
 ```
 
 - `toOpenApi` projects an OpenAPI 3.x doc from `.meta`.
@@ -89,7 +89,7 @@ handler tree (truth: typeof app, .meta)
   renamed route, changed param / body / response shape — makes the two unions differ,
   `AssertExact` resolves to a `{ __drift__: … }` error, and `= true` fails to typecheck.
   It is LINEAR (a union stays one pass; merging into a keyed object would be O(N²)).
-- CLI: `fractal generate` / `fractal watch` (`packages/codegen/src/cli.ts`). Generated
+- CLI: `fractal generate` / `fractal watch` (`packages/type-ir/src/cli.ts`). Generated
   files are committed and self-verifying via the drift guard. Generated depends on source
   (`import type` only — no cycle); source never imports generated.
 
@@ -181,7 +181,7 @@ Query params have no typed story today: they are read by hand off
 `new URL(req.url).searchParams` and never reach OpenAPI or the client. Plumbing is
 half-present: `ParameterObject` in `packages/openapi-api-projector/src/index.ts` already supports
 `in: "query"`, but the projection only emits `in: "path"` (around line 302), and codegen's
-`paramsType` filters to `in === "path"` (`packages/codegen/src/index.ts` line 138).
+`paramsType` filters to `in === "path"` (`packages/type-ir/src/index.ts` line 138).
 **Open design question:** query params are optional/typed/coerced — how do they ride
 `req.ctx` and the discharge model? Or are they read-not-discharged, since they don't gate
 routing? (Path params gate routing; query params don't.)

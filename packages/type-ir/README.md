@@ -23,6 +23,11 @@ Schema (draft 04/07, 2020-12) or OpenAPI 3.0 schema objects.
 - `partial`, `required`, `pick`, `omit`, `extend`, `nullable`, `withMeta`, `deepPartial`, `deepRequired` — structural derive helpers
 - `./json-schema`, `./json-schema-07`, `./json-schema-04`, `./openapi30` — target projections
 - `./jsdoc` — JSDoc-derived metadata helpers
+- `createExtractorProgram`, `typeRefFromType`, `typeRefFromFunctionNode`, `typeRefFromReturnType`, `schemaFromType`, `extractJsDoc` — the TS-source → `TypeRef` extractor (`./extract`)
+- `extractToolSchemas`, `extractRouteTypeRefs`, `extractToolTypeRefs` — whole-tree walkers over an authored `api()`/`op()` tree, producing a `SchemaMap`/`TypeRefMap` (`./tree`)
+- `buildSchema`, `compileValidator`, `compileValidatorModule` — `TypeRef` → TypeBox validator code, a build-time projector (`./compile`)
+- `buildValidatorModuleSource`, `writeValidatorModule` — emit a standalone validator module to disk (`./build`)
+- `fractal-type-ir` (alias `fractal-codegen`) — CLI binary (`./cli.ts`) with `build`/`watch`/`stub`/`check` subcommands
 
 ## Usage
 

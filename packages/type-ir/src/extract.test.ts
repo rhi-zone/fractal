@@ -1,4 +1,4 @@
-// packages/codegen/src/extract.test.ts — build-time extractor tests
+// packages/type-ir/src/extract.test.ts — build-time extractor tests
 //
 // Covers the four contracts of the slice:
 //   1. object type (primitive + optional + array + nested) → correct schema
@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from "bun:test"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
-import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+import { toJsonSchema } from "./json-schema.ts"
+import type { TypeRef } from "./index.ts"
 import {
   extractToolSchemas,
   extractToolTypeRefs,
@@ -135,7 +135,7 @@ describe("fallback for exotic types", () => {
     const q = (schemas["search_run"]?.inputSchema.properties as
       | Record<string, { type?: string; $comment?: string }>
       | undefined)?.q
-    expect(q?.$comment).toMatch(/TODO\(codegen\)/)
+    expect(q?.$comment).toMatch(/TODO\(type-ir\)/)
     expect(q?.$comment).toMatch(/union/)
   })
 })
@@ -270,7 +270,7 @@ describe("TypeRef extraction", () => {
     }).fields
     const q = fields.q!
     expect(q.shape.kind).toBe("unknown")
-    expect(q.meta.$comment).toMatch(/TODO\(codegen\)/)
+    expect(q.meta.$comment).toMatch(/TODO\(type-ir\)/)
     expect(q.meta.$comment).toMatch(/union/)
   })
 
@@ -598,7 +598,7 @@ describe("typeRefFromType gap fixes", () => {
   it("still punts a mixed non-literal union (string | number)", () => {
     const ref = typeRefFromType(paramTypeOf("mixedUnionFn"), checker, source)
     expect(ref.shape.kind).toBe("unknown")
-    expect(ref.meta.$comment).toMatch(/TODO\(codegen\)/)
+    expect(ref.meta.$comment).toMatch(/TODO\(type-ir\)/)
     expect(ref.meta.$comment).toMatch(/union/)
   })
 

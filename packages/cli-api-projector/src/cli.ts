@@ -29,14 +29,14 @@
 // See:
 //   packages/api-tree/src/node.ts   — Node, Handler, fallback
 //   packages/api-tree/src/tags.ts   — resolveTags
-//   packages/codegen/src/tree.ts — extractToolSchemas, SchemaMap
+//   packages/type-ir/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { SchemaMap } from "@rhi-zone/fractal-codegen"
+import type { SchemaMap } from "@rhi-zone/fractal-type-ir"
 
 // ============================================================================
 // CliError — thrown instead of process.exit()

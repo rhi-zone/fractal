@@ -23,14 +23,14 @@
 //
 // See:
 //   packages/http-api-projector/src/project.ts — verbFromTags, meta.http DU (dispatch/directives)
-//   packages/codegen/src/tree.ts — extractToolSchemas, SchemaMap
+//   packages/type-ir/src/tree.ts — extractToolSchemas, SchemaMap
 //   packages/api-tree/src/node.ts    — Node, Handler, fallback
 //   packages/api-tree/src/tags.ts    — resolveTags
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { getHttpMeta, verbFromTags } from "@rhi-zone/fractal-http-api-projector/project"
-import type { SchemaMap } from "@rhi-zone/fractal-codegen"
+import type { SchemaMap } from "@rhi-zone/fractal-type-ir"
 
 // ============================================================================
 // Types
@@ -247,7 +247,7 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
   // Resolve schema map: caller-supplied > sourceFile > empty
   let schemas: SchemaMap = opts.schemas ?? {}
   if (Object.keys(schemas).length === 0 && opts.sourceFile !== undefined) {
-    const { extractToolSchemas } = await import("@rhi-zone/fractal-codegen")
+    const { extractToolSchemas } = await import("@rhi-zone/fractal-type-ir")
     schemas = extractToolSchemas(opts.sourceFile)
   }
 

@@ -101,6 +101,18 @@
     }
   },
   "files": ["src"],
+  "bin": {
+    "fractal-type-ir": "./src/cli.ts",
+    "fractal-codegen": "./src/cli.ts"
+  },
+  "dependencies": {
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@rhi-zone/fractal-api-tree": "workspace:*",
+    "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
+    "@sinclair/typebox": "^0.34.41"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",

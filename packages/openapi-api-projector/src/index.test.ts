@@ -6,7 +6,7 @@
 import { describe, expect, it, beforeAll } from "bun:test"
 import { toOpenApi, type OpenApiDoc } from "./index.ts"
 import { api } from "../../../examples/library-api/src/tree.ts"
-import { extractToolSchemas } from "@rhi-zone/fractal-codegen"
+import { extractToolSchemas } from "@rhi-zone/fractal-type-ir"
 
 const treePath = new URL(
   "../../../examples/library-api/src/tree.ts",

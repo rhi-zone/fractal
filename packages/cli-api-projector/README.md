@@ -8,7 +8,7 @@ Turns an `api()`/`op()` tree into a subcommand-dispatching CLI: tree
 position becomes the subcommand path, JSON-ish argv parsing feeds the
 handler's input, and tags drive behavior — a `destructive` leaf prompts for
 confirmation before running unless the caller opts out. Depends on
-`@rhi-zone/fractal-codegen` to resolve arguments against extracted input
+`@rhi-zone/fractal-type-ir` to resolve arguments against extracted input
 schemas.
 
 ## Key exports

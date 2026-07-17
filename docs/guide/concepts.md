@@ -260,7 +260,7 @@ consistent behavior across surfaces.
 ### Codegen bridge
 
 Projections that need runtime input schemas (MCP, OpenAPI) cannot read TypeScript types
-at runtime — types are erased. `@rhi-zone/fractal-codegen` (`packages/codegen`) bridges
+at runtime — types are erased. `@rhi-zone/fractal-type-ir` (`packages/type-ir`) bridges
 this gap: `extractToolSchemas(entryFile)` uses the TypeScript compiler API to walk the
 exported node tree at the AST level, derive JSON Schema from each leaf's first parameter
 type, and extract leading JSDoc text. The resulting `SchemaMap` is passed to `toTools` as

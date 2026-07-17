@@ -5,7 +5,7 @@
 ## Status
 
 Implemented across five packages: `@rhi-zone/fractal-api-tree`, `@rhi-zone/fractal-http-api-projector`,
-`@rhi-zone/fractal-openapi-api-projector`, `@rhi-zone/fractal-client-api-projector`, and `@rhi-zone/fractal-codegen`.
+`@rhi-zone/fractal-openapi-api-projector`, `@rhi-zone/fractal-client-api-projector`, and `@rhi-zone/fractal-type-ir`.
 Verified by typecheck + test + build (100 tests pass). This document describes the
 CURRENT model.
 
@@ -22,7 +22,7 @@ model is **retired** — all packages that implemented it are deleted.
 @rhi-zone/fractal-api-tree       Handler<R>, combinators, .meta types, drift-guard substrate
 @rhi-zone/fractal-http-api-projector       toFetch, response builders, validated, returns, ./adapter
 @rhi-zone/fractal-openapi-api-projector    toOpenApi — projects an OpenAPI 3.x doc from .meta
-@rhi-zone/fractal-codegen    generate — emits typed client.ts + server.ts from the doc
+@rhi-zone/fractal-type-ir    generate — emits typed client.ts + server.ts from the doc
                              fractal watch — dev-loop file watcher (regenerate on save)
 @rhi-zone/fractal-client-api-projector     typed HTTP client factory (consumes generated client.ts)
 ```
@@ -143,7 +143,7 @@ the second call merges into `__schema` rather than overwriting (verified:
 ```
 app (Reflected<M>)
   → toOpenApi(app, info)        @rhi-zone/fractal-openapi-api-projector
-  → generate(doc, opts)         @rhi-zone/fractal-codegen
+  → generate(doc, opts)         @rhi-zone/fractal-type-ir
   → client.ts + server.ts
 ```
 
@@ -153,10 +153,10 @@ app (Reflected<M>)
 
 The drift guard embedded in `client.ts` is `AssertExact<RouteUnion<typeof app>, GenUnion>`,
 which is a `tsc` error if the app's route structure diverges from the generated union.
-Verified: `packages/codegen/test/drift.test.ts` — planted drift (added route, changed
+Verified: `packages/type-ir/test/drift.test.ts` — planted drift (added route, changed
 body shape) fails on both tsgo and stock tsc with a `__drift__` identifier in the error.
 
-`fractal watch <app-module> --out <dir>` (implemented in `packages/codegen/src/cli.ts`)
+`fractal watch <app-module> --out <dir>` (implemented in `packages/type-ir/src/cli.ts`)
 watches the source directory for changes, debounces them, and regenerates
 `client.ts`/`server.ts` on every save — folding the codegen step into the dev loop.
 

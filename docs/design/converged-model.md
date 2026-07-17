@@ -144,7 +144,7 @@ see `package.json` comment.) 130 tests pass across the 5 active workspaces,
   op key`. `inputSchema` from supplied `SchemaMap` (codegen) or MCP spec minimum
   `{type:"object"}`.
 
-**[BUILT] `@rhi-zone/fractal-codegen` (`packages/codegen`):**
+**[BUILT] `@rhi-zone/fractal-codegen` (`packages/codegen`, as built this session — later merged into `@rhi-zone/fractal-type-ir`/`packages/type-ir`, 2026-07-18):**
 - `extract.ts` — TS compiler API (read-only). `schemaFromType`: primitives
   (string/number/boolean), arrays, optional fields (strips `|undefined`), nested
   objects; punts unions/generics/exotic to `{type:"object",$comment:"TODO(codegen):

@@ -1,4 +1,4 @@
-// packages/codegen/src/build.ts — @rhi-zone/fractal-codegen
+// packages/type-ir/src/build.ts — @rhi-zone/fractal-type-ir
 //
 // BUILD ORCHESTRATOR: wires the extractor (extract.ts/tree.ts) to the AOT
 // validator compiler (compile.ts), producing the standalone,

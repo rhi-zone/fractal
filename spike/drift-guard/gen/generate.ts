@@ -1,6 +1,6 @@
 // spike/drift-guard/gen/generate.ts
 //
-// Build an N-resource app (same shape as packages/codegen/test/scale/gen.ts:
+// Build an N-resource app (same shape as packages/type-ir/test/scale/gen.ts:
 // each resource has GET/POST /res{i} + GET /res{i}/{id} ≈ 3N routes), then emit,
 // for each N, the files each guard formulation needs to be typechecked in
 // isolation:

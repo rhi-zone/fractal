@@ -15,7 +15,7 @@ field type changed) on BOTH tsgo and stock tsc. See `derive.ts` (`RouteUnion` +
   (f2/f3/f4 object derivation), and **`RouteUnion`** (f5 — the linear winner).
 - `naive.ts` — `ClientShapeFromMeta` (f1's heavy nested re-derive).
 - `gen/generate.ts` — builds an N-resource app (≈3N routes; mirrors
-  `packages/codegen/test/scale/gen.ts`), emits the source `app`, the generated
+  `packages/type-ir/test/scale/gen.ts`), emits the source `app`, the generated
   artifacts (`GenRoutes`, `GenUnion`, `ApiClient`), and one file per formulation,
   plus drift-mutated artifacts at the smallest N.
 - `run.ts` — typechecks each formulation × N in isolation under tsgo
@@ -53,7 +53,7 @@ f5 never materializes a keyed object — it compares two UNIONS — so it stays 
 
 ## Core API finding
 `methods<P>({ GET: h })` (the param-route pattern used in
-`packages/codegen/test/scale/gen.ts` and examples) **erases the literal verb set**
+`packages/type-ir/test/scale/gen.ts` and examples) **erases the literal verb set**
 in `.meta` (`verbs: readonly Method[]` instead of `readonly ["GET"]`), because the
 explicit `P` type arg defeats `const T` inference. Any type-level guard reading
 `MethodsMeta.verbs`/`__io` is blind to verbs for those routes. Workaround used
