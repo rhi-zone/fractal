@@ -122,7 +122,7 @@ export function assemble(
   const bag: Record<string, unknown> = {}
   for (const name of paramNames) {
     if (pathParamNames.includes(name)) {
-      bag[name] = stores.path.get(name)
+      bag[name] = stores.path?.get(name)
     } else if (name in sourceMap) {
       const src = sourceMap[name]!
       bag[name] = stores[src.store]?.get(src.key ?? name)

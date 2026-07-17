@@ -24,16 +24,16 @@ describe("httpStores", () => {
   it("path store returns slug values by key", () => {
     const req = new Request("http://localhost/books/book-1")
     const stores = httpStores(req, { bookId: "book-1" }, undefined)
-    expect(stores.path.get("bookId")).toBe("book-1")
-    expect(stores.path.get("missing")).toBeUndefined()
+    expect(stores.path!.get("bookId")).toBe("book-1")
+    expect(stores.path!.get("missing")).toBeUndefined()
   })
 
   it("query store returns query params by key", () => {
     const req = new Request("http://localhost/search?q=dune&limit=10")
     const stores = httpStores(req, {}, undefined)
-    expect(stores.query.get("q")).toBe("dune")
-    expect(stores.query.get("limit")).toBe("10")
-    expect(stores.query.get("missing")).toBeUndefined()
+    expect(stores.query!.get("q")).toBe("dune")
+    expect(stores.query!.get("limit")).toBe("10")
+    expect(stores.query!.get("missing")).toBeUndefined()
   })
 
   it("header store returns headers by key (case-insensitive)", () => {
@@ -41,23 +41,23 @@ describe("httpStores", () => {
       headers: { "X-Api-Key": "secret-123", "Content-Type": "application/json" },
     })
     const stores = httpStores(req, {}, undefined)
-    expect(stores.header.get("x-api-key")).toBe("secret-123")
-    expect(stores.header.get("content-type")).toBe("application/json")
-    expect(stores.header.get("missing")).toBeUndefined()
+    expect(stores.header!.get("x-api-key")).toBe("secret-123")
+    expect(stores.header!.get("content-type")).toBe("application/json")
+    expect(stores.header!.get("missing")).toBeUndefined()
   })
 
   it("body store returns fields from parsed body object", () => {
     const req = new Request("http://localhost/")
     const stores = httpStores(req, {}, { title: "Dune", author: "Herbert" })
-    expect(stores.body.get("title")).toBe("Dune")
-    expect(stores.body.get("author")).toBe("Herbert")
-    expect(stores.body.get("missing")).toBeUndefined()
+    expect(stores.body!.get("title")).toBe("Dune")
+    expect(stores.body!.get("author")).toBe("Herbert")
+    expect(stores.body!.get("missing")).toBeUndefined()
   })
 
   it("body store returns undefined when body is not an object", () => {
     const req = new Request("http://localhost/")
     const stores = httpStores(req, {}, null)
-    expect(stores.body.get("anything")).toBeUndefined()
+    expect(stores.body!.get("anything")).toBeUndefined()
   })
 })
 
