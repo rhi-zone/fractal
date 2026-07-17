@@ -120,13 +120,16 @@ before acting.
   most one function, collapsing `runPipeline`'s per-request loops to a single
   call; `skipEmptyInput` swaps in a no-op decode/validate for 0-param
   handlers (detected via runtime `handler.length`). Both compose with either
-  dispatcher. Still open: none of this is wired as a default — a caller must
-  explicitly choose a compiled router and apply the optimization visitors;
-  `makeRouterFromRoute` remains the uncompiled baseline. The benchmark numbers
+  dispatcher. Update (commit ed29b51): `fusePipeline`/`skipEmptyInput` are now
+  wired as `createFetch` defaults (`preset.ts`, both default `true`), but the
+  compiled router choice (`radixRouter`/`compiledCharRouter`/`mapCharRouter`)
+  is still opt-in — `createFetch`'s default `router` is `makeRouterFromRoute`
+  (zero build cost), not one of the compiled strategies. The benchmark numbers
   are single-machine (see Hardware table in routing-benchmarks.md) and the
   crossover points between strategies (when does the hybrid approach's setup
   cost stop paying for itself vs. the plain segment trie) haven't been tuned
-  into actual selection constants — see new open thread below.
+  into actual selection constants, nor would `createFetch` pick a strategy
+  automatically even if they were.
 - **DX helper composition mechanism is undesigned** — the directive *data
   model* is settled (an array of kind-tagged DU objects on `meta.http`), and
   individual helpers exist (`http.get()` sets only the method directive, with
@@ -151,37 +154,54 @@ before acting.
   regression — the compiled-router capability this displaced was rebuilt
   properly as the composable route compilers (see Routing performance
   thread above).
-- **ALS (`AsyncLocalStorage`) checked for compatibility with `runPipeline` —
-  verified safe, not yet adopted as a utility** (2026-07-17): `runPipeline`
-  (`packages/http/src/route.ts`) is a plain `async` function that `await`s
-  each pipeline stage in sequence with no branching that would drop or
-  fork the async context — a clean linear await chain. This means wrapping
-  it (or a caller's handler) in `AsyncLocalStorage.run()` for per-request
-  context (e.g. request-scoped logging/tracing) is safe and needs no changes
-  to `runPipeline` itself. No `withALS`-style composable wrapper has been
-  written yet — see new open thread below.
+- **`withALS` — built** (2026-07-17, commit ed29b51): `withALS(router, storage,
+  init)` in `packages/http/src/compile.ts` wraps any `CompiledRouter` so every
+  request runs inside its own `AsyncLocalStorage.run()` context — composable
+  over `radixRouter`/`compiledCharRouter`/`mapCharRouter`/
+  `makeRouterFromRoute`, or another `withALS` layer. Relies on `runPipeline`
+  being a clean linear `await` chain (verified safe earlier this session, no
+  changes needed there). Wired into `createFetch` as an opt-in `als` option
+  (`preset.ts`), applied before `autoMethodLayer` so HEAD/OPTIONS/405
+  short-circuits that call through to the router also see the context. Tests
+  in `compile.test.ts` (isolation across concurrent requests) and
+  `preset.test.ts`. Open question carried forward: whether a plain wrapper is
+  all `withALS` ever needs to be, or whether request-scoped-context users hit
+  cases (e.g. nested/derived contexts) that want more — unexercised so far.
 - **Propagating the HTTP architecture to other projections is unstarted**
   (2026-07-17): `packages/http/src/route.ts` is now the reference pattern —
   generic `HttpRoute<H>`, `Node ⇒ ProtocolType` projection + rewriter
-  pipeline, composable compiled dispatch, pipeline-fusion visitors. `mcp`,
-  `cli`, `openapi`, and `client` still walk the raw `Node` tree directly (see
-  "Other projection packages still on the old Node-walking pattern" above,
-  carried over unchanged — migrating them is still unstarted, not newly
-  progressed this session).
-- **Sensible HTTP config defaults — what does a default setup look like?**
-  (2026-07-17): with the compiled routers, pipeline-fusion visitors, and
-  validator injection all now built as independently-composable opt-in
-  pieces, there's no single "just give me a working HTTP server" entry point
-  that picks reasonable defaults (which router compiler, whether to fuse
-  pipelines, whether to skip empty input, whether validators are wired) —
-  each is a separate function a caller must know to reach for and compose in
-  the right order. Not yet designed.
-- **`withALS` as a shipped composable wrapper is undesigned** (2026-07-17):
-  see the ALS verification note above — `runPipeline`'s plain-await-chain
-  shape is confirmed safe to wrap in `AsyncLocalStorage.run()`, but no
-  `withALS`-style utility exists in `packages/http` yet to make that
-  request-scoped-context pattern (logging, tracing, per-request caller
-  identity) reusable rather than something each caller hand-rolls.
+  pipeline, composable compiled dispatch, pipeline-fusion visitors, and now
+  a shared `mapRoute` tree-visitor (see below). `mcp`, `cli`, `openapi`, and
+  `client` still walk the raw `Node` tree directly (see "Other projection
+  packages still on the old Node-walking pattern" above, carried over
+  unchanged — migrating them is still unstarted, not newly progressed this
+  session).
+- **Sensible HTTP config defaults — built, unverified against a real app**
+  (2026-07-17, commit ed29b51): `createFetch` (`packages/http/src/preset.ts`)
+  is now the single "just give me a working HTTP server" entry point —
+  `PresetOptions` exposes toggles for `directives`, `validators`,
+  `fusePipeline`/`skipEmptyInput` (both default `true`), `rewriters`,
+  `router` (a plain function value, default `makeRouterFromRoute` — zero
+  build cost), and `als` (opt-in). Defaults were chosen to be sensible
+  (directives on, free perf optimizations on, no build-time router compile
+  unless asked for). Covered by `preset.test.ts` in isolation. Still open:
+  this hasn't been exercised end-to-end in a real consumer app, so whether
+  the chosen defaults and option shapes hold up under actual use is unverified.
+- **`mapRoute` — shared tree-visitor extracted for rewriters** (2026-07-17,
+  commit 7b4b9cc): `mapRoute(route, fn)` in `packages/http/src/route.ts` is a
+  pre-order visitor that applies `fn` to each node and handles
+  `children`/`fallback` recursion; `applyMethods`, `applyResponse`,
+  `fusePipeline`, `skipEmptyInput` are now built on it instead of each
+  hand-rolling the same recursion. Exported from the package (`index.ts`) for
+  users writing custom `HttpRoute => HttpRoute` rewriters. `applyMoveTo` and
+  `injectValidators` deliberately stay manual — `applyMoveTo` does structural
+  rearrangement (not a per-node transform) and `injectValidators` threads
+  path-accumulation context that `mapRoute`'s single-node `fn` signature
+  doesn't carry. Not generic over `HttpRoute<H>`'s handler-type parameter, so
+  `applyMethods`/`applyResponse` (which need to preserve `H` through their
+  conditional return types) still keep their own typed recursion rather than
+  delegating to it — `mapRoute` is the erased-type building block for
+  rewriters that don't need that precision.
 
 ### Design model is captured and authoritative in `docs/design/invariants.md`
 
