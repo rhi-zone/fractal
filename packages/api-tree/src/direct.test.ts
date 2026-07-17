@@ -1,13 +1,15 @@
 // packages/api-tree/src/direct.test.ts — createDirectApi (zero-protocol-overhead projection)
 
-import { describe, expect, it } from "bun:test"
+import { describe, expect, expectTypeOf, it } from "bun:test"
 import { api, op } from "./node.ts"
 import { createDirectApi } from "./direct.ts"
+import type { DirectApi } from "./direct.ts"
 
 describe("createDirectApi", () => {
   it("invokes a leaf handler directly, no HTTP involved", async () => {
     const tree = api({ ping: op((input: { n: number }) => input.n * 2) })
     const direct = createDirectApi(tree)
+    expectTypeOf(direct.ping).toEqualTypeOf<(input: { n: number }) => Promise<number>>()
     const result = await direct.ping({ n: 21 })
     expect(result).toBe(42)
   })
@@ -15,6 +17,7 @@ describe("createDirectApi", () => {
   it("supports a leaf with no input", async () => {
     const tree = api({ hello: op(() => "hi") })
     const direct = createDirectApi(tree)
+    expectTypeOf(direct.hello).toEqualTypeOf<() => Promise<string>>()
     expect(await direct.hello()).toBe("hi")
   })
 
@@ -25,15 +28,19 @@ describe("createDirectApi", () => {
       }),
     })
     const direct = createDirectApi(tree)
+    expectTypeOf(direct.books.list).toEqualTypeOf<() => Promise<string[]>>()
     expect(await direct.books.list()).toEqual(["a", "b"])
   })
 
   it("supports async handlers transparently", async () => {
-    const tree = api({ fetchThing: op(async (input: { id: string }) => {
+    const tree = api({ fetchThing: op(async (input: { id: string }): Promise<{ id: string }> => {
       await Promise.resolve()
       return { id: input.id }
     }) })
     const direct = createDirectApi(tree)
+    expectTypeOf(direct.fetchThing).toEqualTypeOf<
+      (input: { id: string }) => Promise<{ id: string }>
+    >()
     expect(await direct.fetchThing({ id: "x" })).toEqual({ id: "x" })
   })
 
@@ -45,6 +52,9 @@ describe("createDirectApi", () => {
       })
       const tree = api({}, { fallback: { name: "bookId", subtree: bookItem } })
       const direct = createDirectApi(tree)
+      expectTypeOf(direct.bookId).toEqualTypeOf<
+        (slugValue: string) => DirectApi<typeof bookItem, "bookId">
+      >()
       const book = await direct.bookId("123").read()
       expect(book).toEqual({ id: "123", title: "Dune" })
     })
@@ -68,7 +78,13 @@ describe("createDirectApi", () => {
         },
       })
       const direct = createDirectApi(tree)
-      expect(await direct.bookId("abc").read({ bookId: "override" })).toEqual({
+      // bookId is slug-subtracted from the type, so the typed signature is
+      // `() => Promise<...>`. The runtime still merges explicit fields over
+      // slugs (bulkCollect precedent), but exercising that override requires
+      // escaping the type — this is intentional: the override is an escape
+      // hatch, not the normal call pattern.
+      const read = direct.bookId("abc").read as (input: { bookId: string }) => Promise<{ bookId: string }>
+      expect(await read({ bookId: "override" })).toEqual({
         bookId: "override",
       })
     })
@@ -121,6 +137,14 @@ describe("createDirectApi", () => {
       },
     })
     const direct = createDirectApi(tree)
+    expectTypeOf(direct.root).toEqualTypeOf<
+      ((input: { n: number }) => Promise<number>) & {
+        readonly double: (input: { n: number }) => Promise<number>
+      }
+    >()
+    expectTypeOf(direct.root.double).toEqualTypeOf<
+      (input: { n: number }) => Promise<number>
+    >()
     expect(await direct.root({ n: 1 })).toBe(2)
     expect(await direct.root.double({ n: 5 })).toBe(10)
   })
@@ -202,5 +226,87 @@ describe("createDirectApi — library-api-shaped integration", () => {
     const tree = makeLibraryTree()
     const direct = createDirectApi(tree)
     await expect(direct.books.bookId("nope").read()).rejects.toThrow("Not Found: nope")
+  })
+})
+
+// ============================================================================
+// Type-level checks: DirectApi<N> computes the fully typed proxy shape from
+// the tree's own Node type — no assertions or `as` casts should be needed at
+// call sites. These tests never run any code; `expectTypeOf` checks are
+// evaluated by the type checker.
+// ============================================================================
+
+describe("DirectApi type safety", () => {
+  it("a simple leaf's callable type matches the handler's input/output", () => {
+    const tree = api({ ping: op((input: { n: number }) => input.n * 2) })
+    const direct = createDirectApi(tree)
+    expectTypeOf(direct.ping).toEqualTypeOf<(input: { n: number }) => Promise<number>>()
+  })
+
+  it("a no-input leaf's callable type takes no arguments", () => {
+    const tree = api({ hello: op(() => "hi") })
+    const direct = createDirectApi(tree)
+    expectTypeOf(direct.hello).toEqualTypeOf<() => Promise<string>>()
+  })
+
+  it("a nested branch carries the leaf's typed callable through", () => {
+    const tree = api({
+      books: api({
+        list: op(() => ["a", "b"]),
+      }),
+    })
+    const direct = createDirectApi(tree)
+    expectTypeOf(direct.books.list).toEqualTypeOf<() => Promise<string[]>>()
+  })
+
+  it("an async handler's return type is Promise<T>, not Promise<Promise<T>>", () => {
+    const tree = api({
+      fetchThing: op(async (input: { id: string }): Promise<{ id: string }> => {
+        await Promise.resolve()
+        return { id: input.id }
+      }),
+    })
+    const direct = createDirectApi(tree)
+    expectTypeOf(direct.fetchThing).toEqualTypeOf<
+      (input: { id: string }) => Promise<{ id: string }>
+    >()
+  })
+
+  it("a fallback subtracts captured slug fields from handler input", () => {
+    const bookItem = api({
+      read: op((input: { bookId: string }) => ({ id: input.bookId, title: "Dune" })),
+    })
+    const tree = api({}, { fallback: { name: "bookId", subtree: bookItem } })
+    const direct = createDirectApi(tree)
+
+    expectTypeOf(direct.bookId).toEqualTypeOf<
+      (slugValue: string) => DirectApi<typeof bookItem, "bookId">
+    >()
+    // bookId is subtracted — read takes no input
+    expectTypeOf(direct.bookId("x").read).toEqualTypeOf<
+      () => Promise<{ id: string; title: string }>
+    >()
+  })
+
+  it("a node with both a handler and children is callable AND has typed child properties", () => {
+    const tree = api({
+      root: {
+        handler: (input: { n: number }) => input.n + 1,
+        children: {
+          double: op((input: { n: number }) => input.n * 2),
+        },
+        meta: {},
+      },
+    })
+    const direct = createDirectApi(tree)
+
+    expectTypeOf(direct.root).toEqualTypeOf<
+      ((input: { n: number }) => Promise<number>) & {
+        readonly double: (input: { n: number }) => Promise<number>
+      }
+    >()
+    expectTypeOf(direct.root.double).toEqualTypeOf<
+      (input: { n: number }) => Promise<number>
+    >()
   })
 })
