@@ -117,11 +117,30 @@ function hintsFromTags(tags: Tags): Record<string, boolean> {
 // MCP meta extraction
 // ============================================================================
 
+/**
+ * `meta.mcp` open bag — per-projection overrides for MCP tool generation.
+ * Standard keys are typed; any other key passes through untouched (open bag,
+ * not a fixed schema — see the DU + interpreter design philosophy).
+ */
+export type McpMeta = {
+  /** Full tool-name override (prefix ignored when set). */
+  readonly name?: string
+  /** Description text override. */
+  readonly description?: string
+  /** Emits `annotations.title`. */
+  readonly title?: string
+  /** This node's contribution to the tool-name prefix (branch nodes only). */
+  readonly segment?: string
+  /** Merged over tag-derived hints (override wins per key). */
+  readonly annotations?: McpAnnotations
+  readonly [key: string]: unknown
+}
+
 /** Safely extract the open meta.mcp bag from a Meta. */
-function getMcpMeta(meta: Meta): Record<string, unknown> {
+export function getMcpMeta(meta: Meta): McpMeta {
   const m = meta.mcp
   if (typeof m !== "object" || m === null) return {}
-  return m as Record<string, unknown>
+  return m as McpMeta
 }
 
 // ============================================================================

@@ -12,6 +12,8 @@ export { http, httpVerbBundle } from "./verbs.ts"
 export type { HttpMethods, Method, VerbBundle } from "./verbs.ts"
 export { crud, httpProjection } from "./dx.ts"
 export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
+export { getHttpMeta } from "./project.ts"
+export type { HttpDirective, HttpMeta } from "./project.ts"
 export { createApplyValidation, fusePipeline, mapRoute, skipEmptyInput } from "./route.ts"
 export type { Validator, ValidatorMap } from "./route.ts"
 export {

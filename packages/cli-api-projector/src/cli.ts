@@ -88,14 +88,19 @@ export type CliOpts = {
 // CLI meta extraction
 // ============================================================================
 
-type CliMeta = {
+/**
+ * `meta.cli` open bag — per-projection overrides for CLI subcommand
+ * generation. Standard keys are typed; any other key passes through
+ * untouched (open bag, not a fixed schema).
+ */
+export type CliMeta = {
   readonly name?: string
   readonly alias?: string
   readonly hidden?: boolean
   readonly [key: string]: unknown
 }
 
-function getCliMeta(meta: Meta): CliMeta {
+export function getCliMeta(meta: Meta): CliMeta {
   const c = meta.cli
   if (typeof c !== "object" || c === null) return {}
   return c as CliMeta

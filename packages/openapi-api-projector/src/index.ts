@@ -29,7 +29,7 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { verbFromTags } from "@rhi-zone/fractal-http-api-projector/project"
+import { getHttpMeta, verbFromTags } from "@rhi-zone/fractal-http-api-projector/project"
 import type { SchemaMap } from "@rhi-zone/fractal-codegen"
 
 // ============================================================================
@@ -136,58 +136,11 @@ function pathParams(path: string): string[] {
 }
 
 // ============================================================================
-// Internal: safe http meta extraction (mirrors http/project.ts getHttpMeta)
-// ============================================================================
-
-type HttpMeta = {
-  readonly verb?: string
-  readonly segment?: string
-  readonly legacyPath?: string
-  /**
-   * dispatch: "method" — children distinguished by HTTP verb (method-dispatch).
-   * Non-method dispatch markers (header/query/contentType) are treated here as
-   * segment-dispatch: each child gets a path segment equal to its key or
-   * segment directive rename. This means OpenAPI reflects the attribute value
-   * as a path segment rather than a runtime condition — a reasonable approximation
-   * for enumerating projection. Callers who need precise OpenAPI for attribute-
-   * dispatched endpoints should annotate with meta.openapi explicitly.
-   */
-  readonly dispatch?: "method" | "attr"  // "attr" = any non-method marker (collapsed)
-}
-
-/** Extracts the resolved HTTP meta: verb/segment/legacyPath directives + the
- *  dispatch marker's kind (mirrors packages/http-api-projector/src/project.ts's interpreter). */
-function getHttpMeta(meta: Meta): HttpMeta {
-  const h = meta.http
-  if (typeof h !== "object" || h === null) return {}
-  const r = h as { dispatch?: unknown; directives?: unknown }
-  const out: { verb?: string; segment?: string; legacyPath?: string; dispatch?: "method" | "attr" } = {}
-
-  if (typeof r.dispatch === "object" && r.dispatch !== null) {
-    const d = r.dispatch as Record<string, unknown>
-    // Non-method dispatch (header/query/contentType): collapse to "attr" sentinel.
-    // OpenAPI treats these children as segment-dispatched (each child gets a segment).
-    out.dispatch = d.kind === "method" ? "method" : "attr"
-  }
-
-  if (Array.isArray(r.directives)) {
-    for (const entry of r.directives as unknown[]) {
-      if (typeof entry !== "object" || entry === null) continue
-      const d = entry as Record<string, unknown>
-      if (d.kind === "verb" && typeof d.value === "string") out.verb = d.value
-      else if (d.kind === "segment" && typeof d.value === "string") out.segment = d.value
-      else if (d.kind === "legacyPath" && typeof d.value === "string") out.legacyPath = d.value
-    }
-  }
-
-  return out
-}
-
-// ============================================================================
 // Internal: safe openapi meta extraction
 // ============================================================================
 
-type OpenApiMeta = {
+/** Per-operation OpenAPI overrides read from `meta.openapi` — see `toOpenApi`. */
+export type OpenApiMeta = {
   readonly operationId?: string
   readonly summary?: string
   readonly description?: string
@@ -225,7 +178,7 @@ function walkTree(
   // Non-method dispatch (dispatch:"attr") is treated as segment-dispatch in
   // OpenAPI: each child gets a path segment equal to its key or segment rename.
   const thisHttp = getHttpMeta(n.meta)
-  const methodDispatch = thisHttp.dispatch === "method"
+  const methodDispatch = thisHttp.dispatch?.kind === "method"
   // "attr" dispatch → OpenAPI treats children as segment-dispatched (approximation)
 
   for (const [key, child] of Object.entries(n.children ?? {})) {

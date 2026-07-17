@@ -29,7 +29,7 @@
 
 import { makeRouterFromRoute, naiveTransform } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 
 export { verbFromTags } from "./tags.ts"
 export type { HttpRoute, Pipeline } from "./route.ts"
@@ -111,6 +111,110 @@ export type HttpDirective =
       readonly status?: number
       readonly headers?: Record<string, string>
     }
+
+// ============================================================================
+// getHttpMeta — the ONE canonical `meta.http` parser
+//
+// Resolves the raw `meta.http` bag (dispatch marker + directives array) into
+// a typed, fully-resolved shape. This is what openapi's and client's own
+// self-contained tree walks read instead of each maintaining a divergent
+// local copy (see docs/design — the pre-consolidation state had THREE
+// separate typeof/null-checking parsers: this one, plus one apiece in
+// openapi-api-projector and client-api-projector, with diverging field sets
+// — `dispatch` collapsed vs. not, `moveTo`/`when`/`response` parsed vs.
+// skipped, `dispatchKind` vs. `dispatch` naming).
+//
+// `dispatch` is collapsed from the raw marker (`{kind: "method" | "header" |
+// "query" | "contentType"}`) to `{kind: "method" | "attr"}` — "attr" covers
+// any non-method marker, matching how openapi/client both treat
+// attribute-dispatched children (as segment-dispatch, an approximation; see
+// those packages' own tree walks for how the collapsed value is used).
+//
+// Each directive kind is resolved to its own field — last directive of a
+// given kind in the array wins, matching the pre-consolidation local walks'
+// behavior (a plain for-loop overwriting as it goes).
+// ============================================================================
+
+/** Fully-resolved `meta.http` shape — see `getHttpMeta` above. */
+export type HttpMeta = {
+  /** Collapsed dispatch marker: "attr" covers any non-method marker. */
+  readonly dispatch?: { readonly kind: "method" | "attr" }
+  /** The raw directives array, passed through unresolved for callers that need it. */
+  readonly directives?: readonly HttpDirective[]
+  /** Resolved `{ kind: "verb" }` directive value. */
+  readonly verb?: string
+  /** Resolved `{ kind: "segment" }` directive value. */
+  readonly segment?: string
+  /** Resolved `{ kind: "legacyPath" }` directive value. */
+  readonly legacyPath?: string
+  /** Resolved `{ kind: "when" }` directive value. */
+  readonly when?: string
+  /** Resolved `{ kind: "method" }` directive value. */
+  readonly method?: string
+  /** Resolved `{ kind: "moveTo" }` directive path. */
+  readonly moveTo?: string
+  /** Resolved `{ kind: "response" }` directive fields. */
+  readonly response?: { readonly status?: number; readonly headers?: Record<string, string> }
+}
+
+/** Parse `meta.http` into the resolved `HttpMeta` shape — see module doc above. */
+export function getHttpMeta(meta: Meta): HttpMeta {
+  const h = meta.http
+  if (typeof h !== "object" || h === null) return {}
+  const r = h as { dispatch?: unknown; directives?: unknown }
+
+  const out: {
+    dispatch?: { kind: "method" | "attr" }
+    directives?: readonly HttpDirective[]
+    verb?: string
+    segment?: string
+    legacyPath?: string
+    when?: string
+    method?: string
+    moveTo?: string
+    response?: { status?: number; headers?: Record<string, string> }
+  } = {}
+
+  if (typeof r.dispatch === "object" && r.dispatch !== null) {
+    const d = r.dispatch as Record<string, unknown>
+    out.dispatch = { kind: d.kind === "method" ? "method" : "attr" }
+  }
+
+  if (Array.isArray(r.directives)) {
+    const directives = r.directives as HttpDirective[]
+    out.directives = directives
+    for (const d of directives) {
+      switch (d.kind) {
+        case "verb":
+          out.verb = d.value
+          break
+        case "segment":
+          out.segment = d.value
+          break
+        case "legacyPath":
+          out.legacyPath = d.value
+          break
+        case "when":
+          out.when = d.value
+          break
+        case "method":
+          out.method = d.value
+          break
+        case "moveTo":
+          out.moveTo = d.path
+          break
+        case "response":
+          out.response = {
+            ...(d.status !== undefined ? { status: d.status } : {}),
+            ...(d.headers !== undefined ? { headers: d.headers } : {}),
+          }
+          break
+      }
+    }
+  }
+
+  return out
+}
 
 // ============================================================================
 // Response helpers
