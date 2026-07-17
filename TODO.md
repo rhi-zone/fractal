@@ -51,18 +51,22 @@ before acting.
 
 ### New threads from the 2026-07-17 validation/decode session (not yet built)
 
-- **TypeBox AOT validator codegen** — the chain is almost fully wired but not
-  yet assembled into a build step: TS types + JSDoc → `packages/codegen`'s
-  extractor produces a `TypeRef` → `packages/type-ir`'s `toTypeBox()`
-  projects it to a TypeBox schema → `TypeCompiler.Code()` compiles that to a
-  standalone JS validator function (zero runtime TypeBox dependency). JSDoc
-  constraint tags (`@minimum`, `@maximum`, `@pattern`, etc.) are read from
-  type declarations, not AST nodes. What's missing: the build-step
-  orchestration of this chain, and wiring its generated-file output through
-  `createApplyValidation` (see `packages/http/src/route.ts`, commit
-  ad8b921) so the generated validators actually populate
-  `Pipeline.validate`. A pass-through stub should be generated at project
-  setup so dev-time behavior is sane before codegen has run.
+- **TypeBox AOT validator codegen** — the compile step landed 2026-07-17
+  (commit c30b5cb): `packages/codegen/src/compile.ts`'s `buildSchema()`
+  converts a `TypeRef` to TypeBox `TSchema` objects, `compileValidator()`
+  feeds those through `TypeCompiler.Code()` to produce standalone JS
+  validator functions (no runtime TypeBox dependency in the emitted output —
+  `@sinclair/typebox` is a build-time-only devDependency of `packages/codegen`),
+  and `buildValidatorModuleSource()` orchestrates extraction
+  (`extractRouteTypeRefs`) → compilation → module emission of a
+  `ValidatorMap` that `createApplyValidation()` consumes.
+  `stubValidatorModuleSource()` emits the empty-map pass-through fallback for
+  dev-time before codegen has run. What's still missing: this is a set of
+  functions (`packages/codegen/src/build.ts`), not yet an actual build-step
+  invocation wired into a project's build (no script/CLI entry calls
+  `buildValidatorModuleSource()` and writes its output to disk), and the
+  consumer-app-facing "does a real route's validators actually get replaced
+  end-to-end" path is unverified.
 - **Meta typing pattern** — settled design, not yet implemented: `packages/core`
   defines `interface Meta { tags?: Tags }`. Each protocol package (http, mcp,
   ...) exports its own meta type (e.g. `HttpMeta`) rather than mutating core's
@@ -76,19 +80,30 @@ before acting.
   rewriter pipeline the way `packages/http/src/route.ts` and
   `packages/type-ir` now do. `type-ir` is the reference implementation of the
   correct pattern. Migrating the other four is unstarted.
-- **Projection pipeline generics don't reach HTTP's route projection** —
-  commit ff7c579 made `op()`/`api()` generic so handler types survive tree
-  construction, but `naiveTransform`, `applyMethods`, and `applyMoveTo` in
-  `packages/http/src/route.ts` still operate on the erased `Node` type. This
-  is the follow-up the ff7c579 commit message flags explicitly.
-- **Routing performance is unaddressed but not urgent** — current HTTP
-  dispatch is a tree walk. Prior art: radix trees are the standard approach
-  (dispatch cost scales with path length, not route count); Hono uses a
-  multi-strategy dispatcher (compiled regex for static routes, a trie for
-  dynamic ones). Below roughly 100 routes the architecture choice barely
-  matters in practice. One option worth keeping in mind: since fractal
-  already has a codegen step, static paths could in principle be compiled at
-  build time rather than walked at request time. Matters more as route count
+- ~~**Projection pipeline generics don't reach HTTP's route projection**~~ —
+  RESOLVED (2026-07-17, commit 1f63e1c): `HttpRoute<H>` is now generic;
+  `op()`'s return type marks the handler as required (not optional),
+  enabling leaf/branch discrimination at the type level. New conditional
+  types `NaiveRoute`, `ApplyMethodsRoute`, `ApplyResponseRoute` recursively
+  preserve handler types through `naiveTransform`/`applyMethods`/
+  `applyResponse`. `applyMoveTo` remains the deliberate erasure boundary —
+  runtime string paths from `Meta` are unknowable statically. Type-flow
+  tests added (`packages/http/src/type-flow.test.ts`).
+- **Routing performance** — partly addressed 2026-07-17. Micro-optimizations
+  landed first (commit e525eb5): `splitPath()` avoids a split+filter double
+  allocation, `matchRoute()` does direct method lookup at the leaf instead of
+  building a candidate array, and slug accumulation mutates in place instead
+  of spreading per dynamic segment (safe because static children always win
+  over fallback). Then `compileRouter()` landed (commit a0f89d5) as an
+  optional drop-in replacement for `makeRouterFromRoute()` with the same
+  `(req) => Promise<Response>` contract: it walks the `HttpRoute` tree once
+  at build time and produces closures that call each other directly (no
+  route object in the per-request path), with pipeline merging
+  (`mergePipelines`) hoisted to compile time and a shared `runPipeline()`
+  extracted for both dispatchers. Still open: `compileRouter` is opt-in, not
+  the default — nothing currently forces callers onto it, and a
+  radix-tree/trie structure (the Hono-style multi-strategy approach) hasn't
+  been built, just the closure-compilation step. Matters more as route count
   grows; not a current blocker.
 - **DX helper composition mechanism is undesigned** — the directive *data
   model* is settled (an array of kind-tagged DU objects on `meta.http`), and
@@ -349,8 +364,10 @@ Ordered roughly easiest → hardest to decide:
     `http.*` method directives, `crud()`, `httpProjection()` preset landed
     earlier (commit eee3c66). `op()`/`api()` are now generic and preserve
     handler types through tree construction instead of erasing to `Handler`
-    (commit ff7c579) — though downstream `route.ts` projections still
-    operate on the erased `Node` type (open thread below). See
+    (commit ff7c579), and the downstream `route.ts` projections now preserve
+    those types too (commit 1f63e1c, see resolved thread above) — the only
+    remaining erasure boundary is `applyMoveTo`, deliberately, since its
+    runtime string paths are unknowable statically. See
     `docs/design/routing-and-transforms.md` § DX.
 
 ---
