@@ -24,7 +24,7 @@
 //     subtree, namespaced by `name` (replaces the former `param(name, subtree)`).
 // meta.mcp.name / meta.mcp.segment overrides are NOT yet mirrored here.
 //   TODO(codegen): honor meta.mcp.name / meta.mcp.segment when reconstructing
-//   tool names, matching packages/mcp/src/project.ts.
+//   tool names, matching packages/mcp-api-projector/src/project.ts.
 
 import ts from "typescript"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"

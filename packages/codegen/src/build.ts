@@ -3,7 +3,7 @@
 // BUILD ORCHESTRATOR: wires the extractor (extract.ts/tree.ts) to the AOT
 // validator compiler (compile.ts), producing the standalone,
 // zero-runtime-dependency validator MODULE SOURCE that
-// `createApplyValidation()` (packages/http/src/route.ts) consumes.
+// `createApplyValidation()` (packages/http-api-projector/src/route.ts) consumes.
 //
 //   entryFile --extractRouteTypeRefs--> path -> TypeRef
 //            --compileValidatorModule--> module source (exports `validators`)

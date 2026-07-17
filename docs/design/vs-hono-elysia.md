@@ -18,12 +18,12 @@ Frameworks compared:
 (b) `POST /todos` with body `{title: string}`, returns 201.
 (c) A watched dev loop where the client's TypeScript types track the server.
 
-### fractal (current API — `packages/api-tree` + `packages/http`)
+### fractal (current API — `packages/api-tree` + `packages/http-api-projector`)
 
 ```ts
 // app.ts
 import { choice, methods, param, paramValue, path } from "@rhi-zone/fractal-api-tree";
-import { json, status, text, toFetch, validated, returns } from "@rhi-zone/fractal-http";
+import { json, status, text, toFetch, validated, returns } from "@rhi-zone/fractal-http-api-projector";
 import { schema } from "./schema.ts"; // hand-rolled StandardSchemaV1 fixture
 
 const createSchema = schema({ title: "string" });
@@ -132,7 +132,7 @@ than short-circuiting with 405, so `choice` alts are never cut short — and `to
 then walks the full `.meta` to aggregate the `Allow` set across every branch at the
 matched path.
 
-Verified by `packages/http/src/index.test.ts` (`bun run test`, 30 pass):
+Verified by `packages/http-api-projector/src/index.test.ts` (`bun run test`, 30 pass):
 - "known path, wrong verb -> 405 + Allow lists the table's verbs" — single-table 405.
 - "auto-HEAD mirrors GET: status + headers preserved, empty body" — auto-HEAD.
 - "OPTIONS -> 204 + Allow union (HEAD when GET present, OPTIONS always)" — OPTIONS.
@@ -158,7 +158,7 @@ Combinators (`path`, `methods`, `param`, `choice`, `mount`) are plain functions
 returning a `Handler` with an inert `.meta` sidecar — never a class, never a
 lifecycle hook registration. `undefined` means "not mine — pass to the next handler".
 Validation (`validated`), response building (`json`/`text`/`binary`/`sse`/`status`),
-and HTTP correctness projection (`toFetch`) all live in `@rhi-zone/fractal-http` as
+and HTTP correctness projection (`toFetch`) all live in `@rhi-zone/fractal-http-api-projector` as
 plain functions, not framework protocol.
 
 Hono's core is a class with imperative `.get/.post/.use` registration, a trie
@@ -173,9 +173,9 @@ statement of the current position.
 
 `@rhi-zone/fractal-api-tree` imports no Bun, no Node, and no `Request`/`Response`
 (verified: `packages/api-tree/src/index.ts` imports are zero — no external imports at
-all). `@rhi-zone/fractal-http` imports no Bun and no Node (verified: its only
+all). `@rhi-zone/fractal-http-api-projector` imports no Bun and no Node (verified: its only
 imports are from `@rhi-zone/fractal-api-tree` and WHATWG globals). The single runtime
-touch is `packages/http/src/adapter.ts` (`serveBun`/`serveNode`), which `index.ts`
+touch is `packages/http-api-projector/src/adapter.ts` (`serveBun`/`serveNode`), which `index.ts`
 does not import.
 
 However, **`Request`/`Response` live in `Handler` itself** — they are WHATWG globals
@@ -198,7 +198,7 @@ hello-world is straightforward:
 
 ```ts
 import { methods } from "@rhi-zone/fractal-api-tree";
-import { text, toFetch } from "@rhi-zone/fractal-http";
+import { text, toFetch } from "@rhi-zone/fractal-http-api-projector";
 const handle = toFetch(methods({ GET: () => text("hi") }));
 ```
 
@@ -286,8 +286,8 @@ honest gap (declared response schema required vs Eden's inferred response types)
 - Elysia 405 (issue #682, closed not-planned → still 404): github.com/elysiajs/elysia/issues/682
 - fractal sources verified:
   - `packages/api-tree/src/index.ts` — `Handler<P>`, combinators, `.meta` types
-  - `packages/http/src/index.ts` — `toFetch`, `validated`, `returns`, response builders
-  - `packages/http/src/index.test.ts` — HTTP correctness tests (30 pass)
+  - `packages/http-api-projector/src/index.ts` — `toFetch`, `validated`, `returns`, response builders
+  - `packages/http-api-projector/src/index.test.ts` — HTTP correctness tests (30 pass)
   - `packages/codegen/test/drift.test.ts` — drift guard pipeline (4 pass, both compilers)
   - `packages/codegen/src/cli.ts` — `fractal watch` implementation
   - `examples/todo-api/src/app.ts` — full working example (16 pass)

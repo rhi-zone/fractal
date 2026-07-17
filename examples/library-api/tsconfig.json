@@ -14,9 +14,9 @@
     "paths": {
       "@rhi-zone/fractal-api-tree/node": ["../../packages/api-tree/src/node.ts"],
       "@rhi-zone/fractal-api-tree/tags": ["../../packages/api-tree/src/tags.ts"],
-      "@rhi-zone/fractal-http/preset": ["../../packages/http/src/preset.ts"],
-      "@rhi-zone/fractal-http/project": ["../../packages/http/src/project.ts"],
-      "@rhi-zone/fractal-mcp": ["../../packages/mcp/src/index.ts"],
+      "@rhi-zone/fractal-http-api-projector/preset": ["../../packages/http-api-projector/src/preset.ts"],
+      "@rhi-zone/fractal-http-api-projector/project": ["../../packages/http-api-projector/src/project.ts"],
+      "@rhi-zone/fractal-mcp-api-projector": ["../../packages/mcp-api-projector/src/index.ts"],
       "@rhi-zone/fractal-codegen": ["../../packages/codegen/src/index.ts"]
     }
   },

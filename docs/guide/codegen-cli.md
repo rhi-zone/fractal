@@ -116,11 +116,11 @@ generated file by hand will show up as `stale` on the next CI run.
 
 The generated module exports a `validators: Record<routePath, Validator>`
 map (per entry-file). `createApplyValidation` (in
-`packages/http/src/route.ts`) closes over one or more such maps, keyed by
+`packages/http-api-projector/src/route.ts`) closes over one or more such maps, keyed by
 name, and returns an `applyValidation(key, route)` rewriter:
 
 ```ts
-import { createApplyValidation } from "@rhi-zone/fractal-http/route"
+import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
 import { validators } from "./generated/validators.ts"
 
 const applyValidation = createApplyValidation({ books: validators })

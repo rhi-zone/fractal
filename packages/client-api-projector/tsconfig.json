@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["bun-types"],
+    "paths": {
+      "@rhi-zone/fractal-api-tree": ["../core/src/index.ts"],
+      "@rhi-zone/fractal-api-tree/node": ["../core/src/node.ts"],
+      "@rhi-zone/fractal-api-tree/tags": ["../core/src/tags.ts"],
+      "@rhi-zone/fractal-http-api-projector": ["../http/src/index.ts"],
+      "@rhi-zone/fractal-http-api-projector/project": ["../http/src/project.ts"],
+      "@rhi-zone/fractal-http-api-projector/preset": ["../http/src/preset.ts"],
+      "@rhi-zone/fractal-example-library-api/tree": ["../../examples/library-api/src/tree.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}

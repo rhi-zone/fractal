@@ -1,7 +1,7 @@
 // examples/library-api/src/tree.ts
 //
 // Library API — new-model authoring on the HttpRoute pipeline (naiveTransform
-// + applyMethods/applyMoveTo/applyResponse, see packages/http/src/route.ts
+// + applyMethods/applyMoveTo/applyResponse, see packages/http-api-projector/src/route.ts
 // and docs/design/routing-and-transforms.md). Each leaf carries its OWN tags —
 // there is no ancestor tag inheritance (removed; see docs/design/router-model.md
 // — "Tags"): a node-level tag does not flow down to its descendants.
@@ -19,10 +19,10 @@
 // placeholder.
 
 import { api as api_, op, service } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "@rhi-zone/fractal-http/verbs"
-import { httpProjection } from "@rhi-zone/fractal-http/dx"
-import { createApplyValidation } from "@rhi-zone/fractal-http/route"
-import type { Validator, ValidatorMap } from "@rhi-zone/fractal-http/route"
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
+import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
+import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
+import type { Validator, ValidatorMap } from "@rhi-zone/fractal-http-api-projector/route"
 import { validators as catalogValidators } from "./generated/validators.ts"
 
 // ============================================================================
@@ -141,7 +141,7 @@ const checkoutNode = api_({
  * node-level marker below is retained meta, NOT interpreted by the HttpRoute
  * pipeline (which reads only `moveTo`/`method` directives) — it's read
  * independently by openapi's and client's own self-contained Node-tree
- * walks (packages/openapi/src/index.ts, packages/client/src/index.ts),
+ * walks (packages/openapi-api-projector/src/index.ts, packages/client-api-projector/src/index.ts),
  * which still derive method-co-location from this marker rather than from
  * `moveTo` directives. Two projectors, two encodings of the same fact.
  */
@@ -250,7 +250,7 @@ const applyValidation = createApplyValidation(validatorMap)
 // ============================================================================
 // HttpRoute projection — the pre-composed pipeline (naiveTransform +
 // applyMethods + applyMoveTo + applyResponse, see
-// docs/design/routing-and-transforms.md and packages/http/src/dx.ts),
+// docs/design/routing-and-transforms.md and packages/http-api-projector/src/dx.ts),
 // with the generated `catalog/*` validators applied on top. This is the
 // actual route tree `createFetch(api)` dispatches against.
 // ============================================================================

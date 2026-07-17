@@ -16,7 +16,7 @@
 
 ### Extensible dispatch kinds
 
-The closed `DispatchMarker` union in `packages/http/src/project.ts` becomes an augmentable
+The closed `DispatchMarker` union in `packages/http-api-projector/src/project.ts` becomes an augmentable
 TypeScript interface:
 
 ```ts
@@ -134,7 +134,7 @@ export const dateMatcher: Matcher = (req, children, data) => {
 import { dateMatcher } from "fractal-date-versioning"
 
 // Declaration merging HERE — developer declares what kinds their tree uses
-declare module "@rhi-zone/fractal-http" {
+declare module "@rhi-zone/fractal-http-api-projector" {
   interface DispatchKinds {
     date: { kind: "date"; name: string }
   }
@@ -161,6 +161,6 @@ const fetch = httpProjection({
 
 ## What this supersedes
 
-- The closed `DispatchMarker` union in `packages/http/src/project.ts`.
+- The closed `DispatchMarker` union in `packages/http-api-projector/src/project.ts`.
 - The hardcoded if/else dispatch in `buildRoutes` and `matchConditions`.
 - Any global-registry or battery-side-augmentation proposals (rejected).

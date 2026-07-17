@@ -1,4 +1,4 @@
-import { json, withValidation } from "@rhi-zone/fractal-http"
+import { json, withValidation } from "@rhi-zone/fractal-http-api-projector"
 import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"
 import type { ClientOfContract } from "../contract"
 

@@ -95,7 +95,7 @@
 ## AS-BUILT (implemented this session)
 
 **[BUILT]** Workspaces (5 active): `@rhi-zone/fractal-api-tree`, `-http`, `-mcp`,
-`-codegen`, `examples/library-api`. (`packages/openapi` and `packages/client`
+`-codegen`, `examples/library-api`. (`packages/openapi-api-projector` and `packages/client-api-projector`
 exist but are fenced out of the workspace pending migration to the new model —
 see `package.json` comment.) 130 tests pass across the 5 active workspaces,
 0 fail; typecheck clean.
@@ -116,7 +116,7 @@ see `package.json` comment.) 130 tests pass across the 5 active workspaces,
   isOk/isErr/map/bind/match`; derived combinators `composeK`/`collect`. Old
   D-tree/Schema routing retired.
 
-**[BUILT] `@rhi-zone/fractal-http` (`packages/http`):**
+**[BUILT] `@rhi-zone/fractal-http-api-projector` (`packages/http-api-projector`):**
 - `project.ts` — `buildRoutes(node)`: path purely from tree walk (static key →
   `/{seg}`, ParamNode → `/{name}`, segment inferral strips leading verb word +
   kebab-cases). `meta.http.segment` overrides a node/op's contribution;
@@ -133,7 +133,7 @@ see `package.json` comment.) 130 tests pass across the 5 active workspaces,
 - `adapter.ts` — `serveBun` / `serveNode` runtime adapters (isolated; core stays
   runtime-agnostic).
 
-**[BUILT] `@rhi-zone/fractal-mcp` (`packages/mcp`):**
+**[BUILT] `@rhi-zone/fractal-mcp-api-projector` (`packages/mcp-api-projector`):**
 - `project.ts` — `toTools(node, opts?)`: walks Node tree, emits `McpTool[]` (one
   per op). Name: underscore-joined prefix from tree walk (`meta.mcp.name` full
   override; `meta.mcp.segment` per-node contribution). Annotation hints

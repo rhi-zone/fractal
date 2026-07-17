@@ -3,10 +3,10 @@
 ## How to run
 
 ```sh
-bun run packages/http/src/route.bench.ts
+bun run packages/http-api-projector/src/route.bench.ts
 ```
 
-Results are saved as timestamped JSON in `packages/http/bench-results/`.
+Results are saved as timestamped JSON in `packages/http-api-projector/bench-results/`.
 
 ## Hardware
 

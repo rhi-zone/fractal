@@ -21,7 +21,7 @@ import {
   type MethodsMeta,
   type Method,
 } from "@rhi-zone/fractal-api-tree";
-import { json } from "@rhi-zone/fractal-http";
+import { json } from "@rhi-zone/fractal-http-api-projector";
 import type { RouteUnion } from "../drift-guard/derive.ts";
 
 type Equals<A, B> =

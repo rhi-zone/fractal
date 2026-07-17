@@ -25,14 +25,14 @@ This constraint is load-bearing: composability alone does not yield a small ment
 | Package | Role |
 |---------|------|
 | `@rhi-zone/fractal-api-tree` | `Node<P,Res>`, `Handler`, `Req`, `Pass`, `choice`, `pipe`, `capture`, `typed`, `leaf`, `run`, `resolveSchema`, Standard Schema types |
-| `@rhi-zone/fractal-http` | HTTP kit: `path`, `methods`, `param`, `query`, `header`, `body`, `validate`, `serve` |
+| `@rhi-zone/fractal-http-api-projector` | HTTP kit: `path`, `methods`, `param`, `query`, `header`, `body`, `validate`, `serve` |
 | `@rhi-zone/fractal-worker` | Worker/in-process kit: `procedure`, `field`, `dispatch` |
-| `@rhi-zone/fractal-openapi` | OpenAPI 3.0 / JSON-Schema projection: `toOpenApi`, `toJsonSchema` |
+| `@rhi-zone/fractal-openapi-api-projector` | OpenAPI 3.0 / JSON-Schema projection: `toOpenApi`, `toJsonSchema` |
 
 ## Quick Start
 
 ```ts
-import { path, methods, param, body, validate, serve, leaf } from '@rhi-zone/fractal-http'
+import { path, methods, param, body, validate, serve, leaf } from '@rhi-zone/fractal-http-api-projector'
 
 const app = path({
   todos: methods({
@@ -45,7 +45,7 @@ const app = path({
 const response = await serve(app, { method: 'GET', url: '/todos' })
 
 // Project to OpenAPI — same node, no re-description
-import { toOpenApi } from '@rhi-zone/fractal-openapi'
+import { toOpenApi } from '@rhi-zone/fractal-openapi-api-projector'
 const doc = toOpenApi(app, { title: 'Todos API', version: '1.0.0' })
 ```
 
@@ -55,7 +55,7 @@ const doc = toOpenApi(app, { title: 'Todos API', version: '1.0.0' })
 
 The core (`fractal-api-tree`) knows nothing about HTTP verbs, URL paths, or procedure names. Protocol-specific combinators live in per-protocol kits that consume and produce the same `Node<P,Res>` type:
 
-- **HTTP kit** (`fractal-http`): `methods`, `path`, `param`, `query`, `header`, `body`, `validate`, `serve`
+- **HTTP kit** (`fractal-http-api-projector`): `methods`, `path`, `param`, `query`, `header`, `body`, `validate`, `serve`
 - **Worker kit** (`fractal-worker`): `procedure`, `field`, `dispatch`
 
 `NodeMiddleware = (n: Node<P,Res>) => Node<P,Res>` is the extension point for cross-cutting concerns: an auth middleware wraps a node, contributes a security descriptor to `meta`, and enforces at request time. Business logic and core combinators transfer unchanged across kits.
@@ -65,7 +65,7 @@ The core (`fractal-api-tree`) knows nothing about HTTP verbs, URL paths, or proc
 Every `Node` carries a `meta: Meta` descriptor built during route construction. After construction:
 
 ```ts
-import { toOpenApi } from '@rhi-zone/fractal-openapi'
+import { toOpenApi } from '@rhi-zone/fractal-openapi-api-projector'
 const doc = toOpenApi(app, { title: 'My API', version: '1.0.0' })
 // doc.paths has every route, parameter, requestBody schema, and security requirement
 // derived from the same node tree that runs requests

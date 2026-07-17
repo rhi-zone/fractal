@@ -1,4 +1,4 @@
-import { json, withValidation } from "@rhi-zone/fractal-http"
+import { json, withValidation } from "@rhi-zone/fractal-http-api-projector"
 import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"
 
 // Minimal Standard-Schema validator (no zod — isolate fractal's cost).

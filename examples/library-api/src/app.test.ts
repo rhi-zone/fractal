@@ -13,13 +13,13 @@
 
 import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore, httpRoutes } from "./tree.ts"
-import { createFetch } from "@rhi-zone/fractal-http/preset"
-import { makeRouterFromRoute, routeCandidatesForUrl } from "@rhi-zone/fractal-http/route"
-import { http } from "@rhi-zone/fractal-http/verbs"
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
+import { makeRouterFromRoute, routeCandidatesForUrl } from "@rhi-zone/fractal-http-api-projector/route"
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { op } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import { toTools } from "@rhi-zone/fractal-mcp"
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { extractToolSchemas } from "@rhi-zone/fractal-codegen"
 
 /** Candidate methods reachable at `path` in the library-api's HttpRoute tree. */

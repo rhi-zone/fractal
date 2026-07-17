@@ -22,7 +22,7 @@
 //
 // See:
 //   packages/api-tree/src/node.ts    — the op model (`op(fn, meta)`)
-//   packages/mcp/src/project.ts  — the consumer (toTools inputSchema/description)
+//   packages/mcp-api-projector/src/project.ts  — the consumer (toTools inputSchema/description)
 
 import ts from "typescript"
 import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir"

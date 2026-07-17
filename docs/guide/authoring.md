@@ -6,7 +6,7 @@ MCP, CLI), and each projection derives what it needs from the structure and
 the open metadata bag.
 
 All constructors live in `@rhi-zone/fractal-api-tree/node`. Verb-helper bundles
-live in `@rhi-zone/fractal-http/verbs`.
+live in `@rhi-zone/fractal-http-api-projector/verbs`.
 
 ---
 
@@ -16,7 +16,7 @@ live in `@rhi-zone/fractal-http/verbs`.
 
 ```ts
 import { op } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "@rhi-zone/fractal-http/verbs"
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 
 // Bare fn — empty meta, verb inferred from tags (defaults to POST)
 const listBooks = op((_: unknown): Book[] => [...store.values()])
@@ -223,7 +223,7 @@ pin (`meta.http.verb`) with the behavioral tags that verb implies:
 Attach a bundle as a contribution to `op`:
 
 ```ts
-import { http } from "@rhi-zone/fractal-http/verbs"
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 
 // PUT /books/{bookId}/checkout/reserve + idempotentHint in MCP — one declaration
 const reserve = op(

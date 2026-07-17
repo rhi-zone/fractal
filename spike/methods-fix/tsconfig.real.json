@@ -10,8 +10,8 @@
     "allowImportingTsExtensions": true,
     "paths": {
       "@rhi-zone/fractal-api-tree": ["../../packages/api-tree/src/index.ts"],
-      "@rhi-zone/fractal-http": ["../../packages/http/src/index.ts"],
-      "@rhi-zone/fractal-openapi": ["../../packages/openapi/src/index.ts"]
+      "@rhi-zone/fractal-http-api-projector": ["../../packages/http-api-projector/src/index.ts"],
+      "@rhi-zone/fractal-openapi-api-projector": ["../../packages/openapi-api-projector/src/index.ts"]
     },
     "types": []
   },

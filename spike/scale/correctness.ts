@@ -4,9 +4,9 @@
 // does NOT error, tsc reports TS2578 "Unused '@ts-expect-error'" → the client is
 // degenerate and the measurement would be meaningless.
 
-import { httpRouter, json, withValidation } from "@rhi-zone/fractal-http"
+import { httpRouter, json, withValidation } from "@rhi-zone/fractal-http-api-projector"
 import type { StandardSchema } from "@rhi-zone/fractal-api-tree"
-import { client } from "@rhi-zone/fractal-client"
+import { client } from "@rhi-zone/fractal-client-api-projector"
 import { buildClient, defineRoute, type ClientOfContract } from "./contract"
 
 interface Body { readonly name: string; readonly qty: number }

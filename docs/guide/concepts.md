@@ -88,7 +88,7 @@ that attribute is the path segment (the child's key becomes the next path segmen
 path-segment dispatch is not privileged — it is just the default.
 
 The `meta.http.dispatch` field on a node selects the dispatch attribute for its children
-(type `DispatchMarker` in `packages/http/src/project.ts`):
+(type `DispatchMarker` in `packages/http-api-projector/src/project.ts`):
 
 | `dispatch` value | Children distinguished by |
 |---|---|
@@ -107,7 +107,7 @@ When a node uses non-segment dispatch, branch children still contribute a path s
 normal; only leaf children are resolved at the same URL path. Non-HTTP projections (MCP,
 CLI) ignore the `dispatch` marker and key children by their agnostic name as always.
 
-The `buildRoutes` function in `packages/http/src/project.ts` implements this at build time,
+The `buildRoutes` function in `packages/http-api-projector/src/project.ts` implements this at build time,
 producing a flat `Route[]` where each route carries a `conditions: MatchCondition[]` array
 that encodes whatever attribute dispatch was in effect.
 
@@ -172,7 +172,7 @@ well-formed fractal tree. They are uppercase HTTP vocabulary; they are meaningle
 CLI, and any other projection.
 
 The verb for a leaf is **derived from tags** at build time by `verbFromTags(meta)` in
-`packages/http/src/project.ts`:
+`packages/http-api-projector/src/project.ts`:
 
 ```
 readOnly = true                           → GET
@@ -235,10 +235,10 @@ A **projection** reads the one Node tree and produces a surface. There are two m
 **HTTP** and **CLI** (planned): a request arrives → walk the tree → find one leaf → call
 its handler → return a response.
 
-`buildRoutes(node)` in `packages/http/src/project.ts` compiles the tree to a flat
+`buildRoutes(node)` in `packages/http-api-projector/src/project.ts` compiles the tree to a flat
 `Route[]` at build time. `makeRouter(routes)` dispatches each live request against that
 table in O(routes) with full condition evaluation. The `createFetch(node, opts?)` preset in
-`packages/http/src/preset.ts` composes `buildRoutes` + `makeRouter` +
+`packages/http-api-projector/src/preset.ts` composes `buildRoutes` + `makeRouter` +
 `autoMethodLayer` (HEAD-from-GET, OPTIONS/405) into a WHATWG
 `(req: Request) => Promise<Response>` handler suitable for Bun, Deno, Cloudflare Workers,
 and Node.
@@ -248,7 +248,7 @@ and Node.
 **MCP** and (planned) **OpenAPI, GraphQL, generated client**: flatten all leaves in the
 tree to produce a surface — one tool / one schema object / one client method per leaf.
 
-`toTools(node, opts?)` in `packages/mcp/src/project.ts` walks the tree and emits one
+`toTools(node, opts?)` in `packages/mcp-api-projector/src/project.ts` walks the tree and emits one
 `McpTool` per leaf. Tool names are underscore-joined from tree position
 (`catalog_search`, `books_bookId_get`). The `meta.mcp.name` field is a full override;
 `meta.mcp.segment` overrides the per-node name contribution.
@@ -284,9 +284,9 @@ type, and extract leading JSDoc text. The resulting `SchemaMap` is passed to `to
 | `resolveTags(tags)` | `@rhi-zone/fractal-api-tree/tags` | Apply the implication lattice |
 | `effectiveTags(path)` | `@rhi-zone/fractal-api-tree/tags` | Closest-wins tag inheritance down a path |
 | `dispatch(node, segs, input)` | `@rhi-zone/fractal-api-tree/node` | Minimal runtime tree walker |
-| `buildRoutes(node)` | `@rhi-zone/fractal-http/project` | Compile tree → flat `Route[]` |
-| `verbFromTags(meta)` | `@rhi-zone/fractal-http/project` | Derive HTTP verb from the tag lattice |
-| `makeRouter(routes)` | `@rhi-zone/fractal-http/project` | Runtime verb+path+conditions dispatcher |
-| `createFetch(node, opts?)` | `@rhi-zone/fractal-http/preset` | OOTB HTTP handler (WHATWG `Request→Response`) |
-| `toTools(node, opts?)` | `@rhi-zone/fractal-mcp/project` | Enumerate tree → flat `McpTool[]` |
-| `DispatchMarker` | `@rhi-zone/fractal-http/project` | `"method"` \| header \| query \| contentType dispatch |
+| `buildRoutes(node)` | `@rhi-zone/fractal-http-api-projector/project` | Compile tree → flat `Route[]` |
+| `verbFromTags(meta)` | `@rhi-zone/fractal-http-api-projector/project` | Derive HTTP verb from the tag lattice |
+| `makeRouter(routes)` | `@rhi-zone/fractal-http-api-projector/project` | Runtime verb+path+conditions dispatcher |
+| `createFetch(node, opts?)` | `@rhi-zone/fractal-http-api-projector/preset` | OOTB HTTP handler (WHATWG `Request→Response`) |
+| `toTools(node, opts?)` | `@rhi-zone/fractal-mcp-api-projector/project` | Enumerate tree → flat `McpTool[]` |
+| `DispatchMarker` | `@rhi-zone/fractal-http-api-projector/project` | `"method"` \| header \| query \| contentType dispatch |

@@ -15,7 +15,7 @@
       "@rhi-zone/fractal-api-tree": ["../core/src/index.ts"],
       "@rhi-zone/fractal-api-tree/node": ["../core/src/node.ts"],
       "@rhi-zone/fractal-api-tree/tags": ["../core/src/tags.ts"],
-      "@rhi-zone/fractal-mcp": ["../mcp/src/index.ts"],
+      "@rhi-zone/fractal-mcp-api-projector": ["../mcp/src/index.ts"],
       "@rhi-zone/fractal-type-ir": ["../type-ir/src/index.ts"],
       "@rhi-zone/fractal-type-ir/json-schema": ["../type-ir/src/json-schema.ts"]
     }

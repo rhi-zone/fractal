@@ -1,9 +1,9 @@
 # Decoding requests: the stores model
 
-`@rhi-zone/fractal-http` turns an incoming `Request` into the flat input
+`@rhi-zone/fractal-http-api-projector` turns an incoming `Request` into the flat input
 object a handler expects via a **stores-based decode system**
-(`packages/http/src/decode.ts`, wired into the pipeline in
-`packages/http/src/route.ts`). This guide covers how to use it; see the
+(`packages/http-api-projector/src/decode.ts`, wired into the pipeline in
+`packages/http-api-projector/src/route.ts`). This guide covers how to use it; see the
 source files for the exact mechanics.
 
 ---

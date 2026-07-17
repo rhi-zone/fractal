@@ -2,7 +2,7 @@
 
 > **Provenance:** Settled design from working session 2026-07-09. Supersedes the node/dispatch
 > shape in `converged-model.md` and the built `packages/api-tree` node shape and
-> `packages/http` `buildRoutes`. Tags/metadata/projection principles in `converged-model.md`
+> `packages/http-api-projector` `buildRoutes`. Tags/metadata/projection principles in `converged-model.md`
 > still hold — only the node shape and dispatch change.
 
 > **Extended:** Dispatch extensibility model in [`dispatch-extensibility.md`](dispatch-extensibility.md)
@@ -118,7 +118,7 @@ Composition = **deep-merge of `meta`** (child wins on conflict).
 ## What this supersedes
 
 - `packages/api-tree` node shape: `{ops, children, meta}` → `{handler?, children?, meta}` (ops removed).
-- `packages/http` `buildRoutes`: per-op segments + flat table → the tree compiled as the router
+- `packages/http-api-projector` `buildRoutes`: per-op segments + flat table → the tree compiled as the router
   with attribute-dispatch; verb from tags at build.
 - Tag storage/merge: ad hoc → `meta.tags` sub-bag composed by deep-merge-with-precedence.
 - Adds: verb-helper bundles (`http.*`).

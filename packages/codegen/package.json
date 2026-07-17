@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
-    "@rhi-zone/fractal-mcp": "workspace:*",
+    "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
     "@sinclair/typebox": "^0.34.41"
   },
   "scripts": {

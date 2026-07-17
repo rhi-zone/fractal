@@ -58,7 +58,7 @@ before acting.
 - **Other projection packages still on the old Node-walking pattern** —
   `openapi`, `mcp`, `cli`, and `client` all still directly walk the raw
   `Node` tree rather than going through a `Node ⇒ ProtocolType` projection +
-  rewriter pipeline the way `packages/http/src/route.ts` and
+  rewriter pipeline the way `packages/http-api-projector/src/route.ts` and
   `packages/type-ir` now do. `type-ir` is the reference implementation of the
   correct pattern. Migrating the other four is unstarted.
 - ~~**Projection pipeline generics don't reach HTTP's route projection**~~ —
@@ -69,7 +69,7 @@ before acting.
   preserve handler types through `naiveTransform`/`applyMethods`/
   `applyResponse`. `applyMoveTo` remains the deliberate erasure boundary —
   runtime string paths from `Meta` are unknowable statically. Type-flow
-  tests added (`packages/http/src/type-flow.test.ts`).
+  tests added (`packages/http-api-projector/src/type-flow.test.ts`).
 - **Routing performance** — substantially addressed 2026-07-17. Micro-optimizations
   landed first (commit e525eb5): `splitPath()` avoids a split+filter double
   allocation, `matchRoute()` does direct method lookup at the leaf instead of
@@ -84,12 +84,12 @@ before acting.
   only, `mergePipelines`/`compileRouter`/`compileNode` all deleted as dead
   weight) there was nothing left for it to hoist, so it was removed too.
   In its place, composable route compilers landed (commit b669278,
-  `packages/http/src/compile.ts`): `radixRouter`, `compiledCharRouter`,
+  `packages/http-api-projector/src/compile.ts`): `radixRouter`, `compiledCharRouter`,
   `mapCharRouter` are independent `HttpRoute → (req) => Promise<Response>`
   compilers; their underlying matchers (`radixMatcher`, `compiledCharMatcher`,
   `mapMatcher`) return `RouteMatch | undefined` and compose via
   `chainMatchers` (first-wins); `toRouter` wraps any `Matcher` with pipeline
-  execution. A benchmark harness (`packages/http/src/route.bench.ts`, 8
+  execution. A benchmark harness (`packages/http-api-projector/src/route.bench.ts`, 8
   architectures × 30 cases × path lengths up to 8k chars) backs this with
   measured results in `docs/design/routing-benchmarks.md` — the hybrid
   Map+compiled-charFn strategy (#8) wins broadly (13-280ns vs 45-12000ns+ for
@@ -140,7 +140,7 @@ before acting.
   properly as the composable route compilers (see Routing performance
   thread above).
 - **`withALS` — built** (2026-07-17, commit ed29b51): `withALS(router, storage,
-  init)` in `packages/http/src/compile.ts` wraps any `CompiledRouter` so every
+  init)` in `packages/http-api-projector/src/compile.ts` wraps any `CompiledRouter` so every
   request runs inside its own `AsyncLocalStorage.run()` context — composable
   over `radixRouter`/`compiledCharRouter`/`mapCharRouter`/
   `makeRouterFromRoute`, or another `withALS` layer. Relies on `runPipeline`
@@ -153,7 +153,7 @@ before acting.
   all `withALS` ever needs to be, or whether request-scoped-context users hit
   cases (e.g. nested/derived contexts) that want more — unexercised so far.
 - **Propagating the HTTP architecture to other projections is unstarted**
-  (2026-07-17): `packages/http/src/route.ts` is now the reference pattern —
+  (2026-07-17): `packages/http-api-projector/src/route.ts` is now the reference pattern —
   generic `HttpRoute<H>`, `Node ⇒ ProtocolType` projection + rewriter
   pipeline, composable compiled dispatch, pipeline-fusion visitors, and now
   a shared `mapRoute` tree-visitor (see below). `mcp`, `cli`, `openapi`, and
@@ -162,7 +162,7 @@ before acting.
   unchanged — migrating them is still unstarted, not newly progressed this
   session).
 - **Sensible HTTP config defaults — built, unverified against a real app**
-  (2026-07-17, commit ed29b51): `createFetch` (`packages/http/src/preset.ts`)
+  (2026-07-17, commit ed29b51): `createFetch` (`packages/http-api-projector/src/preset.ts`)
   is now the single "just give me a working HTTP server" entry point —
   `PresetOptions` exposes toggles for `directives`, `validators`,
   `fusePipeline`/`skipEmptyInput` (both default `true`), `rewriters`,
@@ -173,7 +173,7 @@ before acting.
   this hasn't been exercised end-to-end in a real consumer app, so whether
   the chosen defaults and option shapes hold up under actual use is unverified.
 - **`mapRoute` — shared tree-visitor extracted for rewriters** (2026-07-17,
-  commit 7b4b9cc): `mapRoute(route, fn)` in `packages/http/src/route.ts` is a
+  commit 7b4b9cc): `mapRoute(route, fn)` in `packages/http-api-projector/src/route.ts` is a
   pre-order visitor that applies `fn` to each node and handles
   `children`/`fallback` recursion; `applyMethods`, `applyResponse`,
   `fusePipeline`, `skipEmptyInput` are now built on it instead of each
@@ -237,7 +237,7 @@ JSDoc. That codegen now exists: `packages/codegen/src/extract.ts` extracts
 discriminated unions, intersections, 3 branded-type patterns, recursion,
 `Promise` unwrapping, class privacy), and `packages/type-ir` projects those
 `TypeRef`s to 23 format targets (see the two SETTLED sections below). Whether
-the on-tree `Schema` scaffolding in `packages/api-tree`/`packages/http` has
+the on-tree `Schema` scaffolding in `packages/api-tree`/`packages/http-api-projector` has
 actually been swapped out for codegen-derived validators is a separate,
 still-open question — see "Integration into the consumer app is not started"
 below, which is about the *consumer app*, not this in-repo scaffolding; that
@@ -339,7 +339,7 @@ The extensible dispatch model is settled: augmentable `DispatchKinds` interface,
 batteries as plain matcher functions, declaration merging next to the tree,
 projector takes a dictionary + tree. See `docs/design/dispatch-extensibility.md`
 for the full model and pseudocode. Implementation: replace the closed
-`DispatchMarker` union and hardcoded if/else dispatch in `packages/http/src/project.ts`.
+`DispatchMarker` union and hardcoded if/else dispatch in `packages/http-api-projector/src/project.ts`.
 
 Note: dispatchers/matchers are interpreters — degenerate (non-nested) case
 of the interpreter pattern. The DU is the "AST", the projector does case
@@ -354,7 +354,7 @@ combinator in the routing expression model. See
 ### Migrate the fenced packages to the function-core model — RESOLVED (2026-07-11, commit 8e8329c)
 
 The function-core rewrite (`docs/design/function-core-and-projection.md`) landed
-as a vertical slice: `packages/api-tree` + `packages/http` are rewritten to the new
+as a vertical slice: `packages/api-tree` + `packages/http-api-projector` are rewritten to the new
 model (function category + Result + Kleisli/applicative combinators; the
 protocol-neutral D-tree `path`/`param`/`group`/`methods`/`route` + `app`; HTTP
 dispatch + `Result`→`Response` encoding), proven by `examples/library-api` (the
@@ -363,13 +363,13 @@ example directory is `examples/library-api`; `examples/todo-api` and
 `examples/dogfood` also do not exist on disk).
 
 Root `package.json` `workspaces` (verified 2026-07-11) is now:
-`packages/api-tree`, `packages/http`, `packages/mcp`, `packages/codegen`,
-`packages/openapi`, `packages/cli`, `packages/client`, `examples/library-api`.
+`packages/api-tree`, `packages/http-api-projector`, `packages/mcp-api-projector`, `packages/codegen`,
+`packages/openapi-api-projector`, `packages/cli-api-projector`, `packages/client-api-projector`, `examples/library-api`.
 **Every package in `packages/` is in the workspace — none are fenced out.**
-`packages/openapi` and `packages/client` were previously fenced but are back
-in; `packages/mcp` and `packages/cli` are new packages not mentioned in the
+`packages/openapi-api-projector` and `packages/client-api-projector` were previously fenced but are back
+in; `packages/mcp-api-projector` and `packages/cli-api-projector` are new packages not mentioned in the
 original fencing note at all. `examples/library-api` imports
-`@rhi-zone/fractal-mcp` and `@rhi-zone/fractal-codegen` directly, so at least
+`@rhi-zone/fractal-mcp-api-projector` and `@rhi-zone/fractal-codegen` directly, so at least
 those two are active, not just present.
 
 The open question this left — whether `openapi` and `client` had actually
@@ -377,7 +377,7 @@ been migrated to the function-core model, or were back in the workspace
 un-migrated — is now closed: the coordinated refactor (commit 8e8329c) touched
 `openapi`, `client`, `cli`, `codegen`, and `mcp` directly, updating each for
 the `fallback` field and DU-based `meta.http` shape (and rewriting
-`packages/client` as a self-contained enumerator mirroring `openapi`'s
+`packages/client-api-projector` as a self-contained enumerator mirroring `openapi`'s
 pattern). All packages work with the new node shape now; `npm test`/typecheck
 pass across all 8 workspaces (233 tests, 0 failures) per the commit.
 
@@ -407,7 +407,7 @@ Ordered roughly easiest → hardest to decide:
 6. **Decorator / metadata layer** — is there a need for a decorator-like
    pattern for cross-cutting metadata (auth, rate-limit, caching)?
 7. ~~**Per-param HTTP location**~~ — largely built (2026-07-17, commit
-   cc10c04): `packages/http/src/decode.ts` makes this explicit via named
+   cc10c04): `packages/http-api-projector/src/decode.ts` makes this explicit via named
    stores (`path`/`query`/`header`/`body`) plus a `primaryStoreForMethod`
    convention and a per-param `sourceMap` override on `Pipeline.sources`, so
    a param's source is either convention-derived or explicitly declared, not
@@ -444,7 +444,7 @@ Ordered roughly easiest → hardest to decide:
 ## Pending renames — DONE (2026-07-11, commit 8e8329c)
 
 - `by` → `kind` rename on the HTTP dispatch marker discriminant landed in
-  `packages/http/src/project.ts` as part of the coordinated refactor.
+  `packages/http-api-projector/src/project.ts` as part of the coordinated refactor.
 
 ## Pending removals — DONE (2026-07-11, commit 8e8329c)
 
@@ -458,7 +458,7 @@ All four items landed in the coordinated refactor (commit 8e8329c,
 - `ParamNode` type and `param()` constructor — removed; replaced by a
   `fallback?: { name, subtree }` field on `Node` (`children` is now
   `Record<string, Node>`). See `docs/design/router-model.md` § Node Shape.
-- `buildRoutes` / `compile` / flat route table in `packages/http/src/project.ts`
+- `buildRoutes` / `compile` / flat route table in `packages/http-api-projector/src/project.ts`
   — removed; the projector dispatches directly on the tree at request time
   (`candidatesForUrl` + `makeRouter(node)`, O(depth)), with a small full-tree
   scan reserved for the `legacyPath` escape hatch only. See
@@ -524,7 +524,7 @@ open. They're separate from the structural routing model settled in
 transforms only, not input binding.
 
 **Further update (2026-07-17, later)**: HTTP input extraction is now built,
-not just designed. `packages/http/src/decode.ts` (commit cc10c04) introduces
+not just designed. `packages/http-api-projector/src/decode.ts` (commit cc10c04) introduces
 a stores-based model — a request is exposed as uniform named key-value stores
 (`path`, `query`, `header`, `body`); `httpStores()` builds them, and
 `assemble()` reads each declared param from the right store by convention
@@ -569,7 +569,7 @@ own expression. See `docs/design/routing-expression-model.md`.
 
 Generating typed client SDKs directly from the tree (no OpenAPI intermediate).
 The tree already has the structure and types that Stainless infers from OpenAPI.
-`packages/client` proxy is a rough version of this. A natural projection.
+`packages/client-api-projector` proxy is a rough version of this. A natural projection.
 
 ### Projection-specific metadata is co-located, not external
 
@@ -593,7 +593,7 @@ See `docs/design/routing-expression-model.md`.
 
 `packages/api-tree/src/node.ts` used to have its own `dispatch()` — a
 protocol-neutral, path-segment-only tree walk (no method/header awareness) —
-while `packages/http/src/project.ts` had `buildRoutes`/`makeRouter`, the one
+while `packages/http-api-projector/src/project.ts` had `buildRoutes`/`makeRouter`, the one
 actually wired into the HTTP projection. Both were removed in the coordinated
 refactor: core's `dispatch()` was deleted outright (dead code, no production
 callers), and HTTP's `buildRoutes`/`makeRouter(routes)`/`Route[]` were replaced
@@ -604,12 +604,12 @@ two.
 **Superseded (2026-07-17, commit 18c5195)**: that single mechanism
 (`candidatesForUrl`/`makeRouterForNode`/`collectCandidates`/`findLegacyPath`/
 `MatchCondition`) was itself retired in favor of the `HttpRoute` pipeline —
-`makeRouter` in `packages/http/src/project.ts` now only accepts an
+`makeRouter` in `packages/http-api-projector/src/project.ts` now only accepts an
 `HttpRoute` (built via `naiveTransform` → `applyMethods`/`applyMoveTo`/
-`applyResponse` → `makeRouterFromRoute`, see `packages/http/src/route.ts`).
+`applyResponse` → `makeRouterFromRoute`, see `packages/http-api-projector/src/route.ts`).
 `autoMethodLayer` and `createFetch` migrated to the same pipeline.
 `verbFromTags` was extracted out of `project.ts` into the HTTP-specific
-`packages/http/src/tags.ts` in the same commit (it's not a core concern);
+`packages/http-api-projector/src/tags.ts` in the same commit (it's not a core concern);
 `project.ts`, `openapi`, and `client` re-import it from there without
 changing their import paths. There is still a single dispatch mechanism —
 this is a further consolidation, not a new fork.

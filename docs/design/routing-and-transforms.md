@@ -182,13 +182,13 @@ functions composed in order.
 ### `createApplyValidation` — generated validators, wired at runtime
 
 The `validate` slot (`Pipeline["validate"]`) is populated by codegen, not by
-hand. `packages/http/src/route.ts` exports the runtime half of that wiring —
+hand. `packages/http-api-projector/src/route.ts` exports the runtime half of that wiring —
 `createApplyValidation(validators: ValidatorMap)` — which closes over a full
 key → path → validator map and returns an `applyValidation(key, route)`
 rewriter:
 
 ```typescript
-import { createApplyValidation } from "@rhi-zone/fractal-http/route"
+import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
 
 const applyValidation = createApplyValidation({
   books: {
@@ -218,11 +218,11 @@ const routes = applyValidation("books", httpProjection(api))
   that method is preserved untouched.
 
 Example of what codegen would generate before any validators are authored
-for a tree (the stub case exercised in `packages/http/src/route.test.ts`):
+for a tree (the stub case exercised in `packages/http-api-projector/src/route.test.ts`):
 
 ```typescript
 // GENERATED — codegen output placeholder, no validators yet for this tree.
-import { createApplyValidation } from "@rhi-zone/fractal-http/route"
+import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
 
 export const applyValidation = createApplyValidation({}) // empty = pass-through
 ```
@@ -338,11 +338,11 @@ rewriters above via `composeTransforms`:
   (`handler.length === 0`), swaps in a no-op `decode`/`validate` so decode +
   validation are skipped entirely.
 
-Both are default-on in `createFetch` (see `packages/http/src/preset.ts`).
+Both are default-on in `createFetch` (see `packages/http-api-projector/src/preset.ts`).
 
 ## Composable route compilers (2026-07-17)
 
-`packages/http/src/compile.ts` provides independent `HttpRoute => (req) =>
+`packages/http-api-projector/src/compile.ts` provides independent `HttpRoute => (req) =>
 Promise<Response>` compilers:
 
 - `radixRouter` — radix-trie-based path matching

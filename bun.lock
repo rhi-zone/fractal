@@ -16,29 +16,29 @@
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-codegen": "workspace:*",
-        "@rhi-zone/fractal-http": "workspace:*",
-        "@rhi-zone/fractal-mcp": "workspace:*",
+        "@rhi-zone/fractal-http-api-projector": "workspace:*",
+        "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
       },
     },
     "packages/api-tree": {
       "name": "@rhi-zone/fractal-api-tree",
       "version": "0.1.0-alpha.0",
     },
-    "packages/cli": {
-      "name": "@rhi-zone/fractal-cli",
+    "packages/cli-api-projector": {
+      "name": "@rhi-zone/fractal-cli-api-projector",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-codegen": "workspace:*",
       },
     },
-    "packages/client": {
-      "name": "@rhi-zone/fractal-client",
+    "packages/client-api-projector": {
+      "name": "@rhi-zone/fractal-client-api-projector",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-example-library-api": "workspace:*",
-        "@rhi-zone/fractal-http": "workspace:*",
+        "@rhi-zone/fractal-http-api-projector": "workspace:*",
       },
     },
     "packages/codegen": {
@@ -53,34 +53,34 @@
       },
       "devDependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
-        "@rhi-zone/fractal-mcp": "workspace:*",
+        "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
         "@sinclair/typebox": "^0.34.41",
       },
     },
-    "packages/http": {
-      "name": "@rhi-zone/fractal-http",
+    "packages/http-api-projector": {
+      "name": "@rhi-zone/fractal-http-api-projector",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
       },
     },
-    "packages/mcp": {
-      "name": "@rhi-zone/fractal-mcp",
+    "packages/mcp-api-projector": {
+      "name": "@rhi-zone/fractal-mcp-api-projector",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
       },
       "devDependencies": {
-        "@rhi-zone/fractal-http": "workspace:*",
+        "@rhi-zone/fractal-http-api-projector": "workspace:*",
       },
     },
-    "packages/openapi": {
-      "name": "@rhi-zone/fractal-openapi",
+    "packages/openapi-api-projector": {
+      "name": "@rhi-zone/fractal-openapi-api-projector",
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-codegen": "workspace:*",
-        "@rhi-zone/fractal-http": "workspace:*",
+        "@rhi-zone/fractal-http-api-projector": "workspace:*",
       },
     },
     "packages/type-ir": {
@@ -91,19 +91,19 @@
   "packages": {
     "@rhi-zone/fractal-api-tree": ["@rhi-zone/fractal-api-tree@workspace:packages/api-tree"],
 
-    "@rhi-zone/fractal-cli": ["@rhi-zone/fractal-cli@workspace:packages/cli"],
+    "@rhi-zone/fractal-cli-api-projector": ["@rhi-zone/fractal-cli-api-projector@workspace:packages/cli-api-projector"],
 
-    "@rhi-zone/fractal-client": ["@rhi-zone/fractal-client@workspace:packages/client"],
+    "@rhi-zone/fractal-client-api-projector": ["@rhi-zone/fractal-client-api-projector@workspace:packages/client-api-projector"],
 
     "@rhi-zone/fractal-codegen": ["@rhi-zone/fractal-codegen@workspace:packages/codegen"],
 
     "@rhi-zone/fractal-example-library-api": ["@rhi-zone/fractal-example-library-api@workspace:examples/library-api"],
 
-    "@rhi-zone/fractal-http": ["@rhi-zone/fractal-http@workspace:packages/http"],
+    "@rhi-zone/fractal-http-api-projector": ["@rhi-zone/fractal-http-api-projector@workspace:packages/http-api-projector"],
 
-    "@rhi-zone/fractal-mcp": ["@rhi-zone/fractal-mcp@workspace:packages/mcp"],
+    "@rhi-zone/fractal-mcp-api-projector": ["@rhi-zone/fractal-mcp-api-projector@workspace:packages/mcp-api-projector"],
 
-    "@rhi-zone/fractal-openapi": ["@rhi-zone/fractal-openapi@workspace:packages/openapi"],
+    "@rhi-zone/fractal-openapi-api-projector": ["@rhi-zone/fractal-openapi-api-projector@workspace:packages/openapi-api-projector"],
 
     "@rhi-zone/fractal-type-ir": ["@rhi-zone/fractal-type-ir@workspace:packages/type-ir"],
 

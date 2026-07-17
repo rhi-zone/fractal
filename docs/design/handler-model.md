@@ -4,8 +4,8 @@
 
 ## Status
 
-Implemented across five packages: `@rhi-zone/fractal-api-tree`, `@rhi-zone/fractal-http`,
-`@rhi-zone/fractal-openapi`, `@rhi-zone/fractal-client`, and `@rhi-zone/fractal-codegen`.
+Implemented across five packages: `@rhi-zone/fractal-api-tree`, `@rhi-zone/fractal-http-api-projector`,
+`@rhi-zone/fractal-openapi-api-projector`, `@rhi-zone/fractal-client-api-projector`, and `@rhi-zone/fractal-codegen`.
 Verified by typecheck + test + build (100 tests pass). This document describes the
 CURRENT model.
 
@@ -20,17 +20,17 @@ model is **retired** — all packages that implemented it are deleted.
 
 ```
 @rhi-zone/fractal-api-tree       Handler<R>, combinators, .meta types, drift-guard substrate
-@rhi-zone/fractal-http       toFetch, response builders, validated, returns, ./adapter
-@rhi-zone/fractal-openapi    toOpenApi — projects an OpenAPI 3.x doc from .meta
+@rhi-zone/fractal-http-api-projector       toFetch, response builders, validated, returns, ./adapter
+@rhi-zone/fractal-openapi-api-projector    toOpenApi — projects an OpenAPI 3.x doc from .meta
 @rhi-zone/fractal-codegen    generate — emits typed client.ts + server.ts from the doc
                              fractal watch — dev-loop file watcher (regenerate on save)
-@rhi-zone/fractal-client     typed HTTP client factory (consumes generated client.ts)
+@rhi-zone/fractal-client-api-projector     typed HTTP client factory (consumes generated client.ts)
 ```
 
 The load-bearing split: **core is surface-agnostic**; http is the WHATWG surface.
 Core imports nothing — no `Request`/`Response`, no Bun, no Node (verified:
 `packages/api-tree/src/index.ts` has no external imports). `Request`/`Response` enter at
-`@rhi-zone/fractal-http`, which also imports nothing from Bun or Node (`./adapter`
+`@rhi-zone/fractal-http-api-projector`, which also imports nothing from Bun or Node (`./adapter`
 is the sole runtime touch and is not imported by `index.ts`).
 
 Note: `Handler<R>` takes a `Request & { ctx: R }` argument — WHATWG `Request` is
@@ -89,7 +89,7 @@ All combinators live in `@rhi-zone/fractal-api-tree` and return a `Reflected<M, 
 The `"provide"` meta is walked THROUGH by every projection (OpenAPI params, the
 generated client's call args, the drift `RouteUnion`) without surfacing its key —
 the VAR-vs-PATH-PARAM split that keeps a var off the client contract. (Observing
-middleware — `logger` / `cors` / `errorBoundary` in `@rhi-zone/fractal-http` — are
+middleware — `logger` / `cors` / `errorBoundary` in `@rhi-zone/fractal-http-api-projector` — are
 plain `Handler<R> → Handler<R>` wrappers that change no ctx and PRESERVE `.meta`.)
 
 `methods` PASSES on a verb miss (returns `undefined`) — it never emits 405.
@@ -120,7 +120,7 @@ entry point. It wraps the handler to:
 ## Body validation — `validated` and `returns`
 
 ```ts
-// @rhi-zone/fractal-http
+// @rhi-zone/fractal-http-api-projector
 validated(schema: StandardSchemaV1, fn: (value, req) => Response | undefined): ValidatedHandler<I>
 returns(handler: Handler, outSchema): ReturnsHandler<O>
 ```
@@ -134,7 +134,7 @@ type — a schema producing the wrong shape is a compile error.
 The OpenAPI projection and codegen read this as the response schema; it does NOT
 affect runtime dispatch. `validated` + `returns` can be composed in either order;
 the second call merges into `__schema` rather than overwriting (verified:
-`packages/http/src/index.test.ts`, "validated + returns __schema merge" suite).
+`packages/http-api-projector/src/index.test.ts`, "validated + returns __schema merge" suite).
 
 ---
 
@@ -142,7 +142,7 @@ the second call merges into `__schema` rather than overwriting (verified:
 
 ```
 app (Reflected<M>)
-  → toOpenApi(app, info)        @rhi-zone/fractal-openapi
+  → toOpenApi(app, info)        @rhi-zone/fractal-openapi-api-projector
   → generate(doc, opts)         @rhi-zone/fractal-codegen
   → client.ts + server.ts
 ```

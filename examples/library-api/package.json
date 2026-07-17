@@ -18,8 +18,8 @@
   },
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
-    "@rhi-zone/fractal-http": "workspace:*",
-    "@rhi-zone/fractal-mcp": "workspace:*",
+    "@rhi-zone/fractal-http-api-projector": "workspace:*",
+    "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
     "@rhi-zone/fractal-codegen": "workspace:*"
   }
 }

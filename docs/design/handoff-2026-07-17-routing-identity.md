@@ -76,7 +76,7 @@ access. Pipeline lives on HttpRoute.
 
 ### Code (committed)
 
-- `packages/http/src/route.ts` — `HttpRoute` type, `naiveTransform`,
+- `packages/http-api-projector/src/route.ts` — `HttpRoute` type, `naiveTransform`,
   `applyMethods`, `applyMoveTo`, `applyResponse`, `composeTransforms`,
   `makeRouterFromRoute`. 23 tests, all passing. Commit `d0f1329`.
 - Design docs updated: `invariants.md` (Identity section),

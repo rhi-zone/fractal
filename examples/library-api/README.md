@@ -43,8 +43,8 @@ Patterns demonstrated:
 
 ```ts
 import { api, httpRoutes } from "./src/tree.ts"
-import { createFetch } from "@rhi-zone/fractal-http/preset"
-import { toTools } from "@rhi-zone/fractal-mcp"
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 
 const fetch = createFetch(api)
 const res = await fetch(new Request("http://localhost/books/list"))

@@ -7,7 +7,7 @@
 //   4. exotic type (union) punts to `unknown` with a TODO $comment
 
 import { describe, expect, it } from "bun:test"
-import { toTools } from "@rhi-zone/fractal-mcp"
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import {

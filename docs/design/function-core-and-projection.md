@@ -524,7 +524,7 @@ new model removes):
 
 **Salvage** (read critically — these are infrastructure, not blessed model):
 
-- The **WHATWG Request/Response adapter** — `packages/http/src/adapter.ts`
+- The **WHATWG Request/Response adapter** — `packages/http-api-projector/src/adapter.ts`
   (`serveBun` / `serveNode`). Runtime-agnostic, model-independent.
 - **`toFetch`'s correctness *behaviour*** — 404 / 405 + `Allow` (verb union across
   matching routes) / auto-HEAD-from-GET / OPTIONS 204+`Allow`. The *logic* is

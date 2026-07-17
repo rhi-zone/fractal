@@ -53,7 +53,7 @@ and also accepts an explicit `(key, authenticate, inner)` form.
 
 ### toFetch — the discharge gate + HTTP-correctness projection
 
-`toFetch(app)` (in `@rhi-zone/fractal-http`) requires `Handler<{}>` — every param AND var
+`toFetch(app)` (in `@rhi-zone/fractal-http-api-projector`) requires `Handler<{}>` — every param AND var
 must be discharged, else a compile error. It PROJECTS HTTP correctness from `.meta` AFTER
 dispatch returns `undefined`: 405 + `Allow`, auto-HEAD-from-GET, OPTIONS (204 + Allow),
 and the 404-vs-405 distinction. Dispatch combinators stay meta-free; only the projections
@@ -74,7 +74,7 @@ route does not change its client signature.**
 
 ```
 handler tree (truth: typeof app, .meta)
-   → toOpenApi  (packages/openapi, walks .meta)        → OpenAPI 3.x doc
+   → toOpenApi  (packages/openapi-api-projector, walks .meta)        → OpenAPI 3.x doc
    → codegen generate() (packages/codegen)             → client.ts + server.ts + DRIFT GUARD
 ```
 
@@ -179,7 +179,7 @@ than Hono + Elysia combined — the backlog below is the path there.
 ### 1. Typed `query(...)` combinator — HIGHEST VALUE
 Query params have no typed story today: they are read by hand off
 `new URL(req.url).searchParams` and never reach OpenAPI or the client. Plumbing is
-half-present: `ParameterObject` in `packages/openapi/src/index.ts` already supports
+half-present: `ParameterObject` in `packages/openapi-api-projector/src/index.ts` already supports
 `in: "query"`, but the projection only emits `in: "path"` (around line 302), and codegen's
 `paramsType` filters to `in === "path"` (`packages/codegen/src/index.ts` line 138).
 **Open design question:** query params are optional/typed/coerced — how do they ride
