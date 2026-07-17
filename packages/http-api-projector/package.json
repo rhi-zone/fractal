@@ -46,6 +46,10 @@
     "./client": {
       "types": "./src/client.ts",
       "import": "./src/client.ts"
+    },
+    "./codegen": {
+      "types": "./src/codegen.ts",
+      "import": "./src/codegen.ts"
     }
   },
   "files": ["src"],
