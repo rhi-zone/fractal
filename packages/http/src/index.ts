@@ -12,7 +12,7 @@ export { http } from "./verbs.ts"
 export type { HttpMethods, Method, VerbBundle } from "./verbs.ts"
 export { crud, httpProjection } from "./dx.ts"
 export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
-export { createApplyValidation } from "./route.ts"
+export { createApplyValidation, fusePipeline, skipEmptyInput } from "./route.ts"
 export type { Validator, ValidatorMap } from "./route.ts"
 export {
   chainMatchers,

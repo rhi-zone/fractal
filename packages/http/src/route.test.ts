@@ -12,13 +12,16 @@ import {
   applyResponse,
   composeTransforms,
   createApplyValidation,
+  fusePipeline,
   httpRoute,
   isHttpRoute,
   makeRouterFromRoute,
   naiveTransform,
+  skipEmptyInput,
 } from "./route.ts"
 import type { HttpRoute, Pipeline, Validator, ValidatorMap } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
+import { radixRouter } from "./compile.ts"
 
 // ============================================================================
 // naiveTransform — basic tree → HttpRoute conversion
@@ -934,5 +937,297 @@ describe("createApplyValidation", () => {
     const router = makeRouterFromRoute(result)
     const res = await router(new Request("http://localhost/books"))
     expect(await res.json()).toEqual({ handAuthored: true, generated: true })
+  })
+})
+
+// ============================================================================
+// fusePipeline — composes transform arrays down to at most one entry each
+// ============================================================================
+
+describe("fusePipeline", () => {
+  it("no-ops on an empty pipeline", () => {
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => ({}), meta: {} } },
+      meta: {},
+    })
+    const fused = fusePipeline(route)
+    expect(fused.methods?.GET?.pipeline).toBeUndefined()
+  })
+
+  it("no-ops on single-element arrays (already fused)", () => {
+    const reqTransform = (req: Request) => req
+    const pipeline: Pipeline = { reqTransforms: [reqTransform] }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => ({}), meta: {}, pipeline } },
+      meta: {},
+    })
+    const fused = fusePipeline(route)
+    expect(fused.methods?.GET?.pipeline?.reqTransforms).toHaveLength(1)
+    expect(fused.methods?.GET?.pipeline?.reqTransforms?.[0]).toBe(reqTransform)
+  })
+
+  it("fuses multiple reqTransforms/inputTransforms/outputTransforms/resTransforms into one entry each, same behavior as unfused", async () => {
+    const order: string[] = []
+    const pipeline: Pipeline = {
+      reqTransforms: [
+        (req: Request) => { order.push("req1"); return req },
+        (req: Request) => { order.push("req2"); return req },
+      ],
+      inputTransforms: [
+        (input: unknown) => { order.push("in1"); return { ...(input as object), a: 1 } },
+        (input: unknown) => { order.push("in2"); return { ...(input as object), b: 2 } },
+      ],
+      outputTransforms: [
+        (output: unknown) => { order.push("out1"); return { ...(output as object), c: 3 } },
+        (output: unknown) => { order.push("out2"); return { ...(output as object), d: 4 } },
+      ],
+      resTransforms: [
+        (res: Response) => { order.push("res1"); return res },
+        (res: Response) => { order.push("res2"); return res },
+      ],
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (input: unknown) => input, meta: {}, pipeline } },
+      meta: {},
+    })
+    const fused = fusePipeline(route)
+    expect(fused.methods?.GET?.pipeline?.reqTransforms).toHaveLength(1)
+    expect(fused.methods?.GET?.pipeline?.inputTransforms).toHaveLength(1)
+    expect(fused.methods?.GET?.pipeline?.outputTransforms).toHaveLength(1)
+    expect(fused.methods?.GET?.pipeline?.resTransforms).toHaveLength(1)
+
+    const router = makeRouter(fused)
+    const res = await router(new Request("http://localhost/"))
+    const body = await res.json()
+    expect(body).toEqual({ a: 1, b: 2, c: 3, d: 4 })
+    expect(order).toEqual(["req1", "req2", "in1", "in2", "out1", "out2", "res1", "res2"])
+  })
+
+  it("fuses multiple validators into one sequential validator, same behavior as unfused", async () => {
+    const pipeline: Pipeline = {
+      validate: [
+        (bag) => ({ kind: "ok", value: { ...bag, step1: true } }),
+        (bag) => ({ kind: "ok", value: { ...bag, step2: true } }),
+      ],
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (input: unknown) => input, meta: {}, pipeline } },
+      meta: {},
+    })
+    const fused = fusePipeline(route)
+    expect(fused.methods?.GET?.pipeline?.validate).toHaveLength(1)
+
+    const router = makeRouter(fused)
+    const res = await router(new Request("http://localhost/?x=1"))
+    expect(await res.json()).toEqual({ x: "1", step1: true, step2: true })
+  })
+
+  it("fused validators still short-circuit on the first Err", async () => {
+    let secondRan = false
+    const pipeline: Pipeline = {
+      validate: [
+        () => ({ kind: "err", error: "nope" }),
+        (bag) => { secondRan = true; return { kind: "ok", value: bag } },
+      ],
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => ({ ok: true }), meta: {}, pipeline } },
+      meta: {},
+    })
+    const fused = fusePipeline(route)
+    const router = makeRouter(fused)
+    const res = await router(new Request("http://localhost/"))
+    expect(res.status).toBe(400)
+    expect(secondRan).toBe(false)
+  })
+
+  it("leaves decode, encode, sources unchanged", () => {
+    const decode = async (req: Request) => ({ text: await req.text() })
+    const encode = (output: unknown) => new Response(JSON.stringify(output))
+    const sources: Pipeline["sources"] = { paramNames: ["x"] }
+    const pipeline: Pipeline = { decode, encode, sources }
+    const route = httpRoute({
+      methods: { GET: { handler: (input: unknown) => input, meta: {}, pipeline } },
+      meta: {},
+    })
+    const fused = fusePipeline(route)
+    expect(fused.methods?.GET?.pipeline?.decode).toBe(decode)
+    expect(fused.methods?.GET?.pipeline?.encode).toBe(encode)
+    expect(fused.methods?.GET?.pipeline?.sources).toBe(sources)
+  })
+
+  it("recurses into children and fallback", () => {
+    const pipeline: Pipeline = {
+      inputTransforms: [(i) => i, (i) => i],
+    }
+    const route = httpRoute({
+      meta: {},
+      children: {
+        items: httpRoute({
+          methods: { GET: { handler: (_: unknown) => ({}), meta: {}, pipeline } },
+          meta: {},
+        }),
+      },
+      fallback: {
+        name: "id",
+        subtree: httpRoute({
+          methods: { GET: { handler: (_: unknown) => ({}), meta: {}, pipeline } },
+          meta: {},
+        }),
+      },
+    })
+    const fused = fusePipeline(route)
+    expect(fused.children?.items?.methods?.GET?.pipeline?.inputTransforms).toHaveLength(1)
+    expect(fused.fallback?.subtree.methods?.GET?.pipeline?.inputTransforms).toHaveLength(1)
+  })
+
+  it("composes with makeRouterFromRoute and compiled routers (radixRouter)", async () => {
+    const pipeline: Pipeline = {
+      inputTransforms: [
+        (input) => ({ ...(input as object), a: 1 }),
+        (input) => ({ ...(input as object), b: 2 }),
+      ],
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (input: unknown) => input, meta: {}, pipeline } },
+      meta: {},
+    })
+    const fused = fusePipeline(route)
+
+    const plainRouter = makeRouterFromRoute(fused)
+    const plainRes = await plainRouter(new Request("http://localhost/"))
+    expect(await plainRes.json()).toEqual({ a: 1, b: 2 })
+
+    const compiled = radixRouter(fused)
+    const compiledRes = await compiled(new Request("http://localhost/"))
+    expect(await compiledRes.json()).toEqual({ a: 1, b: 2 })
+  })
+})
+
+// ============================================================================
+// skipEmptyInput — skips decode/validate for 0-param handlers
+// ============================================================================
+
+describe("skipEmptyInput", () => {
+  it("swaps in a no-op decode/validate for a 0-param handler", async () => {
+    let sawInput: unknown = "unset"
+    // A genuinely 0-arg handler at runtime — the check this test targets is
+    // `handler.length === 0`, so the arrow function must actually declare no
+    // parameters (a `(input: unknown) => …` handler that merely ignores its
+    // argument would NOT trigger the fast path).
+    const zeroArgRoute = httpRoute({
+      methods: { POST: { handler: () => { sawInput = "called"; return { ok: true } }, meta: {} } },
+      meta: {},
+    })
+    expect(zeroArgRoute.methods?.POST?.handler.length).toBe(0)
+
+    const skipped = skipEmptyInput(zeroArgRoute)
+    expect(skipped.methods?.POST?.pipeline?.decode).toBeDefined()
+    expect(skipped.methods?.POST?.pipeline?.validate).toEqual([])
+
+    const router = makeRouter(skipped)
+    const res = await router(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not valid json at all {{{",
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(sawInput).toBe("called")
+  })
+
+  it("leaves handlers that declare a parameter untouched", () => {
+    const route = httpRoute({
+      methods: { GET: { handler: (input: unknown) => input, meta: {} } },
+      meta: {},
+    })
+    const skipped = skipEmptyInput(route)
+    expect(skipped.methods?.GET?.pipeline).toBeUndefined()
+  })
+
+  it("does not clobber other pipeline fields already present", async () => {
+    const outputTransform = (output: unknown) => ({ wrapped: output })
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: () => ({ ok: true }),
+          meta: {},
+          pipeline: { outputTransforms: [outputTransform] },
+        },
+      },
+      meta: {},
+    })
+    const skipped = skipEmptyInput(route)
+    expect(skipped.methods?.GET?.pipeline?.outputTransforms).toEqual([outputTransform])
+    expect(skipped.methods?.GET?.pipeline?.validate).toEqual([])
+
+    const router = makeRouter(skipped)
+    const res = await router(new Request("http://localhost/"))
+    expect(await res.json()).toEqual({ wrapped: { ok: true } })
+  })
+
+  it("recurses into children and fallback", () => {
+    const route = httpRoute({
+      meta: {},
+      children: {
+        ping: httpRoute({
+          methods: { GET: { handler: () => ({ pong: true }), meta: {} } },
+          meta: {},
+        }),
+      },
+      fallback: {
+        name: "id",
+        subtree: httpRoute({
+          methods: { GET: { handler: () => ({ pong: true }), meta: {} } },
+          meta: {},
+        }),
+      },
+    })
+    const skipped = skipEmptyInput(route)
+    expect(skipped.children?.ping?.methods?.GET?.pipeline?.validate).toEqual([])
+    expect(skipped.fallback?.subtree.methods?.GET?.pipeline?.validate).toEqual([])
+  })
+
+  it("composes with makeRouterFromRoute and compiled routers (radixRouter)", async () => {
+    const route = httpRoute({
+      methods: { GET: { handler: () => ({ ok: true }), meta: {} } },
+      meta: {},
+    })
+    const skipped = skipEmptyInput(route)
+
+    const plainRouter = makeRouterFromRoute(skipped)
+    const plainRes = await plainRouter(new Request("http://localhost/"))
+    expect(await plainRes.json()).toEqual({ ok: true })
+
+    const compiled = radixRouter(skipped)
+    const compiledRes = await compiled(new Request("http://localhost/"))
+    expect(await compiledRes.json()).toEqual({ ok: true })
+  })
+
+  it("composes with fusePipeline via composeTransforms", async () => {
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: () => ({ ok: true }),
+          meta: {},
+          pipeline: {
+            outputTransforms: [
+              (o) => ({ ...(o as object), a: 1 }),
+              (o) => ({ ...(o as object), b: 2 }),
+            ],
+          },
+        },
+      },
+      meta: {},
+    })
+    const transform = composeTransforms(skipEmptyInput, fusePipeline)
+    const result = transform(route)
+    expect(result.methods?.GET?.pipeline?.outputTransforms).toHaveLength(1)
+    expect(result.methods?.GET?.pipeline?.validate).toEqual([])
+
+    const router = makeRouter(result)
+    const res = await router(new Request("http://localhost/"))
+    expect(await res.json()).toEqual({ ok: true, a: 1, b: 2 })
   })
 })

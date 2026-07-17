@@ -653,6 +653,142 @@ export function createApplyValidation(
 }
 
 // ============================================================================
+// 2e. fusePipeline / skipEmptyInput — optional build-time optimizations.
+//
+// Both are plain `HttpRoute => HttpRoute` tree visitors, composable with the
+// rewriters above via `composeTransforms`. Neither changes the shape of
+// `Pipeline` or a method entry's key set / handler type, so — like
+// `injectValidators` above — they're generic-identity in `R`: whatever
+// precision the input tree carries survives untouched.
+//
+// - `fusePipeline` composes each transform array (`reqTransforms`,
+//   `inputTransforms`, `outputTransforms`, `resTransforms`, `validate`) down
+//   to at most one entry, so `runPipeline`'s per-request loops degrade to a
+//   single call instead of N. `decode`/`encode`/`sources` are untouched —
+//   they're already single functions/objects, nothing to fuse.
+// - `skipEmptyInput` finds method entries whose handler declares zero
+//   parameters (`handler.length === 0` — the runtime arity of the actual JS
+//   function, which can be fewer than the `Handler` type's single `input`
+//   parameter suggests, since a 0-arg function is assignable to a 1-arg
+//   function type) and swaps in a no-op `decode`/`validate` so
+//   `runPipeline`'s decode + validate stages skip real work for those routes.
+// ============================================================================
+
+/** Compose `fns` down to a single `(value, meta) => value` — a no-op when `fns` has 0 or 1 entries. */
+function fuseTransforms<T>(
+  fns: ReadonlyArray<(value: T, meta: Meta) => T | Promise<T>>,
+): Array<(value: T, meta: Meta) => T | Promise<T>> {
+  if (fns.length <= 1) return [...fns]
+  return [
+    async (value: T, meta: Meta) => {
+      let acc = value
+      for (const fn of fns) acc = await fn(acc, meta)
+      return acc
+    },
+  ]
+}
+
+/**
+ * Compose `validators` down to a single sequential validator — a no-op when
+ * `validators` has 0 or 1 entries. Preserves the documented semantics
+ * (each `Ok` value feeds the next validator; the first `Err` short-circuits).
+ */
+function fuseValidators(
+  validators: NonNullable<Pipeline["validate"]>,
+): NonNullable<Pipeline["validate"]> {
+  if (validators.length <= 1) return [...validators]
+  return [
+    async (input: Record<string, unknown>) => {
+      let current = input
+      for (const validator of validators) {
+        const result = await validator(current)
+        if (result.kind === "err") return result
+        current = result.value as Record<string, unknown>
+      }
+      return { kind: "ok", value: current }
+    },
+  ]
+}
+
+function fusePipelineOf(pipeline: Pipeline): Pipeline {
+  return {
+    ...pipeline,
+    ...(pipeline.reqTransforms !== undefined
+      ? { reqTransforms: fuseTransforms(pipeline.reqTransforms) }
+      : {}),
+    ...(pipeline.inputTransforms !== undefined
+      ? { inputTransforms: fuseTransforms(pipeline.inputTransforms) }
+      : {}),
+    ...(pipeline.outputTransforms !== undefined
+      ? { outputTransforms: fuseTransforms(pipeline.outputTransforms) }
+      : {}),
+    ...(pipeline.resTransforms !== undefined
+      ? { resTransforms: fuseTransforms(pipeline.resTransforms) }
+      : {}),
+    ...(pipeline.validate !== undefined ? { validate: fuseValidators(pipeline.validate) } : {}),
+  }
+}
+
+/**
+ * Build-time optimization: composes every transform array on every method
+ * entry's pipeline down to at most one entry (see module doc above).
+ * Behaviorally identical to the unfused pipeline — `runPipeline` just loops
+ * over fewer, pre-composed functions.
+ */
+export function fusePipeline<R extends HttpRoute>(route: R): R {
+  let methods = route.methods
+  if (methods !== undefined) {
+    methods = Object.fromEntries(
+      Object.entries(methods).map(([key, entry]) => [
+        key,
+        entry.pipeline !== undefined
+          ? { ...entry, pipeline: fusePipelineOf(entry.pipeline) }
+          : entry,
+      ]),
+    )
+  }
+  const children = route.children !== undefined
+    ? Object.fromEntries(Object.entries(route.children).map(([k, c]) => [k, fusePipeline(c)]))
+    : undefined
+  const fallback = route.fallback !== undefined
+    ? { name: route.fallback.name, subtree: fusePipeline(route.fallback.subtree) }
+    : undefined
+  return httpRoute({ methods, children, fallback, meta: route.meta }) as R
+}
+
+/** No-op decode for 0-param handlers: skips real decode work, produces an empty bag. */
+function emptyDecode(): Record<string, unknown> {
+  return {}
+}
+
+/**
+ * Build-time optimization: for every method entry whose handler takes no
+ * parameters (`handler.length === 0`), replaces `decode`/`validate` with a
+ * no-op so `runPipeline` skips real decode + validation work for that route.
+ * Entries whose handler declares a parameter are left untouched.
+ */
+export function skipEmptyInput<R extends HttpRoute>(route: R): R {
+  let methods = route.methods
+  if (methods !== undefined) {
+    methods = Object.fromEntries(
+      Object.entries(methods).map(([key, entry]) => [
+        key,
+        entry.handler.length === 0
+          ? { ...entry, pipeline: { ...entry.pipeline, decode: emptyDecode, validate: [] } }
+          : entry,
+      ]),
+    )
+  }
+  const children = route.children !== undefined
+    ? Object.fromEntries(Object.entries(route.children).map(([k, c]) => [k, skipEmptyInput(c)]))
+    : undefined
+  const fallback = route.fallback !== undefined
+    ? { name: route.fallback.name, subtree: skipEmptyInput(route.fallback.subtree) }
+    : undefined
+  return httpRoute({ methods, children, fallback, meta: route.meta }) as R
+}
+
+// ============================================================================
 // 3. composeTransforms — chain rewriters into a single Tree => Tree
 // ============================================================================
 
