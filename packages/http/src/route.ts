@@ -216,6 +216,47 @@ export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
 }
 
 // ============================================================================
+// Shared visitor — walks children/fallback so individual rewriters only need
+// to express their own per-node transform.
+// ============================================================================
+
+/**
+ * Pre-order tree visitor shared by the rewriters below that don't need extra
+ * context (path accumulation, etc.) beyond the current node. `fn` transforms
+ * a single node — its own `methods`/`meta`/`pipeline` — and returns it;
+ * `mapRoute` is responsible for the recursion into `children`/`fallback`,
+ * applying `fn` to `route` FIRST, then recursing into the fields of the
+ * result. Pre-order (rather than post-order) is the right choice here
+ * because none of `applyMethods`/`applyResponse`/`fusePipeline`/
+ * `skipEmptyInput` read a node's children to decide how to transform that
+ * node — each only inspects the node's own `methods`/`meta` — so the two
+ * orders are behaviorally identical for them; pre-order is picked because
+ * it lets `fn` return an entirely different node (e.g. with pre-fused
+ * `methods`) before its children are visited, matching how each rewriter
+ * already reads (transform self, then thread through children/fallback).
+ *
+ * Not generic over `HttpRoute<H>`'s handler-type parameter — like
+ * `applyMoveTo`, a caller-supplied `fn: HttpRoute => HttpRoute` can't
+ * preserve a specific `H` through the type system without re-deriving a
+ * mapped type per call site (see `ApplyMethodsRoute`/`ApplyResponseRoute`
+ * above), which is exactly why `applyMethods`/`applyResponse` keep their own
+ * hand-written recursion instead of delegating to `mapRoute` — they need the
+ * type-preserving variant. `mapRoute` is the erased-type building block for
+ * rewriters that don't need that precision (`fusePipeline`, `skipEmptyInput`,
+ * and any user-authored rewriter reaching for it via the package export).
+ */
+export function mapRoute(route: HttpRoute, fn: (node: HttpRoute) => HttpRoute): HttpRoute {
+  const mapped = fn(route)
+  const children = mapped.children !== undefined
+    ? Object.fromEntries(Object.entries(mapped.children).map(([k, c]) => [k, mapRoute(c, fn)]))
+    : undefined
+  const fallback = mapped.fallback !== undefined
+    ? { name: mapped.fallback.name, subtree: mapRoute(mapped.fallback.subtree, fn) }
+    : undefined
+  return httpRoute({ methods: mapped.methods, children, fallback, meta: mapped.meta })
+}
+
+// ============================================================================
 // 2a. applyMethods — reads `{ kind: "method", value }` directives from a
 // method entry's own meta and renames the method key accordingly (POST, the
 // naiveTransform default, becomes GET/PUT/DELETE/…).
@@ -246,29 +287,25 @@ export type ApplyMethodsRoute<R extends HttpRoute> =
   & { readonly meta: Meta }
 
 export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R> {
-  let methods = route.methods
-  if (methods !== undefined) {
-    const rebuilt: Record<string, { handler: Handler; meta: Meta }> = {}
-    let changed = false
-    for (const [key, entry] of Object.entries(methods)) {
-      const directive = directivesOf(entry.meta).find(
-        (d): d is Extract<HttpDirective, { kind: "method" }> => d.kind === "method",
-      )
-      const newKey = directive !== undefined ? directive.value.toUpperCase() : key
-      if (newKey !== key) changed = true
-      rebuilt[newKey] = directive !== undefined
-        ? { handler: entry.handler, meta: withoutDirective(entry.meta, directive) }
-        : entry
+  return mapRoute(route, (node) => {
+    let methods = node.methods
+    if (methods !== undefined) {
+      const rebuilt: Record<string, { handler: Handler; meta: Meta }> = {}
+      let changed = false
+      for (const [key, entry] of Object.entries(methods)) {
+        const directive = directivesOf(entry.meta).find(
+          (d): d is Extract<HttpDirective, { kind: "method" }> => d.kind === "method",
+        )
+        const newKey = directive !== undefined ? directive.value.toUpperCase() : key
+        if (newKey !== key) changed = true
+        rebuilt[newKey] = directive !== undefined
+          ? { handler: entry.handler, meta: withoutDirective(entry.meta, directive) }
+          : entry
+      }
+      methods = changed ? rebuilt : methods
     }
-    methods = changed ? rebuilt : methods
-  }
-  const children = route.children !== undefined
-    ? Object.fromEntries(Object.entries(route.children).map(([k, c]) => [k, applyMethods(c)]))
-    : undefined
-  const fallback = route.fallback !== undefined
-    ? { name: route.fallback.name, subtree: applyMethods(route.fallback.subtree) }
-    : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta }) as ApplyMethodsRoute<R>
+    return httpRoute({ methods, children: node.children, fallback: node.fallback, meta: node.meta })
+  }) as ApplyMethodsRoute<R>
 }
 
 // ============================================================================
@@ -505,33 +542,29 @@ export type ApplyResponseRoute<R extends HttpRoute> =
   & { readonly meta: Meta }
 
 export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute<R> {
-  let methods = route.methods
-  if (methods !== undefined) {
-    const rebuilt: Record<string, { handler: Handler; meta: Meta }> = {}
-    let changed = false
-    for (const [key, entry] of Object.entries(methods)) {
-      const directive = directivesOf(entry.meta).find(
-        (d): d is Extract<HttpDirective, { kind: "response" }> => d.kind === "response",
-      )
-      if (directive === undefined) {
-        rebuilt[key] = entry
-        continue
+  return mapRoute(route, (node) => {
+    let methods = node.methods
+    if (methods !== undefined) {
+      const rebuilt: Record<string, { handler: Handler; meta: Meta }> = {}
+      let changed = false
+      for (const [key, entry] of Object.entries(methods)) {
+        const directive = directivesOf(entry.meta).find(
+          (d): d is Extract<HttpDirective, { kind: "response" }> => d.kind === "response",
+        )
+        if (directive === undefined) {
+          rebuilt[key] = entry
+          continue
+        }
+        changed = true
+        rebuilt[key] = {
+          handler: wrapResponse(entry.handler, directive.status, directive.headers),
+          meta: withoutDirective(entry.meta, directive),
+        }
       }
-      changed = true
-      rebuilt[key] = {
-        handler: wrapResponse(entry.handler, directive.status, directive.headers),
-        meta: withoutDirective(entry.meta, directive),
-      }
+      methods = changed ? rebuilt : methods
     }
-    methods = changed ? rebuilt : methods
-  }
-  const children = route.children !== undefined
-    ? Object.fromEntries(Object.entries(route.children).map(([k, c]) => [k, applyResponse(c)]))
-    : undefined
-  const fallback = route.fallback !== undefined
-    ? { name: route.fallback.name, subtree: applyResponse(route.fallback.subtree) }
-    : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta }) as ApplyResponseRoute<R>
+    return httpRoute({ methods, children: node.children, fallback: node.fallback, meta: node.meta })
+  }) as ApplyResponseRoute<R>
 }
 
 // ============================================================================
@@ -736,24 +769,20 @@ function fusePipelineOf(pipeline: Pipeline): Pipeline {
  * over fewer, pre-composed functions.
  */
 export function fusePipeline<R extends HttpRoute>(route: R): R {
-  let methods = route.methods
-  if (methods !== undefined) {
-    methods = Object.fromEntries(
-      Object.entries(methods).map(([key, entry]) => [
-        key,
-        entry.pipeline !== undefined
-          ? { ...entry, pipeline: fusePipelineOf(entry.pipeline) }
-          : entry,
-      ]),
-    )
-  }
-  const children = route.children !== undefined
-    ? Object.fromEntries(Object.entries(route.children).map(([k, c]) => [k, fusePipeline(c)]))
-    : undefined
-  const fallback = route.fallback !== undefined
-    ? { name: route.fallback.name, subtree: fusePipeline(route.fallback.subtree) }
-    : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta }) as R
+  return mapRoute(route, (node) => {
+    let methods = node.methods
+    if (methods !== undefined) {
+      methods = Object.fromEntries(
+        Object.entries(methods).map(([key, entry]) => [
+          key,
+          entry.pipeline !== undefined
+            ? { ...entry, pipeline: fusePipelineOf(entry.pipeline) }
+            : entry,
+        ]),
+      )
+    }
+    return httpRoute({ methods, children: node.children, fallback: node.fallback, meta: node.meta })
+  }) as R
 }
 
 /** No-op decode for 0-param handlers: skips real decode work, produces an empty bag. */
@@ -768,24 +797,20 @@ function emptyDecode(): Record<string, unknown> {
  * Entries whose handler declares a parameter are left untouched.
  */
 export function skipEmptyInput<R extends HttpRoute>(route: R): R {
-  let methods = route.methods
-  if (methods !== undefined) {
-    methods = Object.fromEntries(
-      Object.entries(methods).map(([key, entry]) => [
-        key,
-        entry.handler.length === 0
-          ? { ...entry, pipeline: { ...entry.pipeline, decode: emptyDecode, validate: [] } }
-          : entry,
-      ]),
-    )
-  }
-  const children = route.children !== undefined
-    ? Object.fromEntries(Object.entries(route.children).map(([k, c]) => [k, skipEmptyInput(c)]))
-    : undefined
-  const fallback = route.fallback !== undefined
-    ? { name: route.fallback.name, subtree: skipEmptyInput(route.fallback.subtree) }
-    : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta }) as R
+  return mapRoute(route, (node) => {
+    let methods = node.methods
+    if (methods !== undefined) {
+      methods = Object.fromEntries(
+        Object.entries(methods).map(([key, entry]) => [
+          key,
+          entry.handler.length === 0
+            ? { ...entry, pipeline: { ...entry.pipeline, decode: emptyDecode, validate: [] } }
+            : entry,
+        ]),
+      )
+    }
+    return httpRoute({ methods, children: node.children, fallback: node.fallback, meta: node.meta })
+  }) as R
 }
 
 // ============================================================================

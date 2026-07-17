@@ -160,16 +160,6 @@ before acting.
   context (e.g. request-scoped logging/tracing) is safe and needs no changes
   to `runPipeline` itself. No `withALS`-style composable wrapper has been
   written yet — see new open thread below.
-- **Tuning crossover constants for router strategy selection is unstarted**
-  (2026-07-17): `docs/design/routing-benchmarks.md` shows relative strategy
-  performance (segment trie vs. radix vs. compiled-char vs. hybrid Map+charFn)
-  crossing over at different route counts / path lengths, but no code picks
-  a strategy automatically based on a measured tree shape — a caller must
-  hand-pick one of `radixRouter`/`compiledCharRouter`/`mapCharRouter`/
-  `makeRouterFromRoute`. The benchmark numbers are single-machine (one Ryzen
-  9 9900X, one Bun version — see routing-benchmarks.md's Hardware table), so
-  any crossover constants derived from them would need re-validation on
-  different hardware/runtimes before being trusted as a general default.
 - **Propagating the HTTP architecture to other projections is unstarted**
   (2026-07-17): `packages/http/src/route.ts` is now the reference pattern —
   generic `HttpRoute<H>`, `Node ⇒ ProtocolType` projection + rewriter
