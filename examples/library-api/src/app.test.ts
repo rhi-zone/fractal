@@ -14,7 +14,7 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 import { api, clearStore, httpRoutes } from "./tree.ts"
 import { createFetch } from "@rhi-zone/fractal-http/preset"
-import { routeCandidatesForUrl } from "@rhi-zone/fractal-http/route"
+import { makeRouterFromRoute, routeCandidatesForUrl } from "@rhi-zone/fractal-http/route"
 import { http } from "@rhi-zone/fractal-http/verbs"
 import { op } from "@rhi-zone/fractal-core/node"
 import { resolveTags } from "@rhi-zone/fractal-core/tags"
@@ -276,5 +276,55 @@ describe("library-api — verb-helper bundles (http.*)", () => {
     const body = (await res.json()) as { reservationId: string; patronId: string }
     expect(body.reservationId).toBe("res-book-1-patron-99")
     expect(body.patronId).toBe("patron-99")
+  })
+})
+
+// ============================================================================
+// Codegen validators — createApplyValidation wiring (tree.ts's `httpRoutes`,
+// wired via generated/validators.ts, see src/generated/validators.ts and
+// package.json's `codegen` script)
+// ============================================================================
+
+describe("library-api — codegen-generated validators", () => {
+  it("httpRoutes wires a generated validator onto catalog/search's GET pipeline", () => {
+    const pipeline = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.pipeline
+    expect(pipeline?.validate).toBeDefined()
+    expect(pipeline?.validate?.length).toBeGreaterThan(0)
+  })
+
+  // `catalog/search`'s generated schema is `{ q?: string }` — every value a
+  // real HTTP GET query string can produce for `q` is already a string
+  // (WHATWG `URLSearchParams` never yields anything else), so a genuine
+  // type-mismatch 400 can't be produced by an actual request to this route.
+  // This calls the actual wired validator (the same function object
+  // `createApplyValidation` injected into `httpRoutes`) directly against a
+  // malformed bag, proving codegen + wiring really do reject bad input
+  // rather than only ever pass through.
+  it("wired validator rejects a wrong-typed bag (q as a number, not a string)", async () => {
+    const validate =
+      httpRoutes.children?.catalog?.children?.search?.methods?.GET?.pipeline?.validate?.[0]
+    expect(validate).toBeDefined()
+    const result = await validate!({ q: 123 })
+    expect(result.kind).toBe("err")
+  })
+
+  it("wired validator accepts a correctly-typed bag (q as a string)", async () => {
+    const validate =
+      httpRoutes.children?.catalog?.children?.search?.methods?.GET?.pipeline?.validate?.[0]
+    expect(validate).toBeDefined()
+    const result = await validate!({ q: "hobbit" })
+    expect(result.kind).toBe("ok")
+  })
+
+  it("valid request through the validated route still returns 200 (GET /catalog/search?q=...)", async () => {
+    const router = makeRouterFromRoute(httpRoutes)
+    const res = await router(new Request("http://localhost/catalog/search?q=hobbit"))
+    expect(res.status).toBe(200)
+  })
+
+  it("valid request through the validated route still returns 200 (GET /catalog/genres)", async () => {
+    const router = makeRouterFromRoute(httpRoutes)
+    const res = await router(new Request("http://localhost/catalog/genres"))
+    expect(res.status).toBe(200)
   })
 })

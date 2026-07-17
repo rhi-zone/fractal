@@ -12,7 +12,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "codegen": "bun ../../packages/codegen/src/cli.ts build src/tree.ts -o src/generated/validators.ts",
+    "codegen:check": "bun ../../packages/codegen/src/cli.ts check src/tree.ts -o src/generated/validators.ts"
   },
   "dependencies": {
     "@rhi-zone/fractal-core": "workspace:*",

@@ -21,6 +21,9 @@
 import { api as api_, op, service } from "@rhi-zone/fractal-core/node"
 import { http } from "@rhi-zone/fractal-http/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http/dx"
+import { createApplyValidation } from "@rhi-zone/fractal-http/route"
+import type { Validator, ValidatorMap } from "@rhi-zone/fractal-http/route"
+import { validators as catalogValidators } from "./generated/validators.ts"
 
 // ============================================================================
 // Domain types + in-memory store
@@ -227,10 +230,29 @@ export const api = api_({
   })
 
 // ============================================================================
-// HttpRoute projection — the pre-composed pipeline (naiveTransform +
-// applyMethods + applyMoveTo + applyResponse, see
-// docs/design/routing-and-transforms.md and packages/http/src/dx.ts). This
-// is the actual route tree `createFetch(api)` dispatches against.
+// Validator wiring — createApplyValidation injects the codegen-generated
+// `catalog/*` validators (examples/library-api/src/generated/validators.ts,
+// produced by `bun run codegen`, see package.json) into the route tree's
+// `pipeline.validate` slot. The `books` service subtree has no generated
+// validators (codegen skips service()-authored leaves — see the file-level
+// comment above) and is untouched: a key not present in the map is a no-op
+// passthrough (route.ts's `createApplyValidation` doc comment).
 // ============================================================================
 
-export const httpRoutes = httpProjection(api)
+// The generated module is a `@ts-nocheck` build artifact (see cli.ts's
+// `GENERATED_HEADER`): its inferred type is the TypeBox-compiler's raw
+// output shape (`kind: string`, not the `"ok" | "err"` literal union
+// `Validator`'s `Result` needs), not `Record<string, Validator>` — cast at
+// this import boundary, same as any generated-code consumer would.
+const validatorMap: ValidatorMap = { catalog: catalogValidators as Record<string, Validator> }
+const applyValidation = createApplyValidation(validatorMap)
+
+// ============================================================================
+// HttpRoute projection — the pre-composed pipeline (naiveTransform +
+// applyMethods + applyMoveTo + applyResponse, see
+// docs/design/routing-and-transforms.md and packages/http/src/dx.ts),
+// with the generated `catalog/*` validators applied on top. This is the
+// actual route tree `createFetch(api)` dispatches against.
+// ============================================================================
+
+export const httpRoutes = applyValidation("catalog", httpProjection(api))
