@@ -2,7 +2,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
-import { api as api_, op, service } from "@rhi-zone/fractal-core/node"
+import { api as api_, op, service } from "@rhi-zone/fractal-api-tree/node"
 import { createFetch } from "./preset.ts"
 import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts"
 import type { HttpRoute, ValidatorMap } from "./route.ts"

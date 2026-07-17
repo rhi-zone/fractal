@@ -1,4 +1,4 @@
-// packages/core/src/node.test.ts — new Node/Handler/Meta/fallback model
+// packages/api-tree/src/node.test.ts — new Node/Handler/Meta/fallback model
 
 import { describe, expect, it } from "bun:test"
 import {

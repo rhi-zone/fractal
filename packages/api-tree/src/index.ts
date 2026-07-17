@@ -1,4 +1,4 @@
-// packages/core/src/index.ts — @rhi-zone/fractal-core
+// packages/api-tree/src/index.ts — @rhi-zone/fractal-api-tree
 //
 // The function-core model base:
 //   - The function category: plain functions `A => B` composed with compose/pipe.

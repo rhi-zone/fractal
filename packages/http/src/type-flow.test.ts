@@ -18,8 +18,8 @@
 // is unknowable statically — see `applyMoveTo`'s doc comment in route.ts.
 
 import { describe, expect, expectTypeOf, it } from "bun:test"
-import { api, op } from "@rhi-zone/fractal-core/node"
-import type { Handler } from "@rhi-zone/fractal-core/node"
+import { api, op } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler } from "@rhi-zone/fractal-api-tree/node"
 import { applyMethods, applyMoveTo, applyResponse, naiveTransform } from "./route.ts"
 import type { HttpRoute, ResponseOverride } from "./route.ts"
 

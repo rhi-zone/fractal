@@ -12,7 +12,7 @@
 // from parsing a path string. The router's type is the FLAT union of its route
 // values — no deep accumulation chain. This is the whole point: linear cost.
 
-import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-core"
+import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-api-tree"
 
 // ============================================================================
 // Segments — value structs. A path is Segment[]; its params come from the

@@ -1,7 +1,7 @@
 // packages/mcp/src/project.test.ts — MCP tool projection tests
 
 import { describe, expect, it } from "bun:test"
-import { api as api_, op } from "@rhi-zone/fractal-core/node"
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { verbFromTags } from "@rhi-zone/fractal-http/project"
 import { toTools } from "./project.ts"
 

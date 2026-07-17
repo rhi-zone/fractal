@@ -21,7 +21,7 @@
 // source of truth.
 //
 // See:
-//   packages/core/src/node.ts    — the op model (`op(fn, meta)`)
+//   packages/api-tree/src/node.ts    — the op model (`op(fn, meta)`)
 //   packages/mcp/src/project.ts  — the consumer (toTools inputSchema/description)
 
 import ts from "typescript"
@@ -549,7 +549,7 @@ function resultTypeArgNodeFrom(
   }
 
   // (a) / (b-no-rename): direct "Result" name with ≥ 2 type arguments.
-  //   Covers: `import { Result } from "@rhi-zone/fractal-core"` (a)
+  //   Covers: `import { Result } from "@rhi-zone/fractal-api-tree"` (a)
   //           `import { Result } from "./barrel"`               (b, no rename)
   if (
     typeRefNode.typeName.text === "Result" &&
@@ -609,7 +609,7 @@ function resultTypeArgNodeFrom(
  * skipLibCheck). It does NOT fire for the alias-instantiation case (those
  * types stay "unresolved" under this extractor's program configuration).
  *
- * Exact shape from packages/core/src/index.ts:
+ * Exact shape from packages/api-tree/src/index.ts:
  *   `{ readonly kind: "ok"; readonly value: T } | { readonly kind: "err"; readonly error: E }`
  *
  * Match criteria (all must hold to avoid false positives on arbitrary unions):

@@ -22,9 +22,9 @@
 //      an `HttpRoute` tree (no attribute dispatch, no match conditions —
 //      those remain the direct tree-walk dispatcher's domain; see project.ts).
 
-import { isLeaf } from "@rhi-zone/fractal-core/node"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
-import type { Result } from "@rhi-zone/fractal-core"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Result } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { bulkCollect, httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"

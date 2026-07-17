@@ -8,7 +8,7 @@
 //   (c) POST /users/:id/deactivate   → Outcome mapped to 200/404/409
 
 import { choice, route, path, lit, param, mount, json } from "./http.ts"
-import type { StandardSchema } from "@rhi-zone/fractal-core"
+import type { StandardSchema } from "@rhi-zone/fractal-api-tree"
 
 interface User {
   readonly id: string

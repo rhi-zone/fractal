@@ -24,7 +24,7 @@ This constraint is load-bearing: composability alone does not yield a small ment
 
 | Package | Role |
 |---------|------|
-| `@rhi-zone/fractal-core` | `Node<P,Res>`, `Handler`, `Req`, `Pass`, `choice`, `pipe`, `capture`, `typed`, `leaf`, `run`, `resolveSchema`, Standard Schema types |
+| `@rhi-zone/fractal-api-tree` | `Node<P,Res>`, `Handler`, `Req`, `Pass`, `choice`, `pipe`, `capture`, `typed`, `leaf`, `run`, `resolveSchema`, Standard Schema types |
 | `@rhi-zone/fractal-http` | HTTP kit: `path`, `methods`, `param`, `query`, `header`, `body`, `validate`, `serve` |
 | `@rhi-zone/fractal-worker` | Worker/in-process kit: `procedure`, `field`, `dispatch` |
 | `@rhi-zone/fractal-openapi` | OpenAPI 3.0 / JSON-Schema projection: `toOpenApi`, `toJsonSchema` |
@@ -53,7 +53,7 @@ const doc = toOpenApi(app, { title: 'Todos API', version: '1.0.0' })
 
 ## Protocol-agnostic core
 
-The core (`fractal-core`) knows nothing about HTTP verbs, URL paths, or procedure names. Protocol-specific combinators live in per-protocol kits that consume and produce the same `Node<P,Res>` type:
+The core (`fractal-api-tree`) knows nothing about HTTP verbs, URL paths, or procedure names. Protocol-specific combinators live in per-protocol kits that consume and produce the same `Node<P,Res>` type:
 
 - **HTTP kit** (`fractal-http`): `methods`, `path`, `param`, `query`, `header`, `body`, `validate`, `serve`
 - **Worker kit** (`fractal-worker`): `procedure`, `field`, `dispatch`

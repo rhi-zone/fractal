@@ -4,7 +4,7 @@
 
 ## Status
 
-Implemented across five packages: `@rhi-zone/fractal-core`, `@rhi-zone/fractal-http`,
+Implemented across five packages: `@rhi-zone/fractal-api-tree`, `@rhi-zone/fractal-http`,
 `@rhi-zone/fractal-openapi`, `@rhi-zone/fractal-client`, and `@rhi-zone/fractal-codegen`.
 Verified by typecheck + test + build (100 tests pass). This document describes the
 CURRENT model.
@@ -19,7 +19,7 @@ model is **retired** — all packages that implemented it are deleted.
 ## Shape
 
 ```
-@rhi-zone/fractal-core       Handler<R>, combinators, .meta types, drift-guard substrate
+@rhi-zone/fractal-api-tree       Handler<R>, combinators, .meta types, drift-guard substrate
 @rhi-zone/fractal-http       toFetch, response builders, validated, returns, ./adapter
 @rhi-zone/fractal-openapi    toOpenApi — projects an OpenAPI 3.x doc from .meta
 @rhi-zone/fractal-codegen    generate — emits typed client.ts + server.ts from the doc
@@ -29,7 +29,7 @@ model is **retired** — all packages that implemented it are deleted.
 
 The load-bearing split: **core is surface-agnostic**; http is the WHATWG surface.
 Core imports nothing — no `Request`/`Response`, no Bun, no Node (verified:
-`packages/core/src/index.ts` has no external imports). `Request`/`Response` enter at
+`packages/api-tree/src/index.ts` has no external imports). `Request`/`Response` enter at
 `@rhi-zone/fractal-http`, which also imports nothing from Bun or Node (`./adapter`
 is the sole runtime touch and is not imported by `index.ts`).
 
@@ -72,7 +72,7 @@ signature.
 
 ## Combinators — plain functions returning `Handler`
 
-All combinators live in `@rhi-zone/fractal-core` and return a `Reflected<M, R>` (a
+All combinators live in `@rhi-zone/fractal-api-tree` and return a `Reflected<M, R>` (a
 `Handler<R>` with an inert `.meta` sidecar). The runtime behavior is pure
 `(req) => Response | undefined`; `.meta` is never read on the dispatch path.
 

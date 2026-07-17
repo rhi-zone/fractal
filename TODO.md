@@ -48,11 +48,11 @@ before acting.
   `buildValidatorModuleSource()` and writes its output to disk), and the
   consumer-app-facing "does a real route's validators actually get replaced
   end-to-end" path is unverified.
-- **Meta typing pattern** — settled design, not yet implemented: `packages/core`
+- **Meta typing pattern** — settled design, not yet implemented: `packages/api-tree`
   defines `interface Meta { tags?: Tags }`. Each protocol package (http, mcp,
   ...) exports its own meta type (e.g. `HttpMeta`) rather than mutating core's
   `Meta`. The consuming project does declaration merging:
-  `declare module '@rhi-zone/fractal-core' { interface Meta extends HttpMeta,
+  `declare module '@rhi-zone/fractal-api-tree' { interface Meta extends HttpMeta,
   McpMeta {} }`. No package touches another package's or core's types
   directly.
 - **Other projection packages still on the old Node-walking pattern** —
@@ -237,7 +237,7 @@ JSDoc. That codegen now exists: `packages/codegen/src/extract.ts` extracts
 discriminated unions, intersections, 3 branded-type patterns, recursion,
 `Promise` unwrapping, class privacy), and `packages/type-ir` projects those
 `TypeRef`s to 23 format targets (see the two SETTLED sections below). Whether
-the on-tree `Schema` scaffolding in `packages/core`/`packages/http` has
+the on-tree `Schema` scaffolding in `packages/api-tree`/`packages/http` has
 actually been swapped out for codegen-derived validators is a separate,
 still-open question — see "Integration into the consumer app is not started"
 below, which is about the *consumer app*, not this in-repo scaffolding; that
@@ -297,7 +297,7 @@ auth/audit/side-effects/error-mapping are DU metadata on an operation node
 (open metadata bag, consistent with the type IR's own pattern) or a separate
 mechanism/layer; (c) reconciliation of the spec's direct
 handler-binding-with-throws + declarative `errorMap` against the existing
-Result/Kleisli composition style in `packages/core`. Per the "unsettled
+Result/Kleisli composition style in `packages/api-tree`. Per the "unsettled
 design questions need the author's own definition" guardrail above, this
 spec supplies evidence and pressure, not an answer — the operation layer
 still needs the author's own definition, not invention from the evidence.
@@ -354,7 +354,7 @@ combinator in the routing expression model. See
 ### Migrate the fenced packages to the function-core model — RESOLVED (2026-07-11, commit 8e8329c)
 
 The function-core rewrite (`docs/design/function-core-and-projection.md`) landed
-as a vertical slice: `packages/core` + `packages/http` are rewritten to the new
+as a vertical slice: `packages/api-tree` + `packages/http` are rewritten to the new
 model (function category + Result + Kleisli/applicative combinators; the
 protocol-neutral D-tree `path`/`param`/`group`/`methods`/`route` + `app`; HTTP
 dispatch + `Result`→`Response` encoding), proven by `examples/library-api` (the
@@ -363,7 +363,7 @@ example directory is `examples/library-api`; `examples/todo-api` and
 `examples/dogfood` also do not exist on disk).
 
 Root `package.json` `workspaces` (verified 2026-07-11) is now:
-`packages/core`, `packages/http`, `packages/mcp`, `packages/codegen`,
+`packages/api-tree`, `packages/http`, `packages/mcp`, `packages/codegen`,
 `packages/openapi`, `packages/cli`, `packages/client`, `examples/library-api`.
 **Every package in `packages/` is in the workspace — none are fenced out.**
 `packages/openapi` and `packages/client` were previously fenced but are back
@@ -452,7 +452,7 @@ All four items landed in the coordinated refactor (commit 8e8329c,
 "refactor: retire dispatch()/ParamNode/effectiveTags/buildRoutes for fallback
 + DU model"):
 
-- `effectiveTags` / tag inheritance in `packages/core/src/tags.ts` — removed;
+- `effectiveTags` / tag inheritance in `packages/api-tree/src/tags.ts` — removed;
   replaced by the `mapNodes` pre-order/post-order tree-transform visitor. A
   node's tags are now exactly what's on the node.
 - `ParamNode` type and `param()` constructor — removed; replaced by a
@@ -467,7 +467,7 @@ All four items landed in the coordinated refactor (commit 8e8329c,
   removed; replaced by DU variants (`meta.http.dispatch: DispatchMarker`,
   `meta.http.directives: HttpDirective[]`) with interpreter functions in the
   projector. See `docs/design/router-model.md` § HTTP metadata.
-- `dispatch()` in `packages/core/src/node.ts` — removed along with its test
+- `dispatch()` in `packages/api-tree/src/node.ts` — removed along with its test
   (the dead protocol-neutral path-walking dispatcher flagged 2026-07-11 had no
   callers in production code). The "which mechanism wins" question this
   raised is moot now that both the core walker and the flagged
@@ -591,7 +591,7 @@ See `docs/design/routing-expression-model.md`.
 
 ### Two divergent dispatch mechanisms — RESOLVED (2026-07-11, commit 8e8329c)
 
-`packages/core/src/node.ts` used to have its own `dispatch()` — a
+`packages/api-tree/src/node.ts` used to have its own `dispatch()` — a
 protocol-neutral, path-segment-only tree walk (no method/header awareness) —
 while `packages/http/src/project.ts` had `buildRoutes`/`makeRouter`, the one
 actually wired into the HTTP projection. Both were removed in the coordinated

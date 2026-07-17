@@ -13,7 +13,7 @@ type Handler<I = any, O = any> = (input: I) => O | Promise<O>
 ```
 
 An operation is a `T => U`. Composition (`compose`, `pipe`) and the `Result<T, E>`
-type are in `@rhi-zone/fractal-core` (`packages/core/src/index.ts`) as base
+type are in `@rhi-zone/fractal-api-tree` (`packages/api-tree/src/index.ts`) as base
 primitives. Everything else — routing, HTTP, MCP — is built on top of bare functions,
 not framework objects.
 
@@ -26,7 +26,7 @@ route table, no `ops` map, no two-level `{ops, children}` split. The tree IS the
 
 ### Node shape
 
-Every node is a value of type `Node` (from `packages/core/src/node.ts`):
+Every node is a value of type `Node` (from `packages/api-tree/src/node.ts`):
 
 ```ts
 type Node = {
@@ -64,7 +64,7 @@ input object under `name`. The handler sees one flat input object — it cannot 
 a path slug from a query param from a body field (provenance-blind by design).
 
 ```ts
-// packages/core/src/node.ts
+// packages/api-tree/src/node.ts
 type ParamNode = { readonly _tag: "param"; readonly name: string; readonly subtree: Node }
 
 // Usage:
@@ -119,7 +119,7 @@ Tags are **agnostic behavioral markers** that live in `meta.tags` on any node. T
 behavior across all projections from one authoring site.
 
 ```ts
-// packages/core/src/tags.ts
+// packages/api-tree/src/tags.ts
 type Tags = {
   readOnly?: boolean | undefined
   idempotent?: boolean | undefined
@@ -137,14 +137,14 @@ negated.
 
 ### Implication lattice
 
-`resolveTags(tags)` (in `packages/core/src/tags.ts`) applies two lattice rules:
+`resolveTags(tags)` (in `packages/api-tree/src/tags.ts`) applies two lattice rules:
 
 - `readOnly = true` implies `idempotent = true`
 - `readOnly = true` AND `destructive = true` is a conflict (both cannot hold)
 
 ### Inheritance — closest-wins
 
-Tags inherit down the tree. `effectiveTags(path)` (in `packages/core/src/tags.ts`)
+Tags inherit down the tree. `effectiveTags(path)` (in `packages/api-tree/src/tags.ts`)
 walks an array of nodes from root to leaf; a defined value (`true` or `false`) at a closer
 node overrides a farther one. `undefined` defers upward. This means you can tag an entire
 subtree as `readOnly` at the branch node, and individual leaves can override.
@@ -200,7 +200,7 @@ position from agnostic meaning and breaks non-HTTP projections.
 `Meta` is an open bag:
 
 ```ts
-// packages/core/src/node.ts
+// packages/api-tree/src/node.ts
 type Meta = { tags?: Tags; readonly [key: string]: unknown }
 ```
 
@@ -213,7 +213,7 @@ verb, segment names, idempotency, auth hints.
 
 Composing meta bags — whether merging a verb helper bundle with explicit tags, or
 accumulating inherited tags down a tree walk — uses one primitive: `mergeMeta(...metas)`
-(in `packages/core/src/node.ts`).
+(in `packages/api-tree/src/node.ts`).
 
 `mergeMeta` is a deep merge with precedence:
 - Later bags win per key; `undefined` defers (does not override a previously-set value).
@@ -272,18 +272,18 @@ type, and extract leading JSDoc text. The resulting `SchemaMap` is passed to `to
 
 | Symbol | Package | What it is |
 |---|---|---|
-| `Node` | `@rhi-zone/fractal-core/node` | The one tree node type |
-| `Handler<I,O>` | `@rhi-zone/fractal-core/node` | A plain callable: `(input: I) => O \| Promise<O>` |
-| `Meta` | `@rhi-zone/fractal-core/node` | Open metadata bag |
-| `op(fn, ...meta)` | `@rhi-zone/fractal-core/node` | Construct a leaf node |
-| `node({ children?, meta? })` | `@rhi-zone/fractal-core/node` | Construct a branch node |
-| `service(instance, opts?)` | `@rhi-zone/fractal-core/node` | Lower a class instance to a branch node |
-| `param(name, subtree)` | `@rhi-zone/fractal-core/node` | Parameterized child edge |
-| `mergeMeta(...metas)` | `@rhi-zone/fractal-core/node` | Deep-merge meta bags, later wins |
-| `Tags` | `@rhi-zone/fractal-core/tags` | Three-valued behavioral tag dict |
-| `resolveTags(tags)` | `@rhi-zone/fractal-core/tags` | Apply the implication lattice |
-| `effectiveTags(path)` | `@rhi-zone/fractal-core/tags` | Closest-wins tag inheritance down a path |
-| `dispatch(node, segs, input)` | `@rhi-zone/fractal-core/node` | Minimal runtime tree walker |
+| `Node` | `@rhi-zone/fractal-api-tree/node` | The one tree node type |
+| `Handler<I,O>` | `@rhi-zone/fractal-api-tree/node` | A plain callable: `(input: I) => O \| Promise<O>` |
+| `Meta` | `@rhi-zone/fractal-api-tree/node` | Open metadata bag |
+| `op(fn, ...meta)` | `@rhi-zone/fractal-api-tree/node` | Construct a leaf node |
+| `node({ children?, meta? })` | `@rhi-zone/fractal-api-tree/node` | Construct a branch node |
+| `service(instance, opts?)` | `@rhi-zone/fractal-api-tree/node` | Lower a class instance to a branch node |
+| `param(name, subtree)` | `@rhi-zone/fractal-api-tree/node` | Parameterized child edge |
+| `mergeMeta(...metas)` | `@rhi-zone/fractal-api-tree/node` | Deep-merge meta bags, later wins |
+| `Tags` | `@rhi-zone/fractal-api-tree/tags` | Three-valued behavioral tag dict |
+| `resolveTags(tags)` | `@rhi-zone/fractal-api-tree/tags` | Apply the implication lattice |
+| `effectiveTags(path)` | `@rhi-zone/fractal-api-tree/tags` | Closest-wins tag inheritance down a path |
+| `dispatch(node, segs, input)` | `@rhi-zone/fractal-api-tree/node` | Minimal runtime tree walker |
 | `buildRoutes(node)` | `@rhi-zone/fractal-http/project` | Compile tree → flat `Route[]` |
 | `verbFromTags(meta)` | `@rhi-zone/fractal-http/project` | Derive HTTP verb from the tag lattice |
 | `makeRouter(routes)` | `@rhi-zone/fractal-http/project` | Runtime verb+path+conditions dispatcher |

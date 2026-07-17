@@ -68,7 +68,7 @@ function variantD(routes: R[]): string {
   L.push(`import { lit, param, path, route, routes } from "../router.ts"`)
   L.push(`import { json } from "../http.ts"`)
   L.push(`import { client } from "../client.ts"`)
-  L.push(`import type { StandardSchema } from "@rhi-zone/fractal-core"`)
+  L.push(`import type { StandardSchema } from "@rhi-zone/fractal-api-tree"`)
   L.push(SCHEMA)
   L.push(`const app = routes(`)
   for (const r of routes) {
@@ -109,7 +109,7 @@ function variantE(routes: R[]): string {
   const L: string[] = []
   L.push(`import { lit, param, path, route } from "../router.ts"`)
   L.push(`import { json } from "../http.ts"`)
-  L.push(`import type { StandardSchema } from "@rhi-zone/fractal-core"`)
+  L.push(`import type { StandardSchema } from "@rhi-zone/fractal-api-tree"`)
   L.push(SCHEMA)
   const names: string[] = []
   for (const r of routes) {

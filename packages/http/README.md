@@ -26,7 +26,7 @@ adapters to run the result as a real server.
 ## Usage
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-core"
+import { api, op } from "@rhi-zone/fractal-api-tree"
 import { http } from "@rhi-zone/fractal-http/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http/dx"
 import { createFetch } from "@rhi-zone/fractal-http/preset"

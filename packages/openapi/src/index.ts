@@ -24,11 +24,11 @@
 // See:
 //   packages/http/src/project.ts — verbFromTags, meta.http DU (dispatch/directives)
 //   packages/codegen/src/tree.ts — extractToolSchemas, SchemaMap
-//   packages/core/src/node.ts    — Node, Handler, fallback
-//   packages/core/src/tags.ts    — resolveTags
+//   packages/api-tree/src/node.ts    — Node, Handler, fallback
+//   packages/api-tree/src/tags.ts    — resolveTags
 
-import { isLeaf } from "@rhi-zone/fractal-core/node"
-import type { Meta, Node } from "@rhi-zone/fractal-core/node"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
+import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { verbFromTags } from "@rhi-zone/fractal-http/project"
 import type { SchemaMap } from "@rhi-zone/fractal-codegen"
 

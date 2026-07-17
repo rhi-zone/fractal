@@ -1,4 +1,4 @@
-// packages/core/src/index.test.ts — the function-core base + derived combinators.
+// packages/api-tree/src/index.test.ts — the function-core base + derived combinators.
 
 import { describe, expect, it } from "bun:test";
 import {

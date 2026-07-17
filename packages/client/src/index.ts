@@ -28,10 +28,10 @@
 //
 // See:
 //   packages/http/src/project.ts — verbFromTags, meta.http DU (dispatch/directives)
-//   packages/core/src/node.ts    — Node, fallback, isLeaf
+//   packages/api-tree/src/node.ts    — Node, fallback, isLeaf
 
-import { isLeaf } from "@rhi-zone/fractal-core/node"
-import type { Meta, Node } from "@rhi-zone/fractal-core/node"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
+import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { verbFromTags } from "@rhi-zone/fractal-http/project"
 import { ClientError } from "./client-error.ts"
 

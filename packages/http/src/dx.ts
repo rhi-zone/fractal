@@ -10,8 +10,8 @@
 //
 // See docs/design/routing-and-transforms.md § DX — constructor sugar.
 
-import { api, op } from "@rhi-zone/fractal-core"
-import type { Handler, Node } from "@rhi-zone/fractal-core/node"
+import { api, op } from "@rhi-zone/fractal-api-tree"
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
 import { http } from "./verbs.ts"
 import { applyMethods, applyMoveTo, applyResponse, composeTransforms, naiveTransform } from "./route.ts"
 import type { HttpRoute } from "./route.ts"

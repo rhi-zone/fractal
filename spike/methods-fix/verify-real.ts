@@ -20,7 +20,7 @@ import {
   type Handler,
   type MethodsMeta,
   type Method,
-} from "@rhi-zone/fractal-core";
+} from "@rhi-zone/fractal-api-tree";
 import { json } from "@rhi-zone/fractal-http";
 import type { RouteUnion } from "../drift-guard/derive.ts";
 

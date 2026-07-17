@@ -1,4 +1,4 @@
-// packages/core/src/tags.ts — @rhi-zone/fractal-core  (new model, alongside legacy spine)
+// packages/api-tree/src/tags.ts — @rhi-zone/fractal-api-tree  (new model, alongside legacy spine)
 //
 // Standard agnostic behavioral tags + the implication lattice resolver.
 //

@@ -5,7 +5,7 @@ position is address**. You build it once, pass it to a projection (HTTP,
 MCP, CLI), and each projection derives what it needs from the structure and
 the open metadata bag.
 
-All constructors live in `@rhi-zone/fractal-core/node`. Verb-helper bundles
+All constructors live in `@rhi-zone/fractal-api-tree/node`. Verb-helper bundles
 live in `@rhi-zone/fractal-http/verbs`.
 
 ---
@@ -15,7 +15,7 @@ live in `@rhi-zone/fractal-http/verbs`.
 `op` produces a leaf node: a `Node` with a `handler` and merged meta.
 
 ```ts
-import { op } from "@rhi-zone/fractal-core/node"
+import { op } from "@rhi-zone/fractal-api-tree/node"
 import { http } from "@rhi-zone/fractal-http/verbs"
 
 // Bare fn — empty meta, verb inferred from tags (defaults to POST)
@@ -54,7 +54,7 @@ not distinguish their origin.
 Children are `Node | ParamNode` values keyed by their **address segment name**.
 
 ```ts
-import { node, op } from "@rhi-zone/fractal-core/node"
+import { node, op } from "@rhi-zone/fractal-api-tree/node"
 
 const catalogNode = node({
   children: {
@@ -82,7 +82,7 @@ stored as a child is just a node whose `handler` is defined — there is one
 - `opts.meta[name]` → meta bag for that child leaf
 
 ```ts
-import { node, op, param, service } from "@rhi-zone/fractal-core/node"
+import { node, op, param, service } from "@rhi-zone/fractal-api-tree/node"
 
 class BooksService {
   // ParamNode field: service() picks it up as a child
@@ -120,7 +120,7 @@ a path segment in the HTTP projection and merges the captured value into handler
 inputs at dispatch time.
 
 ```ts
-import { param } from "@rhi-zone/fractal-core/node"
+import { param } from "@rhi-zone/fractal-api-tree/node"
 
 // bookId becomes the {bookId} segment; its runtime value flows into handler input
 byId = param("bookId", bookItemNode)
@@ -139,7 +139,7 @@ Tags are the open three-valued behavioral dictionary carried in `meta.tags`.
 Three values: `true` (asserted), `false` (negated), `undefined` (unknown —
 absence asserts nothing).
 
-Standard tags from `@rhi-zone/fractal-core/tags`:
+Standard tags from `@rhi-zone/fractal-api-tree/tags`:
 
 | Tag | Meaning | Implies |
 |-----|---------|---------|

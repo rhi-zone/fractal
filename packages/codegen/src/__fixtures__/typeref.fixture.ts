@@ -3,7 +3,7 @@
 // Standalone functions used to exercise typeRefFromType / typeRefFromFunctionNode
 // / typeRefFromReturnType directly (not through the tree walker).
 
-import type { Result } from "@rhi-zone/fractal-core"
+import type { Result } from "@rhi-zone/fractal-api-tree"
 
 export const sample = (input: {
   name: string

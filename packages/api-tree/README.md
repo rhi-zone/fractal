@@ -1,4 +1,4 @@
-# @rhi-zone/fractal-core
+# @rhi-zone/fractal-api-tree
 
 Function-core model: the base function category, a `Result` type, derived
 combinators, and the `Node`/`Op`/`Meta` tree that every projection walks.
@@ -25,8 +25,8 @@ subtyping relationships (e.g. `idempotent` implies nothing destructive).
 ## Usage
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-core"
-import { ok, bind, pipe } from "@rhi-zone/fractal-core"
+import { api, op } from "@rhi-zone/fractal-api-tree"
+import { ok, bind, pipe } from "@rhi-zone/fractal-api-tree"
 
 const tree = api({
   greet: op((input: { name: string }) => `Hello, ${input.name}`),

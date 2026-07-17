@@ -1,4 +1,4 @@
-// packages/core/src/node.ts — @rhi-zone/fractal-core  (new model, alongside legacy spine)
+// packages/api-tree/src/node.ts — @rhi-zone/fractal-api-tree  (new model, alongside legacy spine)
 //
 // The new fractal authoring model: Node / Handler / Meta + constructors
 // (op / api / service) + mergeMeta.

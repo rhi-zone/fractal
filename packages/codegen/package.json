@@ -16,7 +16,7 @@
     "@rhi-zone/fractal-type-ir": "workspace:*"
   },
   "devDependencies": {
-    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-api-tree": "workspace:*",
     "@rhi-zone/fractal-mcp": "workspace:*",
     "@sinclair/typebox": "^0.34.41"
   },

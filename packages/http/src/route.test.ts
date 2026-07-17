@@ -4,8 +4,8 @@
 //   Node --naiveTransform--> HttpRoute --rewriters--> HttpRoute --makeRouter--> Fetch
 
 import { describe, expect, it } from "bun:test"
-import { api as api_, op } from "@rhi-zone/fractal-core/node"
-import type { Meta } from "@rhi-zone/fractal-core/node"
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
+import type { Meta } from "@rhi-zone/fractal-api-tree/node"
 import {
   applyMethods,
   applyMoveTo,

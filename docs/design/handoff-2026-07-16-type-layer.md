@@ -104,7 +104,7 @@ requirements need, in order:
    mechanism/layer.
 3. Reconciliation of the spec's `handler` + `errorMap` binding (direct
    function binding, declarative catch→code mapping) with the existing
-   Result-based composition in `packages/core` — the spec's "bind directly
+   Result-based composition in `packages/api-tree` — the spec's "bind directly
    to a typed function-with-throws" is in tension with the Kleisli/Result
    combinator style already built.
 

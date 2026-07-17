@@ -19,7 +19,7 @@
 //
 // See docs/design/router-model.md §"Verb helpers are verb+implied-tags BUNDLES"
 
-import type { Meta } from "@rhi-zone/fractal-core/node"
+import type { Meta } from "@rhi-zone/fractal-api-tree/node"
 import type { HttpDirective } from "./project.ts"
 
 // ============================================================================

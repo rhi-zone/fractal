@@ -9,7 +9,7 @@
 // self-contained tree walks (openapi, client) that need to derive the same
 // HTTP verb a leaf would get without depending on http's dispatch internals.
 //
-// Not placed in packages/core/src/tags.ts: `resolveTags`/`Tags` there are
+// Not placed in packages/api-tree/src/tags.ts: `resolveTags`/`Tags` there are
 // agnostic (no knowledge of HTTP); this function reads `meta.http`, an
 // HTTP-specific DU. Keeping it here avoids leaking HTTP shape into core.
 //
@@ -24,9 +24,9 @@
 // Tags are read directly from the node's own meta — there is no ancestor
 // inheritance (see docs/design/router-model.md — "Tags").
 
-import { resolveTags } from "@rhi-zone/fractal-core/tags"
-import type { Tags } from "@rhi-zone/fractal-core/tags"
-import type { Meta } from "@rhi-zone/fractal-core/node"
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
+import type { Meta } from "@rhi-zone/fractal-api-tree/node"
 
 /** Extract the `{ kind: "verb", value }` directive from `meta.http.directives`, if present. */
 function verbDirective(meta: Meta): string | undefined {

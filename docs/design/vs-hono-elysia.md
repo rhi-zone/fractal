@@ -18,11 +18,11 @@ Frameworks compared:
 (b) `POST /todos` with body `{title: string}`, returns 201.
 (c) A watched dev loop where the client's TypeScript types track the server.
 
-### fractal (current API — `packages/core` + `packages/http`)
+### fractal (current API — `packages/api-tree` + `packages/http`)
 
 ```ts
 // app.ts
-import { choice, methods, param, paramValue, path } from "@rhi-zone/fractal-core";
+import { choice, methods, param, paramValue, path } from "@rhi-zone/fractal-api-tree";
 import { json, status, text, toFetch, validated, returns } from "@rhi-zone/fractal-http";
 import { schema } from "./schema.ts"; // hand-rolled StandardSchemaV1 fixture
 
@@ -148,7 +148,7 @@ HEAD from GET or emits OPTIONS. Decisive win — and it is compositional (aggreg
 across `choice` and `mount`, not just within a single `methods` table).
 
 **3 — Tighter / more uniform core (WIN / WIN).** The only framework type in
-`@rhi-zone/fractal-core` is `Handler<P>`:
+`@rhi-zone/fractal-api-tree` is `Handler<P>`:
 
 ```ts
 Handler<P> = (req: Request & { params: P }) => Response | undefined | Promise<...>
@@ -171,10 +171,10 @@ router, and a `Context` object with many surfaces (`c.req`, `c.json`, `c.set`,
 **4 — Surface/runtime-agnostic (TIE / TIE).** This criterion requires an HONEST
 statement of the current position.
 
-`@rhi-zone/fractal-core` imports no Bun, no Node, and no `Request`/`Response`
-(verified: `packages/core/src/index.ts` imports are zero — no external imports at
+`@rhi-zone/fractal-api-tree` imports no Bun, no Node, and no `Request`/`Response`
+(verified: `packages/api-tree/src/index.ts` imports are zero — no external imports at
 all). `@rhi-zone/fractal-http` imports no Bun and no Node (verified: its only
-imports are from `@rhi-zone/fractal-core` and WHATWG globals). The single runtime
+imports are from `@rhi-zone/fractal-api-tree` and WHATWG globals). The single runtime
 touch is `packages/http/src/adapter.ts` (`serveBun`/`serveNode`), which `index.ts`
 does not import.
 
@@ -197,7 +197,7 @@ stance. "Core decoupled from HTTP" is retired.
 hello-world is straightforward:
 
 ```ts
-import { methods } from "@rhi-zone/fractal-core";
+import { methods } from "@rhi-zone/fractal-api-tree";
 import { text, toFetch } from "@rhi-zone/fractal-http";
 const handle = toFetch(methods({ GET: () => text("hi") }));
 ```
@@ -285,7 +285,7 @@ honest gap (declared response schema required vs Eden's inferred response types)
 - Elysia auth via `resolve`/macro: https://elysiajs.com/patterns/macro
 - Elysia 405 (issue #682, closed not-planned → still 404): github.com/elysiajs/elysia/issues/682
 - fractal sources verified:
-  - `packages/core/src/index.ts` — `Handler<P>`, combinators, `.meta` types
+  - `packages/api-tree/src/index.ts` — `Handler<P>`, combinators, `.meta` types
   - `packages/http/src/index.ts` — `toFetch`, `validated`, `returns`, response builders
   - `packages/http/src/index.test.ts` — HTTP correctness tests (30 pass)
   - `packages/codegen/test/drift.test.ts` — drift guard pipeline (4 pass, both compilers)

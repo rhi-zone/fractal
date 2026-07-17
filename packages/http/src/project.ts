@@ -29,7 +29,7 @@
 
 import { makeRouterFromRoute, naiveTransform } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
-import type { Node } from "@rhi-zone/fractal-core/node"
+import type { Node } from "@rhi-zone/fractal-api-tree/node"
 
 export { verbFromTags } from "./tags.ts"
 export type { HttpRoute, Pipeline } from "./route.ts"

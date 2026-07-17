@@ -1,5 +1,5 @@
 import { httpRouter, json, withValidation } from "@rhi-zone/fractal-http"
-import type { StandardSchema } from "@rhi-zone/fractal-core"
+import type { StandardSchema } from "@rhi-zone/fractal-api-tree"
 import { client } from "@rhi-zone/fractal-client"
 
 // Minimal Standard-Schema validator (no zod — isolate fractal's cost).

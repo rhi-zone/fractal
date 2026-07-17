@@ -1,5 +1,5 @@
 import { json, withValidation } from "@rhi-zone/fractal-http"
-import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-core"
+import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"
 
 // Minimal Standard-Schema validator (no zod — isolate fractal's cost).
 interface Body { readonly name: string; readonly qty: number }

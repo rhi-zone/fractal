@@ -14,25 +14,29 @@
       "name": "@rhi-zone/fractal-example-library-api",
       "version": "0.0.0",
       "dependencies": {
+        "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-codegen": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
         "@rhi-zone/fractal-http": "workspace:*",
         "@rhi-zone/fractal-mcp": "workspace:*",
       },
+    },
+    "packages/api-tree": {
+      "name": "@rhi-zone/fractal-api-tree",
+      "version": "0.1.0-alpha.0",
     },
     "packages/cli": {
       "name": "@rhi-zone/fractal-cli",
       "version": "0.1.0-alpha.0",
       "dependencies": {
+        "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-codegen": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
       },
     },
     "packages/client": {
       "name": "@rhi-zone/fractal-client",
       "version": "0.1.0-alpha.0",
       "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-example-library-api": "workspace:*",
         "@rhi-zone/fractal-http": "workspace:*",
       },
@@ -40,32 +44,31 @@
     "packages/codegen": {
       "name": "@rhi-zone/fractal-codegen",
       "version": "0.1.0-alpha.0",
+      "bin": {
+        "fractal-codegen": "./src/cli.ts",
+      },
       "dependencies": {
         "@rhi-zone/fractal-type-ir": "workspace:*",
         "typescript": "^6.0.3",
       },
       "devDependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-mcp": "workspace:*",
         "@sinclair/typebox": "^0.34.41",
       },
-    },
-    "packages/core": {
-      "name": "@rhi-zone/fractal-core",
-      "version": "0.1.0-alpha.0",
     },
     "packages/http": {
       "name": "@rhi-zone/fractal-http",
       "version": "0.1.0-alpha.0",
       "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-api-tree": "workspace:*",
       },
     },
     "packages/mcp": {
       "name": "@rhi-zone/fractal-mcp",
       "version": "0.1.0-alpha.0",
       "dependencies": {
-        "@rhi-zone/fractal-core": "workspace:*",
+        "@rhi-zone/fractal-api-tree": "workspace:*",
       },
       "devDependencies": {
         "@rhi-zone/fractal-http": "workspace:*",
@@ -75,8 +78,8 @@
       "name": "@rhi-zone/fractal-openapi",
       "version": "0.1.0-alpha.0",
       "dependencies": {
+        "@rhi-zone/fractal-api-tree": "workspace:*",
         "@rhi-zone/fractal-codegen": "workspace:*",
-        "@rhi-zone/fractal-core": "workspace:*",
         "@rhi-zone/fractal-http": "workspace:*",
       },
     },
@@ -86,13 +89,13 @@
     },
   },
   "packages": {
+    "@rhi-zone/fractal-api-tree": ["@rhi-zone/fractal-api-tree@workspace:packages/api-tree"],
+
     "@rhi-zone/fractal-cli": ["@rhi-zone/fractal-cli@workspace:packages/cli"],
 
     "@rhi-zone/fractal-client": ["@rhi-zone/fractal-client@workspace:packages/client"],
 
     "@rhi-zone/fractal-codegen": ["@rhi-zone/fractal-codegen@workspace:packages/codegen"],
-
-    "@rhi-zone/fractal-core": ["@rhi-zone/fractal-core@workspace:packages/core"],
 
     "@rhi-zone/fractal-example-library-api": ["@rhi-zone/fractal-example-library-api@workspace:examples/library-api"],
 

@@ -16,7 +16,7 @@ import type {
   ParamMeta,
   PathMeta,
   PrefixMeta,
-} from "@rhi-zone/fractal-core";
+} from "@rhi-zone/fractal-api-tree";
 
 // ============================================================================
 // SOUND exact-equality. The function-identity invariant trick: two types are

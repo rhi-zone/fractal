@@ -41,7 +41,7 @@
 //   return corsLayer({ origin: "https://app.example.com" })(methods)
 
 import type { AsyncLocalStorage } from "node:async_hooks"
-import type { Node } from "@rhi-zone/fractal-core/node"
+import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import {
   createApplyValidation,
   fusePipeline as fusePipelineRewriter,

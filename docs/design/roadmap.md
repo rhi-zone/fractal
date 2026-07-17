@@ -64,7 +64,7 @@ and the 404-vs-405 distinction. Dispatch combinators stay meta-free; only the pr
 - `ParamMeta` keys are PATH-PARAMS = API surface → client call args + OpenAPI `parameters`.
 - `ProvideMeta` keys are VARS = server-internal → NOT in client signature/params.
 
-The route-table walk (`walkMeta` in `packages/core/src/index.ts`) appends a pattern
+The route-table walk (`walkMeta` in `packages/api-tree/src/index.ts`) appends a pattern
 segment for `path`/`param` but walks straight THROUGH `provide`. **Adding `withAuth` to a
 route does not change its client signature.**
 
@@ -83,7 +83,7 @@ handler tree (truth: typeof app, .meta)
   server handler aliases, and a STATIC DRIFT GUARD.
 - The drift guard is one line:
   `export const _drift: Assert<AssertExact<RouteUnion<typeof app>, GenUnion>> = true;`
-  — an exact union-vs-union equality (substrate in `packages/core/src/drift.ts`).
+  — an exact union-vs-union equality (substrate in `packages/api-tree/src/drift.ts`).
   `RouteUnion<typeof app>` re-derives the route-entry union from the source `.meta`;
   `GenUnion` is the union the generated client carries. Any drift — added / removed /
   renamed route, changed param / body / response shape — makes the two unions differ,
@@ -203,7 +203,7 @@ scoped authz (beyond binary 401).
 The `param` clone-non-bleed invariant (a sibling `choice` alt must not see a leaked
 `ctx` param) is structurally guaranteed by `paramRT`/`withSegments` and tested indirectly
 via choice-correctness, but has no explicit committed regression test in
-`packages/core/src/index.test.ts`. Commit one.
+`packages/api-tree/src/index.test.ts`. Commit one.
 
 ---
 

@@ -67,7 +67,7 @@ const bodySchema: StandardSchema<unknown, Body> = {
 function variantA(routes: Route[]): string {
   const lines: string[] = []
   lines.push(`import { httpRouter, json, withValidation } from "@rhi-zone/fractal-http"`)
-  lines.push(`import type { StandardSchema } from "@rhi-zone/fractal-core"`)
+  lines.push(`import type { StandardSchema } from "@rhi-zone/fractal-api-tree"`)
   lines.push(`import { client } from "@rhi-zone/fractal-client"`)
   lines.push(SCHEMA_HELPER)
   lines.push(`const app = httpRouter()`)
@@ -118,7 +118,7 @@ function variantA(routes: Route[]): string {
 function variantB(routes: Route[]): string {
   const lines: string[] = []
   lines.push(`import { json, withValidation } from "@rhi-zone/fractal-http"`)
-  lines.push(`import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-core"`)
+  lines.push(`import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"`)
   lines.push(SCHEMA_HELPER)
   // Each handler typed locally and standalone — no builder, no tuple at all.
   // This is the purest isolation of per-route typing cost.
@@ -155,7 +155,7 @@ function variantB(routes: Route[]): string {
 function variantC1(routes: Route[]): string {
   const lines: string[] = []
   lines.push(`import { json, withValidation } from "@rhi-zone/fractal-http"`)
-  lines.push(`import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-core"`)
+  lines.push(`import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"`)
   lines.push(`import type { ClientOfContract } from "../contract"`)
   lines.push(SCHEMA_HELPER)
   lines.push(`type Ctx<P extends string> = RoutingCtx & { params: PathParams<P> } & {`)
@@ -207,7 +207,7 @@ function variantC1(routes: Route[]): string {
 function variantC2(routes: Route[]): string {
   const lines: string[] = []
   lines.push(`import { json, withValidation } from "@rhi-zone/fractal-http"`)
-  lines.push(`import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-core"`)
+  lines.push(`import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"`)
   lines.push(`import { buildClient, defineRoute } from "../contract"`)
   lines.push(SCHEMA_HELPER)
   lines.push(`type Ctx<P extends string> = RoutingCtx & { params: PathParams<P> } & {`)

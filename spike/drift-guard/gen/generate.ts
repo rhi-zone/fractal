@@ -28,7 +28,7 @@ const Ns = (process.argv.length > 2 ? process.argv.slice(2) : ["100", "300", "60
   .map((s) => Math.round(Number(s) / 3)); // arg is route count target; /3 → resources
 
 // Relative import roots (out/ → spike root packages).
-const CORE = "@rhi-zone/fractal-core";
+const CORE = "@rhi-zone/fractal-api-tree";
 const DERIVE = "../derive.ts";
 
 // ------------------------------------------------------------------------------

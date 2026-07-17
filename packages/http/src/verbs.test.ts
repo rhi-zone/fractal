@@ -12,9 +12,9 @@
 //   7. head / options helpers exist and carry readOnly
 
 import { describe, expect, it } from "bun:test"
-import { mergeMeta, op } from "@rhi-zone/fractal-core/node"
-import { resolveTags } from "@rhi-zone/fractal-core/tags"
-import type { Tags } from "@rhi-zone/fractal-core/tags"
+import { mergeMeta, op } from "@rhi-zone/fractal-api-tree/node"
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import { http } from "./verbs.ts"
 import { verbFromTags } from "./project.ts"
 import type { HttpDirective } from "./project.ts"

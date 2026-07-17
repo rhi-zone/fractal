@@ -6,7 +6,7 @@ import { lit, param, path, route, routes, mount } from "./router"
 import { toHandler, json } from "./http"
 import { client } from "./client"
 import { toOpenApi } from "./openapi"
-import type { StandardSchema } from "@rhi-zone/fractal-core"
+import type { StandardSchema } from "@rhi-zone/fractal-api-tree"
 
 // --- a tiny body schema (no zod) -------------------------------------------
 interface NewUser {

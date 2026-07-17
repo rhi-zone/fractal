@@ -10,10 +10,10 @@
 //   C2  buildClient([defineRoute(...), ...]) — opt-in accumulation. Each route
 //       is an independent descriptor; the tuple is formed ONLY at this one call.
 //
-// Both reuse fractal-core's per-route type machinery (PathParams, BodyOf-style
+// Both reuse fractal-api-tree's per-route type machinery (PathParams, BodyOf-style
 // output recovery) so the derived client matches the coupled one's ergonomics.
 
-import type { PathParams, StandardSchema } from "@rhi-zone/fractal-core"
+import type { PathParams, StandardSchema } from "@rhi-zone/fractal-api-tree"
 
 // Recover a validated node's phantom input/output, else a plain handler's return.
 type NodeInput<H> = H extends { readonly meta: { readonly __input?: infer I } }

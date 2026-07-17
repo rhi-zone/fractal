@@ -42,7 +42,7 @@
   },
   "files": ["src"],
   "dependencies": {
-    "@rhi-zone/fractal-core": "workspace:*"
+    "@rhi-zone/fractal-api-tree": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

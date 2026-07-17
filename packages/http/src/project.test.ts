@@ -11,8 +11,8 @@
 // TODO.md "Attribute dispatch is an open design question".
 
 import { describe, expect, it } from "bun:test"
-import { api, op, service } from "@rhi-zone/fractal-core/node"
-import type { Node } from "@rhi-zone/fractal-core/node"
+import { api, op, service } from "@rhi-zone/fractal-api-tree/node"
+import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { makeRouter, toHttpRoutes, verbFromTags } from "./project.ts"
 import { applyMethods, applyMoveTo } from "./route.ts"
 import { autoMethodLayer } from "./layers.ts"

@@ -19,7 +19,7 @@
 // convenience wrappers for the three benchmarked shapes.
 
 import type { AsyncLocalStorage } from "node:async_hooks"
-import type { Handler, Meta } from "@rhi-zone/fractal-core/node"
+import type { Handler, Meta } from "@rhi-zone/fractal-api-tree/node"
 import { runPipeline, splitPath } from "./route.ts"
 import type { HttpRoute, Pipeline } from "./route.ts"
 

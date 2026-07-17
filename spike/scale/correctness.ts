@@ -5,7 +5,7 @@
 // degenerate and the measurement would be meaningless.
 
 import { httpRouter, json, withValidation } from "@rhi-zone/fractal-http"
-import type { StandardSchema } from "@rhi-zone/fractal-core"
+import type { StandardSchema } from "@rhi-zone/fractal-api-tree"
 import { client } from "@rhi-zone/fractal-client"
 import { buildClient, defineRoute, type ClientOfContract } from "./contract"
 

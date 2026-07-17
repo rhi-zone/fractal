@@ -1,8 +1,8 @@
 // packages/http/src/dx.test.ts — crud() and httpProjection() DX sugar tests
 
 import { describe, expect, it } from "bun:test"
-import { isLeaf } from "@rhi-zone/fractal-core/node"
-import type { Node } from "@rhi-zone/fractal-core/node"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
+import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { crud, httpProjection } from "./dx.ts"
 import { naiveTransform } from "./route.ts"
 import type { HttpDirective } from "./project.ts"

@@ -94,13 +94,13 @@
 
 ## AS-BUILT (implemented this session)
 
-**[BUILT]** Workspaces (5 active): `@rhi-zone/fractal-core`, `-http`, `-mcp`,
+**[BUILT]** Workspaces (5 active): `@rhi-zone/fractal-api-tree`, `-http`, `-mcp`,
 `-codegen`, `examples/library-api`. (`packages/openapi` and `packages/client`
 exist but are fenced out of the workspace pending migration to the new model —
 see `package.json` comment.) 130 tests pass across the 5 active workspaces,
 0 fail; typecheck clean.
 
-**[BUILT] `@rhi-zone/fractal-core` (`packages/core`):**
+**[BUILT] `@rhi-zone/fractal-api-tree` (`packages/api-tree`):**
 - `node.ts` — types: `Meta` (open bag, `tags?` sub-bag), `Op<I,O>` (`fn` +
   `meta`), `ParamNode` (`_tag:"param"`, `name`, `subtree`), `ChildEntry = Node |
   ParamNode`, `Node` (`ops`, `children`, `meta`). Constructors: `op(fn, meta?)`,

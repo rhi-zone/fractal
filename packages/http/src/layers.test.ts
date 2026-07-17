@@ -1,7 +1,7 @@
 // packages/http/src/layers.test.ts — composable layer tests
 
 import { describe, expect, it } from "bun:test"
-import { api as api_, op } from "@rhi-zone/fractal-core/node"
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 import { applyMethods, applyMoveTo } from "./route.ts"
 import { autoMethodLayer, corsLayer } from "./layers.ts"

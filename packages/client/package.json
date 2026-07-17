@@ -14,7 +14,7 @@
   },
   "files": ["src"],
   "dependencies": {
-    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-api-tree": "workspace:*",
     "@rhi-zone/fractal-http": "workspace:*",
     "@rhi-zone/fractal-example-library-api": "workspace:*"
   },

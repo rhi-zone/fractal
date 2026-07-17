@@ -8,7 +8,7 @@
 
 import { lit, param, path, route, routes, mount } from "./router"
 import { json } from "./http"
-import type { StandardSchema } from "@rhi-zone/fractal-core"
+import type { StandardSchema } from "@rhi-zone/fractal-api-tree"
 
 interface User {
   readonly id: string

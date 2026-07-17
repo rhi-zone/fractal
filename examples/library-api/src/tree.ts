@@ -18,7 +18,7 @@
 // skips it — its ops degrade to the MCP spec-minimum `{ type: "object" }`
 // placeholder.
 
-import { api as api_, op, service } from "@rhi-zone/fractal-core/node"
+import { api as api_, op, service } from "@rhi-zone/fractal-api-tree/node"
 import { http } from "@rhi-zone/fractal-http/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http/dx"
 import { createApplyValidation } from "@rhi-zone/fractal-http/route"

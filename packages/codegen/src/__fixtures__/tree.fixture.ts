@@ -8,9 +8,9 @@
 // `op(fn, meta?)` calls. The codegen walker recognises `op(...)` children as
 // leaves and extracts their input schemas.
 
-import { api, op } from "@rhi-zone/fractal-core/node"
+import { api, op } from "@rhi-zone/fractal-api-tree/node"
 // (a) Direct import from core's package root.
-import type { Result } from "@rhi-zone/fractal-core"
+import type { Result } from "@rhi-zone/fractal-api-tree"
 // (b) Barrel re-export: Result re-exported through a local barrel FILE, name
 // unchanged. TypeScript sees the same identifier "Result" — the syntax path
 // matches it by name and extracts the first type argument.

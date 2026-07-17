@@ -25,14 +25,14 @@
 //
 // See:
 //   docs/artifacts/fc-op-kinds/projection-mcp.md — MCP concept list + classification
-//   packages/core/src/tags.ts                    — tag lattice (resolveTags)
+//   packages/api-tree/src/tags.ts                    — tag lattice (resolveTags)
 //   packages/http/src/project.ts                 — sibling projection (structural mirror)
 //   packages/codegen/src/tree.ts                 — extractToolSchemas (schema source)
 
-import { isLeaf } from "@rhi-zone/fractal-core/node"
-import { resolveTags } from "@rhi-zone/fractal-core/tags"
-import type { Tags } from "@rhi-zone/fractal-core/tags"
-import type { Meta, Node } from "@rhi-zone/fractal-core/node"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
+import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 
 // ============================================================================
 // Types

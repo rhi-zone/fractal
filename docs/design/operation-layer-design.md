@@ -31,7 +31,7 @@ a structural deficiency. The routing-expression-model.md's proposed primitives
 | `consume(segment, next)` | `children[key]` — keyed dispatch on path segment |
 | `capture(name, next)` | `fallback: { name, subtree }` — wildcard capture |
 | `match(accessor, cases)` | `children` + `meta.http.dispatch: DispatchMarker` |
-| `pipe(f, g)` | `compose()` in `packages/core` |
+| `pipe(f, g)` | `compose()` in `packages/api-tree` |
 | `alt(f, g)` | Multiple candidates from `candidatesForUrl()` |
 
 **What this means for the operation layer**: an operation declaration is another

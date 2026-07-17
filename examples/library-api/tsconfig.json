@@ -12,8 +12,8 @@
     "allowImportingTsExtensions": true,
     "types": ["bun-types"],
     "paths": {
-      "@rhi-zone/fractal-core/node": ["../../packages/core/src/node.ts"],
-      "@rhi-zone/fractal-core/tags": ["../../packages/core/src/tags.ts"],
+      "@rhi-zone/fractal-api-tree/node": ["../../packages/api-tree/src/node.ts"],
+      "@rhi-zone/fractal-api-tree/tags": ["../../packages/api-tree/src/tags.ts"],
       "@rhi-zone/fractal-http/preset": ["../../packages/http/src/preset.ts"],
       "@rhi-zone/fractal-http/project": ["../../packages/http/src/project.ts"],
       "@rhi-zone/fractal-mcp": ["../../packages/mcp/src/index.ts"],

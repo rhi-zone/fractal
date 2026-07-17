@@ -1,6 +1,6 @@
 import { choice, route, path, lit, param, json } from "../http.ts"
 import { client } from "../client.ts"
-import type { StandardSchema } from "@rhi-zone/fractal-core"
+import type { StandardSchema } from "@rhi-zone/fractal-api-tree"
 
 interface Body { readonly name: string; readonly qty: number }
 const bodySchema: StandardSchema<unknown, Body> = {

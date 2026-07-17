@@ -74,7 +74,7 @@ const join = (prefix: string, seg: string): string =>
 
 /**
  * Resolve the LOCAL identifier a source file binds `api` to when importing
- * it from "@rhi-zone/fractal-core/node" — `import { api } from "..."` binds
+ * it from "@rhi-zone/fractal-api-tree/node" — `import { api } from "..."` binds
  * "api", but `import { api as api_ } from "..."` (used when the file also
  * declares its own `const api = ...` tree) binds "api_". Falls back to
  * "api" when no such import is found, so entry-point detection still works
@@ -84,7 +84,7 @@ function resolveApiLocalName(source: ts.SourceFile): string {
   for (const stmt of source.statements) {
     if (!ts.isImportDeclaration(stmt)) continue
     if (!ts.isStringLiteral(stmt.moduleSpecifier)) continue
-    if (stmt.moduleSpecifier.text !== "@rhi-zone/fractal-core/node") continue
+    if (stmt.moduleSpecifier.text !== "@rhi-zone/fractal-api-tree/node") continue
     const namedBindings = stmt.importClause?.namedBindings
     if (!namedBindings || !ts.isNamedImports(namedBindings)) continue
     for (const el of namedBindings.elements) {

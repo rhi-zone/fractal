@@ -17,7 +17,7 @@
     "codegen:check": "bun ../../packages/codegen/src/cli.ts check src/tree.ts -o src/generated/validators.ts"
   },
   "dependencies": {
-    "@rhi-zone/fractal-core": "workspace:*",
+    "@rhi-zone/fractal-api-tree": "workspace:*",
     "@rhi-zone/fractal-http": "workspace:*",
     "@rhi-zone/fractal-mcp": "workspace:*",
     "@rhi-zone/fractal-codegen": "workspace:*"

@@ -12,7 +12,7 @@ import type {
   ParamMeta,
   PathMeta,
   PrefixMeta,
-} from "@rhi-zone/fractal-core";
+} from "@rhi-zone/fractal-api-tree";
 
 // Reuse the flat walk machinery's primitives but assemble the NESTED, grouped
 // call-signature client (the expensive form): group by path, build per-verb call

@@ -5,7 +5,7 @@
 import { lit, param, path, route, routes } from "./router"
 import { json } from "./http"
 import { client } from "./client"
-import type { StandardSchema } from "@rhi-zone/fractal-core"
+import type { StandardSchema } from "@rhi-zone/fractal-api-tree"
 
 interface Body {
   readonly name: string

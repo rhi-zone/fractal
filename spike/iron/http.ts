@@ -15,7 +15,7 @@
 // surface). The runtime touch (`Bun.serve`) lives in serve.ts.
 
 import { type Handler, handler } from "./core.ts"
-import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-core"
+import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-api-tree"
 
 // ============================================================================
 // The request facet a handler reads, and the reply it returns. These are not

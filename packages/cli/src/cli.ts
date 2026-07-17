@@ -27,15 +27,15 @@
 // process.exit, keeping the test runner alive).
 //
 // See:
-//   packages/core/src/node.ts   — Node, Handler, fallback
-//   packages/core/src/tags.ts   — resolveTags
+//   packages/api-tree/src/node.ts   — Node, Handler, fallback
+//   packages/api-tree/src/tags.ts   — resolveTags
 //   packages/codegen/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
-import { isLeaf } from "@rhi-zone/fractal-core/node"
-import { resolveTags } from "@rhi-zone/fractal-core/tags"
-import type { Tags } from "@rhi-zone/fractal-core/tags"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-core/node"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
+import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-codegen"
 
 // ============================================================================

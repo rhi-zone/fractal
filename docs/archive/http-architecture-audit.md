@@ -1,7 +1,7 @@
 # HTTP Projection Architecture Audit
 
 **Branch:** `redesign/function-core`  
-**Scope:** `packages/http/src/{project,layers,preset,verbs,adapter}.ts` + `packages/core/src/{node,tags}.ts`  
+**Scope:** `packages/http/src/{project,layers,preset,verbs,adapter}.ts` + `packages/api-tree/src/{node,tags}.ts`  
 **Date:** 2026-07-09  
 **Status:** Read-only audit; no source changes.
 
@@ -23,7 +23,7 @@
 
 **Where it lives:** `verbFromTags()` in `packages/http/src/project.ts:77-94`.
 
-**Assessment:** **Already composable.** `verbFromTags` is a pure, standalone function — it reads `meta.http.verb` first (override wins, `project.ts:79-83`), then falls through to `resolveTags(meta.tags)` (`project.ts:85-93`). It has no side-effects and no coupling to `buildRoutes` except being called from it. The three-valued lattice lives in `packages/core/src/tags.ts:117-142` (`resolveTags`, `effectiveTags`). 
+**Assessment:** **Already composable.** `verbFromTags` is a pure, standalone function — it reads `meta.http.verb` first (override wins, `project.ts:79-83`), then falls through to `resolveTags(meta.tags)` (`project.ts:85-93`). It has no side-effects and no coupling to `buildRoutes` except being called from it. The three-valued lattice lives in `packages/api-tree/src/tags.ts:117-142` (`resolveTags`, `effectiveTags`). 
 
 `effectiveTags` (`tags.ts:158-170`) is the closest-wins ancestor-merge across the node path and is called inline in `buildRoutes` before invoking `verbFromTags` (`project.ts:205`, `264-266`, `318-321`). This is correct separation: tag inheritance is a core concern, verb derivation is an HTTP concern, and they compose via a clean data handoff.
 

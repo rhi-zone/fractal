@@ -23,7 +23,7 @@
 // ============================================================================
 
 import { httpRoute, type HttpRoute } from "./route.ts"
-import type { Handler } from "@rhi-zone/fractal-core/node"
+import type { Handler } from "@rhi-zone/fractal-api-tree/node"
 import os from "node:os"
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
