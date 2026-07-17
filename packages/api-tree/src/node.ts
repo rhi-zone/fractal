@@ -43,7 +43,10 @@ import type { Tags } from "./tags.ts"
  * non-type-expressible projection/taste concerns (verb, segment, idempotency,
  * auth). Never a second source for domain data.
  */
-export type Meta = { tags?: Tags; readonly [key: string]: unknown }
+export interface Meta {
+  tags?: Tags
+  readonly [key: string]: unknown
+}
 
 /** The bare callable on a leaf node. Provenance-blind: handler sees one flat input. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

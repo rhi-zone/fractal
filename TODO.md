@@ -61,10 +61,13 @@ before acting.
   is wired end-to-end in `examples/library-api` (`src/tree.ts`, exercised in
   `src/app.test.ts`) — the consumer-app-facing "does a real route's validators
   actually get replaced" path is verified, not just designed.
-- **Meta typing pattern** — settled design, not yet implemented: `packages/api-tree`
-  defines `interface Meta { tags?: Tags }`. Each protocol package (http, mcp,
-  ...) exports its own meta type (e.g. `HttpMeta`) rather than mutating core's
-  `Meta`. The consuming project does declaration merging:
+- ~~**Meta typing pattern**~~ — RESOLVED (2026-07-17): `packages/api-tree/src/node.ts`
+  now defines `Meta` as an `interface` (was a `type` alias), enabling
+  declaration merging. Each protocol package already exports its own meta type
+  — `HttpMeta` (`http-api-projector/src/project.ts`), `McpMeta`
+  (`mcp-api-projector/src/project.ts`), `CliMeta` (`cli-api-projector/src/cli.ts`),
+  `OpenApiMeta` (`openapi-api-projector/src/index.ts`) — rather than mutating
+  core's `Meta`. A consuming project can now do declaration merging:
   `declare module '@rhi-zone/fractal-api-tree' { interface Meta extends HttpMeta,
   McpMeta {} }`. No package touches another package's or core's types
   directly.
