@@ -37,6 +37,8 @@ import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
+import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
+import { generateCompletions, isShellName } from "./completions.ts"
 
 // ============================================================================
 // CliError — thrown instead of process.exit()
@@ -78,10 +80,17 @@ export type CliIO = {
 export type CliOpts = {
   /**
    * Pre-computed schema map (from extractToolSchemas). When provided, input
-   * fields are derived from the JSON Schema. When absent, flags degrade to
-   * parsing --key value pairs from argv.
+   * fields are derived from the JSON Schema — both for help text and for
+   * coercing flag values to the schema's declared type before the handler
+   * is called (see `coerceInput`). When absent, flags degrade to parsing
+   * --key value pairs from argv as bare strings (no coercion).
    */
   readonly schemas?: SchemaMap
+  /**
+   * Program name used in usage/help text and generated completion scripts.
+   * Defaults to "cli".
+   */
+  readonly programName?: string
 }
 
 // ============================================================================
@@ -119,6 +128,15 @@ type Resolved = {
   readonly slugs: Record<string, string>
   readonly leafName: string
   readonly leafMeta: Meta
+  /**
+   * The path used to look up this leaf's schema in a `SchemaMap`, i.e. the
+   * same underscore-joined segments `extractToolSchemas` (packages/api-tree/
+   * src/tree.ts) produces: fallback segments are named by `fallback.name`
+   * (e.g. "bookId"), NOT by the runtime slug value the user typed on argv.
+   * Distinct from the raw argv path segments, which contain the literal
+   * slug value at that position.
+   */
+  readonly schemaPath: string[]
 }
 
 /**
@@ -135,6 +153,7 @@ function resolveLeaf(
   n: Node,
   segments: string[],
   slugs: Record<string, string>,
+  schemaPath: string[] = [],
 ): Resolved | null {
   if (segments.length === 0) return null
   const [head, ...tail] = segments
@@ -151,6 +170,7 @@ function resolveLeaf(
         slugs,
         leafName: head,
         leafMeta: child.meta,
+        schemaPath: [...schemaPath, head],
       }
     }
     return null
@@ -160,16 +180,23 @@ function resolveLeaf(
   const staticChild = children[head]
   if (staticChild !== undefined) {
     if (!isLeaf(staticChild)) {
-      return resolveLeaf(staticChild, tail, slugs)
+      return resolveLeaf(staticChild, tail, slugs, [...schemaPath, head])
     }
     // A leaf child at non-tail is a dead-end (a leaf has no children to recurse into)
     return null
   }
 
   // No static match — fall back to the wildcard-capture subtree, if any.
-  // `head` IS the slug value directly (no separate key segment).
+  // `head` IS the slug value directly (no separate key segment); the
+  // schema path instead records `fallback.name`, matching how
+  // extractToolSchemas names the fallback subtree's tools.
   if (n.fallback !== undefined) {
-    return resolveLeaf(n.fallback.subtree, tail, { ...slugs, [n.fallback.name]: head })
+    return resolveLeaf(
+      n.fallback.subtree,
+      tail,
+      { ...slugs, [n.fallback.name]: head },
+      [...schemaPath, n.fallback.name],
+    )
   }
 
   return null
@@ -238,6 +265,8 @@ function buildHelp(
   lines.push("  --help        Show this help text")
   lines.push("  --json        Output result as JSON (default)")
   lines.push("  --yes, --force  Skip confirmation prompts for destructive ops")
+  lines.push("")
+  lines.push(`Run '${cmd} completions <bash|zsh|fish>' to print a shell completion script.`)
 
   return lines.join("\n") + "\n"
 }
@@ -259,8 +288,9 @@ function buildLeafHelp(
   if (tags.readOnly === true) lines.push("  This operation is read-only.", "")
   if (tags.streaming === true) lines.push("  This operation streams results (one JSON object per line).", "")
 
-  // Derive flags from schema
-  const schemaName = path.join("_").replace(/-/g, "_")
+  // Derive flags from schema — schemaPath uses fallback.name (e.g. "bookId"),
+  // not the runtime slug value, matching extractToolSchemas' key convention.
+  const schemaName = resolved.schemaPath.join("_").replace(/-/g, "_")
   const toolSchema = schemas[schemaName]
 
   lines.push("Options:")
@@ -268,22 +298,36 @@ function buildLeafHelp(
   lines.push("  --yes, --force  Skip confirm for destructive ops")
   lines.push("  --json        Output as JSON (default)")
 
-  if (toolSchema?.inputSchema !== undefined) {
-    const schema = toolSchema.inputSchema as Record<string, unknown>
-    const props = schema["properties"] as Record<string, unknown> | undefined
-    const required = (schema["required"] as string[] | undefined) ?? []
-    if (props !== undefined) {
-      for (const [field, fieldSchema] of Object.entries(props)) {
-        const isRequired = required.includes(field)
-        const fs = fieldSchema as Record<string, unknown>
-        const fsDesc = typeof fs["description"] === "string" ? fs["description"] : undefined
-        const req = isRequired ? " (required)" : " (optional)"
-        lines.push(`  --${field}${fsDesc !== undefined ? `  ${fsDesc}` : ""}${req}`)
-      }
+  if (toolSchema?.inputSchema.properties !== undefined) {
+    const props = toolSchema.inputSchema.properties
+    const required = toolSchema.inputSchema.required ?? []
+    for (const [field, fieldSchema] of Object.entries(props)) {
+      const isRequired = required.includes(field)
+      // `description` isn't part of the typed JsonSchema shape emitted today,
+      // but is read defensively in case a future extractor attaches one.
+      const fsDescRaw = (fieldSchema as Record<string, unknown>)["description"]
+      const fsDesc = typeof fsDescRaw === "string" ? fsDescRaw : undefined
+      const req = isRequired ? " (required)" : " (optional)"
+      const typeHint = describeFieldType(fieldSchema)
+      lines.push(`  --${field}${typeHint !== undefined ? `  <${typeHint}>` : ""}${fsDesc !== undefined ? `  ${fsDesc}` : ""}${req}`)
     }
   }
 
   return lines.join("\n") + "\n"
+}
+
+/** Short human-readable type hint for a field's help line, e.g. "number" or "enum: a|b|c". */
+function describeFieldType(fieldSchema: JsonSchema): string | undefined {
+  if (fieldSchema.enum !== undefined) return `enum: ${fieldSchema.enum.join("|")}`
+  if (fieldSchema.type === "array") {
+    const items = fieldSchema.items
+    if (items !== undefined && items !== false) {
+      const itemType = describeFieldType(items)
+      if (itemType !== undefined) return `${itemType}[]`
+    }
+    return "array"
+  }
+  return fieldSchema.type
 }
 
 // ============================================================================
@@ -382,6 +426,146 @@ function buildInput(
 }
 
 // ============================================================================
+// Type coercion from JSON Schema
+// ============================================================================
+//
+// Flag values arrive from argv as `string | string[] | true` (see
+// parseFlags). Before the handler is called, coerceInput walks the leaf's
+// input schema (from `opts.schemas`, keyed by `resolved.schemaPath`) and
+// coerces each field present in BOTH the input and the schema's
+// `properties` to the schema's declared type:
+//   number/integer → Number(value), reject NaN (and non-integers for "integer")
+//   boolean        → "true"/"1"/"yes" → true, "false"/"0"/"no" → false
+//   array          → coerce each element against `items`
+//   enum           → validate membership, suggest the closest match on miss
+//   string/other   → left untouched (today's behavior)
+// Fields with no matching schema property pass through unchanged — this is
+// what keeps coercion backward-compatible with schema-less trees (opts.schemas
+// omitted) and with fields a schema doesn't know about.
+
+/** Levenshtein edit distance — used to suggest the closest enum value on a mismatch. */
+function levenshteinDistance(a: string, b: string): number {
+  const rows = a.length + 1
+  const cols = b.length + 1
+  const dp: number[][] = []
+  for (let i = 0; i < rows; i++) {
+    const row = new Array<number>(cols).fill(0)
+    row[0] = i
+    dp.push(row)
+  }
+  for (let j = 0; j < cols; j++) dp[0]![j] = j
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < cols; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[i]![j] = Math.min(
+        dp[i - 1]![j]! + 1,
+        dp[i]![j - 1]! + 1,
+        dp[i - 1]![j - 1]! + cost,
+      )
+    }
+  }
+  return dp[rows - 1]![cols - 1]!
+}
+
+/** The enum member closest (by edit distance) to `value`, or undefined for an empty enum. */
+function closestEnumMatch(value: string, options: readonly string[]): string | undefined {
+  let best: string | undefined
+  let bestDist = Infinity
+  for (const opt of options) {
+    const d = levenshteinDistance(value, opt)
+    if (d < bestDist) {
+      bestDist = d
+      best = opt
+    }
+  }
+  return best
+}
+
+/** Coerce a single scalar value against a (non-array) field schema. */
+function coerceScalar(field: string, value: unknown, schema: JsonSchema): unknown {
+  if (schema.enum !== undefined) {
+    const str = typeof value === "string" ? value : String(value)
+    if (!schema.enum.includes(str)) {
+      const suggestion = closestEnumMatch(str, schema.enum)
+      const hint = suggestion !== undefined ? ` Did you mean "${suggestion}"?` : ""
+      throw new CliError(
+        `--${field}: invalid value "${str}" — expected one of: ${schema.enum.join(", ")}.${hint}`,
+        1,
+      )
+    }
+    return str
+  }
+
+  // `schema.type` is typed as a 5-member literal union, but the extractor's
+  // underlying type-ir->JSON-Schema projection (packages/type-ir/src/json-schema.ts)
+  // legitimately emits "integer" too (cast at the api-tree boundary) — compare
+  // as a plain string so both "number" and "integer" are covered.
+  const rawType = schema.type as string | undefined
+  switch (rawType) {
+    case "number":
+    case "integer": {
+      if (typeof value === "boolean") {
+        throw new CliError(`--${field}: expected a number, got a boolean flag`, 1)
+      }
+      const n = Number(value)
+      if (Number.isNaN(n)) {
+        throw new CliError(`--${field}: expected a number, got "${String(value)}"`, 1)
+      }
+      if (rawType === "integer" && !Number.isInteger(n)) {
+        throw new CliError(`--${field}: expected an integer, got "${String(value)}"`, 1)
+      }
+      return n
+    }
+    case "boolean": {
+      if (typeof value === "boolean") return value
+      const str = String(value)
+      const s = str.toLowerCase()
+      if (s === "true" || s === "1" || s === "yes") return true
+      if (s === "false" || s === "0" || s === "no") return false
+      throw new CliError(`--${field}: expected a boolean, got "${str}"`, 1)
+    }
+    default:
+      // "string", "object", or schema-less — left untouched.
+      return value
+  }
+}
+
+/** Coerce one input field against its schema, handling the `array` wrapper around coerceScalar. */
+function coerceField(field: string, value: unknown, schema: JsonSchema): unknown {
+  if (schema.type === "array") {
+    const items = schema.items
+    const arr = Array.isArray(value) ? value : [value]
+    if (items === undefined || items === false) return arr
+    return arr.map((el) => coerceScalar(field, el, items))
+  }
+  return coerceScalar(field, value, schema)
+}
+
+/**
+ * Coerce a raw handler input object against a leaf's input schema, field by
+ * field. Fields absent from `schema.properties` (including all fields, when
+ * `schema` itself is undefined — no schema was supplied for this leaf) pass
+ * through unchanged, so this stays backward-compatible with schema-less
+ * trees. Throws CliError on a coercion failure (NaN number, invalid enum
+ * member, unparseable boolean).
+ */
+export function coerceInput(
+  input: Record<string, unknown>,
+  schema: JsonSchema | undefined,
+): Record<string, unknown> {
+  const props = schema?.properties
+  if (props === undefined) return input
+
+  const out: Record<string, unknown> = { ...input }
+  for (const [field, value] of Object.entries(input)) {
+    const fieldSchema = props[field]
+    if (fieldSchema === undefined) continue
+    out[field] = coerceField(field, value, fieldSchema)
+  }
+  return out
+}
+
+// ============================================================================
 // Default IO (process-backed)
 // ============================================================================
 
@@ -419,6 +603,7 @@ export async function runCli(
 ): Promise<void> {
   const ioResolved: CliIO = { ...defaultIO, ...io }
   const schemas: SchemaMap = opts.schemas ?? {}
+  const programName = opts.programName ?? "cli"
 
   // Split argv into subcommand-path segments vs flag tokens.
   // Strategy: consume leading non-flag tokens as path segments; everything
@@ -435,15 +620,30 @@ export async function runCli(
     }
   }
 
+  // `completions <shell>` — a reserved top-level command (not part of the
+  // authored tree) that prints a static shell completion script derived from
+  // the tree structure + schemas. See ./completions.ts.
+  if (pathSegments[0] === "completions") {
+    const shellArg = pathSegments[1]
+    if (!isShellName(shellArg)) {
+      ioResolved.stderr.write(
+        `Usage: ${programName} completions <bash|zsh|fish>\n`,
+      )
+      throw new CliError("Unknown or missing shell for completions", 1)
+    }
+    ioResolved.stdout.write(generateCompletions(shellArg, n, schemas, programName))
+    return
+  }
+
   const { flags, help, yes, json: _json, jsonl } = parseFlags(flagArgv)
 
   // No subcommand args — show root help
   if (pathSegments.length === 0) {
     if (help) {
-      ioResolved.stdout.write(buildHelp(n, [], "cli"))
+      ioResolved.stdout.write(buildHelp(n, [], programName))
       return
     }
-    ioResolved.stderr.write("Usage: cli <subcommand> [options]\nRun with --help for usage.\n")
+    ioResolved.stderr.write(`Usage: ${programName} <subcommand> [options]\nRun with --help for usage.\n`)
     throw new CliError("No subcommand provided", 1)
   }
 
@@ -452,7 +652,7 @@ export async function runCli(
     // Try to resolve to a leaf first
     const target = resolveLeaf(n, pathSegments, {})
     if (target !== null) {
-      ioResolved.stdout.write(buildLeafHelp(target, pathSegments, "cli", schemas))
+      ioResolved.stdout.write(buildLeafHelp(target, pathSegments, programName, schemas))
       return
     }
     // Otherwise walk to a branch child for group help
@@ -467,7 +667,7 @@ export async function runCli(
         break
       }
     }
-    ioResolved.stdout.write(buildHelp(cursor, pathSegments.slice(0, depth), "cli"))
+    ioResolved.stdout.write(buildHelp(cursor, pathSegments.slice(0, depth), programName))
     return
   }
 
@@ -492,8 +692,19 @@ export async function runCli(
     }
   }
 
-  // Build input: flags + slugs (provenance-blind merge)
-  const input = buildInput(flags, target.slugs)
+  // Build input: flags + slugs (provenance-blind merge), then coerce against
+  // the leaf's input schema (number/boolean/array/enum → typed values; a
+  // schema-less field, or no schema at all, passes through unchanged).
+  const schemaName = target.schemaPath.join("_").replace(/-/g, "_")
+  const rawInput = buildInput(flags, target.slugs)
+  let input: Record<string, unknown>
+  try {
+    input = coerceInput(rawInput, schemas[schemaName]?.inputSchema)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    ioResolved.stderr.write(`Error: ${msg}\n`)
+    throw err instanceof CliError ? err : new CliError(msg, 1)
+  }
 
   // Call handler
   let result: unknown
