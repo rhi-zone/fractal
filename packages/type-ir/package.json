@@ -23,6 +23,10 @@
       "types": "./src/from-json.ts",
       "import": "./src/from-json.ts"
     },
+    "./from-json-corpus": {
+      "types": "./src/from-json-corpus.ts",
+      "import": "./src/from-json-corpus.ts"
+    },
     "./jsdoc": {
       "types": "./src/jsdoc.ts",
       "import": "./src/jsdoc.ts"
