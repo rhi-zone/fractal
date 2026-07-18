@@ -19,6 +19,10 @@
       "types": "./src/from-json-schema.ts",
       "import": "./src/from-json-schema.ts"
     },
+    "./from-json": {
+      "types": "./src/from-json.ts",
+      "import": "./src/from-json.ts"
+    },
     "./jsdoc": {
       "types": "./src/jsdoc.ts",
       "import": "./src/jsdoc.ts"
