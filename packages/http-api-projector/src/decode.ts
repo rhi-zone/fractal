@@ -15,38 +15,16 @@
 //
 // Path params (from route slugs) always come from the "path" store,
 // determined by matching param names against the routing-resolved slug names.
+//
+// The Store/Stores/ParamSource/SourceMap types and the `assemble` function
+// itself now live in @rhi-zone/fractal-api-tree's input.ts (this file was the
+// first well-factored version of that pipeline, since generalized so CLI and
+// MCP projectors can share it). Re-exported below for backward compat.
 
-// ============================================================================
-// Store interface
-// ============================================================================
+export type { Store, Stores, ParamSource, SourceMap } from "@rhi-zone/fractal-api-tree"
+export { assemble } from "@rhi-zone/fractal-api-tree"
 
-/** A named key-value interface over a single input source. */
-export interface Store {
-  get(key: string): unknown
-}
-
-/** All input stores available for a given request. */
-export type Stores = Readonly<Record<string, Store>>
-
-// ============================================================================
-// Per-param source override
-// ============================================================================
-
-/**
- * Declares where a specific parameter should be read from, overriding the
- * default convention. Used for cases like pulling a param from a header or
- * from a query param on a POST request.
- */
-export interface ParamSource {
-  readonly store: string
-  readonly key?: string // defaults to param name when omitted
-}
-
-/**
- * Map of param names to their source overrides. Only params listed here
- * diverge from the convention; all others follow the primary-store rule.
- */
-export type SourceMap = Readonly<Record<string, ParamSource>>
+import type { Stores } from "@rhi-zone/fractal-api-tree"
 
 // ============================================================================
 // HTTP stores factory
@@ -94,43 +72,6 @@ export function primaryStoreForMethod(method: string): string {
     default:
       return "body"
   }
-}
-
-// ============================================================================
-// Assembler
-// ============================================================================
-
-/**
- * Build the handler's input bag by reading named params from stores.
- *
- * Resolution order for each param:
- *   1. If the param name matches a path slug → read from "path" store.
- *   2. If the param has an explicit override in `sourceMap` → read from that.
- *   3. Otherwise → read from the primary store (method-derived convention).
- *
- * When `paramNames` is empty (no schema info available), falls back to
- * bulk-collecting all available values from the primary store and path —
- * this preserves backward compat with the old defaultDecode behavior.
- */
-export function assemble(
-  stores: Stores,
-  paramNames: readonly string[],
-  sourceMap: SourceMap,
-  primaryStore: string,
-  pathParamNames: readonly string[],
-): Record<string, unknown> {
-  const bag: Record<string, unknown> = {}
-  for (const name of paramNames) {
-    if (pathParamNames.includes(name)) {
-      bag[name] = stores.path?.get(name)
-    } else if (name in sourceMap) {
-      const src = sourceMap[name]!
-      bag[name] = stores[src.store]?.get(src.key ?? name)
-    } else {
-      bag[name] = stores[primaryStore]?.get(name)
-    }
-  }
-  return bag
 }
 
 // ============================================================================
