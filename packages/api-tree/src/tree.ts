@@ -121,8 +121,8 @@ function fallbackNameLiteral(
  * `onLeaf` receives both the underscore-joined MCP tool name (`name`, mirrors
  * `toTools`) and the raw path-segment array (`path`) it was built from — a
  * fallback segment appears in `path` as `:name` (e.g. `":bookId"`), matching
- * the convention `route.ts`'s `pathKey`/`injectValidators` use at runtime over
- * the `HttpRoute` tree.
+ * the convention `build.ts`'s `wrapValidators` uses at runtime over the
+ * `Node` tree.
  */
 type OnLeaf = (
   name: string,
@@ -273,10 +273,10 @@ export function extractToolTypeRefs(entryFile: string): TypeRefMap {
 /**
  * Extract the ROUTE-PATH → TypeRef map for every exported `api(children,
  * opts?)` tree in a source file — same walk as `extractToolTypeRefs`, but
- * keyed by the `"/"`-joined path-segment string `route.ts`'s
- * `pathKey`/`injectValidators` use (fallback segments rendered as `:name`)
- * instead of the underscore-joined MCP tool name. This is the key shape
- * `createApplyValidation`'s `ValidatorMap` inner map expects.
+ * keyed by the `"/"`-joined path-segment string `build.ts`'s
+ * `wrapValidators` uses (fallback segments rendered as `:name`) instead of
+ * the underscore-joined MCP tool name. This is the key shape
+ * `wrapValidators`'s generated-entry map expects.
  */
 export function extractRouteTypeRefs(entryFile: string): TypeRefMap {
   const out: TypeRefMap = {}

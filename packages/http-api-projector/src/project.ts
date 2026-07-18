@@ -32,7 +32,7 @@ import type { HttpRoute } from "./route.ts"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 
 export { verbFromTags } from "./tags.ts"
-export type { HttpRoute, Pipeline } from "./route.ts"
+export type { HttpRoute } from "./route.ts"
 export {
   applyMethods,
   applyMoveTo,

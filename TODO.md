@@ -7,7 +7,7 @@ On the table from previous session (2026-07-18):
 **From projector coverage audit (HIGH — blocks production use):**
 - **HTTP streaming responses** (SSE/chunked encoding) + **MCP progress notifications** — both need handler context design: how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr). Critical blocker for AI/realtime use cases.
 - **HTTP non-JSON content types** — multipart, form-data, file upload, octet-stream. Request/response payload currently JSON-only.
-- **Validation auto-wiring** — HTTP's validation (codegen-based via `injectValidators`) differs from CLI and MCP (hand-rolled). Wire validation consistently: connect extract → compile → inject into preset by default.
+- ~~**Validation auto-wiring**~~ — RESOLVED (2026-07-19): HTTP's `createFetch` now wires generated validators via `wrapValidators` (`@rhi-zone/fractal-api-tree/build`) at the `Node` level, before `httpProjection` runs — the same mechanism `createMcpServer` and `runCli` already used. See "HttpRoute Pipeline abstraction removed" below.
 
 **From projector coverage audit (MEDIUM-HIGH):**
 - **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains).
@@ -86,6 +86,7 @@ Design decisions remain settled (below); implementation roadmap for Tier 2–3 f
 ### Design decisions (settled)
 
 1. **Pipeline type simplification**: The 8-stage `HttpRoute` pipeline is being replaced. The 4 transform stages (reqTransforms, inputTransforms, outputTransforms, resTransforms) are unused speculative infrastructure. Real needs (ALS bracket, caller-context, around-hooks) are served by the middleware/layer pattern (`(inner) => (req) => result`), which already exists and is load-bearing (`autoMethodLayer`, `corsLayer`). The actual working pipeline is: decode (stores/assemble) → validate → handler → encode.
+   **DONE (2026-07-19)**: see "HttpRoute Pipeline abstraction removed" below.
 
 2. **Validation is a composable middleware, not a core concept**: No special validation slot in core. A validation package provides middleware that uses generated validators.
 
@@ -104,6 +105,53 @@ Design decisions remain settled (below); implementation roadmap for Tier 2–3 f
 ### Reference
 
 Requirements doc at `~/git/*/docs/artifacts/fractal-eval-2026-07/requirements-for-fractal.md` identifies the pipeline's limitations and motivates middleware/layers across all surfaces.
+
+---
+
+## HttpRoute Pipeline abstraction removed — DONE (2026-07-19)
+
+Executed the plan settled in "Validation & middleware patterns" above: the
+`Pipeline` type (`route.ts`) — `reqTransforms`/`decode`-override/
+`inputTransforms`/`validate`/`outputTransforms`/`encode`-override/
+`resTransforms`, plus `runPipeline`'s per-stage loop, `createApplyValidation`/
+`injectValidators`, and the `fusePipeline`/`skipEmptyInput` build-time
+optimizations that existed only to make that loop cheaper — is gone. Nothing
+outside of tests exercising the mechanism itself ever used the 4 transform
+arrays or a per-route `decode`/`encode` override; `sources` (declarative
+per-param decode config) was the one genuinely load-bearing piece and
+survives as a direct field on a method entry (`{ handler, meta, sources? }`),
+not wrapped in anything.
+
+Dispatch is now a single linear function, `runRoute` (route.ts): decode via
+`sources` → call handler → unwrap `Result`/`ResponseOverride` → encode.
+`makeRouterFromRoute` and `compile.ts`'s `toRouter` (shared by
+`radixRouter`/`compiledCharRouter`/`mapCharRouter`) both call it, so every
+dispatcher in the package encodes identically.
+
+Validation moved from a route-tree-level `pipeline.validate` slot to the
+`Node` level: `wrapValidators` (`@rhi-zone/fractal-api-tree/build`) wraps a
+leaf's handler to run the generated `parse()` before the original handler —
+the same mechanism `createMcpServer`'s and `runCli`'s `validators` option
+already used, so HTTP's `createFetch(node, { validators })` now shares one
+wiring convention across all three protocols instead of having its own.
+`api-tree/build.ts`'s `toValidator`/`toValidatorRecord` (the adapter that
+existed solely to fit generated entries into the retired `Validator`/
+`ValidatorMap` shape) were dead code once `createApplyValidation` was gone,
+so they were removed along with their tests.
+
+Migrated: `packages/http-api-projector` (`route.ts`, `compile.ts`,
+`preset.ts`, `index.ts`, `project.ts`, and all affected `*.test.ts`),
+`examples/library-api` (`tree.ts`, `app.test.ts`). Full workspace typecheck
+and `bun test` (2083 tests, 62 files) both pass.
+
+Known gap carried forward, not introduced by this change: a
+`wrapValidators`-rejected input throws `HandlerValidationError`, which
+`runRoute`'s catch-all maps to a generic 500 — there is no dedicated
+400-for-validation-errors path anymore (CLI and MCP already treat a thrown
+validation error the same generic way, so this is HTTP catching up to that
+convention, not a regression against a promise that was ever made for HTTP
+specifically — the OLD `pipeline.validate` slot DID map to 400, so this is a
+real, deliberate behavior change for HTTP call sites relying on that 400).
 
 ---
 
@@ -217,7 +265,7 @@ before acting.
 
 - **Exact coercion placement in the architecture** — where coercion logic lives (input stage? pre-validate? post-extract?), how it composes with validation, whether codegen produces combined or separate coercion+validation functions by default.
 - **Import resolution/provenance tracking for type guard codegen** — DONE (2026-07-18, same session as item 4 above): see that entry for the mechanism (`meta.typeName`/`meta.declarationFile` provenance + caller-supplied `resolveImport`).
-- **Pipeline removal/simplification timeline** — the 4 speculative transform stages on `HttpRoute` are replaced by middleware; remove them now or defer until the middleware story is fully built out?
+- ~~**Pipeline removal/simplification timeline**~~ — RESOLVED (2026-07-19): removed now. See "HttpRoute Pipeline abstraction removed" below.
 
 ### Other projection packages still on the old Node-walking pattern —
   narrowed (2026-07-18): `openapi` and `client` (commits d7fd295, 96f4635)

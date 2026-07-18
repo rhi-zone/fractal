@@ -24,11 +24,13 @@ import {
 import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
 import { radixRouter } from "@rhi-zone/fractal-http-api-projector"
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
-import { op } from "@rhi-zone/fractal-api-tree/node"
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
+import { HandlerValidationError, isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
+import { validators as generatedValidators } from "./generated/validators.ts"
 
 /** Candidate methods reachable at `path` in the library-api's HttpRoute tree. */
 function methodsAt(path: string): string[] {
@@ -288,40 +290,52 @@ describe("library-api — verb-helper bundles (http.*)", () => {
 })
 
 // ============================================================================
-// Codegen validators — createApplyValidation wiring (tree.ts's `httpRoutes`,
-// wired via generated/validators.ts, see src/generated/validators.ts and
-// package.json's `codegen` script)
+// Codegen validators — Node-level `wrapValidators` wiring (tree.ts's
+// `validatedApi`/`httpRoutes`, wired via generated/validators.ts, see
+// src/generated/validators.ts and package.json's `codegen` script). This is
+// the mechanism that replaced the retired route-tree-level
+// `createApplyValidation`/`pipeline.validate` slot — validation now happens
+// on the `Node` handler itself, before HttpRoute projection ever runs, so
+// the same generated module wires HTTP, MCP, and CLI alike.
 // ============================================================================
 
 describe("library-api — codegen-generated validators", () => {
-  it("httpRoutes wires a generated validator onto catalog/search's GET pipeline", () => {
-    const pipeline = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.pipeline
-    expect(pipeline?.validate).toBeDefined()
-    expect(pipeline?.validate?.length).toBeGreaterThan(0)
+  it("httpRoutes' catalog/search GET handler is wrapValidators-wrapped", () => {
+    const handler = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.handler
+    expect(handler).toBeDefined()
+    expect(isValidatorWrapped(handler!)).toBe(true)
+  })
+
+  it("a leaf with no matching generated validator entry is left untouched", () => {
+    // Every leaf in the real `api` tree happens to have a generated entry
+    // (see generated/validators.ts) — this proves the no-op passthrough case
+    // on a synthetic tree instead, mirroring the "widgets"/"other" split
+    // preset.test.ts exercises for createFetch's own validators option.
+    const unwrapped = (input: unknown) => input
+    const fixture = api_({ other: op(unwrapped) })
+    const wrapped = wrapValidators(fixture, generatedValidators)
+    expect(wrapped.children?.other?.handler).toBe(unwrapped)
+    expect(isValidatorWrapped(wrapped.children!.other!.handler!)).toBe(false)
   })
 
   // `catalog/search`'s generated schema is `{ q?: string }` — every value a
   // real HTTP GET query string can produce for `q` is already a string
   // (WHATWG `URLSearchParams` never yields anything else), so a genuine
-  // type-mismatch 400 can't be produced by an actual request to this route.
-  // This calls the actual wired validator (the same function object
-  // `createApplyValidation` injected into `httpRoutes`) directly against a
-  // malformed bag, proving codegen + wiring really do reject bad input
-  // rather than only ever pass through.
-  it("wired validator rejects a wrong-typed bag (q as a number, not a string)", async () => {
-    const validate =
-      httpRoutes.children?.catalog?.children?.search?.methods?.GET?.pipeline?.validate?.[0]
-    expect(validate).toBeDefined()
-    const result = await validate!({ q: 123 })
-    expect(result.kind).toBe("err")
+  // type-mismatch can't be produced by an actual HTTP request to this route.
+  // This calls the wired handler directly with a malformed bag, proving
+  // codegen + wiring really do reject bad input rather than only ever pass
+  // through.
+  it("wired handler rejects a wrong-typed bag (q as a number, not a string)", async () => {
+    const handler = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.handler
+    expect(handler).toBeDefined()
+    await expect(handler!({ q: 123 })).rejects.toThrow(HandlerValidationError)
   })
 
-  it("wired validator accepts a correctly-typed bag (q as a string)", async () => {
-    const validate =
-      httpRoutes.children?.catalog?.children?.search?.methods?.GET?.pipeline?.validate?.[0]
-    expect(validate).toBeDefined()
-    const result = await validate!({ q: "hobbit" })
-    expect(result.kind).toBe("ok")
+  it("wired handler accepts a correctly-typed bag (q as a string)", async () => {
+    const handler = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.handler
+    expect(handler).toBeDefined()
+    const result = (await handler!({ q: "hobbit" })) as unknown[]
+    expect(Array.isArray(result)).toBe(true)
   })
 
   it("valid request through the validated route still returns 200 (GET /catalog/search?q=...)", async () => {
@@ -431,16 +445,6 @@ describe("library-api — createFetch preset options against the real tree", () 
     expect(observedOnHead).toBe("req-lib-1")
   })
 
-  it("fusePipeline/skipEmptyInput: disabling both still dispatches the real tree correctly", async () => {
-    const unfused = createFetch(api, { fusePipeline: false, skipEmptyInput: false })
-
-    const listRes = await unfused(new Request("http://localhost/books/list"))
-    expect(listRes.status).toBe(200)
-
-    const genresRes = await unfused(new Request("http://localhost/catalog/genres"))
-    expect(genresRes.status).toBe(200)
-  })
-
   it("directives: false — naiveTransform baseline; moveTo-placed /books/{id} routes disappear", async () => {
     const naive = createFetch(api, { directives: false })
 
@@ -451,7 +455,11 @@ describe("library-api — createFetch preset options against the real tree", () 
   })
 
   it("codegen-generated validators still run when combined with cors + a custom router", async () => {
-    const combined = createFetch(api, { cors: true, router: radixRouter })
+    const combined = createFetch(api, {
+      cors: true,
+      router: radixRouter,
+      validators: generatedValidators,
+    })
 
     const withQuery = await combined(
       new Request("http://localhost/catalog/search?q=hobbit"),

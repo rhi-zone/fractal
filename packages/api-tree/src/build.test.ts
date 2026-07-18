@@ -2,9 +2,8 @@
 //
 // Covers: the build orchestrator wires extraction (extract.ts/tree.ts) ->
 // @rhi-zone/fractal-type-ir's compileValidatorModule end-to-end, entryFile ->
-// compiled module, and `toValidatorRecord`'s adaptation of the generated
-// `{ check, errors, parse }` triples into the single-function `Validator`
-// shape `createApplyValidation` expects.
+// compiled module; and `wrapValidators`' wiring of that generated
+// `{ check, errors, parse }` map directly onto a `Node` tree's handlers.
 
 import { describe, expect, it } from "bun:test"
 import {
@@ -12,7 +11,6 @@ import {
   HandlerValidationError,
   isValidatorWrapped,
   stubValidatorModuleSource,
-  toValidatorRecord,
   wrapValidators,
 } from "./build.ts"
 import type { GeneratedEntry } from "./build.ts"
@@ -154,7 +152,7 @@ describe("wrapValidators — Node-level counterpart to route.ts's injectValidato
     expect(result).toEqual({ id: 7 })
   })
 
-  it("keys a fallback (wildcard-capture) segment as ':name', matching route.ts's pathKey convention", () => {
+  it("keys a fallback (wildcard-capture) segment as ':name', matching the generated module's path convention", () => {
     const handler = (input: { id: number }) => input
     const tree = api(
       {},
@@ -193,25 +191,5 @@ describe("wrapValidators — Node-level counterpart to route.ts's injectValidato
 
     expect(wrapped.children!.get!.handler).toBe(handler)
     expect(isValidatorWrapped(wrapped.children!.get!.handler!)).toBe(false)
-  })
-})
-
-describe("toValidatorRecord — adapts { check, errors, parse } into a single-function Validator", () => {
-  it("wraps parse's ok branch through unchanged", () => {
-    const source = buildValidatorModuleSource(`${import.meta.dir}/__fixtures__/tree.fixture.ts`)
-    const validators = evalModule(source)
-    const adapted = toValidatorRecord(validators)
-    const result = adapted["users/:userId/get"]!({ userId: "u1" })
-    expect(result).toEqual({ kind: "ok", value: { userId: "u1" } })
-  })
-
-  it("wraps parse's err branch, renaming errors (plural) to error (singular) to match Result<T,E>", () => {
-    const source = buildValidatorModuleSource(`${import.meta.dir}/__fixtures__/tree.fixture.ts`)
-    const validators = evalModule(source)
-    const adapted = toValidatorRecord(validators)
-    const result = adapted["users/create"]!({}) as { kind: "err"; error: unknown[] }
-    expect(result.kind).toBe("err")
-    expect(Array.isArray(result.error)).toBe(true)
-    expect(result.error.length).toBeGreaterThan(0)
   })
 })

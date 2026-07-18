@@ -2,34 +2,36 @@
 //
 // OOTB preset: composes the full HTTP stack into a ready-to-use fetch handler.
 //
-// Pipeline (in order, each independently droppable):
-//   1. httpProjection   — Node => HttpRoute (naiveTransform + applyMethods +
+// Stages (in order, each independently droppable):
+//   1. validators         — wrapValidators(node, opts.validators)
+//                          (@rhi-zone/fractal-api-tree/build), applied to the
+//                          `Node` tree BEFORE projection (opt-in). Same
+//                          mechanism `createMcpServer`/`runCli` use — a leaf
+//                          with a matching generated entry gets its handler
+//                          wrapped to run the generated `parse()` first;
+//                          leaves with no matching entry pass through
+//                          untouched.
+//   2. httpProjection     — Node => HttpRoute (naiveTransform + applyMethods +
 //                          applyMoveTo + applyResponse, see dx.ts).
 //                          `directives: false` drops the directive rewriters,
 //                          leaving the naive-transform baseline (every
 //                          handler POST at its own path-segment key).
-//   2. validators        — createApplyValidation(opts.validators), applied
-//                          once per outer key in the map (opt-in).
-//   3. fusePipeline       — compose each transform array down to one entry
-//                          (route.ts). Free perf, on by default.
-//   4. skipEmptyInput     — no-op decode/validate for 0-param handlers
-//                          (route.ts). Free perf, on by default.
-//   5. rewriters          — user-supplied HttpRoute => HttpRoute passes,
+//   3. rewriters          — user-supplied HttpRoute => HttpRoute passes,
 //                          applied last, right before router compilation.
-//   6. router             — HttpRoute => CompiledRouter. Defaults to
+//   4. router             — HttpRoute => CompiledRouter. Defaults to
 //                          `makeRouterFromRoute` (zero build cost). Swap in
 //                          `radixRouter` / `compiledCharRouter` /
 //                          `mapCharRouter` (compile.ts) — or any function of
 //                          that shape — for faster dispatch at a build-time
 //                          cost. Deliberately a function, not a string enum:
 //                          the built-ins are just values of this same type.
-//   7. als                — withALS (compile.ts), wraps the compiled router
+//   5. als                — withALS (compile.ts), wraps the compiled router
 //                          so every request runs inside its own
 //                          AsyncLocalStorage context. Opt-in.
-//   8. autoMethodLayer    — HEAD-from-GET, OPTIONS→204+Allow, 405+Allow.
+//   6. autoMethodLayer    — HEAD-from-GET, OPTIONS→204+Allow, 405+Allow.
 //
 // Optional (opt-in, off by default):
-//   9. corsLayer          — CORS preflight + origin headers.
+//   7. corsLayer          — CORS preflight + origin headers.
 //
 // To drop the auto-method layer and use core routing only:
 //   return makeRouterFromRoute(httpProjection(node))
@@ -42,13 +44,10 @@
 
 import type { AsyncLocalStorage } from "node:async_hooks"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import {
-  createApplyValidation,
-  fusePipeline as fusePipelineRewriter,
-  makeRouterFromRoute,
-  skipEmptyInput as skipEmptyInputRewriter,
-} from "./route.ts"
-import type { HttpRoute, ValidatorMap } from "./route.ts"
+import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
+import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import { makeRouterFromRoute } from "./route.ts"
+import type { HttpRoute } from "./route.ts"
 import { httpProjection } from "./dx.ts"
 import type { HttpProjectionOptions } from "./dx.ts"
 import { withALS } from "./compile.ts"
@@ -89,29 +88,21 @@ export type PresetOptions<T = unknown> = {
    */
   readonly directives?: boolean
   /**
-   * Generated validators to wire into the route tree via
-   * `createApplyValidation`. Each outer key of the map is applied once, in
-   * `Object.keys` order — same semantics as calling
-   * `createApplyValidation(validators)(key, route)` for every key by hand.
-   * Absent by default (no-op).
+   * Generated validators (from `buildValidatorModuleSource` /
+   * `compileValidatorModule`, keyed by `"/"`-joined route path — see
+   * `wrapValidators` in `@rhi-zone/fractal-api-tree/build`). When provided,
+   * `node` is wrapped via `wrapValidators` BEFORE `httpProjection` runs: any
+   * leaf with a matching entry has its handler run through the generated
+   * `parse()` (coercion + validation in one pass) before the original
+   * handler ever sees the input. Leaves with no matching entry (or when this
+   * option is omitted entirely) keep their original handler untouched. Same
+   * mechanism `createMcpServer`'s and `runCli`'s `opts.validators` use, so a
+   * single generated module wires validation into HTTP, MCP, and CLI alike.
    */
-  readonly validators?: ValidatorMap
-  /**
-   * Compose each transform array (reqTransforms/inputTransforms/
-   * outputTransforms/resTransforms/validate) down to at most one entry per
-   * method (route.ts's `fusePipeline`). Free perf — behaviorally identical
-   * to the unfused pipeline. Default `true`.
-   */
-  readonly fusePipeline?: boolean
-  /**
-   * Skip decode/validate for handlers that take zero parameters (route.ts's
-   * `skipEmptyInput`). Free perf. Default `true`.
-   */
-  readonly skipEmptyInput?: boolean
+  readonly validators?: Readonly<Record<string, GeneratedEntry>>
   /**
    * Additional `HttpRoute => HttpRoute` passes, applied in array order,
-   * after `validators`/`fusePipeline`/`skipEmptyInput` and before router
-   * compilation.
+   * after projection and before router compilation.
    */
   readonly rewriters?: ReadonlyArray<(route: HttpRoute) => HttpRoute>
   /**
@@ -192,6 +183,11 @@ export function createFetch<T = unknown>(
   node: Node,
   opts: PresetOptions<T> = {},
 ): CompiledRouter {
+  // Wire generated validators onto the tree BEFORE any projection walk — see
+  // `PresetOptions.validators`. Leaves with no matching entry keep their
+  // original handler untouched (wrapValidators is a no-op there).
+  const workingNode = opts.validators !== undefined ? wrapValidators(node, opts.validators) : node
+
   const projectionOpts: HttpProjectionOptions =
     opts.projection?.transforms !== undefined
       ? opts.projection
@@ -199,17 +195,7 @@ export function createFetch<T = unknown>(
         ? { transforms: [] }
         : (opts.projection ?? {})
 
-  let routes = httpProjection(node, projectionOpts)
-
-  if (opts.validators !== undefined) {
-    const applyValidation = createApplyValidation(opts.validators)
-    for (const key of Object.keys(opts.validators)) {
-      routes = applyValidation(key, routes)
-    }
-  }
-
-  if (opts.fusePipeline !== false) routes = fusePipelineRewriter(routes)
-  if (opts.skipEmptyInput !== false) routes = skipEmptyInputRewriter(routes)
+  let routes = httpProjection(workingNode, projectionOpts)
 
   for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
 

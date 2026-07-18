@@ -15,12 +15,10 @@
 // ops, including the `books` subtree below (also authored via api()).
 
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
+import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
-import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
-import type { ValidatorMap } from "@rhi-zone/fractal-http-api-projector/route"
-import { toValidatorRecord } from "@rhi-zone/fractal-api-tree/build"
-import { validators as catalogValidators } from "./generated/validators.ts"
+import { validators as generatedValidators } from "./generated/validators.ts"
 
 // ============================================================================
 // Domain types + in-memory store
@@ -225,27 +223,24 @@ export const api = api_({
   })
 
 // ============================================================================
-// Validator wiring — createApplyValidation injects the codegen-generated
-// `catalog/*` validators (examples/library-api/src/generated/validators.ts,
-// produced by `bun run codegen`, see package.json) into the route tree's
-// `pipeline.validate` slot. The `books` subtree has no entry in `validatorMap`
-// and is untouched: a key not present in the map is a no-op passthrough
-// (route.ts's `createApplyValidation` doc comment).
+// Validator wiring — `wrapValidators` (@rhi-zone/fractal-api-tree/build)
+// wraps the codegen-generated validators
+// (examples/library-api/src/generated/validators.ts, produced by
+// `bun run codegen`, see package.json) directly onto `api`'s leaf handlers,
+// keyed by `"/"`-joined route path — the Node-level mechanism shared by
+// HTTP, MCP, and CLI (see build.ts's module doc). A leaf with no matching
+// entry in `generatedValidators` keeps its original handler untouched.
 // ============================================================================
 
-// The generated module exports `Record<path, { check, errors, parse }>` (see
-// type-ir's compile.ts) — a type-ir concern, not http-api-projector's.
-// `toValidatorRecord` (api-tree's build.ts) adapts each entry's `parse` into
-// the single-function `Validator` shape `ValidatorMap` expects.
-const validatorMap: ValidatorMap = { catalog: toValidatorRecord(catalogValidators) }
-const applyValidation = createApplyValidation(validatorMap)
+export const validatedApi = wrapValidators(api, generatedValidators)
 
 // ============================================================================
 // HttpRoute projection — the pre-composed pipeline (naiveTransform +
 // applyMethods + applyMoveTo + applyResponse, see
 // docs/design/routing-and-transforms.md and packages/http-api-projector/src/dx.ts),
-// with the generated `catalog/*` validators applied on top. This is the
-// actual route tree `createFetch(api)` dispatches against.
+// over the validator-wrapped tree. This is the actual route tree
+// `createFetch(api, { validators: generatedValidators })` (see app.test.ts)
+// dispatches against.
 // ============================================================================
 
-export const httpRoutes = applyValidation("catalog", httpProjection(api))
+export const httpRoutes = httpProjection(validatedApi)

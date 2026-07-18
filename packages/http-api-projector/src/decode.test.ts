@@ -4,7 +4,6 @@ import { describe, expect, it } from "bun:test"
 import { api, op } from "@rhi-zone/fractal-api-tree/node"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 import { applyMethods, applyMoveTo, composeTransforms, httpRoute } from "./route.ts"
-import type { Pipeline } from "./route.ts"
 import { assemble, bulkCollect, httpStores, primaryStoreForMethod } from "./decode.ts"
 
 // ============================================================================
@@ -196,21 +195,18 @@ describe("stores-based decode — default behavior through the router", () => {
   })
 })
 
-describe("stores-based decode — per-param source override via pipeline.sources", () => {
+describe("stores-based decode — per-param source override via sources", () => {
   it("reads a specific param from the header store", async () => {
     let capturedInput: unknown
-    const pipeline: Pipeline = {
-      sources: {
-        paramNames: ["title", "apiKey"],
-        sourceMap: { apiKey: { store: "header", key: "x-api-key" } },
-      },
-    }
     const route = httpRoute({
       methods: {
         POST: {
           handler: (input: unknown) => { capturedInput = input; return {} },
           meta: {},
-          pipeline,
+          sources: {
+            paramNames: ["title", "apiKey"],
+            sourceMap: { apiKey: { store: "header", key: "x-api-key" } },
+          },
         },
       },
       meta: {},
@@ -229,11 +225,6 @@ describe("stores-based decode — per-param source override via pipeline.sources
 
   it("path params identified by slug names, rest from primary store", async () => {
     let capturedInput: unknown
-    const pipeline: Pipeline = {
-      sources: {
-        paramNames: ["bookId", "q"],
-      },
-    }
     const route = httpRoute({
       children: {
         books: httpRoute({
@@ -244,7 +235,7 @@ describe("stores-based decode — per-param source override via pipeline.sources
                 GET: {
                   handler: (input: unknown) => { capturedInput = input; return {} },
                   meta: {},
-                  pipeline,
+                  sources: { paramNames: ["bookId", "q"] },
                 },
               },
               meta: {},
@@ -264,17 +255,12 @@ describe("stores-based decode — per-param source override via pipeline.sources
 describe("stores-based decode — optional transform", () => {
   it("runs the transform after assembly, before the handler", async () => {
     let capturedInput: unknown
-    const pipeline: Pipeline = {
-      sources: {
-        transform: (bag) => ({ ...bag, injected: true }),
-      },
-    }
     const route = httpRoute({
       methods: {
         GET: {
           handler: (input: unknown) => { capturedInput = input; return {} },
           meta: {},
-          pipeline,
+          sources: { transform: (bag) => ({ ...bag, injected: true }) },
         },
       },
       meta: {},
@@ -282,53 +268,5 @@ describe("stores-based decode — optional transform", () => {
     const router = makeRouter(route)
     await router(new Request("http://localhost/?name=Alice"))
     expect(capturedInput).toEqual({ name: "Alice", injected: true })
-  })
-})
-
-describe("stores-based decode — interaction with existing pipeline", () => {
-  it("inputTransforms still run after stores-based decode", async () => {
-    let capturedInput: unknown
-    const pipeline: Pipeline = {
-      sources: {
-        paramNames: ["name"],
-      },
-      inputTransforms: [
-        (input) => ({ ...(input as Record<string, unknown>), fromTransform: true }),
-      ],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/?name=Bob"))
-    expect(capturedInput).toEqual({ name: "Bob", fromTransform: true })
-  })
-
-  it("custom decode function still wins over stores config", async () => {
-    let capturedInput: unknown
-    const pipeline: Pipeline = {
-      decode: () => ({ custom: true }),
-      sources: { paramNames: ["ignored"] },
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/?name=Alice"))
-    expect(capturedInput).toEqual({ custom: true })
   })
 })

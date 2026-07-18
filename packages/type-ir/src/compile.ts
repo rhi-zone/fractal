@@ -825,10 +825,9 @@ const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
 /**
  * Emit a complete, standalone, zero-RUNTIME-dependency TypeScript module
  * exporting a `validators` object — `Record<name, { check, errors, parse }>`.
- * The build orchestrator (api-tree's build.ts) adapts each entry's `parse`
- * into whatever single-function `Validator` shape its own consumer (e.g.
- * http-api-projector's `createApplyValidation`) expects; this module makes
- * no assumption about that consumer.
+ * The build orchestrator (api-tree's build.ts) hands this map straight to
+ * `wrapValidators`, which wires each entry's `parse` onto the matching leaf's
+ * handler; this module makes no assumption about that consumer.
  *
  * The module carries exactly one TYPE-ONLY dependency: `import type {
  * ValidationError } from "@rhi-zone/fractal-type-ir"` — this is the SAME

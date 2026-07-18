@@ -5,23 +5,20 @@
 
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import type { Meta } from "@rhi-zone/fractal-api-tree/node"
+import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import {
   applyMethods,
   applyMoveTo,
   applyResponse,
   composeTransforms,
-  createApplyValidation,
-  fusePipeline,
   httpRoute,
   isHttpRoute,
   makeRouterFromRoute,
   naiveTransform,
-  skipEmptyInput,
 } from "./route.ts"
-import type { HttpRoute, Pipeline, Validator, ValidatorMap } from "./route.ts"
+import type { HttpRoute } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
-import { radixRouter } from "./compile.ts"
 
 // ============================================================================
 // naiveTransform — basic tree → HttpRoute conversion
@@ -397,107 +394,14 @@ describe("httpRoute / isHttpRoute", () => {
 })
 
 // ============================================================================
-// Pipeline — interceptable request/response stages
-// (docs/design/routing-and-transforms.md § "Interceptable pipeline")
+// runRoute (via makeRouterFromRoute) — decode → handler → encode, no
+// interceptable stages. Covers default decode/encode, per-route `sources`,
+// Result unwrapping, response overrides, and error handling — everything
+// the retired Pipeline abstraction used to cover, minus the multi-stage
+// machinery nothing in this codebase actually used.
 // ============================================================================
 
-describe("Pipeline", () => {
-  it("runs a reqTransform that adds a header before decode", async () => {
-    const seen: Array<string | null> = []
-    const pipeline: Pipeline = {
-      reqTransforms: [
-        (req) => new Request(req, { headers: { ...Object.fromEntries(req.headers), "x-injected": "yes" } }),
-      ],
-      decode: (req) => {
-        seen.push(req.headers.get("x-injected"))
-        return {}
-      },
-    }
-    const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({}), meta: {}, pipeline } },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/"))
-    expect(seen).toEqual(["yes"])
-  })
-
-  it("runs an inputTransform that injects a field before the handler sees it", async () => {
-    let seenInput: unknown
-    const pipeline: Pipeline = {
-      inputTransforms: [(input) => ({ ...(input as Record<string, unknown>), injected: true })],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => {
-            seenInput = input
-            return {}
-          },
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/"))
-    expect(seenInput).toEqual({ injected: true })
-  })
-
-  it("runs an outputTransform that wraps the handler result", async () => {
-    const pipeline: Pipeline = {
-      outputTransforms: [(output) => ({ data: output })],
-    }
-    const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({ id: 1 }), meta: {}, pipeline } },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(await res.json()).toEqual({ data: { id: 1 } })
-  })
-
-  it("runs a resTransform that adds CORS headers to the response", async () => {
-    const pipeline: Pipeline = {
-      resTransforms: [
-        (res) => {
-          const headers = new Headers(res.headers)
-          headers.set("Access-Control-Allow-Origin", "*")
-          return new Response(res.body, { status: res.status, headers })
-        },
-      ],
-    }
-    const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({ ok: true }), meta: {}, pipeline } },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
-  })
-
-  it("uses a custom decode/encode pair in place of the defaults", async () => {
-    const pipeline: Pipeline = {
-      decode: async (req) => ({ text: await req.text() }),
-      encode: (output) => new Response(`custom:${JSON.stringify(output)}`, { status: 202 }),
-    }
-    const route = httpRoute({
-      methods: {
-        POST: {
-          handler: (input: unknown) => input,
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/", { method: "POST", body: "hello" }))
-    expect(res.status).toBe(202)
-    expect(await res.text()).toBe('custom:{"text":"hello"}')
-  })
-
+describe("runRoute — default decode/encode", () => {
   it("default decode: JSON body merged for POST, empty input for GET", async () => {
     let seenPost: unknown
     let seenGet: unknown
@@ -508,7 +412,7 @@ describe("Pipeline", () => {
       },
       meta: {},
     })
-    const router = makeRouter(route)
+    const router = makeRouterFromRoute(route)
     await router(
       new Request("http://localhost/", {
         method: "POST",
@@ -522,712 +426,195 @@ describe("Pipeline", () => {
     expect(seenGet).toEqual({})
   })
 
-  it("runs the full pipeline (all stages) in the documented order", async () => {
-    const order: string[] = []
-    const pipeline: Pipeline = {
-      reqTransforms: [
-        (req: Request, _meta: Meta) => {
-          order.push("reqTransform")
-          return req
-        },
-      ],
-      decode: (_req: Request, _meta: Meta) => {
-        order.push("decode")
-        return { n: 1 }
-      },
-      inputTransforms: [
-        (input: unknown, _meta: Meta) => {
-          order.push("inputTransform")
-          return input
-        },
-      ],
-      outputTransforms: [
-        (output: unknown, _meta: Meta) => {
-          order.push("outputTransform")
-          return output
-        },
-      ],
-      encode: (output: unknown, _meta: Meta) => {
-        order.push("encode")
-        return jsonResponse(output)
-      },
-      resTransforms: [
-        (res: Response, _meta: Meta) => {
-          order.push("resTransform")
-          return res
-        },
-      ],
-    }
-    function jsonResponse(v: unknown): Response {
-      return new Response(JSON.stringify(v), { status: 200, headers: { "content-type": "application/json" } })
-    }
+  it("invalid JSON body → 400", async () => {
     const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => {
-            order.push("handler")
-            return input
-          },
-          meta: {},
-          pipeline,
-        },
-      },
+      methods: { POST: { handler: (input: unknown) => input, meta: {} } },
       meta: {},
     })
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(await res.json()).toEqual({ n: 1 })
-    expect(order).toEqual([
-      "reqTransform",
-      "decode",
-      "inputTransform",
-      "handler",
-      "outputTransform",
-      "encode",
-      "resTransform",
-    ])
-  })
-})
-
-// ============================================================================
-// Validate slot — after inputTransforms, before handler
-// ============================================================================
-
-describe("Pipeline — validate slot", () => {
-  it("validate returning ok → handler receives validated value", async () => {
-    let capturedInput: unknown
-    const pipeline: Pipeline = {
-      validate: [(bag) => ({ kind: "ok", value: { name: String(bag.name).toUpperCase() } })],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/?name=alice"))
-    expect(capturedInput).toEqual({ name: "ALICE" })
-  })
-
-  it("validate returning err → 400 response with error body", async () => {
-    const pipeline: Pipeline = {
-      validate: [(bag) => {
-        if (typeof bag.age !== "string" || isNaN(Number(bag.age))) {
-          return { kind: "err", error: { field: "age", message: "must be a number" } }
-        }
-        return { kind: "ok", value: { age: Number(bag.age) } }
-      }],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (_: unknown) => ({ ok: true }),
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/?age=not-a-number"))
-    expect(res.status).toBe(400)
-    const body = await res.json() as { error: { field: string; message: string } }
-    expect(body.error.field).toBe("age")
-    expect(body.error.message).toBe("must be a number")
-  })
-
-  it("no validate → input passes through unchanged (backward compat)", async () => {
-    let capturedInput: unknown
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
-          meta: {},
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/?x=1"))
-    expect(capturedInput).toEqual({ x: "1" })
-  })
-
-  it("empty validate array → input passes through unchanged", async () => {
-    let capturedInput: unknown
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
-          meta: {},
-          pipeline: { validate: [] },
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/?x=1"))
-    expect(capturedInput).toEqual({ x: "1" })
-  })
-
-  it("validate with async (Promise<Result>)", async () => {
-    let capturedInput: unknown
-    const pipeline: Pipeline = {
-      validate: [async (bag) => {
-        // Simulate async validation (e.g., DB lookup)
-        await Promise.resolve()
-        return { kind: "ok", value: { validated: true, original: bag } }
-      }],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/?key=val"))
-    expect(capturedInput).toEqual({ validated: true, original: { key: "val" } })
-  })
-
-  it("validate runs after inputTransforms", async () => {
-    const order: string[] = []
-    const pipeline: Pipeline = {
-      inputTransforms: [(input) => { order.push("inputTransform"); return input }],
-      validate: [(bag) => { order.push("validate"); return { kind: "ok", value: bag } }],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (_: unknown) => { order.push("handler"); return {} },
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/"))
-    expect(order).toEqual(["inputTransform", "validate", "handler"])
-  })
-
-  it("multiple validators run sequentially, each Ok value feeding the next", async () => {
-    let capturedInput: unknown
-    const pipeline: Pipeline = {
-      validate: [
-        (bag) => ({ kind: "ok", value: { ...bag, step1: true } }),
-        (bag) => ({ kind: "ok", value: { ...bag, step2: true } }),
-        (bag) => ({ kind: "ok", value: { ...bag, step3: true } }),
-      ],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    await router(new Request("http://localhost/?x=1"))
-    expect(capturedInput).toEqual({ x: "1", step1: true, step2: true, step3: true })
-  })
-
-  it("first Err short-circuits — later validators do not run", async () => {
-    let thirdRan = false
-    const pipeline: Pipeline = {
-      validate: [
-        (bag) => ({ kind: "ok", value: bag }),
-        () => ({ kind: "err", error: { message: "second validator rejects" } }),
-        (bag) => { thirdRan = true; return { kind: "ok", value: bag } },
-      ],
-    }
-    const route = httpRoute({
-      methods: {
-        GET: {
-          handler: (_: unknown) => ({ ok: true }),
-          meta: {},
-          pipeline,
-        },
-      },
-      meta: {},
-    })
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/?x=1"))
-    expect(res.status).toBe(400)
-    const body = await res.json() as { error: { message: string } }
-    expect(body.error.message).toBe("second validator rejects")
-    expect(thirdRan).toBe(false)
-  })
-
-})
-
-// ============================================================================
-// createApplyValidation — runtime injection of generated validators
-// ============================================================================
-
-describe("createApplyValidation", () => {
-  it("pass-through when key not in map (stub case)", () => {
-    const applyValidation = createApplyValidation({})
-    const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({}), meta: {} } },
-      meta: {},
-    })
-    const result = applyValidation("books", route)
-    expect(result).toBe(route)
-  })
-
-  it("injects the validator at the correct path", async () => {
-    const validators: ValidatorMap = {
-      books: {
-        "books": (bag) => ({ kind: "ok", value: { from: "list-validator", ...bag } }),
-        "books/:bookId": (bag) => ({ kind: "ok", value: { from: "item-validator", ...bag } }),
-      },
-    }
-    const applyValidation = createApplyValidation(validators)
-
-    const route = httpRoute({
-      meta: {},
-      children: {
-        books: httpRoute({
-          meta: {},
-          methods: { GET: { handler: (input: unknown) => input, meta: {} } },
-          fallback: {
-            name: "bookId",
-            subtree: httpRoute({
-              meta: {},
-              methods: { GET: { handler: (input: unknown) => input, meta: {} } },
-            }),
-          },
-        }),
-      },
-    })
-
-    const result = applyValidation("books", route)
-
-    const listRouter = makeRouterFromRoute(result)
-    const listRes = await listRouter(new Request("http://localhost/books"))
-    expect(await listRes.json()).toEqual({ from: "list-validator" })
-
-    const itemRouter = makeRouterFromRoute(result)
-    const itemRes = await itemRouter(new Request("http://localhost/books/42"))
-    expect(await itemRes.json()).toEqual({ bookId: "42", from: "item-validator" })
-  })
-
-  it("does not touch leaf methods whose path has no validator entry", async () => {
-    const validators: ValidatorMap = {
-      books: {
-        "books": (bag) => ({ kind: "ok", value: { validated: true, ...bag } }),
-      },
-    }
-    const applyValidation = createApplyValidation(validators)
-
-    const route = httpRoute({
-      meta: {},
-      children: {
-        books: httpRoute({
-          meta: {},
-          methods: { GET: { handler: (input: unknown) => input, meta: {} } },
-        }),
-        authors: httpRoute({
-          meta: {},
-          methods: { GET: { handler: (input: unknown) => input, meta: {} } },
-        }),
-      },
-    })
-
-    const result = applyValidation("books", route)
-    expect(result.children?.authors?.methods?.GET?.pipeline).toBeUndefined()
-
-    const router = makeRouterFromRoute(result)
-    const res = await router(new Request("http://localhost/authors?x=1"))
-    expect(await res.json()).toEqual({ x: "1" })
-  })
-
-  it("duplicate key throws", () => {
-    const applyValidation = createApplyValidation({
-      books: { "books": (bag) => ({ kind: "ok", value: bag }) },
-    })
-    const route = httpRoute({ meta: {} })
-    applyValidation("books", route)
-    expect(() => applyValidation("books", route)).toThrow(
-      'applyValidation: key "books" has already been used',
-    )
-  })
-
-  it("preserves existing pipeline config — doesn't clobber other pipeline fields", async () => {
-    const reqTransform = (req: Request, _meta: Meta) => req
-    const validators: ValidatorMap = {
-      books: {
-        "books": (bag) => ({ kind: "ok", value: { validated: true, ...bag } }),
-      },
-    }
-    const applyValidation = createApplyValidation(validators)
-
-    const route = httpRoute({
-      meta: {},
-      children: {
-        books: httpRoute({
-          meta: {},
-          methods: {
-            GET: {
-              handler: (input: unknown) => input,
-              meta: {},
-              pipeline: {
-                reqTransforms: [reqTransform],
-                sources: { paramNames: ["x"] },
-              },
-            },
-          },
-        }),
-      },
-    })
-
-    const result = applyValidation("books", route)
-    const pipeline = result.children?.books?.methods?.GET?.pipeline
-    expect(pipeline?.reqTransforms).toEqual([reqTransform])
-    expect(pipeline?.sources).toEqual({ paramNames: ["x"] })
-    expect(pipeline?.validate).toBeDefined()
-
-    const router = makeRouterFromRoute(result)
-    const res = await router(new Request("http://localhost/books?x=1"))
-    expect(await res.json()).toEqual({ validated: true, x: "1" })
-  })
-
-  it("appends onto an existing validate array — composes rather than clobbers", async () => {
-    const handAuthored: Validator = (bag) => ({ kind: "ok", value: { ...bag, handAuthored: true } })
-    const validators: ValidatorMap = {
-      books: {
-        "books": (bag) => ({ kind: "ok", value: { ...bag, generated: true } }),
-      },
-    }
-    const applyValidation = createApplyValidation(validators)
-
-    const route = httpRoute({
-      meta: {},
-      children: {
-        books: httpRoute({
-          meta: {},
-          methods: {
-            GET: {
-              handler: (input: unknown) => input,
-              meta: {},
-              pipeline: { validate: [handAuthored] },
-            },
-          },
-        }),
-      },
-    })
-
-    const result = applyValidation("books", route)
-    const pipeline = result.children?.books?.methods?.GET?.pipeline
-    expect(pipeline?.validate).toHaveLength(2)
-    expect(pipeline?.validate?.[0]).toBe(handAuthored)
-
-    const router = makeRouterFromRoute(result)
-    const res = await router(new Request("http://localhost/books"))
-    expect(await res.json()).toEqual({ handAuthored: true, generated: true })
-  })
-})
-
-// ============================================================================
-// fusePipeline — composes transform arrays down to at most one entry each
-// ============================================================================
-
-describe("fusePipeline", () => {
-  it("no-ops on an empty pipeline", () => {
-    const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({}), meta: {} } },
-      meta: {},
-    })
-    const fused = fusePipeline(route)
-    expect(fused.methods?.GET?.pipeline).toBeUndefined()
-  })
-
-  it("no-ops on single-element arrays (already fused)", () => {
-    const reqTransform = (req: Request) => req
-    const pipeline: Pipeline = { reqTransforms: [reqTransform] }
-    const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({}), meta: {}, pipeline } },
-      meta: {},
-    })
-    const fused = fusePipeline(route)
-    expect(fused.methods?.GET?.pipeline?.reqTransforms).toHaveLength(1)
-    expect(fused.methods?.GET?.pipeline?.reqTransforms?.[0]).toBe(reqTransform)
-  })
-
-  it("fuses multiple reqTransforms/inputTransforms/outputTransforms/resTransforms into one entry each, same behavior as unfused", async () => {
-    const order: string[] = []
-    const pipeline: Pipeline = {
-      reqTransforms: [
-        (req: Request) => { order.push("req1"); return req },
-        (req: Request) => { order.push("req2"); return req },
-      ],
-      inputTransforms: [
-        (input: unknown) => { order.push("in1"); return { ...(input as object), a: 1 } },
-        (input: unknown) => { order.push("in2"); return { ...(input as object), b: 2 } },
-      ],
-      outputTransforms: [
-        (output: unknown) => { order.push("out1"); return { ...(output as object), c: 3 } },
-        (output: unknown) => { order.push("out2"); return { ...(output as object), d: 4 } },
-      ],
-      resTransforms: [
-        (res: Response) => { order.push("res1"); return res },
-        (res: Response) => { order.push("res2"); return res },
-      ],
-    }
-    const route = httpRoute({
-      methods: { GET: { handler: (input: unknown) => input, meta: {}, pipeline } },
-      meta: {},
-    })
-    const fused = fusePipeline(route)
-    expect(fused.methods?.GET?.pipeline?.reqTransforms).toHaveLength(1)
-    expect(fused.methods?.GET?.pipeline?.inputTransforms).toHaveLength(1)
-    expect(fused.methods?.GET?.pipeline?.outputTransforms).toHaveLength(1)
-    expect(fused.methods?.GET?.pipeline?.resTransforms).toHaveLength(1)
-
-    const router = makeRouter(fused)
-    const res = await router(new Request("http://localhost/"))
-    const body = await res.json()
-    expect(body).toEqual({ a: 1, b: 2, c: 3, d: 4 })
-    expect(order).toEqual(["req1", "req2", "in1", "in2", "out1", "out2", "res1", "res2"])
-  })
-
-  it("fuses multiple validators into one sequential validator, same behavior as unfused", async () => {
-    const pipeline: Pipeline = {
-      validate: [
-        (bag) => ({ kind: "ok", value: { ...bag, step1: true } }),
-        (bag) => ({ kind: "ok", value: { ...bag, step2: true } }),
-      ],
-    }
-    const route = httpRoute({
-      methods: { GET: { handler: (input: unknown) => input, meta: {}, pipeline } },
-      meta: {},
-    })
-    const fused = fusePipeline(route)
-    expect(fused.methods?.GET?.pipeline?.validate).toHaveLength(1)
-
-    const router = makeRouter(fused)
-    const res = await router(new Request("http://localhost/?x=1"))
-    expect(await res.json()).toEqual({ x: "1", step1: true, step2: true })
-  })
-
-  it("fused validators still short-circuit on the first Err", async () => {
-    let secondRan = false
-    const pipeline: Pipeline = {
-      validate: [
-        () => ({ kind: "err", error: "nope" }),
-        (bag) => { secondRan = true; return { kind: "ok", value: bag } },
-      ],
-    }
-    const route = httpRoute({
-      methods: { GET: { handler: (_: unknown) => ({ ok: true }), meta: {}, pipeline } },
-      meta: {},
-    })
-    const fused = fusePipeline(route)
-    const router = makeRouter(fused)
-    const res = await router(new Request("http://localhost/"))
-    expect(res.status).toBe(400)
-    expect(secondRan).toBe(false)
-  })
-
-  it("leaves decode, encode, sources unchanged", () => {
-    const decode = async (req: Request) => ({ text: await req.text() })
-    const encode = (output: unknown) => new Response(JSON.stringify(output))
-    const sources: Pipeline["sources"] = { paramNames: ["x"] }
-    const pipeline: Pipeline = { decode, encode, sources }
-    const route = httpRoute({
-      methods: { GET: { handler: (input: unknown) => input, meta: {}, pipeline } },
-      meta: {},
-    })
-    const fused = fusePipeline(route)
-    expect(fused.methods?.GET?.pipeline?.decode).toBe(decode)
-    expect(fused.methods?.GET?.pipeline?.encode).toBe(encode)
-    expect(fused.methods?.GET?.pipeline?.sources).toBe(sources)
-  })
-
-  it("recurses into children and fallback", () => {
-    const pipeline: Pipeline = {
-      inputTransforms: [(i) => i, (i) => i],
-    }
-    const route = httpRoute({
-      meta: {},
-      children: {
-        items: httpRoute({
-          methods: { GET: { handler: (_: unknown) => ({}), meta: {}, pipeline } },
-          meta: {},
-        }),
-      },
-      fallback: {
-        name: "id",
-        subtree: httpRoute({
-          methods: { GET: { handler: (_: unknown) => ({}), meta: {}, pipeline } },
-          meta: {},
-        }),
-      },
-    })
-    const fused = fusePipeline(route)
-    expect(fused.children?.items?.methods?.GET?.pipeline?.inputTransforms).toHaveLength(1)
-    expect(fused.fallback?.subtree.methods?.GET?.pipeline?.inputTransforms).toHaveLength(1)
-  })
-
-  it("composes with makeRouterFromRoute and compiled routers (radixRouter)", async () => {
-    const pipeline: Pipeline = {
-      inputTransforms: [
-        (input) => ({ ...(input as object), a: 1 }),
-        (input) => ({ ...(input as object), b: 2 }),
-      ],
-    }
-    const route = httpRoute({
-      methods: { GET: { handler: (input: unknown) => input, meta: {}, pipeline } },
-      meta: {},
-    })
-    const fused = fusePipeline(route)
-
-    const plainRouter = makeRouterFromRoute(fused)
-    const plainRes = await plainRouter(new Request("http://localhost/"))
-    expect(await plainRes.json()).toEqual({ a: 1, b: 2 })
-
-    const compiled = radixRouter(fused)
-    const compiledRes = await compiled(new Request("http://localhost/"))
-    expect(await compiledRes.json()).toEqual({ a: 1, b: 2 })
-  })
-})
-
-// ============================================================================
-// skipEmptyInput — skips decode/validate for 0-param handlers
-// ============================================================================
-
-describe("skipEmptyInput", () => {
-  it("swaps in a no-op decode/validate for a 0-param handler", async () => {
-    let sawInput: unknown = "unset"
-    // A genuinely 0-arg handler at runtime — the check this test targets is
-    // `handler.length === 0`, so the arrow function must actually declare no
-    // parameters (a `(input: unknown) => …` handler that merely ignores its
-    // argument would NOT trigger the fast path).
-    const zeroArgRoute = httpRoute({
-      methods: { POST: { handler: () => { sawInput = "called"; return { ok: true } }, meta: {} } },
-      meta: {},
-    })
-    expect(zeroArgRoute.methods?.POST?.handler.length).toBe(0)
-
-    const skipped = skipEmptyInput(zeroArgRoute)
-    expect(skipped.methods?.POST?.pipeline?.decode).toBeDefined()
-    expect(skipped.methods?.POST?.pipeline?.validate).toEqual([])
-
-    const router = makeRouter(skipped)
+    const router = makeRouterFromRoute(route)
     const res = await router(
       new Request("http://localhost/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "not valid json at all {{{",
+        body: "not valid json {{{",
       }),
     )
-    expect(res.status).toBe(200)
-    expect(sawInput).toBe("called")
+    expect(res.status).toBe(400)
   })
 
-  it("leaves handlers that declare a parameter untouched", () => {
-    const route = httpRoute({
-      methods: { GET: { handler: (input: unknown) => input, meta: {} } },
-      meta: {},
-    })
-    const skipped = skipEmptyInput(route)
-    expect(skipped.methods?.GET?.pipeline).toBeUndefined()
-  })
-
-  it("does not clobber other pipeline fields already present", async () => {
-    const outputTransform = (output: unknown) => ({ wrapped: output })
+  it("handler throwing → 500", async () => {
     const route = httpRoute({
       methods: {
         GET: {
-          handler: () => ({ ok: true }),
+          handler: (_: unknown) => {
+            throw new Error("boom")
+          },
           meta: {},
-          pipeline: { outputTransforms: [outputTransform] },
         },
       },
       meta: {},
     })
-    const skipped = skipEmptyInput(route)
-    expect(skipped.methods?.GET?.pipeline?.outputTransforms).toEqual([outputTransform])
-    expect(skipped.methods?.GET?.pipeline?.validate).toEqual([])
-
-    const router = makeRouter(skipped)
+    const router = makeRouterFromRoute(route)
     const res = await router(new Request("http://localhost/"))
-    expect(await res.json()).toEqual({ wrapped: { ok: true } })
+    expect(res.status).toBe(500)
   })
 
-  it("recurses into children and fallback", () => {
-    const route = httpRoute({
-      meta: {},
-      children: {
-        ping: httpRoute({
-          methods: { GET: { handler: () => ({ pong: true }), meta: {} } },
-          meta: {},
-        }),
-      },
-      fallback: {
-        name: "id",
-        subtree: httpRoute({
-          methods: { GET: { handler: () => ({ pong: true }), meta: {} } },
-          meta: {},
-        }),
-      },
-    })
-    const skipped = skipEmptyInput(route)
-    expect(skipped.children?.ping?.methods?.GET?.pipeline?.validate).toEqual([])
-    expect(skipped.fallback?.subtree.methods?.GET?.pipeline?.validate).toEqual([])
-  })
-
-  it("composes with makeRouterFromRoute and compiled routers (radixRouter)", async () => {
-    const route = httpRoute({
-      methods: { GET: { handler: () => ({ ok: true }), meta: {} } },
-      meta: {},
-    })
-    const skipped = skipEmptyInput(route)
-
-    const plainRouter = makeRouterFromRoute(skipped)
-    const plainRes = await plainRouter(new Request("http://localhost/"))
-    expect(await plainRes.json()).toEqual({ ok: true })
-
-    const compiled = radixRouter(skipped)
-    const compiledRes = await compiled(new Request("http://localhost/"))
-    expect(await compiledRes.json()).toEqual({ ok: true })
-  })
-
-  it("composes with fusePipeline via composeTransforms", async () => {
+  it("handler returning Result ok → 200 with the unwrapped value", async () => {
     const route = httpRoute({
       methods: {
-        GET: {
-          handler: () => ({ ok: true }),
+        GET: { handler: (_: unknown) => ({ kind: "ok", value: { id: 1 } }), meta: {} },
+      },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/"))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: 1 })
+  })
+
+  it("handler returning Result err → 400 with the error body", async () => {
+    const route = httpRoute({
+      methods: {
+        GET: { handler: (_: unknown) => ({ kind: "err", error: { message: "nope" } }), meta: {} },
+      },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/"))
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: { message: string } }
+    expect(body.error.message).toBe("nope")
+  })
+
+  it("response override (via applyResponse) still takes effect through runRoute", async () => {
+    const api = op((_: unknown) => ({ created: true }), {
+      http: { directives: [{ kind: "response", status: 201 }] },
+    })
+    const route = applyResponse(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/", { method: "POST" }))
+    expect(res.status).toBe(201)
+    expect(await res.json()).toEqual({ created: true })
+  })
+})
+
+// ============================================================================
+// runRoute — per-route `sources` (declarative decode configuration; a direct
+// field on the method entry, not a Pipeline slot)
+// ============================================================================
+
+describe("runRoute — per-route sources", () => {
+  it("reads a specific param from the header store via sources.sourceMap", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        POST: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
           meta: {},
-          pipeline: {
-            outputTransforms: [
-              (o) => ({ ...(o as object), a: 1 }),
-              (o) => ({ ...(o as object), b: 2 }),
-            ],
+          sources: {
+            paramNames: ["title", "apiKey"],
+            sourceMap: { apiKey: { store: "header", key: "x-api-key" } },
           },
         },
       },
       meta: {},
     })
-    const transform = composeTransforms(skipEmptyInput, fusePipeline)
-    const result = transform(route)
-    expect(result.methods?.GET?.pipeline?.outputTransforms).toHaveLength(1)
-    expect(result.methods?.GET?.pipeline?.validate).toEqual([])
+    const router = makeRouterFromRoute(route)
+    await router(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": "secret-123" },
+        body: JSON.stringify({ title: "Dune" }),
+      }),
+    )
+    expect(capturedInput).toEqual({ title: "Dune", apiKey: "secret-123" })
+  })
 
-    const router = makeRouter(result)
-    const res = await router(new Request("http://localhost/"))
-    expect(await res.json()).toEqual({ ok: true, a: 1, b: 2 })
+  it("runs sources.transform after assembly, before the handler", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        GET: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          sources: { transform: (bag) => ({ ...bag, injected: true }) },
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    await router(new Request("http://localhost/?name=Alice"))
+    expect(capturedInput).toEqual({ name: "Alice", injected: true })
+  })
+})
+
+// ============================================================================
+// wrapValidators (@rhi-zone/fractal-api-tree/build) — Node-level validation,
+// wired before naiveTransform runs, exercised through the real HTTP dispatch
+// (makeRouterFromRoute). This is the mechanism that replaced the retired
+// route-tree-level `createApplyValidation`/`pipeline.validate` slot.
+// ============================================================================
+
+describe("wrapValidators — HTTP dispatch", () => {
+  /** A synthetic GeneratedEntry: requires `name` to be a non-empty string. */
+  function nameEntry(): GeneratedEntry {
+    return {
+      parse: (value: unknown) => {
+        if (typeof value !== "object" || value === null) {
+          return { kind: "err", errors: [{ kind: "type", path: [], expected: "object", actual: value }] }
+        }
+        const v = value as Record<string, unknown>
+        if (typeof v.name !== "string" || v.name.length === 0) {
+          return { kind: "err", errors: [{ kind: "type", path: ["name"], expected: "non-empty string", actual: v.name }] }
+        }
+        return { kind: "ok", value: v }
+      },
+    }
+  }
+
+  it("valid input → handler is called with the parsed value", async () => {
+    let capturedInput: unknown
+    const tree = api_({
+      greet: op((input: { name: string }) => {
+        capturedInput = input
+        return { greeting: `hi ${input.name}` }
+      }, { http: { directives: [{ kind: "method", value: "GET" }] } }),
+    })
+    const wrapped = wrapValidators(tree, { greet: nameEntry() })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(wrapped)))
+    const res = await router(new Request("http://localhost/greet?name=Alice"))
+    expect(res.status).toBe(200)
+    expect(capturedInput).toEqual({ name: "Alice" })
+    expect(await res.json()).toEqual({ greeting: "hi Alice" })
+  })
+
+  it("invalid input → 500 (thrown HandlerValidationError, no manual 400 mapping)", async () => {
+    const tree = api_({
+      greet: op((input: { name: string }) => ({ greeting: `hi ${input.name}` }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    const wrapped = wrapValidators(tree, { greet: nameEntry() })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(wrapped)))
+    const res = await router(new Request("http://localhost/greet"))
+    // No `name` query param → wrapValidators' wrapped handler throws
+    // HandlerValidationError before the original handler runs; runRoute's
+    // catch-all maps any thrown handler error to 500 (there is no
+    // dedicated 400-for-validation-errors path once validation moved off
+    // the route tree's own `validate` slot and onto the handler itself).
+    expect(res.status).toBe(500)
+  })
+
+  it("leaf with no matching validator entry passes through untouched", async () => {
+    const tree = api_({
+      ping: op((_: unknown) => ({ pong: true }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    const wrapped = wrapValidators(tree, { greet: nameEntry() })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(wrapped)))
+    const res = await router(new Request("http://localhost/ping"))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ pong: true })
   })
 })

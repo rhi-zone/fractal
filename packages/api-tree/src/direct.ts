@@ -8,7 +8,7 @@
 // Unlike the client, this walks the raw `Node` tree directly — there is no
 // HttpRoute pipeline, no verb/path derivation, no fetch/serialization.
 //
-// Bound slug values: on the HTTP side, `runPipeline`'s `bulkCollect` seeds
+// Bound slug values: on the HTTP side, `runRoute`'s `bulkCollect` seeds
 // the decoded input bag with the request's captured slugs before merging in
 // query/body fields (slugs first, explicit fields win on conflict — see
 // packages/http-api-projector/src/decode.ts `bulkCollect`). A handler like

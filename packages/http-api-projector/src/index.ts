@@ -20,8 +20,7 @@ export { crud, httpProjection } from "./dx.ts"
 export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
 export { getHttpMeta } from "./project.ts"
 export type { HttpDirective, HttpMeta } from "./project.ts"
-export { createApplyValidation, fusePipeline, mapRoute, skipEmptyInput } from "./route.ts"
-export type { Validator, ValidatorMap } from "./route.ts"
+export { mapRoute } from "./route.ts"
 export {
   chainMatchers,
   compiledCharMatcher,

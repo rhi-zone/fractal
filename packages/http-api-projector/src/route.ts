@@ -21,69 +21,38 @@
 //   4. `makeRouterFromRoute` — the simple exact-path/method dispatcher over
 //      an `HttpRoute` tree (no attribute dispatch, no match conditions —
 //      those remain the direct tree-walk dispatcher's domain; see project.ts).
+//
+// Dispatch (decode → handler → encode) is NOT an interceptable multi-stage
+// pipeline — that abstraction (reqTransforms/inputTransforms/validate/
+// outputTransforms/resTransforms, plus per-route `decode`/`encode`
+// overrides) was removed: nothing in this codebase used those hooks outside
+// of tests exercising the mechanism itself. Validation now happens at the
+// `Node` level, before this file's transforms ever run — see
+// `@rhi-zone/fractal-api-tree/build`'s `wrapValidators`, which wraps a
+// leaf's handler directly. What's left here is `runRoute` (below): decode
+// the request via `sources` (still genuinely per-route — each route has its
+// own parameter names and source overrides), call the handler, encode the
+// response. Simple, linear, no loop over stage arrays.
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { Result } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { bulkCollect, httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"
 
 // ============================================================================
-// Pipeline — interceptable request/response stages (docs/design/
-// routing-and-transforms.md § "Interceptable pipeline").
-//
-//   Request
-//     → reqTransforms  (Req => Req, in order)
-//     → decode         (Request => T)
-//     → inputTransforms (T => T, in order)     — audit, validation, session injection
-//     → handler        (T => U)
-//     → outputTransforms (U => U, in order)    — redaction, enrichment
-//     → encode         (U => Response)
-//     → resTransforms  (Res => Res, in order)  — CORS, compression, caching
-//   Response
-//
-// `decode`/`encode` are the symmetric protocol boundary; every stage sees the
-// operation's `Meta`. Configurable per-method (on a method entry).
+// Sources — declarative per-route decode configuration. Real, protocol-
+// specific work (which store a param comes from), not part of any removed
+// interceptable-pipeline machinery.
 // ============================================================================
 
-export type Pipeline = {
-  reqTransforms?: Array<(req: Request, meta: Meta) => Request | Promise<Request>>
-  /**
-   * Full custom decode override — when provided, the stores-based system is
-   * bypassed entirely and this function is responsible for producing the
-   * handler's input from the raw request. Backward-compatible: existing
-   * `decode: (req, meta) => input` pipelines continue to work unchanged.
-   */
-  decode?: (req: Request, meta: Meta) => unknown | Promise<unknown>
-  /**
-   * Declarative source configuration for the stores-based decode system.
-   * Only takes effect when `decode` is NOT set (the function override wins).
-   *
-   * - `sourceMap`: per-param overrides — e.g. `{ apiKey: { store: "header", key: "x-api-key" } }`
-   * - `paramNames`: explicit list of param names to extract (when absent,
-   *    bulk-collects all available values — backward compat with old defaultDecode)
-   * - `transform`: optional reshape after assembly, before the handler sees the input
-   */
-  sources?: {
-    readonly sourceMap?: SourceMap
-    readonly paramNames?: readonly string[]
-    readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>
-  }
-  inputTransforms?: Array<(input: unknown, meta: Meta) => unknown | Promise<unknown>>
-  /**
-   * Validate + coerce the assembled input bag after inputTransforms run.
-   * Run sequentially, in array order: each validator's `Ok` value feeds the
-   * next validator's input; the first `Err` short-circuits the whole chain
-   * with a 400 response containing that error (later validators do not run).
-   * When absent or empty, input passes through to the handler unchanged.
-   */
-  validate?: Array<
-    (input: Record<string, unknown>) => Result<unknown, unknown> | Promise<Result<unknown, unknown>>
-  >
-  outputTransforms?: Array<(output: unknown, meta: Meta) => unknown | Promise<unknown>>
-  encode?: (output: unknown, meta: Meta) => Response | Promise<Response>
-  resTransforms?: Array<(res: Response, meta: Meta) => Response | Promise<Response>>
+export type Sources = {
+  /** per-param overrides — e.g. `{ apiKey: { store: "header", key: "x-api-key" } }` */
+  readonly sourceMap?: SourceMap
+  /** explicit list of param names to extract (when absent, bulk-collects all available values) */
+  readonly paramNames?: readonly string[]
+  /** optional reshape after assembly, before the handler sees the input */
+  readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>
 }
 
 // ============================================================================
@@ -96,12 +65,12 @@ export type Pipeline = {
  * `HttpRoute` (no type argument) keeps working everywhere it's used as an
  * erased type (dispatch, `Record<string, HttpRoute>`, etc.); only the
  * type-preserving rewriters below (`naiveTransform`, `applyMethods`,
- * `applyResponse`, `createApplyValidation`) lean on the generic via their own
- * recursively-computed return types — nothing else has to opt in.
+ * `applyResponse`) lean on the generic via their own recursively-computed
+ * return types — nothing else has to opt in.
  */
 export type HttpRoute<H extends Handler = Handler> = {
   readonly methods?: Readonly<
-    Record<string, { readonly handler: H; readonly meta: Meta; readonly pipeline?: Pipeline }>
+    Record<string, { readonly handler: H; readonly meta: Meta; readonly sources?: Sources }>
   >
   readonly children?: Readonly<Record<string, HttpRoute>>
   readonly fallback?: { readonly name: string; readonly subtree: HttpRoute }
@@ -119,7 +88,7 @@ const routeBrand = new WeakSet<object>()
 
 /** Construct an `HttpRoute` value. Registers the value for `isHttpRoute`. */
 export function httpRoute(def: {
-  methods?: Record<string, { handler: Handler; meta: Meta; pipeline?: Pipeline }> | undefined
+  methods?: Record<string, { handler: Handler; meta: Meta; sources?: Sources }> | undefined
   children?: Record<string, HttpRoute> | undefined
   fallback?: { name: string; subtree: HttpRoute } | undefined
   meta?: Meta | undefined
@@ -223,17 +192,16 @@ export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
 /**
  * Pre-order tree visitor shared by the rewriters below that don't need extra
  * context (path accumulation, etc.) beyond the current node. `fn` transforms
- * a single node — its own `methods`/`meta`/`pipeline` — and returns it;
- * `mapRoute` is responsible for the recursion into `children`/`fallback`,
- * applying `fn` to `route` FIRST, then recursing into the fields of the
- * result. Pre-order (rather than post-order) is the right choice here
- * because none of `applyMethods`/`applyResponse`/`fusePipeline`/
- * `skipEmptyInput` read a node's children to decide how to transform that
- * node — each only inspects the node's own `methods`/`meta` — so the two
- * orders are behaviorally identical for them; pre-order is picked because
- * it lets `fn` return an entirely different node (e.g. with pre-fused
- * `methods`) before its children are visited, matching how each rewriter
- * already reads (transform self, then thread through children/fallback).
+ * a single node — its own `methods`/`meta` — and returns it; `mapRoute` is
+ * responsible for the recursion into `children`/`fallback`, applying `fn` to
+ * `route` FIRST, then recursing into the fields of the result. Pre-order
+ * (rather than post-order) is the right choice here because none of
+ * `applyMethods`/`applyResponse` read a node's children to decide how to
+ * transform that node — each only inspects the node's own `methods`/`meta`
+ * — so the two orders are behaviorally identical for them; pre-order is
+ * picked because it lets `fn` return an entirely different node before its
+ * children are visited, matching how each rewriter already reads (transform
+ * self, then thread through children/fallback).
  *
  * Not generic over `HttpRoute<H>`'s handler-type parameter — like
  * `applyMoveTo`, a caller-supplied `fn: HttpRoute => HttpRoute` can't
@@ -242,8 +210,8 @@ export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
  * above), which is exactly why `applyMethods`/`applyResponse` keep their own
  * hand-written recursion instead of delegating to `mapRoute` — they need the
  * type-preserving variant. `mapRoute` is the erased-type building block for
- * rewriters that don't need that precision (`fusePipeline`, `skipEmptyInput`,
- * and any user-authored rewriter reaching for it via the package export).
+ * rewriters that don't need that precision, and for any user-authored
+ * rewriter reaching for it via the package export.
  */
 export function mapRoute(route: HttpRoute, fn: (node: HttpRoute) => HttpRoute): HttpRoute {
   const mapped = fn(route)
@@ -568,252 +536,6 @@ export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute
 }
 
 // ============================================================================
-// 2d. createApplyValidation — runtime injection of generated validators into
-// a route tree's `pipeline.validate` slot.
-//
-// Unlike the other rewriters above (each a plain `HttpRoute => HttpRoute`),
-// validator wiring is keyed: codegen owns a namespace of route-path →
-// validator functions and hands it a KEY (typically the module/file that
-// generated it), so multiple independent codegen runs can each register
-// their own validator set without colliding. `createApplyValidation`
-// closes over the full `ValidatorMap` and returns the `applyValidation(key,
-// route)` rewriter codegen actually calls at each call site:
-//
-//   const applyValidation = createApplyValidation(generatedValidators)
-//   const routed = applyValidation("books", httpProjection(api))
-//
-// A `key` not present in the map is a no-op passthrough — this is what lets
-// codegen emit a stub (`createApplyValidation({})`) before any validators
-// exist for a given tree, per docs/design/routing-and-transforms.md.
-// ============================================================================
-
-/** A single leaf's validator: same shape as `Pipeline["validate"]`. */
-export type Validator = (
-  bag: Record<string, unknown>,
-) => Result<unknown, unknown> | Promise<Result<unknown, unknown>>
-
-/**
- * outer key = the string key passed to `applyValidation(key, route)`.
- * inner key = route path (path segments joined with `/`; a fallback segment
- * is rendered as `:name` — e.g. `"books/:bookId"` — matching the `:id`-style
- * convention used throughout the design docs).
- */
-export type ValidatorMap = Record<string, Record<string, Validator>>
-
-/** Route-path string for a tree position, fallback segments rendered as `:name`. */
-function pathKey(path: readonly string[]): string {
-  return path.join("/")
-}
-
-/**
- * Generic identity in `R` — unlike `applyMethods`/`applyResponse`,
- * `injectValidators` never renames a method key or replaces a handler; it
- * only appends to `entry.pipeline.validate`, whose type (`Pipeline`) is the
- * same whether or not a validator actually matched at a given tree position
- * (itself a dynamic lookup — see `forKey[pathKey(path)]` below). So the
- * input's precise type, whatever it is, is exactly the output's type; no
- * recomputed mapped type is needed the way `naiveTransform` et al. need one.
- */
-function injectValidators<R extends HttpRoute>(
-  route: R,
-  forKey: Readonly<Record<string, Validator>>,
-  path: readonly string[],
-): R {
-  const validator = forKey[pathKey(path)]
-  let methods = route.methods
-  if (methods !== undefined && validator !== undefined) {
-    methods = Object.fromEntries(
-      Object.entries(methods).map(([method, entry]) => [
-        method,
-        {
-          ...entry,
-          pipeline: {
-            ...entry.pipeline,
-            // Append — a generated validator composes alongside any
-            // hand-authored ones already on this method, it never clobbers
-            // them.
-            validate: [...(entry.pipeline?.validate ?? []), validator],
-          },
-        },
-      ]),
-    )
-  }
-  const children = route.children !== undefined
-    ? Object.fromEntries(
-        Object.entries(route.children).map(([key, child]) => [
-          key,
-          injectValidators(child, forKey, [...path, key]),
-        ]),
-      )
-    : undefined
-  const fallback = route.fallback !== undefined
-    ? {
-        name: route.fallback.name,
-        subtree: injectValidators(route.fallback.subtree, forKey, [...path, `:${route.fallback.name}`]),
-      }
-    : undefined
-  return httpRoute({ methods, children, fallback, meta: route.meta }) as R
-}
-
-/**
- * Build an `applyValidation(key, route)` rewriter over a fixed `ValidatorMap`.
- *
- * - `key` not present in `validators` → `route` is returned unchanged (the
- *   stub/pass-through case — see `docs/design/routing-and-transforms.md`).
- * - Otherwise walks `route`, and for every leaf method whose tree position
- *   matches a path in `validators[key]`, APPENDS that validator onto the
- *   method's `pipeline.validate` array — composing alongside (not clobbering)
- *   any validators already there, hand-authored or from a prior
- *   `applyValidation` call. Other pipeline fields are untouched.
- * - Each `key` may be used at most once across the lifetime of the returned
- *   function — a second `applyValidation(sameKey, ...)` call throws. This
- *   catches accidental double-registration of the same generated validator
- *   set (e.g. codegen run twice, or two trees both claiming the same key).
- */
-export function createApplyValidation(
-  validators: ValidatorMap,
-): <R extends HttpRoute>(key: string, route: R) => R {
-  const usedKeys = new Set<string>()
-  return <R extends HttpRoute>(key: string, route: R): R => {
-    if (usedKeys.has(key)) {
-      throw new Error(`applyValidation: key "${key}" has already been used`)
-    }
-    usedKeys.add(key)
-    const forKey = validators[key]
-    if (forKey === undefined) return route
-    return injectValidators(route, forKey, [])
-  }
-}
-
-// ============================================================================
-// 2e. fusePipeline / skipEmptyInput — optional build-time optimizations.
-//
-// Both are plain `HttpRoute => HttpRoute` tree visitors, composable with the
-// rewriters above via `composeTransforms`. Neither changes the shape of
-// `Pipeline` or a method entry's key set / handler type, so — like
-// `injectValidators` above — they're generic-identity in `R`: whatever
-// precision the input tree carries survives untouched.
-//
-// - `fusePipeline` composes each transform array (`reqTransforms`,
-//   `inputTransforms`, `outputTransforms`, `resTransforms`, `validate`) down
-//   to at most one entry, so `runPipeline`'s per-request loops degrade to a
-//   single call instead of N. `decode`/`encode`/`sources` are untouched —
-//   they're already single functions/objects, nothing to fuse.
-// - `skipEmptyInput` finds method entries whose handler declares zero
-//   parameters (`handler.length === 0` — the runtime arity of the actual JS
-//   function, which can be fewer than the `Handler` type's single `input`
-//   parameter suggests, since a 0-arg function is assignable to a 1-arg
-//   function type) and swaps in a no-op `decode`/`validate` so
-//   `runPipeline`'s decode + validate stages skip real work for those routes.
-// ============================================================================
-
-/** Compose `fns` down to a single `(value, meta) => value` — a no-op when `fns` has 0 or 1 entries. */
-function fuseTransforms<T>(
-  fns: ReadonlyArray<(value: T, meta: Meta) => T | Promise<T>>,
-): Array<(value: T, meta: Meta) => T | Promise<T>> {
-  if (fns.length <= 1) return [...fns]
-  return [
-    async (value: T, meta: Meta) => {
-      let acc = value
-      for (const fn of fns) acc = await fn(acc, meta)
-      return acc
-    },
-  ]
-}
-
-/**
- * Compose `validators` down to a single sequential validator — a no-op when
- * `validators` has 0 or 1 entries. Preserves the documented semantics
- * (each `Ok` value feeds the next validator; the first `Err` short-circuits).
- */
-function fuseValidators(
-  validators: NonNullable<Pipeline["validate"]>,
-): NonNullable<Pipeline["validate"]> {
-  if (validators.length <= 1) return [...validators]
-  return [
-    async (input: Record<string, unknown>) => {
-      let current = input
-      for (const validator of validators) {
-        const result = await validator(current)
-        if (result.kind === "err") return result
-        current = result.value as Record<string, unknown>
-      }
-      return { kind: "ok", value: current }
-    },
-  ]
-}
-
-function fusePipelineOf(pipeline: Pipeline): Pipeline {
-  return {
-    ...pipeline,
-    ...(pipeline.reqTransforms !== undefined
-      ? { reqTransforms: fuseTransforms(pipeline.reqTransforms) }
-      : {}),
-    ...(pipeline.inputTransforms !== undefined
-      ? { inputTransforms: fuseTransforms(pipeline.inputTransforms) }
-      : {}),
-    ...(pipeline.outputTransforms !== undefined
-      ? { outputTransforms: fuseTransforms(pipeline.outputTransforms) }
-      : {}),
-    ...(pipeline.resTransforms !== undefined
-      ? { resTransforms: fuseTransforms(pipeline.resTransforms) }
-      : {}),
-    ...(pipeline.validate !== undefined ? { validate: fuseValidators(pipeline.validate) } : {}),
-  }
-}
-
-/**
- * Build-time optimization: composes every transform array on every method
- * entry's pipeline down to at most one entry (see module doc above).
- * Behaviorally identical to the unfused pipeline — `runPipeline` just loops
- * over fewer, pre-composed functions.
- */
-export function fusePipeline<R extends HttpRoute>(route: R): R {
-  return mapRoute(route, (node) => {
-    let methods = node.methods
-    if (methods !== undefined) {
-      methods = Object.fromEntries(
-        Object.entries(methods).map(([key, entry]) => [
-          key,
-          entry.pipeline !== undefined
-            ? { ...entry, pipeline: fusePipelineOf(entry.pipeline) }
-            : entry,
-        ]),
-      )
-    }
-    return httpRoute({ methods, children: node.children, fallback: node.fallback, meta: node.meta })
-  }) as R
-}
-
-/** No-op decode for 0-param handlers: skips real decode work, produces an empty bag. */
-function emptyDecode(): Record<string, unknown> {
-  return {}
-}
-
-/**
- * Build-time optimization: for every method entry whose handler takes no
- * parameters (`handler.length === 0`), replaces `decode`/`validate` with a
- * no-op so `runPipeline` skips real decode + validation work for that route.
- * Entries whose handler declares a parameter are left untouched.
- */
-export function skipEmptyInput<R extends HttpRoute>(route: R): R {
-  return mapRoute(route, (node) => {
-    let methods = node.methods
-    if (methods !== undefined) {
-      methods = Object.fromEntries(
-        Object.entries(methods).map(([key, entry]) => [
-          key,
-          entry.handler.length === 0
-            ? { ...entry, pipeline: { ...entry.pipeline, decode: emptyDecode, validate: [] } }
-            : entry,
-        ]),
-      )
-    }
-    return httpRoute({ methods, children: node.children, fallback: node.fallback, meta: node.meta })
-  }) as R
-}
-
-// ============================================================================
 // 3. composeTransforms — chain rewriters into a single Tree => Tree
 // ============================================================================
 
@@ -837,7 +559,6 @@ type RouteCandidate = {
   readonly handler: Handler
   readonly meta: Meta
   readonly slugs: Readonly<Record<string, string>>
-  readonly pipeline: Pipeline
 }
 
 /**
@@ -877,7 +598,6 @@ function collectRouteCandidates(
       handler: entry.handler,
       meta: entry.meta,
       slugs,
-      pipeline: entry.pipeline ?? {},
     }))
   }
   const seg = segs[idx]!
@@ -911,7 +631,7 @@ function matchRoute(
   idx: number,
   method: string,
   slugs: Record<string, string>,
-): { entry: { handler: Handler; meta: Meta; pipeline?: Pipeline }; slugs: Record<string, string> } | undefined {
+): { entry: { handler: Handler; meta: Meta; sources?: Sources }; slugs: Record<string, string> } | undefined {
   if (idx === segs.length) {
     const entry = route.methods?.[method]
     if (entry === undefined) return undefined
@@ -936,24 +656,23 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
 }
 
 /**
- * Stores-based default decode: exposes the request as named stores (path,
- * query, header, body), then assembles the handler's input bag using
- * conventions (method → primary store) + optional per-param overrides.
+ * Stores-based decode: exposes the request as named stores (path, query,
+ * header, body), then assembles the handler's input bag using conventions
+ * (method → primary store) + optional per-param overrides declared via
+ * `sources` on the matched method entry.
  *
  * When `sources.paramNames` is provided, the assembler reads exactly those
  * params from the appropriate stores. When absent (the common case until
  * codegen-derived param lists are wired in), falls back to bulk-collecting
- * all available values — producing the same flat bag the old defaultDecode
- * returned.
+ * all available values.
  *
- * The body is parsed once here and passed to the stores factory. Methods
- * that conventionally carry no body (GET/HEAD/DELETE) skip body parsing
- * entirely.
+ * The body is parsed once here. Methods that conventionally carry no body
+ * (GET/HEAD/DELETE) skip body parsing entirely.
  */
 async function defaultDecode(
   req: Request,
   slugs: Readonly<Record<string, string>>,
-  sources?: Pipeline["sources"],
+  sources?: Sources,
 ): Promise<unknown> {
   const url = new URL(req.url)
   const primary = primaryStoreForMethod(req.method)
@@ -1010,75 +729,41 @@ function isResult(v: unknown): v is { kind: "ok"; value: unknown } | { kind: "er
 }
 
 /**
- * Runs the interceptable request/response pipeline (see module doc at the
- * top of the file) for a single matched `(handler, meta, pipeline, slugs)`.
+ * Runs a single matched `(handler, meta, sources, slugs)`: decode the
+ * request, call the handler, encode the response. No interceptable stages —
+ * see the module doc above for why. Shared by `makeRouterFromRoute` (below)
+ * and `toRouter` (compile.ts's compiled matchers), so every dispatcher in
+ * this package encodes requests/responses identically.
  */
-export async function runPipeline(
+export async function runRoute(
   req: Request,
   handler: Handler,
-  meta: Meta,
-  pipeline: Pipeline,
+  _meta: Meta,
+  sources: Sources | undefined,
   slugs: Readonly<Record<string, string>>,
 ): Promise<Response> {
-  const reqTransforms = pipeline.reqTransforms ?? []
-  const inputTransforms = pipeline.inputTransforms ?? []
-  const outputTransforms = pipeline.outputTransforms ?? []
-  const resTransforms = pipeline.resTransforms ?? []
-
-  let request = req
-  for (const transform of reqTransforms) request = await transform(request, meta)
-
   let input: unknown
   try {
-    input = pipeline.decode !== undefined
-      ? await pipeline.decode(request, meta)
-      : await defaultDecode(request, slugs, pipeline.sources)
+    input = await defaultDecode(req, slugs, sources)
   } catch {
     return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
   }
 
   try {
-    for (const transform of inputTransforms) input = await transform(input, meta)
-
-    // Validate slot: runs after inputTransforms, before handler. Sequential
-    // — each validator's Ok value feeds the next validator's input; the
-    // first Err short-circuits the whole chain with a 400 response.
-    for (const validator of pipeline.validate ?? []) {
-      const result = await validator(input as Record<string, unknown>)
-      if (result.kind === "err") {
-        return jsonRouteResponse({ error: result.error }, { status: 400 })
-      }
-      input = result.value
-    }
-
     let output: unknown = await (handler(input) as Promise<unknown>)
-    for (const transform of outputTransforms) output = await transform(output, meta)
 
     // Result unwrapping: if the handler returned a Result<T, E>, separate
     // the success and error paths before encoding. The check is exact —
     // typeof + boolean — to avoid false-positives on user data that happens
-    // to have an `ok` field with a non-boolean value.
+    // to have a `kind` field with an unrelated value.
     if (isResult(output)) {
-      if (output.kind === "ok") {
-        output = output.value
-      } else {
-        let response: Response = pipeline.encode !== undefined
-          ? await pipeline.encode(output.error, meta)
-          : defaultEncodeError(output.error)
-        for (const transform of resTransforms) response = await transform(response, meta)
-        return response
-      }
+      if (output.kind === "err") return defaultEncodeError(output.error)
+      output = output.value
     }
 
-    let response: Response = isResponseOverride(output)
+    return isResponseOverride(output)
       ? jsonRouteResponse(output.body, output.init)
-      : pipeline.encode !== undefined
-        ? await pipeline.encode(output, meta)
-        : defaultEncode(output)
-
-    for (const transform of resTransforms) response = await transform(response, meta)
-
-    return response
+      : defaultEncode(output)
   } catch {
     return jsonRouteResponse({ error: "internal server error" }, { status: 500 })
   }
@@ -1090,6 +775,6 @@ export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<
     const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    return runPipeline(req, matched.entry.handler, matched.entry.meta, matched.entry.pipeline ?? {}, matched.slugs)
+    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs)
   }
 }

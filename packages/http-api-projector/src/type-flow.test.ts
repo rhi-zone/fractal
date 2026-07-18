@@ -7,10 +7,10 @@
 //
 //   Node<H> --naiveTransform--> HttpRoute<H> --rewriters--> HttpRoute<H>
 //
-// `naiveTransform`, `applyMethods`, `applyResponse`, and `createApplyValidation`
-// are all generic — each computes its return type recursively from its input's
-// own type (see `NaiveRoute<N>`, `ApplyMethodsRoute<R>`, `ApplyResponseRoute<R>`
-// in route.ts), so a concrete handler's real input/output type keeps flowing
+// `naiveTransform`, `applyMethods`, and `applyResponse` are all generic —
+// each computes its return type recursively from its input's own type (see
+// `NaiveRoute<N>`, `ApplyMethodsRoute<R>`, `ApplyResponseRoute<R>` in
+// route.ts), so a concrete handler's real input/output type keeps flowing
 // through the pipeline instead of widening to the erased `Handler`.
 //
 // `applyMoveTo` is the one deliberate erasure boundary: `moveTo` reads a path

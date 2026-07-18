@@ -9,19 +9,19 @@
 //
 // The decomposition is two layers:
 //   - `Matcher`  — `(pathname, method) => RouteMatch | undefined`, pure path
-//     matching, no pipeline execution. `radixMatcher`, `compiledCharMatcher`,
+//     matching, no dispatch. `radixMatcher`, `compiledCharMatcher`,
 //     `mapMatcher` each build one; `chainMatchers` composes several in order.
-//   - `toRouter` — wraps a `Matcher` with the same pipeline execution
-//     (`runPipeline`, imported from route.ts) that `makeRouterFromRoute`
-//     runs, plus the 404 fallback.
+//   - `toRouter` — wraps a `Matcher` with the same dispatch (`runRoute`,
+//     imported from route.ts) that `makeRouterFromRoute` runs, plus the 404
+//     fallback.
 //
 // `radixRouter`/`compiledCharRouter`/`mapCharRouter` are `toRouter(matcher)`
 // convenience wrappers for the three benchmarked shapes.
 
 import type { AsyncLocalStorage } from "node:async_hooks"
 import type { Handler, Meta } from "@rhi-zone/fractal-api-tree/node"
-import { runPipeline, splitPath } from "./route.ts"
-import type { HttpRoute, Pipeline } from "./route.ts"
+import { runRoute, splitPath } from "./route.ts"
+import type { HttpRoute, Sources } from "./route.ts"
 
 // ============================================================================
 // Shared types
@@ -30,7 +30,7 @@ import type { HttpRoute, Pipeline } from "./route.ts"
 export type RouteMatch = {
   readonly handler: Handler
   readonly meta: Meta
-  readonly pipeline?: Pipeline
+  readonly sources?: Sources
   readonly slugs: Record<string, string>
 }
 
@@ -38,13 +38,13 @@ export type Matcher = (pathname: string, method: string) => RouteMatch | undefin
 
 export type CompiledRouter = (req: Request) => Promise<Response>
 
-/** Wraps a `Matcher` with pipeline execution + 404 fallback — same contract as `makeRouterFromRoute`. */
+/** Wraps a `Matcher` with request dispatch + 404 fallback — same contract as `makeRouterFromRoute`. */
 export function toRouter(matcher: Matcher): CompiledRouter {
   return async (req) => {
     const pathname = new URL(req.url).pathname
     const match = matcher(pathname, req.method)
     if (match === undefined) return new Response("Not Found", { status: 404 })
-    return runPipeline(req, match.handler, match.meta, match.pipeline ?? {}, match.slugs)
+    return runRoute(req, match.handler, match.meta, match.sources, match.slugs)
   }
 }
 
@@ -70,7 +70,7 @@ type CollectedRoute = {
   readonly method: string
   readonly handler: Handler
   readonly meta: Meta
-  readonly pipeline?: Pipeline
+  readonly sources?: Sources
 }
 
 function collectRoutes(route: HttpRoute, segs: readonly string[]): CollectedRoute[] {
@@ -81,7 +81,7 @@ function collectRoutes(route: HttpRoute, segs: readonly string[]): CollectedRout
       method,
       handler: entry.handler,
       meta: entry.meta,
-      ...(entry.pipeline !== undefined ? { pipeline: entry.pipeline } : {}),
+      ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
     })
   }
   if (route.children !== undefined) {
@@ -195,7 +195,7 @@ function radixDispatch(root: RadixNode, pathname: string, method: string): Route
         ? {
             handler: entry.handler,
             meta: entry.meta,
-            ...(entry.pipeline !== undefined ? { pipeline: entry.pipeline } : {}),
+            ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
             slugs,
           }
         : undefined
@@ -311,7 +311,7 @@ function buildCompiledCharMatcher(routes: readonly CollectedRoute[]): Matcher {
       code += `if (i === len) {\n`
       for (const [method, idx] of node.methods) {
         const slugsObj = slugAssigns.length > 0 ? `{ ${slugAssigns.join(", ")} }` : "{}"
-        code += `if (method === ${JSON.stringify(method)}) return { handler: entries[${idx}].handler, meta: entries[${idx}].meta, pipeline: entries[${idx}].pipeline, slugs: ${slugsObj} }\n`
+        code += `if (method === ${JSON.stringify(method)}) return { handler: entries[${idx}].handler, meta: entries[${idx}].meta, sources: entries[${idx}].sources, slugs: ${slugsObj} }\n`
       }
       code += `}\n`
     }
@@ -383,7 +383,7 @@ function buildMapMatcher(routes: readonly CollectedRoute[]): Matcher {
       ? {
           handler: entry.handler,
           meta: entry.meta,
-          ...(entry.pipeline !== undefined ? { pipeline: entry.pipeline } : {}),
+          ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
           slugs: {},
         }
       : undefined
@@ -411,10 +411,10 @@ export function mapCharRouter(route: HttpRoute): CompiledRouter {
 
 // ============================================================================
 // withALS — per-request AsyncLocalStorage context, composable over any
-// `CompiledRouter`. `runPipeline` (route.ts) is a clean linear `await` chain
+// `CompiledRouter`. `runRoute` (route.ts) is a clean linear `await` chain
 // with no concurrent branches in flight, so a context entered once per
 // request via `storage.run` stays correctly scoped to that request's whole
-// pipeline — no leakage across concurrent requests, no manual propagation
+// dispatch — no leakage across concurrent requests, no manual propagation
 // needed at each stage.
 // ============================================================================
 

@@ -3,7 +3,7 @@
 // BUILD ORCHESTRATOR: wires the extractor (extract.ts/tree.ts) to the AOT
 // validator compiler (@rhi-zone/fractal-type-ir's compile.ts), producing the
 // standalone, zero-runtime-dependency validator MODULE SOURCE that
-// `createApplyValidation()` (packages/http-api-projector/src/route.ts) consumes.
+// `wrapValidators` (below) consumes.
 //
 //   entryFile --extractRouteTypeRefs--> path -> TypeRef
 //            --compileValidatorModule--> module source (exports `validators`,
@@ -11,20 +11,9 @@
 //
 // `buildValidatorModuleSource` is the one-shot "codegen has run" path;
 // `stubValidatorModuleSource` is the pre-codegen dev-time placeholder — an
-// empty `validators` map, so `toValidatorRecord({})` is a no-op passthrough
-// for every route until real codegen runs (see route.ts's
-// `createApplyValidation` doc comment).
-//
-// The generated module's `{ check, errors, parse }` triple is a type-ir
-// concern only (it says nothing about `Result`/`Validator` — those are
-// http-api-projector's types). `toValidatorRecord` below adapts a generated
-// `validators` map into the single-function-per-route shape
-// `createApplyValidation`'s `ValidatorMap` expects, by wrapping each entry's
-// `parse`: `parse`'s `{kind:"err",errors}` becomes `{kind:"err",error:errors}`
-// (route.ts's `Result<T,E>` uses `error`, singular — the structured
-// `ValidationError[]` becomes the `E`). Written structurally (no import of
-// http-api-projector's `Validator`/`Result` types) so api-tree doesn't need a
-// runtime dependency on http-api-projector just for this adapter.
+// empty `validators` map, so `wrapValidators(tree, {})` is a no-op
+// passthrough for every leaf until real codegen runs (see `wrapValidators`'s
+// own doc comment below).
 
 import * as path from "node:path"
 import { compileValidatorModule } from "@rhi-zone/fractal-type-ir"
@@ -36,34 +25,16 @@ export type GeneratedEntry = {
   parse: (value: unknown) => { kind: "ok"; value: unknown } | { kind: "err"; errors: unknown[] }
 }
 
-/** Structurally matches http-api-projector's `Validator` — `(bag) =>
- * Result<unknown, unknown>` — without importing that package's types. */
-type Adapted = (bag: Record<string, unknown>) => { kind: "ok"; value: unknown } | { kind: "err"; error: unknown }
-
-/** Adapt one generated entry's `parse` into a single-function `Validator`. */
-export function toValidator(entry: GeneratedEntry): Adapted {
-  return (bag) => {
-    const result = entry.parse(bag)
-    return result.kind === "ok" ? result : { kind: "err", error: result.errors }
-  }
-}
-
-/** Adapt a whole generated `validators` map into `Record<path, Validator>` —
- * the inner map `createApplyValidation`'s `ValidatorMap` expects. */
-export function toValidatorRecord(validators: Record<string, GeneratedEntry>): Record<string, Adapted> {
-  return Object.fromEntries(Object.entries(validators).map(([name, entry]) => [name, toValidator(entry)]))
-}
-
 // ============================================================================
-// wrapValidators — Node-level counterpart to route.ts's `injectValidators`.
-//
-// `injectValidators` wires generated validators into an `HttpRoute`'s
-// `pipeline.validate` slot — a route-tree-specific mechanism. CLI and MCP
-// dispatch directly off the `Node` tree, with no route tree or pipeline in
-// between, so they need validation wired onto the `handler` itself. This is
-// that: wrap each leaf's handler so it calls the generated `parse()` first
-// (coercion + validation + narrowing in one pass) and only invokes the
-// original handler on success.
+// wrapValidators — wires generated validators directly onto a `Node` tree's
+// leaf handlers. The single mechanism shared by HTTP (createFetch's
+// `validators` option), MCP (`createMcpServer`'s `validators` option), and
+// CLI (`runCli`'s `validators` option) — each dispatches off (or, for HTTP,
+// projects from) the `Node` tree, so wiring validation onto the `handler`
+// itself, before any protocol-specific projection runs, covers all three
+// with one generated module. Wraps each leaf's handler so it calls the
+// generated `parse()` first (coercion + validation + narrowing in one pass)
+// and only invokes the original handler on success.
 // ============================================================================
 
 /**
@@ -116,16 +87,14 @@ function wrapHandler(handler: Handler, entry: GeneratedEntry): Handler {
 
 /**
  * Walk `node`, wiring each leaf's handler through its generated validator's
- * `parse()` before the original handler runs — the `Node`-level counterpart
- * to `injectValidators` (http-api-projector's route.ts), for projectors that
- * dispatch directly off a `Node` tree (CLI, MCP) instead of transforming to
- * `HttpRoute` first.
+ * `parse()` before the original handler runs — see the module doc above for
+ * why this lives at the `Node` level rather than on any one protocol's own
+ * route/dispatch tree.
  *
- * Keyed the same way `extractRouteTypeRefs` (tree.ts) and route.ts's
- * `pathKey`/`injectValidators` key their maps: `"/"`-joined path segments,
- * with a `fallback` segment rendered as `:name` (e.g. `"books/:bookId"`) —
- * so a validator module built by `buildValidatorModuleSource` plugs into
- * `wrapValidators` with no re-keying.
+ * Keyed the same way `extractRouteTypeRefs` (tree.ts) keys its map: `"/"`-
+ * joined path segments, with a `fallback` segment rendered as `:name` (e.g.
+ * `"books/:bookId"`) — so a validator module built by
+ * `buildValidatorModuleSource` plugs into `wrapValidators` with no re-keying.
  *
  * A leaf with no matching entry in `validators` passes through with its
  * original handler, untouched — this is what makes `wrapValidators` safe to
@@ -181,9 +150,9 @@ function relativeImportSpecifier(outFile: string, declarationFile: string): stri
  * Extract every leaf op's input type from `entryFile` and compile it into a
  * standalone validator module source string — `export const validators:
  * Record<routePath, { check, errors, parse }>`. Pass the imported
- * `validators` through `toValidatorRecord` (this file) before nesting it
- * under whatever outer key `createApplyValidation`'s `applyValidation(key,
- * route)` expects.
+ * `validators` map straight to `wrapValidators` (this file) — no adaptation
+ * needed, the generated `{ check, errors, parse }` shape already matches
+ * `GeneratedEntry`.
  *
  * `outFile`, when given, anchors `import type` specifiers for handler
  * parameter types that are NAMED (alias/interface) rather than inline —

@@ -3,9 +3,10 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
+import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { createFetch } from "./preset.ts"
 import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts"
-import type { HttpRoute, ValidatorMap } from "./route.ts"
+import type { HttpRoute } from "./route.ts"
 
 // ============================================================================
 // Mixed API fixture
@@ -204,58 +205,61 @@ describe("OOTB preset — directives: false", () => {
 // ============================================================================
 
 describe("OOTB preset — validators", () => {
-  it("applies a validator keyed by outer map key at the matching route path", async () => {
+  /** A synthetic GeneratedEntry: coerces/validates via `parse()`. */
+  function okEntry(): GeneratedEntry {
+    return {
+      parse: (value: unknown) => ({
+        kind: "ok",
+        value: { ...(value as Record<string, unknown>), validated: true },
+      }),
+    }
+  }
+
+  function rejectingEntry(): GeneratedEntry {
+    return {
+      parse: () => ({ kind: "err", errors: [{ kind: "type", path: [], expected: "n/a", actual: "n/a" }] }),
+    }
+  }
+
+  it("wraps the tree via wrapValidators before projection — matching leaf's handler runs parse() first", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
         http: { directives: [{ kind: "method", value: "GET" }] },
       }),
     })
 
-    const validators: ValidatorMap = {
-      gen: {
-        widgets: (bag) => ({ kind: "ok", value: { ...bag, validated: true } }),
-      },
-    }
-
-    const f = createFetch(echoNode, { validators })
+    const f = createFetch(echoNode, { validators: { widgets: okEntry() } })
     const res = await f(new Request("http://localhost/widgets"))
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject({ validated: true })
   })
 
-  it("a failing validator short-circuits with 400", async () => {
+  it("a rejecting generated validator's thrown error surfaces as a 500 (no dedicated validation-error path)", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
         http: { directives: [{ kind: "method", value: "GET" }] },
       }),
     })
 
-    const validators: ValidatorMap = {
-      gen: {
-        widgets: () => ({ kind: "err", error: "nope" }),
-      },
-    }
-
-    const f = createFetch(echoNode, { validators })
+    const f = createFetch(echoNode, { validators: { widgets: rejectingEntry() } })
     const res = await f(new Request("http://localhost/widgets"))
-    expect(res.status).toBe(400)
-  })
-})
-
-// ============================================================================
-// 7. fusePipeline / skipEmptyInput toggles
-// ============================================================================
-
-describe("OOTB preset — fusePipeline / skipEmptyInput default on, toggleable", () => {
-  it("still dispatches correctly with defaults (both on)", async () => {
-    const res = await fetch(new Request("http://localhost/users/list"))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(500)
   })
 
-  it("still dispatches correctly with both explicitly off", async () => {
-    const f = createFetch(api, { fusePipeline: false, skipEmptyInput: false })
-    const res = await f(new Request("http://localhost/users/list"))
+  it("a leaf with no matching validator entry passes through untouched", async () => {
+    const echoNode = api_({
+      widgets: op((input: Record<string, unknown>) => input, {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+      other: op((_: unknown) => ({ ok: true }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+
+    const f = createFetch(echoNode, { validators: { widgets: okEntry() } })
+    const res = await f(new Request("http://localhost/other"))
     expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
   })
 })
 
