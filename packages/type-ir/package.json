@@ -145,6 +145,10 @@
     }
   },
   "files": ["src"],
+  "devDependencies": {
+    "@sinclair/typebox": "^0.34.41",
+    "fast-check": "^4.9.0"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",

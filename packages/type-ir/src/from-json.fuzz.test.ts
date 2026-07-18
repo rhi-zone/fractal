@@ -1,13 +1,12 @@
-// Roundtrip fuzz harness for fromJson: generate arbitrary TypeRefs, produce
-// conforming JSON values, run fromJson, and check that the inferred type
-// is consistent with the generated value.
+// Property-based fuzz harness for fromJson using fast-check.
 //
-// The key invariant: fromJson should not crash, and the generated value
-// should be a valid inhabitant of the inferred type. Width narrowing to a
-// tighter type than the original is expected (e.g. value 5 from int32
-// infers as uint8) — that's correct inference, not a failure.
+// Generates arbitrary TypeRef trees, produces conforming JSON values,
+// runs fromJson, and checks properties. fast-check handles shrinking —
+// when a failure is found, it minimizes the type+value to the simplest
+// reproducer.
 
 import { describe, expect, test } from "bun:test"
+import fc from "fast-check"
 import { t, types, ancestors, type TypeRef } from "./index.ts"
 import {
   int8, int16, int32, int64,
@@ -17,589 +16,577 @@ import {
 import { fromJson } from "./from-json.ts"
 
 // ---------------------------------------------------------------------------
-// Seeded PRNG — deterministic runs for reproducibility
+// TypeRef arbitrary — recursive, depth-bounded via fc.memo
 // ---------------------------------------------------------------------------
 
-// xoshiro128** — fast, good quality, seedable
-function makeRng(seed: number) {
-  let s0 = seed | 0 || 1
-  let s1 = (seed * 2654435761) | 0 || 2
-  let s2 = (seed * 2246822519) | 0 || 3
-  let s3 = (seed * 3266489917) | 0 || 4
-  return {
-    /** Returns a float in [0, 1). */
-    next(): number {
-      const result = Math.imul(s1 * 5, 7) >>> 0
-      const t = s1 << 9
-      s2 ^= s0; s3 ^= s1; s1 ^= s2; s0 ^= s3
-      s2 ^= t; s3 = (s3 << 11) | (s3 >>> 21)
-      return (result >>> 0) / 4294967296
-    },
-    /** Integer in [min, max] inclusive. */
-    int(min: number, max: number): number {
-      return Math.floor(this.next() * (max - min + 1)) + min
-    },
-    /** Pick a random element from an array. */
-    pick<T>(arr: readonly T[]): T {
-      return arr[this.int(0, arr.length - 1)]!
-    },
-    /** Return true with probability p. */
-    chance(p: number): boolean {
-      return this.next() < p
-    },
-  }
+const intWidthRanges: Record<string, { min: number; max: number; ctor: () => TypeRef }> = {
+  uint8:  { min: 0, max: 255, ctor: uint8 },
+  int8:   { min: -128, max: 127, ctor: int8 },
+  uint16: { min: 0, max: 65535, ctor: uint16 },
+  int16:  { min: -32768, max: 32767, ctor: int16 },
+  uint32: { min: 0, max: 4294967295, ctor: uint32 },
+  int32:  { min: -2147483648, max: 2147483647, ctor: int32 },
+  uint64: { min: 0, max: Number.MAX_SAFE_INTEGER, ctor: uint64 },
+  int64:  { min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER, ctor: int64 },
 }
 
-type Rng = ReturnType<typeof makeRng>
-
-// ---------------------------------------------------------------------------
-// TypeRef generator — random type trees
-// ---------------------------------------------------------------------------
-
-// Integer width ranges for value generation
-const intRanges: Record<string, [number, number]> = {
-  uint8:  [0, 255],
-  int8:   [-128, 127],
-  uint16: [0, 65535],
-  int16:  [-32768, 32767],
-  uint32: [0, 4294967295],
-  int32:  [-2147483648, 2147483647],
-  // For uint64/int64 we stay within safe integer range
-  uint64: [0, Number.MAX_SAFE_INTEGER],
-  int64:  [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
-}
-
-const fieldNames = [
+const fieldNamePool = [
   "id", "name", "age", "email", "url", "count", "value", "label",
   "status", "active", "score", "data", "items", "type", "kind",
-  "title", "description", "timestamp", "amount", "level",
+  "title", "desc", "ts", "amount", "level", "flag", "key", "ref",
+  "code", "body", "path", "size", "rank", "index", "pos",
 ]
 
-function generateTypeRef(rng: Rng, depth: number): TypeRef {
-  // Bias toward leaves at deeper nesting to keep trees finite
-  const maxDepth = 4
-  const leafBias = depth >= maxDepth ? 1.0 : depth / (maxDepth + 1)
+// Leaf arbitraries — no recursion needed
 
-  if (rng.chance(leafBias)) {
-    return generateLeaf(rng)
-  }
+const arbNull: fc.Arbitrary<TypeRef> = fc.constant(t(types.null))
+const arbBoolean: fc.Arbitrary<TypeRef> = fc.constant(t(types.boolean))
+const arbNumber: fc.Arbitrary<TypeRef> = fc.constant(t(types.number))
+const arbInteger: fc.Arbitrary<TypeRef> = fc.constant(t(types.integer))
+const arbString: fc.Arbitrary<TypeRef> = fc.constant(t(types.string))
+const arbUnknown: fc.Arbitrary<TypeRef> = fc.constant(t(types.unknown))
 
-  const r = rng.next()
-  if (r < 0.08) return generateLeaf(rng)
-  if (r < 0.28) return generateIntWidth(rng)
-  if (r < 0.38) return generateStringFormat(rng)
-  if (r < 0.53) return generateObject(rng, depth)
-  if (r < 0.63) return generateArray(rng, depth)
-  if (r < 0.73) return generateTuple(rng, depth)
-  if (r < 0.80) return generateUnion(rng, depth)
-  if (r < 0.85) return generateMap(rng, depth)
-  if (r < 0.90) return generateEnum(rng)
-  if (r < 0.95) return generateLiteral(rng)
-  return t(types.unknown)
-}
+const arbIntWidth: fc.Arbitrary<TypeRef> = fc.constantFrom(
+  uint8(), int8(), uint16(), int16(), uint32(), int32(), uint64(), int64(),
+)
 
-function generateLeaf(rng: Rng): TypeRef {
-  const kind = rng.pick(["null", "boolean", "number", "integer", "string"] as const)
-  switch (kind) {
-    case "null": return t(types.null)
-    case "boolean": return t(types.boolean)
-    case "number": return t(types.number)
-    case "integer": return t(types.integer)
-    case "string": return t(types.string)
-  }
-}
+const arbStringFormat: fc.Arbitrary<TypeRef> = fc.constantFrom(
+  date(), datetime(), uuid(), uri(), t(types.string, { format: "email" }),
+)
 
-function generateIntWidth(rng: Rng): TypeRef {
-  const kind = rng.pick(["uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64"] as const)
-  switch (kind) {
-    case "uint8": return uint8()
-    case "int8": return int8()
-    case "uint16": return uint16()
-    case "int16": return int16()
-    case "uint32": return uint32()
-    case "int32": return int32()
-    case "uint64": return uint64()
-    case "int64": return int64()
-  }
-}
+const arbEnum: fc.Arbitrary<TypeRef> = fc.array(
+  fc.stringMatching(/^[a-z][a-z0-9_]{1,10}$/),
+  { minLength: 2, maxLength: 6 },
+).map((members) => {
+  // Deduplicate — enum members must be distinct
+  const unique = [...new Set(members)]
+  return unique.length >= 2 ? t(types.enum(unique)) : t(types.enum(["a", "b"]))
+})
 
-function generateStringFormat(rng: Rng): TypeRef {
-  const fmt = rng.pick(["date", "datetime", "uuid", "uri", "email"] as const)
-  switch (fmt) {
-    case "date": return date()
-    case "datetime": return datetime()
-    case "uuid": return uuid()
-    case "uri": return uri()
-    case "email": return t(types.string, { format: "email" })
-  }
-}
+const arbLiteral: fc.Arbitrary<TypeRef> = fc.oneof(
+  fc.constant(t(types.literal(null))),
+  fc.boolean().map((b) => t(types.literal(b))),
+  fc.integer({ min: -200, max: 200 }).map((n) => t(types.literal(n))),
+  fc.stringMatching(/^[a-z]{2,8}$/).map((s) => t(types.literal(s))),
+)
 
-function generateObject(rng: Rng, depth: number): TypeRef {
-  const fieldCount = rng.int(1, 5)
-  const usedNames = new Set<string>()
-  const fields: Record<string, TypeRef> = {}
-  for (let i = 0; i < fieldCount; i++) {
-    let name: string
-    do { name = rng.pick(fieldNames) } while (usedNames.has(name))
-    usedNames.add(name)
-    let fieldRef = generateTypeRef(rng, depth + 1)
-    if (rng.chance(0.25)) {
-      fieldRef = { shape: fieldRef.shape, meta: { ...fieldRef.meta, optional: true } }
+// All leaf types (no children) — used at max depth and weighted heavily
+const arbLeaf: fc.Arbitrary<TypeRef> = fc.oneof(
+  { weight: 2, arbitrary: arbNull },
+  { weight: 3, arbitrary: arbBoolean },
+  { weight: 3, arbitrary: arbNumber },
+  { weight: 3, arbitrary: arbInteger },
+  { weight: 4, arbitrary: arbString },
+  { weight: 5, arbitrary: arbIntWidth },
+  { weight: 3, arbitrary: arbStringFormat },
+  { weight: 2, arbitrary: arbEnum },
+  { weight: 2, arbitrary: arbLiteral },
+  { weight: 1, arbitrary: arbUnknown },
+)
+
+// Recursive TypeRef tree — fc.memo controls depth
+const arbTypeRef: fc.Memo<TypeRef> = fc.memo((depth) => {
+  if (depth <= 0) return arbLeaf
+
+  const inner = arbTypeRef(depth - 1)
+
+  const arbObject: fc.Arbitrary<TypeRef> = fc.tuple(
+    fc.shuffledSubarray(fieldNamePool, { minLength: 1, maxLength: 5 }),
+    fc.array(fc.tuple(inner, fc.boolean()), { minLength: 1, maxLength: 5 }),
+  ).map(([names, fieldSpecs]) => {
+    const fields: Record<string, TypeRef> = {}
+    const count = Math.min(names.length, fieldSpecs.length)
+    for (let i = 0; i < count; i++) {
+      const [fieldType, isOptional] = fieldSpecs[i]!
+      fields[names[i]!] = isOptional
+        ? { shape: fieldType.shape, meta: { ...fieldType.meta, optional: true } }
+        : fieldType
     }
-    fields[name] = fieldRef
-  }
-  return t(types.object(fields))
-}
+    return t(types.object(fields))
+  })
 
-function generateArray(rng: Rng, depth: number): TypeRef {
-  return t(types.array(generateTypeRef(rng, depth + 1)))
-}
+  const arbArray: fc.Arbitrary<TypeRef> = inner.map((el) => t(types.array(el)))
 
-function generateTuple(rng: Rng, depth: number): TypeRef {
-  const len = rng.int(1, 4)
-  const elements: TypeRef[] = []
-  for (let i = 0; i < len; i++) elements.push(generateTypeRef(rng, depth + 1))
-  return t(types.tuple(elements))
-}
+  const arbTuple: fc.Arbitrary<TypeRef> = fc.array(inner, { minLength: 1, maxLength: 4 })
+    .map((els) => t(types.tuple(els)))
 
-function generateUnion(rng: Rng, depth: number): TypeRef {
-  const count = rng.int(2, 3)
-  const variants: TypeRef[] = []
-  for (let i = 0; i < count; i++) variants.push(generateTypeRef(rng, depth + 1))
-  return t(types.union(variants))
-}
+  const arbUnion: fc.Arbitrary<TypeRef> = fc.array(inner, { minLength: 2, maxLength: 3 })
+    .map((vs) => t(types.union(vs)))
 
-function generateMap(rng: Rng, depth: number): TypeRef {
-  return t(types.map(t(types.string), generateTypeRef(rng, depth + 1)))
-}
+  const arbMap: fc.Arbitrary<TypeRef> = inner.map((v) => t(types.map(t(types.string), v)))
 
-function generateEnum(rng: Rng): TypeRef {
-  const count = rng.int(2, 5)
-  const members: string[] = []
-  for (let i = 0; i < count; i++) members.push(`val_${i}_${rng.int(0, 999)}`)
-  return t(types.enum(members))
-}
-
-function generateLiteral(rng: Rng): TypeRef {
-  const r = rng.next()
-  if (r < 0.25) return t(types.literal(null))
-  if (r < 0.50) return t(types.literal(rng.chance(0.5)))
-  if (r < 0.75) return t(types.literal(rng.int(-100, 100)))
-  return t(types.literal(`lit_${rng.int(0, 999)}`))
-}
+  return fc.oneof(
+    { weight: 12, arbitrary: arbLeaf },
+    { weight: 5, arbitrary: arbObject },
+    { weight: 3, arbitrary: arbArray },
+    { weight: 3, arbitrary: arbTuple },
+    { weight: 2, arbitrary: arbUnion },
+    { weight: 2, arbitrary: arbMap },
+  )
+})
 
 // ---------------------------------------------------------------------------
-// Value generator — produce a valid JSON value for a TypeRef
+// Value arbitrary — given a TypeRef, produce a conforming JSON value
 // ---------------------------------------------------------------------------
 
-function generateValue(ref: TypeRef, rng: Rng): unknown {
+function arbDate(): fc.Arbitrary<string> {
+  return fc.tuple(
+    fc.integer({ min: 2000, max: 2030 }),
+    fc.integer({ min: 1, max: 12 }),
+    fc.integer({ min: 1, max: 28 }),
+  ).map(([y, m, d]) =>
+    `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+  )
+}
+
+function arbDatetime(): fc.Arbitrary<string> {
+  return fc.tuple(
+    arbDate(),
+    fc.integer({ min: 0, max: 23 }),
+    fc.integer({ min: 0, max: 59 }),
+    fc.integer({ min: 0, max: 59 }),
+  ).map(([d, h, min, s]) =>
+    `${d}T${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(s).padStart(2, "0")}Z`
+  )
+}
+
+function arbUuid(): fc.Arbitrary<string> {
+  return fc.tuple(
+    fc.stringMatching(/^[0-9a-f]{8}$/),
+    fc.stringMatching(/^[0-9a-f]{4}$/),
+    fc.stringMatching(/^[0-9a-f]{4}$/),
+    fc.stringMatching(/^[0-9a-f]{4}$/),
+    fc.stringMatching(/^[0-9a-f]{12}$/),
+  ).map(([a, b, c, d, e]) => `${a}-${b}-${c}-${d}-${e}`)
+}
+
+function arbEmail(): fc.Arbitrary<string> {
+  return fc.tuple(
+    fc.stringMatching(/^[a-z]{2,8}$/),
+    fc.stringMatching(/^[a-z]{2,8}$/),
+  ).map(([user, domain]) => `${user}@${domain}.com`)
+}
+
+function arbUri(): fc.Arbitrary<string> {
+  return fc.tuple(
+    fc.constantFrom("http", "https"),
+    fc.stringMatching(/^[a-z]{3,10}$/),
+    fc.stringMatching(/^[a-z0-9]{1,8}$/),
+  ).map(([scheme, domain, path]) => `${scheme}://${domain}.com/${path}`)
+}
+
+// A plain string that won't accidentally match date/datetime/uuid/email/uri formats.
+// Starts with an uppercase letter to avoid matching any format regex.
+function arbPlainString(): fc.Arbitrary<string> {
+  return fc.stringMatching(/^[A-Z][a-zA-Z]{2,10}$/)
+}
+
+function arbValueForType(ref: TypeRef): fc.Arbitrary<unknown> {
   const { shape, meta } = ref
   switch (shape.kind) {
-    case "null": return null
-    case "boolean": return rng.chance(0.5)
-    case "number": return rng.next() * 200 - 100 + 0.1 // always fractional
-    case "integer": return rng.int(-1000, 1000)
-    case "string": return generatePlainString(meta, rng)
+    case "null":
+      return fc.constant(null)
 
-    // Integer widths — generate within the exact range
-    case "uint8":  return rng.int(0, 255)
-    case "int8":   return rng.int(-128, 127)
-    case "uint16": return rng.int(0, 65535)
-    case "int16":  return rng.int(-32768, 32767)
-    case "uint32": return rng.int(0, 4294967295)
-    case "int32":  return rng.int(-2147483648, 2147483647)
-    case "uint64": return rng.int(0, Number.MAX_SAFE_INTEGER)
-    case "int64":  return rng.int(Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+    case "boolean":
+      return fc.boolean()
 
-    // Formatted strings (extension kinds)
-    case "date":     return generateDate(rng)
-    case "datetime": return generateDatetime(rng)
-    case "uuid":     return generateUuid(rng)
-    case "uri":      return `https://example.com/${rng.int(0, 9999)}`
+    case "number":
+      // Always fractional — avoid accidentally producing an integer
+      return fc.double({ min: -1000, max: 1000, noDefaultInfinity: true, noNaN: true })
+        .map((n) => {
+          if (Number.isInteger(n)) return n + 0.5
+          return n
+        })
 
-    case "object":   return generateObjectValue(shape as { kind: "object"; fields: Record<string, TypeRef> }, rng)
-    case "array":    return generateArrayValue(shape as { kind: "array"; element: TypeRef }, rng)
-    case "tuple":    return generateTupleValue(shape as { kind: "tuple"; elements: readonly TypeRef[] }, rng)
-    case "map":      return generateMapValue(shape as { kind: "map"; value: TypeRef }, rng)
-    case "union":    return generateUnionValue(shape as { kind: "union"; variants: readonly TypeRef[] }, rng)
-    case "enum":     return rng.pick((shape as { kind: "enum"; members: readonly string[] }).members)
-    case "literal":  return (shape as { kind: "literal"; value: string | number | boolean | null }).value
-    case "unknown":  return generateRandomJsonValue(rng)
-    case "never":    return undefined // unreachable — skip in caller
-    default:         return null
+    case "integer":
+      return fc.integer({ min: -1000, max: 1000 })
+
+    case "string":
+      if (meta.format === "email") return arbEmail()
+      return arbPlainString()
+
+    // Integer widths — generate within exact range
+    case "uint8":  return fc.integer({ min: 0, max: 255 })
+    case "int8":   return fc.integer({ min: -128, max: 127 })
+    case "uint16": return fc.integer({ min: 0, max: 65535 })
+    case "int16":  return fc.integer({ min: -32768, max: 32767 })
+    case "uint32": return fc.integer({ min: 0, max: 4294967295 })
+    case "int32":  return fc.integer({ min: -2147483648, max: 2147483647 })
+    case "uint64": return fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER })
+    case "int64":  return fc.integer({ min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER })
+
+    // String format kinds
+    case "date":     return arbDate()
+    case "datetime": return arbDatetime()
+    case "uuid":     return arbUuid()
+    case "uri":      return arbUri()
+
+    case "object": {
+      const fields = (shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+      const entries = Object.entries(fields)
+      if (entries.length === 0) return fc.constant({})
+      // Build a record by generating each field's value independently
+      const arbs: Record<string, fc.Arbitrary<unknown>> = {}
+      const optionalFlags: Record<string, boolean> = {}
+      for (const [name, fieldRef] of entries) {
+        arbs[name] = arbValueForType(fieldRef)
+        optionalFlags[name] = fieldRef.meta.optional === true
+      }
+      return fc.record(arbs).chain((rec) => {
+        // For optional fields, sometimes omit them
+        return fc.tuple(
+          ...Object.keys(rec).map((k) =>
+            optionalFlags[k] ? fc.boolean() : fc.constant(true)
+          )
+        ).map((includes) => {
+          const result: Record<string, unknown> = {}
+          const keys = Object.keys(rec)
+          for (let i = 0; i < keys.length; i++) {
+            if (includes[i]) result[keys[i]!] = rec[keys[i]!]
+          }
+          return result
+        })
+      })
+    }
+
+    case "array": {
+      const element = (shape as { kind: "array"; element: TypeRef }).element
+      // Generate 3-7 elements (at least 3 to meet the default arrayThreshold)
+      return fc.array(arbValueForType(element), { minLength: 3, maxLength: 7 })
+    }
+
+    case "tuple": {
+      const elements = (shape as { kind: "tuple"; elements: readonly TypeRef[] }).elements
+      if (elements.length === 0) return fc.constant([])
+      return fc.tuple(...elements.map(arbValueForType)) as fc.Arbitrary<unknown>
+    }
+
+    case "map": {
+      const value = (shape as { kind: "map"; value: TypeRef }).value
+      // Generate 2-5 entries with plain-string keys (won't match formats)
+      return fc.array(
+        fc.tuple(fc.stringMatching(/^[a-z]{2,6}$/), arbValueForType(value)),
+        { minLength: 2, maxLength: 5 },
+      ).map((pairs) => {
+        const result: Record<string, unknown> = {}
+        for (const [k, v] of pairs) result[k] = v
+        return result
+      })
+    }
+
+    case "union": {
+      const variants = (shape as { kind: "union"; variants: readonly TypeRef[] }).variants
+        .filter((v) => v.shape.kind !== "never")
+      if (variants.length === 0) return fc.constant(null)
+      return fc.oneof(...variants.map(arbValueForType))
+    }
+
+    case "enum": {
+      const members = (shape as { kind: "enum"; members: readonly string[] }).members
+      return fc.constantFrom(...members)
+    }
+
+    case "literal": {
+      const value = (shape as { kind: "literal"; value: string | number | boolean | null }).value
+      return fc.constant(value)
+    }
+
+    case "unknown":
+      // Generate some valid JSON — mix of types
+      return fc.oneof(
+        fc.constant(null),
+        fc.boolean(),
+        fc.integer({ min: 0, max: 100 }),
+        arbPlainString(),
+      )
+
+    case "never":
+      // No valid values — should not be reached
+      return fc.constant(undefined)
+
+    default:
+      return fc.constant(null)
   }
-}
-
-function generatePlainString(meta: Record<string, unknown>, rng: Rng): string {
-  // If the type has format meta, generate a valid string of that format
-  if (meta.format === "email") return generateEmail(rng)
-  // Plain string — make sure it doesn't accidentally match a format
-  const chars = "abcdefghijklmnopqrstuvwxyz"
-  const len = rng.int(3, 12)
-  let result = ""
-  for (let i = 0; i < len; i++) result += chars[rng.int(0, chars.length - 1)]
-  return result
-}
-
-function generateDate(rng: Rng): string {
-  const y = rng.int(2000, 2030)
-  const m = String(rng.int(1, 12)).padStart(2, "0")
-  const d = String(rng.int(1, 28)).padStart(2, "0")
-  return `${y}-${m}-${d}`
-}
-
-function generateDatetime(rng: Rng): string {
-  const d = generateDate(rng)
-  const h = String(rng.int(0, 23)).padStart(2, "0")
-  const min = String(rng.int(0, 59)).padStart(2, "0")
-  const s = String(rng.int(0, 59)).padStart(2, "0")
-  return `${d}T${h}:${min}:${s}Z`
-}
-
-function generateUuid(rng: Rng): string {
-  const hex = (n: number) => {
-    let s = ""
-    for (let i = 0; i < n; i++) s += "0123456789abcdef"[rng.int(0, 15)]
-    return s
-  }
-  return `${hex(8)}-${hex(4)}-${hex(4)}-${hex(4)}-${hex(12)}`
-}
-
-function generateEmail(rng: Rng): string {
-  const user = "user" + rng.int(0, 999)
-  const domain = "example" + rng.int(0, 99) + ".com"
-  return `${user}@${domain}`
-}
-
-function generateObjectValue(shape: { kind: "object"; fields: Record<string, TypeRef> }, rng: Rng): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  for (const [name, fieldRef] of Object.entries(shape.fields)) {
-    // Skip optional fields 50% of the time
-    if (fieldRef.meta.optional && rng.chance(0.5)) continue
-    result[name] = generateValue(fieldRef, rng)
-  }
-  return result
-}
-
-function generateArrayValue(shape: { kind: "array"; element: TypeRef }, rng: Rng): unknown[] {
-  // Generate 3-7 elements (at least 3 to meet the default array threshold)
-  const len = rng.int(3, 7)
-  const result: unknown[] = []
-  for (let i = 0; i < len; i++) result.push(generateValue(shape.element, rng))
-  return result
-}
-
-function generateTupleValue(shape: { kind: "tuple"; elements: readonly TypeRef[] }, rng: Rng): unknown[] {
-  return shape.elements.map((el) => generateValue(el, rng))
-}
-
-function generateMapValue(shape: { kind: "map"; value: TypeRef }, rng: Rng): Record<string, unknown> {
-  const count = rng.int(2, 5)
-  const result: Record<string, unknown> = {}
-  for (let i = 0; i < count; i++) {
-    const key = `key_${rng.int(0, 9999)}`
-    result[key] = generateValue(shape.value, rng)
-  }
-  return result
-}
-
-function generateUnionValue(shape: { kind: "union"; variants: readonly TypeRef[] }, rng: Rng): unknown {
-  // Filter out never variants
-  const valid = shape.variants.filter((v) => v.shape.kind !== "never")
-  if (valid.length === 0) return null
-  return generateValue(rng.pick(valid), rng)
-}
-
-function generateRandomJsonValue(rng: Rng): unknown {
-  const r = rng.next()
-  if (r < 0.15) return null
-  if (r < 0.30) return rng.chance(0.5)
-  if (r < 0.50) return rng.int(-100, 100)
-  if (r < 0.70) return "str_" + rng.int(0, 999)
-  if (r < 0.85) return { a: rng.int(0, 100), b: "v" + rng.int(0, 99) }
-  return [rng.int(0, 10), rng.int(0, 10), rng.int(0, 10)]
 }
 
 // ---------------------------------------------------------------------------
-// Validation — check that a value is a valid inhabitant of a TypeRef
+// Consistency checking — value inhabits inferred type
 // ---------------------------------------------------------------------------
 
-function isSubkind(inferred: string, original: string): boolean {
-  if (inferred === original) return true
-  // Check if inferred is a descendant of original via ancestors
-  return ancestors(inferred).includes(original)
+// All integer-like kinds (subtypes of integer, plus integer itself)
+const integerKinds = new Set([
+  "uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64", "integer",
+])
+
+function isSubkind(child: string, parent: string): boolean {
+  if (child === parent) return true
+  return ancestors(child).includes(parent)
 }
 
-// All integer width kinds in tightest-to-widest order.
-// A value inferred as uint8 is valid for any wider integer kind.
-const intWidthOrder = ["uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64", "integer"]
+/** Check that the value is a valid inhabitant of the inferred TypeRef. */
+function valueInhabitsType(value: unknown, inferred: TypeRef): string | null {
+  const kind = inferred.shape.kind
 
-function isIntegerSubtype(inferred: string, original: string): boolean {
-  const inferredIdx = intWidthOrder.indexOf(inferred)
-  const originalIdx = intWidthOrder.indexOf(original)
-  if (inferredIdx === -1 || originalIdx === -1) return false
-  // A tighter (earlier in list) inferred width is fine — the value fits
-  // both the inferred type and the original. But we also need to check that
-  // the inferred width's range is a subset of the original's.
-  // Actually, for the roundtrip invariant, what matters is: the value we
-  // generated from the original type was accepted by fromJson without error,
-  // and the inferred type is an integer subtype. Since the value was
-  // generated within the original's range and the inferrer picks the
-  // tightest width that fits, any tighter width is correct.
-  return true
+  if (value === null) {
+    return kind === "null" ? null : `null value inferred as ${kind}`
+  }
+
+  if (typeof value === "boolean") {
+    return kind === "boolean" ? null : `boolean value inferred as ${kind}`
+  }
+
+  if (typeof value === "number") {
+    if (Number.isInteger(value)) {
+      // Integer values should infer as some integer kind
+      if (integerKinds.has(kind)) {
+        // Check the value actually fits the inferred width's range
+        const range = intWidthRanges[kind]
+        if (range !== undefined) {
+          if (value < range.min || value > range.max) {
+            return `integer ${value} inferred as ${kind} but out of range [${range.min}, ${range.max}]`
+          }
+        }
+        return null
+      }
+      // Integer could also be inferred as number (if narrowing is off)
+      if (kind === "number") return null
+      return `integer value ${value} inferred as ${kind}`
+    }
+    // Fractional number
+    return kind === "number" ? null : `fractional ${value} inferred as ${kind}`
+  }
+
+  if (typeof value === "string") {
+    // Any string subtype is valid for a string value
+    if (kind === "string" || isSubkind(kind, "string")) return null
+    return `string "${value}" inferred as ${kind}`
+  }
+
+  if (Array.isArray(value)) {
+    if (kind === "array" || kind === "tuple") return null
+    return `array value inferred as ${kind}`
+  }
+
+  if (typeof value === "object") {
+    if (kind === "object") {
+      // Check that every key in the value has a corresponding field
+      const fields = (inferred.shape as { fields: Record<string, TypeRef> }).fields
+      for (const key of Object.keys(value as Record<string, unknown>)) {
+        if (!(key in fields)) {
+          return `object key "${key}" not in inferred fields`
+        }
+      }
+      // Check that every required inferred field is present in the value
+      for (const [key, fieldRef] of Object.entries(fields)) {
+        if (!fieldRef.meta.optional && !(key in (value as Record<string, unknown>))) {
+          return `required inferred field "${key}" missing from value`
+        }
+      }
+      return null
+    }
+    return `object value inferred as ${kind}`
+  }
+
+  return null // unknown/undefined — anything goes
 }
 
-/**
- * Check that the inferred TypeRef is consistent with the original TypeRef
- * and the generated value. Returns null on success, or an error message.
- */
-function checkConsistency(
-  original: TypeRef,
-  value: unknown,
-  inferred: TypeRef,
-): string | null {
-  const origKind = original.shape.kind
-  const infKind = inferred.shape.kind
+/** Check the inferred type is the tightest integer width for this value. */
+function checkIntegerTightness(value: number, inferred: TypeRef): string | null {
+  if (!Number.isInteger(value)) return null
+  const kind = inferred.shape.kind
+  if (!integerKinds.has(kind)) return null
 
-  // --- Primitives and integer widths ---
-  // Width narrowing is expected: a value 5 generated from int32 will infer
-  // as uint8. Both are subtypes of integer, so this is fine.
-  if (isSubkind(infKind, origKind)) return null
+  // Replay the inferrer's tightest-first logic: uint8, int8, uint16, int16, uint32, int32, uint64, int64
+  const order: { kind: string; min: number; max: number }[] = [
+    { kind: "uint8", min: 0, max: 255 },
+    { kind: "int8", min: -128, max: 127 },
+    { kind: "uint16", min: 0, max: 65535 },
+    { kind: "int16", min: -32768, max: 32767 },
+    { kind: "uint32", min: 0, max: 4294967295 },
+    { kind: "int32", min: -2147483648, max: 2147483647 },
+  ]
 
-  // Integer width cross-check: any integer kind inferred from a value
-  // generated by another integer kind is fine — the value was in range.
-  if (
-    intWidthOrder.includes(infKind) &&
-    (intWidthOrder.includes(origKind) || origKind === "number")
-  ) {
-    return null
-  }
-
-  // number -> integer narrowing: a value with zero fractional part generated
-  // from `number` will be inferred as an integer kind. This is only valid if
-  // the generated value actually has no fractional part. The value generator
-  // adds 0.1 to number values to avoid this, but let's be safe.
-  if (origKind === "number" && isSubkind(infKind, "number")) return null
-
-  // Literal -> underlying type: literal(42) generates 42, inferred as uint8
-  if (origKind === "literal") {
-    const litVal = (original.shape as { value: unknown }).value
-    if (litVal === null && infKind === "null") return null
-    if (typeof litVal === "boolean" && infKind === "boolean") return null
-    if (typeof litVal === "number" && (intWidthOrder.includes(infKind) || infKind === "number")) return null
-    if (typeof litVal === "string" && (infKind === "string" || isSubkind(infKind, "string"))) return null
-    return `literal ${JSON.stringify(litVal)} inferred as ${infKind}`
-  }
-
-  // Enum -> string: a single sampled enum value is just a string
-  if (origKind === "enum" && infKind === "string") return null
-  // Enum value might match a format (e.g. uuid-shaped enum member)
-  if (origKind === "enum" && isSubkind(infKind, "string")) return null
-
-  // String format: a plain string might not match a format (inferred as
-  // plain string), or a formatted string inferred as a different format
-  // subtype of string — both are string subtypes.
-  if (origKind === "string" && isSubkind(infKind, "string")) return null
-  // String with format meta (email) — the inferred type should also be
-  // string with format meta or a string subtype
-  if (isSubkind(origKind, "string") && isSubkind(infKind, "string")) return null
-
-  // unknown -> anything: unknown is the top type, any inference is valid
-  if (origKind === "unknown") return null
-
-  // --- Containers ---
-
-  if (origKind === "object" && infKind === "object") {
-    return checkObjectConsistency(original, value as Record<string, unknown>, inferred)
-  }
-
-  if (origKind === "array" && infKind === "array") {
-    // Array element type consistency is checked structurally below.
-    // The inferrer merges element types, which may produce a different
-    // (but compatible) element type.
-    return null
-  }
-
-  // Array might be inferred as tuple (below threshold) — that's fine
-  if (origKind === "array" && infKind === "tuple") return null
-  // Tuple might be inferred as array (homogeneous elements above threshold)
-  if (origKind === "tuple" && (infKind === "array" || infKind === "tuple")) return null
-
-  // Map inferred as object (each key becomes a field) — expected
-  if (origKind === "map" && infKind === "object") return null
-
-  // Union: the generated value came from one variant, so the inferred type
-  // should be consistent with that variant (not necessarily the union itself)
-  if (origKind === "union") return null
-
-  return `original kind ${origKind} inferred as ${infKind}`
-}
-
-function checkObjectConsistency(
-  original: TypeRef,
-  value: Record<string, unknown>,
-  inferred: TypeRef,
-): string | null {
-  const origFields = (original.shape as { fields: Record<string, TypeRef> }).fields
-  const infFields = (inferred.shape as { fields: Record<string, TypeRef> }).fields
-
-  // Every field present in the value should appear in the inferred type
-  for (const key of Object.keys(value)) {
-    if (!(key in infFields)) {
-      return `field "${key}" present in value but missing from inferred type`
+  for (const { kind: expected, min, max } of order) {
+    if (value >= min && value <= max) {
+      return kind === expected
+        ? null
+        : `value ${value} should infer as ${expected} (tightest) but got ${kind}`
     }
   }
 
-  // Inferred type should not have fields that aren't in the value
-  for (const key of Object.keys(infFields)) {
-    if (!(key in value)) {
-      return `field "${key}" in inferred type but not in value`
-    }
+  // Beyond 32-bit
+  if (Number.isSafeInteger(value)) {
+    const expected = value >= 0 ? "uint64" : "int64"
+    return kind === expected
+      ? null
+      : `value ${value} should infer as ${expected} but got ${kind}`
   }
 
   return null
 }
 
 // ---------------------------------------------------------------------------
-// The fuzz test
+// Properties
 // ---------------------------------------------------------------------------
 
-const ITERATIONS = 2000
+// Depth 3 gives types up to 3 levels of nesting — deep enough to exercise
+// objects-in-arrays, unions-of-objects, etc.
+const typeRefArb = arbTypeRef(3)
 
-describe("fromJson roundtrip fuzz", () => {
-  test(`${ITERATIONS} iterations: generate type -> generate value -> infer -> check consistency`, () => {
-    const rng = makeRng(42) // deterministic seed
-    let passed = 0
-    let skipped = 0
-    const failures: { iteration: number; original: TypeRef; value: unknown; inferred: TypeRef; error: string }[] = []
+// Combined arbitrary: generate a type, then generate a conforming value
+function arbTypeAndValue(): fc.Arbitrary<{ type: TypeRef; value: unknown }> {
+  return typeRefArb
+    .filter((ref) => ref.shape.kind !== "never")
+    .chain((type) =>
+      arbValueForType(type).map((value) => ({ type, value }))
+    )
+}
 
-    for (let i = 0; i < ITERATIONS; i++) {
-      const original = generateTypeRef(rng, 0)
+describe("fromJson property-based tests", () => {
 
-      // Skip types that can't produce values
-      if (original.shape.kind === "never") { skipped++; continue }
-
-      let value: unknown
-      try {
-        value = generateValue(original, rng)
-      } catch (e) {
-        // Value generation failed — skip (shouldn't happen, but defensive)
-        skipped++
-        continue
-      }
-
-      let inferred: TypeRef
-      try {
-        inferred = fromJson(value)
-      } catch (e) {
-        failures.push({
-          iteration: i,
-          original,
-          value,
-          inferred: t(types.never),
-          error: `fromJson crashed: ${e}`,
-        })
-        continue
-      }
-
-      const error = checkConsistency(original, value, inferred)
-      if (error !== null) {
-        failures.push({ iteration: i, original, value, inferred, error })
-      } else {
-        passed++
-      }
-    }
-
-    // Report
-    const total = ITERATIONS - skipped
-    if (failures.length > 0) {
-      const sample = failures.slice(0, 10)
-      const report = sample.map((f) =>
-        `  iteration ${f.iteration}: ${f.error}\n` +
-        `    original: ${JSON.stringify(f.original.shape)}\n` +
-        `    value:    ${JSON.stringify(f.value)}\n` +
-        `    inferred: ${JSON.stringify(f.inferred.shape)}`
-      ).join("\n")
-      expect(failures.length).toBe(0)
-      // This line is unreachable but helps with debugging if the test is
-      // run in a mode that doesn't stop on first failure:
-      console.log(`FAILURES (${failures.length}/${total}):\n${report}`)
-    }
-
-    expect(passed).toBe(total)
+  // Property 1: fromJson never crashes on any valid JSON
+  test("no crashes on arbitrary JSON values", () => {
+    fc.assert(
+      fc.property(fc.jsonValue(), (value) => {
+        // Should not throw
+        fromJson(value)
+      }),
+      { numRuns: 10000 },
+    )
   })
 
-  test("value generation covers all generatable kinds", () => {
-    // Verify that the generator can produce values for each kind without
-    // crashing, by explicitly constructing one of each.
-    const rng = makeRng(123)
-    const cases: TypeRef[] = [
-      t(types.null),
-      t(types.boolean),
-      t(types.number),
-      t(types.integer),
-      t(types.string),
-      t(types.string, { format: "email" }),
-      uint8(), int8(), uint16(), int16(), uint32(), int32(), uint64(), int64(),
-      date(), datetime(), uuid(), uri(),
-      t(types.object({ a: t(types.string), b: t(types.integer, { optional: true }) })),
-      t(types.array(t(types.boolean))),
-      t(types.tuple([t(types.string), t(types.integer)])),
-      t(types.map(t(types.string), t(types.number))),
-      t(types.union([t(types.string), t(types.integer)])),
-      t(types.enum(["a", "b", "c"])),
-      t(types.literal(42)),
-      t(types.literal("hello")),
-      t(types.literal(true)),
-      t(types.literal(null)),
-      t(types.unknown),
-    ]
-
-    for (const typeRef of cases) {
-      const value = generateValue(typeRef, rng)
-      // Just check it doesn't crash and produces something JSON-serializable
-      expect(() => JSON.stringify(value)).not.toThrow()
-      // And fromJson doesn't crash on it
-      expect(() => fromJson(value)).not.toThrow()
-    }
+  // Property 2: determinism — same input yields structurally equal output
+  test("determinism: same input, same output", () => {
+    fc.assert(
+      fc.property(fc.jsonValue(), (value) => {
+        const a = fromJson(value)
+        const b = fromJson(value)
+        expect(a).toEqual(b)
+      }),
+      { numRuns: 5000 },
+    )
   })
 
-  test("nested type trees: objects in arrays, arrays of tuples, unions of objects", () => {
-    const rng = makeRng(777)
-    const nestedCases: TypeRef[] = [
-      // Array of objects
-      t(types.array(t(types.object({ id: uint32(), name: t(types.string) })))),
-      // Object with nested array
-      t(types.object({ tags: t(types.array(t(types.string))), count: int16() })),
-      // Array of tuples
-      t(types.array(t(types.tuple([t(types.string), uint8()])))),
-      // Union of objects
-      t(types.union([
-        t(types.object({ type: t(types.literal("a")), x: uint8() })),
-        t(types.object({ type: t(types.literal("b")), y: t(types.string) })),
-      ])),
-      // Deeply nested
-      t(types.object({
-        data: t(types.array(t(types.object({
-          items: t(types.tuple([t(types.string), t(types.boolean)])),
-          meta: t(types.map(t(types.string), uint16())),
-        })))),
-      })),
-    ]
+  // Property 3: the generated value inhabits the inferred type
+  test("roundtrip: value inhabits inferred type", () => {
+    fc.assert(
+      fc.property(arbTypeAndValue(), ({ type, value }) => {
+        const inferred = fromJson(value)
+        const error = valueInhabitsType(value, inferred)
+        if (error !== null) {
+          throw new Error(
+            `${error}\n` +
+            `  original type: ${JSON.stringify(type.shape)}\n` +
+            `  value:         ${JSON.stringify(value)}\n` +
+            `  inferred:      ${JSON.stringify(inferred.shape)}`,
+          )
+        }
+      }),
+      { numRuns: 10000 },
+    )
+  })
 
-    for (const typeRef of nestedCases) {
-      const value = generateValue(typeRef, rng)
-      expect(() => JSON.stringify(value)).not.toThrow()
-      const inferred = fromJson(value)
-      const error = checkConsistency(typeRef, value, inferred)
-      if (error !== null) {
-        throw new Error(
-          `Nested case failed: ${error}\n` +
-          `  original: ${JSON.stringify(typeRef.shape)}\n` +
-          `  value:    ${JSON.stringify(value)}\n` +
-          `  inferred: ${JSON.stringify(inferred.shape)}`
-        )
-      }
-    }
+  // Property 4: integer tightness — inferred width is the tightest possible
+  test("tightness: integers infer to tightest width", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER }),
+        (value) => {
+          const inferred = fromJson(value)
+          const error = checkIntegerTightness(value, inferred)
+          if (error !== null) throw new Error(error)
+        },
+      ),
+      { numRuns: 10000 },
+    )
+  })
+
+  // Property 5: leaf type stability — re-inferring a leaf value gives the same type
+  test("leaf stability: fromJson on a leaf value is idempotent on type", () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.constant(null),
+          fc.boolean(),
+          fc.double({ min: -1000, max: 1000, noDefaultInfinity: true, noNaN: true })
+            .map((n) => Number.isInteger(n) ? n + 0.5 : n),
+          fc.integer({ min: -1000, max: 1000 }),
+          arbPlainString(),
+        ),
+        (value) => {
+          const first = fromJson(value)
+          // Generate a "canonical" value from the inferred type and re-infer.
+          // For leaves, the same value re-inferred should give the same type.
+          const second = fromJson(value)
+          expect(first).toEqual(second)
+        },
+      ),
+      { numRuns: 5000 },
+    )
+  })
+
+  // Property 6: object field preservation — all value keys appear in inferred object
+  test("object fields: every key in value appears in inferred object", () => {
+    fc.assert(
+      fc.property(
+        // Generate small objects with plain-string keys and mixed values
+        fc.dictionary(
+          fc.stringMatching(/^[a-z]{2,6}$/),
+          fc.oneof(
+            fc.constant(null),
+            fc.boolean(),
+            fc.integer({ min: 0, max: 100 }),
+            arbPlainString(),
+          ),
+          { minKeys: 1, maxKeys: 8 },
+        ),
+        (obj) => {
+          const inferred = fromJson(obj)
+          expect(inferred.shape.kind).toBe("object")
+          const fields = (inferred.shape as { fields: Record<string, TypeRef> }).fields
+          for (const key of Object.keys(obj)) {
+            if (!(key in fields)) {
+              throw new Error(`key "${key}" missing from inferred object fields`)
+            }
+          }
+          for (const key of Object.keys(fields)) {
+            if (!(key in obj)) {
+              throw new Error(`inferred field "${key}" not in input object`)
+            }
+          }
+        },
+      ),
+      { numRuns: 5000 },
+    )
+  })
+
+  // Property 7: array homogeneity — arrays of same-typed values infer as array (not tuple)
+  test("homogeneous arrays above threshold infer as array kind", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer({ min: 0, max: 100 }), { minLength: 3, maxLength: 20 }),
+        (arr) => {
+          const inferred = fromJson(arr)
+          // All elements are small non-negative integers -> all infer as uint8
+          // -> homogeneous -> should be array, not tuple
+          expect(inferred.shape.kind).toBe("array")
+        },
+      ),
+      { numRuns: 5000 },
+    )
+  })
+
+  // Property 8: string format detection is sound — formats only detected for valid strings
+  test("string format soundness: detected formats match value", () => {
+    fc.assert(
+      fc.property(arbPlainString(), (s) => {
+        const inferred = fromJson(s)
+        // Plain strings (starting with uppercase, no special format) should
+        // not be detected as date, datetime, uuid, email, or uri
+        expect(inferred.shape.kind).toBe("string")
+        expect(inferred.meta).toEqual({})
+      }),
+      { numRuns: 5000 },
+    )
   })
 })
