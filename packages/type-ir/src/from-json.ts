@@ -19,12 +19,12 @@
 // design sketch for that follow-on work.
 
 import { t, types, type TypeRef } from "./index.ts"
-import { date, datetime, int32, int64, uuid, uri } from "./kinds/common.ts"
+import { date, datetime, int8, int16, int32, int64, uint8, uint16, uint32, uint64, uuid, uri } from "./kinds/common.ts"
 
 export interface InferConfig {
   /** Minimum elements before inferring `array` (vs. `tuple`) for a non-empty array. Default: 3. */
   arrayThreshold?: number
-  /** Narrow whole numbers to int32/int64 when they fit the range. Default: true. */
+  /** Narrow whole numbers to the tightest fixed-width integer kind (uint8..int64). Default: true. */
   narrowIntegerWidth?: boolean
   /** Try ISO date/datetime, uuid, email, uri format detection on strings. Default: true. */
   detectStringFormats?: boolean
@@ -77,16 +77,30 @@ function inferString(value: string, config: ResolvedConfig): TypeRef {
   return t(types.string)
 }
 
-// int32/int64 are the only fixed-width integer kinds this package registers
-// (see src/kinds/int-widths.ts) — no int8/int16 to narrow to.
-const INT32_MIN = -2147483648
-const INT32_MAX = 2147483647
+// Width narrowing: check from tightest to widest, prefer unsigned when the
+// value is non-negative. First match wins.
+//
+// Order: uint8 [0,255], int8 [-128,127], uint16 [0,65535], int16 [-32768,32767],
+//        uint32 [0,4294967295], int32 [-2147483648,2147483647],
+//        uint64/int64 for larger safe integers.
+const intWidths: readonly { min: number; max: number; ctor: () => TypeRef }[] = [
+  { min: 0, max: 255, ctor: uint8 },
+  { min: -128, max: 127, ctor: int8 },
+  { min: 0, max: 65535, ctor: uint16 },
+  { min: -32768, max: 32767, ctor: int16 },
+  { min: 0, max: 4294967295, ctor: uint32 },
+  { min: -2147483648, max: 2147483647, ctor: int32 },
+]
 
 function inferNumber(value: number, config: ResolvedConfig): TypeRef {
   if (!Number.isInteger(value)) return t(types.number)
   if (config.narrowIntegerWidth) {
-    if (value >= INT32_MIN && value <= INT32_MAX) return int32()
-    if (Number.isSafeInteger(value)) return int64()
+    for (const { min, max, ctor } of intWidths) {
+      if (value >= min && value <= max) return ctor()
+    }
+    // Beyond 32-bit range but still a safe integer — pick unsigned if
+    // non-negative, signed otherwise.
+    if (Number.isSafeInteger(value)) return value >= 0 ? uint64() : int64()
   }
   return t(types.integer)
 }
