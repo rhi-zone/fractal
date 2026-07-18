@@ -99,7 +99,13 @@ const handlers: Record<string, Converter> = {
     const properties: Record<string, OpenApi20Schema> = {}
     const required: string[] = []
     for (const [name, field] of Object.entries(s.fields)) {
-      properties[name] = toOpenApi20(field)
+      let propSchema = toOpenApi20(field)
+      // Swagger 2.0 §4.7.4: `readOnly` is a per-schema annotation, driven by
+      // the `meta.readonly` open-metadata-bag convention set on the field's
+      // own TypeRef (distinct from `meta.readOnly`, handled in withMeta above
+      // for schemas that carry the OAS-cased key directly).
+      if (field.meta.readonly === true) propSchema = { ...propSchema, readOnly: true }
+      properties[name] = propSchema
       if (field.meta.optional !== true) required.push(name)
     }
     const schema: OpenApi20Schema = { type: "object", properties }

@@ -503,6 +503,20 @@ describe("typeRefFromType gap fixes", () => {
     expect(fields.data?.shape.kind).toBe("string")
   })
 
+  it("sets meta.readonly on a `readonly`-modified field, and leaves a plain field alone", () => {
+    const ref = typeRefFromType(typeOf("ReadonlyField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.id?.meta.readonly).toBe(true)
+    expect(fields.name?.meta.readonly).toBeUndefined()
+  })
+
+  it("sets both meta.optional and meta.readonly on a `readonly` optional field", () => {
+    const ref = typeRefFromType(typeOf("ReadonlyOptionalField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.id?.meta.optional).toBe(true)
+    expect(fields.id?.meta.readonly).toBe(true)
+  })
+
   it("does not stack-overflow on an array-mediated recursive type, and refs itself", () => {
     const ref = typeRefFromType(typeOf("RecursiveType"), checker, source)
     expect(ref.shape.kind).toBe("object")

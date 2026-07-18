@@ -37,7 +37,8 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "object" }
     const fields = Object.entries(s.fields).map(([name, field]) => {
       const optional = field.meta.optional === true
-      return `${name}${optional ? "?" : ""}: ${toTypeScript(field)}`
+      const readonly = field.meta.readonly === true
+      return `${readonly ? "readonly " : ""}${name}${optional ? "?" : ""}: ${toTypeScript(field)}`
     })
     return `{ ${fields.join("; ")} }`
   },

@@ -97,6 +97,16 @@ describe("object", () => {
       "Type.Object({ name: Type.String(), nickname: Type.Optional(Type.String()) })",
     )
   })
+
+  test("readonly field wraps in Type.Readonly", () => {
+    const ref = t(types.object({ id: t(types.string, { readonly: true }) }))
+    expect(toTypeBox(ref)).toBe("Type.Object({ id: Type.Readonly(Type.String()) })")
+  })
+
+  test("optional and readonly field composes Type.Optional(Type.Readonly(...))", () => {
+    const ref = t(types.object({ id: t(types.string, { optional: true, readonly: true }) }))
+    expect(toTypeBox(ref)).toBe("Type.Object({ id: Type.Optional(Type.Readonly(Type.String())) })")
+  })
 })
 
 describe("array", () => {

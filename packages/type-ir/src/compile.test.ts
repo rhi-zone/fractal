@@ -78,6 +78,12 @@ describe("buildSchema — composite kinds", () => {
     expect(schema.properties.age).toMatchObject({ type: "number" })
   })
 
+  it("object with readonly field wraps in Type.Readonly (Symbol('TypeBox.Readonly') tag)", () => {
+    const ref = t(types.object({ id: t(types.string, { readonly: true }) }))
+    const schema = buildSchema(ref) as unknown as { properties: Record<string, Record<symbol, unknown>> }
+    expect(schema.properties.id![Symbol.for("TypeBox.Readonly")]).toBe("Readonly")
+  })
+
   it("array", () => {
     const ref = t(types.array(t(types.string)))
     expect(buildSchema(ref)).toMatchObject({ type: "array", items: { type: "string" } })

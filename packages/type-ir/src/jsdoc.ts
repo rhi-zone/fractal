@@ -115,17 +115,29 @@ export function toJsDocType(ref: TypeRef): string {
   return ref.meta.nullable === true ? `?${type}` : type
 }
 
-function fieldSuffix(field: TypeRef, optional: boolean): string {
-  const description =
-    typeof field.meta.description === "string" ? field.meta.description : optional ? "optional" : undefined
-  return description === undefined ? "" : ` - ${description}`
+// https://jsdoc.app/tags-readonly.html — `@readonly` is normally its own tag on a
+// property's dedicated doc block, but this projector emits properties as a flat
+// list of single-line `@property`/`@param` entries (no per-field doc block to
+// attach a standalone tag to), so readonly rides along in the description text
+// instead — the same textual-fallback idiom `optional` already uses below when a
+// field has no description of its own.
+function fieldSuffix(field: TypeRef, optional: boolean, readonly = false): string {
+  const description = typeof field.meta.description === "string" ? field.meta.description : undefined
+  const fallback = [optional ? "optional" : undefined, readonly ? "readonly" : undefined].filter(
+    (part): part is string => part !== undefined,
+  )
+  if (description !== undefined) {
+    return readonly ? ` - ${description} (readonly)` : ` - ${description}`
+  }
+  return fallback.length > 0 ? ` - ${fallback.join(", ")}` : ""
 }
 
 function propertyLine(name: string, field: TypeRef): string {
   const optional = field.meta.optional === true
+  const readonly = field.meta.readonly === true
   const label = optional ? `[${name}]` : name
   const typeExpr = toJsDocType(field)
-  return ` * @property {${typeExpr}} ${label}${fieldSuffix(field, optional)}`
+  return ` * @property {${typeExpr}} ${label}${fieldSuffix(field, optional, readonly)}`
 }
 
 function paramLine(name: string, field: TypeRef): string {

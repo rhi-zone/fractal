@@ -96,7 +96,16 @@ function fromObject(schema: JsonSchema): TypeRef {
     const fields: Record<string, TypeRef> = {}
     for (const [name, fieldSchema] of Object.entries(properties)) {
       const fieldRef = fromJsonSchema(fieldSchema)
-      fields[name] = required.has(name) ? fieldRef : withMeta(fieldRef, { optional: true })
+      const extra: Record<string, unknown> = {}
+      if (!required.has(name)) extra.optional = true
+      // `readOnly` (already lifted verbatim into meta.readOnly by extractMeta's
+      // generic passthrough above) is additionally mirrored into the
+      // lowercase `meta.readonly` convention (see type-ir's TypeRef doc
+      // comment) so this field round-trips through projectors that read the
+      // TS-source-extraction convention (typescript.ts, zod.ts, typebox.ts, …),
+      // not just the JSON-Schema-native passthrough projectors.
+      if (fieldSchema.readOnly === true) extra.readonly = true
+      fields[name] = Object.keys(extra).length > 0 ? withMeta(fieldRef, extra) : fieldRef
     }
     return t(types.object(fields))
   }

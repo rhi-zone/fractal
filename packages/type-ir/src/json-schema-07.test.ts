@@ -125,6 +125,15 @@ describe("shared: object", () => {
       properties: { nickname: { type: "string" } },
     })
   })
+
+  test("readonly field emits readOnly: true (draft-07 addition)", () => {
+    const ref = t(types.object({ id: t(types.string, { readonly: true }) }))
+    expect(toJsonSchema07(ref)).toEqual({
+      type: "object",
+      properties: { id: { type: "string", readOnly: true } },
+      required: ["id"],
+    })
+  })
 })
 
 describe("shared: array", () => {

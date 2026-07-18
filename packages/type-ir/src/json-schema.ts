@@ -79,7 +79,12 @@ const handlers: Record<string, Converter> = {
     const properties: Record<string, JsonSchema> = {}
     const required: string[] = []
     for (const [name, field] of Object.entries(s.fields)) {
-      properties[name] = toJsonSchema(field)
+      let propSchema = toJsonSchema(field)
+      // draft 2020-12 §9.5: `readOnly` is a per-schema annotation, driven by
+      // the `meta.readonly` open-metadata-bag convention (see type-ir's
+      // TypeRef doc comment) set on the field's own TypeRef.
+      if (field.meta.readonly === true) propSchema = { ...propSchema, readOnly: true }
+      properties[name] = propSchema
       if (field.meta.optional !== true) required.push(name)
     }
     const schema: JsonSchema = { type: "object", properties }

@@ -110,6 +110,15 @@ describe("object", () => {
       properties: { nickname: { type: "string" } },
     })
   })
+
+  test("readonly field emits readOnly: true", () => {
+    const ref = t(types.object({ id: t(types.string, { readonly: true }) }))
+    expect(toOpenApi30(ref)).toEqual({
+      type: "object",
+      properties: { id: { type: "string", readOnly: true } },
+      required: ["id"],
+    })
+  })
 })
 
 describe("array", () => {

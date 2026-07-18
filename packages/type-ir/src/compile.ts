@@ -79,7 +79,13 @@ const handlers: Record<string, Converter> = {
     const fields: Record<string, TSchema> = {}
     for (const [name, field] of Object.entries(s.fields)) {
       const fieldSchema = buildSchema(field)
-      fields[name] = field.meta.optional === true ? Type.Optional(fieldSchema) : fieldSchema
+      // Mirrors type-ir/src/typebox.ts's string projector: Type.Readonly()
+      // wraps a schema to mark the property readonly, composed with
+      // Type.Optional() the same way. Readonly has no effect on
+      // TypeCompiler's runtime validation (it's a static-type-only TypeBox
+      // annotation) but is applied anyway for output-schema fidelity.
+      const readonlySchema = field.meta.readonly === true ? Type.Readonly(fieldSchema) : fieldSchema
+      fields[name] = field.meta.optional === true ? Type.Optional(readonlySchema) : readonlySchema
     }
     return Type.Object(fields, metaOptions(meta))
   },

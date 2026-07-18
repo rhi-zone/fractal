@@ -81,7 +81,11 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "object" }
     const fields = Object.entries(s.fields).map(([name, field]) => {
       const expr = toTypeBox(field)
-      const wrapped = field.meta.optional === true ? `Type.Optional(${expr})` : expr
+      // https://github.com/sinclairzx81/typebox#readonly — Type.Readonly()
+      // wraps a schema to mark the property readonly; composes with
+      // Type.Optional() the same way TypeBox's own docs order them.
+      const readonlyExpr = field.meta.readonly === true ? `Type.Readonly(${expr})` : expr
+      const wrapped = field.meta.optional === true ? `Type.Optional(${readonlyExpr})` : readonlyExpr
       return `${quoteKey(name)}: ${wrapped}`
     })
     return call("Type.Object", [`{ ${fields.join(", ")} }`], [], meta)

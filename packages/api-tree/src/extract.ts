@@ -160,6 +160,14 @@ function isPrivateOrProtected(prop: ts.Symbol): boolean {
   })
 }
 
+/** True for symbols with at least one `readonly`-modified declaration. */
+function isReadonly(prop: ts.Symbol): boolean {
+  return (prop.declarations ?? []).some((decl) => {
+    const mods = ts.getCombinedModifierFlags(decl as ts.Declaration & { kind: ts.SyntaxKind })
+    return (mods & ts.ModifierFlags.Readonly) !== 0
+  })
+}
+
 /**
  * A property symbol's own JSDoc comment (the `/** … *\/` text, excluding
  * `@tag` lines), flattened to a single trimmed string. Uses
@@ -564,6 +572,7 @@ export function typeRefFromType(
       if (isPrivateOrProtected(prop)) continue
 
       const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0
+      const readonly = isReadonly(prop)
       // Strip `| undefined` so `field?: string` lowers as a plain string.
       const propType = checker
         .getTypeOfSymbolAtLocation(prop, loc)
@@ -583,6 +592,7 @@ export function typeRefFromType(
 
       const extraMeta: Record<string, unknown> = {}
       if (optional) extraMeta.optional = true
+      if (readonly) extraMeta.readonly = true
       if (description !== undefined) extraMeta.description = description
       if (defaultValue !== undefined) extraMeta.default = defaultValue
 

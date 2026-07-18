@@ -73,7 +73,11 @@ const handlers: Record<string, Converter> = {
     const fields = Object.entries(s.fields).map(([name, field]) => {
       const expr = toZod(field)
       const optional = field.meta.optional === true ? ".optional()" : ""
-      return `${quoteKey(name)}: ${expr}${optional}`
+      // https://zod.dev/api#readonly — `.readonly()` (any ZodType) marks the
+      // parsed output type readonly (Object.freeze at parse time); chained
+      // after `.optional()` like Zod's other field-level modifiers.
+      const readonly = field.meta.readonly === true ? ".readonly()" : ""
+      return `${quoteKey(name)}: ${expr}${optional}${readonly}`
     })
     return `z.object({ ${fields.join(", ")} })`
   },

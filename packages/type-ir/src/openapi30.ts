@@ -80,7 +80,13 @@ const handlers: Record<string, Converter> = {
     const properties: Record<string, OpenApi30Schema> = {}
     const required: string[] = []
     for (const [name, field] of Object.entries(s.fields)) {
-      properties[name] = toOpenApi30(field)
+      let propSchema = toOpenApi30(field)
+      // OAS 3.0.3 §4.8.24.2: `readOnly` is a per-schema annotation, driven by
+      // the `meta.readonly` open-metadata-bag convention set on the field's
+      // own TypeRef (distinct from `meta.readOnly`, handled in withMeta above
+      // for schemas that carry the OAS-cased key directly).
+      if (field.meta.readonly === true) propSchema = { ...propSchema, readOnly: true }
+      properties[name] = propSchema
       if (field.meta.optional !== true) required.push(name)
     }
     const schema: OpenApi30Schema = { type: "object", properties }

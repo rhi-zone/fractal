@@ -88,6 +88,19 @@ export type TypeRef = {
   readonly meta: Readonly<Record<string, unknown>>
 }
 
+// `meta` is an open bag — these are conventions read by consumers, not
+// hard-typed fields (see design-philosophy: open metadata bag over fixed
+// schema). Recognized conventions include:
+//   - `meta.optional: boolean` — the field may be omitted (set via `partial`/
+//     `required`/`deepPartial`/`deepRequired` in derive.ts).
+//   - `meta.nullable: boolean` — the type additionally accepts `null` (set via
+//     the `nullable()` helper in derive.ts).
+//   - `meta.readonly: boolean` — the field is read-only/immutable and should
+//     not be reassigned after construction. Set on a field's TypeRef (e.g. by
+//     extractors reading a TS `readonly` modifier); consumed by projectors
+//     that can express it (e.g. TypeScript's `readonly` keyword, JSON
+//     Schema/OpenAPI's `readOnly: true`).
+
 const parents: Record<string, string | null> = {
   boolean: null,
   number: null,

@@ -46,6 +46,12 @@ export type DirectRecursive = { self: DirectRecursive }
 /** A field whose type is a Promise — must unwrap like the return-type path. */
 export type PromiseField = { data: Promise<string> }
 
+/** A `readonly` field alongside a plain one — must set `meta.readonly` only on the former. */
+export type ReadonlyField = { readonly id: string; name: string }
+
+/** A field that is both optional and `readonly`. */
+export type ReadonlyOptionalField = { readonly id?: string }
+
 /** A class with mixed visibility + a method — lowers to a purely nominal types.instance. */
 export class SampleClass {
   public name: string = ""

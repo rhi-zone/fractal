@@ -25,6 +25,9 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 //   `maximum` (draft-04 §5.1.1/§5.1.2), not standalone numbers (that numeric form
 //   arrives in draft-06)
 // - No `propertyNames` (introduced draft-06)
+// - No `readOnly`/`writeOnly` (introduced draft-07) — `meta.readonly` on a
+//   field is silently dropped rather than emitting a keyword draft-04 doesn't
+//   define
 export type JsonSchema04 = Record<string, unknown>
 
 // `$comment` is a draft-07+ keyword (json-schema.org draft-07 §10.1) — not part

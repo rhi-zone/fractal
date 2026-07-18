@@ -119,6 +119,22 @@ describe("object", () => {
   test("object with no properties or additionalProperties", () => {
     expect(fromJsonSchema({ type: "object" })).toEqual(t(types.object({})))
   })
+
+  test("readOnly property -> meta.readonly (lowercase convention) alongside verbatim meta.readOnly", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        id: { type: "string", readOnly: true },
+        name: { type: "string" },
+      },
+      required: ["id", "name"],
+    }
+    const result = fromJsonSchema(schema)
+    expect(result.shape.kind).toBe("object")
+    const fields = (result.shape as { kind: "object"; fields: Record<string, ReturnType<typeof t>> }).fields
+    expect(fields.id!.meta).toEqual({ readOnly: true, readonly: true })
+    expect(fields.name!.meta).toEqual({})
+  })
 })
 
 describe("array", () => {

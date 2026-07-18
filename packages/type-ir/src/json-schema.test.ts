@@ -110,6 +110,23 @@ describe("object", () => {
       properties: { nickname: { type: "string" } },
     })
   })
+
+  test("readonly field emits readOnly: true", () => {
+    const ref = t(
+      types.object({
+        id: t(types.string, { readonly: true }),
+        name: t(types.string),
+      }),
+    )
+    expect(toJsonSchema(ref)).toEqual({
+      type: "object",
+      properties: {
+        id: { type: "string", readOnly: true },
+        name: { type: "string" },
+      },
+      required: ["id", "name"],
+    })
+  })
 })
 
 describe("instance", () => {

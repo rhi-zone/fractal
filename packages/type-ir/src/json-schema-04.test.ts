@@ -181,6 +181,15 @@ describe("shared: object", () => {
       properties: { nickname: { type: "string" } },
     })
   })
+
+  test("readonly field: no readOnly keyword — draft-04 predates it (introduced draft-07)", () => {
+    const ref = t(types.object({ id: t(types.string, { readonly: true }) }))
+    expect(toJsonSchema04(ref)).toEqual({
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
+    })
+  })
 })
 
 describe("shared: array", () => {

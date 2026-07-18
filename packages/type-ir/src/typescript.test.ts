@@ -92,6 +92,21 @@ test("object with required and optional fields", () => {
   expect(toTypeScript(ref)).toBe("{ name: string; age?: number }")
 })
 
+test("object with readonly field", () => {
+  const ref = t(
+    types.object({
+      id: t(types.string, { readonly: true }),
+      name: t(types.string),
+    }),
+  )
+  expect(toTypeScript(ref)).toBe("{ readonly id: string; name: string }")
+})
+
+test("object with readonly optional field", () => {
+  const ref = t(types.object({ id: t(types.string, { optional: true, readonly: true }) }))
+  expect(toTypeScript(ref)).toBe("{ readonly id?: string }")
+})
+
 test("array", () => {
   expect(toTypeScript(t(types.array(t(types.string))))).toBe("string[]")
 })

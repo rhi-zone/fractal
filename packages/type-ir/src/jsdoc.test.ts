@@ -252,6 +252,27 @@ describe("toJsDocTypedef", () => {
     )
   })
 
+  test("readonly field without description falls back to 'readonly' text", () => {
+    const ref = t(types.object({ id: t(types.string, { readonly: true }) }))
+    expect(toJsDocTypedef("Widget", ref)).toBe(
+      ["/**", " * @typedef {Object} Widget", " * @property {string} id - readonly", " */"].join("\n"),
+    )
+  })
+
+  test("optional readonly field combines both fallback labels", () => {
+    const ref = t(types.object({ id: t(types.string, { optional: true, readonly: true }) }))
+    expect(toJsDocTypedef("Widget", ref)).toBe(
+      ["/**", " * @typedef {Object} Widget", " * @property {string} [id] - optional, readonly", " */"].join("\n"),
+    )
+  })
+
+  test("readonly field with explicit description appends '(readonly)'", () => {
+    const ref = t(types.object({ id: t(types.string, { readonly: true, description: "primary key" }) }))
+    expect(toJsDocTypedef("Widget", ref)).toBe(
+      ["/**", " * @typedef {Object} Widget", " * @property {string} id - primary key (readonly)", " */"].join("\n"),
+    )
+  })
+
   test("deprecated non-object type expands to multi-line with @deprecated tag", () => {
     const ref = uuid({ deprecated: true })
     expect(toJsDocTypedef("UserId", ref)).toBe(

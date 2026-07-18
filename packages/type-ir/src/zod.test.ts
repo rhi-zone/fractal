@@ -100,6 +100,21 @@ describe("object", () => {
     const ref = t(types.object({ "not-an-ident": t(types.string) }))
     expect(toZod(ref)).toBe('z.object({ "not-an-ident": z.string() })')
   })
+
+  test("readonly field", () => {
+    const ref = t(
+      types.object({
+        id: t(types.string, { readonly: true }),
+        name: t(types.string),
+      }),
+    )
+    expect(toZod(ref)).toBe("z.object({ id: z.string().readonly(), name: z.string() })")
+  })
+
+  test("optional and readonly field chains .optional().readonly()", () => {
+    const ref = t(types.object({ id: t(types.string, { optional: true, readonly: true }) }))
+    expect(toZod(ref)).toBe("z.object({ id: z.string().optional().readonly() })")
+  })
 })
 
 describe("instance", () => {
