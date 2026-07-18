@@ -51,29 +51,6 @@ export interface ParamSource {
 export type SourceMap = Readonly<Record<string, ParamSource>>
 
 // ============================================================================
-// Provenance — where a param was (or would be) resolved from
-// ============================================================================
-
-/** Identifies the store + key a param was resolved from. */
-export interface Provenance {
-  readonly store: string
-  readonly key: string
-}
-
-/**
- * The result of assembling an input bag: the resolved values, plus a lazy
- * thunk that re-derives provenance for any param name on demand. The thunk
- * re-runs the resolution rules (sourceMap → pathParamNames → primary store)
- * without touching the stores — it costs nothing until called, and answers
- * "where would param X resolve from?" even for params that resolved to
- * `undefined` (missing from their store).
- */
-export interface AssemblyResult {
-  readonly values: Record<string, unknown>
-  readonly provenance: (paramName: string) => Provenance | undefined
-}
-
-// ============================================================================
 // Store helper
 // ============================================================================
 
@@ -87,9 +64,7 @@ export function createStore(obj: Record<string, unknown>): Store {
 // ============================================================================
 
 /**
- * Build the handler's input bag by reading named params from stores, and
- * return an `AssemblyResult` pairing the resolved values with a lazy
- * provenance thunk.
+ * Build the handler's input bag by reading named params from stores.
  *
  * Resolution order for each param:
  *   1. If the param name matches a path/positional param → read from "path".
@@ -98,6 +73,11 @@ export function createStore(obj: Record<string, unknown>): Store {
  *
  * `pathParamNames` is optional: HTTP uses it for slug params captured from
  * the URL path; projectors without that concept (e.g. MCP) can omit it.
+ *
+ * Callers that need to report where a param came from (e.g. a validator
+ * formatting an error) can consult `sourceMap[param] ?? { store: primaryStore,
+ * key: param }` directly — the sourceMap passed in here already is the
+ * provenance record, so `assemble` doesn't need to hand back a second one.
  */
 export function assemble(
   stores: Stores,
@@ -105,14 +85,13 @@ export function assemble(
   sourceMap: SourceMap,
   primaryStore: string,
   pathParamNames: readonly string[] = [],
-): AssemblyResult {
-  const resolve = (name: string): Provenance | undefined => {
+): Record<string, unknown> {
+  const resolve = (name: string): ParamSource | undefined => {
     if (pathParamNames.includes(name)) {
       return { store: "path", key: name }
     }
     if (name in sourceMap) {
-      const src = sourceMap[name]!
-      return { store: src.store, key: src.key ?? name }
+      return sourceMap[name]!
     }
     if (primaryStore) {
       return { store: primaryStore, key: name }
@@ -122,12 +101,9 @@ export function assemble(
 
   const values: Record<string, unknown> = {}
   for (const name of paramNames) {
-    const prov = resolve(name)
-    values[name] = prov ? stores[prov.store]?.get(prov.key) : undefined
+    const src = resolve(name)
+    values[name] = src ? stores[src.store]?.get(src.key ?? name) : undefined
   }
 
-  return {
-    values,
-    provenance: (paramName: string) => resolve(paramName),
-  }
+  return values
 }

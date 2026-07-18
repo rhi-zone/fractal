@@ -23,19 +23,13 @@ export { createDirectApi } from "./direct.ts"
 export type { AnyApi } from "./direct.ts"
 
 // The input-source resolution mechanism — stores, sourceMap, and the
-// assembler that resolves each handler param to a store + key, with a lazy
-// provenance thunk. Extracted from the HTTP projector so CLI, MCP, and any
-// future projector can share one pipeline instead of reimplementing it.
-// See "./input.ts" for the full doc.
+// assembler that resolves each handler param to a store + key. Extracted
+// from the HTTP projector so CLI, MCP, and any future projector can share
+// one pipeline instead of reimplementing it. Callers that need to report
+// where a param came from consult the sourceMap directly — see "./input.ts"
+// for the full doc.
 export { assemble, createStore } from "./input.ts"
-export type {
-  AssemblyResult,
-  ParamSource,
-  Provenance,
-  SourceMap,
-  Store,
-  Stores,
-} from "./input.ts"
+export type { ParamSource, SourceMap, Store, Stores } from "./input.ts"
 
 // Dev tooling — the build-time extractor (extract.ts, TS source -> TypeRef)
 // and the source-level api()/op() tree walker (tree.ts) it feeds — lives on
