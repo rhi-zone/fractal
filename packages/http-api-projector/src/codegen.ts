@@ -445,7 +445,10 @@ function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
   for (const [memberName, entry] of node.operations) {
     const base = typeBaseName(entry.codegenName)
     const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown"
-    const sig = entry.requestSchema !== undefined ? `(input: ${base}Input)` : `()`
+    const sig =
+      entry.requestSchema !== undefined
+        ? `(input: ${base}Input, callOpts?: CallOptions)`
+        : `(callOpts?: CallOptions)`
     lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${sig} => Promise<${outputType}>`)
   }
 
@@ -474,12 +477,13 @@ function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
     const base = typeBaseName(entry.codegenName)
     const hasInput = entry.requestSchema !== undefined
     const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown"
-    const params = hasInput ? `input: ${base}Input` : ""
+    const params = hasInput ? `input: ${base}Input, callOpts?: CallOptions` : `callOpts?: CallOptions`
     const inputArg = hasInput ? "input" : "undefined"
     const pathLit = pathTemplateLiteral(entry.path)
     lines.push(
       `${nextIndent}${safeKey(memberName)}: (${params}): Promise<${outputType}> => ` +
-        `__request(baseUrl, fetchImpl, headers, "${entry.verb}", \`${pathLit}\`, ${inputArg}) as Promise<${outputType}>,`,
+        `__request(baseUrl, fetchImpl, headers, "${entry.verb}", \`${pathLit}\`, ${inputArg}, ` +
+        `baseTimeout, baseSignal, callOpts) as Promise<${outputType}>,`,
     )
   }
 
@@ -535,6 +539,8 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
       `export function createClient(baseUrl: string, options: CreateClientOptions = {}): ${clientName} {`,
       `  const fetchImpl = options.fetch ?? fetch`,
       `  const headers = options.headers`,
+      `  const baseTimeout = options.timeout`,
+      `  const baseSignal = options.signal`,
       `  return ${factoryBody}`,
       `}`,
     ].join("\n"),
@@ -553,6 +559,18 @@ const RUNTIME_HELPERS = `
 export type CreateClientOptions = {
   readonly fetch?: typeof fetch
   readonly headers?: Record<string, string>
+  /** Per-request timeout in milliseconds, applied via \`AbortSignal.timeout\`. Overridable per-call. Unset by default. */
+  readonly timeout?: number
+  /** An \`AbortSignal\` that cancels every request from this client. Combined with \`timeout\` (if both set). Overridable per-call. */
+  readonly signal?: AbortSignal
+}
+
+/** Per-call overrides for \`timeout\`/\`signal\`, layered on top of the client-level \`CreateClientOptions\`. */
+export type CallOptions = {
+  /** Overrides the client-level \`timeout\` for this call only. */
+  readonly timeout?: number
+  /** Overrides the client-level \`signal\` for this call only. */
+  readonly signal?: AbortSignal
 }
 
 /** Thrown by the generated client when the server responds with a non-2xx status. */
@@ -570,6 +588,34 @@ export class ClientError extends Error {
   }
 }
 
+// A fresh \`AbortSignal.timeout(ms)\` is created PER CALL (not once at client
+// construction) — its clock starts the moment it's created, so a shared one
+// would only ever fire on the client's first slow call. Per-call
+// \`CallOptions\` fully override (not merge with) the client-level
+// \`timeout\`/\`signal\`.
+function __resolveSignal(
+  baseTimeout: number | undefined,
+  baseSignal: AbortSignal | undefined,
+  callOpts: CallOptions | undefined,
+): AbortSignal | undefined {
+  const timeout = callOpts?.timeout ?? baseTimeout
+  const signal = callOpts?.signal ?? baseSignal
+  const timeoutSignal = timeout !== undefined ? AbortSignal.timeout(timeout) : undefined
+  if (timeoutSignal !== undefined && signal !== undefined) return AbortSignal.any([signal, timeoutSignal])
+  return timeoutSignal ?? signal
+}
+
+/** Rethrow abort-driven fetch failures with a message that distinguishes timeout from user cancellation. */
+function __describeAbort(err: unknown, method: string, path: string, timeout: number | undefined): Error {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return new Error(\`Request timed out after \${timeout}ms: \${method} \${path}\`)
+  }
+  if (err instanceof Error && err.name === "AbortError") {
+    return new Error(\`Request aborted: \${method} \${path}\`)
+  }
+  return err instanceof Error ? err : new Error(String(err))
+}
+
 async function __request(
   baseUrl: string,
   fetchImpl: typeof fetch,
@@ -577,9 +623,15 @@ async function __request(
   method: string,
   path: string,
   input: unknown,
+  baseTimeout: number | undefined,
+  baseSignal: AbortSignal | undefined,
+  callOpts: CallOptions | undefined,
 ): Promise<unknown> {
+  const timeout = callOpts?.timeout ?? baseTimeout
+  const signal = __resolveSignal(baseTimeout, baseSignal, callOpts) ?? null
+
   let url: string
-  const init: RequestInit = { method, headers: { ...(headers ?? {}) } }
+  const init: RequestInit = { method, headers: { ...(headers ?? {}) }, signal }
 
   if (method === "GET" || method === "HEAD" || method === "DELETE") {
     // Input goes into query params for read-only/deletion ops.
@@ -598,7 +650,12 @@ async function __request(
     init.body = JSON.stringify(input ?? {})
   }
 
-  const res = await fetchImpl(url, init)
+  let res: Response
+  try {
+    res = await fetchImpl(url, init)
+  } catch (err) {
+    throw __describeAbort(err, method, path, timeout)
+  }
 
   let body: unknown
   const ct = res.headers.get("Content-Type") ?? ""

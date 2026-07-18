@@ -243,3 +243,61 @@ describe("createClientFromRoute", () => {
     expect(fetched.title).toBe("Verb Named")
   })
 })
+
+// ============================================================================
+// 7. timeout / AbortSignal support
+//
+// `slowFetch` mimics real WHATWG `fetch`'s abort contract: it never settles
+// on its own, and rejects with `req.signal.reason` the moment the request's
+// signal aborts — exactly what the platform `fetch` does, so these tests
+// exercise the same `describeAbort` path a real network timeout would hit.
+// ============================================================================
+
+function makeSlowFetch(): (req: Request) => Promise<Response> {
+  return (req: Request) =>
+    new Promise<Response>((resolve, reject) => {
+      const t = setTimeout(() => resolve(new Response("ok")), 5000)
+      req.signal.addEventListener("abort", () => {
+        clearTimeout(t)
+        reject(req.signal.reason)
+      })
+    })
+}
+
+describe("timeout / AbortSignal support", () => {
+  it("a client-level timeout aborts a hanging request and throws a timeout-specific error", async () => {
+    const client = createClient(api, { baseUrl: "http://localhost", fetch: makeSlowFetch(), timeout: 20 })
+    await expect(client.books.list()).rejects.toThrow(/timed out/i)
+  })
+
+  it("a per-call timeout override aborts a hanging request", async () => {
+    const client = createClient(api, { baseUrl: "http://localhost", fetch: makeSlowFetch() })
+    await expect(client.books.list(undefined, { timeout: 20 })).rejects.toThrow(/timed out/i)
+  })
+
+  it("a user AbortSignal cancels the request and throws a cancellation-specific error", async () => {
+    const controller = new AbortController()
+    const client = createClient(api, {
+      baseUrl: "http://localhost",
+      fetch: makeSlowFetch(),
+      signal: controller.signal,
+    })
+    const pending = client.books.list()
+    queueMicrotask(() => controller.abort())
+    await expect(pending).rejects.toThrow(/aborted/i)
+  })
+
+  it("a per-call AbortSignal override cancels the request", async () => {
+    const controller = new AbortController()
+    const client = createClient(api, { baseUrl: "http://localhost", fetch: makeSlowFetch() })
+    const pending = client.books.list(undefined, { signal: controller.signal })
+    queueMicrotask(() => controller.abort())
+    await expect(pending).rejects.toThrow(/aborted/i)
+  })
+
+  it("no timeout/signal set: existing behavior is unchanged", async () => {
+    const client = makeClient()
+    const result = (await client.catalog.search({ q: "anything" })) as unknown[]
+    expect(Array.isArray(result)).toBe(true)
+  })
+})

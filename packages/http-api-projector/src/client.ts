@@ -85,12 +85,68 @@ export type ClientOptions = {
    * round-trip tests without a network.
    */
   readonly fetch?: (req: Request) => Promise<Response>
+  /**
+   * Per-request timeout in milliseconds, applied via `AbortSignal.timeout`.
+   * Overridable per-call via `CallOptions.timeout`. Unset by default (no
+   * timeout — existing behavior).
+   */
+  readonly timeout?: number
+  /**
+   * An `AbortSignal` that cancels every request made by this client (e.g. a
+   * component-lifetime or navigation signal). Combined with `timeout` (if
+   * both set) via `AbortSignal.any`. Overridable per-call via
+   * `CallOptions.signal`.
+   */
+  readonly signal?: AbortSignal
+}
+
+/** Per-call overrides for `timeout`/`signal`, layered on top of the client-level `ClientOptions`. */
+export type CallOptions = {
+  /** Overrides the client-level `timeout` for this call only. */
+  readonly timeout?: number
+  /** Overrides the client-level `signal` for this call only. */
+  readonly signal?: AbortSignal
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyClient = Record<string, any>
 
 type FetchImpl = (req: Request) => Promise<Response>
+
+// ============================================================================
+// Internal: timeout/signal resolution
+//
+// A fresh `AbortSignal.timeout(ms)` is created PER CALL (not once at client
+// construction) — a timeout signal starts its clock the moment it's created,
+// so a shared one would only ever fire on the client's first slow call.
+// Per-call `CallOptions` fully override (not merge with) the client-level
+// `timeout`/`signal` — this mirrors how a caller would expect "just this one
+// request, no timeout" (`{ timeout: undefined }` can't distinguish "unset"
+// from "clear the default", so an explicit override replaces, not merges).
+// ============================================================================
+
+function resolveSignal(
+  baseTimeout: number | undefined,
+  baseSignal: AbortSignal | undefined,
+  callOpts: CallOptions | undefined,
+): AbortSignal | undefined {
+  const timeout = callOpts?.timeout ?? baseTimeout
+  const signal = callOpts?.signal ?? baseSignal
+  const timeoutSignal = timeout !== undefined ? AbortSignal.timeout(timeout) : undefined
+  if (timeoutSignal !== undefined && signal !== undefined) return AbortSignal.any([signal, timeoutSignal])
+  return timeoutSignal ?? signal
+}
+
+/** Rethrow abort-driven fetch failures with a message that distinguishes timeout from user cancellation. */
+function describeAbort(err: unknown, verb: string, path: string, timeout: number | undefined): Error {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return new Error(`Request timed out after ${timeout}ms: ${verb} ${path}`)
+  }
+  if (err instanceof Error && err.name === "AbortError") {
+    return new Error(`Request aborted: ${verb} ${path}`)
+  }
+  return err instanceof Error ? err : new Error(String(err))
+}
 
 // ============================================================================
 // Internal: handler → own-key name map, built from the raw Node tree
@@ -137,8 +193,13 @@ function makeCaller(
   slugValues: ReadonlySet<string>,
   baseUrl: string,
   fetchImpl: FetchImpl,
-): (input?: unknown) => Promise<unknown> {
-  return async (input?: unknown): Promise<unknown> => {
+  baseTimeout: number | undefined,
+  baseSignal: AbortSignal | undefined,
+): (input?: unknown, callOpts?: CallOptions) => Promise<unknown> {
+  return async (input?: unknown, callOpts?: CallOptions): Promise<unknown> => {
+    const timeout = callOpts?.timeout ?? baseTimeout
+    const signal = resolveSignal(baseTimeout, baseSignal, callOpts) ?? null
+
     let req: Request
     if (verb === "GET" || verb === "HEAD" || verb === "DELETE") {
       // Input goes into query params for read-only/deletion ops; body is not
@@ -157,7 +218,7 @@ function makeCaller(
       const url = baseUrl.startsWith("http")
         ? finalUrl.toString()
         : finalUrl.pathname + (finalUrl.search !== "" ? finalUrl.search : "")
-      req = new Request(url, { method: verb })
+      req = new Request(url, { method: verb, signal })
     } else {
       // POST/PUT/PATCH: input as JSON body
       const url = `${baseUrl}${path}`
@@ -165,10 +226,16 @@ function makeCaller(
         method: verb,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input ?? {}),
+        signal,
       })
     }
 
-    const res = await fetchImpl(req)
+    let res: Response
+    try {
+      res = await fetchImpl(req)
+    } catch (err) {
+      throw describeAbort(err, verb, path, timeout)
+    }
 
     let body: unknown
     const ct = res.headers.get("Content-Type") ?? ""
@@ -213,23 +280,34 @@ function buildClientNode(
   baseUrl: string,
   fetchImpl: FetchImpl,
   handlerNames: ReadonlyMap<Handler, string> | undefined,
-): AnyClient | ((input?: unknown) => Promise<unknown>) {
+  baseTimeout: number | undefined,
+  baseSignal: AbortSignal | undefined,
+): AnyClient | ((input?: unknown, callOpts?: CallOptions) => Promise<unknown>) {
   if (isSingleLeafMethod(route)) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const [verb] = Object.keys(route.methods!)
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return makeCaller(verb!, path, slugValues, baseUrl, fetchImpl)
+    return makeCaller(verb!, path, slugValues, baseUrl, fetchImpl, baseTimeout, baseSignal)
   }
 
   const client: AnyClient = {}
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
     const name = handlerNames?.get(entry.handler) ?? verb.toLowerCase()
-    client[name] = makeCaller(verb, path, slugValues, baseUrl, fetchImpl)
+    client[name] = makeCaller(verb, path, slugValues, baseUrl, fetchImpl, baseTimeout, baseSignal)
   }
 
   for (const [seg, child] of Object.entries(route.children ?? {})) {
-    client[seg] = buildClientNode(child, `${path}/${seg}`, slugValues, baseUrl, fetchImpl, handlerNames)
+    client[seg] = buildClientNode(
+      child,
+      `${path}/${seg}`,
+      slugValues,
+      baseUrl,
+      fetchImpl,
+      handlerNames,
+      baseTimeout,
+      baseSignal,
+    )
   }
 
   if (route.fallback !== undefined) {
@@ -242,6 +320,8 @@ function buildClientNode(
         baseUrl,
         fetchImpl,
         handlerNames,
+        baseTimeout,
+        baseSignal,
       ) as AnyClient
   }
 
@@ -271,7 +351,7 @@ function buildClientNode(
 export function createClientFromRoute(route: HttpRoute, opts: ClientOptions = {}): AnyClient {
   const baseUrl = opts.baseUrl ?? ""
   const fetchImpl = opts.fetch ?? globalThis.fetch.bind(globalThis)
-  return buildClientNode(route, "", new Set(), baseUrl, fetchImpl, undefined) as AnyClient
+  return buildClientNode(route, "", new Set(), baseUrl, fetchImpl, undefined, opts.timeout, opts.signal) as AnyClient
 }
 
 // ============================================================================
@@ -303,5 +383,14 @@ export function createClient(n: Node, opts: ClientOptions = {}): AnyClient {
   const handlerNames = buildHandlerNames(n)
   const baseUrl = opts.baseUrl ?? ""
   const fetchImpl = opts.fetch ?? globalThis.fetch.bind(globalThis)
-  return buildClientNode(route, "", new Set(), baseUrl, fetchImpl, handlerNames) as AnyClient
+  return buildClientNode(
+    route,
+    "",
+    new Set(),
+    baseUrl,
+    fetchImpl,
+    handlerNames,
+    opts.timeout,
+    opts.signal,
+  ) as AnyClient
 }

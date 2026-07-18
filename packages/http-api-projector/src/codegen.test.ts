@@ -79,7 +79,9 @@ describe("generateClientFromNode — structure", () => {
   it("catalog.search (GET) DOES get an Input type — the GET query-params fix", () => {
     expect(source).toContain("export type CatalogSearchInput")
     expect(source).toMatch(/CatalogSearchInput = \{[^}]*readonly q\?: string/s)
-    expect(source).toMatch(/readonly search: \(input: CatalogSearchInput\) => Promise<CatalogSearchOutput>/)
+    expect(source).toMatch(
+      /readonly search: \(input: CatalogSearchInput, callOpts\?: CallOptions\) => Promise<CatalogSearchOutput>/,
+    )
   })
 
   it("emits a Client type with a nested books branch", () => {
@@ -92,10 +94,12 @@ describe("generateClientFromNode — structure", () => {
   })
 
   it("emits list/add/read/remove client members with the right call signatures", () => {
-    expect(source).toMatch(/readonly list: \(\) => Promise<BooksListOutput>/)
-    expect(source).toMatch(/readonly add: \(input: BooksAddInput\) => Promise<BooksAddOutput>/)
-    expect(source).toMatch(/readonly read: \(\) => Promise<BooksBookIdReadOutput>/)
-    expect(source).toMatch(/readonly remove: \(\) => Promise<BooksBookIdRemoveOutput>/)
+    expect(source).toMatch(/readonly list: \(callOpts\?: CallOptions\) => Promise<BooksListOutput>/)
+    expect(source).toMatch(
+      /readonly add: \(input: BooksAddInput, callOpts\?: CallOptions\) => Promise<BooksAddOutput>/,
+    )
+    expect(source).toMatch(/readonly read: \(callOpts\?: CallOptions\) => Promise<BooksBookIdReadOutput>/)
+    expect(source).toMatch(/readonly remove: \(callOpts\?: CallOptions\) => Promise<BooksBookIdRemoveOutput>/)
   })
 
   it("emits createClient and ClientError", () => {
@@ -112,7 +116,7 @@ describe("generateClientFromNode — structure", () => {
   it("degrades to unknown input/output when no SchemaMap is supplied", () => {
     const untyped = generateClientFromNode(api)
     expect(untyped).not.toContain("export type BooksAddInput")
-    expect(untyped).toMatch(/readonly add: \(\) => Promise<unknown>/)
+    expect(untyped).toMatch(/readonly add: \(callOpts\?: CallOptions\) => Promise<unknown>/)
   })
 })
 
@@ -139,7 +143,7 @@ describe("generateClient — HttpRoute + SchemaMap directly, no Node", () => {
     expect(untyped).toMatch(/readonly widgetId: \(widgetId: string\) => \{/)
     // Co-located single GET at the fallback position has no Node-derived
     // name available, so it degrades to the lowercased verb.
-    expect(untyped).toMatch(/readonly get: \(\) => Promise<unknown>/)
+    expect(untyped).toMatch(/readonly get: \(callOpts\?: CallOptions\) => Promise<unknown>/)
   })
 
   it("types operations from a manually-built SchemaMap keyed by the path-derived codegen name", () => {
@@ -164,7 +168,9 @@ describe("generateClient — HttpRoute + SchemaMap directly, no Node", () => {
     expect(typed).toContain("export type WidgetsGetInput")
     expect(typed).toContain("export type WidgetsGetOutput")
     expect(typed).toMatch(/WidgetsGetInput = \{[^}]*readonly q\?: string/s)
-    expect(typed).toMatch(/readonly widgets: \(input: WidgetsGetInput\) => Promise<WidgetsGetOutput>/)
+    expect(typed).toMatch(
+      /readonly widgets: \(input: WidgetsGetInput, callOpts\?: CallOptions\) => Promise<WidgetsGetOutput>/,
+    )
   })
 })
 
@@ -257,5 +263,79 @@ describe("generateClientFromNode — eval end-to-end", () => {
     expect((caught as { status: number }).status).toBe(500)
     expect((caught as { statusText: string }).statusText.length).toBeGreaterThan(0)
     expect((caught as { body: unknown }).body).toBeDefined()
+  })
+})
+
+// ============================================================================
+// 4. timeout / AbortSignal support — generated `createClient`
+//
+// Writes `source` to disk once (module-scoped `fetch` override baked into
+// `CreateClientOptions`) and drives the generated `__request` helper's abort
+// handling directly, mirroring client.test.ts's `makeSlowFetch` — a fetch
+// stand-in that never settles on its own and rejects with `signal.reason`
+// the moment the request's (combined) signal aborts, matching the real
+// WHATWG `fetch` abort contract.
+// ============================================================================
+
+describe("generated createClient — timeout / AbortSignal support", () => {
+  let tmpDir: string | undefined
+  let createClient: (baseUrl: string, options?: unknown) => {
+    readonly books: { readonly list: (input?: unknown, callOpts?: unknown) => Promise<unknown> }
+  }
+  let ownServer: { port: number; stop(closeActiveConnections?: boolean): void } | undefined
+
+  beforeAll(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "fractal-codegen-timeout-"))
+    const modulePath = join(tmpDir, "client.ts")
+    await writeFile(modulePath, source, "utf8")
+    const mod = (await import(pathToFileURL(modulePath).href)) as {
+      createClient: typeof createClient
+    }
+    createClient = mod.createClient
+
+    ownServer = serveBun(createFetch(api, { openapi: false }), { port: 0 })
+  })
+
+  afterAll(async () => {
+    ownServer?.stop(true)
+    if (tmpDir !== undefined) await rm(tmpDir, { recursive: true, force: true })
+  })
+
+  function makeSlowFetch(): typeof fetch {
+    return ((_url: string, init?: RequestInit) =>
+      new Promise<Response>((resolve, reject) => {
+        const t = setTimeout(() => resolve(new Response("ok")), 5000)
+        const signal = init?.signal
+        signal?.addEventListener("abort", () => {
+          clearTimeout(t)
+          reject(signal.reason)
+        })
+      })) as typeof fetch
+  }
+
+  it("a client-level timeout aborts a hanging request and throws a timeout-specific error", async () => {
+    const client = createClient("http://localhost", { fetch: makeSlowFetch(), timeout: 20 })
+    await expect(client.books.list()).rejects.toThrow(/timed out/i)
+  })
+
+  it("a per-call timeout override aborts a hanging request", async () => {
+    const client = createClient("http://localhost", { fetch: makeSlowFetch() })
+    // `books.list` takes no input schema, so its only param is `callOpts`.
+    await expect(client.books.list({ timeout: 20 })).rejects.toThrow(/timed out/i)
+  })
+
+  it("a user AbortSignal cancels the request and throws a cancellation-specific error", async () => {
+    const controller = new AbortController()
+    const client = createClient("http://localhost", { fetch: makeSlowFetch(), signal: controller.signal })
+    const pending = client.books.list()
+    queueMicrotask(() => controller.abort())
+    await expect(pending).rejects.toThrow(/aborted/i)
+  })
+
+  it("no timeout/signal set: existing behavior (real server round-trip) is unchanged", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const client = createClient(`http://localhost:${ownServer!.port}`)
+    const books = (await client.books.list()) as unknown[]
+    expect(Array.isArray(books)).toBe(true)
   })
 })
