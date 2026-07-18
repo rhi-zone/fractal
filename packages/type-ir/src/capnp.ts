@@ -45,6 +45,11 @@ const handlers: Record<string, Converter> = {
   // Nested structs need field-name context to be named; toCapnpStruct special-cases
   // object fields to emit a properly named nested struct instead of falling through here.
   object: (_shape, meta) => (typeof meta.structName === "string" ? meta.structName : "AnyPointer"),
+  // A class instance carries only nominal identity (className/source), never fields
+  // (see type-ir's TypeKinds.instance doc comment) — Cap'n Proto has no construct for
+  // an opaque class reference, so this degrades honestly to AnyPointer rather than
+  // emitting a struct with no fields.
+  instance: leaf("AnyPointer"),
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }
     return `List(${toCapnpType(s.element)})`

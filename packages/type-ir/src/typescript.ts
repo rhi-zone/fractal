@@ -41,6 +41,11 @@ const handlers: Record<string, Converter> = {
     })
     return `{ ${fields.join("; ")} }`
   },
+  // A class instance carries only nominal identity (className/source), never
+  // fields (see type-ir's TypeKinds.instance doc comment) — the caller (whatever
+  // assembles this emitted source into a module) is responsible for ensuring
+  // `className` is imported from `source` alongside the generated declaration.
+  instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }
     return complexKinds.has(s.element.shape.kind)

@@ -46,7 +46,7 @@ export type DirectRecursive = { self: DirectRecursive }
 /** A field whose type is a Promise — must unwrap like the return-type path. */
 export type PromiseField = { data: Promise<string> }
 
-/** A class with mixed visibility + a method, for private-field/method filtering. */
+/** A class with mixed visibility + a method — lowers to a purely nominal types.instance. */
 export class SampleClass {
   public name: string = ""
   private secret: string = ""

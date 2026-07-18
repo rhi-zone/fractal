@@ -437,11 +437,24 @@ export function typeRefFromType(
       return t(types.map(keyRef, typeRefFromType(valueType, checker, loc, nextSeen)))
     }
 
+    // Class instances: a symbol with a ts.ClassDeclaration among its
+    // declarations is a class, not a plain object literal type — lower to
+    // `types.instance`, purely nominal (class name + declaring file), so
+    // identity survives extraction instead of the class being flattened into
+    // a bag of public fields (which would discard its methods and misrepresent
+    // it as plain data). No need to walk `properties` for this case.
+    const classDecl = type.symbol?.declarations?.find(ts.isClassDeclaration)
+    if (classDecl && type.symbol) {
+      return t(types.instance(type.symbol.name, classDecl.getSourceFile().fileName))
+    }
+
     const fields: Record<string, TypeRef> = {}
 
     for (const prop of properties) {
-      // Class instances: skip private/protected members — internal state
-      // isn't part of the public data shape.
+      // Skip private/protected members — internal state isn't part of the
+      // public data shape. (Classes themselves are handled above and never
+      // reach this loop — this guards structural types that still carry
+      // private/protected member symbols.)
       if (isPrivateOrProtected(prop)) continue
 
       const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0
@@ -473,15 +486,6 @@ export function typeRefFromType(
         Object.keys(extraMeta).length > 0
           ? t(fieldRef.shape, { ...fieldRef.meta, ...extraMeta })
           : fieldRef
-    }
-
-    // Class instances: a symbol with a ts.ClassDeclaration among its
-    // declarations is a class, not a plain object literal type — lower to
-    // `types.instance` so the class's identity (name + declaring file)
-    // survives extraction instead of being discarded as a bag of fields.
-    const classDecl = type.symbol?.declarations?.find(ts.isClassDeclaration)
-    if (classDecl && type.symbol) {
-      return t(types.instance(type.symbol.name, classDecl.getSourceFile().fileName, fields))
     }
 
     return t(types.object(fields))

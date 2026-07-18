@@ -15,8 +15,8 @@ describe("ancestors", () => {
     expect(ancestors("boolean")).toEqual([])
   })
 
-  test("instance falls back to object", () => {
-    expect(ancestors("instance")).toEqual(["object"])
+  test("instance is a root kind with no ancestors (purely nominal, not a subtype of object)", () => {
+    expect(ancestors("instance")).toEqual([])
   })
 })
 
@@ -87,21 +87,20 @@ describe("TypeRef construction", () => {
     expect(ancestors("intersection")).toEqual([])
   })
 
-  test("builds an instance carrying class identity alongside fields", () => {
-    const ref = t(types.instance("User", "src/user.ts", { name: t(types.string) }))
+  test("builds an instance carrying only class identity, no fields", () => {
+    const ref = t(types.instance("User", "src/user.ts"))
     expect(ref.shape).toEqual({
       kind: "instance",
       className: "User",
       source: "src/user.ts",
-      fields: { name: { shape: { kind: "string" }, meta: {} } },
     })
   })
 
-  test("resolve falls back from instance to object handler (structural compatibility)", () => {
-    const ref = t(types.instance("User", "src/user.ts", { name: t(types.string) }))
+  test("resolve does NOT fall back from instance to an object handler (nominal, not structural)", () => {
+    const ref = t(types.instance("User", "src/user.ts"))
     const handler = resolve(ref.shape.kind, {
       object: (shape: { kind: string; fields: Record<string, unknown> }) => Object.keys(shape.fields),
     })
-    expect(handler).toBeDefined()
+    expect(handler).toBeUndefined()
   })
 })

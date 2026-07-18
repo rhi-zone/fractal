@@ -100,6 +100,11 @@ const handlers: Record<string, Converter> = {
     })
     return `yup.object({ ${fields.join(", ")} })`
   },
+  // A class instance carries only nominal identity (className/source), never fields
+  // (see type-ir's TypeKinds.instance doc comment) — Yup has no construct for an
+  // opaque class reference, so this degrades honestly to yup.mixed() rather than
+  // emitting a yup.object() with no shape.
+  instance: leaf("yup.mixed()"),
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }
     return `yup.array().of(${toYup(s.element)})`

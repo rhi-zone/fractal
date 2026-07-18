@@ -54,6 +54,10 @@ const postgresHandlers: Record<string, Converter> = {
   unknown: leaf("JSONB"),
   never: leaf("TEXT"),
   object: leaf("JSONB"),
+  // A class instance carries only nominal identity (className/source), never fields
+  // (see type-ir's TypeKinds.instance doc comment) — there is no structure to persist,
+  // so this is treated the same as `unknown` (opaque data) rather than `object`.
+  instance: leaf("JSONB"),
   array: leaf("JSONB"),
   tuple: leaf("JSONB"),
   map: leaf("JSONB"),
@@ -79,6 +83,7 @@ const sqliteHandlers: Record<string, Converter> = {
   float64: leaf("REAL"),
   unknown: leaf("TEXT"),
   object: leaf("TEXT"),
+  instance: leaf("TEXT"),
   array: leaf("TEXT"),
   tuple: leaf("TEXT"),
   map: leaf("TEXT"),
@@ -191,6 +196,7 @@ const mysqlHandlers: Record<string, Converter> = {
   unknown: leaf("JSON"),
   never: leaf("TEXT"),
   object: leaf("JSON"),
+  instance: leaf("JSON"),
   array: leaf("JSON"),
   tuple: leaf("JSON"),
   map: leaf("JSON"),

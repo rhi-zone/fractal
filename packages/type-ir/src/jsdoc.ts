@@ -38,6 +38,11 @@ const handlers: Record<string, Converter> = {
     const props = entries.map(([name, field]) => `${name}: ${toJsDocType(field)}`)
     return `{${props.join(", ")}}`
   },
+  // A class instance carries only nominal identity (className/source), never
+  // fields (see type-ir's TypeKinds.instance doc comment) — JSDoc's type syntax
+  // supports referencing a class by name directly (https://jsdoc.app/tags-type.html),
+  // so this emits the class name rather than a structural object type.
+  instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }
     return `Array.<${toJsDocType(s.element)}>`

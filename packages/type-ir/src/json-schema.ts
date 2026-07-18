@@ -86,23 +86,15 @@ const handlers: Record<string, Converter> = {
     if (required.length > 0) schema.required = required
     return schema
   },
-  // JSON Schema has no class-identity concept — fall back to the same
-  // structural encoding as `object` (properties/required from `fields`), and
-  // carry the class name as `x-class-name` (a vendor-extension-style key, same
-  // convention as this package's OAS projectors' `x-*` fields) so tooling that
-  // wants the identity back can still read it; validators that don't care
-  // just see an ordinary object schema.
+  // JSON Schema has no class-identity concept and `instance` carries no field
+  // data to build `properties` from (it's purely nominal — see type-ir's
+  // TypeKinds.instance doc comment). Degrade honestly to an untyped object
+  // schema, carrying the class name as `x-class-name` (a vendor-extension-style
+  // key, same convention as this package's OAS projectors' `x-*` fields) so
+  // tooling that wants the identity back can still read it.
   instance: (shape) => {
     const s = shape as TypeShape & { kind: "instance" }
-    const properties: Record<string, JsonSchema> = {}
-    const required: string[] = []
-    for (const [name, field] of Object.entries(s.fields)) {
-      properties[name] = toJsonSchema(field)
-      if (field.meta.optional !== true) required.push(name)
-    }
-    const schema: JsonSchema = { type: "object", properties, "x-class-name": s.className }
-    if (required.length > 0) schema.required = required
-    return schema
+    return { type: "object", "x-class-name": s.className }
   },
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }

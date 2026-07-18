@@ -58,6 +58,11 @@ const handlers: Record<string, Converter> = {
   object: (_shape, meta) => ({
     type: typeof meta.messageName === "string" ? meta.messageName : "google.protobuf.Struct",
   }),
+  // A class instance carries only nominal identity (className/source), never fields
+  // (see type-ir's TypeKinds.instance doc comment) — proto3 has no construct for an
+  // opaque class reference, so this degrades honestly to Any rather than emitting a
+  // message with no fields.
+  instance: leaf("google.protobuf.Any"),
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }
     return { type: toProtoField(s.element).type, repeated: true }

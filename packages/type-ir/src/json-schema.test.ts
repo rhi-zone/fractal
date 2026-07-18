@@ -113,12 +113,10 @@ describe("object", () => {
 })
 
 describe("instance", () => {
-  test("falls back to the structural object encoding, carrying x-class-name", () => {
-    const ref = t(types.instance("User", "src/user.ts", { name: t(types.string) }))
+  test("degrades to an untyped object schema, carrying x-class-name", () => {
+    const ref = t(types.instance("User", "src/user.ts"))
     expect(toJsonSchema(ref)).toEqual({
       type: "object",
-      properties: { name: { type: "string" } },
-      required: ["name"],
       "x-class-name": "User",
     })
   })

@@ -103,8 +103,8 @@ describe("object", () => {
 })
 
 describe("instance", () => {
-  test("emits z.instanceof(className), ignoring fields", () => {
-    const ref = t(types.instance("User", "src/user.ts", { name: t(types.string) }))
+  test("emits z.instanceof(className)", () => {
+    const ref = t(types.instance("User", "src/user.ts"))
     expect(toZod(ref)).toBe("z.instanceof(User)")
   })
 })

@@ -93,6 +93,11 @@ const handlers: Record<string, Converter> = {
     })
     return `S.Struct({ ${fields.join(", ")} })`
   },
+  // A class instance carries only nominal identity (className/source), never fields
+  // (see type-ir's TypeKinds.instance doc comment) — Effect Schema has no construct
+  // for an opaque class reference, so this degrades honestly to S.Unknown rather than
+  // emitting an S.Struct with no fields.
+  instance: leaf("S.Unknown"),
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }
     return `S.Array(${toEffectSchema(s.element)})`
