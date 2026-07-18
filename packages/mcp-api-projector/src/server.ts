@@ -62,6 +62,8 @@ import type {
   ServerCapabilities,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
+import { assemble, createStore } from "@rhi-zone/fractal-api-tree"
+import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 import { projectPrompts, projectResources, projectTools } from "./project.ts"
 import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "./project.ts"
 
@@ -238,6 +240,33 @@ export function toResourceContent(result: unknown, uri: string, defaultMimeType:
   return { uri, mimeType: defaultMimeType, text: JSON.stringify(result) }
 }
 
+// ============================================================================
+// Input assembly — shared pipeline (packages/api-tree/src/input.ts)
+// ============================================================================
+
+/**
+ * Assemble a handler's input bag from a single named store of raw values,
+ * via the shared resolution pipeline `assemble`. Mirrors cli-api-projector's
+ * `buildInput`: `paramNames` is the union of the raw values' own keys and any
+ * name declared in `sourceMap` — so a param sourced purely from an override
+ * (not present in the raw values at all) still gets assembled.
+ *
+ * With an empty `sourceMap`, every param resolves from `storeName` by its own
+ * key — i.e. this reduces to `values` unchanged, matching prior behavior
+ * (tool calls got `request.params.arguments` directly; resource template
+ * reads got the regex-captured vars object directly; prompt calls got
+ * `request.params.arguments` directly).
+ */
+function assembleInput(
+  storeName: string,
+  values: Record<string, unknown>,
+  sourceMap: SourceMap,
+): Record<string, unknown> {
+  const stores: Stores = { [storeName]: createStore(values) }
+  const paramNames = [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
+  return assemble(stores, paramNames, sourceMap, storeName)
+}
+
 export type CreateMcpServerOptions = {
   /** Server name, surfaced to MCP clients during the initialize handshake. */
   readonly name: string
@@ -315,9 +344,9 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
 
   server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
     const { name, arguments: args } = request.params
-    const handler = handlers.get(name)
+    const dispatch = handlers.get(name)
 
-    if (handler === undefined) {
+    if (dispatch === undefined) {
       return {
         isError: true,
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
@@ -338,7 +367,8 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
     }
 
     try {
-      const result = await handler(args ?? {})
+      const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
+      const result = await dispatch.handler(input)
       return {
         content: toCallToolContent(result),
       }
@@ -371,10 +401,11 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       for (const template of templateHandlers) {
         const match = template.pattern.exec(uri)
         if (match === null) continue
-        const input: Record<string, string> = {}
+        const captured: Record<string, string> = {}
         template.paramNames.forEach((name, i) => {
-          input[name] = match[i + 1] as string
+          captured[name] = match[i + 1] as string
         })
+        const input = assembleInput("uri-variable", captured, template.sourceMap)
         const result = await template.handler(input)
         return { contents: [toResourceContent(result, uri, template.mimeType)] }
       }
@@ -388,13 +419,14 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
 
     server.setRequestHandler(GetPromptRequestSchema, async (request): Promise<GetPromptResult> => {
       const { name, arguments: args } = request.params
-      const handler = promptHandlers.get(name)
+      const dispatch = promptHandlers.get(name)
 
-      if (handler === undefined) {
+      if (dispatch === undefined) {
         throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
       }
 
-      const result = await handler(args ?? {})
+      const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
+      const result = await dispatch.handler(input)
 
       // A handler may already return a well-formed GetPromptResult (has a
       // `messages` array) — pass it through as-is. Otherwise wrap the plain

@@ -34,6 +34,7 @@ import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { SourceMap } from "@rhi-zone/fractal-api-tree"
 
 // ============================================================================
 // Types
@@ -87,6 +88,17 @@ export type ToolSchema = {
 
 /** Map of tool name → derived schema/description (from codegen). */
 export type SchemaMap = Readonly<Record<string, ToolSchema>>
+
+/**
+ * A dispatch entry: the leaf's handler plus its `meta.mcp.sourceMap` (empty
+ * when the leaf declares no overrides). `server.ts` resolves each call's
+ * input bag via the shared `assemble` pipeline using this sourceMap — see
+ * `packages/api-tree/src/input.ts`.
+ */
+export type Dispatch = {
+  readonly handler: Handler
+  readonly sourceMap: SourceMap
+}
 
 /** Options for `toTools`. */
 export type ToToolsOptions = {
@@ -145,6 +157,16 @@ export type McpMeta = {
   readonly uri?: string
   /** Resource MIME type override; defaults to "application/json". Resources only. */
   readonly mimeType?: string
+  /**
+   * Per-param source overrides for this leaf's input assembly (see
+   * `packages/api-tree/src/input.ts`). Lets a tree author pull a field from a
+   * store other than the surface's default primary store — e.g. pulling a
+   * tool param from a different named store instead of the MCP call's
+   * `arguments`. Params not listed here still resolve via the normal
+   * argument/uri-variable convention. Tools, resource templates, and
+   * prompts only (fixed resources take no input).
+   */
+  readonly sourceMap?: SourceMap
   readonly [key: string]: unknown
 }
 
@@ -164,7 +186,7 @@ export function getMcpMeta(meta: Meta): McpMeta {
  * through this map instead of re-walking the tree per call). */
 export type ProjectToolsResult = {
   readonly tools: McpTool[]
-  readonly handlers: ReadonlyMap<string, Handler>
+  readonly handlers: ReadonlyMap<string, Dispatch>
 }
 
 /**
@@ -193,7 +215,7 @@ export type ProjectToolsResult = {
  */
 export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsResult {
   const schemas = opts.schemas ?? {}
-  const handlers = new Map<string, Handler>()
+  const handlers = new Map<string, Dispatch>()
 
   const walk = (n: Node, prefix: string): McpTool[] => {
     const out: McpTool[] = []
@@ -253,7 +275,7 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
           inputSchema: derived?.inputSchema ?? { type: "object" },
           ...(annotations !== undefined ? { annotations } : {}),
         })
-        handlers.set(name, child.handler as Handler)
+        handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {} })
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         // Static child: use meta.mcp.segment override or the tree key
@@ -328,6 +350,8 @@ export type ResourceTemplateHandler = {
   readonly pattern: RegExp
   readonly mimeType: string
   readonly handler: Handler
+  /** The leaf's `meta.mcp.sourceMap` (empty when none declared). See `Dispatch`. */
+  readonly sourceMap: SourceMap
 }
 
 /** Options for `projectResources`. */
@@ -433,7 +457,14 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
         if (hasFallback) {
           const { pattern, paramNames } = compileUriTemplate(uri)
           resourceTemplates.push({ uriTemplate: uri, name, description, mimeType })
-          templateHandlers.push({ uriTemplate: uri, paramNames, pattern, mimeType, handler: child.handler as Handler })
+          templateHandlers.push({
+            uriTemplate: uri,
+            paramNames,
+            pattern,
+            mimeType,
+            handler: child.handler as Handler,
+            sourceMap: mcp.sourceMap ?? {},
+          })
         } else {
           resources.push({ uri, name, description, mimeType })
           handlers.set(uri, child.handler as Handler)
@@ -498,7 +529,7 @@ export type ProjectPromptsOptions = {
 /** `projectPrompts`'s full result: the flat descriptor array plus a name→handler map for dispatch. */
 export type ProjectPromptsResult = {
   readonly prompts: McpPrompt[]
-  readonly handlers: ReadonlyMap<string, Handler>
+  readonly handlers: ReadonlyMap<string, Dispatch>
 }
 
 /**
@@ -541,7 +572,7 @@ function argumentsFromSchema(schema: Record<string, unknown> | undefined): McpPr
  */
 export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): ProjectPromptsResult {
   const schemas = opts.schemas ?? {}
-  const handlers = new Map<string, Handler>()
+  const handlers = new Map<string, Dispatch>()
 
   const walk = (n: Node, prefix: string): McpPrompt[] => {
     const out: McpPrompt[] = []
@@ -581,7 +612,7 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
           description,
           ...(args !== undefined ? { arguments: args } : {}),
         })
-        handlers.set(name, child.handler as Handler)
+        handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {} })
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         const childMcp = getMcpMeta(child.meta)

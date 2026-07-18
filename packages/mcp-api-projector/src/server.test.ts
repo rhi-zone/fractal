@@ -468,3 +468,141 @@ describe("createMcpServer — input validation", () => {
     expect(content[0]!.text.toLowerCase()).toContain("type")
   })
 })
+
+// ============================================================================
+// 8. Shared input pipeline (packages/api-tree/src/input.ts) — sourceMap
+// ============================================================================
+//
+// Tool calls, resource template reads, and prompt calls are all now
+// assembled via the shared `assemble`/`createStore` pipeline instead of
+// handing the raw arguments/captured-vars object to the handler directly.
+// With no `meta.mcp.sourceMap`, this must be behaviorally identical to
+// before (already covered by the describe blocks above, all still
+// passing). These tests cover the NEW capability: `sourceMap` lets a leaf
+// pull a named param from a different key (or, in the future, a different
+// store) than the surface's default convention.
+
+describe("createMcpServer — sourceMap support (tools)", () => {
+  const sourceMapTree = api_({
+    // Handler expects `id`, but sourceMap pulls it from the `identifier` key
+    // of the call's `arguments` — an aliasing override, not the default
+    // same-named lookup.
+    get: op((input: { id: string }) => ({ id: input.id, name: "Alice" }), {
+      mcp: { sourceMap: { id: { store: "argument", key: "identifier" } } },
+    }),
+  })
+
+  async function connectedSourceMapClient() {
+    const server = createMcpServer(sourceMapTree, { name: "sourcemap-tool-server", version: "1.0.0" })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    return { client }
+  }
+
+  it("resolves a param from its sourceMap-declared key instead of its own name", async () => {
+    const { client } = await connectedSourceMapClient()
+    const result = await client.callTool({ name: "get", arguments: { identifier: "42" } })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(JSON.parse(content[0]!.text)).toEqual({ id: "42", name: "Alice" })
+  })
+
+  it("without sourceMap, a tool still resolves params by their own name (unchanged default)", async () => {
+    const { client } = await connectedClient()
+    const result = await client.callTool({ name: "users_get", arguments: { id: "42" } })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(JSON.parse(content[0]!.text)).toEqual({ id: "42", name: "Alice" })
+  })
+})
+
+describe("createMcpServer — sourceMap support (resource templates)", () => {
+  const sourceMapResourceTree = api_({
+    users: api_({}, {
+      fallback: {
+        name: "userId",
+        subtree: api_({
+          // Handler expects `id`, sourceMap pulls it from the "uri-variable"
+          // store's "userId" key (the fallback-captured segment name).
+          profile: op((input: { id: string }) => ({ id: input.id, name: "Alice" }), {
+            mcp: { as: "resource", sourceMap: { id: { store: "uri-variable", key: "userId" } } },
+          }),
+        }),
+      },
+    }),
+  })
+
+  async function connectedSourceMapResourceClient() {
+    const server = createMcpServer(sourceMapResourceTree, {
+      name: "sourcemap-resource-server",
+      version: "1.0.0",
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    return { client }
+  }
+
+  it("resolves a template param from its sourceMap-declared key instead of the captured var's own name", async () => {
+    const { client } = await connectedSourceMapResourceClient()
+    const result = await client.readResource({ uri: "resource://users/42/profile" })
+
+    expect(result.contents).toHaveLength(1)
+    const content = result.contents[0] as { text: string }
+    expect(JSON.parse(content.text)).toEqual({ id: "42", name: "Alice" })
+  })
+
+  it("without sourceMap, a resource template still binds the captured var by its own name (unchanged default)", async () => {
+    const { client } = await connectedResourceClient()
+    const result = await client.readResource({ uri: "resource://users/42/profile" })
+
+    expect(result.contents).toHaveLength(1)
+    const content = result.contents[0] as { text: string }
+    expect(JSON.parse(content.text)).toEqual({ id: "42", name: "Alice" })
+  })
+})
+
+describe("createMcpServer — sourceMap support (prompts)", () => {
+  const sourceMapPromptTree = api_({
+    // Handler expects `text`, sourceMap pulls it from the `body` argument key.
+    summarize: op((input: { text: string }) => `summary of: ${input.text}`, {
+      mcp: { as: "prompt", sourceMap: { text: { store: "argument", key: "body" } } },
+    }),
+  })
+
+  async function connectedSourceMapPromptClient() {
+    const server = createMcpServer(sourceMapPromptTree, {
+      name: "sourcemap-prompt-server",
+      version: "1.0.0",
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    return { client }
+  }
+
+  it("resolves a prompt argument from its sourceMap-declared key instead of its own name", async () => {
+    const { client } = await connectedSourceMapPromptClient()
+    const result = await client.getPrompt({ name: "summarize", arguments: { body: "hello" } })
+
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]!.content).toEqual({
+      type: "text",
+      text: JSON.stringify("summary of: hello"),
+    })
+  })
+
+  it("without sourceMap, a prompt still resolves arguments by their own name (unchanged default)", async () => {
+    const { client } = await connectedPromptClient()
+    const result = await client.getPrompt({ name: "summarize", arguments: { text: "hello" } })
+
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]!.content).toEqual({
+      type: "text",
+      text: JSON.stringify("summary of: hello"),
+    })
+  })
+})
