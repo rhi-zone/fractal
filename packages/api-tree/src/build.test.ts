@@ -54,7 +54,12 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
 
   it("without an outFile, a NAMED parameter type inlines its structure (no import, since there's no output location to resolve one against)", () => {
     const source = buildValidatorModuleSource(FIXTURE)
-    expect(source).not.toContain("import type")
+    // The module always imports `ValidationError` from type-ir regardless of
+    // outFile — only a NAMED parameter type's import depends on having an
+    // outFile to resolve a relative path against.
+    expect(source.split("\n").filter((line) => line.startsWith("import type"))).toEqual([
+      'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
+    ])
     expect(source).toContain("value is { q?: string }")
   })
 

@@ -12,10 +12,15 @@
 // @rhi-zone/fractal-api-tree's build.test.ts — it wires this package's
 // compileValidatorModule to api-tree's own extractor/tree-walker.
 
+import { spawnSync } from "node:child_process"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, expect, it } from "bun:test"
 import { compileValidator, compileValidatorModule, type ValidationError } from "./compile.ts"
 import { t, types } from "./index.ts"
 import { bytes, date, datetime, duration, int32, time, uri, uuid } from "./kinds/common.ts"
+import { int64 } from "./kinds/int-widths.ts"
 
 type Triple = {
   check: (value: unknown) => boolean
@@ -304,7 +309,12 @@ describe("compileValidatorModule — full module emission", () => {
   it("each entry's guard narrows to the input's inline structural TypeScript rendering when no typeName is carried", () => {
     const source = compileValidatorModule([{ name: "users/create", ref: t(types.object({ name: t(types.string) })) }])
     expect(source).toContain("value is { name: string }")
-    expect(source).not.toContain("import type")
+    // The module always imports `ValidationError` from type-ir (see the
+    // "declares the __inferTypeRef helper..." test below) even with no
+    // typeName-carrying entries — that's the only `import type` line here.
+    expect(source.split("\n").filter((line) => line.startsWith("import type"))).toEqual([
+      'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
+    ])
   })
 
   it("imports a NAMED type (meta.typeName + meta.declarationFile) via resolveImport instead of inlining it", () => {
@@ -346,7 +356,10 @@ describe("compileValidatorModule — full module emission", () => {
       { resolveImport: () => "../types.ts" },
     )
     const importLines = source.split("\n").filter((line) => line.startsWith("import type"))
-    expect(importLines).toEqual(['import type { BookIdParam, BookQuery } from "../types.ts"'])
+    expect(importLines).toEqual([
+      'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
+      'import type { BookIdParam, BookQuery } from "../types.ts"',
+    ])
   })
 
   it("without resolveImport, a typeName-carrying TypeRef still inlines its structure rather than referencing an unimported name", () => {
@@ -355,17 +368,166 @@ describe("compileValidatorModule — full module emission", () => {
       declarationFile: "/repo/src/types.ts",
     })
     const source = compileValidatorModule([{ name: "catalog/search", ref }])
-    expect(source).not.toContain("import type")
     expect(source).not.toContain("value is BookQuery")
     expect(source).toContain("value is { q?: string }")
+    // The only import present is the always-emitted `ValidationError` one —
+    // no import was introduced for the (unresolved) typeName.
+    expect(source.split("\n").filter((line) => line.startsWith("import type"))).toEqual([
+      'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
+    ])
   })
 
-  it("declares the ValidationError type and __inferTypeRef helper exactly once, shared across entries", () => {
+  it("declares the __inferTypeRef helper exactly once, shared across entries, and imports ValidationError from type-ir instead of redeclaring it", () => {
     const source = compileValidatorModule([
       { name: "a", ref: t(types.object({ x: t(types.string) })) },
       { name: "b", ref: t(types.object({ y: t(types.number) })) },
     ])
     expect(source.split("function __inferTypeRef").length - 1).toBe(1)
-    expect(source).toContain("export type ValidationError")
+    expect(source).toContain('import type { ValidationError } from "@rhi-zone/fractal-type-ir"')
+    expect(source).not.toContain("export type ValidationError")
+  })
+})
+
+describe("compileValidator — map key validation (bug: key type was never checked)", () => {
+  it("check rejects a map whose keys don't match the key type (uuid)", () => {
+    const ref = t(types.map(uuid(), t(types.number)))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.check({ "550e8400-e29b-41d4-a716-446655440000": 1 })).toBe(true)
+    expect(v.check({ "not-a-uuid": 1 })).toBe(false)
+  })
+
+  it("check rejects a map whose keys don't match the key type (enum)", () => {
+    const ref = t(types.map(t(types.enum(["a", "b"])), t(types.number)))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.check({ a: 1, b: 2 })).toBe(true)
+    expect(v.check({ c: 1 })).toBe(false)
+  })
+
+  it("check rejects a map whose keys violate a pattern constraint", () => {
+    const ref = t(types.map(t(types.string, { pattern: "^[a-z]+$" }), t(types.number)))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.check({ abc: 1 })).toBe(true)
+    expect(v.check({ ABC: 1 })).toBe(false)
+  })
+
+  it("errors reports a bad key's violation at the entry's path", () => {
+    const ref = t(types.map(uuid(), t(types.number)))
+    const v = evalValidator(compileValidator(ref))
+    const errs = v.errors({ "not-a-uuid": 1 })
+    expect(errs.length).toBeGreaterThan(0)
+    expect(errs.some((e) => e.path.join(".") === "not-a-uuid")).toBe(true)
+  })
+
+  it("parse reports a bad key's violation and still validates the value", () => {
+    const ref = t(types.map(t(types.enum(["a", "b"])), t(types.number)))
+    const v = evalValidator(compileValidator(ref))
+    const result = v.parse({ c: "not-a-number" }) as { kind: "err"; errors: ValidationError[] }
+    expect(result.kind).toBe("err")
+    expect(result.errors.some((e) => e.kind === "enum")).toBe(true)
+    expect(result.errors.some((e) => e.kind === "coerce")).toBe(true)
+  })
+})
+
+describe("compileValidator — standalone output typechecks (bug: ValidationError type was never declared)", () => {
+  it("compileValidator's output declares a local ValidationError type usable without a cast", () => {
+    const ref = t(types.object({ name: t(types.string) }))
+    const source = compileValidator(ref)
+    expect(source).toContain("type ValidationError")
+  })
+
+  it("compileValidator's standalone output typechecks under tsc with no unresolved names", () => {
+    const ref = t(types.object({ name: t(types.string), age: t(types.number, { optional: true }) }))
+    const expr = compileValidator(ref)
+    const source = `const v = (${expr});\nexport {};\n`
+    const dir = mkdtempSync(join(tmpdir(), "compile-validator-tsc-"))
+    const file = join(dir, "standalone.ts")
+    writeFileSync(file, source)
+    const result = spawnSync(
+      "bunx",
+      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", file],
+      { encoding: "utf-8" },
+    )
+    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
+  })
+})
+
+describe("compileValidator — errors()/parse() agree on error kind for wrong-type values (bug: parse over-reported coerce)", () => {
+  it("a boolean where a number is expected is a type error in both errors() and parse()", () => {
+    const ref = t(types.object({ age: t(types.number) }))
+    const v = evalValidator(compileValidator(ref))
+    const errKinds = v.errors({ age: true }).map((e) => e.kind)
+    const parseResult = v.parse({ age: true }) as { kind: "err"; errors: ValidationError[] }
+    expect(errKinds).toEqual(["type"])
+    expect(parseResult.kind).toBe("err")
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"])
+  })
+
+  it("an array where a number is expected is a type error in both errors() and parse()", () => {
+    const ref = t(types.object({ age: t(types.number) }))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.errors({ age: [1] }).map((e) => e.kind)).toEqual(["type"])
+    const parseResult = v.parse({ age: [1] }) as { kind: "err"; errors: ValidationError[] }
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"])
+  })
+
+  it("a number where a boolean is expected is a type error in both errors() and parse()", () => {
+    const ref = t(types.object({ active: t(types.boolean) }))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.errors({ active: 1 }).map((e) => e.kind)).toEqual(["type"])
+    const parseResult = v.parse({ active: 1 }) as { kind: "err"; errors: ValidationError[] }
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"])
+  })
+
+  it("an unparseable numeric string is still a coerce error (not over-corrected to type)", () => {
+    const ref = t(types.object({ age: t(types.number) }))
+    const v = evalValidator(compileValidator(ref))
+    const parseResult = v.parse({ age: "nope" }) as { kind: "err"; errors: ValidationError[] }
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["coerce"])
+  })
+
+  it("a non-true/false string is still a coerce error for boolean (not over-corrected to type)", () => {
+    const ref = t(types.object({ active: t(types.boolean) }))
+    const v = evalValidator(compileValidator(ref))
+    const parseResult = v.parse({ active: "nope" }) as { kind: "err"; errors: ValidationError[] }
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["coerce"])
+  })
+})
+
+describe("compileValidator — int64 range check (bug: int64 had no bounds check, identical to integer)", () => {
+  it("check accepts values within Number.MIN_SAFE_INTEGER/MAX_SAFE_INTEGER and rejects values outside", () => {
+    const v = evalValidator(compileValidator(int64()))
+    expect(v.check(42)).toBe(true)
+    expect(v.check(Number.MAX_SAFE_INTEGER)).toBe(true)
+    expect(v.check(Number.MAX_SAFE_INTEGER + 2)).toBe(false)
+    expect(v.check(Number.MIN_SAFE_INTEGER - 2)).toBe(false)
+  })
+
+  it("errors reports a type error for an out-of-range int64", () => {
+    const v = evalValidator(compileValidator(int64()))
+    const errs = v.errors(Number.MAX_SAFE_INTEGER + 2)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]!.kind).toBe("type")
+  })
+})
+
+describe("compileValidator — duplicate const hoisting (quality: enum/known-field consts were emitted 3x)", () => {
+  it("an enum field's member array is hoisted once, not once per check/errors/parse", () => {
+    const ref = t(types.object({ status: t(types.enum(["a", "b", "c"])) }))
+    const source = compileValidator(ref)
+    // Count `const __membersN = [...]` DECLARATIONS specifically (not
+    // substring occurrences of the array literal text, which also shows up
+    // nested inside the unrelated `__ref` TypeRef literal used for `type`
+    // errors) — errors()/parse() both reference `.enum` handling, so a
+    // pre-fix build would declare this const twice (once per handler
+    // invocation) even though check() only invokes it once more.
+    const memberConstDecls = source.match(/const __members\d+ = /g) ?? []
+    expect(memberConstDecls).toHaveLength(1)
+  })
+
+  it("an object's known-field Set is hoisted once, not once per check/errors/parse", () => {
+    const ref = t(types.object({ name: t(types.string) }), { additionalProperties: false })
+    const source = compileValidator(ref)
+    const occurrences = source.split("new Set(").length - 1
+    expect(occurrences).toBe(1)
   })
 })

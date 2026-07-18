@@ -21,5 +21,8 @@
     "@rhi-zone/fractal-api-tree": "workspace:*",
     "@rhi-zone/fractal-http-api-projector": "workspace:*",
     "@rhi-zone/fractal-mcp-api-projector": "workspace:*"
+  },
+  "devDependencies": {
+    "@rhi-zone/fractal-type-ir": "workspace:*"
   }
 }

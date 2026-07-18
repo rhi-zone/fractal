@@ -17,7 +17,11 @@
 //                                       — validates AND coerces (e.g. string
 //     "42" -> number 42) in one pass, building a FRESH output value (never
 //     mutates the input). Ok branch narrows via the discriminated-union
-//     return type, no explicit `is` predicate needed.
+//     return type, no explicit `is` predicate needed. ONE documented
+//     carve-out: `unknown`/`instance`/`ref` subtrees have no structure to
+//     validate or rebuild from, so their parsed output ALIASES the
+//     corresponding input subtree rather than copying it — see the
+//     `validateHandlers.unknown`/`instance`/`ref` doc comment below.
 //
 // Codegen strategy: string templates with thin helpers (indent, a per-entry
 // const-hoisting pool for regexes/enum-member-arrays/known-field-sets), not
@@ -71,12 +75,23 @@ function indentLines(lines: readonly string[], spaces: number): string[] {
 class GenCtx {
   private consts: string[] = []
   private constCounter = 0
+  // Keyed by `${prefix}\0${expr}` — check/errors/parse each walk the same
+  // TypeRef tree independently against the SAME ctx (see `compileEntryBody`),
+  // so an enum's member array or an object's known-field Set gets requested
+  // up to three times with identical content. Caching by content (not just
+  // by regex pattern, which `addRegex` already did) means each unique
+  // literal is hoisted once and shared across all three functions' bodies.
+  private constCache = new Map<string, string>()
   private regexCache = new Map<string, string>()
   private varCounter = 0
 
   addConst(prefix: string, expr: string): string {
+    const cacheKey = `${prefix}\0${expr}`
+    const cached = this.constCache.get(cacheKey)
+    if (cached !== undefined) return cached
     const name = `__${prefix}${this.constCounter++}`
     this.consts.push(`const ${name} = ${expr};`)
+    this.constCache.set(cacheKey, name)
     return name
   }
 
@@ -97,13 +112,23 @@ class GenCtx {
   }
 }
 
-/** A JSON-serializable TypeRef literal, inlined into generated error objects. */
-function refLiteral(ref: TypeRef): string {
-  return JSON.stringify(ref)
+/** A JSON-serializable TypeRef literal, hoisted to a shared const (via `ctx`)
+ * so a TypeRef checked at multiple call sites — check/errors/parse each walk
+ * the same tree, and a shape can recur under a union/array/object — emits its
+ * `JSON.stringify` literal once rather than inlining it at every site.
+ * `as any`: the literal's inferred object-literal type (`{ kind: string }`,
+ * a WIDENED string, not the exact `TypeKinds` discriminant it structurally
+ * is) doesn't satisfy `ValidationError`'s `expected`/`actual: TypeRef` field
+ * without a full recursive `TypeRef`-shaped type annotation reproduced
+ * inline — `any` sidesteps that without weakening `ValidationError` itself,
+ * whose real definition (imported from type-ir, see `compileValidatorModule`
+ * and this file's own `ValidationError` export) still requires `TypeRef`. */
+function refLiteral(ref: TypeRef, ctx: GenCtx): string {
+  return ctx.addConst("ref", `${JSON.stringify(ref)} as any`)
 }
 
-function typeErrorStmt(pathExpr: string, expected: TypeRef, v: string): string {
-  return `errs.push({ kind: "type", path: ${pathExpr}, expected: ${refLiteral(expected)}, actual: __inferTypeRef(${v}) });`
+function typeErrorStmt(pathExpr: string, expected: TypeRef, v: string, ctx: GenCtx): string {
+  return `errs.push({ kind: "type", path: ${pathExpr}, expected: ${refLiteral(expected, ctx)}, actual: __inferTypeRef(${v}) });`
 }
 
 // A kind is "stringlike"/"numericlike" if it (or an ancestor) is "string" /
@@ -200,7 +225,8 @@ const checkHandlers: Record<string, CheckHandler> = {
   number: (_r, v) => `typeof ${v} === "number"`,
   integer: (_r, v) => `typeof ${v} === "number" && Number.isInteger(${v})`,
   int32: (_r, v) => `typeof ${v} === "number" && Number.isInteger(${v}) && ${v} >= -2147483648 && ${v} <= 2147483647`,
-  int64: (_r, v) => `typeof ${v} === "number" && Number.isInteger(${v})`,
+  int64: (_r, v) =>
+    `typeof ${v} === "number" && Number.isInteger(${v}) && ${v} >= Number.MIN_SAFE_INTEGER && ${v} <= Number.MAX_SAFE_INTEGER`,
   float32: (_r, v) => `typeof ${v} === "number"`,
   float64: (_r, v) => `typeof ${v} === "number"`,
   string: (_r, v) => `typeof ${v} === "string"`,
@@ -247,7 +273,7 @@ const checkHandlers: Record<string, CheckHandler> = {
   },
   map: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "map" }
-    return `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}) && Object.values(${v}).every((__e) => (${genCheckExpr(s.value, "__e", ctx)})))`
+    return `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}) && Object.keys(${v}).every((__k) => (${genCheckExpr(s.key, "__k", ctx)})) && Object.values(${v}).every((__e) => (${genCheckExpr(s.value, "__e", ctx)})))`
   },
   union: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "union" }
@@ -319,7 +345,7 @@ type ValidateHandler = (ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, 
 function nonCoercingLeaf(cond: (v: string, ctx: GenCtx) => string): ValidateHandler {
   return (ref, v, pathExpr, ctx) => {
     const c = cond(v, ctx)
-    const stmts = [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)]
+    const stmts = [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)]
     return { stmts, outExpr: v }
   }
 }
@@ -328,7 +354,7 @@ function formatLeaf(formatName: keyof typeof FORMAT_PATTERNS): ValidateHandler {
   return (ref, v, pathExpr, ctx) => {
     const re = ctx.addRegex(FORMAT_PATTERNS[formatName]!)
     const stmts = [
-      `if (typeof ${v} !== "string") { ${typeErrorStmt(pathExpr, ref, v)} }`,
+      `if (typeof ${v} !== "string") { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
       `else if (!${re}.test(${v})) { errs.push({ kind: "format", path: ${pathExpr}, expected: ${JSON.stringify(formatName)}, actual: ${v} }); }`,
       ...metaConstraintStmts(ref, v, pathExpr, ctx, `typeof ${v} === "string"`),
     ]
@@ -345,15 +371,19 @@ function numberFamilyLeaf(extra?: (v: string) => string): ValidateHandler {
   return (ref, v, pathExpr, ctx, mode) => {
     const c = cond(v)
     if (mode === "errors") {
-      return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)], outExpr: v }
+      return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)], outExpr: v }
     }
     const out = ctx.fresh("n")
     const coercedOk = extra === undefined ? "true" : extra(out)
     const stmts = [
       `let ${out};`,
       `if (${c}) { ${out} = ${v}; }`,
-      `else if (typeof ${v} === "string" && ${v}.trim() !== "" && !Number.isNaN(Number(${v}))) { ${out} = Number(${v}); if (!(${coercedOk})) { ${typeErrorStmt(pathExpr, ref, v)} } }`,
-      `else { errs.push({ kind: "coerce", path: ${pathExpr}, expected: ${JSON.stringify(ref.shape.kind)}, actual: ${v} }); ${out} = ${v}; }`,
+      `else if (typeof ${v} === "string" && ${v}.trim() !== "" && !Number.isNaN(Number(${v}))) { ${out} = Number(${v}); if (!(${coercedOk})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } }`,
+      // A string that failed to parse as a number is a coercion failure; any
+      // other wrong type (boolean, array, object, null) is a type error —
+      // same kind errors() would report, so the two modes agree.
+      `else if (typeof ${v} === "string") { errs.push({ kind: "coerce", path: ${pathExpr}, expected: ${JSON.stringify(ref.shape.kind)}, actual: ${v} }); ${out} = ${v}; }`,
+      `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
       ...metaConstraintStmts(ref, out, pathExpr, ctx, `typeof ${out} === "number"`),
     ]
     return { stmts, outExpr: out }
@@ -362,21 +392,25 @@ function numberFamilyLeaf(extra?: (v: string) => string): ValidateHandler {
 
 const booleanLeaf: ValidateHandler = (ref, v, pathExpr, ctx, mode) => {
   const c = `typeof ${v} === "boolean"`
-  if (mode === "errors") return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`], outExpr: v }
+  if (mode === "errors") return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v }
   const out = ctx.fresh("b")
   const stmts = [
     `let ${out};`,
     `if (${c}) { ${out} = ${v}; }`,
     `else if (${v} === "true") { ${out} = true; }`,
     `else if (${v} === "false") { ${out} = false; }`,
-    `else { errs.push({ kind: "coerce", path: ${pathExpr}, expected: "boolean", actual: ${v} }); ${out} = ${v}; }`,
+    // A string that isn't "true"/"false" is a coercion failure; any other
+    // wrong type (number, array, object, null) is a type error — same kind
+    // errors() would report, so the two modes agree.
+    `else if (typeof ${v} === "string") { errs.push({ kind: "coerce", path: ${pathExpr}, expected: "boolean", actual: ${v} }); ${out} = ${v}; }`,
+    `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
   ]
   return { stmts, outExpr: out }
 }
 
 const stringLeaf: ValidateHandler = (ref, v, pathExpr, ctx) => {
   const c = `typeof ${v} === "string"`
-  const stmts = [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)]
+  const stmts = [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)]
   return { stmts, outExpr: v }
 }
 
@@ -405,7 +439,7 @@ function objectValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, 
   const out = mode === "parse" ? ctx.fresh("o") : undefined
   const stmts: string[] = []
   if (out !== undefined) stmts.push(`let ${out}: Record<string, any> = {};`)
-  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`)
+  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`)
   const body: string[] = []
   for (const [name, field] of Object.entries(s.fields)) {
     const fv = `${v}[${JSON.stringify(name)}]`
@@ -439,7 +473,7 @@ function arrayValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, m
   const out = mode === "parse" ? ctx.fresh("a") : undefined
   const stmts: string[] = []
   if (out !== undefined) stmts.push(`let ${out}: any[] = [];`)
-  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`)
+  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`)
   const idx = ctx.fresh("i")
   const ev = ctx.fresh("e")
   const epath = ctx.fresh("p")
@@ -462,7 +496,7 @@ function tupleValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, m
   const out = mode === "parse" ? ctx.fresh("t") : undefined
   const stmts: string[] = []
   if (out !== undefined) stmts.push(`let ${out}: any[] = [];`)
-  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`)
+  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`)
   const body: string[] = [
     `if (${v}.length !== ${s.elements.length}) { errs.push({ kind: "tuple_length", path: ${pathExpr}, expected: ${s.elements.length}, actual: ${v}.length }); }`,
   ]
@@ -484,15 +518,21 @@ function mapValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mod
   const out = mode === "parse" ? ctx.fresh("m") : undefined
   const stmts: string[] = []
   if (out !== undefined) stmts.push(`let ${out}: Record<string, any> = {};`)
-  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`)
+  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`)
   const key = ctx.fresh("k")
   const ev = ctx.fresh("e")
   const epath = ctx.fresh("p")
+  // The key is always validated in "errors" mode regardless of `mode` — keys
+  // come from `Object.keys` as strings, so there's nothing to coerce; a
+  // constrained key type (uuid/enum/pattern) still needs its errors
+  // collected, but the key itself is never replaced in the parsed output.
+  const keyCheck = genValidate(s.key, key, epath, ctx, "errors")
   const inner = genValidate(s.value, ev, epath, ctx, mode)
   const body = [
     `for (const ${key} of Object.keys(${v})) {`,
     `  const ${ev} = ${v}[${key}];`,
     `  const ${epath} = ${pathExpr}.concat([${key}]);`,
+    ...indentLines(keyCheck.stmts, 2),
     ...indentLines(inner.stmts, 2),
     out === undefined ? "" : `  ${out}[${key}] = ${inner.outExpr};`,
     `}`,
@@ -566,14 +606,14 @@ function intersectionValidate(ref: TypeRef, v: string, pathExpr: string, ctx: Ge
 function interfaceValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "interface" }
   const baseCond = `typeof ${v} === "object" && ${v} !== null`
-  const stmts = [`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`]
+  const stmts = [`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`]
   const body: string[] = []
   for (const name of Object.keys(s.methods)) {
     const fv = `${v}[${JSON.stringify(name)}]`
     const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
     body.push(
       `if (typeof ${fv} === "undefined") { errs.push({ kind: "missing", path: ${fpath} }); }`,
-      `else if (typeof ${fv} !== "function") { ${typeErrorStmt(fpath, ref, fv)} }`,
+      `else if (typeof ${fv} !== "function") { ${typeErrorStmt(fpath, ref, fv, ctx)} }`,
     )
   }
   stmts.push(...indentLines(body, 2), `}`)
@@ -585,7 +625,7 @@ const validateHandlers: Record<string, ValidateHandler> = {
   number: numberFamilyLeaf(),
   integer: numberFamilyLeaf((v) => `Number.isInteger(${v})`),
   int32: numberFamilyLeaf((v) => `Number.isInteger(${v}) && ${v} >= -2147483648 && ${v} <= 2147483647`),
-  int64: numberFamilyLeaf((v) => `Number.isInteger(${v})`),
+  int64: numberFamilyLeaf((v) => `Number.isInteger(${v}) && ${v} >= Number.MIN_SAFE_INTEGER && ${v} <= Number.MAX_SAFE_INTEGER`),
   float32: numberFamilyLeaf(),
   float64: numberFamilyLeaf(),
   string: stringLeaf,
@@ -598,8 +638,16 @@ const validateHandlers: Record<string, ValidateHandler> = {
   bytes: formatLeaf("bytes"),
   null: nonCoercingLeaf((v) => `${v} === null`),
   void: nonCoercingLeaf((v) => `${v} === undefined`),
+  // `unknown`/`instance`/`ref` have no structure to validate or reconstruct
+  // from (see the doc comments on their `checkHandlers` counterparts above,
+  // and index.ts's own `instance`/`ref` docs) — parse() returns the SAME
+  // reference it was given rather than a fresh copy. This is the one
+  // documented carve-out to parse()'s "fresh output, never mutates the
+  // input" contract (see this file's header comment): there's nothing to
+  // copy FROM, so aliasing is the only option, not a shortcut taken for
+  // convenience.
   unknown: (_ref, v) => ({ stmts: [], outExpr: v }),
-  never: (ref, v, pathExpr) => ({ stmts: [typeErrorStmt(pathExpr, ref, v)], outExpr: v }),
+  never: (ref, v, pathExpr, ctx) => ({ stmts: [typeErrorStmt(pathExpr, ref, v, ctx)], outExpr: v }),
   instance: (_ref, v) => ({ stmts: [], outExpr: v }),
   ref: (_ref, v) => ({ stmts: [], outExpr: v }),
   function: nonCoercingLeaf((v) => `typeof ${v} === "function"`),
@@ -645,7 +693,11 @@ function genValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mod
 // checked against — see typeRefToString for turning either into display text).
 // ============================================================================
 
-const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any) {
+// `: any` return type: like `refLiteral`'s `as any` above, the inferred
+// per-branch object-literal type doesn't satisfy `ValidationError`'s
+// `actual: TypeRef` field without reproducing the full recursive `TypeRef`
+// type inline — `any` sidesteps that.
+const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any): any {
   if (v === null) return { shape: { kind: "null" }, meta: {} };
   if (v === undefined) return { shape: { kind: "void" }, meta: {} };
   if (Array.isArray(v)) return { shape: { kind: "array", element: { shape: { kind: "unknown" }, meta: {} } }, meta: {} };
@@ -681,9 +733,17 @@ function guardAnnotation(
 
 /** Emit the `{ check, errors, parse }` triple's body lines (no wrapping
  * IIFE/braces — the caller supplies those) for a single TypeRef. `withHelper`
- * controls whether the `__inferTypeRef` runtime helper (used by `type`-kind
- * ValidationErrors) is declared inline — `compileValidatorModule` hoists one
- * shared copy to module scope instead and passes `false`. */
+ * controls whether the `__inferTypeRef` runtime helper AND the
+ * `ValidationError` type (used by `type`-kind ValidationErrors) are declared
+ * inline — `compileValidatorModule` hoists one shared copy of each to module
+ * scope instead and passes `false`.
+ *
+ * The narrowing `value is T` / discriminated-`parse`-return cast is applied
+ * INSIDE this function body's `return` statement (not by the caller wrapping
+ * the IIFE call from outside) — when `withHelper` is true, `ValidationError`
+ * is a TYPE LOCAL to this function body, out of scope for a cast written
+ * after the IIFE closes; casting from inside keeps it in scope in both
+ * `withHelper` cases. */
 function compileEntryBody(ref: TypeRef, annotation: string, withHelper: boolean): string[] {
   const ctx = new GenCtx()
   const checkExpr = genCheckExpr(ref, "value", ctx)
@@ -691,7 +751,18 @@ function compileEntryBody(ref: TypeRef, annotation: string, withHelper: boolean)
   const parseBody = genValidate(ref, "value", "path", ctx, "parse")
 
   const lines: string[] = []
-  if (withHelper) lines.push(INFER_TYPE_REF_SOURCE)
+  // `withHelper` is true only for `compileValidator`'s single-expression,
+  // truly-standalone output — there's no module scope to hoist a shared
+  // `ValidationError` type/`__inferTypeRef` helper to, so both are declared
+  // locally inside the IIFE (erased at runtime, no cost). `compileValidatorModule`
+  // hoists one shared copy of each to module scope instead (see
+  // `compileValidatorModule`) and passes `false` here.
+  if (withHelper) {
+    // A local `type` declaration inside the IIFE body — NOT `export type`
+    // (module-level export syntax is invalid inside a function body).
+    lines.push(VALIDATION_ERROR_TYPE_SOURCE.replace(/^export /, ""))
+    lines.push(INFER_TYPE_REF_SOURCE)
+  }
   lines.push(...ctx.declarations())
   // `value: any` (not `unknown`) throughout the raw compiled body — bracket
   // access (`value["field"]`) only type-checks against `any`; the ANNOTATED,
@@ -714,9 +785,11 @@ function compileEntryBody(ref: TypeRef, annotation: string, withHelper: boolean)
   lines.push(`  if (errs.length === 0) return { kind: "ok" as const, value: ${parseBody.outExpr} };`)
   lines.push(`  return { kind: "err" as const, errors: errs };`)
   lines.push(`}`)
-  lines.push(
-    `return { check: check, errors: errors, parse: parse };`,
-  )
+  lines.push(`return { check: check, errors: errors, parse: parse } as unknown as {`)
+  lines.push(`  check: (value: unknown) => value is ${annotation};`)
+  lines.push(`  errors: (value: unknown) => ValidationError[];`)
+  lines.push(`  parse: (value: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`)
+  lines.push(`};`)
   return lines
 }
 
@@ -729,15 +802,7 @@ function compileEntryBody(ref: TypeRef, annotation: string, withHelper: boolean)
 export function compileValidator(ref: TypeRef): string {
   const { annotation } = guardAnnotation(ref, undefined)
   const body = compileEntryBody(ref, annotation, true)
-  return [
-    "(function () {",
-    ...indentLines(body, 2),
-    "})() as unknown as {",
-    `  check: (value: unknown) => value is ${annotation};`,
-    "  errors: (value: unknown) => ValidationError[];",
-    `  parse: (value: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`,
-    "}",
-  ].join("\n")
+  return ["(function () {", ...indentLines(body, 2), "})()"].join("\n")
 }
 
 const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
@@ -758,25 +823,31 @@ const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
   | { kind: "coerce"; path: string[]; expected: string; actual: unknown };`
 
 /**
- * Emit a complete, standalone, zero-runtime-dependency TypeScript module
+ * Emit a complete, standalone, zero-RUNTIME-dependency TypeScript module
  * exporting a `validators` object — `Record<name, { check, errors, parse }>`.
  * The build orchestrator (api-tree's build.ts) adapts each entry's `parse`
  * into whatever single-function `Validator` shape its own consumer (e.g.
  * http-api-projector's `createApplyValidation`) expects; this module makes
  * no assumption about that consumer.
  *
- * `expected`/`actual` in a `type`-kind `ValidationError` are TypeRef values
- * (see `ValidationError`'s doc in this file) — the module-local
- * `ValidationError` type widens them to `unknown` (no import of type-ir's own
- * `TypeRef` type needed to keep the emitted module dependency-free); pass the
- * emitted values to `typeRefToString` (importable from `@rhi-zone/fractal-type-ir`)
- * for a display string.
+ * The module carries exactly one TYPE-ONLY dependency: `import type {
+ * ValidationError } from "@rhi-zone/fractal-type-ir"` — this is the SAME
+ * `ValidationError` type this file (compile.ts) exports, so `expected`/
+ * `actual` in a `type`-kind error are genuinely `TypeRef`-typed (no `unknown`
+ * widening, no cast needed to hand them to `typeRefToString`, also
+ * importable from `@rhi-zone/fractal-type-ir`, for a display string). A
+ * type-only import has no runtime footprint — it's erased by the
+ * TypeScript/Bun transpiler — so this doesn't reintroduce a runtime
+ * dependency; the consuming package's package.json just needs `@rhi-zone/
+ * fractal-type-ir` listed (as a dependency or devDependency) for the
+ * TYPECHECK to resolve it.
  */
 export function compileValidatorModule(
   entries: readonly { name: string; ref: TypeRef }[],
   options?: { resolveImport?: (declarationFile: string) => string },
 ): string {
   const imports = new Map<string, Set<string>>()
+  imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
   const lines: string[] = []
   lines.push("// AUTO-GENERATED by @rhi-zone/fractal-type-ir. Do not edit by hand.")
   lines.push("")
@@ -792,13 +863,7 @@ export function compileValidatorModule(
     const body = compileEntryBody(ref, annotation, false)
     entryLines.push(`  ${JSON.stringify(name)}: (function () {`)
     entryLines.push(...indentLines(body, 4))
-    entryLines.push(`  })() as unknown as {`)
-    entryLines.push(`    check: (value: unknown) => value is ${annotation};`)
-    entryLines.push(`    errors: (value: unknown) => ValidationError[];`)
-    entryLines.push(
-      `    parse: (value: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`,
-    )
-    entryLines.push(`  },`)
+    entryLines.push(`  })(),`)
   }
 
   for (const [from, names] of imports) {
@@ -806,8 +871,6 @@ export function compileValidatorModule(
   }
   if (imports.size > 0) lines.push("")
 
-  lines.push(VALIDATION_ERROR_TYPE_SOURCE)
-  lines.push("")
   lines.push(INFER_TYPE_REF_SOURCE)
   lines.push("")
   lines.push("export const validators = {")
