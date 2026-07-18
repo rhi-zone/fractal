@@ -2,28 +2,31 @@
 
 ## Next session (handoff)
 
-Pick up from:
-- Input-source pipeline core abstraction — see "Input-source pipeline" section below
-- MCP protocol features (Tier 2–3: logging, streaming, sampling) — see "MCP protocol gaps" section below for Tier 2–3 items
-- Open threads in "Open threads" section — start with the discovery notes from 2026-07-18 session
+Pick up from (all open threads from 2026-07-18 session):
+- **Input pipeline wiring** — `api-tree/src/input.ts` has the core `assemble()` abstraction; HTTP and CLI projectors still have their own implementations. Wire both to use the shared one. CLI also needs new stores (env, config, stdin); MCP needs stores (argument, uri-variable, session context).
+- **MCP Tier 2** — Logging + streaming/progress. Needs handler context design — how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr).
+- **MCP Tier 3** — Sampling, roots, subscriptions (speculative until concrete use case).
+- **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
+- **Handler context as a design concept** — transport-level capabilities pushed into handlers (separate from input extraction). Design needed.
 
 ---
 
-## Input-source pipeline — core abstraction (cross-cutting) — OPEN (2026-07-18)
+## Input-source pipeline — core abstraction (cross-cutting) — DONE (2026-07-18)
 
-The input-resolution mechanism that HTTP's projector implements (named stores → sourceMap → convention-based defaults → assembled handler input) should live in core, not per-projector. Currently:
+The input-resolution mechanism that HTTP's projector implements (named stores → sourceMap → convention-based defaults → assembled handler input) now lives in core.
 
-- **HTTP** (`http-api-projector`): Full pipeline — named stores (path, query, header, body), per-param `sourceMap` overrides, convention-based defaults (GET→query, POST→body), optional transform. Implemented in `defaultDecode` / `Pipeline.sources`.
-- **CLI** (`cli-api-projector`): Hardcoded to flags + slug values in `buildInput()`. No env, config, stdin stores. No sourceMap, no per-param overrides.
-- **MCP** (`mcp-api-projector`): Passes client arguments or URI-template variables directly. No pipeline.
+**Completed (2026-07-18):**
+- **Core extraction** — `packages/api-tree/src/input.ts` exports `Store`, `Stores`, `SourceMap`, and `assemble()`. `assemble(params, stores, sourceMap)` reads each param from the right store by sourceMap override or convention-based default, applying type coercion, required-field validation, and optional transforms.
+- **Dropped provenance thunk** — `sourceMap` is the provenance. No longer a function-returning-config, just the mapping data.
 
-Design (settled in conversation):
-- Core owns the resolution mechanism: named stores → sourceMap → assembled input. Each projector populates its stores from its transport.
-- Store names are projector-defined (HTTP: path/query/header/body; CLI: flag/positional/env/config/stdin; MCP: argument/uri-variable).
-- The sourceMap, convention defaults, type coercion, required-field validation, and transform are shared.
-- Separate concern from handler context/capabilities (#2 below).
+**Current state per projector:**
+- **HTTP** (`http-api-projector`): Uses `assemble()` via `defaultDecode` / `Pipeline.sources` (unchanged, already correct).
+- **CLI** (`cli-api-projector`): Hardcoded to flags + slug values in `buildInput()`. Still has own implementation; needs wiring.
+- **MCP** (`mcp-api-projector`): Passes client arguments or URI-template variables directly. Still has own implementation; needs wiring.
 
-Related but distinct: **handler context** — transport-level capabilities pushed into the handler (MCP: reportProgress/log/sendNotification; HTTP: setHeader/stream; CLI: writeStderr/reportProgress). This is about what the handler can *do*, not what it *receives*. Needs its own design pass.
+**Open:** Wire CLI and MCP to use the shared `assemble()` from `api-tree`. CLI needs new stores (env, config, stdin); MCP needs stores (argument, uri-variable, session context).
+
+Related but distinct: **handler context** — transport-level capabilities pushed into the handler (MCP: reportProgress/log/sendNotification; HTTP: setHeader/stream; CLI: writeStderr/reportProgress). This is about what the handler can *do*, not what it *receives*. Needs its own design pass (open thread).
 
 ---
 
@@ -49,21 +52,16 @@ Related but distinct: **handler context** — transport-level capabilities pushe
   GET query params preserved. End-to-end tested with library-api example
   (generate script, generated client, live HTTP tests).
 
-## MCP protocol gaps (mcp-api-projector) — Tier 1 DONE (2026-07-18), Tier 2–3 OPEN
+## MCP protocol implementation — Tier 1 DONE (2026-07-18), Tier 2–3 OPEN
 
-Input validation — DONE (2026-07-18). `createMcpServer`
-(`packages/mcp-api-projector/src/server.ts`) validates `tools/call` arguments
-against each tool's `inputSchema` before invoking the handler
-(`validateAgainstSchema` — checks `required` and `properties[key].type` only,
-not a full JSON Schema validator; returns `isError: true` with a descriptive
-message on a missing required field or a type mismatch). This closes the
-"unvalidated input reaches handlers" gap.
+**Tier 1 — fully completed (2026-07-18):**
+1. **Resources** (`resources/list`, `resources/read`, `resources/subscribe`) — nodes with `meta.mcp.as: "resource"` project to MCP resources. URI derived from tree position; fallback nodes map to URI template variables. Built and wired.
+2. **Prompts** (`prompts/list`, `prompts/get`) — nodes with `meta.mcp.as: "prompt"` project to MCP prompts. Argument derivation from schema. Built and wired.
+3. **Rich content types** — handler return type drives content type. Projector examines return shape and sets `mimeType` accordingly. Built.
+4. **Transport presets** — `createStdioMcpServer` and `createHttpMcpServer` (with Streamable HTTP) provide one-call MCP server construction. Wired.
+5. **Input validation** — `createMcpServer` validates `tools/call` arguments against each tool's `inputSchema` before handler invocation (`validateAgainstSchema` — checks `required` and `properties[key].type`; returns error on missing required fields or type mismatch). Built.
 
-Tier 1 — DONE. Resources, prompts (natural extensions of tree→projection),
-and rich content types (handler return type drives content type) are built and
-wired. Transport presets (`createStdioMcpServer`, `createHttpMcpServer`)
-convenience wrappers are built. Design decisions remain settled; implementation
-roadmap for Tier 2–3 follows:
+Design decisions remain settled (below); implementation roadmap for Tier 2–3 follows:
 
 ### Design decisions (settled)
 
@@ -96,6 +94,17 @@ roadmap for Tier 2–3 follows:
 1. Sampling.
 2. Roots.
 3. Subscriptions (change notifications for resources).
+
+## Type-ir additions — four new kinds — DONE (2026-07-18)
+
+**Four new type kinds** added to `packages/type-ir` to round out the structural vocabulary:
+
+1. **`instance` kind** — purely nominal: `{ className, source }`. No structure, no fields. Used to mark the concrete side of `instanceof` checks. Extracted from class types by the extractor.
+2. **`function` kind** — `{ params, returnType, thisType? }`. Standalone callables, callbacks, higher-order function types. Represents a function signature without belonging to a type's contract.
+3. **`method` kind** — subtype of `function`. Belongs to a type's contract, not standalone. Extracted from class methods and attached to the parent type.
+4. **`interface` kind** — `{ methods: Record<string, TypeRef> }`. The callable surface of a type. Maps to protobuf `service`, capnp `interface`. Attached to instance TypeRefs via `meta.interface`.
+
+**Projector updates (2026-07-18):** All 21+ projectors across all format targets (JSON Schema, OpenAPI, TypeScript, SQL, Protobuf, Cap'n Proto, JTD, JSDoc, 9 validator libraries) updated to handle the four new kinds. The extractor (`packages/api-tree/src/extract.ts`, moved from `type-ir` 2026-07-18) updated: classes now project to `instance` (nominal) + methods extracted as `method` TypeRefs + `interface` attached via meta. Round-trip tested; codegen output byte-identical to baseline.
 
 ## Session wrap-up: DX build-out + extractor rewrite — DONE (2026-07-18)
 
@@ -281,7 +290,15 @@ These are starting context for a future session, not a task list. Each points at
 the design docs for detail rather than restating them; verify each is still live
 before acting.
 
-### New threads from the 2026-07-18 proxies/codegen session
+### New threads from the 2026-07-18 MCP + type-ir session
+
+- **Input pipeline wiring** — `assemble()` is now in core, but CLI and MCP still have their own implementations. Wire both to use the shared one. Scope: CLI needs env/config/stdin stores; MCP needs argument/uri-variable/session-context stores.
+- **MCP Tier 2: Logging + streaming/progress** — Needs `notifications/message` + log-level negotiation, and handler context design: how do handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr)? This is a separate design from input extraction.
+- **MCP Tier 3: Sampling, roots, subscriptions** — Speculative; needs concrete use case before building.
+- **Type-ir semantic types cleanup** — Current kind groupings (core structurals/universals vs. optional semantics extensions) work but designed quickly. Revisit composition, naming consistency, and granularity once the extension API gets broader consumers beyond wire-numerics/temporal/common.
+- **Handler context as a design concept** — Transport-level capabilities pushed into handlers. Separate concern from input extraction. Design needed: what shape does this take, how does it compose, does it need a test harness?
+
+### Previous threads from the 2026-07-18 proxies/codegen session
 
 - **TypeRef semantic types cleanup** — the current type-kind groupings in
   `packages/type-ir/src/kinds/*.ts` work but were designed quickly. Candidates
