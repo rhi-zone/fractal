@@ -102,6 +102,13 @@ describe("object", () => {
   })
 })
 
+describe("instance", () => {
+  test("emits z.instanceof(className), ignoring fields", () => {
+    const ref = t(types.instance("User", "src/user.ts", { name: t(types.string) }))
+    expect(toZod(ref)).toBe("z.instanceof(User)")
+  })
+})
+
 describe("array", () => {
   test("element type", () => {
     const ref = t(types.array(t(types.integer)))

@@ -234,7 +234,7 @@ export function columnDef(name: string, col: SqlColumn): string {
 }
 
 export function toCreateTable(tableName: string, ref: TypeRef, opts?: { dialect?: SqlDialect }): string {
-  if (ref.shape.kind !== "object") throw new Error(`toCreateTable requires an object type, got "${ref.shape.kind}"`)
+  if (!isA(ref.shape.kind, "object")) throw new Error(`toCreateTable requires an object type, got "${ref.shape.kind}"`)
   const s = ref.shape as TypeShape & { kind: "object" }
   const columns = Object.entries(s.fields).map(([name, field]) => columnDef(name, toSqlDdl(field, opts)))
   return `CREATE TABLE ${tableName} (\n  ${columns.join(",\n  ")}\n);`

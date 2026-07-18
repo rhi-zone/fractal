@@ -15,6 +15,20 @@ export interface TypeKinds {
   unknown: { readonly kind: "unknown" }
   never: { readonly kind: "never" }
   object: { readonly kind: "object"; readonly fields: Readonly<Record<string, TypeRef>> }
+  // A class instance — structurally an object (`fields` is the same public-field
+  // shape `object` carries, so any projector without an explicit `instance`
+  // handler falls back to its `object` handler via the parent chain below and
+  // still renders correctly) plus the class identity (`className`/`source`)
+  // that plain `object` discards. Extractors that can see a class declaration
+  // (e.g. api-tree's TS extractor) emit this instead of `object` so identity
+  // survives into projection; projectors that care (Zod's `z.instanceof`) read
+  // `className`, and everyone else just reads `fields`.
+  instance: {
+    readonly kind: "instance"
+    readonly className: string
+    readonly source: string
+    readonly fields: Readonly<Record<string, TypeRef>>
+  }
   array: { readonly kind: "array"; readonly element: TypeRef }
   tuple: { readonly kind: "tuple"; readonly elements: readonly TypeRef[] }
   map: { readonly kind: "map"; readonly key: TypeRef; readonly value: TypeRef }
@@ -42,6 +56,8 @@ const parents: Record<string, string | null> = {
   unknown: null,
   never: null,
   object: null,
+  // Structurally an object — see the TypeKinds.instance doc comment above.
+  instance: "object",
   array: null,
   tuple: null,
   map: null,
@@ -91,6 +107,8 @@ export const types = {
   unknown: { kind: "unknown" } as const,
   never: { kind: "never" } as const,
   object: (fields: Record<string, TypeRef>) => ({ kind: "object", fields }) as const,
+  instance: (className: string, source: string, fields: Record<string, TypeRef>) =>
+    ({ kind: "instance", className, source, fields }) as const,
   array: (element: TypeRef) => ({ kind: "array", element }) as const,
   tuple: (elements: readonly TypeRef[]) => ({ kind: "tuple", elements }) as const,
   map: (key: TypeRef, value: TypeRef) => ({ kind: "map", key, value }) as const,

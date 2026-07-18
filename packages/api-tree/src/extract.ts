@@ -475,6 +475,15 @@ export function typeRefFromType(
           : fieldRef
     }
 
+    // Class instances: a symbol with a ts.ClassDeclaration among its
+    // declarations is a class, not a plain object literal type — lower to
+    // `types.instance` so the class's identity (name + declaring file)
+    // survives extraction instead of being discarded as a bag of fields.
+    const classDecl = type.symbol?.declarations?.find(ts.isClassDeclaration)
+    if (classDecl && type.symbol) {
+      return t(types.instance(type.symbol.name, classDecl.getSourceFile().fileName, fields))
+    }
+
     return t(types.object(fields))
   }
 

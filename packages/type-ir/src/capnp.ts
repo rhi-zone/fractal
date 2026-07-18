@@ -1,4 +1,8 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+
+function isA(kind: string, target: string): boolean {
+  return kind === target || ancestors(kind).includes(target)
+}
 
 // Cap'n Proto schema language: https://capnproto.org/language.html
 export type CapnpStruct = {
@@ -98,13 +102,13 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
     const description: { description: string } | Record<string, never> =
       typeof fieldRef.meta.description === "string" ? { description: fieldRef.meta.description } : {}
-    if (fieldRef.shape.kind === "object") {
+    if (isA(fieldRef.shape.kind, "object")) {
       const nestedName = capitalize(fieldName)
       nestedStructs.push(toCapnpStruct(nestedName, fieldRef))
       fields.push({ name: fieldName, type: nestedName, ordinal, ...description })
     } else if (
       fieldRef.shape.kind === "array" &&
-      (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "object"
+      isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
     ) {
       const nestedName = capitalize(fieldName)
       const element = (fieldRef.shape as TypeShape & { kind: "array" }).element

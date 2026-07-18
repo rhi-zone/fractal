@@ -132,7 +132,7 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "intersection" }
     const [first, ...rest] = s.members
     if (first === undefined) return "S.Unknown"
-    if (s.members.every((member) => member.shape.kind === "object")) {
+    if (s.members.every((member) => isA(member.shape.kind, "object"))) {
       return rest.reduce((acc, member) => `S.extend(${acc}, ${toEffectSchema(member)})`, toEffectSchema(first))
     }
     return toEffectSchema(first)

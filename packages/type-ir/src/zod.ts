@@ -77,6 +77,15 @@ const handlers: Record<string, Converter> = {
     })
     return `z.object({ ${fields.join(", ")} })`
   },
+  // https://zod.dev/?id=instanceof — `z.instanceof(Class)` checks the runtime
+  // prototype chain rather than validating structurally, so it needs the
+  // actual class reference in scope, not just its name. The caller (whatever
+  // assembles this emitted source into a module) is responsible for ensuring
+  // `className` is imported from `source` alongside `zod`.
+  instance: (shape) => {
+    const s = shape as TypeShape & { kind: "instance" }
+    return `z.instanceof(${s.className})`
+  },
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }
     return `z.array(${toZod(s.element)})`

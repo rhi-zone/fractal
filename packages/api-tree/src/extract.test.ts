@@ -458,10 +458,12 @@ describe("typeRefFromType gap fixes", () => {
     expect(ref.shape.kind).toBe("object")
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
     const owner = fields.owner!
-    expect(owner.shape.kind).toBe("object")
-    const ownerFields = (owner.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(Object.keys(ownerFields)).toEqual(["name"])
-    expect(ownerFields.name?.shape.kind).toBe("string")
+    expect(owner.shape.kind).toBe("instance")
+    const ownerShape = owner.shape as { kind: "instance"; className: string; source: string; fields: Record<string, TypeRef> }
+    expect(ownerShape.className).toBe("SampleClass")
+    expect(ownerShape.source).toContain("typeref.fixture.ts")
+    expect(Object.keys(ownerShape.fields)).toEqual(["name"])
+    expect(ownerShape.fields.name?.shape.kind).toBe("string")
   })
 
   it("unwraps a nested Promise<T> field to T's TypeRef", () => {

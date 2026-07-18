@@ -1,4 +1,8 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+
+function isA(kind: string, target: string): boolean {
+  return kind === target || ancestors(kind).includes(target)
+}
 
 // Proto3 language spec: https://protobuf.dev/programming-guides/proto3/
 export type ProtoField = {
@@ -136,13 +140,13 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
       fieldRef.meta.deprecated === true ? { deprecated: true } : {}
     const description: { description: string } | Record<string, never> =
       typeof fieldRef.meta.description === "string" ? { description: fieldRef.meta.description } : {}
-    if (fieldRef.shape.kind === "object") {
+    if (isA(fieldRef.shape.kind, "object")) {
       const nestedName = capitalize(fieldName)
       nestedMessages.push(toProtoMessage(nestedName, fieldRef))
       fields.push({ name: fieldName, field: { type: nestedName, repeated: false, optional, ...deprecated, ...description }, number })
     } else if (
       fieldRef.shape.kind === "array" &&
-      (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "object"
+      isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
     ) {
       const nestedName = capitalize(fieldName)
       const element = (fieldRef.shape as TypeShape & { kind: "array" }).element

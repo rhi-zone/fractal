@@ -14,6 +14,10 @@ describe("ancestors", () => {
   test("root type has no ancestors", () => {
     expect(ancestors("boolean")).toEqual([])
   })
+
+  test("instance falls back to object", () => {
+    expect(ancestors("instance")).toEqual(["object"])
+  })
 })
 
 describe("resolve", () => {
@@ -81,5 +85,23 @@ describe("TypeRef construction", () => {
 
   test("intersection is a root kind with no ancestors", () => {
     expect(ancestors("intersection")).toEqual([])
+  })
+
+  test("builds an instance carrying class identity alongside fields", () => {
+    const ref = t(types.instance("User", "src/user.ts", { name: t(types.string) }))
+    expect(ref.shape).toEqual({
+      kind: "instance",
+      className: "User",
+      source: "src/user.ts",
+      fields: { name: { shape: { kind: "string" }, meta: {} } },
+    })
+  })
+
+  test("resolve falls back from instance to object handler (structural compatibility)", () => {
+    const ref = t(types.instance("User", "src/user.ts", { name: t(types.string) }))
+    const handler = resolve(ref.shape.kind, {
+      object: (shape: { kind: string; fields: Record<string, unknown> }) => Object.keys(shape.fields),
+    })
+    expect(handler).toBeDefined()
   })
 })

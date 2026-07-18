@@ -33,7 +33,7 @@ function runtimeGuard(ref: TypeRef): string {
   }
   if (kind === "null") return "value === null"
   if (kind === "array" || kind === "tuple") return "Array.isArray(value)"
-  if (kind === "object" || kind === "map") return `typeof value === "object" && value !== null && !Array.isArray(value)`
+  if (kind === "object" || kind === "instance" || kind === "map") return `typeof value === "object" && value !== null && !Array.isArray(value)`
   if (isA(kind, "string")) return `typeof value === "string"`
   if (isA(kind, "number")) return `typeof value === "number"`
   if (kind === "boolean") return `typeof value === "boolean"`
@@ -144,7 +144,7 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "intersection" }
     const [first, ...rest] = s.members
     if (first === undefined) return "yup.mixed()"
-    if (s.members.every((member) => member.shape.kind === "object")) {
+    if (s.members.every((member) => isA(member.shape.kind, "object"))) {
       return rest.reduce((acc, member) => `${acc}.concat(${toYup(member)})`, toYup(first))
     }
     return toYup(first)
