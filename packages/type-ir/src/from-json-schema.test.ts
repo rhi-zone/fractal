@@ -140,6 +140,23 @@ describe("tuple", () => {
     }
     expect(fromJsonSchema(schema)).toEqual(t(types.tuple([t(types.string), t(types.integer)])))
   })
+
+  test("draft-04/07 array-form items", () => {
+    const schema = {
+      type: "array",
+      items: [{ type: "string" }, { type: "number" }],
+    }
+    expect(fromJsonSchema(schema)).toEqual(t(types.tuple([t(types.string), t(types.number)])))
+  })
+
+  test("prefixItems takes precedence over array-form items when both present", () => {
+    const schema = {
+      type: "array",
+      prefixItems: [{ type: "string" }, { type: "integer" }],
+      items: [{ type: "boolean" }],
+    }
+    expect(fromJsonSchema(schema)).toEqual(t(types.tuple([t(types.string), t(types.integer)])))
+  })
 })
 
 describe("map", () => {

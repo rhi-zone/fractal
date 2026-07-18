@@ -116,6 +116,11 @@ function fromArray(schema: JsonSchema): TypeRef {
   }
 
   const items = schema.items
+  // Draft-04/07 array-form `items` — the pre-2020-12 tuple syntax.
+  if (Array.isArray(items)) {
+    return t(types.tuple((items as JsonSchema[]).map(fromJsonSchema)))
+  }
+
   if (items !== undefined && typeof items === "object" && items !== null) {
     return t(types.array(fromJsonSchema(items as JsonSchema)))
   }
