@@ -55,6 +55,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import type {
   CallToolResult,
+  ContentBlock,
   GetPromptResult,
   Implementation,
   ReadResourceResult,
@@ -153,6 +154,88 @@ export function validateAgainstSchema(
   }
 
   return errors.length === 0 ? { valid: true } : { valid: false, errors }
+}
+
+// ============================================================================
+// Rich content pass-through (tool call results, resource read results)
+// ============================================================================
+//
+// A handler's return value drives the MCP content type it becomes: a plain
+// value (string/number/object/array with no recognizable MCP content shape)
+// is wrapped as `{ type: "text", ... }` for backward compatibility, but a
+// value that already looks like MCP content (or an array of such values) is
+// passed through untouched — this is how a handler returns an image, audio,
+// or embedded resource instead of having everything flattened to JSON text.
+
+/** MCP content-block `type` discriminator values recognized for pass-through. */
+const MCP_CONTENT_TYPES = new Set(["text", "image", "audio", "resource"])
+
+/**
+ * True when `value` is a plain object whose `type` field is one of the
+ * recognized MCP content-block discriminators, with the fields that
+ * discriminator requires present (and of the right basic shape) — not just
+ * a coincidental `type: "text"` on an unrelated object. Used to decide
+ * whether a handler's return value is already MCP content (pass through)
+ * or a plain value (wrap as text).
+ */
+function isMcpContentBlock(value: unknown): value is ContentBlock {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  const type = (value as { type?: unknown }).type
+  if (typeof type !== "string" || !MCP_CONTENT_TYPES.has(type)) return false
+
+  const v = value as Record<string, unknown>
+  switch (type) {
+    case "text":
+      return typeof v.text === "string"
+    case "image":
+    case "audio":
+      return typeof v.data === "string" && typeof v.mimeType === "string"
+    case "resource":
+      return typeof v.resource === "object" && v.resource !== null && typeof (v.resource as { uri?: unknown }).uri === "string"
+    default:
+      return false
+  }
+}
+
+/**
+ * Decide the `content` array for a `tools/call` result from a handler's raw
+ * return value: an already-MCP-shaped value (or array of them) passes
+ * through as-is; anything else is wrapped as a single text block, matching
+ * the previous always-JSON.stringify behavior (with a string value used
+ * verbatim instead of being double-stringified).
+ */
+export function toCallToolContent(result: unknown): ContentBlock[] {
+  if (Array.isArray(result) && result.length > 0 && result.every(isMcpContentBlock)) {
+    return result
+  }
+  if (isMcpContentBlock(result)) {
+    return [result]
+  }
+  return [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result) }]
+}
+
+/** Resource content shape produced for a `resources/read` result. */
+type ResourceContentEntry =
+  | { uri: string; mimeType: string; text: string }
+  | { uri: string; mimeType: string; blob: string }
+
+/**
+ * Decide the single `contents` entry for a `resources/read` result: if the
+ * handler already returned `{ text }` or `{ blob }` (optionally with its own
+ * `mimeType`), use those fields directly; otherwise fall back to
+ * `JSON.stringify`-as-text, matching the previous always-JSON behavior.
+ */
+export function toResourceContent(result: unknown, uri: string, defaultMimeType: string): ResourceContentEntry {
+  if (typeof result === "object" && result !== null && !Array.isArray(result)) {
+    const v = result as Record<string, unknown>
+    if (typeof v.text === "string") {
+      return { uri, mimeType: typeof v.mimeType === "string" ? v.mimeType : defaultMimeType, text: v.text }
+    }
+    if (typeof v.blob === "string") {
+      return { uri, mimeType: typeof v.mimeType === "string" ? v.mimeType : defaultMimeType, blob: v.blob }
+    }
+  }
+  return { uri, mimeType: defaultMimeType, text: JSON.stringify(result) }
 }
 
 export type CreateMcpServerOptions = {
@@ -257,7 +340,7 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
     try {
       const result = await handler(args ?? {})
       return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
+        content: toCallToolContent(result),
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -282,7 +365,7 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       if (fixedHandler !== undefined) {
         const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json"
         const result = await fixedHandler({})
-        return { contents: [{ uri, mimeType, text: JSON.stringify(result) }] }
+        return { contents: [toResourceContent(result, uri, mimeType)] }
       }
 
       for (const template of templateHandlers) {
@@ -293,7 +376,7 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
           input[name] = match[i + 1] as string
         })
         const result = await template.handler(input)
-        return { contents: [{ uri, mimeType: template.mimeType, text: JSON.stringify(result) }] }
+        return { contents: [toResourceContent(result, uri, template.mimeType)] }
       }
 
       throw new McpError(ErrorCode.InvalidParams, `Resource not found: ${uri}`)

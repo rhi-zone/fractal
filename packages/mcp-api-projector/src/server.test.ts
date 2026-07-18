@@ -312,6 +312,132 @@ describe("createMcpServer — prompt capability advertisement", () => {
   })
 })
 
+// ============================================================================
+// 7. Rich content pass-through — tools/call and resources/read
+// ============================================================================
+//
+// A handler's return shape drives the content type: a plain value still
+// wraps as text (backward compat), but a value that already looks like MCP
+// content (or an array of such values) passes through untouched instead of
+// being flattened to JSON text.
+
+const richContentTree = api_({
+  plain: op((_: unknown) => ({ id: "1", name: "Alice" })),
+  str: op((_: unknown) => "hello world"),
+  image: op((_: unknown) => ({ type: "image", data: "YWJj", mimeType: "image/png" })),
+  multi: op((_: unknown) => [
+    { type: "text", text: "first" },
+    { type: "text", text: "second" },
+  ]),
+  coincidentalType: op((_: unknown) => ({ type: "widget", name: "not-mcp-content" })),
+})
+
+async function connectedRichContentClient() {
+  const server = createMcpServer(richContentTree, { name: "rich-content-server", version: "1.0.0" })
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: "test-client", version: "1.0.0" })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  return { server, client }
+}
+
+describe("createMcpServer — tools/call rich content", () => {
+  it("a plain object return value still wraps as a JSON text block (backward compat)", async () => {
+    const { client } = await connectedRichContentClient()
+    const result = await client.callTool({ name: "plain", arguments: {} })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content).toHaveLength(1)
+    expect(content[0]!.type).toBe("text")
+    expect(JSON.parse(content[0]!.text)).toEqual({ id: "1", name: "Alice" })
+  })
+
+  it("a string return value becomes text content verbatim, not double-stringified", async () => {
+    const { client } = await connectedRichContentClient()
+    const result = await client.callTool({ name: "str", arguments: {} })
+
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content).toHaveLength(1)
+    expect(content[0]!.text).toBe("hello world")
+    expect(content[0]!.text).not.toBe(JSON.stringify("hello world"))
+  })
+
+  it("a handler returning an image content object passes through untouched", async () => {
+    const { client } = await connectedRichContentClient()
+    const result = await client.callTool({ name: "image", arguments: {} })
+
+    expect(result.content).toEqual([{ type: "image", data: "YWJj", mimeType: "image/png" }])
+  })
+
+  it("a handler returning an array of content items passes through as multiple content entries", async () => {
+    const { client } = await connectedRichContentClient()
+    const result = await client.callTool({ name: "multi", arguments: {} })
+
+    expect(result.content).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: "second" },
+    ])
+  })
+
+  it("an object with a coincidental non-MCP `type` field still gets wrapped as text (no false positive)", async () => {
+    const { client } = await connectedRichContentClient()
+    const result = await client.callTool({ name: "coincidentalType", arguments: {} })
+
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content).toHaveLength(1)
+    expect(content[0]!.type).toBe("text")
+    expect(JSON.parse(content[0]!.text)).toEqual({ type: "widget", name: "not-mcp-content" })
+  })
+})
+
+const richResourceTree = api_({
+  plainResource: op((_: unknown) => ({ theme: "dark" }), {
+    mcp: { as: "resource", mimeType: "application/json" },
+  }),
+  textResource: op((_: unknown) => ({ text: "raw text content", mimeType: "text/plain" }), {
+    mcp: { as: "resource" },
+  }),
+  blobResource: op((_: unknown) => ({ blob: "YWJj" }), {
+    mcp: { as: "resource" },
+  }),
+})
+
+async function connectedRichResourceClient() {
+  const server = createMcpServer(richResourceTree, { name: "rich-resource-server", version: "1.0.0" })
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: "test-client", version: "1.0.0" })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  return { server, client }
+}
+
+describe("createMcpServer — resources/read rich content", () => {
+  it("a plain object return value still wraps as JSON text (backward compat)", async () => {
+    const { client } = await connectedRichResourceClient()
+    const result = await client.readResource({ uri: "resource://plainResource" })
+
+    const content = result.contents[0] as { text: string; mimeType?: string }
+    expect(JSON.parse(content.text)).toEqual({ theme: "dark" })
+    expect(content.mimeType).toBe("application/json")
+  })
+
+  it("a handler returning { text, mimeType } directly uses those fields instead of JSON.stringify", async () => {
+    const { client } = await connectedRichResourceClient()
+    const result = await client.readResource({ uri: "resource://textResource" })
+
+    const content = result.contents[0] as { text: string; mimeType?: string }
+    expect(content.text).toBe("raw text content")
+    expect(content.mimeType).toBe("text/plain")
+  })
+
+  it("a handler returning { blob } directly uses the blob field", async () => {
+    const { client } = await connectedRichResourceClient()
+    const result = await client.readResource({ uri: "resource://blobResource" })
+
+    const content = result.contents[0] as { blob: string }
+    expect(content.blob).toBe("YWJj")
+  })
+})
+
 describe("createMcpServer — input validation", () => {
   it("valid input passes through to the handler", async () => {
     const { client } = await connectedValidatedClient()
