@@ -13,6 +13,23 @@ export type CapnpStruct = {
   description?: string
 }
 
+// Cap'n Proto interfaces (§ "Interfaces": https://capnproto.org/language.html#interfaces)
+// — `methodName @N (param :Type, ...) -> (result :Type, ...);`. Cap'n Proto
+// natively supports multiple named results; this projector always emits at
+// most one, named `result` (a `void`-returning method emits `-> ()`).
+export type CapnpMethod = {
+  name: string
+  ordinal: number
+  params: Array<{ name: string; type: string }>
+  results: Array<{ name: string; type: string }>
+}
+
+export type CapnpInterface = {
+  name: string
+  methods: CapnpMethod[]
+  description?: string
+}
+
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
 
 const leaf =
@@ -82,8 +99,17 @@ const handlers: Record<string, Converter> = {
     return first === undefined ? "AnyPointer" : toCapnpType(first)
   },
   // Cap'n Proto has no callable-type construct — degrades honestly to
-  // AnyPointer, same as `instance` above.
+  // AnyPointer, same as `instance` above. (`method` falls back here too via
+  // `registerParent` for the field-position case; the real encoding of a
+  // method surface is `toCapnpInterface` below, which is Cap'n Proto's own
+  // native `interface` construct — https://capnproto.org/language.html#interfaces.)
   function: leaf("AnyPointer"),
+  // Cap'n Proto's `interface` (https://capnproto.org/language.html#interfaces)
+  // is a top-level declaration, not a field type — a service surface embedded
+  // in field position has no construct to degrade to, so this falls back to
+  // AnyPointer same as `function`/`instance` above. `toCapnpInterface` is the
+  // real encoding, used when an `interface` TypeRef is a top-level declaration.
+  interface: leaf("AnyPointer"),
 }
 
 export function toCapnpType(ref: TypeRef): string {
@@ -154,6 +180,37 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
   return result
 }
 
+/**
+ * Lower an `interface` TypeRef (a service's method surface) to a
+ * `CapnpInterface` — Cap'n Proto's own native construct for exactly this
+ * (unlike protobuf, which has no direct params->message-type mapping and
+ * needs synthesized wrapper messages, Cap'n Proto's `interface` methods take
+ * named params and return named results directly, so no wrapper structs are
+ * needed here).
+ */
+export function toCapnpInterface(name: string, ref: TypeRef): CapnpInterface {
+  const shape = ref.shape as TypeShape & { kind: "interface" }
+  const methods: CapnpMethod[] = []
+  let ordinal = 0
+
+  for (const [methodName, methodRef] of Object.entries(shape.methods)) {
+    const m = methodRef.shape as TypeShape & {
+      kind: "method" | "function"
+      params: readonly { name: string; type: TypeRef }[]
+      returnType: TypeRef
+    }
+    const params = m.params.map((p) => ({ name: p.name, type: toCapnpType(p.type) }))
+    const isVoid = m.returnType.shape.kind === "void"
+    const results = isVoid ? [] : [{ name: "result", type: toCapnpType(m.returnType) }]
+    methods.push({ name: methodName, ordinal, params, results })
+    ordinal++
+  }
+
+  const result: CapnpInterface = { name, methods }
+  if (typeof ref.meta.description === "string") result.description = ref.meta.description
+  return result
+}
+
 function renderField(field: CapnpStruct["fields"][number], indent: string): string[] {
   const lines: string[] = []
   // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
@@ -187,12 +244,34 @@ function renderStruct(struct: CapnpStruct, depth: number): string[] {
   return lines
 }
 
-export function renderCapnp(structs: CapnpStruct[], id?: string): string {
+function renderMethodLine(method: CapnpMethod, indent: string): string {
+  const params = method.params.map((p) => `${p.name} :${p.type}`).join(", ")
+  const results = method.results.map((r) => `${r.name} :${r.type}`).join(", ")
+  return `${indent}${method.name} @${method.ordinal} (${params}) -> (${results});`
+}
+
+function renderInterface(iface: CapnpInterface, depth: number): string[] {
+  const indent = "  ".repeat(depth)
+  const inner = "  ".repeat(depth + 1)
+  const lines: string[] = []
+  // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
+  // comments immediately above the interface are the idiomatic convention.
+  if (typeof iface.description === "string") lines.push(`${indent}# ${iface.description}`)
+  lines.push(`${indent}interface ${iface.name} {`)
+  for (const method of iface.methods) lines.push(renderMethodLine(method, inner))
+  lines.push(`${indent}}`)
+  return lines
+}
+
+export function renderCapnp(structs: CapnpStruct[], id?: string, interfaces: CapnpInterface[] = []): string {
   // File ID (§ "Files"): every .capnp file must declare a unique @0x... identifier.
   const header = id !== undefined ? `@${id};` : "# @0x... (assign a unique ID)"
   const lines = [header, ""]
   for (const struct of structs) {
     lines.push(...renderStruct(struct, 0), "")
+  }
+  for (const iface of interfaces) {
+    lines.push(...renderInterface(iface, 0), "")
   }
   return `${lines.join("\n").trimEnd()}\n`
 }

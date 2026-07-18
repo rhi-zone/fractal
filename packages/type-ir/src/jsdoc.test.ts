@@ -489,3 +489,26 @@ describe("function", () => {
     expect(toJsDocType(ref)).toBe("function(number): void")
   })
 })
+
+describe("method", () => {
+  test("falls back to function(...) syntax via registerParent", () => {
+    const ref = t(types.method([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toJsDocType(ref)).toBe("function(number): string")
+  })
+})
+
+describe("interface", () => {
+  test("emits an object-literal type with each method's function(...) type", () => {
+    const ref = t(
+      types.interface({
+        deposit: t(types.method([{ name: "amount", type: t(types.number) }], t(types.void))),
+      }),
+    )
+    expect(toJsDocType(ref)).toBe("{deposit: function(number): void}")
+  })
+
+  test("emits an empty-map fallback for an interface with no methods", () => {
+    const ref = t(types.interface({}))
+    expect(toJsDocType(ref)).toBe("Object.<string, function()>")
+  })
+})

@@ -98,6 +98,60 @@ function functionRefFromSignature(
   return t(types.function(params, returnType, thisType))
 }
 
+/**
+ * Lower a class method's call signature to a `types.method` TypeRef (not
+ * `types.function` — a method belongs to the class's contract, not a
+ * standalone callable; see type-ir's TypeKinds.method doc comment).
+ * `thisType` is always the class's own `types.instance` ref, passed in
+ * explicitly rather than read off `sig.thisParameter` — a method's `this` is
+ * always its declaring class, whether or not the signature carries an
+ * explicit `this` parameter.
+ */
+function methodRefFromSignature(
+  sig: ts.Signature,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+  thisType: TypeRef,
+): TypeRef {
+  const params = sig.getParameters().map((param) => ({
+    name: param.name,
+    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen),
+  }))
+  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen)
+  return t(types.method(params, returnType, thisType))
+}
+
+/**
+ * A class's method surface as a `Record<name, TypeRef>` (each a
+ * `types.method`), for building a `types.interface` alongside the class's
+ * `types.instance`. A property counts as a method when its own declaration is
+ * a `ts.MethodDeclaration`, OR — for arrow-function class properties (`foo =
+ * (x: number) => void`, declared as a `PropertyDeclaration`, not a
+ * `MethodDeclaration`) — when its resolved type carries a call signature.
+ * Private/protected members are skipped (the method surface is public API,
+ * same convention as the object-field extraction loop below).
+ */
+function methodsFromClassType(
+  type: ts.Type,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+  thisType: TypeRef,
+): Record<string, TypeRef> {
+  const methods: Record<string, TypeRef> = {}
+  for (const prop of checker.getPropertiesOfType(type)) {
+    if (isPrivateOrProtected(prop)) continue
+    const isMethodDecl = (prop.declarations ?? []).some(ts.isMethodDeclaration)
+    const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
+    const [sig] = checker.getSignaturesOfType(propType, ts.SignatureKind.Call)
+    if (!isMethodDecl && !sig) continue
+    if (!sig) continue
+    methods[prop.name] = methodRefFromSignature(sig, checker, loc, seen, thisType)
+  }
+  return methods
+}
+
 /** True for symbols with at least one private/protected declaration. */
 function isPrivateOrProtected(prop: ts.Symbol): boolean {
   return (prop.declarations ?? []).some((decl) => {
@@ -481,7 +535,23 @@ export function typeRefFromType(
     // it as plain data). No need to walk `properties` for this case.
     const classDecl = type.symbol?.declarations?.find(ts.isClassDeclaration)
     if (classDecl && type.symbol) {
-      return t(types.instance(type.symbol.name, classDecl.getSourceFile().fileName))
+      const instanceRef = t(types.instance(type.symbol.name, classDecl.getSourceFile().fileName))
+
+      // The class's method surface, if any, is its other half (see
+      // TypeKinds.instance's doc comment in type-ir/src/index.ts: "a class's
+      // fields are only half its surface — methods are the other half").
+      // There's no separate multi-declaration output channel here (extraction
+      // yields one TypeRef per type), so the `interface` TypeRef rides along
+      // as `meta.interface` — an open-metadata-bag attachment (CLAUDE.md:
+      // "open metadata bag over fixed schema") rather than a new return shape,
+      // additive and non-breaking for every existing consumer of this
+      // function. `instance` itself stays purely nominal; nothing here adds
+      // fields to it.
+      const methods = methodsFromClassType(type, checker, loc, nextSeen, instanceRef)
+      if (Object.keys(methods).length > 0) {
+        return t(instanceRef.shape, { ...instanceRef.meta, interface: t(types.interface(methods)) })
+      }
+      return instanceRef
     }
 
     const fields: Record<string, TypeRef> = {}

@@ -59,6 +59,11 @@ export class SampleClass {
 /** Class instance type, used as a field to exercise the object branch on it. */
 export type ClassInstanceField = { owner: SampleClass }
 
+/** A class with fields only, no methods — meta.interface should be absent. */
+export class NoMethodClass {
+  public name: string = ""
+}
+
 // ── Callable/function type fixtures ─────────────────────────────────────────
 
 /** A field whose type is a callback — lowers to types.function, not punted. */

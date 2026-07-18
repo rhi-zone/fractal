@@ -52,6 +52,33 @@ export interface TypeKinds {
     readonly returnType: TypeRef
     readonly thisType?: TypeRef
   }
+  // A callable that belongs to a type's contract — not a standalone callable
+  // (that's `function`), but the shape of one entry in a service/interface's
+  // method surface. Same fields as `function` (params/returnType/thisType)
+  // because a method IS a callable; `registerParent("method", "function")`
+  // below means any projector without an explicit `method` handler falls back
+  // to its `function` handler automatically (see `resolve`). Kept distinct
+  // from `function` so projectors that DO care about the difference (protobuf
+  // RPCs, Cap'n Proto interface methods, TypeScript method-signature syntax
+  // vs. arrow-function syntax) can special-case it.
+  method: {
+    readonly kind: "method"
+    readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
+    readonly returnType: TypeRef
+    readonly thisType?: TypeRef
+  }
+  // A type that carries methods — the equivalent of Protobuf's `service` or
+  // Cap'n Proto's `interface`: not data, a contract of callable operations.
+  // Structural (no name of its own — naming is a declaration concern, same as
+  // `object`). `methods` are TypeRefs, typically (but not necessarily) of
+  // `method` kind. Deliberately NOT a subtype of `object` (see `instance`'s
+  // doc comment above for the parallel reasoning) — an interface's methods
+  // are not `object` fields, and projectors that can't express a service
+  // surface must degrade explicitly rather than silently rendering an object.
+  interface: {
+    readonly kind: "interface"
+    readonly methods: Readonly<Record<string, TypeRef>>
+  }
 }
 
 export type TypeShape = TypeKinds[keyof TypeKinds]
@@ -82,6 +109,11 @@ const parents: Record<string, string | null> = {
   ref: null,
   intersection: null,
   function: null,
+  // A method IS a callable — projectors without an explicit `method` handler
+  // fall back to their `function` handler (see TypeKinds.method doc comment).
+  method: "function",
+  // NOT a subtype of `object` — see TypeKinds.interface doc comment above.
+  interface: null,
 }
 
 export function registerParent(kind: string, parent: string | null): void {
@@ -140,6 +172,15 @@ export const types = {
     thisType === undefined
       ? ({ kind: "function", params, returnType } as const)
       : ({ kind: "function", params, returnType, thisType } as const),
+  method: (
+    params: readonly { name: string; type: TypeRef }[],
+    returnType: TypeRef,
+    thisType?: TypeRef,
+  ) =>
+    thisType === undefined
+      ? ({ kind: "method", params, returnType } as const)
+      : ({ kind: "method", params, returnType, thisType } as const),
+  interface: (methods: Record<string, TypeRef>) => ({ kind: "interface", methods }) as const,
 }
 
 export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial, deepRequired } from "./derive.ts"

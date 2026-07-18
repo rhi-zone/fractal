@@ -93,6 +93,30 @@ const handlers: Record<string, Converter> = {
     const params = [...thisParam, ...s.params.map((p) => `${p.name}: ${toTypeScript(p.type)}`)]
     return `(${params.join(", ")}) => ${toTypeScript(s.returnType)}`
   },
+  // `method` has no explicit entry here for the *standalone* case — falls
+  // back to the `function` handler above (arrow-function syntax) via
+  // `registerParent("method", "function")`. The `interface` handler below
+  // renders each method with method-signature syntax instead, since that's
+  // the idiomatic TS form for a method living inside an object/interface type.
+  //
+  // https://www.typescriptlang.org/docs/handbook/2/objects.html#method-syntax —
+  // `{ methodName(params): ReturnType }` — distinct from the arrow-function
+  // field syntax (`{ methodName: (params) => ReturnType }`) that the generic
+  // `function` handler emits, and the idiomatic form once a callable belongs
+  // to an object/interface's own member list rather than being a value in
+  // type position.
+  interface: (shape) => {
+    const s = shape as TypeShape & { kind: "interface" }
+    const methods = Object.entries(s.methods).map(([name, methodRef]) => {
+      const m = methodRef.shape as TypeShape & { kind: "method" | "function" }
+      if (m.params === undefined || m.returnType === undefined) {
+        return `${name}(): ${toTypeScript(methodRef)}`
+      }
+      const params = m.params.map((p) => `${p.name}: ${toTypeScript(p.type)}`)
+      return `${name}(${params.join(", ")}): ${toTypeScript(m.returnType)}`
+    })
+    return `{ ${methods.join("; ")} }`
+  },
 }
 
 export function toTypeScript(ref: TypeRef): string {

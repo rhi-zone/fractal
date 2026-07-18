@@ -141,6 +141,11 @@ const handlers: Record<string, Converter> = {
   // OAS 3.0 has no callable-type concept — same vendor-extension degradation
   // as json-schema.ts's `x-function`.
   function: leaf({ "x-function": true }),
+  // Same degrade as `function`, distinguished by `x-method: true`.
+  method: leaf({ "x-method": true }),
+  // OAS 3.0 has no service/interface-with-methods concept — degrade to an
+  // untyped object schema carrying `x-interface: true`.
+  interface: leaf({ type: "object", "x-interface": true }),
 }
 
 export function toOpenApi30(ref: TypeRef): OpenApi30Schema {

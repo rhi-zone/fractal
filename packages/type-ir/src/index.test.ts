@@ -138,4 +138,69 @@ describe("TypeRef construction", () => {
   test("function is a root kind with no ancestors", () => {
     expect(ancestors("function")).toEqual([])
   })
+
+  test("builds a method carrying a thisType", () => {
+    const ref = t(
+      types.method(
+        [{ name: "amount", type: t(types.number) }],
+        t(types.void),
+        t(types.instance("Account", "src/account.ts")),
+      ),
+    )
+    expect(ref.shape).toEqual({
+      kind: "method",
+      params: [{ name: "amount", type: { shape: { kind: "number" }, meta: {} } }],
+      returnType: { shape: { kind: "void" }, meta: {} },
+      thisType: { shape: { kind: "instance", className: "Account", source: "src/account.ts" }, meta: {} },
+    })
+  })
+
+  test("builds a method with no thisType", () => {
+    const ref = t(types.method([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(ref.shape).toEqual({
+      kind: "method",
+      params: [{ name: "x", type: { shape: { kind: "number" }, meta: {} } }],
+      returnType: { shape: { kind: "string" }, meta: {} },
+    })
+    expect((ref.shape as { thisType?: unknown }).thisType).toBeUndefined()
+  })
+
+  test("method's parent is function — a projector without an explicit method handler falls back to it", () => {
+    expect(ancestors("method")).toEqual(["function"])
+    expect(resolve("method", { function: "FUNCTION" })).toBe("FUNCTION")
+    expect(resolve("method", { method: "METHOD", function: "FUNCTION" })).toBe("METHOD")
+  })
+
+  test("builds an interface carrying named method TypeRefs", () => {
+    const ref = t(
+      types.interface({
+        deposit: t(types.method([{ name: "amount", type: t(types.number) }], t(types.void))),
+      }),
+    )
+    expect(ref.shape).toEqual({
+      kind: "interface",
+      methods: {
+        deposit: {
+          shape: {
+            kind: "method",
+            params: [{ name: "amount", type: { shape: { kind: "number" }, meta: {} } }],
+            returnType: { shape: { kind: "void" }, meta: {} },
+          },
+          meta: {},
+        },
+      },
+    })
+  })
+
+  test("interface is a root kind with no ancestors (not a subtype of object)", () => {
+    expect(ancestors("interface")).toEqual([])
+  })
+
+  test("resolve does NOT fall back from interface to an object handler (structural but not object)", () => {
+    const ref = t(types.interface({}))
+    const handler = resolve(ref.shape.kind, {
+      object: (shape: { kind: string; fields: Record<string, unknown> }) => Object.keys(shape.fields),
+    })
+    expect(handler).toBeUndefined()
+  })
 })

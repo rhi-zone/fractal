@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes, date, datetime, duration, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { renderProto, toProtoField, toProtoMessage } from "./protobuf.ts"
+import { renderProto, toProtoField, toProtoMessage, toProtoService } from "./protobuf.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {
@@ -325,5 +325,54 @@ describe("function", () => {
       repeated: false,
       optional: false,
     })
+  })
+})
+
+describe("method", () => {
+  test("as a field, falls back to google.protobuf.Any via registerParent", () => {
+    const ref = t(types.method([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toProtoField(ref)).toEqual({
+      type: "google.protobuf.Any",
+      repeated: false,
+      optional: false,
+    })
+  })
+})
+
+describe("interface -> service (the key use case)", () => {
+  test("toProtoService lowers each method to an RPC with synthesized request/response messages", () => {
+    const ref = t(
+      types.interface({
+        deposit: t(types.method([{ name: "amount", type: t(types.number) }], t(types.void))),
+        getBalance: t(types.method([], t(types.number))),
+      }),
+    )
+    const service = toProtoService("AccountService", ref)
+    expect(service.name).toBe("AccountService")
+    expect(service.rpcs).toEqual([
+      { name: "Deposit", requestType: "DepositRequest", responseType: "DepositResponse" },
+      { name: "GetBalance", requestType: "GetBalanceRequest", responseType: "GetBalanceResponse" },
+    ])
+    expect(service.messages).toEqual([
+      { name: "DepositRequest", fields: [{ name: "amount", field: { type: "double", repeated: false, optional: false }, number: 1 }] },
+      { name: "DepositResponse", fields: [] },
+      { name: "GetBalanceRequest", fields: [] },
+      { name: "GetBalanceResponse", fields: [{ name: "result", field: { type: "double", repeated: false, optional: false }, number: 1 }] },
+    ])
+  })
+
+  test("renderProto renders a service block alongside its synthesized messages", () => {
+    const ref = t(
+      types.interface({
+        deposit: t(types.method([{ name: "amount", type: t(types.number) }], t(types.void))),
+      }),
+    )
+    const service = toProtoService("AccountService", ref)
+    const output = renderProto([], [service])
+    expect(output).toContain("message DepositRequest {")
+    expect(output).toContain("double amount = 1;")
+    expect(output).toContain("message DepositResponse {")
+    expect(output).toContain("service AccountService {")
+    expect(output).toContain("rpc Deposit(DepositRequest) returns (DepositResponse);")
   })
 })

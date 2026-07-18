@@ -246,3 +246,22 @@ describe("function", () => {
     expect(toTypeScript(t(types.array(fn)))).toBe("Array<(x: number) => string>")
   })
 })
+
+describe("method", () => {
+  test("standalone method falls back to arrow-function syntax via registerParent", () => {
+    const ref = t(types.method([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toTypeScript(ref)).toBe("(x: number) => string")
+  })
+})
+
+describe("interface", () => {
+  test("emits method-signature syntax, not arrow-function fields", () => {
+    const ref = t(
+      types.interface({
+        deposit: t(types.method([{ name: "amount", type: t(types.number) }], t(types.void))),
+        balance: t(types.method([], t(types.number))),
+      }),
+    )
+    expect(toTypeScript(ref)).toBe("{ deposit(amount: number): void; balance(): number }")
+  })
+})

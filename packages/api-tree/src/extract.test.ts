@@ -465,6 +465,38 @@ describe("typeRefFromType gap fixes", () => {
     expect(Object.keys(ownerShape)).toEqual(["kind", "className", "source"])
   })
 
+  it("carries the class's method surface as an interface TypeRef in meta.interface, alongside the nominal instance", () => {
+    const ref = typeRefFromType(typeOf("ClassInstanceField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    const owner = fields.owner!
+    expect(owner.shape.kind).toBe("instance")
+
+    const iface = owner.meta.interface as TypeRef
+    expect(iface).toBeDefined()
+    expect(iface.shape.kind).toBe("interface")
+    const methods = (iface.shape as { kind: "interface"; methods: Record<string, TypeRef> }).methods
+    expect(Object.keys(methods)).toEqual(["greet"])
+
+    const greet = methods.greet!
+    expect(greet.shape.kind).toBe("method")
+    const greetShape = greet.shape as {
+      kind: "method"
+      params: readonly { name: string; type: TypeRef }[]
+      returnType: TypeRef
+      thisType?: TypeRef
+    }
+    expect(greetShape.params).toEqual([])
+    expect(greetShape.returnType.shape.kind).toBe("string")
+    expect(greetShape.thisType?.shape.kind).toBe("instance")
+    expect((greetShape.thisType?.shape as { className: string }).className).toBe("SampleClass")
+  })
+
+  it("omits meta.interface entirely for a class with no methods", () => {
+    const ref = typeRefFromType(typeOf("NoMethodClass"), checker, source)
+    expect(ref.shape.kind).toBe("instance")
+    expect(ref.meta.interface).toBeUndefined()
+  })
+
   it("unwraps a nested Promise<T> field to T's TypeRef", () => {
     const ref = typeRefFromType(typeOf("PromiseField"), checker, source)
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields

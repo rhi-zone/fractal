@@ -165,6 +165,12 @@ const handlers: Record<string, Converter> = {
   // json-schema.ts (latest draft) uses: an untyped schema carrying
   // `x-function: true`.
   function: leaf({ "x-function": true }),
+  // Same degrade as `function`, distinguished by `x-method: true` (a
+  // standalone callable vs. one belonging to a type's contract).
+  method: leaf({ "x-method": true }),
+  // draft-04 has no service/interface-with-methods vocabulary either —
+  // degrade to an untyped object schema carrying `x-interface: true`.
+  interface: leaf({ type: "object", "x-interface": true }),
 }
 
 export function toJsonSchema04(ref: TypeRef): JsonSchema04 {

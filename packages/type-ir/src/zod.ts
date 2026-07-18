@@ -140,6 +140,21 @@ const handlers: Record<string, Converter> = {
     const args = s.params.map((p) => toZod(p.type)).join(", ")
     return `z.function().args(${args}).returns(${toZod(s.returnType)})`
   },
+  // `method` has no explicit entry here — `registerParent("method", "function")`
+  // means `resolve()` falls back to the `function` handler above, and Zod's
+  // `z.function()` has no `this`-binding concept either way.
+  //
+  // https://zod.dev/?id=objects — a service surface has no single native Zod
+  // construct, but its methods each have one (`z.function()`, same as
+  // `function`/`method` above), so `z.object({...})` with each method rendered
+  // as a `z.function()` field is the closest faithful encoding: it validates
+  // the shape "an object with these callable members," which is what an
+  // `interface` TypeRef actually asserts.
+  interface: (shape) => {
+    const s = shape as TypeShape & { kind: "interface" }
+    const methods = Object.entries(s.methods).map(([name, method]) => `${quoteKey(name)}: ${toZod(method)}`)
+    return `z.object({ ${methods.join(", ")} })`
+  },
 }
 
 export function toZod(ref: TypeRef): string {

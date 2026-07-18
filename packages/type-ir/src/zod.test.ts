@@ -334,3 +334,30 @@ describe("function", () => {
     expect(toZod(ref)).toBe("z.function().args(z.number()).returns(z.void())")
   })
 })
+
+describe("method", () => {
+  test("falls back to the function handler via registerParent", () => {
+    const ref = t(
+      types.method(
+        [{ name: "amount", type: t(types.number) }],
+        t(types.void),
+        t(types.instance("Account", "src/account.ts")),
+      ),
+    )
+    expect(toZod(ref)).toBe("z.function().args(z.number()).returns(z.void())")
+  })
+})
+
+describe("interface", () => {
+  test("emits z.object with each method as a z.function() field", () => {
+    const ref = t(
+      types.interface({
+        deposit: t(types.method([{ name: "amount", type: t(types.number) }], t(types.void))),
+        balance: t(types.method([], t(types.number))),
+      }),
+    )
+    expect(toZod(ref)).toBe(
+      "z.object({ deposit: z.function().args(z.number()).returns(z.void()), balance: z.function().args().returns(z.number()) })",
+    )
+  })
+})

@@ -145,9 +145,30 @@ const handlers: Record<string, Converter> = {
   // same convention as `instance`'s `x-class-name`) so tooling that cares can
   // still detect the shape was a function.
   function: leaf({ "x-function": true }),
+  // Same degrade as `function`, but carrying `x-method: true` instead of
+  // `x-function: true` so tooling can distinguish "a standalone callable"
+  // from "a callable that belongs to a type's contract" — an explicit entry
+  // rather than relying on the `method` -> `function` parent fallback,
+  // because the distinguishing vendor-extension key is the whole point here.
+  method: leaf({ "x-method": true }),
+  // JSON Schema has no service/interface-with-methods vocabulary either —
+  // degrade to an untyped object schema, carrying `x-interface: true` (same
+  // vendor-extension convention as `x-class-name`/`x-function`/`x-method`).
+  interface: leaf({ type: "object", "x-interface": true }),
 }
 
-const complexKinds = new Set(["object", "instance", "array", "tuple", "map", "union", "intersection", "function"])
+const complexKinds = new Set([
+  "object",
+  "instance",
+  "array",
+  "tuple",
+  "map",
+  "union",
+  "intersection",
+  "function",
+  "method",
+  "interface",
+])
 
 export function toJsonSchema(ref: TypeRef): JsonSchema {
   const converter = resolve(ref.shape.kind, handlers)

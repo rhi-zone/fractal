@@ -23,6 +23,25 @@ export type ProtoMessage = {
   description?: string
 }
 
+// https://protobuf.dev/programming-guides/proto3/#services — a service's RPCs
+// each take exactly one request message and return exactly one response
+// message. `requestMessage`/`responseMessage` are synthesized wrapper
+// messages (gRPC convention: `rpc Foo(FooRequest) returns (FooResponse)`)
+// carrying the method's params/return value, since arbitrary scalar/callable
+// types can't sit directly in an RPC's request/response position.
+export type ProtoRpc = {
+  name: string
+  requestType: string
+  responseType: string
+}
+
+export type ProtoService = {
+  name: string
+  rpcs: ProtoRpc[]
+  messages: ProtoMessage[]
+  description?: string
+}
+
 type ProtoBase = { type: string; repeated?: boolean; mapKey?: string; mapValue?: string }
 
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => ProtoBase
@@ -109,8 +128,19 @@ const handlers: Record<string, Converter> = {
     return first === undefined ? { type: "google.protobuf.Any" } : toProtoField(first)
   },
   // Proto3 has no callable-type construct — degrades honestly to Any, same as
-  // `instance` above.
+  // `instance` above. (`method` falls back here too via `registerParent` —
+  // this fallback only applies when a method TypeRef shows up in ordinary
+  // *field* position; the actual method-as-RPC use case is `toProtoService`
+  // below, which reads `interface.methods` directly rather than going through
+  // this field-type converter.)
   function: leaf("google.protobuf.Any"),
+  // A service surface embedded as a field's type has no proto3 field
+  // construct (`service` is a top-level declaration, not a field type,
+  // per https://protobuf.dev/programming-guides/proto3/#services) — degrades
+  // honestly to Any, same as `function`/`instance` above. The real encoding
+  // of `interface` is `toProtoService`, which emits a `service { rpc ... }`
+  // block from an `interface` TypeRef used as a top-level declaration.
+  interface: leaf("google.protobuf.Any"),
 }
 
 export function toProtoField(ref: TypeRef): ProtoField {
@@ -182,6 +212,49 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
   return message
 }
 
+/**
+ * Lower an `interface` TypeRef (a service's method surface) to a
+ * `ProtoService` — the KEY use case `method`/`interface` were added for
+ * (Cap'n Proto's/Protobuf's own missing "callable contract" vocabulary,
+ * see TypeKinds.interface's doc comment in index.ts). Each method becomes an
+ * RPC; since proto3 RPCs take exactly one request and one response message
+ * (§ "Services"), each method's params are wrapped into a synthesized
+ * `<Method>Request` message (one field per param) and its return type into a
+ * `<Method>Response` message (a single `result` field, or no fields at all
+ * for a `void` return) — the standard gRPC wrapper-message convention.
+ */
+export function toProtoService(name: string, ref: TypeRef): ProtoService {
+  const shape = ref.shape as TypeShape & { kind: "interface" }
+  const rpcs: ProtoRpc[] = []
+  const messages: ProtoMessage[] = []
+
+  for (const [methodName, methodRef] of Object.entries(shape.methods)) {
+    const m = methodRef.shape as TypeShape & { kind: "method" | "function"; params: unknown; returnType: unknown }
+    const rpcName = capitalize(methodName)
+    const params = (m.params ?? []) as Array<{ name: string; type: TypeRef }>
+    const returnType = m.returnType as TypeRef | undefined
+
+    const requestType = `${rpcName}Request`
+    messages.push({
+      name: requestType,
+      fields: params.map((p, i) => ({ name: p.name, field: toProtoField(p.type), number: i + 1 })),
+    })
+
+    const responseType = `${rpcName}Response`
+    const isVoid = returnType === undefined || returnType.shape.kind === "void"
+    messages.push({
+      name: responseType,
+      fields: isVoid ? [] : [{ name: "result", field: toProtoField(returnType), number: 1 }],
+    })
+
+    rpcs.push({ name: rpcName, requestType, responseType })
+  }
+
+  const service: ProtoService = { name, rpcs, messages }
+  if (typeof ref.meta.description === "string") service.description = ref.meta.description
+  return service
+}
+
 function renderField(entry: ProtoMessage["fields"][number], indent: string): string[] {
   const { field } = entry
   const lines: string[] = []
@@ -222,10 +295,32 @@ function renderMessage(message: ProtoMessage, depth: number): string[] {
   return lines
 }
 
-export function renderProto(messages: ProtoMessage[]): string {
+function renderService(service: ProtoService, depth: number): string[] {
+  const indent = "  ".repeat(depth)
+  const inner = "  ".repeat(depth + 1)
+  const lines: string[] = []
+  if (typeof service.description === "string") lines.push(`${indent}// ${service.description}`)
+  lines.push(`${indent}service ${service.name} {`)
+  for (const rpc of service.rpcs) {
+    lines.push(`${inner}rpc ${rpc.name}(${rpc.requestType}) returns (${rpc.responseType});`)
+  }
+  lines.push(`${indent}}`)
+  return lines
+}
+
+// `services`' synthesized request/response messages (see `toProtoService`)
+// are rendered as top-level sibling messages alongside `messages` — proto3
+// has no nested-message-inside-service construct (§ "Services" only allows
+// `rpc` entries in a service block), so they're declared at the same level
+// the RPCs reference them by name.
+export function renderProto(messages: ProtoMessage[], services: ProtoService[] = []): string {
   const lines = ['syntax = "proto3";', ""]
   for (const message of messages) {
     lines.push(...renderMessage(message, 0), "")
+  }
+  for (const service of services) {
+    for (const message of service.messages) lines.push(...renderMessage(message, 0), "")
+    lines.push(...renderService(service, 0), "")
   }
   return `${lines.join("\n").trimEnd()}\n`
 }

@@ -91,6 +91,22 @@ const handlers: Record<string, Converter> = {
     const params = s.params.map((p) => toJsDocType(p.type)).join(", ")
     return `function(${params}): ${toJsDocType(s.returnType)}`
   },
+  // `method` has no explicit entry — falls back to the `function` handler
+  // above via `registerParent("method", "function")`; JSDoc's function-type
+  // syntax has no separate "this belongs to a contract" notion anyway.
+  //
+  // JSDoc/Closure Compiler has no dedicated service/interface-with-methods
+  // type syntax (https://jsdoc.app/tags-type.html) — degrades to the same
+  // object-type-literal form the `object` handler above uses, with each
+  // method's type rendered via `toJsDocType` (which resolves through the
+  // `function` handler for `method`-kind entries).
+  interface: (shape) => {
+    const s = shape as TypeShape & { kind: "interface" }
+    const entries = Object.entries(s.methods)
+    if (entries.length === 0) return "Object.<string, function()>"
+    const props = entries.map(([name, method]) => `${name}: ${toJsDocType(method)}`)
+    return `{${props.join(", ")}}`
+  },
 }
 
 export function toJsDocType(ref: TypeRef): string {

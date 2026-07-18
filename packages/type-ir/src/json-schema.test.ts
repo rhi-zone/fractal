@@ -318,6 +318,20 @@ describe("function", () => {
   })
 })
 
+describe("method", () => {
+  test("degrades to an untyped schema carrying x-method (distinguished from x-function)", () => {
+    const ref = t(types.method([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toJsonSchema(ref)).toEqual({ "x-method": true })
+  })
+})
+
+describe("interface", () => {
+  test("degrades to an untyped object schema carrying x-interface", () => {
+    const ref = t(types.interface({ deposit: t(types.method([], t(types.void))) }))
+    expect(toJsonSchema(ref)).toEqual({ type: "object", "x-interface": true })
+  })
+})
+
 describe("unrecognized metadata (open metadata bag)", () => {
   test("meta.brand is silently ignored — projects to the base type", () => {
     expect(toJsonSchema(t(types.string, { brand: "LocationId" }))).toEqual({

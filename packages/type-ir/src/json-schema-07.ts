@@ -136,9 +136,25 @@ const handlers: Record<string, Converter> = {
   // json-schema.ts (latest draft) uses: an untyped schema carrying
   // `x-function: true`.
   function: leaf({ "x-function": true }),
+  // Same degrade as `function`, distinguished by `x-method: true` (a
+  // standalone callable vs. one belonging to a type's contract).
+  method: leaf({ "x-method": true }),
+  // draft-07 has no service/interface-with-methods vocabulary either —
+  // degrade to an untyped object schema carrying `x-interface: true`.
+  interface: leaf({ type: "object", "x-interface": true }),
 }
 
-const complexKinds = new Set(["object", "array", "tuple", "map", "union", "intersection", "function"])
+const complexKinds = new Set([
+  "object",
+  "array",
+  "tuple",
+  "map",
+  "union",
+  "intersection",
+  "function",
+  "method",
+  "interface",
+])
 
 export function toJsonSchema07(ref: TypeRef): JsonSchema07 {
   const converter = resolve(ref.shape.kind, handlers)

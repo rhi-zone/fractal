@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes, date, datetime, duration, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { renderCapnp, toCapnpStruct, toCapnpType } from "./capnp.ts"
+import { renderCapnp, toCapnpInterface, toCapnpStruct, toCapnpType } from "./capnp.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {
@@ -314,5 +314,43 @@ describe("function", () => {
   test("degrades to AnyPointer (no callable-type construct)", () => {
     const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
     expect(toCapnpType(ref)).toBe("AnyPointer")
+  })
+})
+
+describe("method", () => {
+  test("as a field, falls back to AnyPointer via registerParent", () => {
+    const ref = t(types.method([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toCapnpType(ref)).toBe("AnyPointer")
+  })
+})
+
+describe("interface -> Cap'n Proto interface (the key use case)", () => {
+  test("toCapnpInterface lowers each method to a native interface method", () => {
+    const ref = t(
+      types.interface({
+        deposit: t(types.method([{ name: "amount", type: t(types.number) }], t(types.void))),
+        getBalance: t(types.method([], t(types.number))),
+      }),
+    )
+    const iface = toCapnpInterface("AccountService", ref)
+    expect(iface).toEqual({
+      name: "AccountService",
+      methods: [
+        { name: "deposit", ordinal: 0, params: [{ name: "amount", type: "Float64" }], results: [] },
+        { name: "getBalance", ordinal: 1, params: [], results: [{ name: "result", type: "Float64" }] },
+      ],
+    })
+  })
+
+  test("renders as native `interface { method @N (...) -> (...); }` syntax", () => {
+    const ref = t(
+      types.interface({
+        deposit: t(types.method([{ name: "amount", type: t(types.number) }], t(types.void))),
+      }),
+    )
+    const iface = toCapnpInterface("AccountService", ref)
+    const output = renderCapnp([], undefined, [iface])
+    expect(output).toContain("interface AccountService {")
+    expect(output).toContain("deposit @0 (amount :Float64) -> ();")
   })
 })

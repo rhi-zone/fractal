@@ -169,6 +169,11 @@ const handlers: Record<string, Converter> = {
   // Swagger 2.0 has no callable-type concept — same vendor-extension
   // degradation as json-schema.ts's `x-function`.
   function: leaf({ "x-function": true }),
+  // Same degrade as `function`, distinguished by `x-method: true`.
+  method: leaf({ "x-method": true }),
+  // Swagger 2.0 has no service/interface-with-methods concept — degrade to
+  // an untyped object schema carrying `x-interface: true`.
+  interface: leaf({ type: "object", "x-interface": true }),
 }
 
 function sameShape(a: OpenApi20Schema, b: OpenApi20Schema): boolean {
