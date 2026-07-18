@@ -41,6 +41,8 @@ import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 import { assemble, createStore } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { generateCompletions, isShellName } from "./completions.ts"
 
 // ============================================================================
@@ -100,6 +102,19 @@ export type CliOpts = {
    * to print.
    */
   readonly version?: string
+  /**
+   * Generated validators (from `buildValidatorModuleSource` /
+   * `compileValidatorModule`, keyed by `"/"`-joined route path — see
+   * `wrapValidators` in `@rhi-zone/fractal-api-tree/build`). When provided,
+   * `n` is wrapped via `wrapValidators` before dispatch: any leaf with a
+   * matching entry has its handler run through the generated `parse()`
+   * (coercion + validation in one pass), and `coerceInput`/`applyDefaults`/
+   * `validateRequired` are skipped for that leaf — the generated validator
+   * takes over. Leaves with no matching entry (or when this option is
+   * omitted entirely) keep using `coerceInput`/`validateRequired` against
+   * `opts.schemas` as before.
+   */
+  readonly validators?: Readonly<Record<string, GeneratedEntry>>
 }
 
 // ============================================================================
@@ -714,13 +729,14 @@ const defaultIO: CliIO = {
  * the caller (a real main() entry point) is responsible for actually exiting.
  * This keeps bun test alive when errors occur.
  *
- * @param n    - The root Node to dispatch into.
+ * @param rootNode - The root Node to dispatch into. Wrapped via `wrapValidators`
+ *   first when `opts.validators` is provided (see `CliOpts.validators`).
  * @param argv - Arguments after program name.
  * @param io   - Injectable IO (stdout, stderr, confirm). Defaults to process streams.
  * @param opts - Options: schemas map from codegen.
  */
 export async function runCli(
-  n: Node,
+  rootNode: Node,
   argv: string[],
   io: Partial<CliIO> = {},
   opts: CliOpts = {},
@@ -728,6 +744,10 @@ export async function runCli(
   const ioResolved: CliIO = { ...defaultIO, ...io }
   const schemas: SchemaMap = opts.schemas ?? {}
   const programName = opts.programName ?? "cli"
+  // Wire generated validators onto the tree BEFORE any dispatch — see
+  // `CliOpts.validators`. Leaves with no matching entry keep their original
+  // handler untouched (wrapValidators is a no-op there).
+  const n = opts.validators !== undefined ? wrapValidators(rootNode, opts.validators) : rootNode
 
   // Split argv into subcommand-path segments vs flag tokens.
   // Strategy: consume leading non-flag tokens as path segments; everything
@@ -840,15 +860,23 @@ export async function runCli(
   const inputSchema = schemas[schemaName]?.inputSchema
   const sourceMap = getCliMeta(target.leafMeta).sourceMap ?? {}
   const rawInput = buildInput(flags, target.slugs, sourceMap)
-  let input: Record<string, unknown>
-  try {
-    input = coerceInput(rawInput, inputSchema)
-    input = applyDefaults(input, inputSchema)
-    validateRequired(input, inputSchema)
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    ioResolved.stderr.write(`Error: ${msg}\n`)
-    throw err instanceof CliError ? err : new CliError(msg, 1)
+  // A generated validator (see CliOpts.validators) already wraps
+  // target.handler to run parse() — coercion + validation + defaults in one
+  // pass — so the schema-derived fallback path below is skipped for this
+  // leaf specifically. Uncovered leaves (no matching generated validator, or
+  // opts.validators omitted entirely) keep using it exactly as before.
+  const generatedValidatorHandlesThis = isValidatorWrapped(target.handler)
+  let input: Record<string, unknown> = rawInput
+  if (!generatedValidatorHandlesThis) {
+    try {
+      input = coerceInput(rawInput, inputSchema)
+      input = applyDefaults(input, inputSchema)
+      validateRequired(input, inputSchema)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      ioResolved.stderr.write(`Error: ${msg}\n`)
+      throw err instanceof CliError ? err : new CliError(msg, 1)
+    }
   }
 
   // Call handler
@@ -856,6 +884,9 @@ export async function runCli(
   try {
     result = await Promise.resolve(target.handler(input))
   } catch (err: unknown) {
+    // HandlerValidationError.message is already a formatted summary of the
+    // structured `errors` array (see @rhi-zone/fractal-api-tree/build) — no
+    // special-casing needed beyond the existing Error branch.
     const msg = err instanceof Error ? err.message : String(err)
     ioResolved.stderr.write(`Error: ${msg}\n`)
     throw new CliError(msg, 1)

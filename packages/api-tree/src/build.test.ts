@@ -7,7 +7,17 @@
 // shape `createApplyValidation` expects.
 
 import { describe, expect, it } from "bun:test"
-import { buildValidatorModuleSource, stubValidatorModuleSource, toValidatorRecord } from "./build.ts"
+import {
+  buildValidatorModuleSource,
+  HandlerValidationError,
+  isValidatorWrapped,
+  stubValidatorModuleSource,
+  toValidatorRecord,
+  wrapValidators,
+} from "./build.ts"
+import type { GeneratedEntry } from "./build.ts"
+import { api, op } from "./node.ts"
+import type { Node } from "./node.ts"
 
 /** Strip TypeScript syntax (type annotations, `as` casts, `import type`) via
  * Bun's transpiler — `buildValidatorModuleSource` now emits typed guards, so
@@ -73,6 +83,116 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     const validators = evalModule(source)
     expect(validators["namedType/search"]!.check({ q: "x" })).toBe(true)
     expect(validators["namedType/search"]!.check({})).toBe(true)
+  })
+})
+
+describe("wrapValidators — Node-level counterpart to route.ts's injectValidators", () => {
+  /** A synthetic GeneratedEntry: rejects `id` fields that aren't a positive
+   * integer string, coercing a valid one to a number — enough to prove
+   * parse()'s coercion actually reaches the wrapped handler's input. */
+  function idEntry(): GeneratedEntry {
+    return {
+      parse: (value: unknown) => {
+        if (typeof value !== "object" || value === null) {
+          return { kind: "err", errors: [{ kind: "type", path: [], expected: "object", actual: value }] }
+        }
+        const id = (value as Record<string, unknown>).id
+        if (typeof id !== "string" || !/^\d+$/.test(id)) {
+          return { kind: "err", errors: [{ kind: "type", path: ["id"], expected: "numeric string", actual: id }] }
+        }
+        return { kind: "ok", value: { ...(value as Record<string, unknown>), id: Number(id) } }
+      },
+    }
+  }
+
+  it("wraps a matching leaf: parse() runs first, handler receives the parsed value", async () => {
+    const handler = (input: { id: number }) => ({ doubled: input.id * 2 })
+    const tree = api({ get: op(handler) })
+    const wrapped = wrapValidators(tree, { get: idEntry() })
+
+    const result = await Promise.resolve(wrapped.children!.get!.handler!({ id: "21" }))
+    expect(result).toEqual({ doubled: 42 })
+  })
+
+  it("throws HandlerValidationError (carrying the structured errors) instead of calling the handler on invalid input", async () => {
+    const handler = (input: { id: number }) => ({ doubled: input.id * 2 })
+    const tree = api({ get: op(handler) })
+    const wrapped = wrapValidators(tree, { get: idEntry() })
+
+    await expect(Promise.resolve(wrapped.children!.get!.handler!({ id: "not-a-number" }))).rejects.toThrow(
+      HandlerValidationError,
+    )
+    try {
+      await wrapped.children!.get!.handler!({ id: "not-a-number" })
+      throw new Error("expected rejection")
+    } catch (err) {
+      expect(err).toBeInstanceOf(HandlerValidationError)
+      expect((err as HandlerValidationError).errors).toEqual([
+        { kind: "type", path: ["id"], expected: "numeric string", actual: "not-a-number" },
+      ])
+    }
+  })
+
+  it("a leaf with no matching validator entry passes through with its original handler, untouched", () => {
+    const handler = (input: { id: number }) => input
+    const tree = api({ get: op(handler), other: op(handler) })
+    const wrapped = wrapValidators(tree, { get: idEntry() }) // no entry for "other"
+
+    expect(wrapped.children!.other!.handler).toBe(handler) // same reference — untouched
+    expect(isValidatorWrapped(wrapped.children!.other!.handler!)).toBe(false)
+    expect(wrapped.children!.get!.handler).not.toBe(handler) // wrapped — different reference
+    expect(isValidatorWrapped(wrapped.children!.get!.handler!)).toBe(true)
+  })
+
+  it("keys nested children by '/'-joined path, matching extractRouteTypeRefs' convention", async () => {
+    const handler = (input: { id: number }) => input
+    const tree = api({ users: api({ get: op(handler) }) })
+    const wrapped = wrapValidators(tree, { "users/get": idEntry() })
+
+    expect(isValidatorWrapped(wrapped.children!.users!.children!.get!.handler!)).toBe(true)
+    const result = await Promise.resolve(wrapped.children!.users!.children!.get!.handler!({ id: "7" }))
+    expect(result).toEqual({ id: 7 })
+  })
+
+  it("keys a fallback (wildcard-capture) segment as ':name', matching route.ts's pathKey convention", () => {
+    const handler = (input: { id: number }) => input
+    const tree = api(
+      {},
+      { fallback: { name: "userId", subtree: api({ get: op(handler) }) } },
+    )
+    const wrapped = wrapValidators(tree, { ":userId/get": idEntry() })
+
+    expect(isValidatorWrapped((wrapped.fallback!.subtree.children!.get as Node).handler!)).toBe(true)
+  })
+
+  it("never mutates the input Node tree", () => {
+    const handler = (input: { id: number }) => input
+    const originalHandler = handler
+    const tree = api({ get: op(handler) })
+    const snapshotHandler = tree.children!.get!.handler
+
+    wrapValidators(tree, { get: idEntry() })
+
+    expect(tree.children!.get!.handler).toBe(snapshotHandler)
+    expect(tree.children!.get!.handler).toBe(originalHandler)
+  })
+
+  it("returns a fresh tree — the root and every rebuilt branch are new objects", () => {
+    const handler = (input: { id: number }) => input
+    const tree = api({ get: op(handler) })
+    const wrapped = wrapValidators(tree, { get: idEntry() })
+
+    expect(wrapped).not.toBe(tree)
+    expect(wrapped.children).not.toBe(tree.children)
+  })
+
+  it("an empty validators map wraps nothing", () => {
+    const handler = (input: { id: number }) => input
+    const tree = api({ get: op(handler) })
+    const wrapped = wrapValidators(tree, {})
+
+    expect(wrapped.children!.get!.handler).toBe(handler)
+    expect(isValidatorWrapped(wrapped.children!.get!.handler!)).toBe(false)
   })
 })
 

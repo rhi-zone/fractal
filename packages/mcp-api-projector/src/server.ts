@@ -64,6 +64,8 @@ import type {
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { assemble, createStore } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { projectPrompts, projectResources, projectTools } from "./project.ts"
 import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "./project.ts"
 
@@ -282,6 +284,20 @@ export type CreateMcpServerOptions = {
   /** Prompt projection options (see `projectPrompts`). Forwarded as-is. */
   readonly prompts?: ProjectPromptsOptions
   /**
+   * Generated validators (from `buildValidatorModuleSource` /
+   * `compileValidatorModule`, keyed by `"/"`-joined route path — see
+   * `wrapValidators` in `@rhi-zone/fractal-api-tree/build`). When provided,
+   * `tree` is wrapped via `wrapValidators` before `projectTools`/
+   * `projectResources`/`projectPrompts` build their dispatch maps: any leaf
+   * with a matching entry has its handler run through the generated
+   * `parse()` (coercion + validation in one pass), and the manual
+   * `validateAgainstSchema` check for that tool is skipped — the generated
+   * validator takes over. Leaves with no matching entry (or when this option
+   * is omitted entirely) keep going through `validateAgainstSchema` as
+   * before.
+   */
+  readonly validators?: Readonly<Record<string, GeneratedEntry>>
+  /**
    * Additional capabilities to advertise beyond `{ tools: {} }` (always
    * included — this preset always registers tool handlers), `{ resources: {} }`
    * (added automatically when the tree contains any resource leaves), and
@@ -310,16 +326,21 @@ export type CreateMcpServerOptions = {
  * transport-level failure.
  */
 export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Server {
-  const { tools, handlers } = projectTools(tree, opts.schemas !== undefined ? { schemas: opts.schemas } : {})
+  // Wire generated validators onto the tree BEFORE any projection walk — see
+  // `CreateMcpServerOptions.validators`. Leaves with no matching entry keep
+  // their original handler untouched (wrapValidators is a no-op there).
+  const workingTree = opts.validators !== undefined ? wrapValidators(tree, opts.validators) : tree
+
+  const { tools, handlers } = projectTools(workingTree, opts.schemas !== undefined ? { schemas: opts.schemas } : {})
   const {
     resources,
     resourceTemplates,
     handlers: resourceHandlers,
     templateHandlers,
-  } = projectResources(tree, opts.resources ?? {})
+  } = projectResources(workingTree, opts.resources ?? {})
   const hasResources = resources.length > 0 || resourceTemplates.length > 0
 
-  const { prompts, handlers: promptHandlers } = projectPrompts(tree, opts.prompts ?? {})
+  const { prompts, handlers: promptHandlers } = projectPrompts(workingTree, opts.prompts ?? {})
   const hasPrompts = prompts.length > 0
 
   const implementation: Implementation = {
@@ -353,8 +374,13 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       }
     }
 
+    // A generated validator (see CreateMcpServerOptions.validators) already
+    // wraps dispatch.handler to run parse() — coercion + validation in one
+    // pass — so the schema-derived fallback check below is skipped for this
+    // tool specifically. Uncovered tools (no matching generated validator, or
+    // opts.validators omitted entirely) keep going through it as before.
     const tool = toolsByName.get(name)
-    if (tool !== undefined) {
+    if (tool !== undefined && !isValidatorWrapped(dispatch.handler)) {
       const result = validateAgainstSchema(tool.inputSchema, args ?? {})
       if (!result.valid) {
         return {

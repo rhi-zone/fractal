@@ -29,9 +29,10 @@
 import * as path from "node:path"
 import { compileValidatorModule } from "@rhi-zone/fractal-type-ir"
 import { extractRouteTypeRefs } from "./tree.ts"
+import type { Handler, Node } from "./node.ts"
 
 /** One generated entry's public shape — see compile.ts's `compileValidatorModule`. */
-type GeneratedEntry = {
+export type GeneratedEntry = {
   parse: (value: unknown) => { kind: "ok"; value: unknown } | { kind: "err"; errors: unknown[] }
 }
 
@@ -51,6 +52,115 @@ export function toValidator(entry: GeneratedEntry): Adapted {
  * the inner map `createApplyValidation`'s `ValidatorMap` expects. */
 export function toValidatorRecord(validators: Record<string, GeneratedEntry>): Record<string, Adapted> {
   return Object.fromEntries(Object.entries(validators).map(([name, entry]) => [name, toValidator(entry)]))
+}
+
+// ============================================================================
+// wrapValidators — Node-level counterpart to route.ts's `injectValidators`.
+//
+// `injectValidators` wires generated validators into an `HttpRoute`'s
+// `pipeline.validate` slot — a route-tree-specific mechanism. CLI and MCP
+// dispatch directly off the `Node` tree, with no route tree or pipeline in
+// between, so they need validation wired onto the `handler` itself. This is
+// that: wrap each leaf's handler so it calls the generated `parse()` first
+// (coercion + validation + narrowing in one pass) and only invokes the
+// original handler on success.
+// ============================================================================
+
+/**
+ * Thrown by a `wrapValidators`-wrapped handler when the generated `parse()`
+ * rejects the input. The structured `errors` array (type-ir's
+ * `ValidationError[]`, carried here as `unknown[]` — see `GeneratedEntry`)
+ * survives on the instance so a projector can format it richly; `message` is
+ * a best-effort human-readable summary for callers that just want `.message`
+ * (CLI's `CliError`, MCP's `isError` content — both already reduce a thrown
+ * error to its `.message`).
+ */
+export class HandlerValidationError extends Error {
+  readonly errors: unknown[]
+  constructor(errors: unknown[]) {
+    super(`Validation failed: ${JSON.stringify(errors)}`)
+    this.name = "HandlerValidationError"
+    this.errors = errors
+  }
+}
+
+/**
+ * Runtime brand for a handler produced by `wrapValidators`'s wrapping — lets
+ * a projector (CLI, MCP) tell whether a resolved leaf's validation is
+ * already handled by a generated validator, so its own fallback
+ * coercion/validation step (`coerceInput`/`validateRequired` in CLI,
+ * `validateAgainstSchema` in MCP) can be skipped for that leaf specifically,
+ * while still running for leaves `wrapValidators` didn't touch — no matching
+ * validator at that path, or `validators` not supplied at all. Same pattern
+ * as `route.ts`'s `routeBrand`/`isHttpRoute`.
+ */
+const wrappedHandlerBrand = new WeakSet<Handler>()
+
+/** True when `handler` was produced by `wrapValidators`'s wrapping — see the brand doc above. */
+export function isValidatorWrapped(handler: Handler): boolean {
+  return wrappedHandlerBrand.has(handler)
+}
+
+/** Wrap one leaf handler: `entry.parse(input)` first — `ok` calls `handler`
+ * with the parsed (coerced, validated, narrowed) value; `err` throws
+ * `HandlerValidationError` instead of ever reaching `handler`. */
+function wrapHandler(handler: Handler, entry: GeneratedEntry): Handler {
+  const wrapped: Handler = async (input: unknown) => {
+    const result = entry.parse(input)
+    if (result.kind === "err") throw new HandlerValidationError(result.errors)
+    return handler(result.value)
+  }
+  wrappedHandlerBrand.add(wrapped)
+  return wrapped
+}
+
+/**
+ * Walk `node`, wiring each leaf's handler through its generated validator's
+ * `parse()` before the original handler runs — the `Node`-level counterpart
+ * to `injectValidators` (http-api-projector's route.ts), for projectors that
+ * dispatch directly off a `Node` tree (CLI, MCP) instead of transforming to
+ * `HttpRoute` first.
+ *
+ * Keyed the same way `extractRouteTypeRefs` (tree.ts) and route.ts's
+ * `pathKey`/`injectValidators` key their maps: `"/"`-joined path segments,
+ * with a `fallback` segment rendered as `:name` (e.g. `"books/:bookId"`) —
+ * so a validator module built by `buildValidatorModuleSource` plugs into
+ * `wrapValidators` with no re-keying.
+ *
+ * A leaf with no matching entry in `validators` passes through with its
+ * original handler, untouched — this is what makes `wrapValidators` safe to
+ * call with a partial (or empty/stub) validator map: uncovered leaves are a
+ * no-op. Never mutates `node`; always returns a fresh tree.
+ */
+export function wrapValidators(
+  node: Node,
+  validators: Readonly<Record<string, GeneratedEntry>>,
+  path: readonly string[] = [],
+): Node {
+  const entry = validators[path.join("/")]
+  const handler = node.handler !== undefined
+    ? (entry !== undefined ? wrapHandler(node.handler, entry) : node.handler)
+    : undefined
+  const children = node.children !== undefined
+    ? Object.fromEntries(
+        Object.entries(node.children).map(([key, child]) => [
+          key,
+          wrapValidators(child, validators, [...path, key]),
+        ]),
+      )
+    : undefined
+  const fallback = node.fallback !== undefined
+    ? {
+        name: node.fallback.name,
+        subtree: wrapValidators(node.fallback.subtree, validators, [...path, `:${node.fallback.name}`]),
+      }
+    : undefined
+  return {
+    ...(handler !== undefined ? { handler } : {}),
+    ...(children !== undefined ? { children } : {}),
+    ...(fallback !== undefined ? { fallback } : {}),
+    meta: node.meta,
+  }
 }
 
 /**
