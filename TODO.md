@@ -2,12 +2,26 @@
 
 ## Next session (handoff)
 
-Pick up from (all open threads from 2026-07-18 session):
-- **Input pipeline wiring** — `api-tree/src/input.ts` has the core `assemble()` abstraction; HTTP and CLI projectors still have their own implementations. Wire both to use the shared one. CLI also needs new stores (env, config, stdin); MCP needs stores (argument, uri-variable, session context).
-- **MCP Tier 2** — Logging + streaming/progress. Needs handler context design — how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr).
-- **MCP Tier 3** — Sampling, roots, subscriptions (speculative until concrete use case).
+Pick up from remaining HIGH-priority coverage audit items + open threads (2026-07-18):
+
+**From projector coverage audit (HIGH — blocks production use):**
+- **HTTP streaming responses** (SSE/chunked encoding) + **MCP progress notifications** — both need handler context design: how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr). Critical blocker for AI/realtime use cases.
+- **HTTP non-JSON content types** — multipart, form-data, file upload, octet-stream. Request/response payload currently JSON-only.
+- **Validation auto-wiring** — HTTP's validation (codegen-based via `injectValidators`) differs from CLI and MCP (hand-rolled). Wire validation consistently: connect extract → compile → inject into preset by default.
+
+**From projector coverage audit (MEDIUM-HIGH):**
+- **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains).
+
+**From design backlog:**
+- **GraphQL API projector** (server + client) — type-ir SDL projector done; API projector still open. Follows HTTP/CLI/MCP projection pattern.
+- **Structured error types** — declare operation-specific error outcomes in the tree. Handlers throw or return Result; tree is currently silent.
+- **Extract improvements** — overloaded functions, generics, async generators currently degrade silently.
+
+**Open threads:**
+- **Handler context as a design concept** — transport-level capabilities pushed into handlers (separate from input extraction). Design + implementation needed.
+- **Input pipeline wiring** (CLI/MCP) — `api-tree/src/input.ts` has core `assemble()`, but CLI and MCP still have own implementations. CLI needs stores (env, config, stdin); MCP needs (argument, uri-variable, session context).
+- **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 - **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
-- **Handler context as a design concept** — transport-level capabilities pushed into handlers (separate from input extraction). Design needed.
 
 ---
 
@@ -104,7 +118,7 @@ Design decisions remain settled (below); implementation roadmap for Tier 2–3 f
 3. **`method` kind** — subtype of `function`. Belongs to a type's contract, not standalone. Extracted from class methods and attached to the parent type.
 4. **`interface` kind** — `{ methods: Record<string, TypeRef> }`. The callable surface of a type. Maps to protobuf `service`, capnp `interface`. Attached to instance TypeRefs via `meta.interface`.
 
-**Projector updates (2026-07-18):** All 21+ projectors across all format targets (JSON Schema, OpenAPI, TypeScript, SQL, Protobuf, Cap'n Proto, JTD, JSDoc, 9 validator libraries) updated to handle the four new kinds. The extractor (`packages/api-tree/src/extract.ts`, moved from `type-ir` 2026-07-18) updated: classes now project to `instance` (nominal) + methods extracted as `method` TypeRefs + `interface` attached via meta. Round-trip tested; codegen output byte-identical to baseline.
+**Projector updates (2026-07-18):** 23 projectors across all format targets — JSON Schema (3 drafts), OpenAPI (2 versions), TypeScript, SQL (4 dialects), Protobuf, Cap'n Proto, JTD, JSDoc, 9 validator libraries, **GraphQL SDL (new), FlatBuffers (new)** — all updated to handle the four new kinds. The extractor (`packages/api-tree/src/extract.ts`, moved from `type-ir` 2026-07-18) updated: classes now project to `instance` (nominal) + methods extracted as `method` TypeRefs + `interface` attached via meta. Round-trip tested; codegen output byte-identical to baseline.
 
 ## Session wrap-up: DX build-out + extractor rewrite — DONE (2026-07-18)
 
@@ -263,38 +277,42 @@ all 1600 tests across the monorepo pass.
 
 ---
 
-## Projector coverage audit — OPEN (2026-07-18)
+## Projector coverage audit — MOSTLY COMPLETE (2026-07-18)
 
 Surface inventory of missing or incomplete projector implementations across HTTP, CLI, MCP, type-IR, and extraction layer. Organized by severity for prioritization.
 
 ### HIGH — blocks production use:
 
-1. **HTTP: no non-JSON content types** — multipart, form-data, file upload, octet-stream unsupported. Request/response payload only supports JSON serialization.
-2. **HTTP: no streaming responses** — SSE/chunked encoding unavailable. Critical blocker for AI/realtime use cases (streaming LLM outputs, live data feeds).
-3. **HTTP: no auth metadata** — no `securitySchemes` in OpenAPI output. Can't emit security requirements in the spec.
-4. **HTTP client: no retry/backoff, timeout, or streaming** — generated client has no resilience or streaming support.
-5. **MCP server: no progress notifications** — long-running tool calls appear hung with no way to report progress to the client.
-6. **Cross-cutting: validation inconsistent** — HTTP's validation (optional, codegen-based, wired via `injectValidators`) differs from CLI and MCP (hand-rolled per projector). No shared validation primitive exists.
-7. **Type-IR `fromJsonSchema`: silently mishandles draft-04/07 tuple syntax** — expects 2020-12 `prefixItems` format; older schemas with positional array items fail silently or produce incorrect TypeRefs.
+1. **HTTP: no non-JSON content types** — multipart, form-data, file upload, octet-stream unsupported. Request/response payload only supports JSON serialization. **OPEN**
+2. **HTTP: no streaming responses** — SSE/chunked encoding unavailable. Critical blocker for AI/realtime use cases (streaming LLM outputs, live data feeds). **OPEN** — needs handler context design.
+3. **HTTP: no auth metadata** — no `securitySchemes` in OpenAPI output. Can't emit security requirements in the spec. **DONE (2026-07-18)** — `meta.openapi.security` + `securitySchemes` implemented.
+4. **HTTP client: no retry/backoff, timeout, or streaming** — generated client has no resilience or streaming support. **DONE (2026-07-18)** — client-level + per-call timeout, runtime + codegen support added.
+5. **MCP server: no progress notifications** — long-running tool calls appear hung with no way to report progress to the client. **OPEN** — needs handler context design.
+6. **Cross-cutting: validation inconsistent** — HTTP's validation (optional, codegen-based, wired via `injectValidators`) differs from CLI and MCP (hand-rolled per projector). No shared validation primitive exists. **OPEN** — validation auto-wiring design needed.
+7. **Type-IR `fromJsonSchema`: silently mishandles draft-04/07 tuple syntax** — expects 2020-12 `prefixItems` format; older schemas with positional array items fail silently or produce incorrect TypeRefs. **DONE (2026-07-18)** — draft-04/07 tuple support added to `fromJsonSchema`.
 
 ### MEDIUM-HIGH:
 
-8. **MCP: no sampling support** — server and client lack sampling capability. Blocks LLM-in-the-loop tool patterns (e.g. model-chooses-tool chains).
-9. **Node: no auth/permission metadata convention** — each projector reinvents or skips. No settled pattern.
+8. **MCP: no sampling support** — server and client lack sampling capability. Blocks LLM-in-the-loop tool patterns (e.g. model-chooses-tool chains). **OPEN**
+9. **Node: no auth/permission metadata convention** — each projector reinvents or skips. No settled pattern. **OPEN**
 
 ### MEDIUM:
 
-10. **HTTP: no declarative status codes** — always 200/400 unless handler overrides. No way to declare that an operation always returns 201, 301, 204, etc.
-11. **CLI: no interactive prompts** — can't prompt for missing args interactively; no stdin piping support.
-12. **MCP server: no logging, subscriptions, or cancellation** — missing `notifications/message`, `resources/subscribe`, tool `Cancel` support.
-13. **Node: no deprecation at tree level** — only `meta.openapi.deprecated` exists (HTTP-specific). Should be projector-agnostic.
-14. **Node: no structured error types** — no way to declare operation-specific error outcomes in the tree. Handlers throw or return Result; tree is silent.
-15. **Type-IR: no readonly modifier** — IR lacks a way to express read-only fields. Most targets support it; IR doesn't track it.
-16. **Extract: no overloaded functions, generics, or async generators** — these TS patterns either error or degrade silently.
+10. **HTTP: no declarative status codes** — always 200/400 unless handler overrides. No way to declare that an operation always returns 201, 301, 204, etc. **DONE (2026-07-18)** — `meta.http.directives` response override already supports this.
+11. **CLI: no interactive prompts** — can't prompt for missing args interactively; no stdin piping support. **OPEN**
+12. **MCP server: no logging, subscriptions, or cancellation** — missing `notifications/message`, `resources/subscribe`, tool `Cancel` support. **OPEN** — Tier 2–3 features.
+13. **Node: no deprecation at tree level** — only `meta.openapi.deprecated` exists (HTTP-specific). Should be projector-agnostic. **DONE (2026-07-18)** — lifted to tree-level tag (projector-agnostic).
+14. **Node: no structured error types** — no way to declare operation-specific error outcomes in the tree. Handlers throw or return Result; tree is silent. **OPEN**
+15. **Type-IR: no readonly modifier** — IR lacks a way to express read-only fields. Most targets support it; IR doesn't track it. **DONE (2026-07-18)** — readonly modifier added to type-ir.
+16. **Extract: no overloaded functions, generics, or async generators** — these TS patterns either error or degrade silently. **OPEN**
 
 ### Missing projectors entirely:
 
-17. **GraphQL** — no type-ir projector, no API projector. Design exploration archived at `docs/archive/fc-op-kinds/projection-graphql.md`.
+17. **GraphQL** — no type-ir projector, no API projector. Design exploration archived at `docs/archive/fc-op-kinds/projection-graphql.md`. **PARTIALLY DONE (2026-07-18)** — type-ir SDL projector complete; API projector (server + client) still open.
+
+### New projectors added (2026-07-18):
+
+18. **FlatBuffers type-ir projector** — DONE (2026-07-18). Follows the same `TypeRef` → wire-format pattern as Protobuf/Cap'n Proto.
 
 ---
 
