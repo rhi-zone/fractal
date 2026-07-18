@@ -281,3 +281,71 @@ describe("meta.openapi overrides", () => {
     expect("deprecated" in (d.paths["/fresh"]?.["post"] ?? {})).toBe(false)
   })
 })
+
+// ============================================================================
+// 8. Security schemes and per-operation / spec-level security
+// ============================================================================
+
+describe("security", () => {
+  it("securitySchemes on any node are merged into components.securitySchemes", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const n = api_({
+      list: op((_: unknown) => [], {
+        openapi: {
+          securitySchemes: {
+            bearer: { type: "http", scheme: "bearer" },
+          },
+        },
+      }),
+      get: op((_: unknown) => null, {
+        openapi: {
+          securitySchemes: {
+            apiKey: { type: "apiKey", in: "header", name: "X-API-Key" },
+          },
+        },
+      }),
+    })
+    const d = await toOpenApi(n)
+    expect(d.components?.securitySchemes).toEqual({
+      bearer: { type: "http", scheme: "bearer" },
+      apiKey: { type: "apiKey", in: "header", name: "X-API-Key" },
+    })
+  })
+
+  it("per-operation meta.openapi.security is emitted on that operation only", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const n = api_({
+      secure: op((_: unknown) => null, {
+        openapi: { security: [{ bearer: [] }, { apiKey: [] }] },
+      }),
+      open: op((_: unknown) => null, {}),
+    })
+    const d = await toOpenApi(n)
+    expect(d.paths["/secure"]?.["post"]?.security).toEqual([{ bearer: [] }, { apiKey: [] }])
+    expect(d.paths["/open"]?.["post"]?.security).toBeUndefined()
+  })
+
+  it("root node's meta.openapi.security is emitted as the spec-level default", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const n = api_(
+      {
+        thing: op((_: unknown) => null, {}),
+      },
+      { meta: { openapi: { security: [{ bearer: [] }] } } },
+    )
+    const d = await toOpenApi(n)
+    expect(d.security).toEqual([{ bearer: [] }])
+    // Not duplicated onto the operation itself — that stays a per-op override.
+    expect(d.paths["/thing"]?.["post"]?.security).toBeUndefined()
+  })
+
+  it("no security meta anywhere → no security/components.securitySchemes keys (existing behavior unchanged)", () => {
+    expect(doc.security).toBeUndefined()
+    expect(doc.components).toBeUndefined()
+    for (const methods of Object.values(doc.paths)) {
+      for (const op of Object.values(methods)) {
+        expect(op.security).toBeUndefined()
+      }
+    }
+  })
+})

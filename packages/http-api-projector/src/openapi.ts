@@ -70,6 +70,22 @@ export type OpenApiOpts = {
 /** A JSON-Schema-compatible object (open bag — OpenAPI 3.1 allows any $schema). */
 export type OpenApiSchema = Record<string, unknown>
 
+/**
+ * An OpenAPI 3.1 security scheme object (`components/securitySchemes/<name>`)
+ * — open bag since the shape varies by `type` (`http`, `apiKey`, `oauth2`,
+ * `openIdConnect`); the OpenAPI projector doesn't validate the shape, only
+ * merges it through from `meta.openapi.securitySchemes`.
+ */
+export type OpenApiSecurityScheme = Record<string, unknown>
+
+/**
+ * An OpenAPI 3.1 security requirement object — one entry per alternative
+ * (OR); an entry naming multiple scheme keys requires ALL of them (AND). The
+ * array value is the list of scopes for oauth2/openIdConnect schemes, `[]`
+ * otherwise.
+ */
+export type OpenApiSecurityRequirement = Record<string, string[]>
+
 /** A single OpenAPI 3.1 path item method entry. */
 export type OpenApiOperation = {
   readonly operationId: string
@@ -77,6 +93,7 @@ export type OpenApiOperation = {
   readonly description?: string
   readonly tags?: string[]
   readonly deprecated?: boolean
+  readonly security?: OpenApiSecurityRequirement[]
   readonly parameters?: OpenApiParameter[]
   readonly requestBody?: {
     readonly required: boolean
@@ -115,6 +132,21 @@ export type OpenApiDoc = {
     readonly version: string
   }
   readonly paths: Record<string, Record<string, OpenApiOperation>>
+  /**
+   * Spec-level default security requirement, read from the root node's
+   * `meta.openapi.security` — applies to every operation that doesn't
+   * override it with its own `security` field. Absent when the root carries
+   * no `meta.openapi.security`.
+   */
+  readonly security?: OpenApiSecurityRequirement[]
+  /**
+   * Present only when at least one node in the tree carries
+   * `meta.openapi.securitySchemes` — merged from every such node (see
+   * `collectSecuritySchemes` below).
+   */
+  readonly components?: {
+    readonly securitySchemes: Record<string, OpenApiSecurityScheme>
+  }
 }
 
 // ============================================================================
@@ -143,6 +175,21 @@ export type OpenApiMeta = {
   readonly description?: string
   readonly tags?: string[]
   readonly deprecated?: boolean
+  /**
+   * Per-operation security requirement — set on a method entry's own meta.
+   * "This operation requires scheme A OR scheme B": `[{ a: [] }, { b: [] }]`.
+   * Set on the ROOT node's meta instead, it becomes the spec-level default
+   * (`OpenApiDoc.security`) rather than a per-operation override — see
+   * `buildDoc`.
+   */
+  readonly security?: OpenApiSecurityRequirement[]
+  /**
+   * Security scheme definitions — can be authored on any node in the tree;
+   * the OpenAPI projector walks the whole tree and merges every node's
+   * `securitySchemes` bag into `components.securitySchemes` (see
+   * `collectSecuritySchemes`). Not itself emitted on the operation.
+   */
+  readonly securitySchemes?: Record<string, OpenApiSecurityScheme>
   readonly [key: string]: unknown
 }
 
@@ -150,6 +197,38 @@ function getOpenApiMeta(meta: Meta): OpenApiMeta {
   const o = meta.openapi
   if (typeof o !== "object" || o === null) return {}
   return o as OpenApiMeta
+}
+
+// ============================================================================
+// Internal: security scheme collection — walks the whole HttpRoute tree
+// merging every node's (and every method entry's) `meta.openapi.
+// securitySchemes` bag into one map. Definitions may be authored anywhere in
+// the tree; a later-visited node's scheme with the same name overwrites an
+// earlier one (last-write-wins — same merge semantics as a plain object
+// spread), so a shared scheme is expected to be authored once and reused by
+// name from `meta.openapi.security` elsewhere.
+// ============================================================================
+
+function collectSecuritySchemes(
+  route: HttpRoute,
+  out: Record<string, OpenApiSecurityScheme>,
+): void {
+  const nodeSchemes = getOpenApiMeta(route.meta).securitySchemes
+  if (typeof nodeSchemes === "object" && nodeSchemes !== null) {
+    Object.assign(out, nodeSchemes)
+  }
+  for (const entry of Object.values(route.methods ?? {})) {
+    const entrySchemes = getOpenApiMeta(entry.meta).securitySchemes
+    if (typeof entrySchemes === "object" && entrySchemes !== null) {
+      Object.assign(out, entrySchemes)
+    }
+  }
+  for (const child of Object.values(route.children ?? {})) {
+    collectSecuritySchemes(child, out)
+  }
+  if (route.fallback !== undefined) {
+    collectSecuritySchemes(route.fallback.subtree, out)
+  }
 }
 
 // ============================================================================
@@ -316,6 +395,17 @@ async function buildDoc(
 
   const entries = walkRoute(route, "", names)
 
+  // Security schemes: merged from every node in the tree (see
+  // collectSecuritySchemes doc above). Only emitted on the doc when at least
+  // one scheme was found — an empty components.securitySchemes would be
+  // noise on documents that don't use this feature.
+  const securitySchemes: Record<string, OpenApiSecurityScheme> = {}
+  collectSecuritySchemes(route, securitySchemes)
+
+  // Spec-level default security: the root node's own meta.openapi.security
+  // (NOT a method entry's — those are per-operation and read below).
+  const rootSecurity = getOpenApiMeta(route.meta).security
+
   const paths: Record<string, Record<string, OpenApiOperation>> = {}
 
   for (const entry of entries) {
@@ -359,7 +449,16 @@ async function buildDoc(
     const outputSchema: OpenApiSchema = (toolSchema?.outputSchema as OpenApiSchema | undefined) ?? { type: "object" }
 
     // Build operation, merging any passthrough keys from meta.openapi
-    const { operationId: _oid, summary, description, tags: opTags, deprecated, ...extraOpenApiMeta } = openApiMeta
+    const {
+      operationId: _oid,
+      summary,
+      description,
+      tags: opTags,
+      deprecated,
+      security: opSecurity,
+      securitySchemes: _securitySchemes,
+      ...extraOpenApiMeta
+    } = openApiMeta
 
     // deprecated: meta.openapi.deprecated (per-projection override) wins when
     // explicitly set; otherwise fall back to the tree-level meta.tags.deprecated
@@ -374,6 +473,7 @@ async function buildDoc(
       ...(typeof description === "string" ? { description } : {}),
       ...(Array.isArray(opTags) ? { tags: opTags } : {}),
       ...(resolvedDeprecated ? { deprecated: true } : {}),
+      ...(Array.isArray(opSecurity) ? { security: opSecurity } : {}),
       ...(parameters.length > 0 ? { parameters } : {}),
       ...(requestBody !== undefined ? { requestBody } : {}),
       responses: {
@@ -400,5 +500,7 @@ async function buildDoc(
     openapi: "3.1.0",
     info: { title, version },
     paths,
+    ...(Array.isArray(rootSecurity) ? { security: rootSecurity } : {}),
+    ...(Object.keys(securitySchemes).length > 0 ? { components: { securitySchemes } } : {}),
   }
 }
