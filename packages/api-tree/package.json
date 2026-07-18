@@ -26,6 +26,10 @@
     "./extract": {
       "types": "./src/extract.ts",
       "import": "./src/extract.ts"
+    },
+    "./build": {
+      "types": "./src/build.ts",
+      "import": "./src/build.ts"
     }
   },
   "files": ["src"],
@@ -38,7 +42,6 @@
   "devDependencies": {
     "@rhi-zone/fractal-cli-api-projector": "workspace:*",
     "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
-    "@sinclair/typebox": "^0.34.41",
     "typescript": "^6.0.3"
   },
   "scripts": {

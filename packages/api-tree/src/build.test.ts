@@ -2,10 +2,12 @@
 //
 // Covers: the build orchestrator wires extraction (extract.ts/tree.ts) ->
 // @rhi-zone/fractal-type-ir's compileValidatorModule end-to-end, entryFile ->
-// compiled module.
+// compiled module, and `toValidatorRecord`'s adaptation of the generated
+// `{ check, errors, parse }` triples into the single-function `Validator`
+// shape `createApplyValidation` expects.
 
 import { describe, expect, it } from "bun:test"
-import { buildValidatorModuleSource, stubValidatorModuleSource } from "./build.ts"
+import { buildValidatorModuleSource, stubValidatorModuleSource, toValidatorRecord } from "./build.ts"
 
 /** Strip TypeScript syntax (type annotations, `as` casts, `import type`) via
  * Bun's transpiler — `buildValidatorModuleSource` now emits typed guards, so
@@ -14,8 +16,14 @@ import { buildValidatorModuleSource, stubValidatorModuleSource } from "./build.t
  * file before running it. */
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" })
 
+type Triple = {
+  check: (value: unknown) => boolean
+  errors: (value: unknown) => unknown[]
+  parse: (value: unknown) => { kind: "ok"; value: unknown } | { kind: "err"; errors: unknown[] }
+}
+
 /** Evaluate a `compileValidatorModule(...)`-produced module source into its `validators` map. */
-function evalModule(source: string): Record<string, (bag: Record<string, unknown>) => { kind: "ok" | "err"; value?: unknown; error?: unknown }> {
+function evalModule(source: string): Record<string, Triple> {
   const commonJs = tsTranspiler.transformSync(source).replace("export const validators", "const validators") + "\nreturn validators;"
   return new Function(commonJs)()
 }
@@ -30,14 +38,14 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
 
     const validators = evalModule(source)
     expect(
-      validators["users/create"]!({
+      validators["users/create"]!.check({
         name: "Alice",
         roles: ["admin"],
         address: { street: "Main" },
-      }).kind,
-    ).toBe("ok")
-    expect(validators["users/create"]!({}).kind).toBe("err")
-    expect(validators["users/:userId/get"]!({ userId: "u1" }).kind).toBe("ok")
+      }),
+    ).toBe(true)
+    expect(validators["users/create"]!.check({})).toBe(false)
+    expect(validators["users/:userId/get"]!.check({ userId: "u1" })).toBe(true)
   })
 
   it("stubValidatorModuleSource emits an empty validators map", () => {
@@ -58,7 +66,27 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     expect(source).not.toContain("value is { q?: string }")
 
     const validators = evalModule(source)
-    expect(validators["namedType/search"]!({ q: "x" }).kind).toBe("ok")
-    expect(validators["namedType/search"]!({}).kind).toBe("ok")
+    expect(validators["namedType/search"]!.check({ q: "x" })).toBe(true)
+    expect(validators["namedType/search"]!.check({})).toBe(true)
+  })
+})
+
+describe("toValidatorRecord — adapts { check, errors, parse } into a single-function Validator", () => {
+  it("wraps parse's ok branch through unchanged", () => {
+    const source = buildValidatorModuleSource(`${import.meta.dir}/__fixtures__/tree.fixture.ts`)
+    const validators = evalModule(source)
+    const adapted = toValidatorRecord(validators)
+    const result = adapted["users/:userId/get"]!({ userId: "u1" })
+    expect(result).toEqual({ kind: "ok", value: { userId: "u1" } })
+  })
+
+  it("wraps parse's err branch, renaming errors (plural) to error (singular) to match Result<T,E>", () => {
+    const source = buildValidatorModuleSource(`${import.meta.dir}/__fixtures__/tree.fixture.ts`)
+    const validators = evalModule(source)
+    const adapted = toValidatorRecord(validators)
+    const result = adapted["users/create"]!({}) as { kind: "err"; error: unknown[] }
+    expect(result.kind).toBe("err")
+    expect(Array.isArray(result.error)).toBe(true)
+    expect(result.error.length).toBeGreaterThan(0)
   })
 })

@@ -18,7 +18,8 @@ import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
 import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
-import type { Validator, ValidatorMap } from "@rhi-zone/fractal-http-api-projector/route"
+import type { ValidatorMap } from "@rhi-zone/fractal-http-api-projector/route"
+import { toValidatorRecord } from "@rhi-zone/fractal-api-tree/build"
 import { validators as catalogValidators } from "./generated/validators.ts"
 
 // ============================================================================
@@ -232,12 +233,11 @@ export const api = api_({
 // (route.ts's `createApplyValidation` doc comment).
 // ============================================================================
 
-// The generated module is a `@ts-nocheck` build artifact (see cli.ts's
-// `GENERATED_HEADER`): its inferred type is the TypeBox-compiler's raw
-// output shape (`kind: string`, not the `"ok" | "err"` literal union
-// `Validator`'s `Result` needs), not `Record<string, Validator>` — cast at
-// this import boundary, same as any generated-code consumer would.
-const validatorMap: ValidatorMap = { catalog: catalogValidators as Record<string, Validator> }
+// The generated module exports `Record<path, { check, errors, parse }>` (see
+// type-ir's compile.ts) — a type-ir concern, not http-api-projector's.
+// `toValidatorRecord` (api-tree's build.ts) adapts each entry's `parse` into
+// the single-function `Validator` shape `ValidatorMap` expects.
+const validatorMap: ValidatorMap = { catalog: toValidatorRecord(catalogValidators) }
 const applyValidation = createApplyValidation(validatorMap)
 
 // ============================================================================

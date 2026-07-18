@@ -212,8 +212,9 @@ export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial,
 // ============================================================================
 // AOT validator codegen projector
 //
-// compile.ts (TypeRef -> TypeBox validator code) is a type-ir projector, so
-// it lives alongside the other 20+ projectors. The extractor (extract.ts,
+// compile.ts (TypeRef -> standalone check/errors/parse validator code, no
+// runtime dependency) is a type-ir projector, so it lives alongside the other
+// 20+ projectors. The extractor (extract.ts,
 // TS source -> TypeRef), the tree walker (tree.ts, source-level api()/op()
 // walk), the build orchestrator (build.ts), and the `fractal-api-tree`
 // build/watch/stub/check CLI (cli.ts) live in @rhi-zone/fractal-api-tree
@@ -221,4 +222,4 @@ export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial,
 // concern, not type-ir's.
 // ============================================================================
 
-export { buildSchema, compileValidator, compileValidatorModule } from "./compile.ts"
+export { compileValidator, compileValidatorModule, typeRefToString, type ValidationError } from "./compile.ts"

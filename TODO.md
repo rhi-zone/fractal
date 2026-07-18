@@ -171,6 +171,32 @@ before acting.
   is wired end-to-end in `examples/library-api` (`src/tree.ts`, exercised in
   `src/app.test.ts`) — the consumer-app-facing "does a real route's validators
   actually get replaced" path is verified, not just designed.
+  **Superseded 2026-07-18**: the TypeBox-based codegen above (`buildSchema()`
+  + `TypeCompiler.Code()`) was fully replaced by a native, dependency-free
+  codegen engine in `packages/type-ir/src/compile.ts` — `@sinclair/typebox`
+  is no longer a dependency of `type-ir` or `api-tree` at all (build-time or
+  runtime). Each compiled operation now emits THREE standalone functions
+  instead of one boolean check: `check(value): value is T` (fast boolean
+  path, no allocations), `errors(value): ValidationError[]` (structured,
+  non-short-circuiting error collection with paths/expected/actual — see the
+  `ValidationError` DU exported from `@rhi-zone/fractal-type-ir`), and
+  `parse(value): {kind:"ok",value:T} | {kind:"err",errors}` (validates +
+  coerces — e.g. numeric/boolean strings — into a FRESH output value, never
+  mutates input). `compileValidatorModule()`'s emitted shape changed from
+  `Record<path, Validator>` to `Record<path, {check,errors,parse}>` — a
+  type-ir-only concern with no opinion on http-api-projector's
+  `Result`/`Validator` types. `packages/api-tree/src/build.ts` gained
+  `toValidator`/`toValidatorRecord`, adapting a generated entry's `parse`
+  into the single-function `Validator` shape `createApplyValidation`
+  expects (`{kind:"err",errors}` → `{kind:"err",error:errors}`, matching
+  `Result<T,E>`'s singular `error` field) — written structurally, no new
+  runtime dependency between api-tree and http-api-projector.
+  `examples/library-api` regenerated and typechecks clean under `strict`.
+  Known scope cuts (not attempted this pass): `ref`/`instance` kinds still
+  can't be validated structurally (pass-through, same limitation the old
+  TypeBox path had, now non-throwing instead of throwing); format regexes
+  for uuid/uri/date/time/datetime/duration/bytes are best-effort, not
+  spec-exact.
 - ~~**Meta typing pattern**~~ — RESOLVED (2026-07-17): `packages/api-tree/src/node.ts`
   now defines `Meta` as an `interface` (was a `type` alias), enabling
   declaration merging. Each protocol package already exports its own meta type
