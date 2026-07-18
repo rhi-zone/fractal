@@ -316,3 +316,10 @@ describe("toRuntypesDeclarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to R.Unknown (no callable-value runtype)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toRuntypes(ref)).toBe("R.Unknown")
+  })
+})

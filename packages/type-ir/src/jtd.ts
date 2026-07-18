@@ -115,6 +115,10 @@ const handlers: Record<string, Converter> = {
     const [first] = s.members
     return { form: first === undefined ? {} : toJtd(first), metadata: { intersection: true } }
   },
+  // JTD has no callable-type form — degrade to the empty form (accepts
+  // anything), flagged in metadata (§2.2.7's extension point) like every
+  // other unrepresentable case above.
+  function: () => ({ form: {}, metadata: { function: true } }),
 }
 
 export function toJtd(ref: TypeRef): Jtd {

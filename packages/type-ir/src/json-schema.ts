@@ -140,9 +140,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "intersection" }
     return { allOf: s.members.map(toJsonSchema) }
   },
+  // JSON Schema has no callable-type vocabulary — degrade honestly to an
+  // untyped schema, carrying `x-function: true` (vendor-extension-style key,
+  // same convention as `instance`'s `x-class-name`) so tooling that cares can
+  // still detect the shape was a function.
+  function: leaf({ "x-function": true }),
 }
 
-const complexKinds = new Set(["object", "instance", "array", "tuple", "map", "union", "intersection"])
+const complexKinds = new Set(["object", "instance", "array", "tuple", "map", "union", "intersection", "function"])
 
 export function toJsonSchema(ref: TypeRef): JsonSchema {
   const converter = resolve(ref.shape.kind, handlers)

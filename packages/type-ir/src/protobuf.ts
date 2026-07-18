@@ -108,6 +108,9 @@ const handlers: Record<string, Converter> = {
     const [first] = s.members
     return first === undefined ? { type: "google.protobuf.Any" } : toProtoField(first)
   },
+  // Proto3 has no callable-type construct — degrades honestly to Any, same as
+  // `instance` above.
+  function: leaf("google.protobuf.Any"),
 }
 
 export function toProtoField(ref: TypeRef): ProtoField {

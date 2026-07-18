@@ -161,6 +161,10 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "intersection" }
     return { allOf: s.members.map(toJsonSchema04) }
   },
+  // draft-04 has no callable-type vocabulary either — same honest degradation
+  // json-schema.ts (latest draft) uses: an untyped schema carrying
+  // `x-function: true`.
+  function: leaf({ "x-function": true }),
 }
 
 export function toJsonSchema04(ref: TypeRef): JsonSchema04 {

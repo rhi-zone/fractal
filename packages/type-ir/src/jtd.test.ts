@@ -218,3 +218,10 @@ describe("nested", () => {
     })
   })
 })
+
+describe("function", () => {
+  test("degrades to the empty form, flagged in metadata (no callable-type form)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toJtd(ref)).toEqual({ metadata: { function: true } })
+  })
+})

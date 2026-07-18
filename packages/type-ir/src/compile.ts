@@ -132,6 +132,17 @@ const handlers: Record<string, Converter> = {
     if (s.members.length === 0) return Type.Unknown()
     return Type.Intersect(s.members.map(buildSchema), metaOptions(meta))
   },
+  // Type.Function(params, returns) is TypeBox's native callable-type
+  // constructor (mirrors type-ir/src/typebox.ts's string-projector handler).
+  // `thisType` has no dedicated slot and is dropped.
+  function: (shape, meta) => {
+    const s = shape as TypeShape & { kind: "function" }
+    return Type.Function(
+      s.params.map((p) => buildSchema(p.type)),
+      buildSchema(s.returnType),
+      metaOptions(meta),
+    )
+  },
 }
 
 /** Lower a TypeRef to an actual TypeBox `TSchema` runtime object. */

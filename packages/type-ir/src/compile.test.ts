@@ -141,6 +141,13 @@ describe("buildSchema — composite kinds", () => {
     const ref = t({ kind: "totally-unknown-kind" } as unknown as TypeShape)
     expect(toPlain(buildSchema(ref))).toEqual({})
   })
+
+  it("function lowers to Type.Function(params, returns)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    const schema = toPlain(buildSchema(ref)) as { parameters: unknown[]; returns: unknown }
+    expect(schema.parameters).toEqual([{ type: "number" }])
+    expect(schema.returns).toEqual({ type: "string" })
+  })
 })
 
 describe("compileValidator — standalone validator source", () => {

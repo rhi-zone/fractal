@@ -81,6 +81,9 @@ const handlers: Record<string, Converter> = {
     const [first] = s.members
     return first === undefined ? "AnyPointer" : toCapnpType(first)
   },
+  // Cap'n Proto has no callable-type construct — degrades honestly to
+  // AnyPointer, same as `instance` above.
+  function: leaf("AnyPointer"),
 }
 
 export function toCapnpType(ref: TypeRef): string {

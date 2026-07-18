@@ -103,4 +103,39 @@ describe("TypeRef construction", () => {
     })
     expect(handler).toBeUndefined()
   })
+
+  test("builds a free function with params and return type, no thisType", () => {
+    const ref = t(
+      types.function(
+        [{ name: "x", type: t(types.number) }],
+        t(types.string),
+      ),
+    )
+    expect(ref.shape).toEqual({
+      kind: "function",
+      params: [{ name: "x", type: { shape: { kind: "number" }, meta: {} } }],
+      returnType: { shape: { kind: "string" }, meta: {} },
+    })
+    expect((ref.shape as { thisType?: unknown }).thisType).toBeUndefined()
+  })
+
+  test("builds a method function carrying a thisType", () => {
+    const ref = t(
+      types.function(
+        [{ name: "amount", type: t(types.number) }],
+        t(types.void),
+        t(types.instance("Account", "src/account.ts")),
+      ),
+    )
+    expect(ref.shape).toEqual({
+      kind: "function",
+      params: [{ name: "amount", type: { shape: { kind: "number" }, meta: {} } }],
+      returnType: { shape: { kind: "void" }, meta: {} },
+      thisType: { shape: { kind: "instance", className: "Account", source: "src/account.ts" }, meta: {} },
+    })
+  })
+
+  test("function is a root kind with no ancestors", () => {
+    expect(ancestors("function")).toEqual([])
+  })
 })

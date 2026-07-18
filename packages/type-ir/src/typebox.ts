@@ -121,6 +121,15 @@ const handlers: Record<string, Converter> = {
     if (s.members.length === 0) return "Type.Unknown()"
     return call("Type.Intersect", [`[${s.members.map(toTypeBox).join(", ")}]`], [], meta)
   },
+  // https://github.com/sinclairzx81/typebox#Functions — Type.Function(params,
+  // returns) is TypeBox's native callable-type constructor. `thisType` has no
+  // dedicated slot (TypeBox validates parameter/return shapes, not a `this`
+  // binding) and is dropped.
+  function: (shape, meta) => {
+    const s = shape as TypeShape & { kind: "function" }
+    const params = s.params.map((p) => toTypeBox(p.type)).join(", ")
+    return call("Type.Function", [`[${params}]`, toTypeBox(s.returnType)], [], meta)
+  },
 }
 
 export function toTypeBox(ref: TypeRef): string {

@@ -223,3 +223,26 @@ test("unknown kind fallback", () => {
   const ref = { shape: { kind: "bogus" } as never, meta: {} }
   expect(toTypeScript(ref)).toBe("unknown")
 })
+
+describe("function", () => {
+  test("emits a TS function-type expression", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toTypeScript(ref)).toBe("(x: number) => string")
+  })
+
+  test("emits an explicit `this` parameter when thisType is present", () => {
+    const ref = t(
+      types.function(
+        [{ name: "amount", type: t(types.number) }],
+        t(types.void),
+        t(types.instance("Account", "src/account.ts")),
+      ),
+    )
+    expect(toTypeScript(ref)).toBe("(this: Account, amount: number) => void")
+  })
+
+  test("wraps a function element type in Array<...>, not T[]", () => {
+    const fn = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toTypeScript(t(types.array(fn)))).toBe("Array<(x: number) => string>")
+  })
+})

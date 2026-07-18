@@ -132,9 +132,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "intersection" }
     return { allOf: s.members.map(toJsonSchema07) }
   },
+  // draft-07 has no callable-type vocabulary either — same honest degradation
+  // json-schema.ts (latest draft) uses: an untyped schema carrying
+  // `x-function: true`.
+  function: leaf({ "x-function": true }),
 }
 
-const complexKinds = new Set(["object", "array", "tuple", "map", "union", "intersection"])
+const complexKinds = new Set(["object", "array", "tuple", "map", "union", "intersection", "function"])
 
 export function toJsonSchema07(ref: TypeRef): JsonSchema07 {
   const converter = resolve(ref.shape.kind, handlers)

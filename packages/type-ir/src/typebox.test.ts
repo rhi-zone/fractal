@@ -303,3 +303,21 @@ describe("declarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("emits Type.Function(params, returns) — TypeBox's native callable-type constructor", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toTypeBox(ref)).toBe("Type.Function([Type.Number()], Type.String())")
+  })
+
+  test("drops thisType (no dedicated slot)", () => {
+    const ref = t(
+      types.function(
+        [{ name: "amount", type: t(types.number) }],
+        t(types.void),
+        t(types.instance("Account", "src/account.ts")),
+      ),
+    )
+    expect(toTypeBox(ref)).toBe("Type.Function([Type.Number()], Type.Void())")
+  })
+})

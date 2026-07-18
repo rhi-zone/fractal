@@ -570,3 +570,12 @@ describe("columnDef renders checks and comments", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to the opaque-data column type per dialect (not persistable)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toSqlDdl(ref)).toEqual({ type: "JSONB", nullable: false })
+    expect(toSqlDdl(ref, { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(ref, { dialect: "mysql" })).toEqual({ type: "JSON", nullable: false })
+  })
+})

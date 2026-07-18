@@ -350,3 +350,10 @@ describe("toArkTypeDeclarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to unknown (ArkType validates data shapes, not callables)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toArkType(ref)).toBe('type("unknown")')
+  })
+})

@@ -689,6 +689,56 @@ describe("typeRefFromType gap fixes", () => {
     expect(variants).toHaveLength(2)
     expect(variants.every((v) => v.shape.kind === "object")).toBe(true)
   })
+
+  // ── Callable/function types ────────────────────────────────────────────────
+
+  it("lowers a callback field to types.function instead of punting or dropping it", () => {
+    const ref = typeRefFromType(typeOf("CallbackField"), checker, source)
+    expect(ref.shape.kind).toBe("object")
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(fields)).toEqual(["onChange"])
+    const onChange = fields.onChange!
+    expect(onChange.shape.kind).toBe("function")
+    const fn = onChange.shape as {
+      kind: "function"
+      params: readonly { name: string; type: TypeRef }[]
+      returnType: TypeRef
+      thisType?: TypeRef
+    }
+    expect(fn.params).toHaveLength(1)
+    expect(fn.params[0]?.name).toBe("value")
+    expect(fn.params[0]?.type.shape.kind).toBe("number")
+    expect(fn.returnType.shape.kind).toBe("void")
+    expect(fn.thisType).toBeUndefined()
+  })
+
+  it("lowers a bare arrow-function type alias to types.function with all params in order", () => {
+    const ref = typeRefFromType(typeOf("ArrowFnType"), checker, source)
+    expect(ref.shape.kind).toBe("function")
+    const fn = ref.shape as {
+      kind: "function"
+      params: readonly { name: string; type: TypeRef }[]
+      returnType: TypeRef
+    }
+    expect(fn.params.map((p) => p.name)).toEqual(["x", "label"])
+    expect(fn.params.map((p) => p.type.shape.kind)).toEqual(["number", "string"])
+    expect(fn.returnType.shape.kind).toBe("boolean")
+  })
+
+  it("carries an explicit `this` parameter as thisType, resolved to the class's own instance", () => {
+    const ref = typeRefFromType(typeOf("BoundMethodType"), checker, source)
+    expect(ref.shape.kind).toBe("function")
+    const fn = ref.shape as {
+      kind: "function"
+      params: readonly { name: string; type: TypeRef }[]
+      returnType: TypeRef
+      thisType?: TypeRef
+    }
+    expect(fn.params.map((p) => p.name)).toEqual(["amount"])
+    expect(fn.thisType?.shape.kind).toBe("instance")
+    const thisShape = fn.thisType?.shape as { kind: "instance"; className: string }
+    expect(thisShape.className).toBe("MethodOwner")
+  })
 })
 
 // ============================================================================

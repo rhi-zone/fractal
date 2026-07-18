@@ -303,3 +303,10 @@ describe("toIoTsDeclarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to t.unknown, noted (no callable-value codec)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toIoTs(ref)).toBe("t.unknown /* function */")
+  })
+})

@@ -9,10 +9,12 @@
 //
 // Scope: obvious shapes only. Object types with primitive fields
 // (string/number/boolean), optional (`?` / `| undefined`), arrays, and nested
-// objects are lowered structurally. Anything exotic (unions, generics, branded
-// / callable types, …) is PUNTED to `t(types.unknown, { $comment })` carrying
-// a `$comment` that names the unhandled case — self-documenting rather than
-// silently lossy. Extraction goes TS type → TypeRef → JSON Schema; the
+// objects are lowered structurally. Callable types (arrow/function values,
+// callback params, method-shaped fields) lower to `types.function`. Anything
+// still exotic (unions, generics, constructable types, …) is PUNTED to
+// `t(types.unknown, { $comment })` carrying a `$comment` that names the
+// unhandled case — self-documenting rather than silently lossy. Extraction
+// goes TS type → TypeRef → JSON Schema; the
 // TypeRef is produced here and projected via
 // `@rhi-zone/fractal-type-ir/json-schema`'s `toJsonSchema`.
 //
@@ -70,6 +72,31 @@ export type JsonSchema = {
 /** The TypeRef punt: `unknown` tagged with the unhandled case. */
 const puntRef = (reason: string): TypeRef =>
   t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` })
+
+/**
+ * Lower a call signature to a `types.function` TypeRef: ordered params (name +
+ * type), return type, and — when the signature carries an explicit/implicit
+ * `this` parameter (e.g. a class method, where it resolves to
+ * `types.instance(className, source)`) — `thisType`. Free functions with no
+ * `this` parameter omit it.
+ */
+function functionRefFromSignature(
+  sig: ts.Signature,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+): TypeRef {
+  const params = sig.getParameters().map((param) => ({
+    name: param.name,
+    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen),
+  }))
+  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen)
+  const thisParam = sig.thisParameter
+  const thisType = thisParam
+    ? typeRefFromType(checker.getTypeOfSymbolAtLocation(thisParam, loc), checker, loc, seen)
+    : undefined
+  return t(types.function(params, returnType, thisType))
+}
 
 /** True for symbols with at least one private/protected declaration. */
 function isPrivateOrProtected(prop: ts.Symbol): boolean {
@@ -253,6 +280,11 @@ export function typeRefFromType(
   if (flags & ts.TypeFlags.StringLike) return t(types.string)
   if (flags & ts.TypeFlags.NumberLike) return t(types.number)
   if (flags & ts.TypeFlags.BooleanLike) return t(types.boolean)
+  // `void` was never reachable before function-typed return positions existed
+  // (object/param extraction never produces it) — a callable's `void` return
+  // now flows through here via `functionRefFromSignature`.
+  if (flags & ts.TypeFlags.Void) return t(types.void)
+  if (flags & ts.TypeFlags.Null) return t(types.null)
 
   // ── Tuples (checked before isArrayType — tuples fail that check and would
   //    otherwise fall through to the object branch as `{"0":…,"1":…,"length":…}`) ──
@@ -409,12 +441,16 @@ export function typeRefFromType(
 
   // ── Object types: primitive/optional/array/nested fields ──────────────────
   if (flags & ts.TypeFlags.Object) {
-    // Function-like objects (call/construct signatures) are not domain shapes.
-    if (
-      checker.getSignaturesOfType(type, ts.SignatureKind.Call).length > 0 ||
-      checker.getSignaturesOfType(type, ts.SignatureKind.Construct).length > 0
-    ) {
-      return puntRef(`callable/constructable (${checker.typeToString(type)})`)
+    // Callable types (arrow/function-typed values, callback params, method
+    // fields) lower to `types.function` — a real type-position shape, not a
+    // punt. Constructable types (`new (...) => T`) have no IR representation
+    // yet and still punt.
+    const callSigs = checker.getSignaturesOfType(type, ts.SignatureKind.Call)
+    if (callSigs.length > 0) {
+      return functionRefFromSignature(callSigs[0]!, checker, loc, seen)
+    }
+    if (checker.getSignaturesOfType(type, ts.SignatureKind.Construct).length > 0) {
+      return puntRef(`constructable (${checker.typeToString(type)})`)
     }
 
     const nextSeen = new Set(seen).add(type)
@@ -463,11 +499,9 @@ export function typeRefFromType(
         .getTypeOfSymbolAtLocation(prop, loc)
         .getNonNullableType()
 
-      // Methods aren't domain data — omit them (mirrors the callable punt above).
-      if (checker.getSignaturesOfType(propType, ts.SignatureKind.Call).length > 0) {
-        continue
-      }
-
+      // Method-shaped fields (call signature) lower to `types.function` —
+      // e.g. `callback: (x: number) => void` — same as any other callable
+      // type position (see the call-signature branch above).
       const fieldRef = typeRefFromType(propType, checker, loc, nextSeen)
 
       // Per-field JSDoc: `/** … */` above a property → `meta.description`;

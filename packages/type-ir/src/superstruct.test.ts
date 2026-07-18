@@ -291,3 +291,10 @@ describe("toSuperstructDeclarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to s.unknown() (no callable-value validator)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toSuperstruct(ref)).toBe("s.unknown()")
+  })
+})

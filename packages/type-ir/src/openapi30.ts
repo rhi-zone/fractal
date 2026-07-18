@@ -138,6 +138,9 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "intersection" }
     return { allOf: s.members.map(toOpenApi30) }
   },
+  // OAS 3.0 has no callable-type concept — same vendor-extension degradation
+  // as json-schema.ts's `x-function`.
+  function: leaf({ "x-function": true }),
 }
 
 export function toOpenApi30(ref: TypeRef): OpenApi30Schema {

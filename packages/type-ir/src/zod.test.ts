@@ -314,3 +314,23 @@ describe("toZodDeclarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("emits z.function().args(...).returns(...)", () => {
+    const ref = t(
+      types.function([{ name: "x", type: t(types.number) }], t(types.string)),
+    )
+    expect(toZod(ref)).toBe("z.function().args(z.number()).returns(z.string())")
+  })
+
+  test("drops thisType (no Zod equivalent)", () => {
+    const ref = t(
+      types.function(
+        [{ name: "amount", type: t(types.number) }],
+        t(types.void),
+        t(types.instance("Account", "src/account.ts")),
+      ),
+    )
+    expect(toZod(ref)).toBe("z.function().args(z.number()).returns(z.void())")
+  })
+})

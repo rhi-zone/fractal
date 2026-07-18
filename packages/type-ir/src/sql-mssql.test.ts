@@ -276,3 +276,10 @@ describe("toMssqlCreateTable: comma is preserved, not swallowed by the comment",
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to NVARCHAR(MAX) (not persistable column data)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toMssqlType(ref)).toBe("NVARCHAR(MAX)")
+  })
+})

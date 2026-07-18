@@ -42,6 +42,9 @@ const mssqlHandlers: Record<string, Converter> = {
   literal: literalHandler,
   enum: leaf("NVARCHAR(255)"),
   ref: leaf("NVARCHAR(255)"),
+  // Functions aren't persistable column data — same opaque fallback as the
+  // other structural kinds above.
+  function: leaf("NVARCHAR(MAX)"),
 }
 // MSSQL has no intersection/mixin column type — lossy fallback: resolve the
 // first member's shape against this same handler map, dropping the rest.

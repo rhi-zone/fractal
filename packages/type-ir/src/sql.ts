@@ -65,6 +65,9 @@ const postgresHandlers: Record<string, Converter> = {
   literal: literalHandler,
   enum: leaf("TEXT"),
   ref: leaf("TEXT"),
+  // Functions aren't persistable column data — same opaque-fallback treatment
+  // as `instance`/`unknown` above.
+  function: leaf("JSONB"),
 }
 // Assigned after construction (not inline) so the closure captures the fully
 // initialized `postgresHandlers` map, not a `const` reference mid-TDZ.
@@ -88,6 +91,7 @@ const sqliteHandlers: Record<string, Converter> = {
   tuple: leaf("TEXT"),
   map: leaf("TEXT"),
   union: leaf("TEXT"),
+  function: leaf("TEXT"),
 }
 // Overridden (not inherited from the postgres spread) so the fallback
 // resolves against sqlite's own type names, not postgres's.
@@ -204,6 +208,7 @@ const mysqlHandlers: Record<string, Converter> = {
   literal: mysqlLiteralHandler,
   enum: mysqlEnumHandler,
   ref: leaf("TEXT"),
+  function: leaf("JSON"),
 }
 mysqlHandlers.intersection = intersectionFallback(mysqlHandlers, "JSON")
 

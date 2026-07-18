@@ -150,6 +150,12 @@ const handlers: Record<string, Converter> = {
     const args = members.map((m) => (m.mode === "expr" ? m.text : `type(${asDefArg(m)})`))
     return { text: `type.and(${args.join(", ")})`, mode: "expr" }
   },
+  // ArkType's string DSL validates data shapes, not callable values — there's
+  // no function-type construct to target, so this degrades to `unknown`
+  // (matches the `instance` fallback pattern used by other data-only
+  // projectors, but ArkType doesn't distinguish instance/function specially
+  // either — both are opaque to it).
+  function: leaf("unknown"),
 }
 
 function emitRef(ref: TypeRef): Emitted {

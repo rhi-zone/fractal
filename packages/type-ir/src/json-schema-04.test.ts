@@ -308,3 +308,10 @@ describe("document wrapper", () => {
     })
   })
 })
+
+describe("function", () => {
+  test("degrades to an untyped schema carrying x-function (no callable-type vocabulary)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toJsonSchema04(ref)).toEqual({ "x-function": true })
+  })
+})

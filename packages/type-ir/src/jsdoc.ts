@@ -82,6 +82,15 @@ const handlers: Record<string, Converter> = {
     const [first] = s.members
     return first === undefined ? "*" : toJsDocType(first)
   },
+  // JSDoc/Closure Compiler's function type syntax: `function(ParamType,
+  // ParamType): ReturnType` (https://jsdoc.app/tags-type.html#type-language).
+  // `thisType` (an explicit/implicit `this` binding) has no dedicated slot in
+  // this syntax and is dropped — lossy but the closest native fit.
+  function: (shape) => {
+    const s = shape as TypeShape & { kind: "function" }
+    const params = s.params.map((p) => toJsDocType(p.type)).join(", ")
+    return `function(${params}): ${toJsDocType(s.returnType)}`
+  },
 }
 
 export function toJsDocType(ref: TypeRef): string {

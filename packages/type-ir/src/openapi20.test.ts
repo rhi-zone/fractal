@@ -323,3 +323,10 @@ describe("nested", () => {
     })
   })
 })
+
+describe("function", () => {
+  test("degrades to a vendor-extension x-function marker (no callable-type concept)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toOpenApi20(ref)).toEqual({ "x-function": true })
+  })
+})

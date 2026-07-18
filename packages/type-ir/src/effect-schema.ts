@@ -142,6 +142,9 @@ const handlers: Record<string, Converter> = {
     }
     return toEffectSchema(first)
   },
+  // Effect Schema has no callable-type schema — degrades to S.Unknown, same
+  // as `instance` above.
+  function: leaf("S.Unknown"),
 }
 
 export function toEffectSchema(ref: TypeRef): string {

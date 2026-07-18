@@ -303,3 +303,10 @@ describe("toYupDeclarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to yup.mixed() (no construct for an opaque callable value)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toYup(ref)).toBe("yup.mixed()")
+  })
+})

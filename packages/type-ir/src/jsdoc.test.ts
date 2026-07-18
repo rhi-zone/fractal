@@ -471,3 +471,21 @@ describe("toJsDocTypedefs", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("emits JSDoc's function(...) type syntax", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toJsDocType(ref)).toBe("function(number): string")
+  })
+
+  test("drops thisType (no dedicated slot in JSDoc's type language)", () => {
+    const ref = t(
+      types.function(
+        [{ name: "amount", type: t(types.number) }],
+        t(types.void),
+        t(types.instance("Account", "src/account.ts")),
+      ),
+    )
+    expect(toJsDocType(ref)).toBe("function(number): void")
+  })
+})

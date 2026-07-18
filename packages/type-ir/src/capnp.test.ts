@@ -309,3 +309,10 @@ describe("renderCapnp", () => {
     expect(output).toContain("value @1 :Text;")
   })
 })
+
+describe("function", () => {
+  test("degrades to AnyPointer (no callable-type construct)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toCapnpType(ref)).toBe("AnyPointer")
+  })
+})

@@ -59,6 +59,25 @@ export class SampleClass {
 /** Class instance type, used as a field to exercise the object branch on it. */
 export type ClassInstanceField = { owner: SampleClass }
 
+// ── Callable/function type fixtures ─────────────────────────────────────────
+
+/** A field whose type is a callback — lowers to types.function, not punted. */
+export type CallbackField = { onChange: (value: number) => void }
+
+/** A bare arrow-function type alias, exercised directly (not just as a field). */
+export type ArrowFnType = (x: number, label: string) => boolean
+
+/** A class whose method surfaces via a call-signature-only interface, so
+ * `thisType` on the extracted function carries the class's own instance type. */
+export class MethodOwner {
+  deposit(amount: number): void {}
+}
+
+/** The method's call signature lifted to a standalone function type, `this`
+ * bound explicitly to `MethodOwner` — mirrors what the checker resolves for
+ * `MethodOwner.prototype.deposit` accessed as a value. */
+export type BoundMethodType = (this: MethodOwner, amount: number) => void
+
 // ── Branded/opaque type fixtures ────────────────────────────────────────────
 
 /** Branded string — the standard nominal-typing pattern over a primitive. */

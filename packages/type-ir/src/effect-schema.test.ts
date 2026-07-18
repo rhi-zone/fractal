@@ -307,3 +307,10 @@ describe("toEffectSchemaDeclarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to S.Unknown (no callable-type schema)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toEffectSchema(ref)).toBe("S.Unknown")
+  })
+})

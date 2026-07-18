@@ -311,6 +311,13 @@ describe("nested", () => {
   })
 })
 
+describe("function", () => {
+  test("degrades to an untyped schema carrying x-function (no JSON Schema callable vocabulary)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toJsonSchema(ref)).toEqual({ "x-function": true })
+  })
+})
+
 describe("unrecognized metadata (open metadata bag)", () => {
   test("meta.brand is silently ignored — projects to the base type", () => {
     expect(toJsonSchema(t(types.string, { brand: "LocationId" }))).toEqual({

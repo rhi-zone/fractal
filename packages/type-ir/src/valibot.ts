@@ -107,6 +107,9 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "intersection" }
     return { schema: `v.intersect([${s.members.map(toValibot).join(", ")}])`, actions: [] }
   },
+  // Valibot has no callable-value schema — degrades to v.unknown(), same
+  // fallback as an unrecognized kind.
+  function: leaf("v.unknown()"),
 }
 
 export function toValibot(ref: TypeRef): string {

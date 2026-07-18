@@ -125,6 +125,10 @@ const handlers: Record<string, Converter> = {
     if (s.members.length === 0) return "R.Unknown"
     return `R.Intersect(${s.members.map(toRuntypes).join(", ")})`
   },
+  // runtypes validates data shapes, not callable values — no function runtype
+  // to target, so this degrades to R.Unknown (same fallback as an
+  // unrecognized kind).
+  function: leaf("R.Unknown"),
 }
 
 export function toRuntypes(ref: TypeRef): string {

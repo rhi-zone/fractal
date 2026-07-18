@@ -316,3 +316,14 @@ describe("unrecognized metadata (open metadata bag)", () => {
     })
   })
 })
+
+describe("function", () => {
+  test("degrades to google.protobuf.Any (no callable-type construct)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toProtoField(ref)).toEqual({
+      type: "google.protobuf.Any",
+      repeated: false,
+      optional: false,
+    })
+  })
+})

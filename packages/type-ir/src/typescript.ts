@@ -11,7 +11,7 @@ function quote(value: string): string {
   return JSON.stringify(value)
 }
 
-const complexKinds = new Set(["union", "object", "map", "intersection"])
+const complexKinds = new Set(["union", "object", "map", "intersection", "function"])
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("boolean"),
@@ -82,6 +82,16 @@ const handlers: Record<string, Converter> = {
   intersection: (shape) => {
     const s = shape as TypeShape & { kind: "intersection" }
     return s.members.map(toTypeScript).join(" & ")
+  },
+  // TS's function-type syntax (`(params) => ReturnType`) supports an explicit
+  // `this` parameter as its own leading pseudo-parameter
+  // (https://www.typescriptlang.org/docs/handbook/2/functions.html#declaring-this-in-a-function) —
+  // used when the TypeRef carries `thisType` (e.g. a class method's `this`).
+  function: (shape) => {
+    const s = shape as TypeShape & { kind: "function" }
+    const thisParam = s.thisType === undefined ? [] : [`this: ${toTypeScript(s.thisType)}`]
+    const params = [...thisParam, ...s.params.map((p) => `${p.name}: ${toTypeScript(p.type)}`)]
+    return `(${params.join(", ")}) => ${toTypeScript(s.returnType)}`
   },
 }
 

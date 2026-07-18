@@ -131,6 +131,15 @@ const handlers: Record<string, Converter> = {
     if (first === undefined) return "z.unknown()"
     return rest.reduce((acc, member) => `z.intersection(${acc}, ${toZod(member)})`, toZod(first))
   },
+  // https://zod.dev/?id=functions — `z.function()` validates arity/argument
+  // and return types via `.args(...)`/`.returns(...)`. `thisType` has no Zod
+  // equivalent (Zod validates call signatures, not the `this` binding) and is
+  // dropped.
+  function: (shape) => {
+    const s = shape as TypeShape & { kind: "function" }
+    const args = s.params.map((p) => toZod(p.type)).join(", ")
+    return `z.function().args(${args}).returns(${toZod(s.returnType)})`
+  },
 }
 
 export function toZod(ref: TypeRef): string {

@@ -39,6 +39,19 @@ export interface TypeKinds {
   enum: { readonly kind: "enum"; readonly members: readonly string[] }
   ref: { readonly kind: "ref"; readonly target: string }
   intersection: { readonly kind: "intersection"; readonly members: readonly TypeRef[] }
+  // A callable type: ordered parameters, a return type, and an optional
+  // `this` binding (present for class methods and other functions with an
+  // explicit/implicit `this` — e.g. `types.instance("ClassName", source)`;
+  // absent for free functions with no `this`). Deliberately NOT a subtype of
+  // anything — see `parents` below. Not used to inline class methods onto
+  // `instance` (which stays purely nominal); this kind is for callable types
+  // that appear in type positions (callback params, fields, etc.).
+  function: {
+    readonly kind: "function"
+    readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
+    readonly returnType: TypeRef
+    readonly thisType?: TypeRef
+  }
 }
 
 export type TypeShape = TypeKinds[keyof TypeKinds]
@@ -68,6 +81,7 @@ const parents: Record<string, string | null> = {
   enum: null,
   ref: null,
   intersection: null,
+  function: null,
 }
 
 export function registerParent(kind: string, parent: string | null): void {
@@ -118,6 +132,14 @@ export const types = {
   enum: (members: readonly string[]) => ({ kind: "enum", members }) as const,
   ref: (target: string) => ({ kind: "ref", target }) as const,
   intersection: (members: readonly TypeRef[]) => ({ kind: "intersection", members }) as const,
+  function: (
+    params: readonly { name: string; type: TypeRef }[],
+    returnType: TypeRef,
+    thisType?: TypeRef,
+  ) =>
+    thisType === undefined
+      ? ({ kind: "function", params, returnType } as const)
+      : ({ kind: "function", params, returnType, thisType } as const),
 }
 
 export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial, deepRequired } from "./derive.ts"

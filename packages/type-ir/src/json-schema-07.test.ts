@@ -304,6 +304,13 @@ describe("shared: nested", () => {
   })
 })
 
+describe("function", () => {
+  test("degrades to an untyped schema carrying x-function (no callable-type vocabulary)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toJsonSchema07(ref)).toEqual({ "x-function": true })
+  })
+})
+
 describe("shared: unrecognized metadata (open metadata bag)", () => {
   test("meta.brand is silently ignored — projects to the base type", () => {
     expect(toJsonSchema07(t(types.string, { brand: "LocationId" }))).toEqual({

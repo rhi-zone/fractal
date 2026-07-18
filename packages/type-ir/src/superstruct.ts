@@ -124,6 +124,9 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "intersection" }
     return `s.intersection([${s.members.map(toSuperstruct).join(", ")}])`
   },
+  // Superstruct has no callable-value validator — degrades to s.unknown(),
+  // same fallback as an unrecognized kind.
+  function: leaf("s.unknown()"),
 }
 
 export function toSuperstruct(ref: TypeRef): string {

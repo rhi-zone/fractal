@@ -154,6 +154,9 @@ const handlers: Record<string, Converter> = {
     }
     return toYup(first)
   },
+  // Yup has no construct for an opaque callable value — degrades honestly to
+  // yup.mixed(), same as `instance` above.
+  function: leaf("yup.mixed()"),
 }
 
 export function toYup(ref: TypeRef): string {

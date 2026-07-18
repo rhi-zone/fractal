@@ -303,3 +303,10 @@ describe("declarations", () => {
     )
   })
 })
+
+describe("function", () => {
+  test("degrades to v.unknown() (no callable-value schema)", () => {
+    const ref = t(types.function([{ name: "x", type: t(types.number) }], t(types.string)))
+    expect(toValibot(ref)).toBe("v.unknown()")
+  })
+})

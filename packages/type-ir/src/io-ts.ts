@@ -95,6 +95,9 @@ const handlers: Record<string, Converter> = {
     if (s.members.length === 0) return { code: "t.unknown" }
     return { code: `t.intersection([${s.members.map(toIoTs).join(", ")}])` }
   },
+  // io-ts has no callable-value codec — falls back to t.unknown, noted like
+  // every other unrepresentable case this projector handles.
+  function: leaf("t.unknown", "function"),
 }
 
 function constraintNotes(meta: Readonly<Record<string, unknown>>, kind: string): string[] {
