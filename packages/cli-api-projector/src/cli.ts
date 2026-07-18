@@ -38,6 +38,8 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
+import { assemble, createStore } from "@rhi-zone/fractal-api-tree"
+import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 import { generateCompletions, isShellName } from "./completions.ts"
 
 // ============================================================================
@@ -112,6 +114,15 @@ export type CliMeta = {
   readonly name?: string
   readonly alias?: string
   readonly hidden?: boolean
+  /**
+   * Per-param source overrides for this leaf's input assembly (see
+   * `packages/api-tree/src/input.ts`). Lets a tree author pull a field from
+   * a store other than the CLI's default ("flag") — e.g.
+   * `{ apiKey: { store: "env", key: "API_KEY" } }` to require an environment
+   * variable instead of a `--api-key` flag. Params not listed here still
+   * resolve via the normal flag/slug convention.
+   */
+  readonly sourceMap?: SourceMap
   readonly [key: string]: unknown
 }
 
@@ -441,23 +452,48 @@ function parseFlags(argv: string[]): ParsedArgv {
 // ============================================================================
 
 /**
- * Merge parsed flag values with accumulated slug values into a single input
- * object. Slugs overlay flags (provenance-blind — the handler sees one flat
- * input object and cannot tell where any field came from).
+ * Assemble the handler's input bag from the CLI's named stores, via the
+ * shared resolution pipeline (`packages/api-tree/src/input.ts`).
+ *
+ * Stores:
+ *   - "flag": parsed --flags (parseFlags result)
+ *   - "path": accumulated `fallback`-captured slug values — named "path" (not
+ *     "slug") because `assemble`'s `pathParamNames` resolution is hardcoded to
+ *     read from a store literally named "path" (see input.ts)
+ *   - "env":  process.env — new capability, reachable only via `sourceMap`
+ *     (no implicit convention pulls a field from the environment)
+ *
+ * Primary store is "flag" (unmarked params default to a CLI flag). Slug
+ * keys are passed as `pathParamNames` so they always win over a same-named
+ * flag — matching the prior hardcoded merge order (slugs overlay flags).
+ *
+ * `paramNames` is the union of every key any store could produce: flag
+ * keys, slug keys, and any name declared in `sourceMap` (so a field pulled
+ * purely from an override — e.g. `apiKey` from "env" with no `--api-key`
+ * flag — is still assembled even though it never appears in `flags`). This
+ * keeps schema-less trees (no fixed field list) working exactly as before:
+ * with an empty `sourceMap`, this reduces to the old flags+slugs merge.
  */
 function buildInput(
   flags: Record<string, string | string[] | true>,
   slugs: Record<string, string>,
+  sourceMap: SourceMap,
 ): Record<string, unknown> {
-  const input: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(flags)) {
-    input[k] = v === true ? true : v
+  const stores: Stores = {
+    flag: createStore(flags),
+    path: createStore(slugs),
+    env: createStore(process.env as Record<string, unknown>),
   }
-  // Slugs overlay flags (provenance-blind: handler sees one flat object)
-  for (const [k, v] of Object.entries(slugs)) {
-    input[k] = v
-  }
-  return input
+
+  const paramNames = [
+    ...new Set([
+      ...Object.keys(flags),
+      ...Object.keys(slugs),
+      ...Object.keys(sourceMap),
+    ]),
+  ]
+
+  return assemble(stores, paramNames, sourceMap, "flag", Object.keys(slugs))
 }
 
 // ============================================================================
@@ -799,7 +835,8 @@ export async function runCli(
   // `required` field is present — all BEFORE the handler is ever called.
   const schemaName = target.schemaPath.join("_").replace(/-/g, "_")
   const inputSchema = schemas[schemaName]?.inputSchema
-  const rawInput = buildInput(flags, target.slugs)
+  const sourceMap = getCliMeta(target.leafMeta).sourceMap ?? {}
+  const rawInput = buildInput(flags, target.slugs, sourceMap)
   let input: Record<string, unknown>
   try {
     input = coerceInput(rawInput, inputSchema)
