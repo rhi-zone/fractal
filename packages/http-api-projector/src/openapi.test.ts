@@ -248,4 +248,36 @@ describe("meta.openapi overrides", () => {
     const d = await toOpenApi(n)
     expect(d.paths["/old"]?.["post"]?.deprecated).toBe(true)
   })
+
+  it("meta.tags.deprecated (tree-level tag) surfaces as OpenAPI deprecated", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const n = api_({
+        old: op((_: unknown) => null, {
+          tags: { deprecated: true },
+        }),
+      })
+    const d = await toOpenApi(n)
+    expect(d.paths["/old"]?.["post"]?.deprecated).toBe(true)
+  })
+
+  it("meta.openapi.deprecated overrides meta.tags.deprecated when both set", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const n = api_({
+        old: op((_: unknown) => null, {
+          tags: { deprecated: false },
+          openapi: { deprecated: true },
+        }),
+      })
+    const d = await toOpenApi(n)
+    expect(d.paths["/old"]?.["post"]?.deprecated).toBe(true)
+  })
+
+  it("no deprecated tag/meta → no deprecated key in the operation", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const n = api_({
+        fresh: op((_: unknown) => null, {}),
+      })
+    const d = await toOpenApi(n)
+    expect("deprecated" in (d.paths["/fresh"]?.["post"] ?? {})).toBe(false)
+  })
 })

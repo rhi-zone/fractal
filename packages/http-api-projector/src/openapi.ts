@@ -36,6 +36,8 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import { httpProjection } from "./dx.ts"
 import type { HttpRoute } from "./route.ts"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
@@ -258,6 +260,12 @@ function walkRoute(
  * operationId, summary, description, tags, deprecated. Any unrecognised keys
  * pass through.
  *
+ * `deprecated` also reads from the tree-level `meta.tags.deprecated` (the
+ * standard cross-projector tag — see api-tree/src/tags.ts) so CLI/MCP/HTTP
+ * all see the same authored fact. `meta.openapi.deprecated` is a
+ * per-projection override and wins when explicitly set (backward compat with
+ * documents authored before `deprecated` became a tree-level tag).
+ *
  * @param route - The (already rewritten) HttpRoute tree to project.
  * @param opts  - Options: title, version, sourceFile, schemas.
  */
@@ -353,12 +361,19 @@ async function buildDoc(
     // Build operation, merging any passthrough keys from meta.openapi
     const { operationId: _oid, summary, description, tags: opTags, deprecated, ...extraOpenApiMeta } = openApiMeta
 
+    // deprecated: meta.openapi.deprecated (per-projection override) wins when
+    // explicitly set; otherwise fall back to the tree-level meta.tags.deprecated
+    // tag so the same authored fact reaches every projector.
+    const resolvedDeprecated = deprecated === true
+      ? true
+      : resolveTags((meta.tags ?? {}) as Tags).deprecated === true
+
     const operation: OpenApiOperation = {
       operationId,
       ...(typeof summary === "string" ? { summary } : {}),
       ...(typeof description === "string" ? { description } : {}),
       ...(Array.isArray(opTags) ? { tags: opTags } : {}),
-      ...(deprecated === true ? { deprecated: true } : {}),
+      ...(resolvedDeprecated ? { deprecated: true } : {}),
       ...(parameters.length > 0 ? { parameters } : {}),
       ...(requestBody !== undefined ? { requestBody } : {}),
       responses: {

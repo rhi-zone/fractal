@@ -237,3 +237,44 @@ describe("CLI projection — library-api fixture", () => {
     expect(genres).toContain("Cyberpunk")
   })
 })
+
+// ============================================================================
+// meta.tags.deprecated → surfaced in CLI help text
+// ============================================================================
+
+describe("meta.tags.deprecated surfaces in CLI help text", () => {
+  it("parent listing marks a deprecated leaf command with [DEPRECATED]", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const tree = api_({
+      old: op((_: unknown) => "result", { tags: { deprecated: true } }),
+      fresh: op((_: unknown) => "result", {}),
+    })
+    const mock = makeMockIO(true)
+    await runCli(tree, ["--help"], mock.io)
+    const out = mock.out.join("")
+    expect(out).toContain("[DEPRECATED] old")
+    expect(out).not.toContain("[DEPRECATED] fresh")
+  })
+
+  it("leaf --help shows a deprecation notice", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const tree = api_({
+      old: op((_: unknown) => "result", { tags: { deprecated: true } }),
+    })
+    const mock = makeMockIO(true)
+    await runCli(tree, ["old", "--help"], mock.io)
+    const out = mock.out.join("")
+    expect(out).toContain("[DEPRECATED]")
+  })
+
+  it("no deprecated tag → no [DEPRECATED] marker in help", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const tree = api_({
+      fresh: op((_: unknown) => "result", {}),
+    })
+    const mock = makeMockIO(true)
+    await runCli(tree, ["--help"], mock.io)
+    const out = mock.out.join("")
+    expect(out).not.toContain("[DEPRECATED]")
+  })
+})

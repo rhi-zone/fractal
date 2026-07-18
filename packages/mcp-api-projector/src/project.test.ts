@@ -536,3 +536,39 @@ describe("prompt arguments derived from schema", () => {
     expect(prompts[0]!.arguments).toBeUndefined()
   })
 })
+
+// ============================================================================
+// meta.tags.deprecated → deprecated flag on tools/resources/prompts
+// ============================================================================
+
+describe("meta.tags.deprecated surfaces on every leaf-derived surface", () => {
+  it("tool: deprecated:true → tools[0].deprecated === true", () => {
+    const n = api_({ old: op((_: unknown) => "result", { tags: { deprecated: true } }) })
+    const tools = toTools(n)
+    expect(tools[0]!.deprecated).toBe(true)
+  })
+
+  it("tool: no deprecated tag → deprecated key omitted", () => {
+    const n = api_({ fresh: op((_: unknown) => "result", {}) })
+    const tools = toTools(n)
+    expect("deprecated" in tools[0]!).toBe(false)
+  })
+
+  it("tool: deprecated:false → deprecated key omitted (three-valued, not false)", () => {
+    const n = api_({ fresh: op((_: unknown) => "result", { tags: { deprecated: false } }) })
+    const tools = toTools(n)
+    expect("deprecated" in tools[0]!).toBe(false)
+  })
+
+  it("resource: deprecated:true → resources[0].deprecated === true", () => {
+    const n = api_({ old: op((_: unknown) => ({}), { mcp: { as: "resource" }, tags: { deprecated: true } }) })
+    const { resources } = projectResources(n)
+    expect(resources[0]!.deprecated).toBe(true)
+  })
+
+  it("prompt: deprecated:true → prompts[0].deprecated === true", () => {
+    const n = api_({ old: op((_: unknown) => ({}), { mcp: { as: "prompt" }, tags: { deprecated: true } }) })
+    const { prompts } = projectPrompts(n)
+    expect(prompts[0]!.deprecated).toBe(true)
+  })
+})

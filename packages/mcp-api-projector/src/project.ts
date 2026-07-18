@@ -4,6 +4,8 @@
 // one per leaf node (handler-carrying Node) in the tree. Annotation hints
 // (readOnlyHint, destructiveHint, idempotentHint, openWorldHint) are derived
 // from the SAME meta.tags that drives the HTTP verb — one authoring, two surfaces.
+// `meta.tags.deprecated` is likewise read once and surfaced as a `deprecated`
+// key on tools, resources, resource templates, and prompts (see `McpTool`).
 //
 // A leaf's tags are read directly from its OWN meta.tags — there is no
 // ancestor inheritance (removed; see docs/design/router-model.md — "Tags").
@@ -73,6 +75,16 @@ export type McpTool = {
   readonly description: string
   readonly inputSchema: Record<string, unknown>
   readonly annotations?: McpAnnotations
+  /**
+   * Lifecycle flag: the operation is slated for removal. Derived from the
+   * tree-level `meta.tags.deprecated` tag (see api-tree/src/tags.ts) — the
+   * same authored fact the CLI and HTTP/OpenAPI projectors read. Omitted
+   * (rather than `false`) when not asserted, matching the three-valued tag
+   * semantics — no current MCP spec revision defines a standard `deprecated`
+   * field/annotation, so this is carried as an open descriptor key a client
+   * may choose to surface.
+   */
+  readonly deprecated?: boolean
 }
 
 /**
@@ -268,12 +280,16 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
         const annotations: McpAnnotations | undefined =
           Object.keys(annotationsMerged).length > 0 ? annotationsMerged : undefined
 
+        // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
+        const deprecated = resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true
+
         out.push({
           name,
           description,
           // Derived-from-type schema when available; else the MCP spec minimum.
           inputSchema: derived?.inputSchema ?? { type: "object" },
           ...(annotations !== undefined ? { annotations } : {}),
+          ...(deprecated ? { deprecated: true } : {}),
         })
         handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {} })
       } else {
@@ -333,6 +349,8 @@ export type McpResource = {
   readonly name: string
   readonly description: string
   readonly mimeType: string
+  /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
+  readonly deprecated?: boolean
 }
 
 /** An MCP resource template — a URI carrying `{var}` placeholders bound at read time. */
@@ -341,6 +359,8 @@ export type McpResourceTemplate = {
   readonly name: string
   readonly description: string
   readonly mimeType: string
+  /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
+  readonly deprecated?: boolean
 }
 
 /** A compiled URI template: matches a concrete read URI and binds its captured segments. */
@@ -454,9 +474,12 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
 
         const mimeType = typeof mcp.mimeType === "string" ? mcp.mimeType : "application/json"
 
+        // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
+        const deprecated = resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true
+
         if (hasFallback) {
           const { pattern, paramNames } = compileUriTemplate(uri)
-          resourceTemplates.push({ uriTemplate: uri, name, description, mimeType })
+          resourceTemplates.push({ uriTemplate: uri, name, description, mimeType, ...(deprecated ? { deprecated: true } : {}) })
           templateHandlers.push({
             uriTemplate: uri,
             paramNames,
@@ -466,7 +489,7 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
             sourceMap: mcp.sourceMap ?? {},
           })
         } else {
-          resources.push({ uri, name, description, mimeType })
+          resources.push({ uri, name, description, mimeType, ...(deprecated ? { deprecated: true } : {}) })
           handlers.set(uri, child.handler as Handler)
         }
       } else {
@@ -518,6 +541,8 @@ export type McpPrompt = {
   readonly name: string
   readonly description: string
   readonly arguments?: McpPromptArgument[]
+  /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
+  readonly deprecated?: boolean
 }
 
 /** Options for `projectPrompts`. */
@@ -607,10 +632,14 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
 
         const args = argumentsFromSchema(derived?.inputSchema)
 
+        // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
+        const deprecated = resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true
+
         out.push({
           name,
           description,
           ...(args !== undefined ? { arguments: args } : {}),
+          ...(deprecated ? { deprecated: true } : {}),
         })
         handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {} })
       } else {

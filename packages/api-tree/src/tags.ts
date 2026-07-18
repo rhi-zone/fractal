@@ -61,6 +61,18 @@ export const TAG_OPEN_WORLD = "openWorld" as const
  */
 export const TAG_STREAMING = "streaming" as const
 
+/**
+ * `deprecated`: The operation is slated for removal; callers should migrate
+ * away from it. Orthogonal to all other standard tags — a deprecated
+ * operation may still be readOnly, destructive, etc.
+ *
+ * Previously this only existed as the HTTP/OpenAPI-specific
+ * `meta.openapi.deprecated`; it is now a tree-level tag so every projector
+ * (CLI, MCP, HTTP, …) can surface it. `meta.openapi.deprecated` still works
+ * as a per-projection override (see http-api-projector/src/openapi.ts).
+ */
+export const TAG_DEPRECATED = "deprecated" as const
+
 // ============================================================================
 // Tags sub-bag — open three-valued dict
 // ============================================================================
@@ -77,6 +89,7 @@ export type Tags = {
   destructive?: boolean | undefined
   openWorld?: boolean | undefined
   streaming?: boolean | undefined
+  deprecated?: boolean | undefined
   [custom: string]: boolean | undefined
 }
 
@@ -98,6 +111,7 @@ export type ResolvedTags = {
   readonly destructive: TagValue
   readonly openWorld: TagValue
   readonly streaming: TagValue
+  readonly deprecated: TagValue
   readonly conflict?: string
 }
 
@@ -108,8 +122,8 @@ export type ResolvedTags = {
  *   readOnly ⇒ idempotent   (if readOnly=true and idempotent=undefined → set idempotent=true)
  *   readOnly ∧ destructive  → conflict (both true is a contradiction)
  *
- * Unknowns stay unknown — absence does NOT default to false. The `streaming`
- * and `openWorld` tags are orthogonal and pass through untouched.
+ * Unknowns stay unknown — absence does NOT default to false. The `streaming`,
+ * `openWorld`, and `deprecated` tags are orthogonal and pass through untouched.
  *
  * Standard tag keys are read from the Tags bag; any additional keys the
  * caller added are ignored here (they remain in the bag, untouched).
@@ -120,6 +134,7 @@ export function resolveTags(tags: Tags): ResolvedTags {
   const rawIdempotent = tags[TAG_IDEMPOTENT] as TagValue
   const openWorld = tags[TAG_OPEN_WORLD] as TagValue
   const streaming = tags[TAG_STREAMING] as TagValue
+  const deprecated = tags[TAG_DEPRECATED] as TagValue
 
   // readOnly ⇒ idempotent: lift unknown to true when readOnly is asserted
   const idempotent: TagValue =
@@ -137,6 +152,7 @@ export function resolveTags(tags: Tags): ResolvedTags {
     destructive,
     openWorld,
     streaming,
+    deprecated,
     ...(conflict !== undefined ? { conflict } : {}),
   }
 }

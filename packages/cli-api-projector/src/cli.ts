@@ -14,6 +14,7 @@
 //   - destructive:true  → io.confirm() before running (skippable via --yes/--force)
 //   - readOnly:true     → no confirm
 //   - streaming:true    → output each item as a JSONL line
+//   - deprecated:true   → "[DEPRECATED]" marker in command listings + leaf help
 //
 // Input field → flag derivation:
 //   Named --flags parsed from argv; fallback slug values merged on top
@@ -278,7 +279,8 @@ function buildHelp(
       const leafDesc = descriptionFrom(child.meta)
       const leafName = typeof cliMeta.name === "string" ? cliMeta.name : key
       const aliasSuffix = typeof cliMeta.alias === "string" ? ` (alias: ${cliMeta.alias})` : ""
-      lines.push(`  ${leafName}${aliasSuffix}${leafDesc !== undefined ? `  — ${leafDesc}` : ""}`)
+      const deprecatedPrefix = resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true ? "[DEPRECATED] " : ""
+      lines.push(`  ${deprecatedPrefix}${leafName}${aliasSuffix}${leafDesc !== undefined ? `  — ${leafDesc}` : ""}`)
     }
   }
 
@@ -326,6 +328,7 @@ function buildLeafHelp(
   lines.push(`Usage: ${cmd} [options]`, "")
 
   const tags = resolveTags((resolved.leafMeta.tags ?? {}) as Tags)
+  if (tags.deprecated === true) lines.push("  [DEPRECATED] This operation is deprecated and may be removed.", "")
   if (tags.destructive === true) lines.push("  This operation is destructive and irreversible. Requires --yes/--force to skip confirmation.", "")
   if (tags.readOnly === true) lines.push("  This operation is read-only.", "")
   if (tags.streaming === true) lines.push("  This operation streams results (one JSON object per line).", "")
