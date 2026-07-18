@@ -350,6 +350,29 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
     expect(toJsonSchema(inputRef)).toEqual(schemaFromFunctionNode(fn, checker))
   })
 
+  it("typeRefFromFunctionNode carries no typeName/declarationFile for an anonymous inline parameter type", () => {
+    const inputRef = typeRefFromFunctionNode(fn, checker)
+    expect(inputRef.meta.typeName).toBeUndefined()
+    expect(inputRef.meta.declarationFile).toBeUndefined()
+  })
+
+  it("typeRefFromFunctionNode carries meta.typeName/meta.declarationFile for a NAMED (type alias) parameter type", () => {
+    const namedFn = findExportedFn(source, "namedParamFn")
+    const inputRef = typeRefFromFunctionNode(namedFn, checker)
+    expect(inputRef.meta.typeName).toBe("BookQuery")
+    expect(inputRef.meta.declarationFile).toBe(TYPEREF_FIXTURE)
+    // Structural lowering still happens underneath the provenance metadata —
+    // the shape itself is unaffected, only meta gains the two extra keys.
+    expect(inputRef.shape.kind).toBe("object")
+  })
+
+  it("typeRefFromFunctionNode carries meta.typeName/meta.declarationFile for a NAMED (interface) parameter type", () => {
+    const namedFn = findExportedFn(source, "namedInterfaceParamFn")
+    const inputRef = typeRefFromFunctionNode(namedFn, checker)
+    expect(inputRef.meta.typeName).toBe("BookIdParam")
+    expect(inputRef.meta.declarationFile).toBe(TYPEREF_FIXTURE)
+  })
+
   it("typeRefFromType matches schemaFromType for the same resolved parameter type", () => {
     const fnType = checker.getTypeAtLocation(fn)
     const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)

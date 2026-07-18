@@ -100,6 +100,17 @@ export type TypeRef = {
 //     extractors reading a TS `readonly` modifier); consumed by projectors
 //     that can express it (e.g. TypeScript's `readonly` keyword, JSON
 //     Schema/OpenAPI's `readOnly: true`).
+//   - `meta.typeName: string` + `meta.declarationFile: string` — a top-level
+//     TypeRef's NAMED-type provenance (set by
+//     `@rhi-zone/fractal-api-tree`'s `typeRefFromFunctionNode` when a
+//     handler's parameter type is a declared alias/interface, not an inline
+//     object literal). `declarationFile` is the absolute path of the file
+//     `typeName` is declared in. Consumed by codegen that needs to reference
+//     the type by name instead of inlining its structure — e.g.
+//     `compileValidatorModule`'s generated type-guard annotations, which
+//     `import type { typeName } from "…"` (path resolved by the caller,
+//     which alone knows the emitted module's own location) when both are
+//     present, and inline the structural TypeScript rendering otherwise.
 
 const parents: Record<string, string | null> = {
   boolean: null,

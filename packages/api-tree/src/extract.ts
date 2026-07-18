@@ -628,9 +628,50 @@ export function schemaFromType(
 // ============================================================================
 
 /**
+ * The declared-type provenance of a top-level extracted type: its name and
+ * the absolute path of the file it's declared in — recoverable only when the
+ * type is NAMED (a `type X = …` alias or an `interface X {…}`), not for an
+ * anonymous/inline shape (`(input: { q: string }) => …`).
+ *
+ * Read only at the top level (a handler's own parameter type), not while
+ * descending into `typeRefFromType`'s structural walk — nested named types
+ * (e.g. a field typed `Address`) are still inlined structurally there, same
+ * as before; only the OUTER type gets a name worth importing, since that's
+ * the one a generated type-guard annotation needs to reference.
+ *
+ * Anonymous object-literal types resolve to a symbol whose sole declaration
+ * is a `ts.TypeLiteralNode` (the `{ … }` syntax itself, not a named
+ * declaration) — excluded here so those fall through to structural inlining
+ * instead of being treated as "named".
+ */
+function typeProvenanceOf(
+  type: ts.Type,
+  checker: ts.TypeChecker,
+): { name: string; declarationFile: string } | undefined {
+  const aliasSymbol = type.aliasSymbol
+  const aliasDecl = aliasSymbol?.declarations?.[0]
+  if (aliasSymbol && aliasDecl) {
+    return { name: aliasSymbol.name, declarationFile: aliasDecl.getSourceFile().fileName }
+  }
+  const symbol = type.getSymbol()
+  const decl = symbol?.declarations?.[0]
+  if (symbol && decl && !ts.isTypeLiteralNode(decl)) {
+    return { name: symbol.name, declarationFile: decl.getSourceFile().fileName }
+  }
+  return undefined
+}
+
+/**
  * Derive the input TypeRef from a function-typed node (arrow or function
  * expression): its first parameter's type is the op input. A niladic op
  * lowers to an empty object TypeRef.
+ *
+ * When the parameter type is a NAMED type (alias/interface, not an inline
+ * object literal), the returned TypeRef carries `meta.typeName` +
+ * `meta.declarationFile` — provenance a codegen consumer (e.g.
+ * `@rhi-zone/fractal-type-ir`'s `compileValidatorModule`) can use to `import
+ * type { X } from "…"` instead of inlining the type's structure into a
+ * generated annotation. See index.ts's meta-bag convention doc comment.
  */
 export function typeRefFromFunctionNode(
   fn: ts.Node,
@@ -642,7 +683,11 @@ export function typeRefFromFunctionNode(
   const [param] = sig.getParameters()
   if (!param) return t(types.object({}))
   const paramType = checker.getTypeOfSymbolAtLocation(param, fn)
-  return typeRefFromType(paramType, checker, fn)
+  const ref = typeRefFromType(paramType, checker, fn)
+  const provenance = typeProvenanceOf(paramType, checker)
+  return provenance
+    ? t(ref.shape, { ...ref.meta, typeName: provenance.name, declarationFile: provenance.declarationFile })
+    : ref
 }
 
 /**

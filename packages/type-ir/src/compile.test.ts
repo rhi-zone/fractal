@@ -23,14 +23,27 @@ function toPlain(schema: unknown): unknown {
   return JSON.parse(JSON.stringify(schema))
 }
 
+/** Strip TypeScript syntax (type annotations, `as` casts) via Bun's
+ * transpiler — `compileValidator`/`compileValidatorModule` now emit typed
+ * guards (`value is T`, `as (value: unknown) => …`), so the raw source is no
+ * longer plain JS `new Function` can parse directly; this mirrors what the
+ * consuming toolchain (Bun/tsc) does to the generated file before running it. */
+const tsTranspiler = new Bun.Transpiler({ loader: "ts" })
+function stripTypes(source: string): string {
+  // `transformSync` treats a bare expression as a statement and appends its
+  // own trailing `;` — trimmed here so callers can still wrap the result in
+  // their own parens/template without producing `(...;)`.
+  return tsTranspiler.transformSync(source).trim().replace(/;$/, "")
+}
+
 /** Evaluate a `compileValidator(...)`-produced expression string into a callable Validator. */
 function evalValidator(source: string): (bag: Record<string, unknown>) => { kind: "ok" | "err"; value?: unknown; error?: unknown } {
-  return new Function(`return (${source});`)()
+  return new Function(`return (${stripTypes(source)});`)()
 }
 
 /** Evaluate a `compileValidatorModule(...)`-produced module source into its `validators` map. */
 function evalModule(source: string): Record<string, (bag: Record<string, unknown>) => { kind: "ok" | "err"; value?: unknown; error?: unknown }> {
-  const commonJs = source.replace("export const validators", "const validators") + "\nreturn validators;"
+  const commonJs = stripTypes(source).replace("export const validators", "const validators") + "\nreturn validators;"
   return new Function(commonJs)()
 }
 
@@ -224,5 +237,67 @@ describe("compileValidatorModule — full module emission", () => {
   it("emits an empty validators map for no entries (the stub case)", () => {
     const source = compileValidatorModule([])
     expect(evalModule(source)).toEqual({})
+  })
+
+  it("each entry's guard narrows to the input's inline structural TypeScript rendering when no typeName is carried", () => {
+    const source = compileValidatorModule([
+      { name: "users/create", ref: t(types.object({ name: t(types.string) })) },
+    ])
+    expect(source).toContain("value is { name: string }")
+    expect(source).not.toContain("import type")
+  })
+
+  it("imports a NAMED type (meta.typeName + meta.declarationFile) via resolveImport instead of inlining it", () => {
+    const ref = t(types.object({ q: t(types.string, { optional: true }) }), {
+      typeName: "BookQuery",
+      declarationFile: "/repo/src/types.ts",
+    })
+    const source = compileValidatorModule([{ name: "catalog/search", ref }], {
+      resolveImport: (declarationFile) => {
+        expect(declarationFile).toBe("/repo/src/types.ts")
+        return "../types.ts"
+      },
+    })
+    expect(source).toContain('import type { BookQuery } from "../types.ts"')
+    expect(source).toContain("value is BookQuery")
+    // The named type isn't ALSO inlined structurally into the guard.
+    expect(source).not.toContain("value is { q")
+
+    // `import type` is type-only — Bun's transpiler elides it entirely, so
+    // the module still evaluates standalone even though "../types.ts" (a
+    // fixture path, not a real file) is never actually resolved at runtime.
+    const validators = evalModule(source)
+    expect(validators["catalog/search"]!({ q: "x" }).kind).toBe("ok")
+  })
+
+  it("groups multiple entries sharing the same resolved import specifier into one import line", () => {
+    const bookQueryRef = t(types.object({ q: t(types.string) }), {
+      typeName: "BookQuery",
+      declarationFile: "/repo/src/types.ts",
+    })
+    const bookIdRef = t(types.object({ bookId: t(types.string) }), {
+      typeName: "BookIdParam",
+      declarationFile: "/repo/src/types.ts",
+    })
+    const source = compileValidatorModule(
+      [
+        { name: "catalog/search", ref: bookQueryRef },
+        { name: "books/:bookId/read", ref: bookIdRef },
+      ],
+      { resolveImport: () => "../types.ts" },
+    )
+    const importLines = source.split("\n").filter((line) => line.startsWith("import type"))
+    expect(importLines).toEqual(['import type { BookIdParam, BookQuery } from "../types.ts"'])
+  })
+
+  it("without resolveImport, a typeName-carrying TypeRef still inlines its structure rather than referencing an unimported name", () => {
+    const ref = t(types.object({ q: t(types.string, { optional: true }) }), {
+      typeName: "BookQuery",
+      declarationFile: "/repo/src/types.ts",
+    })
+    const source = compileValidatorModule([{ name: "catalog/search", ref }])
+    expect(source).not.toContain("import type")
+    expect(source).not.toContain("value is BookQuery")
+    expect(source).toContain("value is { q?: string }")
   })
 })

@@ -91,7 +91,7 @@ Design decisions remain settled (below); implementation roadmap for Tier 2–3 f
 
 3. **All operations get validation, not protocol-specific**: All operations in the API tree (HTTP, CLI, MCP) receive validation. The tree carries the types (via extract), not the protocol. MCP's `inputSchema` is a projection artifact, not the source of truth.
 
-4. **Type guards from generated validators**: Generated validators should emit type guards (`(input: unknown) => input is BookQuery`), closing the runtime/TypeScript type gap. Currently generated validators are pure JS with `@ts-nocheck`, returning `Result<unknown, unknown>` with no type narrowing.
+4. **Type guards from generated validators** — DONE (2026-07-18): `typeRefFromFunctionNode` (packages/api-tree/src/extract.ts) now carries `meta.typeName`/`meta.declarationFile` provenance for a NAMED handler parameter type (alias/interface; inline object literals carry neither). `compileValidatorModule` (packages/type-ir/src/compile.ts) casts each entry's compiled `check` to `(value: unknown) => value is T` — `T` is the imported named type (via a caller-supplied `resolveImport(declarationFile) => moduleSpecifier`, since only the caller knows the emitted file's own location) or, absent that, `T`'s inline structural TypeScript rendering (`toTypeScript`, reused from the existing TS-string projector). `packages/api-tree/src/build.ts`'s `buildValidatorModuleSource(entryFile, outFile?)` resolves the relative import path from `outFile`. Generated output (`examples/library-api/src/generated/validators.ts`) dropped `@ts-nocheck` and typechecks clean under `strict`.
 
 5. **Strict validation vs. coercion are separate concerns**: Coercion converts string-source values to typed values (e.g., `"42"` → `42`). It's type-dependent (target type determines coercion), not source-dependent. Strict validation is orthogonal.
 
@@ -190,7 +190,7 @@ before acting.
 ### New threads from the 2026-07-18 validation & middleware session
 
 - **Exact coercion placement in the architecture** — where coercion logic lives (input stage? pre-validate? post-extract?), how it composes with validation, whether codegen produces combined or separate coercion+validation functions by default.
-- **Import resolution/provenance tracking for type guard codegen** — generated validator module needs to import the handler's parameter types; currently there's no mechanism for tracking where those types come from or wiring up the imports in the emitted code.
+- **Import resolution/provenance tracking for type guard codegen** — DONE (2026-07-18, same session as item 4 above): see that entry for the mechanism (`meta.typeName`/`meta.declarationFile` provenance + caller-supplied `resolveImport`).
 - **Pipeline removal/simplification timeline** — the 4 speculative transform stages on `HttpRoute` are replaced by middleware; remove them now or defer until the middleware story is fully built out?
 
 ### Other projection packages still on the old Node-walking pattern —

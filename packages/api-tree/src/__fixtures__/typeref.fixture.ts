@@ -177,6 +177,24 @@ export type NonDiscriminated = { a: string } | { b: number }
 export const shapeUnionFn = (shape: ShapeUnion): void => {}
 export const nonDiscriminatedFn = (u: NonDiscriminated): void => {}
 
+// ── Named top-level parameter type fixtures (import-provenance) ────────────
+
+/** A named object type, used as a handler's own parameter type directly —
+ * exercises `typeRefFromFunctionNode`'s `meta.typeName`/`meta.declarationFile`
+ * provenance (as opposed to an inline `(input: { … }) => …` parameter, which
+ * carries neither). */
+export type BookQuery = { q?: string }
+
+export const namedParamFn = (input: BookQuery): void => {}
+
+/** An interface (not a `type` alias) as a handler's parameter type — same
+ * provenance capture, different declaration syntax. */
+export interface BookIdParam {
+  bookId: string
+}
+
+export const namedInterfaceParamFn = (input: BookIdParam): void => {}
+
 // ── Symbol-branded type fixtures ────────────────────────────────────────────
 
 declare const LocationIdBrand: unique symbol

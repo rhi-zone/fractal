@@ -16,6 +16,7 @@
 import { Type, type TSchema } from "@sinclair/typebox"
 import { TypeCompiler } from "@sinclair/typebox/compiler"
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { toTypeScript } from "./typescript.ts"
 
 // ============================================================================
 // TypeRef -> TSchema (mirrors type-ir/src/typebox.ts, builds objects not strings)
@@ -173,51 +174,127 @@ function indent(code: string, spaces: number): string {
 const DEFAULT_ERROR_MESSAGE = "validation failed"
 
 /**
+ * `TypeCompiler.Code()` always emits a function BODY of the exact shape
+ * `return function check(value) { … }` (see `compileValidator`'s doc
+ * comment) whose body indexes into `value` with bracket access
+ * (`value['field']`) throughout — code that only type-checks against `any`.
+ * Giving the checked-in-by-hand `unknown`/named-type ANNOTATION to `check`'s
+ * CALLER (via the `as (value: unknown) => value is T` cast below) is what
+ * makes the emitted validator narrow; the raw compiled body underneath stays
+ * untyped by annotating its own parameter with an EXPLICIT `any` — distinct
+ * from an IMPLICIT `any`, which `strict`'s `noImplicitAny` would reject once
+ * `@ts-nocheck` is gone. (A narrower annotation, even `unknown`, breaks: TS's
+ * built-in `typeof`/`Array.isArray` narrowing collapses `value` to `{}`
+ * ahead of each bracket access, and `{}` has no indexable properties.)
+ */
+function annotateCheckParam(code: string): string {
+  return code.replace("function check(value)", "function check(value: any)")
+}
+
+/**
+ * The type-guard annotation for a validator's input, plus the `import type`
+ * this annotation needs (if any). Two cases:
+ *   - The TypeRef carries `meta.typeName` + `meta.declarationFile` (see
+ *     index.ts's meta-bag doc — set by `@rhi-zone/fractal-api-tree`'s
+ *     `typeRefFromFunctionNode` for a NAMED handler parameter type) AND the
+ *     caller passed `resolveImport` to turn that declaration file into a
+ *     module specifier: the annotation is the bare type name, imported.
+ *   - Otherwise (anonymous/inline parameter type, or no `resolveImport`):
+ *     the annotation is the type's own structural TypeScript rendering
+ *     (`toTypeScript`, this package's TS-string projector) — inlined
+ *     directly into the guard, no import needed.
+ */
+function guardAnnotation(
+  ref: TypeRef,
+  resolveImport: ((declarationFile: string) => string) | undefined,
+): { annotation: string; typeImport?: { typeName: string; from: string } } {
+  const typeName = typeof ref.meta.typeName === "string" ? ref.meta.typeName : undefined
+  const declarationFile = typeof ref.meta.declarationFile === "string" ? ref.meta.declarationFile : undefined
+  if (typeName !== undefined && declarationFile !== undefined && resolveImport !== undefined) {
+    return { annotation: typeName, typeImport: { typeName, from: resolveImport(declarationFile) } }
+  }
+  return { annotation: toTypeScript(ref) }
+}
+
+/**
  * Compile a single TypeRef to a standalone JS EXPRESSION (not a statement)
  * evaluating to a `Validator` — `(bag) => Result<unknown, unknown>` — with no
  * runtime dependency on TypeBox. `TypeCompiler.Code()`'s output is a function
  * BODY (`return function check(value) {...}`); wrapping it in an IIFE and
  * capturing the returned function is what lets a second IIFE adapt its
  * boolean return into the `Result` shape `route.ts`'s pipeline expects.
+ *
+ * The returned expression is a type guard: `check` is cast to `(value:
+ * unknown) => value is T` (T = the TypeRef's structural TypeScript
+ * rendering — a single expression has no module scope to `import` a named
+ * type into, so this always inlines; `compileValidatorModule` below is the
+ * one that can import), so `bag` narrows to `T` in the `"ok"` branch.
  */
 export function compileValidator(ref: TypeRef, errorMessage: string = DEFAULT_ERROR_MESSAGE): string {
   const schema = buildSchema(ref)
-  const code = TypeCompiler.Code(schema)
+  const code = annotateCheckParam(TypeCompiler.Code(schema))
+  const { annotation } = guardAnnotation(ref, undefined)
   return [
     "(function () {",
     "  const check = (function () {",
     indent(code, 4),
-    "  })();",
-    `  return (bag) => (check(bag) ? { kind: "ok", value: bag } : { kind: "err", error: { message: ${JSON.stringify(errorMessage)} } });`,
+    `  })() as (value: unknown) => value is ${annotation};`,
+    `  return (bag: Record<string, unknown>) => (check(bag) ? { kind: "ok" as const, value: bag } : { kind: "err" as const, error: { message: ${JSON.stringify(errorMessage)} } });`,
     "})()",
   ].join("\n")
 }
 
 /**
- * Emit a complete, standalone, zero-dependency JS module exporting a
- * `validators` object — `Record<name, Validator>`, i.e. the INNER map of a
- * `ValidatorMap` (see route.ts). The build orchestrator (build.ts) is
- * responsible for nesting this under whatever outer key it passes to
- * `createApplyValidation`'s `applyValidation(key, route)`.
+ * Emit a complete, standalone, zero-dependency-AT-RUNTIME TypeScript module
+ * exporting a `validators` object — `Record<name, Validator>`, i.e. the
+ * INNER map of a `ValidatorMap` (see route.ts). The build orchestrator
+ * (build.ts) is responsible for nesting this under whatever outer key it
+ * passes to `createApplyValidation`'s `applyValidation(key, route)`.
+ *
+ * Each entry's `check` is cast to a type-guard `(value: unknown) => value is
+ * T`, so `bag` narrows to `T` in the `"ok"` branch — a caller pattern-matching
+ * on `.kind` gets a typed `.value`, not `unknown`. `T` is either an imported
+ * named type (when `options.resolveImport` can place it — see
+ * `guardAnnotation`) or that type's own inline structural rendering.
+ * TypeBox remains build-time-only: nothing in the emitted source imports it.
  */
-export function compileValidatorModule(entries: readonly { name: string; ref: TypeRef }[]): string {
+export function compileValidatorModule(
+  entries: readonly { name: string; ref: TypeRef }[],
+  options?: { resolveImport?: (declarationFile: string) => string },
+): string {
+  const imports = new Map<string, Set<string>>() // module specifier -> type names
   const lines: string[] = []
   lines.push("// AUTO-GENERATED by @rhi-zone/fractal-type-ir. Do not edit by hand.")
   lines.push("")
-  lines.push("export const validators = {")
+
+  const entryLines: string[] = []
   for (const { name, ref } of entries) {
     const schema = buildSchema(ref)
-    const code = TypeCompiler.Code(schema)
+    const code = annotateCheckParam(TypeCompiler.Code(schema))
     const errorMessage = `validation failed: ${name}`
-    lines.push(`  ${JSON.stringify(name)}: (function () {`)
-    lines.push("    const check = (function () {")
-    lines.push(indent(code, 6))
-    lines.push("    })();")
-    lines.push(
-      `    return (bag) => (check(bag) ? { kind: "ok", value: bag } : { kind: "err", error: { message: ${JSON.stringify(errorMessage)} } });`,
+    const { annotation, typeImport } = guardAnnotation(ref, options?.resolveImport)
+    if (typeImport) {
+      const names = imports.get(typeImport.from) ?? new Set<string>()
+      names.add(typeImport.typeName)
+      imports.set(typeImport.from, names)
+    }
+    entryLines.push(`  ${JSON.stringify(name)}: (function () {`)
+    entryLines.push("    const check = (function () {")
+    entryLines.push(indent(code, 6))
+    entryLines.push(`    })() as (value: unknown) => value is ${annotation};`)
+    entryLines.push(
+      `    return (bag: Record<string, unknown>) => (check(bag) ? { kind: "ok" as const, value: bag } : { kind: "err" as const, error: { message: ${JSON.stringify(errorMessage)} } });`,
     )
-    lines.push("  })(),")
+    entryLines.push("  })(),")
   }
+
+  for (const [from, names] of imports) {
+    lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`)
+  }
+  if (imports.size > 0) lines.push("")
+
+  lines.push("export const validators = {")
+  lines.push(...entryLines)
   lines.push("}")
   lines.push("")
   return lines.join("\n")

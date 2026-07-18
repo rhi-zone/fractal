@@ -22,6 +22,13 @@ import type { Result as ResultFromBarrel } from "./result-reexport.fixture.ts"
 // site maps to T.
 type ApiResult<T> = Result<T, string>
 
+// A NAMED parameter type (as opposed to every other op below, whose input is
+// an inline object literal) — exercises the import-provenance path:
+// `typeRefFromFunctionNode` should carry `meta.typeName`/`meta.declarationFile`
+// for this op's input, which `buildValidatorModuleSource` (build.test.ts)
+// then turns into a generated `import type { BookQuery } from "…"`.
+export type BookQuery = { q?: string }
+
 // Named-constant op — declared separately and referenced by identifier in the
 // tree literal below, exercising the walker's identifier-resolution path
 // (not just inline `op(...)` calls). Mirrors examples/library-api's
@@ -102,6 +109,11 @@ export const tree = api({
           async (_input: { id: string }): Promise<Result<{ name: string }, string>> =>
             ({ kind: "ok", value: { name: "Alice" } }),
         ),
+      }),
+    // A NAMED parameter type (`BookQuery`, declared above) — see its doc
+    // comment for what this exercises.
+    namedType: api({
+        search: op((input: BookQuery) => ({ hits: input.q === undefined ? 0 : 1 })),
       }),
     // Genuinely-different union that must NOT be false-positived.
     // This is a 2-member union but does NOT have the Result name or DU shape.
