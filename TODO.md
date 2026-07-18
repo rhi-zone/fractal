@@ -261,6 +261,43 @@ recorded in `docs/design/decisions.md` § Package naming convention. Verified
 `.md` sources (checked via grep across the repo, excluding `node_modules`);
 all 1600 tests across the monorepo pass.
 
+---
+
+## Projector coverage audit — OPEN (2026-07-18)
+
+Surface inventory of missing or incomplete projector implementations across HTTP, CLI, MCP, type-IR, and extraction layer. Organized by severity for prioritization.
+
+### HIGH — blocks production use:
+
+1. **HTTP: no non-JSON content types** — multipart, form-data, file upload, octet-stream unsupported. Request/response payload only supports JSON serialization.
+2. **HTTP: no streaming responses** — SSE/chunked encoding unavailable. Critical blocker for AI/realtime use cases (streaming LLM outputs, live data feeds).
+3. **HTTP: no auth metadata** — no `securitySchemes` in OpenAPI output. Can't emit security requirements in the spec.
+4. **HTTP client: no retry/backoff, timeout, or streaming** — generated client has no resilience or streaming support.
+5. **MCP server: no progress notifications** — long-running tool calls appear hung with no way to report progress to the client.
+6. **Cross-cutting: validation inconsistent** — HTTP's validation (optional, codegen-based, wired via `injectValidators`) differs from CLI and MCP (hand-rolled per projector). No shared validation primitive exists.
+7. **Type-IR `fromJsonSchema`: silently mishandles draft-04/07 tuple syntax** — expects 2020-12 `prefixItems` format; older schemas with positional array items fail silently or produce incorrect TypeRefs.
+
+### MEDIUM-HIGH:
+
+8. **MCP: no sampling support** — server and client lack sampling capability. Blocks LLM-in-the-loop tool patterns (e.g. model-chooses-tool chains).
+9. **Node: no auth/permission metadata convention** — each projector reinvents or skips. No settled pattern.
+
+### MEDIUM:
+
+10. **HTTP: no declarative status codes** — always 200/400 unless handler overrides. No way to declare that an operation always returns 201, 301, 204, etc.
+11. **CLI: no interactive prompts** — can't prompt for missing args interactively; no stdin piping support.
+12. **MCP server: no logging, subscriptions, or cancellation** — missing `notifications/message`, `resources/subscribe`, tool `Cancel` support.
+13. **Node: no deprecation at tree level** — only `meta.openapi.deprecated` exists (HTTP-specific). Should be projector-agnostic.
+14. **Node: no structured error types** — no way to declare operation-specific error outcomes in the tree. Handlers throw or return Result; tree is silent.
+15. **Type-IR: no readonly modifier** — IR lacks a way to express read-only fields. Most targets support it; IR doesn't track it.
+16. **Extract: no overloaded functions, generics, or async generators** — these TS patterns either error or degrade silently.
+
+### Missing projectors entirely:
+
+17. **GraphQL** — no type-ir projector, no API projector. Design exploration archived at `docs/archive/fc-op-kinds/projection-graphql.md`.
+
+---
+
 ## Open design questions
 
 ### ~~Attribute dispatch (header/query/contentType) is an open design question~~
