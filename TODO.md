@@ -3,8 +3,27 @@
 ## Next session (handoff)
 
 Pick up from:
-- MCP protocol features (resources, prompts, streaming, logging, transport presets, sampling) — see "MCP protocol gaps" section below
+- Input-source pipeline core abstraction — see "Input-source pipeline" section below
+- MCP protocol features (Tier 2–3: logging, streaming, sampling) — see "MCP protocol gaps" section below for Tier 2–3 items
 - Open threads in "Open threads" section — start with the discovery notes from 2026-07-18 session
+
+---
+
+## Input-source pipeline — core abstraction (cross-cutting) — OPEN (2026-07-18)
+
+The input-resolution mechanism that HTTP's projector implements (named stores → sourceMap → convention-based defaults → assembled handler input) should live in core, not per-projector. Currently:
+
+- **HTTP** (`http-api-projector`): Full pipeline — named stores (path, query, header, body), per-param `sourceMap` overrides, convention-based defaults (GET→query, POST→body), optional transform. Implemented in `defaultDecode` / `Pipeline.sources`.
+- **CLI** (`cli-api-projector`): Hardcoded to flags + slug values in `buildInput()`. No env, config, stdin stores. No sourceMap, no per-param overrides.
+- **MCP** (`mcp-api-projector`): Passes client arguments or URI-template variables directly. No pipeline.
+
+Design (settled in conversation):
+- Core owns the resolution mechanism: named stores → sourceMap → assembled input. Each projector populates its stores from its transport.
+- Store names are projector-defined (HTTP: path/query/header/body; CLI: flag/positional/env/config/stdin; MCP: argument/uri-variable).
+- The sourceMap, convention defaults, type coercion, required-field validation, and transform are shared.
+- Separate concern from handler context/capabilities (#2 below).
+
+Related but distinct: **handler context** — transport-level capabilities pushed into the handler (MCP: reportProgress/log/sendNotification; HTTP: setHeader/stream; CLI: writeStderr/reportProgress). This is about what the handler can *do*, not what it *receives*. Needs its own design pass.
 
 ---
 
@@ -30,7 +49,7 @@ Pick up from:
   GET query params preserved. End-to-end tested with library-api example
   (generate script, generated client, live HTTP tests).
 
-## MCP protocol gaps (mcp-api-projector) — OPEN (2026-07-18)
+## MCP protocol gaps (mcp-api-projector) — Tier 1 DONE (2026-07-18), Tier 2–3 OPEN
 
 Input validation — DONE (2026-07-18). `createMcpServer`
 (`packages/mcp-api-projector/src/server.ts`) validates `tools/call` arguments
@@ -40,8 +59,11 @@ not a full JSON Schema validator; returns `isError: true` with a descriptive
 message on a missing required field or a type mismatch). This closes the
 "unvalidated input reaches handlers" gap.
 
-The projector is currently tools-only; resources, prompts, and streaming are
-the next layers. Design decisions are settled; implementation roadmap follows:
+Tier 1 — DONE. Resources, prompts (natural extensions of tree→projection),
+and rich content types (handler return type drives content type) are built and
+wired. Transport presets (`createStdioMcpServer`, `createHttpMcpServer`)
+convenience wrappers are built. Design decisions remain settled; implementation
+roadmap for Tier 2–3 follows:
 
 ### Design decisions (settled)
 
@@ -59,26 +81,21 @@ the next layers. Design decisions are settled; implementation roadmap follows:
 
 ### Implementation roadmap
 
-**Tier 1** — Natural extensions of tree→projection:
-1. Resources (`resources/list`, `resources/read`, `resources/subscribe`) —
-   `meta.mcp.as: "resource"`, URI from tree position, fallback→URI template
-   vars, mimeType meta.
-2. Prompts (`prompts/list`, `prompts/get`) — `meta.mcp.as: "prompt"`, handler
-   returns messages.
-3. Rich content types — handler return type drives content type instead of
-   always `JSON.stringify`.
+**Tier 1 — DONE (2026-07-18)**: Natural extensions of tree→projection
+1. Resources (`resources/list`, `resources/read`, `resources/subscribe`) — built.
+2. Prompts (`prompts/list`, `prompts/get`) — built.
+3. Rich content types — built.
+4. Transport presets (`createStdioMcpServer`, `createHttpMcpServer`) — built.
 
-**Tier 2** — Server-level features:
-4. Transport presets — `createStdioMcpServer`, `createHttpMcpServer`
-   convenience wrappers.
-5. Logging — `notifications/message` + log-level negotiation.
-6. Streaming/progress — `notifications/progress`, handler receives context
+**Tier 2 — OPEN** — Server-level features:
+1. Logging — `notifications/message` + log-level negotiation.
+2. Streaming/progress — `notifications/progress`, handler receives context
    with `reportProgress` callback.
 
-**Tier 3** — Client↔server (speculative until concrete use case):
-7. Sampling.
-8. Roots.
-9. Subscriptions (change notifications for resources).
+**Tier 3 — OPEN** — Client↔server (speculative until concrete use case):
+1. Sampling.
+2. Roots.
+3. Subscriptions (change notifications for resources).
 
 ## Session wrap-up: DX build-out + extractor rewrite — DONE (2026-07-18)
 
