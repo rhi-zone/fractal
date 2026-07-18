@@ -81,6 +81,32 @@ Design decisions remain settled (below); implementation roadmap for Tier 2–3 f
 
 ---
 
+## Validation & middleware patterns — SETTLED (2026-07-18)
+
+### Design decisions (settled)
+
+1. **Pipeline type simplification**: The 8-stage `HttpRoute` pipeline is being replaced. The 4 transform stages (reqTransforms, inputTransforms, outputTransforms, resTransforms) are unused speculative infrastructure. Real needs (ALS bracket, caller-context, around-hooks) are served by the middleware/layer pattern (`(inner) => (req) => result`), which already exists and is load-bearing (`autoMethodLayer`, `corsLayer`). The actual working pipeline is: decode (stores/assemble) → validate → handler → encode.
+
+2. **Validation is a composable middleware, not a core concept**: No special validation slot in core. A validation package provides middleware that uses generated validators.
+
+3. **All operations get validation, not protocol-specific**: All operations in the API tree (HTTP, CLI, MCP) receive validation. The tree carries the types (via extract), not the protocol. MCP's `inputSchema` is a projection artifact, not the source of truth.
+
+4. **Type guards from generated validators**: Generated validators should emit type guards (`(input: unknown) => input is BookQuery`), closing the runtime/TypeScript type gap. Currently generated validators are pure JS with `@ts-nocheck`, returning `Result<unknown, unknown>` with no type narrowing.
+
+5. **Strict validation vs. coercion are separate concerns**: Coercion converts string-source values to typed values (e.g., `"42"` → `42`). It's type-dependent (target type determines coercion), not source-dependent. Strict validation is orthogonal.
+
+6. **Coercion supports combined and separate modes**: Combined mode is one-pass transform+validate for performance on deeply recursive types. Separate mode is strict validate after coerce. Codegen can generate either.
+
+7. **Uniform middleware across all surfaces**: Middleware mechanism is identical across HTTP, CLI, MCP — same `(inner) => ... => result` layer shape. CLI has a routing tree (subcommands) just like HTTP has routes.
+
+8. **CLI validation subsumes ad-hoc patterns**: `coerceInput`/`validateRequired` in CLI projector are ad-hoc and will be subsumed by the shared validation/coercion story.
+
+### Reference
+
+Requirements doc at `~/git/*/docs/artifacts/fractal-eval-2026-07/requirements-for-fractal.md` identifies the pipeline's limitations and motivates middleware/layers across all surfaces.
+
+---
+
 ## Projector coverage audit — MOSTLY COMPLETE (2026-07-18)
 
 ---
@@ -161,7 +187,13 @@ before acting.
   import from `http-api-projector` instead. `OpenApiMeta` and `CliMeta` are
   exported alongside `HttpMeta`/`McpMeta` as of the same commit. `OpenApiMeta`
   now lives in `http-api-projector` too, post-merge.
-- **Other projection packages still on the old Node-walking pattern** —
+### New threads from the 2026-07-18 validation & middleware session
+
+- **Exact coercion placement in the architecture** — where coercion logic lives (input stage? pre-validate? post-extract?), how it composes with validation, whether codegen produces combined or separate coercion+validation functions by default.
+- **Import resolution/provenance tracking for type guard codegen** — generated validator module needs to import the handler's parameter types; currently there's no mechanism for tracking where those types come from or wiring up the imports in the emitted code.
+- **Pipeline removal/simplification timeline** — the 4 speculative transform stages on `HttpRoute` are replaced by middleware; remove them now or defer until the middleware story is fully built out?
+
+### Other projection packages still on the old Node-walking pattern —
   narrowed (2026-07-18): `openapi` and `client` (commits d7fd295, 96f4635)
   now consume the already-projected `HttpRoute` tree instead of re-walking
   raw `Node` — both live inside `http-api-projector` now (see the merge
