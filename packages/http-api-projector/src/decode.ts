@@ -56,7 +56,7 @@ declare module "@rhi-zone/fractal-api-tree" {
  * returns `undefined` for them rather than coercing to a string.
  */
 const mapLikeHandler: ProxyHandler<{ get(key: string): unknown }> = {
-  get: (target, prop) => (typeof prop === "string" ? target.get(prop) : undefined),
+  get: (target, prop) => (typeof prop === "string" ? target.get(prop) ?? undefined : undefined),
 }
 
 /**

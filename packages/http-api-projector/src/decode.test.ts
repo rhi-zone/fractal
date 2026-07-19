@@ -32,10 +32,9 @@ describe("httpStores", () => {
     const stores = httpStores(req, {}, undefined)
     expect(stores.query!.q).toBe("dune")
     expect(stores.query!.limit).toBe("10")
-    // URLSearchParams.get() returns null (not undefined) for a missing key,
-    // and the shared mapLikeHandler proxy is a thin pass-through to .get() —
-    // it doesn't coerce null to undefined.
-    expect(stores.query!.missing).toBeNull()
+    // URLSearchParams.get() returns null for a missing key, but the proxy
+    // handler coerces it to undefined for consistency with plain object stores.
+    expect(stores.query!.missing).toBeUndefined()
   })
 
   it("query store is a lazily-constructed, memoized Proxy", () => {
@@ -53,9 +52,9 @@ describe("httpStores", () => {
     const stores = httpStores(req, {}, undefined)
     expect(stores.header!["x-api-key"]).toBe("secret-123")
     expect(stores.header!["content-type"]).toBe("application/json")
-    // Headers.get() returns null (not undefined) for a missing key, same
-    // pass-through reasoning as the query store above.
-    expect(stores.header!.missing).toBeNull()
+    // Headers.get() returns null for a missing key, but the proxy handler
+    // coerces it to undefined for consistency with plain object stores.
+    expect(stores.header!.missing).toBeUndefined()
   })
 
   it("body store returns fields from parsed body object", () => {
