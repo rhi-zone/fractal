@@ -33,7 +33,6 @@
 //   packages/api-tree/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
-import { AsyncLocalStorage } from "node:async_hooks"
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
@@ -44,6 +43,7 @@ import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
+import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import { generateCompletions, isShellName } from "./completions.ts"
 
 // ============================================================================
@@ -132,10 +132,7 @@ export type CliOpts<T = unknown> = {
    * (the dispatch info passed to every middleware) instead. Absent by
    * default (no ALS wrapping).
    */
-  readonly als?: {
-    readonly storage: AsyncLocalStorage<T>
-    readonly init: (context: CliMiddlewareContext) => T
-  }
+  readonly als?: AlsConfig<CliMiddlewareContext, T>
   /**
    * Around-hooks wrapping the handler call, with access to CLI-specific
    * dispatch context (see `CliMiddlewareContext`). Composes like an onion:

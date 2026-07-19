@@ -38,7 +38,7 @@ import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
-import { bulkCollect, httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
+import { httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"
 
 // ============================================================================
@@ -663,9 +663,13 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
  * `sources` on the matched method entry.
  *
  * When `sources.paramNames` is provided, the assembler reads exactly those
- * params from the appropriate stores. When absent (the common case until
- * codegen-derived param lists are wired in), falls back to bulk-collecting
- * all available values.
+ * params from the appropriate stores. When absent (no codegen-derived param
+ * list wired in for this route), `paramNames` is computed the same way
+ * cli-api-projector's `buildInput` and mcp-api-projector's `assembleInput`
+ * do: the union of every key any store could actually produce (path slugs,
+ * query keys, body keys) plus any name declared purely via `sourceMap` —
+ * then run through the same `assemble` call as the declarative path. No
+ * separate bulk-merge codepath.
  *
  * The body is parsed once here. Methods that conventionally carry no body
  * (GET/HEAD/DELETE) skip body parsing entirely.
@@ -687,17 +691,25 @@ async function defaultDecode(
     }
   }
 
-  let bag: Record<string, unknown>
+  const stores = httpStores(req, slugs, parsedBody)
+  const pathParamNames = Object.keys(slugs)
+  const sourceMap = sources?.sourceMap ?? {}
 
-  if (sources?.paramNames !== undefined && sources.paramNames.length > 0) {
-    // Declarative path: assemble from named stores using explicit param list
-    const stores = httpStores(req, slugs, parsedBody)
-    const pathParamNames = Object.keys(slugs)
-    bag = assemble(stores, sources.paramNames, sources.sourceMap ?? {}, primary, pathParamNames)
-  } else {
-    // Bulk-collect path: backward compat — merge all available values
-    bag = bulkCollect(slugs, url.searchParams, parsedBody, primary)
-  }
+  const paramNames =
+    sources?.paramNames !== undefined && sources.paramNames.length > 0
+      ? sources.paramNames
+      : [
+          ...new Set([
+            ...pathParamNames,
+            ...url.searchParams.keys(),
+            ...(typeof parsedBody === "object" && parsedBody !== null
+              ? Object.keys(parsedBody as Record<string, unknown>)
+              : []),
+            ...Object.keys(sourceMap),
+          ]),
+        ]
+
+  let bag = assemble(stores, paramNames, sourceMap, primary, pathParamNames)
 
   // Optional transform after assembly
   if (sources?.transform !== undefined) {

@@ -8,17 +8,18 @@
 // Unlike the client, this walks the raw `Node` tree directly — there is no
 // HttpRoute pipeline, no verb/path derivation, no fetch/serialization.
 //
-// Bound slug values: on the HTTP side, `runRoute`'s `bulkCollect` seeds
-// the decoded input bag with the request's captured slugs before merging in
-// query/body fields (slugs first, explicit fields win on conflict — see
-// packages/http-api-projector/src/decode.ts `bulkCollect`). A handler like
+// Bound slug values: on the HTTP side, `defaultDecode` (route.ts) seeds the
+// decoded input bag with the request's captured slugs — a param name that
+// matches a route path slug always resolves from the `path` store, ahead of
+// the primary store or any `sourceMap` override (see `assemble`'s
+// resolution order in packages/api-tree/src/input.ts). A handler like
 // `readBook` in examples/library-api declares `input: { bookId: string }`
 // and relies on that seeding — it is never passed `bookId` explicitly by a
 // caller. `api.books.bookId("123").read()` only works if this projection
 // reproduces that seeding: each `fallback` call accumulates its slug value,
 // and every leaf beneath it merges the accumulated slugs into the input
 // object it hands the handler (accumulated slugs first, caller-supplied
-// fields win — same precedence as `bulkCollect`).
+// fields win — same precedence path params take in `assemble`).
 //
 // A node carrying BOTH a handler and children (an uncommon but valid Node
 // shape, see node.ts) becomes a callable function with the child API
@@ -28,7 +29,7 @@
 // See:
 //   packages/api-tree/src/node.ts                 — Node, Handler, fallback, isLeaf
 //   packages/http-api-projector/src/client.ts     — the HTTP-backed analogue
-//   packages/http-api-projector/src/decode.ts      — bulkCollect (slug-seeding precedent)
+//   packages/http-api-projector/src/route.ts       — defaultDecode (slug-seeding precedent)
 
 import { isLeaf } from "./node.ts"
 import type { Handler, Node } from "./node.ts"
@@ -90,8 +91,9 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 /**
  * Merge accumulated slug values into the caller-supplied input, slugs first
- * so explicit fields win on conflict — mirrors `bulkCollect`'s precedence.
- * With no accumulated slugs, the input passes through unchanged (including
+ * so explicit fields win on conflict — mirrors path params' precedence in
+ * `assemble`'s resolution order (packages/api-tree/src/input.ts). With no
+ * accumulated slugs, the input passes through unchanged (including
  * non-object inputs, which a slug bag can't merge into).
  */
 function withSlugs(slugs: Slugs, input: unknown): unknown {
@@ -142,7 +144,7 @@ function buildApi(tree: Node, slugs: Slugs): AnyApi {
  * - `fallback`: a `(slugValue: string) => subApi` function keyed by
  *   `fallback.name`, mirroring the client's wildcard-capture handling. The
  *   slug value is threaded down and merged into every descendant leaf's
- *   input (see module doc — `bulkCollect` precedent).
+ *   input (see module doc — `defaultDecode` slug-seeding precedent).
  * - `Slugs` parameter: accumulated fallback names are subtracted from handler
  *   inputs via `Omit`. When all input keys are slug-captured, the callable
  *   collapses to zero args.

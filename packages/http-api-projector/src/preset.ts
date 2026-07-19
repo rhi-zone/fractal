@@ -42,10 +42,10 @@
 //   const methods = autoMethodLayer(router, routes)
 //   return corsLayer({ origin: "https://app.example.com" })(methods)
 
-import type { AsyncLocalStorage } from "node:async_hooks"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import { makeRouterFromRoute } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
 import { httpProjection } from "./dx.ts"
@@ -121,10 +121,7 @@ export type PresetOptions<T = unknown> = {
    * that still call through to the router also run inside the context.
    * Absent by default (no ALS wrapping).
    */
-  readonly als?: {
-    readonly storage: AsyncLocalStorage<T>
-    readonly init: (req: Request) => T
-  }
+  readonly als?: AlsConfig<Request, T>
   /**
    * Consumer-supplied `Fetch => Fetch` layers, applied in array order —
    * the first entry is the outermost wrapper. Composed around the compiled

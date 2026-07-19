@@ -74,32 +74,3 @@ export function primaryStoreForMethod(method: string): string {
   }
 }
 
-// ============================================================================
-// Bulk collect — backward-compat fallback when no param names are known
-// ============================================================================
-
-/**
- * Collect all available values from the path and primary source stores,
- * producing the same flat bag that the old `defaultDecode` returned. Used
- * when no schema/paramNames information is available (the common case until
- * codegen-derived param lists are wired in).
- */
-export function bulkCollect(
-  slugs: Readonly<Record<string, string>>,
-  queryParams: URLSearchParams,
-  parsedBody: unknown,
-  primaryStore: string,
-): Record<string, unknown> {
-  const bag: Record<string, unknown> = { ...slugs }
-  if (primaryStore === "query") {
-    for (const [k, v] of queryParams) bag[k] = v
-  } else {
-    // body is primary — merge body fields, but also merge query params
-    // (backward compat: old defaultDecode merged query for all methods)
-    for (const [k, v] of queryParams) bag[k] = v
-    if (typeof parsedBody === "object" && parsedBody !== null) {
-      Object.assign(bag, parsedBody)
-    }
-  }
-  return bag
-}

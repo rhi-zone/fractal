@@ -86,9 +86,10 @@ else still follows the primary-store rule.
 
 ## 4. Explicit param lists — `sources.paramNames`
 
-By default (see §5), decode bulk-collects everything it can find. Providing
-`paramNames` switches to **declarative** mode: the assembler reads exactly
-those names, nothing more, each via the resolution order:
+By default (see §5), decode computes a param list from everything it can
+find. Providing `paramNames` explicitly switches to **declarative** mode:
+the assembler reads exactly those names, nothing more, each via the
+resolution order:
 
 ```ts
 const pipeline: Pipeline = {
@@ -113,17 +114,23 @@ generated instead of hand-written.
 
 ---
 
-## 5. Bulk-collect fallback
+## 5. Computed `paramNames` fallback
 
-When `paramNames` is absent (or empty), decode falls back to `bulkCollect`:
-it merges all path slugs, all query params, and (for body-primary methods)
-all body fields into one flat bag — this is the pre-stores `defaultDecode`
-behavior, preserved for backward compatibility so existing handlers that
-don't declare a param list keep working unchanged.
+When `sources.paramNames` is absent (or empty), decode computes a param
+list itself instead of running a separate merge codepath — the same
+approach cli-api-projector's `buildInput` and mcp-api-projector's
+`assembleInput` use: the union of every key any store could actually
+produce (path slugs, query keys, body keys) plus any name declared purely
+via `sourceMap`, then that list runs through the exact same `assemble` call
+as the declarative path (§4's resolution order applies unchanged).
 
-Note the bulk-collect quirk carried over from the old behavior: query params
-are merged in regardless of method, even when body is the primary store —
-useful for things like `?debug=1` alongside a JSON POST body.
+Because each param name resolves through exactly one store (path override,
+`sourceMap` override, or the primary store), a query-only key on a
+body-primary request only ends up in the bag if it's also reachable via
+`sourceMap` or happens to collide with a path slug — there is no longer an
+implicit "always merge query too" behavior for body-primary methods. Declare
+an explicit `sourceMap` entry (`{ store: "query" }`) for any param that must
+be readable from query regardless of method.
 
 ---
 
@@ -181,7 +188,7 @@ when convenient, not as a requirement.
   GET/HEAD/DELETE, body otherwise).
 - `sources.sourceMap` overrides individual params to a different
   store/key.
-- `sources.paramNames` switches from bulk-collect to an explicit, declarative
-  param list — the mode codegen is expected to drive.
+- `sources.paramNames` switches from the computed param list to an explicit,
+  declarative param list — the mode codegen is expected to drive.
 - `sources.transform` reshapes the assembled bag as a final step.
 - `Pipeline.decode` bypasses stores entirely for full manual control.

@@ -4,7 +4,7 @@ import { describe, expect, it } from "bun:test"
 import { api, op } from "@rhi-zone/fractal-api-tree/node"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 import { applyMethods, applyMoveTo, composeTransforms, httpRoute } from "./route.ts"
-import { assemble, bulkCollect, httpStores, primaryStoreForMethod } from "./decode.ts"
+import { assemble, httpStores, primaryStoreForMethod } from "./decode.ts"
 
 // ============================================================================
 // Unit tests — stores, assembler, conventions
@@ -103,26 +103,6 @@ describe("assemble", () => {
       [],
     )
     expect(result).toEqual({ "x-request-id": "abc" })
-  })
-})
-
-describe("bulkCollect", () => {
-  it("merges slugs + query for query-primary methods", () => {
-    const params = new URLSearchParams("q=test&page=1")
-    const result = bulkCollect({ bookId: "b-1" }, params, undefined, "query")
-    expect(result).toEqual({ bookId: "b-1", q: "test", page: "1" })
-  })
-
-  it("merges slugs + query + body for body-primary methods", () => {
-    const params = new URLSearchParams("extra=yes")
-    const result = bulkCollect({ id: "x" }, params, { title: "Dune" }, "body")
-    expect(result).toEqual({ id: "x", extra: "yes", title: "Dune" })
-  })
-
-  it("body fields override query fields on collision (body-primary)", () => {
-    const params = new URLSearchParams("title=from-query")
-    const result = bulkCollect({}, params, { title: "from-body" }, "body")
-    expect(result).toEqual({ title: "from-body" })
   })
 })
 

@@ -41,7 +41,6 @@
 //   packages/mcp-api-projector/src/project.ts   — toTools/projectTools/projectResources (descriptors + dispatch tables)
 //   packages/http-api-projector/src/preset.ts   — sibling preset (createFetch, structural mirror)
 
-import { AsyncLocalStorage } from "node:async_hooks"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import {
   CallToolRequestSchema,
@@ -67,6 +66,7 @@ import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
+import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import { projectPrompts, projectResources, projectTools } from "./project.ts"
 import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "./project.ts"
 
@@ -362,10 +362,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    * via `context` (the dispatch info passed to every middleware) instead.
    * Absent by default (no ALS wrapping).
    */
-  readonly als?: {
-    readonly storage: AsyncLocalStorage<T>
-    readonly init: (context: McpMiddlewareContext) => T
-  }
+  readonly als?: AlsConfig<McpMiddlewareContext, T>
   /**
    * Around-hooks wrapping each tool/resource/prompt handler call, with
    * access to MCP-specific dispatch context (see `McpMiddlewareContext`).

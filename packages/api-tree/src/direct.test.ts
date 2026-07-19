@@ -80,7 +80,7 @@ describe("createDirectApi", () => {
       const direct = createDirectApi(tree)
       // bookId is slug-subtracted from the type, so the typed signature is
       // `() => Promise<...>`. The runtime still merges explicit fields over
-      // slugs (bulkCollect precedent), but exercising that override requires
+      // slugs (mirrors `assemble`'s path-param precedence), but exercising that override requires
       // escaping the type — this is intentional: the override is an escape
       // hatch, not the normal call pattern.
       const read = direct.bookId("abc").read as (input: { bookId: string }) => Promise<{ bookId: string }>
