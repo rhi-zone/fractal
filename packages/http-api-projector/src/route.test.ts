@@ -499,6 +499,97 @@ describe("runRoute — default decode/encode", () => {
 })
 
 // ============================================================================
+// runRoute — ResponseOverride body passthrough (encodeOverride). A response
+// directive's handler return value becomes the override's `body` verbatim
+// (see `wrapResponse` in route.ts), so exercising this through
+// `{ kind: "response" }` + a handler returning a non-plain-object value is
+// the direct way to drive `encodeOverride` without reaching for the
+// module-private `RESPONSE_OVERRIDE` brand.
+// ============================================================================
+
+describe("runRoute — ResponseOverride body passthrough", () => {
+  it("binary ArrayBuffer body passes through untouched with the handler's content-type", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    const api = op((_: unknown) => bytes.buffer, {
+      http: {
+        directives: [
+          { kind: "response", headers: { "Content-Type": "application/octet-stream" } },
+        ],
+      },
+    })
+    const route = applyResponse(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/", { method: "POST" }))
+    expect(res.headers.get("Content-Type")).toBe("application/octet-stream")
+    const buf = await res.arrayBuffer()
+    expect(new Uint8Array(buf)).toEqual(bytes)
+  })
+
+  it("string body with an explicit non-JSON content-type passes through as-is", async () => {
+    const api = op((_: unknown) => "<h1>hello</h1>", {
+      http: { directives: [{ kind: "response", headers: { "Content-Type": "text/html" } }] },
+    })
+    const route = applyResponse(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/", { method: "POST" }))
+    expect(res.headers.get("Content-Type")).toBe("text/html")
+    expect(await res.text()).toBe("<h1>hello</h1>")
+  })
+
+  it("string body WITHOUT an explicit content-type still gets JSON.stringify'd (backwards compat)", async () => {
+    const api = op((_: unknown) => "plain string", {
+      http: { directives: [{ kind: "response", status: 200 }] },
+    })
+    const route = applyResponse(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/", { method: "POST" }))
+    expect(res.headers.get("Content-Type")).toBe("application/json")
+    expect(await res.text()).toBe(JSON.stringify("plain string"))
+  })
+
+  it("ReadableStream body passes through for streaming", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("chunk-1"))
+        controller.close()
+      },
+    })
+    const api = op((_: unknown) => stream, {
+      http: { directives: [{ kind: "response", headers: { "Content-Type": "text/plain" } }] },
+    })
+    const route = applyResponse(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/", { method: "POST" }))
+    expect(await res.text()).toBe("chunk-1")
+  })
+
+  it("a full Response object as the override body is returned directly", async () => {
+    const inner = new Response("teapot", { status: 418, headers: { "X-Kind": "teapot" } })
+    const api = op((_: unknown) => inner, {
+      http: { directives: [{ kind: "response", status: 200 }] },
+    })
+    const route = applyResponse(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/", { method: "POST" }))
+    expect(res.status).toBe(418)
+    expect(res.headers.get("X-Kind")).toBe("teapot")
+    expect(await res.text()).toBe("teapot")
+  })
+
+  it("existing plain-object JSON override behavior is unchanged", async () => {
+    const api = op((_: unknown) => ({ created: true }), {
+      http: { directives: [{ kind: "response", status: 201 }] },
+    })
+    const route = applyResponse(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/", { method: "POST" }))
+    expect(res.status).toBe(201)
+    expect(res.headers.get("Content-Type")).toBe("application/json")
+    expect(await res.json()).toEqual({ created: true })
+  })
+})
+
+// ============================================================================
 // runRoute — per-route `sources` (declarative decode configuration; a direct
 // field on the method entry, not a Pipeline slot)
 // ============================================================================

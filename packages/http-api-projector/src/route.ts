@@ -658,6 +658,55 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
 }
 
 /**
+ * Encode a `ResponseOverride` into a `Response` — the counterpart to
+ * `jsonRouteResponse` for the override path. Historically every override
+ * body was `JSON.stringify`'d regardless of shape, which broke binary
+ * responses, streams, and anything already serialized by the handler. Now:
+ *
+ *   - `body instanceof Response` — the handler built the whole response
+ *     itself (its own headers/status/body); return it directly, `init` is
+ *     ignored (there is nothing left to merge it into).
+ *   - `ReadableStream` / `ArrayBuffer` / `Uint8Array` / `Blob` / `null` /
+ *     `undefined` — already a valid `BodyInit` (or an intentionally empty
+ *     body); passed straight to `new Response()` with `init` untouched, so
+ *     whatever Content-Type the handler set on `init.headers` survives
+ *     unmangled.
+ *   - `string` — ambiguous: could be a plain-text/HTML body the handler
+ *     already serialized, or a `Node` handler's raw JSON-shaped output that
+ *     happens to be typed as `string`. Disambiguated via `init.headers`: an
+ *     EXPLICIT non-JSON Content-Type means the handler already serialized
+ *     the body itself, so it passes through as-is; otherwise falls back to
+ *     the original `JSON.stringify` behavior for backwards compatibility.
+ *   - anything else (objects, numbers, arrays, …) — unchanged: JSON.stringify
+ *     via `jsonRouteResponse`.
+ */
+function encodeOverride(override: ResponseOverride): Response {
+  const { body, init } = override
+
+  if (body instanceof Response) return body
+
+  if (
+    body instanceof ReadableStream ||
+    body instanceof ArrayBuffer ||
+    body instanceof Uint8Array ||
+    body instanceof Blob ||
+    body === null ||
+    body === undefined
+  ) {
+    return new Response(body as BodyInit | null | undefined, init)
+  }
+
+  if (typeof body === "string") {
+    const headers = new Headers(init?.headers)
+    const contentType = headers.get("Content-Type")
+    const isExplicitlyNonJson = contentType !== null && !contentType.includes("application/json")
+    if (isExplicitlyNonJson) return new Response(body, { ...init, headers })
+  }
+
+  return jsonRouteResponse(body, init)
+}
+
+/**
  * Stores-based decode: exposes the request as named stores (path, query,
  * header, body), then assembles the handler's input bag using conventions
  * (method → primary store) + optional per-param overrides declared via
@@ -833,7 +882,7 @@ export async function runRoute(
     }
 
     return isResponseOverride(output)
-      ? jsonRouteResponse(output.body, output.init)
+      ? encodeOverride(output)
       : defaultEncode(output)
   } catch {
     return jsonRouteResponse({ error: "internal server error" }, { status: 500 })
