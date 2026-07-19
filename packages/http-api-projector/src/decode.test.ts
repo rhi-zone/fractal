@@ -4,7 +4,7 @@ import { describe, expect, it } from "bun:test"
 import { api, op } from "@rhi-zone/fractal-api-tree/node"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 import { applyMethods, applyMoveTo, composeTransforms, httpRoute } from "./route.ts"
-import { assemble, httpStores, primaryStoreForMethod } from "./decode.ts"
+import { assemble, httpStores, parseRequestBody, primaryStoreForMethod } from "./decode.ts"
 
 // ============================================================================
 // Unit tests — stores, assembler, conventions
@@ -241,6 +241,195 @@ describe("stores-based decode — per-param source override via sources", () => 
     const router = makeRouter(route)
     await router(new Request("http://localhost/books/book-7?q=chapters"))
     expect(capturedInput).toEqual({ bookId: "book-7", q: "chapters" })
+  })
+})
+
+// ============================================================================
+// parseRequestBody — Content-Type-driven body parsing
+// ============================================================================
+
+describe("parseRequestBody", () => {
+  it("application/json → parsed JSON (unchanged behavior)", async () => {
+    const req = new Request("http://localhost/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Dune" }),
+    })
+    expect(await parseRequestBody(req)).toEqual({ title: "Dune" })
+  })
+
+  it("multipart/form-data with text fields → plain object", async () => {
+    const fd = new FormData()
+    fd.set("title", "Dune")
+    fd.set("author", "Herbert")
+    const req = new Request("http://localhost/", { method: "POST", body: fd })
+    const parsed = await parseRequestBody(req)
+    expect(parsed).toEqual({ title: "Dune", author: "Herbert" })
+  })
+
+  it("multipart/form-data with a file upload → File object in body", async () => {
+    const file = new File(["hello world"], "hello.txt", { type: "text/plain" })
+    const fd = new FormData()
+    fd.set("title", "Dune")
+    fd.set("upload", file)
+    const req = new Request("http://localhost/", { method: "POST", body: fd })
+    const parsed = await parseRequestBody(req) as Record<string, unknown>
+    expect(parsed.title).toBe("Dune")
+    expect(parsed.upload).toBeInstanceOf(File)
+    expect((parsed.upload as File).name).toBe("hello.txt")
+  })
+
+  it("multipart/form-data with duplicate keys → collected into an array", async () => {
+    const fd = new FormData()
+    fd.append("tag", "sci-fi")
+    fd.append("tag", "classic")
+    const req = new Request("http://localhost/", { method: "POST", body: fd })
+    const parsed = await parseRequestBody(req)
+    expect(parsed).toEqual({ tag: ["sci-fi", "classic"] })
+  })
+
+  it("application/x-www-form-urlencoded → plain object", async () => {
+    const req = new Request("http://localhost/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "title=Dune&author=Herbert",
+    })
+    const parsed = await parseRequestBody(req)
+    expect(parsed).toEqual({ title: "Dune", author: "Herbert" })
+  })
+
+  it("text/plain → stored under the conventional _text key", async () => {
+    const req = new Request("http://localhost/", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: "just some raw text",
+    })
+    const parsed = await parseRequestBody(req)
+    expect(parsed).toEqual({ _text: "just some raw text" })
+  })
+
+  it("application/octet-stream → stored under the conventional _binary key", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    const req = new Request("http://localhost/", {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: bytes,
+    })
+    const parsed = await parseRequestBody(req) as Record<string, unknown>
+    expect(new Uint8Array(parsed._binary as ArrayBuffer)).toEqual(bytes)
+  })
+
+  it("no Content-Type → undefined (httpStores turns this into an empty body store)", async () => {
+    const req = new Request("http://localhost/", { method: "POST" })
+    const parsed = await parseRequestBody(req)
+    expect(parsed).toBeUndefined()
+  })
+})
+
+// ============================================================================
+// Integration — non-JSON bodies flowing through the router into the body
+// store and, from there, into the assembled handler input.
+// ============================================================================
+
+describe("stores-based decode — non-JSON bodies through the router", () => {
+  it("multipart/form-data fields land in the body store", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        POST: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const fd = new FormData()
+    fd.set("title", "Dune")
+    fd.set("author", "Herbert")
+    await router(new Request("http://localhost/", { method: "POST", body: fd }))
+    expect(capturedInput).toEqual({ title: "Dune", author: "Herbert" })
+  })
+
+  it("a file upload passes through as a File object to the handler", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        POST: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    const file = new File(["contents"], "avatar.png", { type: "image/png" })
+    const fd = new FormData()
+    fd.set("avatar", file)
+    await router(new Request("http://localhost/", { method: "POST", body: fd }))
+    const captured = capturedInput as Record<string, unknown>
+    expect(captured.avatar).toBeInstanceOf(File)
+    expect((captured.avatar as File).name).toBe("avatar.png")
+  })
+
+  it("url-encoded form fields land in the body store", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        POST: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "title=Dune&author=Herbert",
+    }))
+    expect(capturedInput).toEqual({ title: "Dune", author: "Herbert" })
+  })
+
+  it("text/plain body available via sourceMap from the conventional _text key", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        POST: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+          sources: {
+            paramNames: ["text"],
+            sourceMap: { text: { store: "body", key: "_text" } },
+          },
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: "raw text body",
+    }))
+    expect(capturedInput).toEqual({ text: "raw text body" })
+  })
+
+  it("no Content-Type → empty body store, empty assembled input", async () => {
+    let capturedInput: unknown
+    const route = httpRoute({
+      methods: {
+        POST: {
+          handler: (input: unknown) => { capturedInput = input; return {} },
+          meta: {},
+        },
+      },
+      meta: {},
+    })
+    const router = makeRouter(route)
+    await router(new Request("http://localhost/", { method: "POST" }))
+    expect(capturedInput).toEqual({})
   })
 })
 

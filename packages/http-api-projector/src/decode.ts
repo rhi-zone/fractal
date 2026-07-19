@@ -43,6 +43,69 @@ declare module "@rhi-zone/fractal-api-tree" {
 // rather than re-declared here.
 
 // ============================================================================
+// Body parsing — Content-Type-driven request body decode
+// ============================================================================
+//
+// `application/json` is the historical, still-default case. The rest
+// (multipart, url-encoded, text, binary) are additive: each Content-Type is
+// routed to the WHATWG API that already understands it (`req.formData()`,
+// `req.text()`, `req.arrayBuffer()`) rather than a hand-rolled parser — Bun
+// implements all three natively. No Content-Type (or a body-less request)
+// falls through to `undefined`, matching the historical "no body parsed"
+// state that `httpStores` already turns into an empty `body` store.
+
+/**
+ * Convert a `FormData` (from either `multipart/form-data` or
+ * `application/x-www-form-urlencoded`, both parsed via `req.formData()`)
+ * into a plain object suitable for the `body` store. A `File` entry is kept
+ * as-is (the handler receives the WHATWG `File` object directly — no
+ * special-casing needed downstream). Duplicate keys (e.g. multiple files
+ * under the same field name) collect into an array rather than the last
+ * value silently winning.
+ */
+function formDataToObject(fd: FormData): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of fd.entries()) {
+    if (key in out) {
+      const existing = out[key]
+      if (Array.isArray(existing)) existing.push(value)
+      else out[key] = [existing, value]
+    } else {
+      out[key] = value
+    }
+  }
+  return out
+}
+
+/**
+ * Parse a request body according to its Content-Type, once, up front —
+ * mirrors the `req.json()` call this replaces. Conventional keys `_text`/
+ * `_binary` hold whole-body values (text/plain, application/octet-stream)
+ * that don't naturally decompose into named fields the way form data does;
+ * a handler pulls them via `sourceMap: { text: { store: "body", key: "_text" } }`
+ * the same way it would any other body field. Returns `undefined` when the
+ * Content-Type is absent or unrecognized — `httpStores` already treats a
+ * non-object `parsedBody` as an empty `body` store, so this doesn't need its
+ * own empty-object fallback.
+ */
+export async function parseRequestBody(req: Request): Promise<unknown> {
+  const ct = req.headers.get("Content-Type") ?? ""
+  if (ct.includes("application/json")) {
+    return await req.json()
+  }
+  if (ct.includes("multipart/form-data") || ct.includes("application/x-www-form-urlencoded")) {
+    return formDataToObject(await req.formData())
+  }
+  if (ct.includes("text/plain")) {
+    return { _text: await req.text() }
+  }
+  if (ct.includes("application/octet-stream")) {
+    return { _binary: await req.arrayBuffer() }
+  }
+  return undefined
+}
+
+// ============================================================================
 // HTTP stores factory
 // ============================================================================
 

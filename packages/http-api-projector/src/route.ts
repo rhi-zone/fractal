@@ -39,7 +39,7 @@ import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
 import type { Stores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
-import { httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
+import { httpStores, primaryStoreForMethod, assemble, parseRequestBody } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"
 
 // ============================================================================
@@ -794,8 +794,10 @@ function encodeOverride(override: ResponseOverride): Response {
  * then run through the same `assemble` call as the declarative path. No
  * separate bulk-merge codepath.
  *
- * The body is parsed once here. Methods that conventionally carry no body
- * (GET/HEAD/DELETE) skip body parsing entirely.
+ * The body is parsed once here, via `parseRequestBody` (decode.ts) — which
+ * one is JSON, multipart, url-encoded, text, or binary based on
+ * Content-Type. Methods that conventionally carry no body (GET/HEAD/DELETE)
+ * skip body parsing entirely.
  *
  * Returns the `stores` alongside the assembled `input` bag — `stores` is
  * threaded into `HttpHandlerMiddleware` (see below), which sees both the
@@ -810,13 +812,11 @@ async function defaultDecode(
   const url = new URL(req.url)
   const primary = primaryStoreForMethod(req.method)
 
-  // Parse body for methods that conventionally carry one
+  // Parse body for methods that conventionally carry one — Content-Type
+  // drives which WHATWG parser handles it (see `parseRequestBody`).
   let parsedBody: unknown = undefined
   if (primary === "body") {
-    const ct = req.headers.get("Content-Type") ?? ""
-    if (ct.includes("application/json")) {
-      parsedBody = await req.json()
-    }
+    parsedBody = await parseRequestBody(req)
   }
 
   const stores = httpStores(req, slugs, parsedBody)
@@ -924,7 +924,7 @@ export async function runRoute(
     input = decoded.input
     stores = decoded.stores
   } catch {
-    return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
+    return jsonRouteResponse({ error: "invalid request body" }, { status: 400 })
   }
 
   try {
