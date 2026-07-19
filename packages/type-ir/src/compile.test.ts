@@ -442,9 +442,15 @@ describe("compileValidator — standalone output typechecks (bug: ValidationErro
     const dir = mkdtempSync(join(tmpdir(), "compile-validator-tsc-"))
     const file = join(dir, "standalone.ts")
     writeFileSync(file, source)
+    // `--ignoreConfig`: TypeScript 6 errors (TS5112) when a tsconfig.json is
+    // present in the process cwd and files are also passed on the command
+    // line — even though that ambient tsconfig has nothing to do with the
+    // standalone file under test here. The test runner's cwd is this
+    // package (which has its own tsconfig.json), so without this flag the
+    // invocation fails regardless of whether the generated source is valid.
     const result = spawnSync(
       "bunx",
-      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", file],
+      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", "--ignoreConfig", file],
       { encoding: "utf-8" },
     )
     expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
