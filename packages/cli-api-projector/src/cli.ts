@@ -33,6 +33,7 @@
 //   packages/api-tree/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
+import { AsyncLocalStorage } from "node:async_hooks"
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
@@ -82,7 +83,7 @@ export type CliIO = {
 // Options
 // ============================================================================
 
-export type CliOpts = {
+export type CliOpts<T = unknown> = {
   /**
    * Pre-computed schema map (from extractToolSchemas). When provided, input
    * fields are derived from the JSON Schema — both for help text and for
@@ -115,6 +116,26 @@ export type CliOpts = {
    * `opts.schemas` as before.
    */
   readonly validators?: Readonly<Record<string, GeneratedEntry>>
+  /**
+   * Wrap the handler call so it runs inside its own `AsyncLocalStorage`
+   * context. `init` computes the per-invocation context value from
+   * CLI-specific dispatch context (see `CliMiddlewareContext`) — the same
+   * context shape `CliMiddleware` receives. Mirrors HTTP's `PresetOptions.als`
+   * (`packages/http-api-projector/src/preset.ts`). ALS is the INNERMOST
+   * wrapper — closer to the handler than `opts.middleware` — so the store is
+   * active only while `target.handler` (and anything it calls, transitively)
+   * runs; a `CliMiddleware`'s own code, before or after calling `next`, is
+   * NOT itself inside the ALS context — Node's `AsyncLocalStorage` doesn't
+   * propagate back out through an `await`'d call once it settles. A
+   * middleware that needs the store should read it from code it invokes
+   * synchronously inside `next`, or maintain its own context via `context`
+   * (the dispatch info passed to every middleware) instead. Absent by
+   * default (no ALS wrapping).
+   */
+  readonly als?: {
+    readonly storage: AsyncLocalStorage<T>
+    readonly init: (context: CliMiddlewareContext) => T
+  }
   /**
    * Around-hooks wrapping the handler call, with access to CLI-specific
    * dispatch context (see `CliMiddlewareContext`). Composes like an onion:
@@ -786,11 +807,11 @@ const defaultIO: CliIO = {
  * @param io   - Injectable IO (stdout, stderr, confirm). Defaults to process streams.
  * @param opts - Options: schemas map from codegen.
  */
-export async function runCli(
+export async function runCli<T = unknown>(
   rootNode: Node,
   argv: string[],
   io: Partial<CliIO> = {},
-  opts: CliOpts = {},
+  opts: CliOpts<T> = {},
 ): Promise<void> {
   const ioResolved: CliIO = { ...defaultIO, ...io }
   const schemas: SchemaMap = opts.schemas ?? {}
@@ -930,18 +951,24 @@ export async function runCli(
     }
   }
 
-  // Call handler — wrapped by any configured middleware (outermost-first;
-  // see CliOpts.middleware). With no middleware configured, `callHandler`
-  // is just `target.handler` itself (zero overhead).
+  // Call handler — wrapped (innermost-first) by ALS (see CliOpts.als), then
+  // by any configured middleware (outermost-first; see CliOpts.middleware).
+  // With neither configured, `callHandler` is just `target.handler` itself
+  // (zero overhead).
+  const middlewareContext: CliMiddlewareContext = {
+    meta: target.leafMeta,
+    io: ioResolved,
+    slugs: target.slugs,
+    leafName: target.leafName,
+  }
+  const baseHandler = opts.als !== undefined
+    ? (input: Record<string, unknown>) =>
+        opts.als!.storage.run(opts.als!.init(middlewareContext), () => target.handler(input))
+    : target.handler
   const middleware = opts.middleware ?? []
   const callHandler = middleware.length === 0
-    ? target.handler
-    : composeMiddleware(middleware, target.handler, {
-        meta: target.leafMeta,
-        io: ioResolved,
-        slugs: target.slugs,
-        leafName: target.leafName,
-      })
+    ? baseHandler
+    : composeMiddleware(middleware, baseHandler, middlewareContext)
 
   let result: unknown
   try {

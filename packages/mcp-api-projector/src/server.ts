@@ -41,6 +41,7 @@
 //   packages/mcp-api-projector/src/project.ts   — toTools/projectTools/projectResources (descriptors + dispatch tables)
 //   packages/http-api-projector/src/preset.ts   — sibling preset (createFetch, structural mirror)
 
+import { AsyncLocalStorage } from "node:async_hooks"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import {
   CallToolRequestSchema,
@@ -308,7 +309,7 @@ function composeMiddleware(
   return wrapped
 }
 
-export type CreateMcpServerOptions = {
+export type CreateMcpServerOptions<T = unknown> = {
   /** Server name, surfaced to MCP clients during the initialize handshake. */
   readonly name: string
   /** Server version, surfaced alongside `name`. */
@@ -345,6 +346,27 @@ export type CreateMcpServerOptions = {
    */
   readonly capabilities?: ServerCapabilities
   /**
+   * Wrap each tool/resource/prompt handler call so it runs inside its own
+   * `AsyncLocalStorage` context. `init` computes the per-invocation context
+   * value from MCP-specific dispatch context (see `McpMiddlewareContext`) —
+   * the same context shape `McpMiddleware` receives. Mirrors HTTP's
+   * `PresetOptions.als` (`packages/http-api-projector/src/preset.ts`) and
+   * CLI's `CliOpts.als` (`packages/cli-api-projector/src/cli.ts`). ALS is the
+   * INNERMOST wrapper — closer to the handler than `opts.middleware` — so the
+   * store is active only while the dispatched handler (and anything it
+   * calls, transitively) runs; an `McpMiddleware`'s own code, before or after
+   * calling `next`, is NOT itself inside the ALS context — Node's
+   * `AsyncLocalStorage` doesn't propagate back out through an `await`'d call
+   * once it settles. A middleware that needs the store should read it from
+   * code it invokes synchronously inside `next`, or maintain its own context
+   * via `context` (the dispatch info passed to every middleware) instead.
+   * Absent by default (no ALS wrapping).
+   */
+  readonly als?: {
+    readonly storage: AsyncLocalStorage<T>
+    readonly init: (context: McpMiddlewareContext) => T
+  }
+  /**
    * Around-hooks wrapping each tool/resource/prompt handler call, with
    * access to MCP-specific dispatch context (see `McpMiddlewareContext`).
    * Composes like an onion: the first entry in the array is the OUTERMOST
@@ -380,7 +402,7 @@ export type CreateMcpServerOptions = {
  * different mechanism — the wrapped handler returns an err Result rather
  * than throwing, so it's caught by a return-value check, not the try/catch.
  */
-export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Server {
+export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOptions<T>): Server {
   // Wire generated validators onto the tree BEFORE any projection walk — see
   // `CreateMcpServerOptions.validators`. Leaves with no matching entry keep
   // their original handler untouched (wrapValidators is a no-op there).
@@ -400,6 +422,18 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
 
   // Around-hooks wrapping each handler call — see CreateMcpServerOptions.middleware.
   const middleware = opts.middleware ?? []
+
+  // ALS wrapping (see CreateMcpServerOptions.als) — innermost, closer to the
+  // handler than `middleware`. Absent `opts.als` degrades to identity (no
+  // wrapping, zero overhead), matching `middleware`'s own zero-overhead
+  // no-op case.
+  const withAls = (
+    handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+    context: McpMiddlewareContext,
+  ): (input: Record<string, unknown>) => unknown | Promise<unknown> =>
+    opts.als === undefined
+      ? handler
+      : (input) => opts.als!.storage.run(opts.als!.init(context), () => handler(input))
 
   const implementation: Implementation = {
     name: opts.name,
@@ -453,9 +487,11 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
 
     try {
       const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
+      const toolContext: McpMiddlewareContext = { meta: dispatch.meta, name, requestType: "tool" }
+      const baseHandler = withAls(dispatch.handler, toolContext)
       const callHandler = middleware.length === 0
-        ? dispatch.handler
-        : composeMiddleware(middleware, dispatch.handler, { meta: dispatch.meta, name, requestType: "tool" })
+        ? baseHandler
+        : composeMiddleware(middleware, baseHandler, toolContext)
       const result = await callHandler(input)
 
       // A generated validator signals a rejection by returning an err
@@ -500,9 +536,11 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       const fixed = resourceHandlers.get(uri)
       if (fixed !== undefined) {
         const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json"
+        const fixedContext: McpMiddlewareContext = { meta: fixed.meta, name: uri, requestType: "resource" }
+        const baseHandler = withAls(fixed.handler, fixedContext)
         const callHandler = middleware.length === 0
-          ? fixed.handler
-          : composeMiddleware(middleware, fixed.handler, { meta: fixed.meta, name: uri, requestType: "resource" })
+          ? baseHandler
+          : composeMiddleware(middleware, baseHandler, fixedContext)
         const result = await callHandler({})
         return { contents: [toResourceContent(result, uri, mimeType)] }
       }
@@ -515,9 +553,11 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
           captured[name] = match[i + 1] as string
         })
         const input = assembleInput("uri-variable", captured, template.sourceMap)
+        const templateContext: McpMiddlewareContext = { meta: template.meta, name: uri, requestType: "resource" }
+        const baseHandler = withAls(template.handler, templateContext)
         const callHandler = middleware.length === 0
-          ? template.handler
-          : composeMiddleware(middleware, template.handler, { meta: template.meta, name: uri, requestType: "resource" })
+          ? baseHandler
+          : composeMiddleware(middleware, baseHandler, templateContext)
         const result = await callHandler(input)
         return { contents: [toResourceContent(result, uri, template.mimeType)] }
       }
@@ -538,9 +578,11 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       }
 
       const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
+      const promptContext: McpMiddlewareContext = { meta: dispatch.meta, name, requestType: "prompt" }
+      const baseHandler = withAls(dispatch.handler, promptContext)
       const callHandler = middleware.length === 0
-        ? dispatch.handler
-        : composeMiddleware(middleware, dispatch.handler, { meta: dispatch.meta, name, requestType: "prompt" })
+        ? baseHandler
+        : composeMiddleware(middleware, baseHandler, promptContext)
       const result = await callHandler(input)
 
       // A handler may already return a well-formed GetPromptResult (has a
