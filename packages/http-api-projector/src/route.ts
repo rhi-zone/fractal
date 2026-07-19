@@ -36,6 +36,7 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import { isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { bulkCollect, httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"
@@ -717,18 +718,6 @@ function defaultEncodeError(error: unknown): Response {
 }
 
 /**
- * Exact Result<T, E> check: matches the core `Result` DU shape
- * `{ kind: "ok", value } | { kind: "err", error }`. Only triggers when
- * `kind` is exactly `"ok"` or `"err"` — user data with an unrelated
- * `kind` field won't false-positive.
- */
-function isResult(v: unknown): v is { kind: "ok"; value: unknown } | { kind: "err"; error: unknown } {
-  if (typeof v !== "object" || v === null || !("kind" in v)) return false
-  const kind = (v as { kind: unknown }).kind
-  return kind === "ok" || kind === "err"
-}
-
-/**
  * Runs a single matched `(handler, meta, sources, slugs)`: decode the
  * request, call the handler, encode the response. No interceptable stages —
  * see the module doc above for why. Shared by `makeRouterFromRoute` (below)
@@ -753,10 +742,16 @@ export async function runRoute(
     let output: unknown = await (handler(input) as Promise<unknown>)
 
     // Result unwrapping: if the handler returned a Result<T, E>, separate
-    // the success and error paths before encoding. The check is exact —
-    // typeof + boolean — to avoid false-positives on user data that happens
-    // to have a `kind` field with an unrelated value.
-    if (isResult(output)) {
+    // the success and error paths before encoding — a 400, not the catch
+    // block's 500, since an err Result is an expected outcome the handler
+    // chose to signal, not an unexpected failure. This is also how a
+    // `wrapValidators`-wrapped handler (@rhi-zone/fractal-api-tree/build)
+    // signals a validation rejection: it returns `err(validationErrors)`
+    // rather than throwing, so it lands here as a discriminated-union check
+    // on the return value, not a catch. The check is exact — typeof + kind
+    // — to avoid false-positives on user data that happens to have a `kind`
+    // field with an unrelated value.
+    if (isResultShape(output)) {
       if (output.kind === "err") return defaultEncodeError(output.error)
       output = output.value
     }

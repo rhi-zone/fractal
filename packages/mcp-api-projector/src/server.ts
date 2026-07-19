@@ -62,7 +62,7 @@ import type {
   ServerCapabilities,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import { assemble, createStore } from "@rhi-zone/fractal-api-tree"
+import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
@@ -323,7 +323,10 @@ export type CreateMcpServerOptions = {
  * A handler that throws (sync or async) is caught and surfaced as an MCP
  * tool error result (`isError: true`) rather than crashing the request —
  * that is the protocol's own error-signaling channel, distinct from a
- * transport-level failure.
+ * transport-level failure. A generated validator's rejection (see
+ * `CreateMcpServerOptions.validators`) is surfaced the same way but via a
+ * different mechanism — the wrapped handler returns an err Result rather
+ * than throwing, so it's caught by a return-value check, not the try/catch.
  */
 export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Server {
   // Wire generated validators onto the tree BEFORE any projection walk — see
@@ -380,7 +383,8 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
     // tool specifically. Uncovered tools (no matching generated validator, or
     // opts.validators omitted entirely) keep going through it as before.
     const tool = toolsByName.get(name)
-    if (tool !== undefined && !isValidatorWrapped(dispatch.handler)) {
+    const generatedValidatorHandlesThis = isValidatorWrapped(dispatch.handler)
+    if (tool !== undefined && !generatedValidatorHandlesThis) {
       const result = validateAgainstSchema(tool.inputSchema, args ?? {})
       if (!result.valid) {
         return {
@@ -395,6 +399,24 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
     try {
       const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
       const result = await dispatch.handler(input)
+
+      // A generated validator signals a rejection by returning an err
+      // Result — `{kind:"err", error: ValidationError[]}` (see
+      // @rhi-zone/fractal-api-tree/build's `wrapHandler`) — instead of
+      // throwing, so this is a discriminated-union check on the return
+      // value rather than another catch branch. Scoped to validator-wrapped
+      // tools specifically so an ordinary handler's own domain data is never
+      // mistaken for a validation failure just because it happens to carry a
+      // `kind` field.
+      if (generatedValidatorHandlesThis && isResultShape(result) && result.kind === "err") {
+        return {
+          isError: true,
+          content: [
+            { type: "text", text: `Invalid input for tool "${name}": ${JSON.stringify(result.error)}` },
+          ],
+        }
+      }
+
       return {
         content: toCallToolContent(result),
       }

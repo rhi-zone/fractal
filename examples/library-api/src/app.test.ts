@@ -27,7 +27,8 @@ import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import { HandlerValidationError, isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import { isResultShape } from "@rhi-zone/fractal-api-tree"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
 import { validators as generatedValidators } from "./generated/validators.ts"
@@ -328,7 +329,10 @@ describe("library-api — codegen-generated validators", () => {
   it("wired handler rejects a wrong-typed bag (q as a number, not a string)", async () => {
     const handler = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.handler
     expect(handler).toBeDefined()
-    await expect(handler!({ q: 123 })).rejects.toThrow(HandlerValidationError)
+    const result = await handler!({ q: 123 })
+    expect(isResultShape(result)).toBe(true)
+    if (!isResultShape(result)) throw new Error("expected a Result")
+    expect(result.kind).toBe("err")
   })
 
   it("wired handler accepts a correctly-typed bag (q as a string)", async () => {

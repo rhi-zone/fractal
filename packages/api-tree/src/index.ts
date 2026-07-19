@@ -83,6 +83,24 @@ export const isErr = <T, E>(
   r: Result<T, E>,
 ): r is { kind: "err"; error: E } => r.kind === "err";
 
+/**
+ * Loose structural check: true when `v` matches the `Result` DU's shape at
+ * runtime — `{kind:"ok",value}` or `{kind:"err",error}` — without requiring
+ * its static type to already be known as `Result<T, E>`. For a dispatcher
+ * that calls an erased `Handler` (return type widened to `any`/`unknown` —
+ * e.g. after `wrapValidators` wraps it) and needs to tell whether the
+ * returned value IS a `Result` before it can narrow with `isOk`/`isErr`.
+ * Exact on `kind` (only `"ok"`/`"err"` match) so user data with an unrelated
+ * `kind` field never false-positives.
+ */
+export function isResultShape(
+  v: unknown,
+): v is { kind: "ok"; value: unknown } | { kind: "err"; error: unknown } {
+  if (typeof v !== "object" || v === null || !("kind" in v)) return false;
+  const kind = (v as { kind: unknown }).kind;
+  return kind === "ok" || kind === "err";
+}
+
 /** Map the success value; pass an error through untouched. */
 export const map = <T, E, U>(r: Result<T, E>, f: (t: T) => U): Result<U, E> =>
   r.kind === "ok" ? ok(f(r.value)) : r;

@@ -8,7 +8,6 @@
 import { describe, expect, it } from "bun:test"
 import {
   buildValidatorModuleSource,
-  HandlerValidationError,
   isValidatorWrapped,
   stubValidatorModuleSource,
   wrapValidators,
@@ -16,6 +15,7 @@ import {
 import type { GeneratedEntry } from "./build.ts"
 import { api, op } from "./node.ts"
 import type { Node } from "./node.ts"
+import { isResultShape } from "./index.ts"
 
 /** Strip TypeScript syntax (type annotations, `as` casts, `import type`) via
  * Bun's transpiler — `buildValidatorModuleSource` now emits typed guards, so
@@ -112,23 +112,17 @@ describe("wrapValidators — Node-level counterpart to route.ts's injectValidato
     expect(result).toEqual({ doubled: 42 })
   })
 
-  it("throws HandlerValidationError (carrying the structured errors) instead of calling the handler on invalid input", async () => {
+  it("returns an err Result (carrying the structured errors) instead of calling the handler on invalid input", async () => {
     const handler = (input: { id: number }) => ({ doubled: input.id * 2 })
     const tree = api({ get: op(handler) })
     const wrapped = wrapValidators(tree, { get: idEntry() })
 
-    await expect(Promise.resolve(wrapped.children!.get!.handler!({ id: "not-a-number" }))).rejects.toThrow(
-      HandlerValidationError,
-    )
-    try {
-      await wrapped.children!.get!.handler!({ id: "not-a-number" })
-      throw new Error("expected rejection")
-    } catch (err) {
-      expect(err).toBeInstanceOf(HandlerValidationError)
-      expect((err as HandlerValidationError).errors).toEqual([
-        { kind: "type", path: ["id"], expected: "numeric string", actual: "not-a-number" },
-      ])
-    }
+    const result = await Promise.resolve(wrapped.children!.get!.handler!({ id: "not-a-number" }))
+    expect(isResultShape(result)).toBe(true)
+    if (!isResultShape(result) || result.kind !== "err") throw new Error("expected an err Result")
+    expect(result.error).toEqual([
+      { kind: "type", path: ["id"], expected: "numeric string", actual: "not-a-number" },
+    ])
   })
 
   it("a leaf with no matching validator entry passes through with its original handler, untouched", () => {

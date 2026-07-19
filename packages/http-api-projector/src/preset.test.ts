@@ -234,7 +234,7 @@ describe("OOTB preset — validators", () => {
     expect(await res.json()).toMatchObject({ validated: true })
   })
 
-  it("a rejecting generated validator's thrown error surfaces as a 500 (no dedicated validation-error path)", async () => {
+  it("a rejecting generated validator's err Result surfaces as a 400 with the structured errors", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
         http: { directives: [{ kind: "method", value: "GET" }] },
@@ -243,7 +243,9 @@ describe("OOTB preset — validators", () => {
 
     const f = createFetch(echoNode, { validators: { widgets: rejectingEntry() } })
     const res = await f(new Request("http://localhost/widgets"))
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: unknown }
+    expect(body.error).toEqual([{ kind: "type", path: [], expected: "n/a", actual: "n/a" }])
   })
 
   it("a leaf with no matching validator entry passes through untouched", async () => {

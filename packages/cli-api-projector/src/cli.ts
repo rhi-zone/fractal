@@ -39,7 +39,7 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import { assemble, createStore } from "@rhi-zone/fractal-api-tree"
+import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
@@ -884,10 +884,21 @@ export async function runCli(
   try {
     result = await Promise.resolve(target.handler(input))
   } catch (err: unknown) {
-    // HandlerValidationError.message is already a formatted summary of the
-    // structured `errors` array (see @rhi-zone/fractal-api-tree/build) — no
-    // special-casing needed beyond the existing Error branch.
     const msg = err instanceof Error ? err.message : String(err)
+    ioResolved.stderr.write(`Error: ${msg}\n`)
+    throw new CliError(msg, 1)
+  }
+
+  // A generated validator (see CliOpts.validators) signals a rejection by
+  // returning an err Result — `{kind:"err", error: ValidationError[]}` (see
+  // @rhi-zone/fractal-api-tree/build's `wrapHandler`) — instead of throwing,
+  // so this is a discriminated-union check on the return value rather than
+  // another catch branch. Scoped to validator-wrapped leaves specifically
+  // (`generatedValidatorHandlesThis`, computed above) so an ordinary
+  // handler's own domain data is never mistaken for a validation failure
+  // just because it happens to carry a `kind` field.
+  if (generatedValidatorHandlesThis && isResultShape(result) && result.kind === "err") {
+    const msg = `Validation failed: ${JSON.stringify(result.error)}`
     ioResolved.stderr.write(`Error: ${msg}\n`)
     throw new CliError(msg, 1)
   }

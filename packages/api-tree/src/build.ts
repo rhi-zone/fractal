@@ -19,6 +19,7 @@ import * as path from "node:path"
 import { compileValidatorModule } from "@rhi-zone/fractal-type-ir"
 import { extractRouteTypeRefs } from "./tree.ts"
 import type { Handler, Node } from "./node.ts"
+import { err } from "./index.ts"
 
 /** One generated entry's public shape — see compile.ts's `compileValidatorModule`. */
 export type GeneratedEntry = {
@@ -38,24 +39,6 @@ export type GeneratedEntry = {
 // ============================================================================
 
 /**
- * Thrown by a `wrapValidators`-wrapped handler when the generated `parse()`
- * rejects the input. The structured `errors` array (type-ir's
- * `ValidationError[]`, carried here as `unknown[]` — see `GeneratedEntry`)
- * survives on the instance so a projector can format it richly; `message` is
- * a best-effort human-readable summary for callers that just want `.message`
- * (CLI's `CliError`, MCP's `isError` content — both already reduce a thrown
- * error to its `.message`).
- */
-export class HandlerValidationError extends Error {
-  readonly errors: unknown[]
-  constructor(errors: unknown[]) {
-    super(`Validation failed: ${JSON.stringify(errors)}`)
-    this.name = "HandlerValidationError"
-    this.errors = errors
-  }
-}
-
-/**
  * Runtime brand for a handler produced by `wrapValidators`'s wrapping — lets
  * a projector (CLI, MCP) tell whether a resolved leaf's validation is
  * already handled by a generated validator, so its own fallback
@@ -72,13 +55,26 @@ export function isValidatorWrapped(handler: Handler): boolean {
   return wrappedHandlerBrand.has(handler)
 }
 
-/** Wrap one leaf handler: `entry.parse(input)` first — `ok` calls `handler`
- * with the parsed (coerced, validated, narrowed) value; `err` throws
- * `HandlerValidationError` instead of ever reaching `handler`. */
+/**
+ * Wrap one leaf handler: `entry.parse(input)` first — `ok` calls `handler`
+ * with the parsed (coerced, validated, narrowed) value; `err` returns a
+ * `Result` `{kind:"err", error: ValidationError[]}` (this package's own
+ * `Result<T,E>` — see index.ts's `ok`/`err`/`isResultShape`) instead of ever
+ * reaching `handler`.
+ *
+ * Deliberately a returned Result, not a thrown error class: an error class
+ * can't be exhaustively matched (no discriminated union over `instanceof`)
+ * and `instanceof` itself breaks across realms/bundles — a dispatcher
+ * (`runRoute` for HTTP, `runCli` for CLI, the MCP tool-call handler) checks
+ * the return value's `kind` instead of wrapping the call in a catch block.
+ * The wrapped handler's static return type stays the erased `Handler`
+ * (default `any`/`any`), so returning a `Result` here doesn't require
+ * threading a new generic through `Node`/`op`/`api`.
+ */
 function wrapHandler(handler: Handler, entry: GeneratedEntry): Handler {
   const wrapped: Handler = async (input: unknown) => {
     const result = entry.parse(input)
-    if (result.kind === "err") throw new HandlerValidationError(result.errors)
+    if (result.kind === "err") return err(result.errors)
     return handler(result.value)
   }
   wrappedHandlerBrand.add(wrapped)

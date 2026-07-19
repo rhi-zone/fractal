@@ -588,7 +588,7 @@ describe("wrapValidators — HTTP dispatch", () => {
     expect(await res.json()).toEqual({ greeting: "hi Alice" })
   })
 
-  it("invalid input → 500 (thrown HandlerValidationError, no manual 400 mapping)", async () => {
+  it("invalid input → 400 (wrapped handler returns an err Result, no throw)", async () => {
     const tree = api_({
       greet: op((input: { name: string }) => ({ greeting: `hi ${input.name}` }), {
         http: { directives: [{ kind: "method", value: "GET" }] },
@@ -597,12 +597,14 @@ describe("wrapValidators — HTTP dispatch", () => {
     const wrapped = wrapValidators(tree, { greet: nameEntry() })
     const router = makeRouterFromRoute(applyMethods(naiveTransform(wrapped)))
     const res = await router(new Request("http://localhost/greet"))
-    // No `name` query param → wrapValidators' wrapped handler throws
-    // HandlerValidationError before the original handler runs; runRoute's
-    // catch-all maps any thrown handler error to 500 (there is no
-    // dedicated 400-for-validation-errors path once validation moved off
-    // the route tree's own `validate` slot and onto the handler itself).
-    expect(res.status).toBe(500)
+    // No `name` query param → wrapValidators' wrapped handler returns an
+    // `err(validationErrors)` Result before the original handler runs;
+    // runRoute's Result-unwrapping (a discriminated-union check on the
+    // return value, not a catch block) maps it to 400 with the structured
+    // errors as the JSON body.
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: unknown }
+    expect(Array.isArray(body.error)).toBe(true)
   })
 
   it("leaf with no matching validator entry passes through untouched", async () => {
