@@ -61,7 +61,7 @@ import type {
   ReadResourceResult,
   ServerCapabilities,
 } from "@modelcontextprotocol/sdk/types.js"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
@@ -269,6 +269,45 @@ function assembleInput(
   return assemble(stores, paramNames, sourceMap, storeName)
 }
 
+// ============================================================================
+// Middleware — around-hooks wrapping the handler call
+// ============================================================================
+
+/** Context available to MCP middleware at the point the handler is invoked. */
+export type McpMiddlewareContext = {
+  readonly meta: Meta
+  readonly name: string
+  readonly requestType: "tool" | "resource" | "prompt"
+}
+
+/**
+ * An MCP middleware wraps the handler-invoking function `next`, given
+ * dispatch context for the tool/resource/prompt being called. Middleware
+ * compose like HTTP layers (`packages/http-api-projector/src/layers.ts`) and
+ * CLI middleware (`packages/cli-api-projector/src/cli.ts`): the first entry
+ * in `CreateMcpServerOptions.middleware` is the OUTERMOST wrapper.
+ */
+export type McpMiddleware = (
+  next: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+  context: McpMiddlewareContext,
+) => (input: Record<string, unknown>) => unknown | Promise<unknown>
+
+/**
+ * Compose `middleware` around `base`, first entry outermost. An empty array
+ * returns `base` unchanged (identity — no wrapping overhead).
+ */
+function composeMiddleware(
+  middleware: readonly McpMiddleware[],
+  base: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+  context: McpMiddlewareContext,
+): (input: Record<string, unknown>) => unknown | Promise<unknown> {
+  let wrapped = base
+  for (let i = middleware.length - 1; i >= 0; i--) {
+    wrapped = middleware[i]!(wrapped, context)
+  }
+  return wrapped
+}
+
 export type CreateMcpServerOptions = {
   /** Server name, surfaced to MCP clients during the initialize handshake. */
   readonly name: string
@@ -305,6 +344,19 @@ export type CreateMcpServerOptions = {
    * leaves).
    */
   readonly capabilities?: ServerCapabilities
+  /**
+   * Around-hooks wrapping each tool/resource/prompt handler call, with
+   * access to MCP-specific dispatch context (see `McpMiddlewareContext`).
+   * Composes like an onion: the first entry in the array is the OUTERMOST
+   * wrapper, matching HTTP's layer composition
+   * (`packages/http-api-projector/src/layers.ts`) and CLI's middleware
+   * (`packages/cli-api-projector/src/cli.ts`). This is the mechanism for
+   * wiring around-hooks that need MCP-specific context (ALS, audit, caller
+   * context) at the projector level — see `McpMiddleware`.
+   *
+   * When omitted (or empty), each handler is called directly — zero overhead.
+   */
+  readonly middleware?: readonly McpMiddleware[]
 }
 
 /**
@@ -345,6 +397,9 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
 
   const { prompts, handlers: promptHandlers } = projectPrompts(workingTree, opts.prompts ?? {})
   const hasPrompts = prompts.length > 0
+
+  // Around-hooks wrapping each handler call — see CreateMcpServerOptions.middleware.
+  const middleware = opts.middleware ?? []
 
   const implementation: Implementation = {
     name: opts.name,
@@ -398,7 +453,10 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
 
     try {
       const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
-      const result = await dispatch.handler(input)
+      const callHandler = middleware.length === 0
+        ? dispatch.handler
+        : composeMiddleware(middleware, dispatch.handler, { meta: dispatch.meta, name, requestType: "tool" })
+      const result = await callHandler(input)
 
       // A generated validator signals a rejection by returning an err
       // Result — `{kind:"err", error: ValidationError[]}` (see
@@ -439,10 +497,13 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       const { uri } = request.params
 
       // Fixed resources first (exact URI match), then templates (pattern match).
-      const fixedHandler = resourceHandlers.get(uri)
-      if (fixedHandler !== undefined) {
+      const fixed = resourceHandlers.get(uri)
+      if (fixed !== undefined) {
         const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json"
-        const result = await fixedHandler({})
+        const callHandler = middleware.length === 0
+          ? fixed.handler
+          : composeMiddleware(middleware, fixed.handler, { meta: fixed.meta, name: uri, requestType: "resource" })
+        const result = await callHandler({})
         return { contents: [toResourceContent(result, uri, mimeType)] }
       }
 
@@ -454,7 +515,10 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
           captured[name] = match[i + 1] as string
         })
         const input = assembleInput("uri-variable", captured, template.sourceMap)
-        const result = await template.handler(input)
+        const callHandler = middleware.length === 0
+          ? template.handler
+          : composeMiddleware(middleware, template.handler, { meta: template.meta, name: uri, requestType: "resource" })
+        const result = await callHandler(input)
         return { contents: [toResourceContent(result, uri, template.mimeType)] }
       }
 
@@ -474,7 +538,10 @@ export function createMcpServer(tree: Node, opts: CreateMcpServerOptions): Serve
       }
 
       const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
-      const result = await dispatch.handler(input)
+      const callHandler = middleware.length === 0
+        ? dispatch.handler
+        : composeMiddleware(middleware, dispatch.handler, { meta: dispatch.meta, name, requestType: "prompt" })
+      const result = await callHandler(input)
 
       // A handler may already return a well-formed GetPromptResult (has a
       // `messages` array) — pass it through as-is. Otherwise wrap the plain

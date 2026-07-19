@@ -1,5 +1,6 @@
 // packages/mcp-api-projector/src/index.ts — @rhi-zone/fractal-mcp-api-projector
 export type {
+  Dispatch,
   McpAnnotations,
   McpMeta,
   McpPrompt,
@@ -12,13 +13,14 @@ export type {
   ProjectResourcesOptions,
   ProjectResourcesResult,
   ProjectToolsResult,
+  ResourceDispatch,
   ResourceTemplateHandler,
   SchemaMap,
   ToolSchema,
   ToToolsOptions,
 } from "./project.ts"
 export { getMcpMeta, projectPrompts, projectResources, projectTools, toTools } from "./project.ts"
-export type { CreateMcpServerOptions, ValidationResult } from "./server.ts"
+export type { CreateMcpServerOptions, McpMiddleware, McpMiddlewareContext, ValidationResult } from "./server.ts"
 export { createMcpServer, validateAgainstSchema } from "./server.ts"
 export type { CreateHttpMcpServerOptions, CreateStdioMcpServerOptions } from "./presets.ts"
 export { createHttpMcpServer, createStdioMcpServer } from "./presets.ts"

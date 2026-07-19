@@ -115,6 +115,57 @@ export type CliOpts = {
    * `opts.schemas` as before.
    */
   readonly validators?: Readonly<Record<string, GeneratedEntry>>
+  /**
+   * Around-hooks wrapping the handler call, with access to CLI-specific
+   * dispatch context (see `CliMiddlewareContext`). Composes like an onion:
+   * the first entry in the array is the OUTERMOST wrapper (it sees the call
+   * first and last), matching HTTP's layer composition
+   * (`packages/http-api-projector/src/layers.ts`). This is the mechanism for
+   * wiring around-hooks that need CLI-specific context (ALS, audit, caller
+   * context) at the projector level — see `CliMiddleware`.
+   *
+   * When omitted (or empty), the handler is called directly — zero overhead.
+   */
+  readonly middleware?: readonly CliMiddleware[]
+}
+
+// ============================================================================
+// Middleware — around-hooks wrapping the handler call
+// ============================================================================
+
+/** Context available to CLI middleware at the point the handler is invoked. */
+export type CliMiddlewareContext = {
+  readonly meta: Meta
+  readonly io: CliIO
+  readonly slugs: Record<string, string>
+  readonly leafName: string
+}
+
+/**
+ * A CLI middleware wraps the handler-invoking function `next`, given
+ * dispatch context for the leaf being called. Middleware compose like HTTP
+ * layers: `runCli` applies `opts.middleware` outermost-first (see `CliOpts`).
+ */
+export type CliMiddleware = (
+  next: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+  context: CliMiddlewareContext,
+) => (input: Record<string, unknown>) => unknown | Promise<unknown>
+
+/**
+ * Compose `middleware` around `base`, first entry outermost — `middleware[0]`
+ * wraps `middleware[1]` wraps ... wraps `base`. An empty array returns `base`
+ * unchanged (identity — no wrapping overhead).
+ */
+function composeMiddleware(
+  middleware: readonly CliMiddleware[],
+  base: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+  context: CliMiddlewareContext,
+): (input: Record<string, unknown>) => unknown | Promise<unknown> {
+  let wrapped = base
+  for (let i = middleware.length - 1; i >= 0; i--) {
+    wrapped = middleware[i]!(wrapped, context)
+  }
+  return wrapped
 }
 
 // ============================================================================
@@ -879,10 +930,22 @@ export async function runCli(
     }
   }
 
-  // Call handler
+  // Call handler — wrapped by any configured middleware (outermost-first;
+  // see CliOpts.middleware). With no middleware configured, `callHandler`
+  // is just `target.handler` itself (zero overhead).
+  const middleware = opts.middleware ?? []
+  const callHandler = middleware.length === 0
+    ? target.handler
+    : composeMiddleware(middleware, target.handler, {
+        meta: target.leafMeta,
+        io: ioResolved,
+        slugs: target.slugs,
+        leafName: target.leafName,
+      })
+
   let result: unknown
   try {
-    result = await Promise.resolve(target.handler(input))
+    result = await Promise.resolve(callHandler(input))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     ioResolved.stderr.write(`Error: ${msg}\n`)

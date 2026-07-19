@@ -3,5 +3,5 @@
 // CLI projection for the function-core tree.
 // Exports runCli, CliIO, CliMeta, CliOpts, walkCliCommands, CliCommandEntry, getCliMeta.
 
-export type { CliIO, CliMeta, CliOpts, CliCommandEntry } from "./cli.ts"
+export type { CliIO, CliMeta, CliMiddleware, CliMiddlewareContext, CliOpts, CliCommandEntry } from "./cli.ts"
 export { getCliMeta, runCli, walkCliCommands } from "./cli.ts"

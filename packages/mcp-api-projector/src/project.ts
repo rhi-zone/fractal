@@ -110,6 +110,10 @@ export type SchemaMap = Readonly<Record<string, ToolSchema>>
 export type Dispatch = {
   readonly handler: Handler
   readonly sourceMap: SourceMap
+  /** The leaf's own `Meta` — carried through for consumers (e.g. `server.ts`'s
+   * middleware context) that need dispatch-time access to it without a second
+   * tree walk. */
+  readonly meta: Meta
 }
 
 /** Options for `toTools`. */
@@ -291,7 +295,7 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
           ...(annotations !== undefined ? { annotations } : {}),
           ...(deprecated ? { deprecated: true } : {}),
         })
-        handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {} })
+        handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         // Static child: use meta.mcp.segment override or the tree key
@@ -367,11 +371,20 @@ export type McpResourceTemplate = {
 export type ResourceTemplateHandler = {
   readonly uriTemplate: string
   readonly paramNames: readonly string[]
-  readonly pattern: RegExp
   readonly mimeType: string
+  readonly pattern: RegExp
   readonly handler: Handler
   /** The leaf's `meta.mcp.sourceMap` (empty when none declared). See `Dispatch`. */
   readonly sourceMap: SourceMap
+  /** The leaf's own `Meta` — see `Dispatch.meta`. */
+  readonly meta: Meta
+}
+
+/** Fixed-resource dispatch entry: the leaf's handler plus its `Meta`. Fixed
+ * resources take no input (no sourceMap — see `ProjectResourcesResult`). */
+export type ResourceDispatch = {
+  readonly handler: Handler
+  readonly meta: Meta
 }
 
 /** Options for `projectResources`. */
@@ -384,8 +397,8 @@ export type ProjectResourcesOptions = {
 export type ProjectResourcesResult = {
   readonly resources: McpResource[]
   readonly resourceTemplates: McpResourceTemplate[]
-  /** Fixed-resource dispatch: URI → handler (no template variables to bind). */
-  readonly handlers: ReadonlyMap<string, Handler>
+  /** Fixed-resource dispatch: URI → handler + meta (no template variables to bind). */
+  readonly handlers: ReadonlyMap<string, ResourceDispatch>
   /** Template-resource dispatch: tried in order against a concrete read URI. */
   readonly templateHandlers: readonly ResourceTemplateHandler[]
 }
@@ -441,7 +454,7 @@ function compileUriTemplate(uriTemplate: string): { pattern: RegExp; paramNames:
  */
 export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): ProjectResourcesResult {
   const scheme = opts.scheme ?? "resource://"
-  const handlers = new Map<string, Handler>()
+  const handlers = new Map<string, ResourceDispatch>()
   const templateHandlers: ResourceTemplateHandler[] = []
 
   const walk = (
@@ -487,10 +500,11 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
             mimeType,
             handler: child.handler as Handler,
             sourceMap: mcp.sourceMap ?? {},
+            meta: child.meta,
           })
         } else {
           resources.push({ uri, name, description, mimeType, ...(deprecated ? { deprecated: true } : {}) })
-          handlers.set(uri, child.handler as Handler)
+          handlers.set(uri, { handler: child.handler as Handler, meta: child.meta })
         }
       } else {
         // ── Branch child ────────────────────────────────────────────────────
@@ -641,7 +655,7 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
           ...(args !== undefined ? { arguments: args } : {}),
           ...(deprecated ? { deprecated: true } : {}),
         })
-        handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {} })
+        handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         const childMcp = getMcpMeta(child.meta)
