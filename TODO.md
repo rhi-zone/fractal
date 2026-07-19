@@ -2,12 +2,12 @@
 
 ## Next session (handoff)
 
-On the table from previous session (2026-07-18):
+**On the table from this session (2026-07-19):**
 
 **From projector coverage audit (HIGH — blocks production use):**
 - **HTTP streaming responses** (SSE/chunked encoding) + **MCP progress notifications** — both need handler context design: how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr). Critical blocker for AI/realtime use cases.
 - **HTTP non-JSON content types** — multipart, form-data, file upload, octet-stream. Request/response payload currently JSON-only.
-- ~~**Validation auto-wiring**~~ — RESOLVED (2026-07-19): HTTP's `createFetch` now wires generated validators via `wrapValidators` (`@rhi-zone/fractal-api-tree/build`) at the `Node` level, before `httpProjection` runs — the same mechanism `createMcpServer` and `runCli` already used. See "HttpRoute Pipeline abstraction removed" below.
+- **Caller-context assembly** — needs design and implementation. Parallel to input extraction, never merged with it, protocol-specific extraction from request context. Blocks proper auth/session patterns and middleware that depends on parsed request data.
 
 **From projector coverage audit (MEDIUM-HIGH):**
 - **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains).
@@ -17,9 +17,13 @@ On the table from previous session (2026-07-18):
 - **Structured error types** — declare operation-specific error outcomes in the tree. Handlers throw or return Result; tree is currently silent.
 - **Extract improvements** — overloaded functions, generics, async generators currently degrade silently.
 
+**Architectural refinements (ongoing):**
+- **Middleware/layers for HTTP** — expose via `PresetOptions.layers` for consumers to supply cross-cutting layers. Mechanism is built; option threading and preset integration remaining.
+- **Middleware/layers for CLI and MCP** — added this session (2026-07-19) as the same `(inner) => ... => result` pattern HTTP uses. Mechanism is in place but consumer preset integration (`createCli`/`createMcpServer` option threading) pending.
+- **Coercion placement specifics** — currently handled in `parse()` (transform+validate single pass). Broader story for store-level coercion and pre-input coercion TBD.
+
 **Open threads:**
-- **Handler context as a design concept** — transport-level capabilities pushed into handlers (separate from input extraction). Design + implementation needed.
-- **Input pipeline wiring** (CLI/MCP) — `api-tree/src/input.ts` has core `assemble()`, but CLI and MCP still have own implementations. CLI needs stores (env, config, stdin); MCP needs (argument, uri-variable, session context).
+- **Input pipeline wiring** (CLI/MCP) — `api-tree/src/input.ts` has core `assemble()`, but CLI and MCP still have own implementations. CLI needs stores (env, config, stdin); MCP needs (argument, uri-variable, session context). _Note: low priority — works as-is; consolidation is a quality improvement, not a blocker._
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 - **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
 
@@ -81,26 +85,24 @@ Design decisions remain settled (below); implementation roadmap for Tier 2–3 f
 
 ---
 
-## Validation & middleware patterns — SETTLED (2026-07-18)
+## Validation & middleware patterns — SETTLED (2026-07-18–2026-07-19)
 
 ### Design decisions (settled)
 
-1. **Pipeline type simplification**: The 8-stage `HttpRoute` pipeline is being replaced. The 4 transform stages (reqTransforms, inputTransforms, outputTransforms, resTransforms) are unused speculative infrastructure. Real needs (ALS bracket, caller-context, around-hooks) are served by the middleware/layer pattern (`(inner) => (req) => result`), which already exists and is load-bearing (`autoMethodLayer`, `corsLayer`). The actual working pipeline is: decode (stores/assemble) → validate → handler → encode.
-   **DONE (2026-07-19)**: see "HttpRoute Pipeline abstraction removed" below.
+1. **Pipeline type is gone**: The 8-stage `HttpRoute` pipeline (including `reqTransforms`, `inputTransforms`, `outputTransforms`, `resTransforms`) was removed 2026-07-19. Real needs (ALS bracket, caller-context, around-hooks) are served by the middleware/layer pattern (`(inner) => (req) => result`), which is now uniform across HTTP, CLI, and MCP. The actual working pipeline is: decode (stores/assemble) → validate → handler → encode.
+   See "HttpRoute Pipeline abstraction removed" and "Middleware/layers for CLI and MCP — DONE (2026-07-19)" below.
 
-2. **Validation is a composable middleware, not a core concept**: No special validation slot in core. A validation package provides middleware that uses generated validators.
+2. **Validation is a composable mechanism at the Node level, not a core concept**: Validation doesn't live in a special slot; it's a `Node`-level wrapper (`wrapValidators`) that runs generated `parse()` before the handler. This mechanism is used identically by all three projectors (HTTP, CLI, MCP).
 
-3. **All operations get validation, not protocol-specific**: All operations in the API tree (HTTP, CLI, MCP) receive validation. The tree carries the types (via extract), not the protocol. MCP's `inputSchema` is a projection artifact, not the source of truth.
+3. **All operations get validation, not protocol-specific**: All operations in the API tree receive validation based on extracted types. The tree carries the types (via extract), not the protocol. MCP's `inputSchema` is a projection artifact derived from the extracted types, not the source of truth.
 
-4. **Type guards from generated validators** — DONE (2026-07-18): `typeRefFromFunctionNode` (packages/api-tree/src/extract.ts) now carries `meta.typeName`/`meta.declarationFile` provenance for a NAMED handler parameter type (alias/interface; inline object literals carry neither). `compileValidatorModule` (packages/type-ir/src/compile.ts) casts each entry's compiled `check` to `(value: unknown) => value is T` — `T` is the imported named type (via a caller-supplied `resolveImport(declarationFile) => moduleSpecifier`, since only the caller knows the emitted file's own location) or, absent that, `T`'s inline structural TypeScript rendering (`toTypeScript`, reused from the existing TS-string projector). `packages/api-tree/src/build.ts`'s `buildValidatorModuleSource(entryFile, outFile?)` resolves the relative import path from `outFile`. Generated output (`examples/library-api/src/generated/validators.ts`) dropped `@ts-nocheck` and typechecks clean under `strict`.
+4. **Type guards from generated validators with import provenance** — DONE (2026-07-18): `typeRefFromFunctionNode` (packages/api-tree/src/extract.ts) carries `meta.typeName`/`meta.declarationFile` provenance for NAMED handler parameter types. `compileValidatorModule` (packages/type-ir/src/compile.ts) emits three functions per entry: `check(value): value is T` (boolean), `errors(value): ValidationError[]` (structured errors), and `parse(value): Result` (validate+coerce). Type guards use imported named types or inline structural rendering.
 
-5. **Strict validation vs. coercion are separate concerns**: Coercion converts string-source values to typed values (e.g., `"42"` → `42`). It's type-dependent (target type determines coercion), not source-dependent. Strict validation is orthogonal.
+5. **Coercion is type-dependent and separate from strict validation**: Coercion converts string-source values (e.g., `"42"` → `42`). Strict validation checks conformance. `parse()` combines both in one pass for performance; separate `check()` + `coerce()` paths available if needed.
 
-6. **Coercion supports combined and separate modes**: Combined mode is one-pass transform+validate for performance on deeply recursive types. Separate mode is strict validate after coerce. Codegen can generate either.
+6. **Uniform middleware across all surfaces**: Middleware mechanism is identical — `(inner) => (context) => result` layer shape across HTTP, CLI, MCP. CLI/MCP received this pattern this session (2026-07-19) matching HTTP's established approach.
 
-7. **Uniform middleware across all surfaces**: Middleware mechanism is identical across HTTP, CLI, MCP — same `(inner) => ... => result` layer shape. CLI has a routing tree (subcommands) just like HTTP has routes.
-
-8. **CLI validation subsumes ad-hoc patterns**: `coerceInput`/`validateRequired` in CLI projector are ad-hoc and will be subsumed by the shared validation/coercion story.
+7. **ValidationError is a flat discriminated union with 15 kinds**: Result-based error signaling, not error classes. Errors carry TypeRef for type information (named type or inline structural). HTTP maps errors to 400, CLI to stderr, MCP to error content.
 
 ### Reference
 
@@ -152,6 +154,27 @@ validation error the same generic way, so this is HTTP catching up to that
 convention, not a regression against a promise that was ever made for HTTP
 specifically — the OLD `pipeline.validate` slot DID map to 400, so this is a
 real, deliberate behavior change for HTTP call sites relying on that 400).
+
+## Middleware/layers for CLI and MCP — DONE (2026-07-19)
+
+Added middleware/layer pattern to CLI and MCP projectors, matching HTTP's
+established `(inner) => (req) => result` shape. Both projectors now support
+composable layers: a `layers` option on `PresetOptions` accepts an array of
+layer factories, each wrapping the inner handler.
+
+CLI layers receive `(input, context)` where `context` carries command-line
+metadata; MCP layers receive `(params, context)` where `context` carries
+protocol and operation metadata. Middleware composition is identical to HTTP's
+via spread/concat/array chaining.
+
+No preset function changes needed (both `runCli` and `createMcpServer` already
+accepted a `validators` option and threaded it to the Node-wrapper API; layers
+simply extend that mechanism). Tests cover basic composition and isolation
+across calls.
+
+Known limitation: middleware/layers are not yet exercised against real
+cross-cutting concerns (auth, logging, rate limiting) — the mechanism is in
+place but consumer patterns remain to be established.
 
 ---
 
