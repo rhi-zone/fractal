@@ -499,6 +499,117 @@ describe("runRoute — default decode/encode", () => {
 })
 
 // ============================================================================
+// runRoute — async iterable handlers stream as Server-Sent Events. Detection
+// is structural (`Symbol.asyncIterator` on the handler's return value) and
+// unconditional today — see route.ts's `isAsyncIterable`/`streamAsSse` doc
+// comments. Reads the raw response body via a `ReadableStream` reader rather
+// than any SSE-parsing helper, so these tests exercise exactly the bytes
+// `streamAsSse` writes.
+// ============================================================================
+
+async function readAllSseText(res: Response): Promise<string> {
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let text = ""
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    text += decoder.decode(value, { stream: true })
+  }
+  return text
+}
+
+describe("runRoute — async iterable handlers stream as SSE", () => {
+  it("streams an async generator as text/event-stream", async () => {
+    async function* gen() {
+      yield 1
+      yield 2
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/"))
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream")
+    const text = await readAllSseText(res)
+    expect(text).toBe("data: 1\n\n" + "data: 2\n\n" + "event: done\ndata: undefined\n\n")
+  })
+
+  it("plain yielded values become untagged data events", async () => {
+    async function* gen() {
+      yield { hello: "world" }
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/"))
+    const text = await readAllSseText(res)
+    expect(text.startsWith(`data: ${JSON.stringify({ hello: "world" })}\n\n`)).toBe(true)
+  })
+
+  it("StreamProgress yields become event: progress frames", async () => {
+    async function* gen() {
+      yield { kind: "progress", progress: 0.5, total: 1, message: "halfway" }
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/"))
+    const text = await readAllSseText(res)
+    expect(text.startsWith("event: progress\n")).toBe(true)
+    const dataLine = text.split("\n")[1]!
+    expect(dataLine).toBe(`data: ${JSON.stringify({ progress: 0.5, total: 1, message: "halfway" })}`)
+  })
+
+  it("StreamChunk yields unwrap to a plain data event carrying the inner data", async () => {
+    async function* gen() {
+      yield { kind: "chunk", data: { n: 42 } }
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/"))
+    const text = await readAllSseText(res)
+    expect(text).toBe(`data: ${JSON.stringify({ n: 42 })}\n\nevent: done\ndata: undefined\n\n`)
+  })
+
+  it("the generator's return value is sent as a final event: done frame before close", async () => {
+    async function* gen() {
+      yield 1
+      return { total: 1, ok: true }
+    }
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/"))
+    const text = await readAllSseText(res)
+    expect(text).toBe(
+      `data: 1\n\n` + `event: done\ndata: ${JSON.stringify({ total: 1, ok: true })}\n\n`,
+    )
+  })
+
+  it("non-async-iterable return values are unaffected (backwards compat)", async () => {
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => ({ id: 1 }), meta: {} } },
+      meta: {},
+    })
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/"))
+    expect(res.headers.get("Content-Type")).toBe("application/json")
+    expect(await res.json()).toEqual({ id: 1 })
+  })
+})
+
+// ============================================================================
 // runRoute — ResponseOverride body passthrough (encodeOverride). A response
 // directive's handler return value becomes the override's `body` verbatim
 // (see `wrapResponse` in route.ts), so exercising this through

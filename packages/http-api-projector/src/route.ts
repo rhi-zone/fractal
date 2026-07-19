@@ -36,7 +36,7 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { isResultShape } from "@rhi-zone/fractal-api-tree"
+import { isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
 import type { Stores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
@@ -651,6 +651,79 @@ function matchRoute(
   return undefined
 }
 
+/**
+ * True when `v` is an async iterable — a handler that returns one is
+ * streamed (see `streamAsSse` below) instead of buffered through
+ * `defaultEncode`. Structural (`Symbol.asyncIterator` presence), matching
+ * how `isResultShape`/`isResponseOverride` recognize their shapes: a runtime
+ * check on the returned value, not a static handler-type annotation.
+ */
+function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    typeof (v as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
+  )
+}
+
+const encoder = new TextEncoder()
+
+/** Format one SSE frame: `event: <name>\ndata: <json>\n\n` (event line
+ *  omitted for the unnamed/default event, matching the SSE spec). */
+function sseFrame(data: unknown, event?: string): Uint8Array {
+  const lines: string[] = []
+  if (event !== undefined) lines.push(`event: ${event}`)
+  lines.push(`data: ${JSON.stringify(data)}`)
+  lines.push("", "")
+  return encoder.encode(lines.join("\n"))
+}
+
+/**
+ * Encode an async iterable handler result as a Server-Sent Events response.
+ * Each yielded value is inspected: `StreamProgress`/`StreamChunk` (see
+ * `@rhi-zone/fractal-api-tree`) become `event: progress`/plain `data:`
+ * frames respectively (a chunk's own `data` field is unwrapped so the SSE
+ * payload is the inner value, not the `{ kind: "chunk", data }` wrapper);
+ * any other yielded value falls back to a plain `data:` frame, untagged.
+ * The generator's return value (its completion payload, distinct from what
+ * it yields) is sent as a final `event: done` frame before the stream
+ * closes — this is why the loop below uses a manual `.next()` call instead
+ * of `for await`, which discards a generator's return value.
+ */
+function streamAsSse(iterable: AsyncIterable<unknown>): Response {
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const iterator = iterable[Symbol.asyncIterator]()
+      try {
+        for (;;) {
+          const step = await iterator.next()
+          if (step.done) {
+            controller.enqueue(sseFrame(step.value, "done"))
+            break
+          }
+          const value: unknown = step.value
+          if (isStreamProgress(value)) {
+            const { kind: _kind, ...progress } = value
+            controller.enqueue(sseFrame(progress, "progress"))
+          } else if (isStreamChunk(value)) {
+            controller.enqueue(sseFrame(value.data))
+          } else {
+            controller.enqueue(sseFrame(value))
+          }
+        }
+      } catch (error) {
+        controller.error(error)
+        return
+      }
+      controller.close()
+    },
+  })
+  return new Response(body, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  })
+}
+
 function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
   const headers = new Headers(init?.headers)
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json")
@@ -865,6 +938,12 @@ export async function runRoute(
       ? base
       : composeHandlerMiddleware(middleware, base)
     let output: unknown = await (callHandler(input as Record<string, unknown>, stores) as Promise<unknown>)
+
+    // Streaming: an async-iterable result (e.g. an async generator handler)
+    // is streamed as Server-Sent Events instead of buffered — checked before
+    // Result-unwrapping since neither a Result nor a ResponseOverride is an
+    // async iterable, so there's no ambiguity between the three shapes.
+    if (isAsyncIterable(output)) return streamAsSse(output)
 
     // Result unwrapping: if the handler returned a Result<T, E>, separate
     // the success and error paths before encoding — a 400, not the catch
