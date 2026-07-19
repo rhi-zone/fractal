@@ -42,6 +42,7 @@
 //   packages/http-api-projector/src/preset.ts   — sibling preset (createFetch, structural mirror)
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js"
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -60,6 +61,8 @@ import type {
   Implementation,
   ReadResourceResult,
   ServerCapabilities,
+  ServerNotification,
+  ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
@@ -274,11 +277,29 @@ function assembleInput(
 // Middleware — around-hooks wrapping the handler call
 // ============================================================================
 
+/**
+ * The SDK's per-request `extra` argument, as passed to a `Server.setRequestHandler`
+ * callback for `tools/call`, `resources/read`, and `prompts/get` — carries
+ * `sendNotification` (progress reporting), `signal` (cancellation), and
+ * transport-provided fields like `sessionId`/`authInfo`. Matches the generic
+ * instantiation `Server` resolves to when constructed without explicit
+ * request/notification type parameters (see `createMcpServer` below).
+ */
+export type McpRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>
+
 /** Context available to MCP middleware at the point the handler is invoked. */
 export type McpMiddlewareContext = {
   readonly meta: Meta
   readonly name: string
   readonly requestType: "tool" | "resource" | "prompt"
+  /**
+   * The SDK's `extra` argument for this request — `sendNotification` for
+   * progress reporting, `signal` for cancellation, and other transport-
+   * provided fields (see `McpRequestExtra`). Previously dropped at the
+   * handler call site; now threaded through to middleware and `opts.als.init`
+   * so handlers/middleware can report progress or observe cancellation.
+   */
+  readonly extra: McpRequestExtra
 }
 
 /**
@@ -452,7 +473,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
 
   const toolsByName = new Map(tools.map((t) => [t.name, t] as const))
 
-  server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
     const { name, arguments: args } = request.params
     const dispatch = handlers.get(name)
 
@@ -484,7 +505,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
 
     try {
       const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
-      const toolContext: McpMiddlewareContext = { meta: dispatch.meta, name, requestType: "tool" }
+      const toolContext: McpMiddlewareContext = { meta: dispatch.meta, name, requestType: "tool", extra }
       const baseHandler = withAls(dispatch.handler, toolContext)
       const callHandler = middleware.length === 0
         ? baseHandler
@@ -540,14 +561,14 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
 
     const resourcesByUri = new Map(resources.map((r) => [r.uri, r] as const))
 
-    server.setRequestHandler(ReadResourceRequestSchema, async (request): Promise<ReadResourceResult> => {
+    server.setRequestHandler(ReadResourceRequestSchema, async (request, extra): Promise<ReadResourceResult> => {
       const { uri } = request.params
 
       // Fixed resources first (exact URI match), then templates (pattern match).
       const fixed = resourceHandlers.get(uri)
       if (fixed !== undefined) {
         const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json"
-        const fixedContext: McpMiddlewareContext = { meta: fixed.meta, name: uri, requestType: "resource" }
+        const fixedContext: McpMiddlewareContext = { meta: fixed.meta, name: uri, requestType: "resource", extra }
         const baseHandler = withAls(fixed.handler, fixedContext)
         const callHandler = middleware.length === 0
           ? baseHandler
@@ -564,7 +585,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
           captured[name] = match[i + 1] as string
         })
         const input = assembleInput("uri-variable", captured, template.sourceMap)
-        const templateContext: McpMiddlewareContext = { meta: template.meta, name: uri, requestType: "resource" }
+        const templateContext: McpMiddlewareContext = { meta: template.meta, name: uri, requestType: "resource", extra }
         const baseHandler = withAls(template.handler, templateContext)
         const callHandler = middleware.length === 0
           ? baseHandler
@@ -580,7 +601,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   if (hasPrompts) {
     server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }))
 
-    server.setRequestHandler(GetPromptRequestSchema, async (request): Promise<GetPromptResult> => {
+    server.setRequestHandler(GetPromptRequestSchema, async (request, extra): Promise<GetPromptResult> => {
       const { name, arguments: args } = request.params
       const dispatch = promptHandlers.get(name)
 
@@ -589,7 +610,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       }
 
       const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
-      const promptContext: McpMiddlewareContext = { meta: dispatch.meta, name, requestType: "prompt" }
+      const promptContext: McpMiddlewareContext = { meta: dispatch.meta, name, requestType: "prompt", extra }
       const baseHandler = withAls(dispatch.handler, promptContext)
       const callHandler = middleware.length === 0
         ? baseHandler
