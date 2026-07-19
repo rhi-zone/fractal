@@ -12,14 +12,16 @@
 // projector package: cli-api-projector and mcp-api-projector both already
 // depend on api-tree (`@rhi-zone/fractal-api-tree`), so api-tree taking a
 // REAL dependency on either of them the other way would be a package cycle.
-// Instead of importing `CliMiddlewareContext`/`McpMiddlewareContext` from
-// those packages, this module redeclares their shapes structurally
-// (`CliContextShape`/`McpContextShape` below) — TypeScript's structural
-// typing makes a value of the real `CliMiddlewareContext` assignable
-// wherever `CliContextShape` is expected (and vice versa) with no import
-// needed, so there's nothing to keep in sync beyond the shape itself, and a
-// consumer who imports the real types still gets full type-checking against
-// them at the call site.
+// Instead of importing `CliAlsContext`/`McpAlsContext` (each projector's
+// dispatch-context type for `opts.als` — see cli.ts/server.ts; distinct from
+// middleware, which no longer receives a context bag, see
+// docs/design/middleware-and-caller-context.md) from those packages, this
+// module redeclares their shapes structurally (`CliContextShape`/
+// `McpContextShape` below) — TypeScript's structural typing makes a value of
+// the real `CliAlsContext` assignable wherever `CliContextShape` is expected
+// (and vice versa) with no import needed, so there's nothing to keep in sync
+// beyond the shape itself, and a consumer who imports the real types still
+// gets full type-checking against them at the call site.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Meta } from "./node.ts";
@@ -31,12 +33,11 @@ import type { Meta } from "./node.ts";
 // Deliberately NOT imported from cli-api-projector / mcp-api-projector (see
 // module doc above — would create a package cycle). Kept intentionally
 // narrow: only the fields `createContext`'s own extractors need to accept,
-// which happen to be the full shape of `CliMiddlewareContext` /
-// `McpMiddlewareContext` today. If either grows a field this module doesn't
-// reference, no update is needed here — structural typing only checks the
-// fields actually used.
+// which happen to be the full shape of `CliAlsContext` / `McpAlsContext`
+// today. If either grows a field this module doesn't reference, no update is
+// needed here — structural typing only checks the fields actually used.
 
-/** Structural mirror of cli-api-projector's `CliMiddlewareContext`. */
+/** Structural mirror of cli-api-projector's `CliAlsContext`. */
 export type CliContextShape = {
   readonly meta: Meta;
   readonly io: {
@@ -48,7 +49,7 @@ export type CliContextShape = {
   readonly leafName: string;
 };
 
-/** Structural mirror of mcp-api-projector's `McpMiddlewareContext`. */
+/** Structural mirror of mcp-api-projector's `McpAlsContext`. */
 export type McpContextShape = {
   readonly meta: Meta;
   readonly name: string;

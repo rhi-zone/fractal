@@ -20,7 +20,7 @@ export type {
   ToToolsOptions,
 } from "./project.ts"
 export { getMcpMeta, projectPrompts, projectResources, projectTools, toTools } from "./project.ts"
-export type { CreateMcpServerOptions, McpMiddleware, McpMiddlewareContext, ValidationResult } from "./server.ts"
+export type { CreateMcpServerOptions, McpAlsContext, McpMiddleware, ValidationResult } from "./server.ts"
 export { createMcpServer, validateAgainstSchema } from "./server.ts"
 export type { CreateHttpMcpServerOptions, CreateStdioMcpServerOptions } from "./presets.ts"
 export { createHttpMcpServer, createStdioMcpServer } from "./presets.ts"

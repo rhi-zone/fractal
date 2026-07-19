@@ -58,7 +58,7 @@ import { toOpenApiFromRoute } from "./openapi.ts"
 import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts"
 
 export type { CorsOptions, Fetch }
-export type { HttpHandlerMiddleware, HttpHandlerMiddlewareContext } from "./route.ts"
+export type { HttpHandlerMiddleware } from "./route.ts"
 
 /** `PresetOptions.openapi` object form — `OpenApiOpts` plus the mount path. */
 export type OpenApiPresetOptions = OpenApiOpts & {
@@ -141,13 +141,15 @@ export type PresetOptions<T = unknown> = {
   /**
    * Around-hooks wrapping the HANDLER call itself — a separate mechanism
    * from `opts.middleware` above (which wraps the whole `Fetch` request/
-   * response cycle, before a route is even matched). `handlerMiddleware`
-   * sits INSIDE `runRoute` (route.ts): after decode, before encode/Result-
-   * unwrapping, with access to the matched route's `meta`, the live
-   * `Request`, and the path `slugs` — the same handler-scoped hook CLI's
-   * `CliOpts.middleware` and MCP's `CreateMcpServerOptions.middleware`
-   * already provide, now available for HTTP too. Composes like an onion:
-   * the first entry is the OUTERMOST wrapper, matching every other
+   * response cycle, before a route is even matched). `handlerMiddleware` is
+   * `F => F` where `F = (input, stores) => result` (see
+   * docs/design/middleware-and-caller-context.md). It sits INSIDE `runRoute`
+   * (route.ts): after decode, before encode/Result-unwrapping, seeing both
+   * the assembled input and the raw pre-assembly stores (`httpStores()`,
+   * decode.ts) — the same handler-scoped hook CLI's `CliOpts.middleware` and
+   * MCP's `CreateMcpServerOptions.middleware` already provide, now available
+   * for HTTP too. The handler itself never receives `stores`. Composes like
+   * an onion: the first entry is the OUTERMOST wrapper, matching every other
    * middleware convention in this codebase. Threaded through to whichever
    * router compiler `opts.router` resolves to (every built-in compiler in
    * compile.ts accepts it as a second argument). Empty/absent by default

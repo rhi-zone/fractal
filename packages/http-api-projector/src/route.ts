@@ -37,6 +37,7 @@
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { isResultShape } from "@rhi-zone/fractal-api-tree"
+import type { Stores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { httpStores, primaryStoreForMethod, assemble } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"
@@ -673,12 +674,17 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
  *
  * The body is parsed once here. Methods that conventionally carry no body
  * (GET/HEAD/DELETE) skip body parsing entirely.
+ *
+ * Returns the `stores` alongside the assembled `input` bag — `stores` is
+ * threaded into `HttpHandlerMiddleware` (see below), which sees both the
+ * assembled input AND the raw pre-assembly stores; the handler itself only
+ * ever sees `input`.
  */
 async function defaultDecode(
   req: Request,
   slugs: Readonly<Record<string, string>>,
   sources?: Sources,
-): Promise<unknown> {
+): Promise<{ readonly input: unknown; readonly stores: Stores }> {
   const url = new URL(req.url)
   const primary = primaryStoreForMethod(req.method)
 
@@ -716,7 +722,7 @@ async function defaultDecode(
     bag = sources.transform(bag)
   }
 
-  return bag
+  return { input: bag, stores }
 }
 
 /** Default `encode`: a 200 JSON response. */
@@ -734,33 +740,27 @@ function defaultEncodeError(error: unknown): Response {
 // distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/
 // preset.ts (`PresetOptions.middleware`). Mirrors CliMiddleware
 // (cli-api-projector/src/cli.ts) and McpMiddleware
-// (mcp-api-projector/src/server.ts): both projectors already have this
-// handler-scoped hook; HTTP did not. Sits INSIDE `runRoute` — after decode,
-// before encode — so it sees (and can transform) the assembled input bag and
-// the handler's raw return value, with access to the matched route's `meta`,
-// the live `Request`, and the path `slugs` (available only after route
-// matching, unlike protocol-level middleware which wraps the whole
-// request/response cycle before a route is even resolved).
+// (mcp-api-projector/src/server.ts): all three projectors share the same
+// shape — `F => F` where `F = (input, stores) => result` (see
+// docs/design/middleware-and-caller-context.md). Sits INSIDE `runRoute` —
+// after decode, before encode — so it sees (and can transform) the assembled
+// input bag and the raw pre-assembly stores (`httpStores()`, decode.ts), with
+// the handler's raw return value returned back out. The handler itself is
+// `(input) => result` — it never receives `stores`; that's structural (see
+// the `(input, _stores) => handler(input)` base in `runRoute`), not a
+// convention to remember.
 // ============================================================================
 
-/** Context available to HTTP handler middleware at the point the handler is invoked. */
-export type HttpHandlerMiddlewareContext = {
-  readonly meta: Meta
-  readonly req: Request
-  readonly slugs: Record<string, string>
-}
-
 /**
- * An HTTP handler middleware wraps the handler-invoking function `next`,
- * given dispatch context for the route being called. Middleware compose like
- * an onion: the first entry in `handlerMiddleware` (runRoute's parameter,
- * threaded from `PresetOptions.handlerMiddleware`) is the OUTERMOST wrapper —
- * same convention as `CliMiddleware`/`McpMiddleware`.
+ * An HTTP handler middleware wraps the handler-invoking function `next`
+ * (itself `F => F`, see module doc above). Middleware compose like an onion:
+ * the first entry in `handlerMiddleware` (runRoute's parameter, threaded from
+ * `PresetOptions.handlerMiddleware`) is the OUTERMOST wrapper — same
+ * convention as `CliMiddleware`/`McpMiddleware`.
  */
 export type HttpHandlerMiddleware = (
-  next: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-  context: HttpHandlerMiddlewareContext,
-) => (input: Record<string, unknown>) => unknown | Promise<unknown>
+  next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
 
 /**
  * Compose `middleware` around `base`, first entry outermost. An empty array
@@ -768,12 +768,11 @@ export type HttpHandlerMiddleware = (
  */
 function composeHandlerMiddleware(
   middleware: readonly HttpHandlerMiddleware[],
-  base: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-  context: HttpHandlerMiddlewareContext,
-): (input: Record<string, unknown>) => unknown | Promise<unknown> {
+  base: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+): (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown> {
   let wrapped = base
   for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped, context)
+    wrapped = middleware[i]!(wrapped)
   }
   return wrapped
 }
@@ -797,22 +796,26 @@ export async function runRoute(
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
 ): Promise<Response> {
   let input: unknown
+  let stores: Stores
   try {
-    input = await defaultDecode(req, slugs, sources)
+    const decoded = await defaultDecode(req, slugs, sources)
+    input = decoded.input
+    stores = decoded.stores
   } catch {
     return jsonRouteResponse({ error: "invalid JSON body" }, { status: 400 })
   }
 
   try {
+    // Bridge the plain handler `(input) => result` into `F => F`'s base case
+    // `(input, stores) => handler(input)` — the handler never sees `stores`,
+    // structurally (see HttpHandlerMiddleware's module doc above).
+    const base = (input: Record<string, unknown>, _stores: Stores) =>
+      (handler as (input: Record<string, unknown>) => unknown | Promise<unknown>)(input)
     const middleware = handlerMiddleware ?? []
     const callHandler = middleware.length === 0
-      ? handler
-      : composeHandlerMiddleware(
-          middleware,
-          handler as (input: Record<string, unknown>) => unknown | Promise<unknown>,
-          { meta, req, slugs: { ...slugs } },
-        )
-    let output: unknown = await (callHandler(input as Record<string, unknown>) as Promise<unknown>)
+      ? base
+      : composeHandlerMiddleware(middleware, base)
+    let output: unknown = await (callHandler(input as Record<string, unknown>, stores) as Promise<unknown>)
 
     // Result unwrapping: if the handler returned a Result<T, E>, separate
     // the success and error paths before encoding — a 400, not the catch

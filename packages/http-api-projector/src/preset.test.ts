@@ -460,8 +460,8 @@ describe("OOTB preset — handlerMiddleware", () => {
   })
 
   it("wraps the handler call and can transform its output", async () => {
-    const tagOutput: HttpHandlerMiddleware = (next) => async (input) => {
-      const result = await next(input)
+    const tagOutput: HttpHandlerMiddleware = (next) => async (input, stores) => {
+      const result = await next(input, stores)
       return { tagged: true, result }
     }
     const f = createFetch(api, { handlerMiddleware: [tagOutput] })
@@ -476,8 +476,8 @@ describe("OOTB preset — handlerMiddleware", () => {
       out.headers.append("X-Middleware", name)
       return out
     }
-    const tagOutput: HttpHandlerMiddleware = (next) => async (input) => {
-      const result = await next(input)
+    const tagOutput: HttpHandlerMiddleware = (next) => async (input, stores) => {
+      const result = await next(input, stores)
       return { tagged: true, result }
     }
     const f = createFetch(api, {
@@ -490,8 +490,8 @@ describe("OOTB preset — handlerMiddleware", () => {
   })
 
   it("is threaded through custom `router` compilers (e.g. radixRouter)", async () => {
-    const tagOutput: HttpHandlerMiddleware = (next) => async (input) => {
-      const result = await next(input)
+    const tagOutput: HttpHandlerMiddleware = (next) => async (input, stores) => {
+      const result = await next(input, stores)
       return { tagged: true, result }
     }
     const f = createFetch(api, { router: radixRouter, handlerMiddleware: [tagOutput] })

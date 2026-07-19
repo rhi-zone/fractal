@@ -641,15 +641,13 @@ describe("runRoute — handler-level middleware", () => {
     expect(await res.json()).toEqual({ got: "1" })
   })
 
-  it("sees dispatch context (meta, req, slugs) and can transform input before / output after", async () => {
-    let seenMeta: unknown
-    let seenReqUrl: string | undefined
-    let seenSlugs: unknown
-    const doubleInput: HttpHandlerMiddleware = (next, context) => (input) => {
-      seenMeta = context.meta
-      seenReqUrl = context.req.url
-      seenSlugs = context.slugs
-      return next({ ...input, x: String(Number(input.x) * 2) })
+  it("can read from stores — the raw pre-assembly path/query stores — and can transform input before / output after", async () => {
+    let seenPathBookId: unknown
+    let seenQueryX: unknown
+    const doubleInput: HttpHandlerMiddleware = (next) => (input, stores) => {
+      seenPathBookId = stores.path?.get("bookId")
+      seenQueryX = stores.query?.get("x")
+      return next({ ...input, x: String(Number(input.x) * 2) }, stores)
     }
     const tree = api_({
       books: api_({}, {
@@ -667,22 +665,37 @@ describe("runRoute — handler-level middleware", () => {
     const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [doubleInput])
     const res = await router(new Request("http://localhost/books/42/echo?x=5"))
     expect(await res.json()).toEqual({ bookId: "42", got: 10 })
-    expect((seenMeta as { description?: string }).description).toBe("an echo op")
-    expect(seenReqUrl).toBe("http://localhost/books/42/echo?x=5")
-    expect(seenSlugs).toEqual({ bookId: "42" })
+    expect(seenPathBookId).toBe("42")
+    expect(seenQueryX).toBe("5")
+  })
+
+  it("the handler does not receive stores — only the assembled input", async () => {
+    // A handler declared with a single `input` parameter has no way to reach
+    // `stores` — there is no second parameter to receive it. This proves the
+    // base adapter is `(input, _stores) => handler(input)`, not something
+    // that leaks `stores` through to the handler.
+    const tree = api_({
+      whatArgs: op((input: unknown) => ({ argCount: Object.keys(input as object).length }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    const passStores: HttpHandlerMiddleware = (next) => (input, stores) => next(input, stores)
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [passStores])
+    const res = await router(new Request("http://localhost/whatArgs?x=1"))
+    expect(await res.json()).toEqual({ argCount: 1 })
   })
 
   it("composes multiple middleware — first entry is outermost (sees the call first and last)", async () => {
     const order: string[] = []
-    const outer: HttpHandlerMiddleware = (next) => async (input) => {
+    const outer: HttpHandlerMiddleware = (next) => async (input, stores) => {
       order.push("outer:before")
-      const result = await next(input)
+      const result = await next(input, stores)
       order.push("outer:after")
       return result
     }
-    const inner: HttpHandlerMiddleware = (next) => async (input) => {
+    const inner: HttpHandlerMiddleware = (next) => async (input, stores) => {
       order.push("inner:before")
-      const result = await next(input)
+      const result = await next(input, stores)
       order.push("inner:after")
       return result
     }

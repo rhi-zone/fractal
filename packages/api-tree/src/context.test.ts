@@ -5,9 +5,9 @@
 // directly into `createFetch`'s `PresetOptions.als`, `runCli`'s
 // `CliOpts.als`, and `createMcpServer`'s `CreateMcpServerOptions.als` — with
 // no cast at the call site (structural typing against `CliContextShape` /
-// `McpContextShape` lines up with the real `CliMiddlewareContext` /
-// `McpMiddlewareContext`) — and that `getStore()` reads back whichever
-// surface most recently entered its context.
+// `McpContextShape` lines up with the real `CliAlsContext` / `McpAlsContext`)
+// — and that `getStore()` reads back whichever surface most recently entered
+// its context.
 
 import { describe, expect, it } from "bun:test"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"

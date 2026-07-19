@@ -2,7 +2,7 @@
 //
 // Covers: each dispatch path (tool, fixed resource, resource template,
 // prompt) runs its handler inside the configured AsyncLocalStorage context,
-// `init` receives MCP dispatch context (McpMiddlewareContext), concurrent
+// `init` receives MCP dispatch context (McpAlsContext), concurrent
 // calls stay isolated, and ALS composes with `opts.middleware` as the
 // INNERMOST wrapper — same contract as HTTP's `PresetOptions.als`
 // (`packages/http-api-projector/src/preset.ts`) and CLI's `CliOpts.als`
@@ -102,12 +102,12 @@ describe("CreateMcpServerOptions.als — tools", () => {
     let seenBeforeNext: string | undefined
     let seenAfterNext: string | undefined
 
-    const observe: McpMiddleware = (next) => async (input) => {
+    const observe: McpMiddleware = (next) => async (input, stores) => {
       // Before calling `next`, ALS hasn't been entered yet — middleware runs
       // OUTSIDE the store (ALS is the innermost wrapper, closer to the
       // handler than middleware — see CreateMcpServerOptions.als).
       seenBeforeNext = storage.getStore()?.requestId
-      const result = await next(input)
+      const result = await next(input, stores)
       // After `next` settles, execution is back outside the store too —
       // Node's AsyncLocalStorage does not propagate back out through an
       // already-settled `await`.

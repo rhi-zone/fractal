@@ -1,7 +1,10 @@
 // packages/cli-api-projector/src/middleware.test.ts — CliOpts.middleware
 //
-// Covers: a middleware sees CLI dispatch context, wraps the handler call, can
-// modify input/output, ALS-based caller context threads through to the
+// Covers: middleware is `F => F` where `F = (input, stores) => result` (see
+// docs/design/middleware-and-caller-context.md) — a middleware can read from
+// the raw pre-assembly `stores` (flag/path/env), can inspect/transform the
+// assembled `input`, the handler itself never receives `stores` (structural,
+// not a convention), ALS-based caller context threads through to the
 // handler, and composition order (first entry = outermost wrapper).
 
 import { AsyncLocalStorage } from "node:async_hooks"
@@ -32,31 +35,40 @@ describe("CliOpts.middleware", () => {
     expect(JSON.parse(out.join(""))).toEqual({ got: "1" })
   })
 
-  it("middleware sees CLI dispatch context (meta, leafName, slugs, io)", async () => {
-    const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), { description: "an echo op" }) })
-    let seenLeafName: string | undefined
-    let seenDescription: unknown
-    let sawIo = false
-    const capture: CliMiddleware = (next, context) => {
-      seenLeafName = context.leafName
-      seenDescription = context.meta.description
-      // `runCli` shallow-merges the injected io over defaults (`{ ...defaultIO, ...io }`),
-      // so the individual stream objects (not the wrapper) are reference-identical.
-      sawIo = context.io.stdout === io.stdout
-      return next
+  it("middleware can read from stores — flag, path, and env", async () => {
+    const tree = api_({
+      users: api_({}, {
+        fallback: {
+          name: "userId",
+          subtree: api_({
+            profile: op((input: { userId: string; x: string }) => ({ id: input.userId, got: input.x }), {}),
+          }),
+        },
+      }),
+    })
+    let seenFlagX: unknown
+    let seenPathUserId: unknown
+    let seenEnvHome: unknown
+    const readStores: CliMiddleware = (next) => (input, stores) => {
+      seenFlagX = stores.flag?.get("x")
+      seenPathUserId = stores.path?.get("userId")
+      seenEnvHome = stores.env?.get("HOME")
+      return next(input, stores)
     }
-    const { io } = makeIO()
-    await runCli(tree, ["echo", "--x", "1"], io, { middleware: [capture] })
-    expect(seenLeafName).toBe("echo")
-    expect(seenDescription).toBe("an echo op")
-    expect(sawIo).toBe(true)
+    const { out, io } = makeIO()
+    await runCli(tree, ["users", "u1", "profile", "--x", "1"], io, { middleware: [readStores] })
+    expect(JSON.parse(out.join(""))).toEqual({ id: "u1", got: "1" })
+    expect(seenFlagX).toBe("1")
+    expect(seenPathUserId).toBe("u1")
+    expect(seenEnvHome).toBe(process.env.HOME)
   })
 
   it("middleware wraps the handler call — can transform input before and output after", async () => {
     const tree = api_({ echo: op((input: { x: string }) => ({ got: Number(input.x) }), {}) })
-    const doubleInput: CliMiddleware = (next) => (input) => next({ ...input, x: String(Number(input.x) * 2) })
-    const wrapOutput: CliMiddleware = (next) => async (input) => {
-      const result = await next(input)
+    const doubleInput: CliMiddleware = (next) => (input, stores) =>
+      next({ ...input, x: String(Number(input.x) * 2) }, stores)
+    const wrapOutput: CliMiddleware = (next) => async (input, stores) => {
+      const result = await next(input, stores)
       return { wrapped: result }
     }
     const { out, io } = makeIO()
@@ -64,30 +76,44 @@ describe("CliOpts.middleware", () => {
     expect(JSON.parse(out.join(""))).toEqual({ wrapped: { got: 10 } })
   })
 
-  it("middleware sets up an AsyncLocalStorage caller-context the handler can read", async () => {
-    const als = new AsyncLocalStorage<{ leafName: string }>()
+  it("the handler does not receive stores — only the assembled input", async () => {
+    // A handler declared with a single `input` parameter has no way to reach
+    // `stores` — there is no second parameter to receive it. This proves the
+    // base adapter is `(input, _stores) => handler(input)`, not something
+    // that leaks `stores` through to the handler.
     const tree = api_({
-      whoami: op((_: unknown) => ({ leafName: als.getStore()?.leafName ?? "none" }), {}),
+      whatArgs: op((input: unknown) => ({ argCount: Object.keys(input as object).length }), {}),
     })
-    const withAls: CliMiddleware = (next, context) => (input) =>
-      als.run({ leafName: context.leafName }, () => next(input))
+    const passStores: CliMiddleware = (next) => (input, stores) => next(input, stores)
     const { out, io } = makeIO()
-    await runCli(tree, ["whoami"], io, { middleware: [withAls] })
-    expect(JSON.parse(out.join(""))).toEqual({ leafName: "whoami" })
+    await runCli(tree, ["whatArgs", "--x", "1"], io, { middleware: [passStores] })
+    expect(JSON.parse(out.join(""))).toEqual({ argCount: 1 })
+  })
+
+  it("middleware sets up an AsyncLocalStorage caller-context the handler can read", async () => {
+    const als = new AsyncLocalStorage<{ requestedBy: string }>()
+    const tree = api_({
+      whoami: op((_: unknown) => ({ requestedBy: als.getStore()?.requestedBy ?? "none" }), {}),
+    })
+    const withAls: CliMiddleware = (next) => (input, stores) =>
+      als.run({ requestedBy: String(stores.flag?.get("user") ?? "unknown") }, () => next(input, stores))
+    const { out, io } = makeIO()
+    await runCli(tree, ["whoami", "--user", "alice"], io, { middleware: [withAls] })
+    expect(JSON.parse(out.join(""))).toEqual({ requestedBy: "alice" })
   })
 
   it("composes multiple middleware — first entry is outermost (sees the call first and last)", async () => {
     const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) })
     const order: string[] = []
-    const outer: CliMiddleware = (next) => async (input) => {
+    const outer: CliMiddleware = (next) => async (input, stores) => {
       order.push("outer:before")
-      const result = await next(input)
+      const result = await next(input, stores)
       order.push("outer:after")
       return result
     }
-    const inner: CliMiddleware = (next) => async (input) => {
+    const inner: CliMiddleware = (next) => async (input, stores) => {
       order.push("inner:before")
-      const result = await next(input)
+      const result = await next(input, stores)
       order.push("inner:after")
       return result
     }

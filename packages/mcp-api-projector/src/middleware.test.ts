@@ -1,10 +1,11 @@
 // packages/mcp-api-projector/src/middleware.test.ts — CreateMcpServerOptions.middleware
 //
-// Covers: a middleware sees MCP dispatch context (meta, name, requestType),
-// wraps the handler call for tools/resources/prompts, ALS-based caller
-// context threads through to the handler, and composition order (first
-// entry = outermost wrapper). Driven through a real
-// `@modelcontextprotocol/sdk` `Client` over `InMemoryTransport`, same as
+// Covers: middleware is `F => F` where `F = (input, stores) => result` (see
+// docs/design/middleware-and-caller-context.md) — a middleware can read from
+// the raw pre-assembly `stores`, can inspect/transform the assembled `input`,
+// the handler itself never receives `stores` (structural, not a convention),
+// and composition order (first entry = outermost wrapper). Driven through a
+// real `@modelcontextprotocol/sdk` `Client` over `InMemoryTransport`, same as
 // server.test.ts.
 
 import { AsyncLocalStorage } from "node:async_hooks"
@@ -41,27 +42,22 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
     expect(JSON.parse(textOf(result))).toEqual({ got: "1" })
   })
 
-  it("middleware sees MCP dispatch context (meta, name, requestType)", async () => {
-    let seenName: string | undefined
-    let seenDescription: unknown
-    let seenRequestType: string | undefined
-    const capture: McpMiddleware = (next, context) => {
-      seenName = context.name
-      seenDescription = context.meta.description
-      seenRequestType = context.requestType
-      return next
+  it("middleware can read from stores — the raw pre-assembly argument store", async () => {
+    let seenRawX: unknown
+    const readStores: McpMiddleware = (next) => (input, stores) => {
+      seenRawX = stores.argument?.get("x")
+      return next(input, stores)
     }
-    const { client } = await connectedClient(tree, { middleware: [capture] })
+    const { client } = await connectedClient(tree, { middleware: [readStores] })
     await client.callTool({ name: "echo", arguments: { x: "1" } })
-    expect(seenName).toBe("echo")
-    expect(seenDescription).toBe("an echo op")
-    expect(seenRequestType).toBe("tool")
+    expect(seenRawX).toBe("1")
   })
 
-  it("middleware wraps the handler call — can transform input before and output after", async () => {
-    const doubleInput: McpMiddleware = (next) => (input) => next({ ...input, x: String(Number(input.x) * 2) })
-    const wrapOutput: McpMiddleware = (next) => async (input) => {
-      const result = await next(input)
+  it("middleware can inspect and transform input before and after the handler runs", async () => {
+    const doubleInput: McpMiddleware = (next) => (input, stores) =>
+      next({ ...input, x: String(Number(input.x) * 2) }, stores)
+    const wrapOutput: McpMiddleware = (next) => async (input, stores) => {
+      const result = await next(input, stores)
       return { wrapped: result }
     }
     const numTree = api_({ echo: op((input: { x: string }) => ({ got: Number(input.x) }), {}) })
@@ -70,29 +66,43 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
     expect(JSON.parse(textOf(result))).toEqual({ wrapped: { got: 10 } })
   })
 
+  it("the handler does not receive stores — only the assembled input", async () => {
+    // A handler declared with a single `input` parameter has no way to reach
+    // `stores` — there is no second parameter to receive it. This proves the
+    // base adapter is `(input, _stores) => handler(input)`, not something
+    // that leaks `stores` through to the handler.
+    const argsTree = api_({
+      whatArgs: op((input: unknown) => ({ argCount: (input as object) === null ? 0 : Object.keys(input as object).length, input }), {}),
+    })
+    const passStores: McpMiddleware = (next) => (input, stores) => next(input, stores)
+    const { client } = await connectedClient(argsTree, { middleware: [passStores] })
+    const result = await client.callTool({ name: "whatArgs", arguments: { x: "1" } })
+    expect(JSON.parse(textOf(result))).toEqual({ argCount: 1, input: { x: "1" } })
+  })
+
   it("middleware sets up an AsyncLocalStorage caller-context the handler can read", async () => {
     const als = new AsyncLocalStorage<{ name: string }>()
     const alsTree = api_({
       whoami: op((_: unknown) => ({ name: als.getStore()?.name ?? "none" }), {}),
     })
-    const withAls: McpMiddleware = (next, context) => (input) =>
-      als.run({ name: context.name }, () => next(input))
+    const withAls: McpMiddleware = (next) => (input, stores) =>
+      als.run({ name: String(stores.argument?.get("name") ?? "unknown") }, () => next(input, stores))
     const { client } = await connectedClient(alsTree, { middleware: [withAls] })
-    const result = await client.callTool({ name: "whoami", arguments: {} })
-    expect(JSON.parse(textOf(result))).toEqual({ name: "whoami" })
+    const result = await client.callTool({ name: "whoami", arguments: { name: "caller-1" } })
+    expect(JSON.parse(textOf(result))).toEqual({ name: "caller-1" })
   })
 
   it("composes multiple middleware — first entry is outermost (sees the call first and last)", async () => {
     const order: string[] = []
-    const outer: McpMiddleware = (next) => async (input) => {
+    const outer: McpMiddleware = (next) => async (input, stores) => {
       order.push("outer:before")
-      const result = await next(input)
+      const result = await next(input, stores)
       order.push("outer:after")
       return result
     }
-    const inner: McpMiddleware = (next) => async (input) => {
+    const inner: McpMiddleware = (next) => async (input, stores) => {
       order.push("inner:before")
-      const result = await next(input)
+      const result = await next(input, stores)
       order.push("inner:after")
       return result
     }
@@ -115,49 +125,47 @@ describe("CreateMcpServerOptions.middleware — resources", () => {
     }),
   })
 
-  it("middleware sees requestType 'resource' for a fixed resource read", async () => {
-    let seenRequestType: string | undefined
-    let seenName: string | undefined
-    const capture: McpMiddleware = (next, context) => {
-      seenRequestType = context.requestType
-      seenName = context.name
-      return next
+  it("middleware wraps a fixed resource read", async () => {
+    let called = false
+    const track: McpMiddleware = (next) => (input, stores) => {
+      called = true
+      return next(input, stores)
     }
-    const { client } = await connectedClient(tree, { middleware: [capture] })
+    const { client } = await connectedClient(tree, { middleware: [track] })
     await client.readResource({ uri: "resource://config" })
-    expect(seenRequestType).toBe("resource")
-    expect(seenName).toBe("resource://config")
+    expect(called).toBe(true)
   })
 
-  it("middleware wraps a resource-template read", async () => {
-    const order: string[] = []
-    const track: McpMiddleware = (next, context) => (input) => {
-      order.push(context.name)
-      return next(input)
+  it("middleware wraps a resource-template read and can read the captured slug from stores", async () => {
+    let seenUserId: unknown
+    const track: McpMiddleware = (next) => (input, stores) => {
+      seenUserId = stores["uri-variable"]?.get("userId")
+      return next(input, stores)
     }
     const { client } = await connectedClient(tree, { middleware: [track] })
     const result = await client.readResource({ uri: "resource://users/u1/profile" })
     const content = result.contents[0] as { text: string }
     expect(JSON.parse(content.text)).toEqual({ id: "u1" })
-    expect(order).toEqual(["resource://users/u1/profile"])
+    expect(seenUserId).toBe("u1")
   })
 })
 
 describe("CreateMcpServerOptions.middleware — prompts", () => {
   const tree = api_({
-    greet: op((_: unknown) => ({ messages: [{ role: "assistant", content: { type: "text", text: "hi" } }] }), {
-      mcp: { as: "prompt" },
-    }),
+    greet: op((input: { who: string }) => ({
+      messages: [{ role: "assistant", content: { type: "text", text: `hi ${input.who}` } }],
+    }), { mcp: { as: "prompt" } }),
   })
 
-  it("middleware sees requestType 'prompt'", async () => {
-    let seenRequestType: string | undefined
-    const capture: McpMiddleware = (next, context) => {
-      seenRequestType = context.requestType
-      return next
+  it("middleware can read the prompt's raw argument from stores", async () => {
+    let seenWho: unknown
+    const track: McpMiddleware = (next) => (input, stores) => {
+      seenWho = stores.argument?.get("who")
+      return next(input, stores)
     }
-    const { client } = await connectedClient(tree, { middleware: [capture] })
-    await client.getPrompt({ name: "greet", arguments: {} })
-    expect(seenRequestType).toBe("prompt")
+    const { client } = await connectedClient(tree, { middleware: [track] })
+    const result = await client.getPrompt({ name: "greet", arguments: { who: "world" } })
+    expect((result.messages[0]?.content as { text: string }).text).toBe("hi world")
+    expect(seenWho).toBe("world")
   })
 })

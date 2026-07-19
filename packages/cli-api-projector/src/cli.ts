@@ -119,28 +119,29 @@ export type CliOpts<T = unknown> = {
   /**
    * Wrap the handler call so it runs inside its own `AsyncLocalStorage`
    * context. `init` computes the per-invocation context value from
-   * CLI-specific dispatch context (see `CliMiddlewareContext`) — the same
-   * context shape `CliMiddleware` receives. Mirrors HTTP's `PresetOptions.als`
-   * (`packages/http-api-projector/src/preset.ts`). ALS is the INNERMOST
-   * wrapper — closer to the handler than `opts.middleware` — so the store is
-   * active only while `target.handler` (and anything it calls, transitively)
-   * runs; a `CliMiddleware`'s own code, before or after calling `next`, is
-   * NOT itself inside the ALS context — Node's `AsyncLocalStorage` doesn't
-   * propagate back out through an `await`'d call once it settles. A
-   * middleware that needs the store should read it from code it invokes
-   * synchronously inside `next`, or maintain its own context via `context`
-   * (the dispatch info passed to every middleware) instead. Absent by
-   * default (no ALS wrapping).
+   * CLI-specific dispatch context (see `CliAlsContext`). Mirrors HTTP's
+   * `PresetOptions.als` (`packages/http-api-projector/src/preset.ts`). ALS is
+   * the INNERMOST wrapper — closer to the handler than `opts.middleware` —
+   * so the store is active only while `target.handler` (and anything it
+   * calls, transitively) runs; a `CliMiddleware`'s own code, before or after
+   * calling `next`, is NOT itself inside the ALS context — Node's
+   * `AsyncLocalStorage` doesn't propagate back out through an `await`'d call
+   * once it settles. A middleware that needs cross-cutting context should
+   * read it from `stores` (the second parameter every `CliMiddleware`
+   * receives), or read the ALS store from code it invokes synchronously
+   * inside `next`. Absent by default (no ALS wrapping).
    */
-  readonly als?: AlsConfig<CliMiddlewareContext, T>
+  readonly als?: AlsConfig<CliAlsContext, T>
   /**
-   * Around-hooks wrapping the handler call, with access to CLI-specific
-   * dispatch context (see `CliMiddlewareContext`). Composes like an onion:
+   * Around-hooks wrapping the handler call — `F => F` where
+   * `F = (input, stores) => result` (see
+   * docs/design/middleware-and-caller-context.md). Composes like an onion:
    * the first entry in the array is the OUTERMOST wrapper (it sees the call
    * first and last), matching HTTP's layer composition
-   * (`packages/http-api-projector/src/layers.ts`). This is the mechanism for
-   * wiring around-hooks that need CLI-specific context (ALS, audit, caller
-   * context) at the projector level — see `CliMiddleware`.
+   * (`packages/http-api-projector/src/layers.ts`). `stores` is the raw
+   * pre-assembly stores built for input assembly (see `buildInput`) — the
+   * vehicle for cross-cutting concerns (caller identity, audit, ...); the
+   * handler itself never sees `stores`.
    *
    * When omitted (or empty), the handler is called directly — zero overhead.
    */
@@ -149,25 +150,24 @@ export type CliOpts<T = unknown> = {
 
 // ============================================================================
 // Middleware — around-hooks wrapping the handler call
+//
+// Middleware is F => F, where F = (input, stores) => result — see
+// docs/design/middleware-and-caller-context.md. `input` is the assembled,
+// validated domain arguments (same shape the handler receives); `stores` is
+// the raw pre-assembly stores built by `buildInput`. The handler itself is
+// `(input) => result` — it never receives `stores`; that's structural (see
+// the `(input, _stores) => handler(input)` base in `runCli`), not a
+// convention to remember.
 // ============================================================================
 
-/** Context available to CLI middleware at the point the handler is invoked. */
-export type CliMiddlewareContext = {
-  readonly meta: Meta
-  readonly io: CliIO
-  readonly slugs: Record<string, string>
-  readonly leafName: string
-}
-
 /**
- * A CLI middleware wraps the handler-invoking function `next`, given
- * dispatch context for the leaf being called. Middleware compose like HTTP
- * layers: `runCli` applies `opts.middleware` outermost-first (see `CliOpts`).
+ * A CLI middleware wraps the handler-invoking function `next` (itself
+ * `F => F`, see module doc above). Middleware compose like HTTP layers:
+ * `runCli` applies `opts.middleware` outermost-first (see `CliOpts`).
  */
 export type CliMiddleware = (
-  next: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-  context: CliMiddlewareContext,
-) => (input: Record<string, unknown>) => unknown | Promise<unknown>
+  next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
 
 /**
  * Compose `middleware` around `base`, first entry outermost — `middleware[0]`
@@ -176,14 +176,28 @@ export type CliMiddleware = (
  */
 function composeMiddleware(
   middleware: readonly CliMiddleware[],
-  base: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-  context: CliMiddlewareContext,
-): (input: Record<string, unknown>) => unknown | Promise<unknown> {
+  base: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+): (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown> {
   let wrapped = base
   for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped, context)
+    wrapped = middleware[i]!(wrapped)
   }
   return wrapped
+}
+
+// ============================================================================
+// ALS dispatch context — separate from CliMiddleware's (input, stores). ALS
+// is a side channel (see docs/design/middleware-and-caller-context.md); this
+// is dispatch metadata for `CliOpts.als`'s `init`, not a context bag threaded
+// through middleware.
+// ============================================================================
+
+/** Dispatch context `CliOpts.als`'s `init` receives. */
+export type CliAlsContext = {
+  readonly meta: Meta
+  readonly io: CliIO
+  readonly slugs: Record<string, string>
+  readonly leafName: string
 }
 
 // ============================================================================
@@ -560,12 +574,17 @@ function parseFlags(argv: string[]): ParsedArgv {
  * flag — is still assembled even though it never appears in `flags`). This
  * keeps schema-less trees (no fixed field list) working exactly as before:
  * with an empty `sourceMap`, this reduces to the old flags+slugs merge.
+ *
+ * Returns the `stores` alongside the assembled `input` bag — `stores` is
+ * threaded into `CliMiddleware` (see above), which sees both the assembled
+ * input AND the raw pre-assembly stores; the handler itself only ever sees
+ * `input`.
  */
 function buildInput(
   flags: Record<string, string | string[] | true>,
   slugs: Record<string, string>,
   sourceMap: SourceMap,
-): Record<string, unknown> {
+): { readonly input: Record<string, unknown>; readonly stores: Stores } {
   const stores: Stores = {
     flag: createStore(flags),
     path: createStore(slugs),
@@ -580,7 +599,7 @@ function buildInput(
     ]),
   ]
 
-  return assemble(stores, paramNames, sourceMap, "flag", Object.keys(slugs))
+  return { input: assemble(stores, paramNames, sourceMap, "flag", Object.keys(slugs)), stores }
 }
 
 // ============================================================================
@@ -928,7 +947,7 @@ export async function runCli<T = unknown>(
   const schemaName = target.schemaPath.join("_").replace(/-/g, "_")
   const inputSchema = schemas[schemaName]?.inputSchema
   const sourceMap = getCliMeta(target.leafMeta).sourceMap ?? {}
-  const rawInput = buildInput(flags, target.slugs, sourceMap)
+  const { input: rawInput, stores } = buildInput(flags, target.slugs, sourceMap)
   // A generated validator (see CliOpts.validators) already wraps
   // target.handler to run parse() — coercion + validation + defaults in one
   // pass — so the schema-derived fallback path below is skipped for this
@@ -952,24 +971,28 @@ export async function runCli<T = unknown>(
   // by any configured middleware (outermost-first; see CliOpts.middleware).
   // With neither configured, `callHandler` is just `target.handler` itself
   // (zero overhead).
-  const middlewareContext: CliMiddlewareContext = {
+  const alsContext: CliAlsContext = {
     meta: target.leafMeta,
     io: ioResolved,
     slugs: target.slugs,
     leafName: target.leafName,
   }
-  const baseHandler = opts.als !== undefined
+  const alsHandler = opts.als !== undefined
     ? (input: Record<string, unknown>) =>
-        opts.als!.storage.run(opts.als!.init(middlewareContext), () => target.handler(input))
+        opts.als!.storage.run(opts.als!.init(alsContext), () => target.handler(input))
     : target.handler
+  // Bridge the plain handler `(input) => result` into `F => F`'s base case
+  // `(input, stores) => handler(input)` — the handler never sees `stores`,
+  // structurally (see CliMiddleware's module doc above).
+  const base = (input: Record<string, unknown>, _stores: Stores) => alsHandler(input)
   const middleware = opts.middleware ?? []
   const callHandler = middleware.length === 0
-    ? baseHandler
-    : composeMiddleware(middleware, baseHandler, middlewareContext)
+    ? base
+    : composeMiddleware(middleware, base)
 
   let result: unknown
   try {
-    result = await Promise.resolve(callHandler(input))
+    result = await Promise.resolve(callHandler(input, stores))
   } catch {
     // Thrown errors are never surfaced verbatim to the end user — matching
     // HTTP's `runRoute` (route.ts), which already collapses a thrown error

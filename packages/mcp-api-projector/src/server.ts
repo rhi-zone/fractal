@@ -252,10 +252,13 @@ export function toResourceContent(result: unknown, uri: string, defaultMimeType:
  * via the shared resolution pipeline `assemble`. Mirrors cli-api-projector's
  * `buildInput`: `paramNames` is the union of the raw values' own keys and any
  * name declared in `sourceMap` — so a param sourced purely from an override
- * (not present in the raw values at all) still gets assembled.
+ * (not present in the raw values at all) still gets assembled. Returns the
+ * `stores` alongside the assembled `input` bag — `stores` is threaded into
+ * `McpMiddleware` (see below), which sees both the assembled input AND the
+ * raw pre-assembly stores; the handler itself only ever sees `input`.
  *
  * With an empty `sourceMap`, every param resolves from `storeName` by its own
- * key — i.e. this reduces to `values` unchanged, matching prior behavior
+ * key — i.e. `input` reduces to `values` unchanged, matching prior behavior
  * (tool calls got `request.params.arguments` directly; resource template
  * reads got the regex-captured vars object directly; prompt calls got
  * `request.params.arguments` directly).
@@ -264,34 +267,36 @@ function assembleInput(
   storeName: string,
   values: Record<string, unknown>,
   sourceMap: SourceMap,
-): Record<string, unknown> {
+): { readonly input: Record<string, unknown>; readonly stores: Stores } {
   const stores: Stores = { [storeName]: createStore(values) }
   const paramNames = [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
-  return assemble(stores, paramNames, sourceMap, storeName)
+  return { input: assemble(stores, paramNames, sourceMap, storeName), stores }
 }
 
 // ============================================================================
 // Middleware — around-hooks wrapping the handler call
+//
+// Middleware is F => F, where F = (input, stores) => result — see
+// docs/design/middleware-and-caller-context.md. There is no separate context
+// bag: `input` is the assembled, validated domain arguments (same shape the
+// handler receives); `stores` is the raw pre-assembly stores built for input
+// assembly (see `assembleInput`), giving middleware access to whatever the
+// handler didn't declare. The handler itself is `(input) => result` — it
+// never receives `stores`; that's structural (see `withAls` and the
+// `(input, _stores) => handler(input)` base below), not a convention to
+// remember.
 // ============================================================================
 
-/** Context available to MCP middleware at the point the handler is invoked. */
-export type McpMiddlewareContext = {
-  readonly meta: Meta
-  readonly name: string
-  readonly requestType: "tool" | "resource" | "prompt"
-}
-
 /**
- * An MCP middleware wraps the handler-invoking function `next`, given
- * dispatch context for the tool/resource/prompt being called. Middleware
- * compose like HTTP layers (`packages/http-api-projector/src/layers.ts`) and
- * CLI middleware (`packages/cli-api-projector/src/cli.ts`): the first entry
- * in `CreateMcpServerOptions.middleware` is the OUTERMOST wrapper.
+ * An MCP middleware wraps the handler-invoking function `next` (itself
+ * `F => F`, see module doc above). Middleware compose like HTTP layers
+ * (`packages/http-api-projector/src/layers.ts`) and CLI middleware
+ * (`packages/cli-api-projector/src/cli.ts`): the first entry in
+ * `CreateMcpServerOptions.middleware` is the OUTERMOST wrapper.
  */
 export type McpMiddleware = (
-  next: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-  context: McpMiddlewareContext,
-) => (input: Record<string, unknown>) => unknown | Promise<unknown>
+  next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
 
 /**
  * Compose `middleware` around `base`, first entry outermost. An empty array
@@ -299,14 +304,27 @@ export type McpMiddleware = (
  */
 function composeMiddleware(
   middleware: readonly McpMiddleware[],
-  base: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-  context: McpMiddlewareContext,
-): (input: Record<string, unknown>) => unknown | Promise<unknown> {
+  base: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+): (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown> {
   let wrapped = base
   for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped, context)
+    wrapped = middleware[i]!(wrapped)
   }
   return wrapped
+}
+
+// ============================================================================
+// ALS dispatch context — separate from McpMiddleware's (input, stores). ALS
+// is a side channel (see docs/design/middleware-and-caller-context.md); this
+// is dispatch metadata for `opts.als.init`, not a context bag threaded
+// through middleware.
+// ============================================================================
+
+/** Dispatch context `CreateMcpServerOptions.als`'s `init` receives. */
+export type McpAlsContext = {
+  readonly meta: Meta
+  readonly name: string
+  readonly requestType: "tool" | "resource" | "prompt"
 }
 
 export type CreateMcpServerOptions<T = unknown> = {
@@ -348,30 +366,30 @@ export type CreateMcpServerOptions<T = unknown> = {
   /**
    * Wrap each tool/resource/prompt handler call so it runs inside its own
    * `AsyncLocalStorage` context. `init` computes the per-invocation context
-   * value from MCP-specific dispatch context (see `McpMiddlewareContext`) —
-   * the same context shape `McpMiddleware` receives. Mirrors HTTP's
-   * `PresetOptions.als` (`packages/http-api-projector/src/preset.ts`) and
-   * CLI's `CliOpts.als` (`packages/cli-api-projector/src/cli.ts`). ALS is the
-   * INNERMOST wrapper — closer to the handler than `opts.middleware` — so the
-   * store is active only while the dispatched handler (and anything it
-   * calls, transitively) runs; an `McpMiddleware`'s own code, before or after
-   * calling `next`, is NOT itself inside the ALS context — Node's
+   * value from MCP-specific dispatch context (see `McpAlsContext`). Mirrors
+   * HTTP's `PresetOptions.als` (`packages/http-api-projector/src/preset.ts`)
+   * and CLI's `CliOpts.als` (`packages/cli-api-projector/src/cli.ts`). ALS is
+   * the INNERMOST wrapper — closer to the handler than `opts.middleware` —
+   * so the store is active only while the dispatched handler (and anything
+   * it calls, transitively) runs; an `McpMiddleware`'s own code, before or
+   * after calling `next`, is NOT itself inside the ALS context — Node's
    * `AsyncLocalStorage` doesn't propagate back out through an `await`'d call
-   * once it settles. A middleware that needs the store should read it from
-   * code it invokes synchronously inside `next`, or maintain its own context
-   * via `context` (the dispatch info passed to every middleware) instead.
-   * Absent by default (no ALS wrapping).
+   * once it settles. A middleware that needs cross-cutting context should
+   * read it from `stores` (the second parameter every `McpMiddleware`
+   * receives), or read the ALS store from code it invokes synchronously
+   * inside `next`. Absent by default (no ALS wrapping).
    */
-  readonly als?: AlsConfig<McpMiddlewareContext, T>
+  readonly als?: AlsConfig<McpAlsContext, T>
   /**
-   * Around-hooks wrapping each tool/resource/prompt handler call, with
-   * access to MCP-specific dispatch context (see `McpMiddlewareContext`).
-   * Composes like an onion: the first entry in the array is the OUTERMOST
-   * wrapper, matching HTTP's layer composition
-   * (`packages/http-api-projector/src/layers.ts`) and CLI's middleware
-   * (`packages/cli-api-projector/src/cli.ts`). This is the mechanism for
-   * wiring around-hooks that need MCP-specific context (ALS, audit, caller
-   * context) at the projector level — see `McpMiddleware`.
+   * Around-hooks wrapping each tool/resource/prompt handler call — `F => F`
+   * where `F = (input, stores) => result` (see
+   * docs/design/middleware-and-caller-context.md). Composes like an onion:
+   * the first entry in the array is the OUTERMOST wrapper, matching HTTP's
+   * layer composition (`packages/http-api-projector/src/layers.ts`) and
+   * CLI's middleware (`packages/cli-api-projector/src/cli.ts`). `stores` is
+   * the raw pre-assembly stores built for input assembly (see
+   * `assembleInput`) — the vehicle for cross-cutting concerns (caller
+   * identity, audit, ...); the handler itself never sees `stores`.
    *
    * When omitted (or empty), each handler is called directly — zero overhead.
    */
@@ -426,11 +444,19 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   // no-op case.
   const withAls = (
     handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-    context: McpMiddlewareContext,
+    context: McpAlsContext,
   ): (input: Record<string, unknown>) => unknown | Promise<unknown> =>
     opts.als === undefined
       ? handler
       : (input) => opts.als!.storage.run(opts.als!.init(context), () => handler(input))
+
+  // Bridge a plain handler `(input) => result` into `F => F`'s base case
+  // `(input, stores) => handler(input)` — the handler never sees `stores`,
+  // structurally (see McpMiddleware's module doc above).
+  const toBase = (
+    handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+  ): ((input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>) =>
+    (input, _stores) => handler(input)
 
   const implementation: Implementation = {
     name: opts.name,
@@ -483,13 +509,13 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
     }
 
     try {
-      const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
-      const toolContext: McpMiddlewareContext = { meta: dispatch.meta, name, requestType: "tool" }
-      const baseHandler = withAls(dispatch.handler, toolContext)
+      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap)
+      const toolContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "tool" }
+      const base = toBase(withAls(dispatch.handler, toolContext))
       const callHandler = middleware.length === 0
-        ? baseHandler
-        : composeMiddleware(middleware, baseHandler, toolContext)
-      let result = await callHandler(input)
+        ? base
+        : composeMiddleware(middleware, base)
+      let result = await callHandler(input, stores)
 
       // Result unwrapping: applied UNCONDITIONALLY (matching HTTP's
       // `runRoute`, packages/http-api-projector/src/route.ts) — any handler
@@ -547,12 +573,12 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       const fixed = resourceHandlers.get(uri)
       if (fixed !== undefined) {
         const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json"
-        const fixedContext: McpMiddlewareContext = { meta: fixed.meta, name: uri, requestType: "resource" }
-        const baseHandler = withAls(fixed.handler, fixedContext)
+        const fixedContext: McpAlsContext = { meta: fixed.meta, name: uri, requestType: "resource" }
+        const base = toBase(withAls(fixed.handler, fixedContext))
         const callHandler = middleware.length === 0
-          ? baseHandler
-          : composeMiddleware(middleware, baseHandler, fixedContext)
-        const result = await callHandler({})
+          ? base
+          : composeMiddleware(middleware, base)
+        const result = await callHandler({}, {})
         return { contents: [toResourceContent(result, uri, mimeType)] }
       }
 
@@ -563,13 +589,13 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         template.paramNames.forEach((name, i) => {
           captured[name] = match[i + 1] as string
         })
-        const input = assembleInput("uri-variable", captured, template.sourceMap)
-        const templateContext: McpMiddlewareContext = { meta: template.meta, name: uri, requestType: "resource" }
-        const baseHandler = withAls(template.handler, templateContext)
+        const { input, stores } = assembleInput("uri-variable", captured, template.sourceMap)
+        const templateContext: McpAlsContext = { meta: template.meta, name: uri, requestType: "resource" }
+        const base = toBase(withAls(template.handler, templateContext))
         const callHandler = middleware.length === 0
-          ? baseHandler
-          : composeMiddleware(middleware, baseHandler, templateContext)
-        const result = await callHandler(input)
+          ? base
+          : composeMiddleware(middleware, base)
+        const result = await callHandler(input, stores)
         return { contents: [toResourceContent(result, uri, template.mimeType)] }
       }
 
@@ -588,13 +614,13 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
       }
 
-      const input = assembleInput("argument", args ?? {}, dispatch.sourceMap)
-      const promptContext: McpMiddlewareContext = { meta: dispatch.meta, name, requestType: "prompt" }
-      const baseHandler = withAls(dispatch.handler, promptContext)
+      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap)
+      const promptContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "prompt" }
+      const base = toBase(withAls(dispatch.handler, promptContext))
       const callHandler = middleware.length === 0
-        ? baseHandler
-        : composeMiddleware(middleware, baseHandler, promptContext)
-      const result = await callHandler(input)
+        ? base
+        : composeMiddleware(middleware, base)
+      const result = await callHandler(input, stores)
 
       // A handler may already return a well-formed GetPromptResult (has a
       // `messages` array) — pass it through as-is. Otherwise wrap the plain
