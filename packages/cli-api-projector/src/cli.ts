@@ -13,8 +13,19 @@
 // no ancestor inheritance; see docs/design/router-model.md — "Tags"):
 //   - destructive:true  → io.confirm() before running (skippable via --yes/--force)
 //   - readOnly:true     → no confirm
-//   - streaming:true    → output each item as a JSONL line
+//   - streaming:true    → output each item as a JSONL line (array results)
 //   - deprecated:true   → "[DEPRECATED]" marker in command listings + leaf help
+//
+// Async-generator streaming (see docs/design/middleware-and-caller-context.md
+// — "Streaming and Progress"): when a handler returns an `AsyncIterable`
+// (detected structurally via `Symbol.asyncIterator`, same as HTTP's
+// `isAsyncIterable`), it's streamed incrementally — NOT gated by
+// `tags.streaming`/`--jsonl`, which only affect array results. Each yielded
+// value is written to stdout as a JSONL line as soon as it's yielded (true
+// push streaming, not buffer-then-emit); a `StreamProgress` effect goes to
+// stderr as a human-readable `[progress] N% message` line instead; the
+// generator's return value is written as the final stdout JSONL line. See
+// `streamAsyncIterable` below.
 //
 // Input field → flag derivation:
 //   Named --flags parsed from argv; fallback slug values merged on top
@@ -39,7 +50,7 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import { assemble, isResultShape } from "@rhi-zone/fractal-api-tree"
+import { assemble, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with CLI's store names — see
@@ -1032,6 +1043,21 @@ export async function runCli<T = unknown>(
     throw new CliError("internal error", 1)
   }
 
+  // Streaming: an async-iterable result (e.g. an async generator handler) is
+  // streamed incrementally — one JSONL line written to stdout per yield, as
+  // it's yielded, not buffered — instead of going through Result-unwrapping
+  // and the buffer-then-emit output paths below. Checked before
+  // Result-unwrapping, matching HTTP's `runRoute` (route.ts): neither a
+  // Result nor a plain value is an async iterable, so there's no ambiguity.
+  // Unconditional — not gated by `tags.streaming`/`--jsonl` — mirroring
+  // HTTP's `isAsyncIterable(output)` check, which also isn't gated by a
+  // per-route flag: a handler that returns an async iterable IS the signal
+  // to stream, on every projector.
+  if (isAsyncIterable(result)) {
+    await streamAsyncIterable(result, ioResolved)
+    return
+  }
+
   // Result unwrapping: applied UNCONDITIONALLY (matching HTTP's `runRoute`,
   // route.ts) — any handler returning `{kind:"err", error}` gets proper CLI
   // error handling, not just leaves wrapped by a generated validator
@@ -1052,12 +1078,10 @@ export async function runCli<T = unknown>(
 
   // Output
   if (tags.streaming === true || jsonl) {
-    // Streaming: one JSON line per item
-    if (Array.isArray(result) || isAsyncIterable(result)) {
-      const items = isAsyncIterable(result)
-        ? await collectAsync(result)
-        : (result as unknown[])
-      for (const item of items) {
+    // Streaming: one JSON line per item. `result` is never an async iterable
+    // here (handled above), so only the plain-array case remains.
+    if (Array.isArray(result)) {
+      for (const item of result) {
         ioResolved.stdout.write(JSON.stringify(item) + "\n")
       }
     } else {
@@ -1081,12 +1105,50 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
   return typeof v === "object" && v !== null && Symbol.asyncIterator in v
 }
 
-async function collectAsync(it: AsyncIterable<unknown>): Promise<unknown[]> {
-  const result: unknown[] = []
-  for await (const item of it) {
-    result.push(item)
+/** A JSONL line for one value — `null` for `undefined`/`null` (matching the
+ *  non-streaming default output's convention), `JSON.stringify` otherwise. */
+function jsonLine(v: unknown): string {
+  return (v === undefined || v === null ? "null" : JSON.stringify(v)) + "\n"
+}
+
+/**
+ * Stream an async-iterable handler result incrementally to `io`, per the
+ * async-generator streaming protocol (docs/design/middleware-and-caller-context.md
+ * — "Streaming and Progress"): each yielded value is inspected — a
+ * `StreamProgress` effect is written to stderr as a human-readable line
+ * (`[progress] 25% message`), a `StreamChunk` effect is unwrapped to its
+ * `.data` and written as a JSONL line to stdout, and any other yielded value
+ * (the untagged-yield fallback — see `isStreamEffect`'s doc) is written to
+ * stdout as-is. Uses a manual `.next()` loop (not `for await`), which
+ * discards a generator's return value; the return value is written as the
+ * final JSONL line to stdout, matching HTTP's `streamAsSse`'s `done` frame.
+ * Each line is written as it's produced — true push streaming, not
+ * buffer-then-emit.
+ */
+async function streamAsyncIterable(
+  iterable: AsyncIterable<unknown>,
+  io: CliIO,
+): Promise<void> {
+  const iterator = iterable[Symbol.asyncIterator]()
+  for (;;) {
+    const step = await iterator.next()
+    if (step.done) {
+      io.stdout.write(jsonLine(step.value))
+      return
+    }
+    const value: unknown = step.value
+    if (isStreamProgress(value)) {
+      const pct = value.total !== undefined
+        ? `${Math.round((value.progress / value.total) * 100)}%`
+        : `${value.progress}%`
+      const message = value.message !== undefined ? ` ${value.message}` : ""
+      io.stderr.write(`[progress] ${pct}${message}\n`)
+    } else if (isStreamChunk(value)) {
+      io.stdout.write(jsonLine(value.data))
+    } else {
+      io.stdout.write(jsonLine(value))
+    }
   }
-  return result
 }
 
 // ============================================================================
