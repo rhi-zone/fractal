@@ -3,12 +3,17 @@
 ## Next session (handoff)
 
 **From projector coverage audit (HIGH — blocks production use):**
-- **HTTP streaming responses** (SSE/chunked encoding) + **MCP progress notifications** — both need handler context design: how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr). Critical blocker for AI/realtime use cases. Note: async iterable / yield pattern may be the foundation for both.
-- **HTTP non-JSON content types** — PARTIALLY DONE (response side complete as of 2026-07-20; request side still needs multipart/form-data/file upload). Response side: `ResponseOverride` now passes through binary/stream/text/blob bodies unchanged.
-- **Caller-context assembly** — IN PROGRESS via caller store. Parallel to input extraction, never merged with it, protocol-specific extraction from request context. Blocks proper auth/session patterns and middleware that depends on parsed request data.
+- **HTTP non-JSON content types** — PARTIALLY DONE (response side complete as of 2026-07-20; request side still needs multipart/form-data/file upload). Response side: `ResponseOverride` now passes through binary/stream/text/blob bodies unchanged. **Request side (multipart/form-data/file upload parsing) — IN PROGRESS; remaining production blocker.**
 
-**From projector coverage audit (MEDIUM-HIGH):**
-- **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains).
+**Completed this session (2026-07-20) — no longer blockers:**
+- **HTTP streaming responses** (SSE/chunked encoding) — DONE. Async generator handlers that `yield StreamEffect` now work across all projectors. Response side: `ResponseOverride` streams via `AsyncIterable<Uint8Array>`.
+- **MCP progress notifications** — DONE. Handlers receive `reportProgress(message, progress)` callback via caller store. Progress yields inside handler bodies are captured by `StreamProgress` extractor and sent as MCP notifications.
+- **Caller-context assembly** — DONE. Caller store (typed via declaration merging on `StoreRegistry` interface) provides transport-level capabilities to handlers. Pattern unified across HTTP/CLI/MCP via middleware/layer design.
+
+**Open items (quality & design depth, not blockers):**
+- **Opt-in configuration for stream effect / Result detection** — design doc (`docs/design/middleware-and-caller-context.md`) notes that handlers returning async iterables or `Result` types should be auto-detected and wrapped. Not yet implemented; configurable opt-in needed (likely via metadata or compiler flag).
+- **Root tsconfig investigation** — workspace root `tsconfig.json` needs audit for strictness/consistency across packages.
+- **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains); lower priority.
 
 **From design backlog:**
 - **GraphQL API projector** (server + client) — type-ir SDL projector done; API projector still open. Follows HTTP/CLI/MCP projection pattern.
@@ -20,6 +25,22 @@
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 - **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
 - **Coercion placement specifics** — currently handled in `parse()` (transform+validate single pass). Broader story for store-level coercion and pre-input coercion TBD.
+
+---
+
+## Streaming, progress notifications, and caller store — DONE (2026-07-20)
+
+HTTP streaming (SSE via async generators), MCP progress notifications, and CLI incremental JSONL streaming all completed this session. Handlers yielding `StreamEffect` values now work uniformly across all three projectors:
+
+- **HTTP**: `ResponseOverride` streams via `AsyncIterable<Uint8Array>` with appropriate `Content-Type` headers (application/x-ndjson for JSONL, text/event-stream for SSE).
+- **MCP**: `StreamProgress` extractor yields are captured and sent as `notifications/progress` messages. Handlers receive `reportProgress(message, progress)` callback via caller store.
+- **CLI**: Incremental JSONL streaming to stdout, matching HTTP's line-delimited JSON format.
+
+**Caller store** (typed via declaration merging on `StoreRegistry` interface) provides transport-level capabilities to handlers without coupling. Pattern unified across all three projectors via middleware/layer design. Each projector populates caller-specific stores (HTTP: response/setHeader, MCP: reportProgress, CLI: writeStderr).
+
+**Stores refactored** from closure-captured context to plain objects with lazy proxy getters, eliminating accidental mutation and improving debuggability.
+
+**StreamEffect DU** defined in `packages/api-tree/src/effect.ts` with discriminated union pattern (kind-tagged values for `Progress`, `Log`, etc.), matching the fractal design philosophy.
 
 ---
 
