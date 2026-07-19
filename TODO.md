@@ -3,9 +3,9 @@
 ## Next session (handoff)
 
 **From projector coverage audit (HIGH — blocks production use):**
-- **HTTP streaming responses** (SSE/chunked encoding) + **MCP progress notifications** — both need handler context design: how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr). Critical blocker for AI/realtime use cases.
-- **HTTP non-JSON content types** — multipart, form-data, file upload, octet-stream. Request/response payload currently JSON-only.
-- **Caller-context assembly** — needs design and implementation. Parallel to input extraction, never merged with it, protocol-specific extraction from request context. Blocks proper auth/session patterns and middleware that depends on parsed request data.
+- **HTTP streaming responses** (SSE/chunked encoding) + **MCP progress notifications** — both need handler context design: how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr). Critical blocker for AI/realtime use cases. Note: async iterable / yield pattern may be the foundation for both.
+- **HTTP non-JSON content types** — PARTIALLY DONE (response side complete as of 2026-07-20; request side still needs multipart/form-data/file upload). Response side: `ResponseOverride` now passes through binary/stream/text/blob bodies unchanged.
+- **Caller-context assembly** — IN PROGRESS via caller store. Parallel to input extraction, never merged with it, protocol-specific extraction from request context. Blocks proper auth/session patterns and middleware that depends on parsed request data.
 
 **From projector coverage audit (MEDIUM-HIGH):**
 - **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains).
@@ -23,7 +23,21 @@
 
 ---
 
+## Middleware redesign, typed stores, and HTTP response bodies — DONE (2026-07-20)
+
+Middleware refactored from `(next, context) => (input) => result` (with invented context bags per projector) to a cleaner `F => F` pattern where `F = (input, stores) => result`. This eliminates the abstraction leakage and projection-specific `*MiddlewareContext` types (removed: `McpMiddlewareContext`, `CliMiddlewareContext`, `HttpHandlerMiddlewareContext`). 
+
+Stores are now declared via TypeScript declaration merging on the `StoreRegistry` interface — each projector and consumer app merges its own stores into the shared interface, providing type-safe access without coupling. Documented as a side channel and strongly discouraged in favor of explicit handler parameters.
+
+HTTP response body support extended to non-JSON types (binary/stream/text/blob) via `ResponseOverride` passthrough on the response side — request-side multipart/form-data/file upload still open.
+
+Design doc written: `docs/design/middleware-and-caller-context.md`. Caller-context assembly via caller store now in progress (see handoff above).
+
+---
+
 ## Cross-projector consistency, middleware, and ALS support — DONE (2026-07-19)
+
+Middleware redesigned 2026-07-20; see section above. Original work: uniform middleware/layer pattern across HTTP/CLI/MCP, ALS support with `withALS`, typed stores via declaration merging.
 
 ---
 
