@@ -26,6 +26,18 @@ export { assemble } from "@rhi-zone/fractal-api-tree"
 
 import type { Stores } from "@rhi-zone/fractal-api-tree"
 
+// Augment the shared StoreRegistry with HTTP's store names, so `Stores`
+// (declaration-merged across all projectors that are loaded) exposes exactly
+// these keys here — accessing any other store name is a compile-time error.
+declare module "@rhi-zone/fractal-api-tree" {
+  interface StoreRegistry {
+    path: true
+    query: true
+    header: true
+    body: true
+  }
+}
+
 // ============================================================================
 // HTTP stores factory
 // ============================================================================

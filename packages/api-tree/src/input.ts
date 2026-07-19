@@ -27,8 +27,29 @@ export interface Store {
   get(key: string): unknown
 }
 
-/** All input stores available for a given request/invocation. */
-export type Stores = Readonly<Record<string, Store>>
+/**
+ * Registry of store names, populated via declaration merging. The base
+ * interface is empty; each projector augments it with the store names it
+ * defines (e.g. HTTP adds `path`/`query`/`header`/`body`), so that
+ * `stores.someStore` is a compile-time error unless some projector actually
+ * declares `someStore`. See http-api-projector/src/decode.ts,
+ * cli-api-projector/src/cli.ts, mcp-api-projector/src/server.ts for the
+ * `declare module` augmentations.
+ */
+export interface StoreRegistry {}
+
+/**
+ * All input stores available for a given request/invocation. Values are
+ * optional: `StoreRegistry` is declaration-merged globally across every
+ * projector that's part of a given compilation (e.g. `tsc` type-checking
+ * the whole monorepo pulls in HTTP's, CLI's, and MCP's augmentations at
+ * once), but any single projector only ever builds the subset of stores it
+ * actually defines. Optional values keep construction sound per-projector
+ * while still making `stores.someUndeclaredName` a compile-time error —
+ * that's the property this type exists to enforce, not "every registered
+ * store is always present."
+ */
+export type Stores = Readonly<{ [K in keyof StoreRegistry]?: Store }>
 
 // ============================================================================
 // Per-param source override
@@ -99,10 +120,16 @@ export function assemble(
     return undefined
   }
 
+  // Store names are resolved dynamically here (from sourceMap/pathParamNames,
+  // both plain strings) — `Stores` is intentionally narrowed to the
+  // declaration-merged StoreRegistry for call sites that access it by
+  // literal key, so this internal lookup needs the wider index signature.
+  const byName = stores as Readonly<Record<string, Store | undefined>>
+
   const values: Record<string, unknown> = {}
   for (const name of paramNames) {
     const src = resolve(name)
-    values[name] = src ? stores[src.store]?.get(src.key ?? name) : undefined
+    values[name] = src ? byName[src.store]?.get(src.key ?? name) : undefined
   }
 
   return values

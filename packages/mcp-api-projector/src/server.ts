@@ -64,6 +64,16 @@ import type {
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+
+// Augment the shared StoreRegistry with MCP's store names — see
+// http-api-projector/src/decode.ts for the matching augmentation and its doc.
+declare module "@rhi-zone/fractal-api-tree" {
+  interface StoreRegistry {
+    argument: true
+    "uri-variable": true
+  }
+}
+
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
@@ -268,7 +278,10 @@ function assembleInput(
   values: Record<string, unknown>,
   sourceMap: SourceMap,
 ): { readonly input: Record<string, unknown>; readonly stores: Stores } {
-  const stores: Stores = { [storeName]: createStore(values) }
+  // storeName is always one of MCP's declared store names ("argument" or
+  // "uri-variable") at call sites below, but it's threaded through as a
+  // plain string — cast past the declaration-merged `Stores`' literal keys.
+  const stores = { [storeName]: createStore(values) } as Stores
   const paramNames = [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
   return { input: assemble(stores, paramNames, sourceMap, storeName), stores }
 }

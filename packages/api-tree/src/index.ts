@@ -29,7 +29,7 @@ export type { AnyApi } from "./direct.ts"
 // where a param came from consult the sourceMap directly — see "./input.ts"
 // for the full doc.
 export { assemble, createStore } from "./input.ts"
-export type { ParamSource, SourceMap, Store, Stores } from "./input.ts"
+export type { ParamSource, SourceMap, Store, StoreRegistry, Stores } from "./input.ts"
 
 // Dev tooling — the build-time extractor (extract.ts, TS source -> TypeRef)
 // and the source-level api()/op() tree walker (tree.ts) it feeds — lives on

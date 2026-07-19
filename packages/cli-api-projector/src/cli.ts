@@ -41,6 +41,17 @@ import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+
+// Augment the shared StoreRegistry with CLI's store names — see
+// http-api-projector/src/decode.ts for the matching augmentation and its doc.
+declare module "@rhi-zone/fractal-api-tree" {
+  interface StoreRegistry {
+    flag: true
+    path: true
+    env: true
+  }
+}
+
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
