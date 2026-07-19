@@ -32,7 +32,9 @@
         "@rhi-zone/fractal-type-ir": "workspace:*",
       },
       "devDependencies": {
+        "@modelcontextprotocol/sdk": "^1.29.0",
         "@rhi-zone/fractal-cli-api-projector": "workspace:*",
+        "@rhi-zone/fractal-http-api-projector": "workspace:*",
         "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
         "typescript": "^6.0.3",
       },
