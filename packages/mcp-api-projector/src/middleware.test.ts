@@ -110,6 +110,38 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
     await client.callTool({ name: "echo", arguments: { x: "1" } })
     expect(order).toEqual(["outer:before", "inner:before", "inner:after", "outer:after"])
   })
+
+  it("middleware can read the caller store — populated from the SDK's RequestHandlerExtra (sessionId/authInfo)", async () => {
+    // InMemoryTransport (no session-managed HTTP transport underneath) never
+    // sets `extra.sessionId`/`extra.authInfo` — this proves the `caller`
+    // store is wired through from `extra` without throwing, and that its
+    // values pass through whatever the SDK actually handed the request
+    // handler (undefined here), not a hardcoded placeholder.
+    let sawCallerStore = false
+    let seenSessionId: unknown
+    let seenAuthInfo: unknown
+    const readCaller: McpMiddleware = (next) => (input, stores) => {
+      sawCallerStore = stores.caller !== undefined
+      seenSessionId = stores.caller?.get("sessionId")
+      seenAuthInfo = stores.caller?.get("authInfo")
+      return next(input, stores)
+    }
+    const { client } = await connectedClient(tree, { middleware: [readCaller] })
+    const result = await client.callTool({ name: "echo", arguments: { x: "1" } })
+    expect(JSON.parse(textOf(result))).toEqual({ got: "1" })
+    expect(sawCallerStore).toBe(true)
+    expect(seenSessionId).toBeUndefined()
+    expect(seenAuthInfo).toBeUndefined()
+  })
+
+  it("the handler's assembled input does not include caller fields unless explicitly sourceMapped", async () => {
+    const { client } = await connectedClient(tree, {})
+    const result = await client.callTool({ name: "echo", arguments: { x: "1" } })
+    const parsed = JSON.parse(textOf(result))
+    expect(parsed).toEqual({ got: "1" })
+    expect(parsed.sessionId).toBeUndefined()
+    expect(parsed.authInfo).toBeUndefined()
+  })
 })
 
 describe("CreateMcpServerOptions.middleware — resources", () => {

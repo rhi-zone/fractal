@@ -42,6 +42,7 @@
 //   packages/http-api-projector/src/preset.ts   — sibling preset (createFetch, structural mirror)
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js"
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -60,6 +61,8 @@ import type {
   Implementation,
   ReadResourceResult,
   ServerCapabilities,
+  ServerNotification,
+  ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
@@ -73,6 +76,10 @@ declare module "@rhi-zone/fractal-api-tree" {
     "uri-variable": true
   }
 }
+
+// `caller` itself is declared once, in api-tree's input.ts — shared across
+// all three projectors (see that file's doc comment on StoreRegistry) —
+// rather than re-declared here.
 
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
@@ -272,16 +279,29 @@ export function toResourceContent(result: unknown, uri: string, defaultMimeType:
  * (tool calls got `request.params.arguments` directly; resource template
  * reads got the regex-captured vars object directly; prompt calls got
  * `request.params.arguments` directly).
+ *
+ * `extra` is the SDK's per-request `RequestHandlerExtra` (second argument to
+ * every `setRequestHandler` callback below) — its `authInfo`/`sessionId`
+ * populate the `caller` store: `caller.get("authInfo")` returns the SDK's
+ * `AuthInfo` object, `caller.get("sessionId")` the session ID string. This
+ * replaces the reverted `extra`-into-`McpMiddlewareContext` threading (commit
+ * `027baa6`) — `extra` now flows through `stores.caller` like every other
+ * projector's caller context; it is never exposed to middleware directly. See
+ * docs/design/middleware-and-caller-context.md.
  */
 function assembleInput(
   storeName: string,
   values: Record<string, unknown>,
   sourceMap: SourceMap,
+  extra: McpRequestExtra,
 ): { readonly input: Record<string, unknown>; readonly stores: Stores } {
   // storeName is always one of MCP's declared store names ("argument" or
   // "uri-variable") at call sites below, but it's threaded through as a
   // plain string — cast past the declaration-merged `Stores`' literal keys.
-  const stores = { [storeName]: createStore(values) } as Stores
+  const stores = {
+    [storeName]: createStore(values),
+    caller: createStore({ authInfo: extra.authInfo, sessionId: extra.sessionId }),
+  } as Stores
   const paramNames = [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
   return { input: assemble(stores, paramNames, sourceMap, storeName), stores }
 }
@@ -299,6 +319,17 @@ function assembleInput(
 // `(input, _stores) => handler(input)` base below), not a convention to
 // remember.
 // ============================================================================
+
+/**
+ * The SDK's per-request `RequestHandlerExtra` for this package's `Server`
+ * (default `RequestT`/`NotificationT`, per `createMcpServer`'s use of the
+ * SDK's low-level `Server` — see module doc above) — the second parameter
+ * every `setRequestHandler` callback receives. Carries `authInfo`/`sessionId`,
+ * consumed by `assembleInput` to populate the `caller` store; never threaded
+ * to middleware directly (see `assembleInput`'s doc and
+ * docs/design/middleware-and-caller-context.md).
+ */
+type McpRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>
 
 /**
  * An MCP middleware wraps the handler-invoking function `next` (itself
@@ -491,7 +522,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
 
   const toolsByName = new Map(tools.map((t) => [t.name, t] as const))
 
-  server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
     const { name, arguments: args } = request.params
     const dispatch = handlers.get(name)
 
@@ -522,7 +553,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
     }
 
     try {
-      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap)
+      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra)
       const toolContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "tool" }
       const base = toBase(withAls(dispatch.handler, toolContext))
       const callHandler = middleware.length === 0
@@ -579,7 +610,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
 
     const resourcesByUri = new Map(resources.map((r) => [r.uri, r] as const))
 
-    server.setRequestHandler(ReadResourceRequestSchema, async (request): Promise<ReadResourceResult> => {
+    server.setRequestHandler(ReadResourceRequestSchema, async (request, extra): Promise<ReadResourceResult> => {
       const { uri } = request.params
 
       // Fixed resources first (exact URI match), then templates (pattern match).
@@ -591,7 +622,10 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         const callHandler = middleware.length === 0
           ? base
           : composeMiddleware(middleware, base)
-        const result = await callHandler({}, {})
+        // No URI-variables for a fixed resource — assembleInput still builds
+        // the `caller` store from `extra` so middleware sees it here too.
+        const { input, stores } = assembleInput("uri-variable", {}, {}, extra)
+        const result = await callHandler(input, stores)
         return { contents: [toResourceContent(result, uri, mimeType)] }
       }
 
@@ -602,7 +636,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         template.paramNames.forEach((name, i) => {
           captured[name] = match[i + 1] as string
         })
-        const { input, stores } = assembleInput("uri-variable", captured, template.sourceMap)
+        const { input, stores } = assembleInput("uri-variable", captured, template.sourceMap, extra)
         const templateContext: McpAlsContext = { meta: template.meta, name: uri, requestType: "resource" }
         const base = toBase(withAls(template.handler, templateContext))
         const callHandler = middleware.length === 0
@@ -619,7 +653,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   if (hasPrompts) {
     server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }))
 
-    server.setRequestHandler(GetPromptRequestSchema, async (request): Promise<GetPromptResult> => {
+    server.setRequestHandler(GetPromptRequestSchema, async (request, extra): Promise<GetPromptResult> => {
       const { name, arguments: args } = request.params
       const dispatch = promptHandlers.get(name)
 
@@ -627,7 +661,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
       }
 
-      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap)
+      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra)
       const promptContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "prompt" }
       const base = toBase(withAls(dispatch.handler, promptContext))
       const callHandler = middleware.length === 0

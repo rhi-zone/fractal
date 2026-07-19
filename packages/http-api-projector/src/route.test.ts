@@ -800,6 +800,45 @@ describe("runRoute — handler-level middleware", () => {
     expect(order).toEqual(["outer:before", "inner:before", "inner:after", "outer:after"])
   })
 
+  it("middleware can read the caller store — populated from auth headers", async () => {
+    let seenAuthorization: unknown
+    let seenCookie: unknown
+    const readCaller: HttpHandlerMiddleware = (next) => (input, stores) => {
+      seenAuthorization = stores.caller?.get("authorization")
+      seenCookie = stores.caller?.get("cookie")
+      return next(input, stores)
+    }
+    const tree = api_({
+      echo: op((input: { x: string }) => ({ got: input.x }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [readCaller])
+    const res = await router(
+      new Request("http://localhost/echo?x=1", {
+        headers: { authorization: "Bearer abc123", cookie: "session=xyz" },
+      }),
+    )
+    expect(await res.json()).toEqual({ got: "1" })
+    expect(seenAuthorization).toBe("Bearer abc123")
+    expect(seenCookie).toBe("session=xyz")
+  })
+
+  it("the handler's assembled input does not include caller fields unless explicitly sourceMapped", async () => {
+    const tree = api_({
+      echo: op((input: { x: string }) => input, {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)))
+    const res = await router(
+      new Request("http://localhost/echo?x=1", { headers: { authorization: "Bearer abc123" } }),
+    )
+    const body = await res.json()
+    expect(body).toEqual({ x: "1" })
+    expect(body.authorization).toBeUndefined()
+  })
+
   it("runs before Result-unwrapping — an err Result from the middleware chain still maps to 400", async () => {
     const rejecting: HttpHandlerMiddleware = () => async () => ({ kind: "err", error: "rejected by middleware" })
     const tree = api_({

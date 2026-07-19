@@ -38,6 +38,10 @@ declare module "@rhi-zone/fractal-api-tree" {
   }
 }
 
+// `caller` itself is declared once, in api-tree's input.ts — shared across
+// all three projectors (see that file's doc comment on StoreRegistry) —
+// rather than re-declared here.
+
 // ============================================================================
 // HTTP stores factory
 // ============================================================================
@@ -47,6 +51,14 @@ declare module "@rhi-zone/fractal-api-tree" {
  * body. The body is parsed once (upstream) and passed in rather than re-parsed
  * here — this keeps the factory synchronous and allows the caller to handle
  * parse errors.
+ *
+ * `caller` is populated from raw request headers — `caller.get("authorization")`
+ * returns the `Authorization` header value, `caller.get("cookie")` the `Cookie`
+ * header value, and so on for any other auth-related header a consumer names.
+ * This store is deliberately a thin pass-through over headers (same underlying
+ * source as the `header` store): PARSING what's inside (decoding a JWT,
+ * splitting a cookie string into individual cookies, ...) is the consumer's
+ * job, not this factory's — see docs/design/middleware-and-caller-context.md.
  */
 export function httpStores(
   req: Request,
@@ -64,6 +76,7 @@ export function httpStores(
           ? (parsedBody as Record<string, unknown>)[k]
           : undefined,
     },
+    caller: { get: (k) => req.headers.get(k) ?? undefined },
   }
 }
 

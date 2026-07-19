@@ -35,8 +35,19 @@ export interface Store {
  * declares `someStore`. See http-api-projector/src/decode.ts,
  * cli-api-projector/src/cli.ts, mcp-api-projector/src/server.ts for the
  * `declare module` augmentations.
+ *
+ * `caller` is declared HERE, in api-tree, rather than per-projector — unlike
+ * `path`/`query`/`header`/etc. (which are genuinely projector-specific), every
+ * projector populates a `caller` store (auth/identity context; see
+ * docs/design/middleware-and-caller-context.md), so it belongs on the shared
+ * registry instead of being redundantly declared three times. HTTP populates
+ * it from auth headers/cookies, CLI from environment, MCP from the SDK's
+ * `authInfo`/`sessionId` — see each projector's stores factory
+ * (`httpStores`, `buildInput`, `assembleInput`).
  */
-export interface StoreRegistry {}
+export interface StoreRegistry {
+  caller: true
+}
 
 /**
  * All input stores available for a given request/invocation. Values are

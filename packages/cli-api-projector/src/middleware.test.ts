@@ -102,6 +102,28 @@ describe("CliOpts.middleware", () => {
     expect(JSON.parse(out.join(""))).toEqual({ requestedBy: "alice" })
   })
 
+  it("middleware can read the caller store — populated from OS-level identity (process.env.USER)", async () => {
+    const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) })
+    let seenCallerUser: unknown
+    const readCaller: CliMiddleware = (next) => (input, stores) => {
+      seenCallerUser = stores.caller?.get("user")
+      return next(input, stores)
+    }
+    const { out, io } = makeIO()
+    await runCli(tree, ["echo", "--x", "1"], io, { middleware: [readCaller] })
+    expect(JSON.parse(out.join(""))).toEqual({ got: "1" })
+    expect(seenCallerUser).toBe(process.env.USER ?? process.env.USERNAME)
+  })
+
+  it("the handler's assembled input does not include caller fields unless explicitly sourceMapped", async () => {
+    const tree = api_({ echo: op((input: { x: string }) => input, {}) })
+    const { out, io } = makeIO()
+    await runCli(tree, ["echo", "--x", "1"], io)
+    const result = JSON.parse(out.join(""))
+    expect(result).toEqual({ x: "1" })
+    expect(result.user).toBeUndefined()
+  })
+
   it("composes multiple middleware — first entry is outermost (sees the call first and last)", async () => {
     const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) })
     const order: string[] = []

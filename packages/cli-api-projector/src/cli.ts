@@ -52,6 +52,10 @@ declare module "@rhi-zone/fractal-api-tree" {
   }
 }
 
+// `caller` itself is declared once, in api-tree's input.ts — shared across
+// all three projectors (see that file's doc comment on StoreRegistry) —
+// rather than re-declared here.
+
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
@@ -590,16 +594,26 @@ function parseFlags(argv: string[]): ParsedArgv {
  * threaded into `CliMiddleware` (see above), which sees both the assembled
  * input AND the raw pre-assembly stores; the handler itself only ever sees
  * `input`.
+ *
+ * `caller` is populated from OS-level identity — `caller.get("user")` returns
+ * `process.env.USER` (falling back to `USERNAME`, set on Windows), the CLI's
+ * closest analog to HTTP's auth headers / MCP's `authInfo`. Anything richer
+ * (a config-file identity, a stored auth token) is the consumer's job to
+ * layer on top — see docs/design/middleware-and-caller-context.md.
  */
 function buildInput(
   flags: Record<string, string | string[] | true>,
   slugs: Record<string, string>,
   sourceMap: SourceMap,
 ): { readonly input: Record<string, unknown>; readonly stores: Stores } {
+  const caller: Record<string, unknown> = {
+    user: process.env.USER ?? process.env.USERNAME,
+  }
   const stores: Stores = {
     flag: createStore(flags),
     path: createStore(slugs),
     env: createStore(process.env as Record<string, unknown>),
+    caller: createStore(caller),
   }
 
   const paramNames = [
