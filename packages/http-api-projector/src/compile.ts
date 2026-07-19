@@ -21,7 +21,7 @@
 import type { AsyncLocalStorage } from "node:async_hooks"
 import type { Handler, Meta } from "@rhi-zone/fractal-api-tree/node"
 import { runRoute, splitPath } from "./route.ts"
-import type { HttpRoute, Sources } from "./route.ts"
+import type { HttpHandlerMiddleware, HttpRoute, Sources } from "./route.ts"
 
 // ============================================================================
 // Shared types
@@ -39,12 +39,12 @@ export type Matcher = (pathname: string, method: string) => RouteMatch | undefin
 export type CompiledRouter = (req: Request) => Promise<Response>
 
 /** Wraps a `Matcher` with request dispatch + 404 fallback — same contract as `makeRouterFromRoute`. */
-export function toRouter(matcher: Matcher): CompiledRouter {
+export function toRouter(matcher: Matcher, handlerMiddleware?: readonly HttpHandlerMiddleware[]): CompiledRouter {
   return async (req) => {
     const pathname = new URL(req.url).pathname
     const match = matcher(pathname, req.method)
     if (match === undefined) return new Response("Not Found", { status: 404 })
-    return runRoute(req, match.handler, match.meta, match.sources, match.slugs)
+    return runRoute(req, match.handler, match.meta, match.sources, match.slugs, handlerMiddleware)
   }
 }
 
@@ -233,8 +233,8 @@ export function radixMatcher(route: HttpRoute): Matcher {
   return buildRadixMatcher(collectRoutes(route, []))
 }
 
-export function radixRouter(route: HttpRoute): CompiledRouter {
-  return toRouter(radixMatcher(route))
+export function radixRouter(route: HttpRoute, handlerMiddleware?: readonly HttpHandlerMiddleware[]): CompiledRouter {
+  return toRouter(radixMatcher(route), handlerMiddleware)
 }
 
 // ============================================================================
@@ -356,8 +356,8 @@ export function compiledCharMatcher(route: HttpRoute): Matcher {
   return buildCompiledCharMatcher(collectRoutes(route, []))
 }
 
-export function compiledCharRouter(route: HttpRoute): CompiledRouter {
-  return toRouter(compiledCharMatcher(route))
+export function compiledCharRouter(route: HttpRoute, handlerMiddleware?: readonly HttpHandlerMiddleware[]): CompiledRouter {
+  return toRouter(compiledCharMatcher(route), handlerMiddleware)
 }
 
 // ============================================================================
@@ -402,11 +402,11 @@ export function mapMatcher(route: HttpRoute): Matcher {
 // through to the compiled char fn on a miss.
 // ============================================================================
 
-export function mapCharRouter(route: HttpRoute): CompiledRouter {
+export function mapCharRouter(route: HttpRoute, handlerMiddleware?: readonly HttpHandlerMiddleware[]): CompiledRouter {
   const routes = collectRoutes(route, [])
   const staticMatcher = buildMapMatcher(routes.filter((r) => !isDynamicPath(r.path)))
   const dynamicMatcher = buildCompiledCharMatcher(routes.filter((r) => isDynamicPath(r.path)))
-  return toRouter(chainMatchers(staticMatcher, dynamicMatcher))
+  return toRouter(chainMatchers(staticMatcher, dynamicMatcher), handlerMiddleware)
 }
 
 // ============================================================================

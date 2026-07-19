@@ -96,10 +96,10 @@ describe("createMcpClient — tool calls", () => {
     expect(result).toEqual({ id: "99", name: "Bob" })
   })
 
-  it("a throwing handler surfaces as a rejected promise (McpClientError)", async () => {
+  it("a throwing handler surfaces as a rejected promise (McpClientError) without leaking the thrown message", async () => {
     const { proxy } = await connectedClientPair()
     await expect(proxy.boom()).rejects.toBeInstanceOf(McpClientError)
-    await expect(proxy.boom()).rejects.toThrow("kaboom")
+    await expect(proxy.boom()).rejects.toThrow("internal error")
   })
 })
 

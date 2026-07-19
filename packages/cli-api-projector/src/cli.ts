@@ -970,24 +970,36 @@ export async function runCli<T = unknown>(
   let result: unknown
   try {
     result = await Promise.resolve(callHandler(input))
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    ioResolved.stderr.write(`Error: ${msg}\n`)
-    throw new CliError(msg, 1)
+  } catch {
+    // Thrown errors are never surfaced verbatim to the end user — matching
+    // HTTP's `runRoute` (route.ts), which already collapses a thrown error
+    // to a generic "internal server error" 500 rather than leaking
+    // `err.message`. A handler's thrown message can carry internals (stack
+    // frames, file paths, driver-specific SQL text, ...) that weren't meant
+    // for a CLI consumer; a handler that WANTS to communicate a specific,
+    // user-facing failure should return an `err(...)` Result instead (see
+    // the Result-unwrapping check below), which IS surfaced verbatim — that
+    // is the intentional, opt-in error-reporting channel.
+    ioResolved.stderr.write("Error: internal error\n")
+    throw new CliError("internal error", 1)
   }
 
-  // A generated validator (see CliOpts.validators) signals a rejection by
-  // returning an err Result — `{kind:"err", error: ValidationError[]}` (see
-  // @rhi-zone/fractal-api-tree/build's `wrapHandler`) — instead of throwing,
-  // so this is a discriminated-union check on the return value rather than
-  // another catch branch. Scoped to validator-wrapped leaves specifically
-  // (`generatedValidatorHandlesThis`, computed above) so an ordinary
-  // handler's own domain data is never mistaken for a validation failure
-  // just because it happens to carry a `kind` field.
-  if (generatedValidatorHandlesThis && isResultShape(result) && result.kind === "err") {
-    const msg = `Validation failed: ${JSON.stringify(result.error)}`
-    ioResolved.stderr.write(`Error: ${msg}\n`)
-    throw new CliError(msg, 1)
+  // Result unwrapping: applied UNCONDITIONALLY (matching HTTP's `runRoute`,
+  // route.ts) — any handler returning `{kind:"err", error}` gets proper CLI
+  // error handling, not just leaves wrapped by a generated validator
+  // (`generatedValidatorHandlesThis`, computed above, still only gates the
+  // fallback coerceInput/validateRequired step, a separate concern). A
+  // `kind:"ok"` Result is unwrapped to its `.value` before being printed, so
+  // an ordinary handler that happens to return this package's own
+  // `Result<T,E>` shape (see @rhi-zone/fractal-api-tree's `ok`/`err`) is
+  // treated the same way regardless of validator wiring.
+  if (isResultShape(result)) {
+    if (result.kind === "err") {
+      const msg = `Error: ${JSON.stringify(result.error)}`
+      ioResolved.stderr.write(`${msg}\n`)
+      throw new CliError(msg, 1)
+    }
+    result = result.value
   }
 
   // Output

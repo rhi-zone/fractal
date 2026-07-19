@@ -729,19 +729,72 @@ function defaultEncodeError(error: unknown): Response {
   return jsonRouteResponse({ error }, { status: 400 })
 }
 
+// ============================================================================
+// Handler-level middleware — around-hooks wrapping the handler call itself,
+// distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/
+// preset.ts (`PresetOptions.middleware`). Mirrors CliMiddleware
+// (cli-api-projector/src/cli.ts) and McpMiddleware
+// (mcp-api-projector/src/server.ts): both projectors already have this
+// handler-scoped hook; HTTP did not. Sits INSIDE `runRoute` — after decode,
+// before encode — so it sees (and can transform) the assembled input bag and
+// the handler's raw return value, with access to the matched route's `meta`,
+// the live `Request`, and the path `slugs` (available only after route
+// matching, unlike protocol-level middleware which wraps the whole
+// request/response cycle before a route is even resolved).
+// ============================================================================
+
+/** Context available to HTTP handler middleware at the point the handler is invoked. */
+export type HttpHandlerMiddlewareContext = {
+  readonly meta: Meta
+  readonly req: Request
+  readonly slugs: Record<string, string>
+}
+
+/**
+ * An HTTP handler middleware wraps the handler-invoking function `next`,
+ * given dispatch context for the route being called. Middleware compose like
+ * an onion: the first entry in `handlerMiddleware` (runRoute's parameter,
+ * threaded from `PresetOptions.handlerMiddleware`) is the OUTERMOST wrapper —
+ * same convention as `CliMiddleware`/`McpMiddleware`.
+ */
+export type HttpHandlerMiddleware = (
+  next: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+  context: HttpHandlerMiddlewareContext,
+) => (input: Record<string, unknown>) => unknown | Promise<unknown>
+
+/**
+ * Compose `middleware` around `base`, first entry outermost. An empty array
+ * returns `base` unchanged (identity — no wrapping overhead).
+ */
+function composeHandlerMiddleware(
+  middleware: readonly HttpHandlerMiddleware[],
+  base: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+  context: HttpHandlerMiddlewareContext,
+): (input: Record<string, unknown>) => unknown | Promise<unknown> {
+  let wrapped = base
+  for (let i = middleware.length - 1; i >= 0; i--) {
+    wrapped = middleware[i]!(wrapped, context)
+  }
+  return wrapped
+}
+
 /**
  * Runs a single matched `(handler, meta, sources, slugs)`: decode the
- * request, call the handler, encode the response. No interceptable stages —
- * see the module doc above for why. Shared by `makeRouterFromRoute` (below)
- * and `toRouter` (compile.ts's compiled matchers), so every dispatcher in
- * this package encodes requests/responses identically.
+ * request, call the handler, encode the response. No interceptable
+ * PROTOCOL-level stages — see the module doc above for why. Shared by
+ * `makeRouterFromRoute` (below) and `toRouter` (compile.ts's compiled
+ * matchers), so every dispatcher in this package encodes requests/responses
+ * identically. `handlerMiddleware` (see `HttpHandlerMiddleware` above) is the
+ * one interceptable HANDLER-level hook — applied around the handler call
+ * itself, after decode and before encode/Result-unwrapping.
  */
 export async function runRoute(
   req: Request,
   handler: Handler,
-  _meta: Meta,
+  meta: Meta,
   sources: Sources | undefined,
   slugs: Readonly<Record<string, string>>,
+  handlerMiddleware?: readonly HttpHandlerMiddleware[],
 ): Promise<Response> {
   let input: unknown
   try {
@@ -751,7 +804,15 @@ export async function runRoute(
   }
 
   try {
-    let output: unknown = await (handler(input) as Promise<unknown>)
+    const middleware = handlerMiddleware ?? []
+    const callHandler = middleware.length === 0
+      ? handler
+      : composeHandlerMiddleware(
+          middleware,
+          handler as (input: Record<string, unknown>) => unknown | Promise<unknown>,
+          { meta, req, slugs: { ...slugs } },
+        )
+    let output: unknown = await (callHandler(input as Record<string, unknown>) as Promise<unknown>)
 
     // Result unwrapping: if the handler returned a Result<T, E>, separate
     // the success and error paths before encoding — a 400, not the catch
@@ -776,12 +837,15 @@ export async function runRoute(
   }
 }
 
-export function makeRouterFromRoute(root: HttpRoute): (req: Request) => Promise<Response> {
+export function makeRouterFromRoute(
+  root: HttpRoute,
+  handlerMiddleware?: readonly HttpHandlerMiddleware[],
+): (req: Request) => Promise<Response> {
   return async (req) => {
     const segs = splitPath(new URL(req.url).pathname)
     const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs)
+    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware)
   }
 }

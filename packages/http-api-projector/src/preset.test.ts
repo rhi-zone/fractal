@@ -6,7 +6,7 @@ import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { createFetch } from "./preset.ts"
 import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts"
-import type { HttpRoute } from "./route.ts"
+import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import type { Fetch } from "./layers.ts"
 
 // ============================================================================
@@ -444,5 +444,58 @@ describe("OOTB preset — middleware", () => {
     const res = await f(new Request("http://localhost/users/list"))
     expect(res.headers.get("X-Middleware")).toBe("a")
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
+  })
+})
+
+// ============================================================================
+// 12. handlerMiddleware — a SEPARATE option from `middleware` above. Wraps
+// the handler call itself (inside runRoute), not the whole Fetch cycle.
+// ============================================================================
+
+describe("OOTB preset — handlerMiddleware", () => {
+  it("no handlerMiddleware = same behavior as before", async () => {
+    const res = await fetch(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([{ id: 1, name: "Alice" }])
+  })
+
+  it("wraps the handler call and can transform its output", async () => {
+    const tagOutput: HttpHandlerMiddleware = (next) => async (input) => {
+      const result = await next(input)
+      return { tagged: true, result }
+    }
+    const f = createFetch(api, { handlerMiddleware: [tagOutput] })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(await res.json()).toEqual({ tagged: true, result: [{ id: 1, name: "Alice" }] })
+  })
+
+  it("is independent of protocol-level `middleware` — both apply together, at their own layer", async () => {
+    const headerMiddleware = (name: string) => (inner: Fetch): Fetch => async (req) => {
+      const res = await inner(req)
+      const out = new Response(res.body, { status: res.status, headers: new Headers(res.headers) })
+      out.headers.append("X-Middleware", name)
+      return out
+    }
+    const tagOutput: HttpHandlerMiddleware = (next) => async (input) => {
+      const result = await next(input)
+      return { tagged: true, result }
+    }
+    const f = createFetch(api, {
+      middleware: [headerMiddleware("protocol")],
+      handlerMiddleware: [tagOutput],
+    })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.headers.get("X-Middleware")).toBe("protocol")
+    expect(await res.json()).toEqual({ tagged: true, result: [{ id: 1, name: "Alice" }] })
+  })
+
+  it("is threaded through custom `router` compilers (e.g. radixRouter)", async () => {
+    const tagOutput: HttpHandlerMiddleware = (next) => async (input) => {
+      const result = await next(input)
+      return { tagged: true, result }
+    }
+    const f = createFetch(api, { router: radixRouter, handlerMiddleware: [tagOutput] })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(await res.json()).toEqual({ tagged: true, result: [{ id: 1, name: "Alice" }] })
   })
 })

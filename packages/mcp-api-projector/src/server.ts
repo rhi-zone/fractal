@@ -489,33 +489,47 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       const callHandler = middleware.length === 0
         ? baseHandler
         : composeMiddleware(middleware, baseHandler, toolContext)
-      const result = await callHandler(input)
+      let result = await callHandler(input)
 
-      // A generated validator signals a rejection by returning an err
-      // Result — `{kind:"err", error: ValidationError[]}` (see
-      // @rhi-zone/fractal-api-tree/build's `wrapHandler`) — instead of
-      // throwing, so this is a discriminated-union check on the return
-      // value rather than another catch branch. Scoped to validator-wrapped
-      // tools specifically so an ordinary handler's own domain data is never
-      // mistaken for a validation failure just because it happens to carry a
-      // `kind` field.
-      if (generatedValidatorHandlesThis && isResultShape(result) && result.kind === "err") {
-        return {
-          isError: true,
-          content: [
-            { type: "text", text: `Invalid input for tool "${name}": ${JSON.stringify(result.error)}` },
-          ],
+      // Result unwrapping: applied UNCONDITIONALLY (matching HTTP's
+      // `runRoute`, packages/http-api-projector/src/route.ts) — any handler
+      // returning `{kind:"err", error}` gets a proper MCP tool error result,
+      // not just tools wrapped by a generated validator
+      // (`generatedValidatorHandlesThis`, computed above, still only gates
+      // the fallback `validateAgainstSchema` check, a separate concern). A
+      // `kind:"ok"` Result is unwrapped to its `.value` before becoming
+      // content, so an ordinary handler that happens to return this
+      // package's own `Result<T,E>` shape (see
+      // @rhi-zone/fractal-api-tree's `ok`/`err`) is treated the same way
+      // regardless of validator wiring.
+      if (isResultShape(result)) {
+        if (result.kind === "err") {
+          return {
+            isError: true,
+            content: [
+              { type: "text", text: `Invalid input for tool "${name}": ${JSON.stringify(result.error)}` },
+            ],
+          }
         }
+        result = result.value
       }
 
       return {
         content: toCallToolContent(result),
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+    } catch {
+      // A thrown error is never surfaced verbatim to the caller — matching
+      // HTTP's `runRoute` (route.ts), which already collapses a thrown
+      // error to a generic "internal server error" 500 rather than leaking
+      // `err.message`. A handler's thrown message can carry internals
+      // (stack frames, file paths, driver-specific text, ...) that weren't
+      // meant for an MCP client; a handler that WANTS to communicate a
+      // specific, client-facing failure should return an `err(...)` Result
+      // instead (see the Result-unwrapping check above), which IS surfaced
+      // verbatim — that is the intentional, opt-in error-reporting channel.
       return {
         isError: true,
-        content: [{ type: "text", text: message }],
+        content: [{ type: "text", text: "internal error" }],
       }
     }
   })

@@ -75,13 +75,14 @@ describe("createMcpServer — tools/call", () => {
   // 3. Error handling — tool throws → MCP error response, not a crash
   // ==========================================================================
 
-  it("a throwing handler surfaces as an MCP tool error result", async () => {
+  it("a throwing handler surfaces as an MCP tool error result without leaking the thrown message", async () => {
     const { client } = await connectedClient()
     const result = await client.callTool({ name: "users_boom", arguments: {} })
 
     expect(result.isError).toBe(true)
     const content = result.content as Array<{ type: string; text: string }>
-    expect(content[0]!.text).toContain("kaboom")
+    expect(content[0]!.text).not.toContain("kaboom")
+    expect(content[0]!.text).toBe("internal error")
   })
 
   it("an unknown tool name surfaces as an MCP tool error result", async () => {

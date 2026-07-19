@@ -17,7 +17,7 @@ import {
   makeRouterFromRoute,
   naiveTransform,
 } from "./route.ts"
-import type { HttpRoute } from "./route.ts"
+import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 
 // ============================================================================
@@ -618,5 +618,94 @@ describe("wrapValidators — HTTP dispatch", () => {
     const res = await router(new Request("http://localhost/ping"))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ pong: true })
+  })
+})
+
+// ============================================================================
+// runRoute — handler-level middleware (makeRouterFromRoute's second param).
+// Distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/
+// preset.ts: this wraps the handler call itself, inside `runRoute`, after
+// decode and before encode/Result-unwrapping — the HTTP counterpart of
+// `CliMiddleware` (cli-api-projector) and `McpMiddleware` (mcp-api-projector).
+// ============================================================================
+
+describe("runRoute — handler-level middleware", () => {
+  it("with no middleware configured, the handler is called directly", async () => {
+    const tree = api_({
+      echo: op((input: { x: string }) => ({ got: input.x }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)))
+    const res = await router(new Request("http://localhost/echo?x=1"))
+    expect(await res.json()).toEqual({ got: "1" })
+  })
+
+  it("sees dispatch context (meta, req, slugs) and can transform input before / output after", async () => {
+    let seenMeta: unknown
+    let seenReqUrl: string | undefined
+    let seenSlugs: unknown
+    const doubleInput: HttpHandlerMiddleware = (next, context) => (input) => {
+      seenMeta = context.meta
+      seenReqUrl = context.req.url
+      seenSlugs = context.slugs
+      return next({ ...input, x: String(Number(input.x) * 2) })
+    }
+    const tree = api_({
+      books: api_({}, {
+        fallback: {
+          name: "bookId",
+          subtree: api_({
+            echo: op((input: { bookId: string; x: string }) => ({ bookId: input.bookId, got: Number(input.x) }), {
+              description: "an echo op",
+              http: { directives: [{ kind: "method", value: "GET" }] },
+            }),
+          }),
+        },
+      }),
+    })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [doubleInput])
+    const res = await router(new Request("http://localhost/books/42/echo?x=5"))
+    expect(await res.json()).toEqual({ bookId: "42", got: 10 })
+    expect((seenMeta as { description?: string }).description).toBe("an echo op")
+    expect(seenReqUrl).toBe("http://localhost/books/42/echo?x=5")
+    expect(seenSlugs).toEqual({ bookId: "42" })
+  })
+
+  it("composes multiple middleware — first entry is outermost (sees the call first and last)", async () => {
+    const order: string[] = []
+    const outer: HttpHandlerMiddleware = (next) => async (input) => {
+      order.push("outer:before")
+      const result = await next(input)
+      order.push("outer:after")
+      return result
+    }
+    const inner: HttpHandlerMiddleware = (next) => async (input) => {
+      order.push("inner:before")
+      const result = await next(input)
+      order.push("inner:after")
+      return result
+    }
+    const tree = api_({
+      echo: op((input: { x: string }) => ({ got: input.x }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [outer, inner])
+    await router(new Request("http://localhost/echo?x=1"))
+    expect(order).toEqual(["outer:before", "inner:before", "inner:after", "outer:after"])
+  })
+
+  it("runs before Result-unwrapping — an err Result from the middleware chain still maps to 400", async () => {
+    const rejecting: HttpHandlerMiddleware = () => async () => ({ kind: "err", error: "rejected by middleware" })
+    const tree = api_({
+      echo: op((input: { x: string }) => ({ got: input.x }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [rejecting])
+    const res = await router(new Request("http://localhost/echo?x=1"))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: "rejected by middleware" })
   })
 })

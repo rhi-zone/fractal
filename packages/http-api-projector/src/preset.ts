@@ -47,7 +47,7 @@ import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import { makeRouterFromRoute } from "./route.ts"
-import type { HttpRoute } from "./route.ts"
+import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import { httpProjection } from "./dx.ts"
 import type { HttpProjectionOptions } from "./dx.ts"
 import { withALS } from "./compile.ts"
@@ -58,6 +58,7 @@ import { toOpenApiFromRoute } from "./openapi.ts"
 import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts"
 
 export type { CorsOptions, Fetch }
+export type { HttpHandlerMiddleware, HttpHandlerMiddlewareContext } from "./route.ts"
 
 /** `PresetOptions.openapi` object form — `OpenApiOpts` plus the mount path. */
 export type OpenApiPresetOptions = OpenApiOpts & {
@@ -111,8 +112,11 @@ export type PresetOptions<T = unknown> = {
    * `compiledCharRouter`, or `mapCharRouter` (compile.ts) for faster
    * dispatch at a build-time cost, or supply your own — this is a plain
    * function value, not a string enum, so any conforming compiler works.
+   * Every built-in compiler accepts `opts.handlerMiddleware` as its second
+   * argument (see below) — `createFetch` always forwards it, so a custom
+   * compiler wanting to support handler middleware should accept it too.
    */
-  readonly router?: (route: HttpRoute) => CompiledRouter
+  readonly router?: (route: HttpRoute, handlerMiddleware?: readonly HttpHandlerMiddleware[]) => CompiledRouter
   /**
    * Wrap the compiled router so every request runs inside its own
    * `AsyncLocalStorage` context (compile.ts's `withALS`). `init` computes
@@ -134,6 +138,22 @@ export type PresetOptions<T = unknown> = {
    * `createFetch`'s composition chain. Empty/absent by default (no-op).
    */
   readonly middleware?: ReadonlyArray<(inner: Fetch) => Fetch>
+  /**
+   * Around-hooks wrapping the HANDLER call itself — a separate mechanism
+   * from `opts.middleware` above (which wraps the whole `Fetch` request/
+   * response cycle, before a route is even matched). `handlerMiddleware`
+   * sits INSIDE `runRoute` (route.ts): after decode, before encode/Result-
+   * unwrapping, with access to the matched route's `meta`, the live
+   * `Request`, and the path `slugs` — the same handler-scoped hook CLI's
+   * `CliOpts.middleware` and MCP's `CreateMcpServerOptions.middleware`
+   * already provide, now available for HTTP too. Composes like an onion:
+   * the first entry is the OUTERMOST wrapper, matching every other
+   * middleware convention in this codebase. Threaded through to whichever
+   * router compiler `opts.router` resolves to (every built-in compiler in
+   * compile.ts accepts it as a second argument). Empty/absent by default
+   * (no-op, zero overhead).
+   */
+  readonly handlerMiddleware?: readonly HttpHandlerMiddleware[]
   /**
    * Auto-serve a generated OpenAPI 3.1 document — OpenAPI only ever
    * describes HTTP APIs, so `createFetch` mounts it with zero extra setup.
@@ -209,7 +229,7 @@ export function createFetch<T = unknown>(
   for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
 
   const compileRouter = opts.router ?? makeRouterFromRoute
-  const router = compileRouter(routes)
+  const router = compileRouter(routes, opts.handlerMiddleware)
 
   const withContext =
     opts.als !== undefined ? withALS(router, opts.als.storage, opts.als.init) : router

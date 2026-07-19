@@ -83,7 +83,8 @@ describe("runCli — generated validators (opts.validators) wired via wrapValida
       ),
     ).rejects.toThrow(CliError)
     expect(handlerCalled).toBe(false)
-    expect(mock.err.join("")).toContain("Validation failed")
+    expect(mock.err.join("")).toContain("Error:")
+    expect(mock.err.join("")).toContain("numeric string")
   })
 
   it("a leaf with no matching generated-validator entry keeps using coerceInput/validateRequired (fallback)", async () => {
