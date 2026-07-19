@@ -7,6 +7,7 @@ import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { createFetch } from "./preset.ts"
 import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts"
 import type { HttpRoute } from "./route.ts"
+import type { Fetch } from "./layers.ts"
 
 // ============================================================================
 // Mixed API fixture
@@ -352,5 +353,96 @@ describe("OOTB preset — als", () => {
     const res = await f(new Request("http://localhost/whoami", { method: "HEAD" }))
     expect(res.status).toBe(200)
     expect(observedInsideHandler).toBe("req-head")
+  })
+})
+
+// ============================================================================
+// 11. middleware — consumer-supplied Fetch => Fetch layers
+// ============================================================================
+
+describe("OOTB preset — middleware", () => {
+  /** Wraps `inner`, tagging every response with a header naming this middleware. */
+  const headerMiddleware = (name: string) => (inner: Fetch): Fetch => async (req) => {
+    const res = await inner(req)
+    const out = new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: new Headers(res.headers),
+    })
+    out.headers.append("X-Middleware", name)
+    return out
+  }
+
+  it("no middleware = same behavior as before (no X-Middleware header)", async () => {
+    const res = await fetch(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+    expect(res.headers.get("X-Middleware")).toBeNull()
+  })
+
+  it("a single middleware wraps the router and its effect is observable on the response", async () => {
+    const f = createFetch(api, { middleware: [headerMiddleware("a")] })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+    expect(res.headers.get("X-Middleware")).toBe("a")
+  })
+
+  it("multiple middleware compose — first in array is outermost wrapper", async () => {
+    const order: string[] = []
+    const tracking = (name: string) => (inner: Fetch): Fetch => async (req) => {
+      order.push(`${name}:enter`)
+      const res = await inner(req)
+      order.push(`${name}:exit`)
+      return res
+    }
+
+    const f = createFetch(api, { middleware: [tracking("outer"), tracking("inner")] })
+    await f(new Request("http://localhost/users/list"))
+
+    // outer wraps inner: outer enters first, inner enters/exits fully inside
+    // outer's call, then outer exits last.
+    expect(order).toEqual([
+      "outer:enter",
+      "inner:enter",
+      "inner:exit",
+      "outer:exit",
+    ])
+  })
+
+  it("middleware sees requests that reach the router — protocol short-circuits (OPTIONS) still handled by autoMethodLayer without invoking middleware", async () => {
+    let invoked = false
+    const spy = (inner: Fetch): Fetch => async (req) => {
+      invoked = true
+      return inner(req)
+    }
+
+    const f = createFetch(api, { middleware: [spy] })
+    const res = await f(
+      new Request("http://localhost/users/list", { method: "OPTIONS" }),
+    )
+    expect(res.status).toBe(204)
+    expect(invoked).toBe(false)
+  })
+
+  it("middleware runs on the actual dispatched request, e.g. GET /users/list", async () => {
+    let invoked = false
+    const spy = (inner: Fetch): Fetch => async (req) => {
+      invoked = true
+      return inner(req)
+    }
+
+    const f = createFetch(api, { middleware: [spy] })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+    expect(invoked).toBe(true)
+  })
+
+  it("composes with cors: response carries both middleware and CORS headers", async () => {
+    const f = createFetch(api, {
+      middleware: [headerMiddleware("a")],
+      cors: true,
+    })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.headers.get("X-Middleware")).toBe("a")
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
   })
 })

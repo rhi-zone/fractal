@@ -11,7 +11,7 @@ import { allowHeader } from "./project.ts"
 import { routeCandidatesForUrl } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
 
-type Fetch = (req: Request) => Promise<Response>
+export type Fetch = (req: Request) => Promise<Response>
 
 // ============================================================================
 // autoMethodLayer

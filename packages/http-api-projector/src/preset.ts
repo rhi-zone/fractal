@@ -53,11 +53,11 @@ import type { HttpProjectionOptions } from "./dx.ts"
 import { withALS } from "./compile.ts"
 import type { CompiledRouter } from "./compile.ts"
 import { autoMethodLayer, corsLayer } from "./layers.ts"
-import type { CorsOptions } from "./layers.ts"
+import type { CorsOptions, Fetch } from "./layers.ts"
 import { toOpenApiFromRoute } from "./openapi.ts"
 import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts"
 
-export type { CorsOptions }
+export type { CorsOptions, Fetch }
 
 /** `PresetOptions.openapi` object form — `OpenApiOpts` plus the mount path. */
 export type OpenApiPresetOptions = OpenApiOpts & {
@@ -125,6 +125,18 @@ export type PresetOptions<T = unknown> = {
     readonly storage: AsyncLocalStorage<T>
     readonly init: (req: Request) => T
   }
+  /**
+   * Consumer-supplied `Fetch => Fetch` layers, applied in array order —
+   * the first entry is the outermost wrapper. Composed around the compiled
+   * router (and `als` context, when set) but inside `autoMethodLayer` and
+   * `corsLayer`: a middleware sees the request after ALS context is
+   * established, and its response passes back through `autoMethodLayer`'s
+   * HEAD-stripping and `corsLayer`'s header injection. Use this for
+   * cross-cutting concerns like audit logging or request-scoped state that
+   * want to wrap every dispatched request without reimplementing
+   * `createFetch`'s composition chain. Empty/absent by default (no-op).
+   */
+  readonly middleware?: ReadonlyArray<(inner: Fetch) => Fetch>
   /**
    * Auto-serve a generated OpenAPI 3.1 document — OpenAPI only ever
    * describes HTTP APIs, so `createFetch` mounts it with zero extra setup.
@@ -205,7 +217,16 @@ export function createFetch<T = unknown>(
   const withContext =
     opts.als !== undefined ? withALS(router, opts.als.storage, opts.als.init) : router
 
-  const withMethods = autoMethodLayer(withContext, routes)
+  // Consumer middleware wraps between the router (+ ALS context) and the
+  // built-in protocol layers below — inside autoMethodLayer/corsLayer, so it
+  // sees every request after protocol handling but before the raw router
+  // dispatch. First entry in the array is the outermost wrapper.
+  const withMiddleware = (opts.middleware ?? []).reduceRight<CompiledRouter>(
+    (inner, mw) => mw(inner),
+    withContext,
+  )
+
+  const withMethods = autoMethodLayer(withMiddleware, routes)
 
   const withOpenApiDoc = withOpenApi(withMethods, routes, opts.openapi)
 
