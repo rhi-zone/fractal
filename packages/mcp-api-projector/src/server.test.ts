@@ -567,6 +567,116 @@ describe("createMcpServer — sourceMap support (resource templates)", () => {
   })
 })
 
+// ============================================================================
+// 9. Streaming — a handler returning an AsyncIterable (async generator) is
+// drained into progress notifications + collected content instead of going
+// through the plain-value path. See docs/design/middleware-and-caller-
+// context.md's "Streaming and Progress" section.
+// ============================================================================
+
+const streamingTree = api_({
+  // Progress + chunk effects, untagged yields, and a generator return value —
+  // all four kinds this projector must interpret.
+  progressAndChunks: op(async function* (_: unknown) {
+    yield { kind: "progress" as const, progress: 1, total: 3 }
+    yield { kind: "chunk" as const, data: "first" }
+    yield { kind: "progress" as const, progress: 2, total: 3 }
+    yield { kind: "chunk" as const, data: "second" }
+    return "done"
+  }),
+  untaggedOnly: op(async function* (_: unknown) {
+    yield "alpha"
+    yield "beta"
+  }),
+  noReturn: op(async function* (_: unknown) {
+    yield { kind: "chunk" as const, data: "only-chunk" }
+  }),
+  plainNonStreaming: op((_: unknown) => "not a stream"),
+})
+
+async function connectedStreamingClient() {
+  const server = createMcpServer(streamingTree, { name: "streaming-test-server", version: "1.0.0" })
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: "test-client", version: "1.0.0" })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  return { client }
+}
+
+describe("createMcpServer — tools/call streaming", () => {
+  it("sends a progress notification for each StreamProgress yield when the caller supplies a progressToken", async () => {
+    const { client } = await connectedStreamingClient()
+    const progressUpdates: unknown[] = []
+
+    const result = await client.callTool(
+      { name: "progressAndChunks", arguments: {} },
+      undefined,
+      { onprogress: (p) => progressUpdates.push(p) },
+    )
+
+    expect(result.isError).toBeFalsy()
+    expect(progressUpdates).toEqual([
+      { progress: 1, total: 3 },
+      { progress: 2, total: 3 },
+    ])
+  })
+
+  it("does not send progress notifications when the caller supplies no progressToken", async () => {
+    const { client } = await connectedStreamingClient()
+    const progressUpdates: unknown[] = []
+    // No `onprogress` option — the SDK never attaches a progressToken to the
+    // request, so the server-side check on `extra._meta?.progressToken` must
+    // skip sending notifications entirely (not just skip client-side
+    // reporting of the same notifications).
+    const result = await client.callTool({ name: "progressAndChunks", arguments: {} })
+
+    expect(result.isError).toBeFalsy()
+    expect(progressUpdates).toEqual([])
+  })
+
+  it("collects StreamChunk yields into content blocks, in yield order", async () => {
+    const { client } = await connectedStreamingClient()
+    const result = await client.callTool({ name: "progressAndChunks", arguments: {} })
+
+    const content = result.content as Array<{ type: string; text: string }>
+    // Two chunks ("first", "second") plus the generator's return value ("done").
+    expect(content.map((c) => c.text)).toEqual(["first", "second", "done"])
+  })
+
+  it("treats untagged yields as chunks", async () => {
+    const { client } = await connectedStreamingClient()
+    const result = await client.callTool({ name: "untaggedOnly", arguments: {} })
+
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content.map((c) => c.text)).toEqual(["alpha", "beta"])
+  })
+
+  it("appends the generator's return value as the final content entry", async () => {
+    const { client } = await connectedStreamingClient()
+    const result = await client.callTool({ name: "progressAndChunks", arguments: {} })
+
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content[content.length - 1]!.text).toBe("done")
+  })
+
+  it("a generator with no meaningful return value still surfaces its chunks", async () => {
+    const { client } = await connectedStreamingClient()
+    const result = await client.callTool({ name: "noReturn", arguments: {} })
+
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content.map((c) => c.text)).toEqual(["only-chunk"])
+  })
+
+  it("a non-async-iterable return value is handled unchanged (backwards compat)", async () => {
+    const { client } = await connectedStreamingClient()
+    const result = await client.callTool({ name: "plainNonStreaming", arguments: {} })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content).toHaveLength(1)
+    expect(content[0]!.text).toBe("not a stream")
+  })
+})
+
 describe("createMcpServer — sourceMap support (prompts)", () => {
   const sourceMapPromptTree = api_({
     // Handler expects `text`, sourceMap pulls it from the `body` argument key.

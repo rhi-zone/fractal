@@ -65,7 +65,7 @@ import type {
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { assemble, isResultShape } from "@rhi-zone/fractal-api-tree"
+import { assemble, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with MCP's store names — see
@@ -258,6 +258,167 @@ export function toResourceContent(result: unknown, uri: string, defaultMimeType:
     }
   }
   return { uri, mimeType: defaultMimeType, text: JSON.stringify(result) }
+}
+
+// ============================================================================
+// Streaming — a handler returning an AsyncIterable (see
+// docs/design/middleware-and-caller-context.md's "Streaming and Progress"
+// section) is drained here instead of going through the plain-value path.
+// `StreamProgress` yields become `notifications/progress` (only when the
+// caller supplied a `progressToken` — a client that never asked for progress
+// has no token to correlate them against, so they're skipped, not queued);
+// `StreamChunk` yields and untagged yields are both collected as content via
+// `toCallToolContent`, matching HTTP's `streamAsSse` (route.ts) treating an
+// untagged yield as a chunk by default. The generator's return value (not a
+// yielded value) is the final result, appended the same way.
+// ============================================================================
+
+/**
+ * True when `v` is an async iterable — a handler that returns one is
+ * drained via `collectStreamedToolContent`/`collectStreamedMessages` instead
+ * of going straight through `toCallToolContent`/plain-value handling.
+ * Structural (`Symbol.asyncIterator` presence), mirroring HTTP's
+ * `isAsyncIterable` (packages/http-api-projector/src/route.ts).
+ */
+function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    typeof (v as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
+  )
+}
+
+/**
+ * Drain a tool handler's `AsyncIterable` return value into the `content`
+ * array a `tools/call` result needs: `StreamProgress` yields become
+ * `notifications/progress` sent via `extra.sendNotification` (only when the
+ * request carried a `progressToken` in its `_meta`); `StreamChunk` yields and
+ * untagged yields are both run through `toCallToolContent` and appended to
+ * `content`; the generator's return value is run through the same
+ * `toCallToolContent` and appended last, as the final result.
+ */
+async function collectStreamedToolContent(
+  iterable: AsyncIterable<unknown>,
+  extra: McpRequestExtra,
+): Promise<ContentBlock[]> {
+  const progressToken = extra._meta?.progressToken
+  const content: ContentBlock[] = []
+  const iterator = iterable[Symbol.asyncIterator]()
+  for (;;) {
+    const step = await iterator.next()
+    if (step.done) {
+      if (step.value !== undefined) content.push(...toCallToolContent(step.value))
+      break
+    }
+    const value: unknown = step.value
+    if (isStreamProgress(value)) {
+      if (progressToken !== undefined) {
+        await extra.sendNotification({
+          method: "notifications/progress",
+          params: {
+            progressToken,
+            progress: value.progress,
+            total: value.total ?? 1,
+            ...(value.message !== undefined ? { message: value.message } : {}),
+          },
+        })
+      }
+    } else if (isStreamChunk(value)) {
+      content.push(...toCallToolContent(value.data))
+    } else {
+      content.push(...toCallToolContent(value))
+    }
+  }
+  return content
+}
+
+/**
+ * Drain a resource-read handler's `AsyncIterable` return value into
+ * additional `contents` entries for a `resources/read` result — each yielded
+ * value (progress excluded — reported the same way as tools, via
+ * `sendNotification`) and the final return value become one
+ * `toResourceContent` entry apiece.
+ */
+async function collectStreamedResourceContents(
+  iterable: AsyncIterable<unknown>,
+  extra: McpRequestExtra,
+  uri: string,
+  defaultMimeType: string,
+): Promise<ResourceContentEntry[]> {
+  const progressToken = extra._meta?.progressToken
+  const contents: ResourceContentEntry[] = []
+  const iterator = iterable[Symbol.asyncIterator]()
+  for (;;) {
+    const step = await iterator.next()
+    if (step.done) {
+      if (step.value !== undefined) contents.push(toResourceContent(step.value, uri, defaultMimeType))
+      break
+    }
+    const value: unknown = step.value
+    if (isStreamProgress(value)) {
+      if (progressToken !== undefined) {
+        await extra.sendNotification({
+          method: "notifications/progress",
+          params: {
+            progressToken,
+            progress: value.progress,
+            total: value.total ?? 1,
+            ...(value.message !== undefined ? { message: value.message } : {}),
+          },
+        })
+      }
+    } else if (isStreamChunk(value)) {
+      contents.push(toResourceContent(value.data, uri, defaultMimeType))
+    } else {
+      contents.push(toResourceContent(value, uri, defaultMimeType))
+    }
+  }
+  return contents
+}
+
+/**
+ * Drain a prompt handler's `AsyncIterable` return value into the `messages`
+ * array a `prompts/get` result needs — each yielded value (progress
+ * excluded) and the final return value become one assistant text message
+ * apiece, matching the plain-value fallback in the `GetPromptRequestSchema`
+ * handler below (JSON.stringify-as-text) since a prompt yield has no
+ * dedicated rich-content shape the way tool/resource content does.
+ */
+async function collectStreamedMessages(
+  iterable: AsyncIterable<unknown>,
+  extra: McpRequestExtra,
+): Promise<Array<{ role: "assistant"; content: { type: "text"; text: string } }>> {
+  const progressToken = extra._meta?.progressToken
+  const messages: Array<{ role: "assistant"; content: { type: "text"; text: string } }> = []
+  const iterator = iterable[Symbol.asyncIterator]()
+  for (;;) {
+    const step = await iterator.next()
+    if (step.done) {
+      if (step.value !== undefined) {
+        messages.push({ role: "assistant", content: { type: "text", text: JSON.stringify(step.value) } })
+      }
+      break
+    }
+    const value: unknown = step.value
+    if (isStreamProgress(value)) {
+      if (progressToken !== undefined) {
+        await extra.sendNotification({
+          method: "notifications/progress",
+          params: {
+            progressToken,
+            progress: value.progress,
+            total: value.total ?? 1,
+            ...(value.message !== undefined ? { message: value.message } : {}),
+          },
+        })
+      }
+    } else if (isStreamChunk(value)) {
+      messages.push({ role: "assistant", content: { type: "text", text: JSON.stringify(value.data) } })
+    } else {
+      messages.push({ role: "assistant", content: { type: "text", text: JSON.stringify(value) } })
+    }
+  }
+  return messages
 }
 
 // ============================================================================
@@ -561,6 +722,16 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         : composeMiddleware(middleware, base)
       let result = await callHandler(input, stores)
 
+      // Streaming: an async-iterable result (e.g. an async generator
+      // handler) is drained into progress notifications + collected content
+      // instead of going through Result-unwrapping/toCallToolContent below —
+      // checked first since neither a Result nor plain content is an async
+      // iterable, so there's no ambiguity (matches HTTP's `runRoute`,
+      // packages/http-api-projector/src/route.ts).
+      if (isAsyncIterable(result)) {
+        return { content: await collectStreamedToolContent(result, extra) }
+      }
+
       // Result unwrapping: applied UNCONDITIONALLY (matching HTTP's
       // `runRoute`, packages/http-api-projector/src/route.ts) — any handler
       // returning `{kind:"err", error}` gets a proper MCP tool error result,
@@ -626,6 +797,9 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         // the `caller` store from `extra` so middleware sees it here too.
         const { input, stores } = assembleInput("uri-variable", {}, {}, extra)
         const result = await callHandler(input, stores)
+        if (isAsyncIterable(result)) {
+          return { contents: await collectStreamedResourceContents(result, extra, uri, mimeType) }
+        }
         return { contents: [toResourceContent(result, uri, mimeType)] }
       }
 
@@ -643,6 +817,9 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
           ? base
           : composeMiddleware(middleware, base)
         const result = await callHandler(input, stores)
+        if (isAsyncIterable(result)) {
+          return { contents: await collectStreamedResourceContents(result, extra, uri, template.mimeType) }
+        }
         return { contents: [toResourceContent(result, uri, template.mimeType)] }
       }
 
@@ -668,6 +845,12 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         ? base
         : composeMiddleware(middleware, base)
       const result = await callHandler(input, stores)
+
+      // Streaming: collect all yields + the final return value into the
+      // messages array — see `collectStreamedMessages`'s doc.
+      if (isAsyncIterable(result)) {
+        return { messages: await collectStreamedMessages(result, extra) }
+      }
 
       // A handler may already return a well-formed GetPromptResult (has a
       // `messages` array) — pass it through as-is. Otherwise wrap the plain
