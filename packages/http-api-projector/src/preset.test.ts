@@ -499,3 +499,59 @@ describe("OOTB preset — handlerMiddleware", () => {
     expect(await res.json()).toEqual({ tagged: true, result: [{ id: 1, name: "Alice" }] })
   })
 })
+
+// ============================================================================
+// opts.detection — opt-out of the Result/streaming structural sniffing (see
+// PresetOptions.detection, route.ts's `runRoute`). Both default to `true`.
+// ============================================================================
+
+describe("OOTB preset — detection", () => {
+  const resultLikeApi = api_({
+    getThing: op((_: unknown) => ({ kind: "ok", value: 42 }), {
+      http: { directives: [{ kind: "method", value: "GET" }] },
+    }),
+  })
+
+  it("defaults (detection omitted): Result-shape output is unwrapped, matching prior behavior", async () => {
+    const f = createFetch(resultLikeApi)
+    const res = await f(new Request("http://localhost/getThing"))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual(42)
+  })
+
+  it("detection.result: false — a Result-shaped return value passes through untouched", async () => {
+    const f = createFetch(resultLikeApi, { detection: { result: false } })
+    const res = await f(new Request("http://localhost/getThing"))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ kind: "ok", value: 42 })
+  })
+
+  async function* gen() {
+    yield 1
+    yield 2
+  }
+  const streamingApi = api_({
+    getStream: op((_: unknown) => gen(), {
+      http: { directives: [{ kind: "method", value: "GET" }] },
+    }),
+  })
+
+  it("defaults (detection omitted): an async-iterable return value streams as SSE, matching prior behavior", async () => {
+    const f = createFetch(streamingApi)
+    const res = await f(new Request("http://localhost/getStream"))
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream")
+  })
+
+  it("detection.streaming: false — an async-iterable return value is NOT streamed; treated as a plain value", async () => {
+    const f = createFetch(streamingApi, { detection: { streaming: false } })
+    const res = await f(new Request("http://localhost/getStream"))
+    expect(res.headers.get("Content-Type")).not.toBe("text/event-stream")
+    expect(res.status).toBe(200)
+  })
+
+  it("is threaded through custom `router` compilers (e.g. radixRouter)", async () => {
+    const f = createFetch(resultLikeApi, { router: radixRouter, detection: { result: false } })
+    const res = await f(new Request("http://localhost/getThing"))
+    expect(await res.json()).toEqual({ kind: "ok", value: 42 })
+  })
+})

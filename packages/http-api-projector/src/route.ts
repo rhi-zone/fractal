@@ -37,7 +37,7 @@
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, Stores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { httpStores, primaryStoreForMethod, assemble, parseRequestBody } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"
@@ -907,7 +907,14 @@ function composeHandlerMiddleware(
  * matchers), so every dispatcher in this package encodes requests/responses
  * identically. `handlerMiddleware` (see `HttpHandlerMiddleware` above) is the
  * one interceptable HANDLER-level hook — applied around the handler call
- * itself, after decode and before encode/Result-unwrapping.
+ * itself, after decode and before encode/Result-unwrapping. `detection`
+ * (see `DetectionOptions`, `@rhi-zone/fractal-api-tree`) gates the two
+ * structural sniffs of the handler's return value — `result` for
+ * `isResultShape`, `streaming` for the `isAsyncIterable` check below (and,
+ * transitively, `streamAsSse`'s `StreamEffect` tag interpretation, since
+ * disabling `streaming` skips entering `streamAsSse` at all). Both default
+ * to `true` when `detection` is omitted. `ResponseOverride` detection is
+ * never gated — see its own doc comment above for why.
  */
 export async function runRoute(
   req: Request,
@@ -916,7 +923,10 @@ export async function runRoute(
   sources: Sources | undefined,
   slugs: Readonly<Record<string, string>>,
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
+  detection?: DetectionOptions,
 ): Promise<Response> {
+  const detectStreaming = detection?.streaming ?? true
+  const detectResult = detection?.result ?? true
   let input: unknown
   let stores: Stores
   try {
@@ -943,7 +953,7 @@ export async function runRoute(
     // is streamed as Server-Sent Events instead of buffered — checked before
     // Result-unwrapping since neither a Result nor a ResponseOverride is an
     // async iterable, so there's no ambiguity between the three shapes.
-    if (isAsyncIterable(output)) return streamAsSse(output)
+    if (detectStreaming && isAsyncIterable(output)) return streamAsSse(output)
 
     // Result unwrapping: if the handler returned a Result<T, E>, separate
     // the success and error paths before encoding — a 400, not the catch
@@ -955,7 +965,7 @@ export async function runRoute(
     // on the return value, not a catch. The check is exact — typeof + kind
     // — to avoid false-positives on user data that happens to have a `kind`
     // field with an unrelated value.
-    if (isResultShape(output)) {
+    if (detectResult && isResultShape(output)) {
       if (output.kind === "err") return defaultEncodeError(output.error)
       output = output.value
     }
@@ -971,12 +981,13 @@ export async function runRoute(
 export function makeRouterFromRoute(
   root: HttpRoute,
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
+  detection?: DetectionOptions,
 ): (req: Request) => Promise<Response> {
   return async (req) => {
     const segs = splitPath(new URL(req.url).pathname)
     const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware)
+    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware, detection)
   }
 }

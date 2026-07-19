@@ -46,6 +46,7 @@ import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
+import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 import { makeRouterFromRoute } from "./route.ts"
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import { httpProjection } from "./dx.ts"
@@ -59,6 +60,7 @@ import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts"
 
 export type { CorsOptions, Fetch }
 export type { HttpHandlerMiddleware } from "./route.ts"
+export type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 
 /** `PresetOptions.openapi` object form — `OpenApiOpts` plus the mount path. */
 export type OpenApiPresetOptions = OpenApiOpts & {
@@ -113,10 +115,15 @@ export type PresetOptions<T = unknown> = {
    * dispatch at a build-time cost, or supply your own — this is a plain
    * function value, not a string enum, so any conforming compiler works.
    * Every built-in compiler accepts `opts.handlerMiddleware` as its second
-   * argument (see below) — `createFetch` always forwards it, so a custom
-   * compiler wanting to support handler middleware should accept it too.
+   * argument and `opts.detection` as its third (see below) — `createFetch`
+   * always forwards both, so a custom compiler wanting to support handler
+   * middleware or detection config should accept them too.
    */
-  readonly router?: (route: HttpRoute, handlerMiddleware?: readonly HttpHandlerMiddleware[]) => CompiledRouter
+  readonly router?: (
+    route: HttpRoute,
+    handlerMiddleware?: readonly HttpHandlerMiddleware[],
+    detection?: DetectionOptions,
+  ) => CompiledRouter
   /**
    * Wrap the compiled router so every request runs inside its own
    * `AsyncLocalStorage` context (compile.ts's `withALS`). `init` computes
@@ -156,6 +163,23 @@ export type PresetOptions<T = unknown> = {
    * (no-op, zero overhead).
    */
   readonly handlerMiddleware?: readonly HttpHandlerMiddleware[]
+  /**
+   * Opt-in configuration for `runRoute`'s (route.ts) structural sniffing of
+   * a handler's return value — `result` gates `Result`-shape
+   * (`{kind:"ok"|"err"}`) unwrapping, `streaming` gates `AsyncIterable`
+   * detection (and, transitively, `StreamEffect` tag interpretation on its
+   * yields). Both default to `true` — existing behavior — when `detection`
+   * itself, or either field, is omitted. Disable one when a handler
+   * legitimately returns/yields data shaped like one of these DUs and it
+   * must NOT be reinterpreted as the transport protocol (see
+   * `docs/design/middleware-and-caller-context.md`'s "Streaming and
+   * Progress" section, and `DetectionOptions`'s own doc,
+   * `@rhi-zone/fractal-api-tree`). `ResponseOverride` detection is never
+   * gated — it's `Symbol`-tagged, structurally collision-proof. Threaded
+   * through to whichever router compiler `opts.router` resolves to (every
+   * built-in compiler in compile.ts accepts it as a third argument).
+   */
+  readonly detection?: DetectionOptions
   /**
    * Auto-serve a generated OpenAPI 3.1 document — OpenAPI only ever
    * describes HTTP APIs, so `createFetch` mounts it with zero extra setup.
@@ -231,7 +255,7 @@ export function createFetch<T = unknown>(
   for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
 
   const compileRouter = opts.router ?? makeRouterFromRoute
-  const router = compileRouter(routes, opts.handlerMiddleware)
+  const router = compileRouter(routes, opts.handlerMiddleware, opts.detection)
 
   const withContext =
     opts.als !== undefined ? withALS(router, opts.als.storage, opts.als.init) : router

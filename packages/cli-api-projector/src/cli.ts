@@ -51,7 +51,7 @@ import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 import { assemble, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with CLI's store names — see
 // http-api-projector/src/decode.ts for the matching augmentation and its doc.
@@ -172,6 +172,22 @@ export type CliOpts<T = unknown> = {
    * When omitted (or empty), the handler is called directly — zero overhead.
    */
   readonly middleware?: readonly CliMiddleware[]
+  /**
+   * Opt-in configuration for the structural sniffing `runCli` applies to a
+   * handler's return value — `result` gates `Result`-shape
+   * (`{kind:"ok"|"err"}`) unwrapping, `streaming` gates `AsyncIterable`
+   * detection (and, transitively, `StreamEffect` tag interpretation on its
+   * yields via `streamAsyncIterable`). Both default to `true` — existing
+   * behavior — when `detection` itself, or either field, is omitted.
+   * Disable one when a handler legitimately returns/yields data shaped like
+   * one of these DUs and it must NOT be reinterpreted as the transport
+   * protocol (see `docs/design/middleware-and-caller-context.md`'s
+   * "Streaming and Progress" section, and `DetectionOptions`'s own doc,
+   * `@rhi-zone/fractal-api-tree`). Mirrors HTTP's `PresetOptions.detection`
+   * (`packages/http-api-projector/src/preset.ts`) and MCP's
+   * `CreateMcpServerOptions.detection`.
+   */
+  readonly detection?: DetectionOptions
 }
 
 // ============================================================================
@@ -1043,31 +1059,39 @@ export async function runCli<T = unknown>(
     throw new CliError("internal error", 1)
   }
 
+  // Opt-in return-value detection — see CliOpts.detection. Both default to
+  // `true`, matching every prior release's unconditional behavior.
+  const detectStreaming = opts.detection?.streaming ?? true
+  const detectResult = opts.detection?.result ?? true
+
   // Streaming: an async-iterable result (e.g. an async generator handler) is
   // streamed incrementally — one JSONL line written to stdout per yield, as
   // it's yielded, not buffered — instead of going through Result-unwrapping
   // and the buffer-then-emit output paths below. Checked before
   // Result-unwrapping, matching HTTP's `runRoute` (route.ts): neither a
   // Result nor a plain value is an async iterable, so there's no ambiguity.
-  // Unconditional — not gated by `tags.streaming`/`--jsonl` — mirroring
-  // HTTP's `isAsyncIterable(output)` check, which also isn't gated by a
-  // per-route flag: a handler that returns an async iterable IS the signal
-  // to stream, on every projector.
-  if (isAsyncIterable(result)) {
+  // Not gated by `tags.streaming`/`--jsonl` — mirroring HTTP's
+  // `isAsyncIterable(output)` check, which also isn't gated by a per-route
+  // flag: a handler that returns an async iterable IS the signal to stream,
+  // on every projector. IS gated by `detectStreaming` (`CliOpts.detection`)
+  // — with detection disabled, an async-iterable result falls through to
+  // the plain-value output path below instead.
+  if (detectStreaming && isAsyncIterable(result)) {
     await streamAsyncIterable(result, ioResolved)
     return
   }
 
-  // Result unwrapping: applied UNCONDITIONALLY (matching HTTP's `runRoute`,
-  // route.ts) — any handler returning `{kind:"err", error}` gets proper CLI
-  // error handling, not just leaves wrapped by a generated validator
-  // (`generatedValidatorHandlesThis`, computed above, still only gates the
-  // fallback coerceInput/validateRequired step, a separate concern). A
-  // `kind:"ok"` Result is unwrapped to its `.value` before being printed, so
-  // an ordinary handler that happens to return this package's own
+  // Result unwrapping: applied whenever `detectResult` is on (matching
+  // HTTP's `runRoute`, route.ts) — any handler returning
+  // `{kind:"err", error}` gets proper CLI error handling, not just leaves
+  // wrapped by a generated validator (`generatedValidatorHandlesThis`,
+  // computed above, still only gates the fallback
+  // coerceInput/validateRequired step, a separate concern). A `kind:"ok"`
+  // Result is unwrapped to its `.value` before being printed, so an
+  // ordinary handler that happens to return this package's own
   // `Result<T,E>` shape (see @rhi-zone/fractal-api-tree's `ok`/`err`) is
   // treated the same way regardless of validator wiring.
-  if (isResultShape(result)) {
+  if (detectResult && isResultShape(result)) {
     if (result.kind === "err") {
       const msg = `Error: ${JSON.stringify(result.error)}`
       ioResolved.stderr.write(`${msg}\n`)

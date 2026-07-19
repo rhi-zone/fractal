@@ -167,6 +167,31 @@ export function isStreamEffect(value: unknown): value is StreamEffect {
   return kind === "progress" || kind === "chunk";
 }
 
+// ============================================================================
+// DetectionOptions — shared opt-in config for projector return-value sniffing
+// ============================================================================
+
+/**
+ * Opt-in configuration, shared by every projector preset (HTTP, MCP, CLI),
+ * for which return-value protocols get auto-detected on a handler's output.
+ * `result` gates `isResultShape` unwrapping; `streaming` gates
+ * `AsyncIterable` detection AND interpretation of yielded `StreamEffect`
+ * tags (`isStreamProgress`/`isStreamChunk`) — with streaming off, an async
+ * iterable is never drained specially, it's just an ordinary return value.
+ * Both default to `true` at every call site for backwards compatibility —
+ * a consumer opts OUT only when its own data legitimately collides with one
+ * of these shapes (see `docs/design/middleware-and-caller-context.md`).
+ *
+ * `ResponseOverride` (HTTP-only, `packages/http-api-projector/src/route.ts`)
+ * is deliberately NOT covered here — it's tagged with a `Symbol`, which is
+ * structurally impossible for user data to collide with, so it's always
+ * detected.
+ */
+export type DetectionOptions = {
+  readonly result?: boolean;
+  readonly streaming?: boolean;
+};
+
 /** True when `value` is specifically a `StreamProgress` effect. */
 export function isStreamProgress(value: unknown): value is StreamProgress {
   if (typeof value !== "object" || value === null || !("kind" in value))

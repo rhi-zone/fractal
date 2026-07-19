@@ -677,6 +677,76 @@ describe("createMcpServer — tools/call streaming", () => {
   })
 })
 
+// ============================================================================
+// 10. opts.detection — opt-out of the Result/streaming structural sniffing
+// (see CreateMcpServerOptions.detection). Both default to `true`.
+// ============================================================================
+
+describe("createMcpServer — detection", () => {
+  const resultLikeTree = api_({
+    getThing: op((_: unknown) => ({ kind: "ok", value: 42 })),
+  })
+
+  async function connectedClientFor(tree: ReturnType<typeof api_>, detection?: { result?: boolean; streaming?: boolean }) {
+    const server = createMcpServer(tree, {
+      name: "detection-test-server",
+      version: "1.0.0",
+      ...(detection !== undefined ? { detection } : {}),
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    return { client }
+  }
+
+  it("defaults (detection omitted): Result-shape output is unwrapped, matching prior behavior", async () => {
+    const { client } = await connectedClientFor(resultLikeTree)
+    const result = await client.callTool({ name: "getThing", arguments: {} })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(JSON.parse(content[0]!.text)).toEqual(42)
+  })
+
+  it("detection.result: false — a Result-shaped return value passes through untouched", async () => {
+    const { client } = await connectedClientFor(resultLikeTree, { result: false })
+    const result = await client.callTool({ name: "getThing", arguments: {} })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(JSON.parse(content[0]!.text)).toEqual({ kind: "ok", value: 42 })
+  })
+
+  const streamingTree2 = api_({
+    getStream: op(async function* (_: unknown) {
+      yield 1
+      yield 2
+    }),
+  })
+
+  it("defaults (detection omitted): an async-iterable return value is drained/streamed, matching prior behavior", async () => {
+    const { client } = await connectedClientFor(streamingTree2)
+    const result = await client.callTool({ name: "getStream", arguments: {} })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content.map((c) => c.text)).toEqual(["1", "2"])
+  })
+
+  it("detection.streaming: false — an async-iterable return value is NOT streamed; treated as a plain value", async () => {
+    const { client } = await connectedClientFor(streamingTree2, { streaming: false })
+    const result = await client.callTool({ name: "getStream", arguments: {} })
+
+    // Not drained via collectStreamedToolContent — falls through to the
+    // ordinary content path, which wraps the (async generator) object as a
+    // single JSON text block rather than one block per yield.
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(content).toHaveLength(1)
+    expect(content.map((c) => c.text)).not.toEqual(["1", "2"])
+  })
+})
+
 describe("createMcpServer — sourceMap support (prompts)", () => {
   const sourceMapPromptTree = api_({
     // Handler expects `text`, sourceMap pulls it from the `body` argument key.

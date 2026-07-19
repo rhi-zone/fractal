@@ -66,7 +66,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { assemble, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with MCP's store names — see
 // http-api-projector/src/decode.ts for the matching augmentation and its doc.
@@ -599,6 +599,25 @@ export type CreateMcpServerOptions<T = unknown> = {
    * When omitted (or empty), each handler is called directly — zero overhead.
    */
   readonly middleware?: readonly McpMiddleware[]
+  /**
+   * Opt-in configuration for the structural sniffing this preset applies to
+   * a tool/resource/prompt handler's return value — `result` gates
+   * `Result`-shape (`{kind:"ok"|"err"}`) unwrapping (tools only — resources
+   * and prompts don't unwrap `Result` today), `streaming` gates
+   * `AsyncIterable` detection (and, transitively, `StreamEffect` tag
+   * interpretation on its yields — `collectStreamedToolContent`/
+   * `collectStreamedResourceContents`/`collectStreamedMessages`). Both
+   * default to `true` — existing behavior — when `detection` itself, or
+   * either field, is omitted. Disable one when a handler legitimately
+   * returns/yields data shaped like one of these DUs and it must NOT be
+   * reinterpreted as the transport protocol (see
+   * `docs/design/middleware-and-caller-context.md`'s "Streaming and
+   * Progress" section, and `DetectionOptions`'s own doc,
+   * `@rhi-zone/fractal-api-tree`). Mirrors HTTP's `PresetOptions.detection`
+   * (`packages/http-api-projector/src/preset.ts`) and CLI's
+   * `CliOpts.detection`.
+   */
+  readonly detection?: DetectionOptions
 }
 
 /**
@@ -642,6 +661,10 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
 
   // Around-hooks wrapping each handler call — see CreateMcpServerOptions.middleware.
   const middleware = opts.middleware ?? []
+
+  // Opt-in return-value detection — see CreateMcpServerOptions.detection.
+  const detectResult = opts.detection?.result ?? true
+  const detectStreaming = opts.detection?.streaming ?? true
 
   // ALS wrapping (see CreateMcpServerOptions.als) — innermost, closer to the
   // handler than `middleware`. Absent `opts.als` degrades to identity (no
@@ -728,13 +751,14 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       // checked first since neither a Result nor plain content is an async
       // iterable, so there's no ambiguity (matches HTTP's `runRoute`,
       // packages/http-api-projector/src/route.ts).
-      if (isAsyncIterable(result)) {
+      if (detectStreaming && isAsyncIterable(result)) {
         return { content: await collectStreamedToolContent(result, extra) }
       }
 
-      // Result unwrapping: applied UNCONDITIONALLY (matching HTTP's
-      // `runRoute`, packages/http-api-projector/src/route.ts) — any handler
-      // returning `{kind:"err", error}` gets a proper MCP tool error result,
+      // Result unwrapping: applied whenever `detectResult` is on (matching
+      // HTTP's `runRoute`, packages/http-api-projector/src/route.ts) — any
+      // handler returning `{kind:"err", error}` gets a proper MCP tool
+      // error result,
       // not just tools wrapped by a generated validator
       // (`generatedValidatorHandlesThis`, computed above, still only gates
       // the fallback `validateAgainstSchema` check, a separate concern). A
@@ -743,7 +767,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       // package's own `Result<T,E>` shape (see
       // @rhi-zone/fractal-api-tree's `ok`/`err`) is treated the same way
       // regardless of validator wiring.
-      if (isResultShape(result)) {
+      if (detectResult && isResultShape(result)) {
         if (result.kind === "err") {
           return {
             isError: true,
@@ -797,7 +821,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         // the `caller` store from `extra` so middleware sees it here too.
         const { input, stores } = assembleInput("uri-variable", {}, {}, extra)
         const result = await callHandler(input, stores)
-        if (isAsyncIterable(result)) {
+        if (detectStreaming && isAsyncIterable(result)) {
           return { contents: await collectStreamedResourceContents(result, extra, uri, mimeType) }
         }
         return { contents: [toResourceContent(result, uri, mimeType)] }
@@ -817,7 +841,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
           ? base
           : composeMiddleware(middleware, base)
         const result = await callHandler(input, stores)
-        if (isAsyncIterable(result)) {
+        if (detectStreaming && isAsyncIterable(result)) {
           return { contents: await collectStreamedResourceContents(result, extra, uri, template.mimeType) }
         }
         return { contents: [toResourceContent(result, uri, template.mimeType)] }
@@ -848,7 +872,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
 
       // Streaming: collect all yields + the final return value into the
       // messages array — see `collectStreamedMessages`'s doc.
-      if (isAsyncIterable(result)) {
+      if (detectStreaming && isAsyncIterable(result)) {
         return { messages: await collectStreamedMessages(result, extra) }
       }
 
