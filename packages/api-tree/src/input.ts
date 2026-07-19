@@ -22,10 +22,15 @@
 // Store interface
 // ============================================================================
 
-/** A named key-value interface over a single input source. */
-export interface Store {
-  get(key: string): unknown
-}
+/**
+ * A named key-value interface over a single input source. Plain property
+ * access — `store[key]`, not `store.get(key)`. Object-backed stores (path
+ * slugs, parsed body, ...) are used directly; method-backed sources
+ * (URLSearchParams, Headers) are wrapped in a Proxy with plain-property
+ * semantics by the projector that builds them (see `httpStores` in
+ * http-api-projector/src/decode.ts) rather than by this shared type.
+ */
+export type Store = Record<string, unknown>
 
 /**
  * Registry of store names, populated via declaration merging. The base
@@ -83,15 +88,6 @@ export interface ParamSource {
 export type SourceMap = Readonly<Record<string, ParamSource>>
 
 // ============================================================================
-// Store helper
-// ============================================================================
-
-/** Wrap a plain object as a Store — property access as `get`. */
-export function createStore(obj: Record<string, unknown>): Store {
-  return { get: (key) => obj[key] }
-}
-
-// ============================================================================
 // Assembler
 // ============================================================================
 
@@ -140,7 +136,7 @@ export function assemble(
   const values: Record<string, unknown> = {}
   for (const name of paramNames) {
     const src = resolve(name)
-    values[name] = src ? byName[src.store]?.get(src.key ?? name) : undefined
+    values[name] = src ? byName[src.store]?.[src.key ?? name] : undefined
   }
 
   return values

@@ -736,8 +736,8 @@ describe("runRoute — handler-level middleware", () => {
     let seenPathBookId: unknown
     let seenQueryX: unknown
     const doubleInput: HttpHandlerMiddleware = (next) => (input, stores) => {
-      seenPathBookId = stores.path?.get("bookId")
-      seenQueryX = stores.query?.get("x")
+      seenPathBookId = stores.path?.bookId
+      seenQueryX = stores.query?.x
       return next({ ...input, x: String(Number(input.x) * 2) }, stores)
     }
     const tree = api_({
@@ -804,8 +804,8 @@ describe("runRoute — handler-level middleware", () => {
     let seenAuthorization: unknown
     let seenCookie: unknown
     const readCaller: HttpHandlerMiddleware = (next) => (input, stores) => {
-      seenAuthorization = stores.caller?.get("authorization")
-      seenCookie = stores.caller?.get("cookie")
+      seenAuthorization = stores.caller?.authorization
+      seenCookie = stores.caller?.cookie
       return next(input, stores)
     }
     const tree = api_({

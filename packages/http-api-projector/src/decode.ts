@@ -47,13 +47,35 @@ declare module "@rhi-zone/fractal-api-tree" {
 // ============================================================================
 
 /**
+ * Shared Proxy handler for method-backed sources (`URLSearchParams`,
+ * `Headers`) — makes plain property access (`store[key]`) delegate to the
+ * source's own `.get(key)` method. Module-level constant: allocated once,
+ * reused across every request's Proxy rather than rebuilt per-call. Symbol
+ * properties (e.g. `Symbol.toPrimitive`, `Symbol.iterator`) are NOT
+ * delegated to `.get()` — a symbol is never a valid map key, so this
+ * returns `undefined` for them rather than coercing to a string.
+ */
+const mapLikeHandler: ProxyHandler<{ get(key: string): unknown }> = {
+  get: (target, prop) => (typeof prop === "string" ? target.get(prop) : undefined),
+}
+
+/**
  * Build the standard HTTP stores from a request, route slugs, and a pre-parsed
  * body. The body is parsed once (upstream) and passed in rather than re-parsed
  * here — this keeps the factory synchronous and allows the caller to handle
  * parse errors.
  *
- * `caller` is populated from raw request headers — `caller.get("authorization")`
- * returns the `Authorization` header value, `caller.get("cookie")` the `Cookie`
+ * `path`/`body`/`caller` are plain objects — direct property access, no
+ * wrapping needed. `query`/`header` wrap method-backed sources
+ * (`URLSearchParams`/`Headers`) in a Proxy (via the shared `mapLikeHandler`
+ * above) so `stores.query.x` reads the same as `stores.query.get("x")` would
+ * have — but only on first access: each is a lazy, self-memoizing getter
+ * (`Object.defineProperty` swaps the getter for the constructed Proxy after
+ * first read), so a request that never touches `query`/`header` never pays
+ * for constructing them.
+ *
+ * `caller` is populated from raw request headers — `caller.authorization`
+ * returns the `Authorization` header value, `caller.cookie` the `Cookie`
  * header value, and so on for any other auth-related header a consumer names.
  * This store is deliberately a thin pass-through over headers (same underlying
  * source as the `header` store): PARSING what's inside (decoding a JWT,
@@ -65,18 +87,26 @@ export function httpStores(
   slugs: Readonly<Record<string, string>>,
   parsedBody: unknown,
 ): Stores {
-  const url = new URL(req.url)
+  const caller: Record<string, unknown> = {}
+  for (const [key, value] of req.headers.entries()) {
+    caller[key] = value
+  }
   return {
-    path: { get: (k) => slugs[k] },
-    query: { get: (k) => url.searchParams.get(k) ?? undefined },
-    header: { get: (k) => req.headers.get(k) ?? undefined },
-    body: {
-      get: (k) =>
-        typeof parsedBody === "object" && parsedBody !== null
-          ? (parsedBody as Record<string, unknown>)[k]
-          : undefined,
+    path: slugs,
+    body: (typeof parsedBody === "object" && parsedBody !== null)
+      ? (parsedBody as Record<string, unknown>)
+      : {},
+    caller,
+    get query(): Record<string, unknown> {
+      const proxy = new Proxy(new URL(req.url).searchParams, mapLikeHandler) as unknown as Record<string, unknown>
+      Object.defineProperty(this, "query", { value: proxy, configurable: false })
+      return proxy
     },
-    caller: { get: (k) => req.headers.get(k) ?? undefined },
+    get header(): Record<string, unknown> {
+      const proxy = new Proxy(req.headers, mapLikeHandler) as unknown as Record<string, unknown>
+      Object.defineProperty(this, "header", { value: proxy, configurable: false })
+      return proxy
+    },
   }
 }
 

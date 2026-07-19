@@ -39,7 +39,7 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
+import { assemble, isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with CLI's store names — see
@@ -595,7 +595,7 @@ function parseFlags(argv: string[]): ParsedArgv {
  * input AND the raw pre-assembly stores; the handler itself only ever sees
  * `input`.
  *
- * `caller` is populated from OS-level identity — `caller.get("user")` returns
+ * `caller` is populated from OS-level identity — `caller.user` returns
  * `process.env.USER` (falling back to `USERNAME`, set on Windows), the CLI's
  * closest analog to HTTP's auth headers / MCP's `authInfo`. Anything richer
  * (a config-file identity, a stored auth token) is the consumer's job to
@@ -610,10 +610,10 @@ function buildInput(
     user: process.env.USER ?? process.env.USERNAME,
   }
   const stores: Stores = {
-    flag: createStore(flags),
-    path: createStore(slugs),
-    env: createStore(process.env as Record<string, unknown>),
-    caller: createStore(caller),
+    flag: flags,
+    path: slugs,
+    env: process.env as Record<string, unknown>,
+    caller,
   }
 
   const paramNames = [

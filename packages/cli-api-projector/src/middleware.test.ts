@@ -50,9 +50,9 @@ describe("CliOpts.middleware", () => {
     let seenPathUserId: unknown
     let seenEnvHome: unknown
     const readStores: CliMiddleware = (next) => (input, stores) => {
-      seenFlagX = stores.flag?.get("x")
-      seenPathUserId = stores.path?.get("userId")
-      seenEnvHome = stores.env?.get("HOME")
+      seenFlagX = stores.flag?.x
+      seenPathUserId = stores.path?.userId
+      seenEnvHome = stores.env?.HOME
       return next(input, stores)
     }
     const { out, io } = makeIO()
@@ -96,7 +96,7 @@ describe("CliOpts.middleware", () => {
       whoami: op((_: unknown) => ({ requestedBy: als.getStore()?.requestedBy ?? "none" }), {}),
     })
     const withAls: CliMiddleware = (next) => (input, stores) =>
-      als.run({ requestedBy: String(stores.flag?.get("user") ?? "unknown") }, () => next(input, stores))
+      als.run({ requestedBy: String(stores.flag?.user ?? "unknown") }, () => next(input, stores))
     const { out, io } = makeIO()
     await runCli(tree, ["whoami", "--user", "alice"], io, { middleware: [withAls] })
     expect(JSON.parse(out.join(""))).toEqual({ requestedBy: "alice" })
@@ -106,7 +106,7 @@ describe("CliOpts.middleware", () => {
     const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) })
     let seenCallerUser: unknown
     const readCaller: CliMiddleware = (next) => (input, stores) => {
-      seenCallerUser = stores.caller?.get("user")
+      seenCallerUser = stores.caller?.user
       return next(input, stores)
     }
     const { out, io } = makeIO()

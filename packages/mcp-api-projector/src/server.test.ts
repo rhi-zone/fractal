@@ -475,7 +475,8 @@ describe("createMcpServer — input validation", () => {
 // ============================================================================
 //
 // Tool calls, resource template reads, and prompt calls are all now
-// assembled via the shared `assemble`/`createStore` pipeline instead of
+// assembled via the shared `assemble` pipeline (packages/api-tree/src/input.ts)
+// — stores are plain objects with property access — instead of
 // handing the raw arguments/captured-vars object to the handler directly.
 // With no `meta.mcp.sourceMap`, this must be behaviorally identical to
 // before (already covered by the describe blocks above, all still

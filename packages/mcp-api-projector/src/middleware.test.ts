@@ -45,7 +45,7 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
   it("middleware can read from stores — the raw pre-assembly argument store", async () => {
     let seenRawX: unknown
     const readStores: McpMiddleware = (next) => (input, stores) => {
-      seenRawX = stores.argument?.get("x")
+      seenRawX = stores.argument?.x
       return next(input, stores)
     }
     const { client } = await connectedClient(tree, { middleware: [readStores] })
@@ -86,7 +86,7 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
       whoami: op((_: unknown) => ({ name: als.getStore()?.name ?? "none" }), {}),
     })
     const withAls: McpMiddleware = (next) => (input, stores) =>
-      als.run({ name: String(stores.argument?.get("name") ?? "unknown") }, () => next(input, stores))
+      als.run({ name: String(stores.argument?.name ?? "unknown") }, () => next(input, stores))
     const { client } = await connectedClient(alsTree, { middleware: [withAls] })
     const result = await client.callTool({ name: "whoami", arguments: { name: "caller-1" } })
     expect(JSON.parse(textOf(result))).toEqual({ name: "caller-1" })
@@ -122,8 +122,8 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
     let seenAuthInfo: unknown
     const readCaller: McpMiddleware = (next) => (input, stores) => {
       sawCallerStore = stores.caller !== undefined
-      seenSessionId = stores.caller?.get("sessionId")
-      seenAuthInfo = stores.caller?.get("authInfo")
+      seenSessionId = stores.caller?.sessionId
+      seenAuthInfo = stores.caller?.authInfo
       return next(input, stores)
     }
     const { client } = await connectedClient(tree, { middleware: [readCaller] })
@@ -171,7 +171,7 @@ describe("CreateMcpServerOptions.middleware — resources", () => {
   it("middleware wraps a resource-template read and can read the captured slug from stores", async () => {
     let seenUserId: unknown
     const track: McpMiddleware = (next) => (input, stores) => {
-      seenUserId = stores["uri-variable"]?.get("userId")
+      seenUserId = stores["uri-variable"]?.userId
       return next(input, stores)
     }
     const { client } = await connectedClient(tree, { middleware: [track] })
@@ -192,7 +192,7 @@ describe("CreateMcpServerOptions.middleware — prompts", () => {
   it("middleware can read the prompt's raw argument from stores", async () => {
     let seenWho: unknown
     const track: McpMiddleware = (next) => (input, stores) => {
-      seenWho = stores.argument?.get("who")
+      seenWho = stores.argument?.who
       return next(input, stores)
     }
     const { client } = await connectedClient(tree, { middleware: [track] })

@@ -28,7 +28,7 @@ export type { AnyApi } from "./direct.ts"
 // one pipeline instead of reimplementing it. Callers that need to report
 // where a param came from consult the sourceMap directly — see "./input.ts"
 // for the full doc.
-export { assemble, createStore } from "./input.ts"
+export { assemble } from "./input.ts"
 export type { ParamSource, SourceMap, Store, StoreRegistry, Stores } from "./input.ts"
 
 // Dev tooling — the build-time extractor (extract.ts, TS source -> TypeRef)

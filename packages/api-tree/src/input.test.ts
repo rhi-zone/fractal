@@ -1,12 +1,12 @@
 // packages/api-tree/src/input.test.ts — input resolution pipeline
 
 import { describe, expect, it } from "bun:test"
-import { assemble, createStore } from "./input.ts"
+import { assemble } from "./input.ts"
 
 describe("assemble", () => {
   it("resolves params from the primary store by convention", () => {
     const stores = {
-      query: createStore({ a: "1", b: "2" }),
+      query: { a: "1", b: "2" },
     }
     const result = assemble(stores, ["a", "b"], {}, "query")
     expect(result).toEqual({ a: "1", b: "2" })
@@ -14,8 +14,8 @@ describe("assemble", () => {
 
   it("applies sourceMap overrides ahead of the primary store", () => {
     const stores = {
-      query: createStore({ a: "from-query" }),
-      header: createStore({ a: "from-header" }),
+      query: { a: "from-query" },
+      header: { a: "from-header" },
     }
     const result = assemble(
       stores,
@@ -28,8 +28,8 @@ describe("assemble", () => {
 
   it("applies sourceMap overrides with a remapped key", () => {
     const stores = {
-      query: createStore({}),
-      header: createStore({ "x-a": "from-header-key" }),
+      query: {},
+      header: { "x-a": "from-header-key" },
     }
     const result = assemble(
       stores,
@@ -42,8 +42,8 @@ describe("assemble", () => {
 
   it("prefers pathParamNames over sourceMap and primary store", () => {
     const stores = {
-      path: createStore({ id: "path-id" }),
-      query: createStore({ id: "query-id" }),
+      path: { id: "path-id" },
+      query: { id: "query-id" },
     }
     const result = assemble(
       stores,
@@ -56,17 +56,8 @@ describe("assemble", () => {
   })
 
   it("returns undefined values for params missing from their store", () => {
-    const stores = { query: createStore({}) }
+    const stores = { query: {} }
     const result = assemble(stores, ["missing"], {}, "query")
     expect(result).toEqual({ missing: undefined })
-  })
-})
-
-describe("createStore", () => {
-  it("wraps a plain object as a Store", () => {
-    const store = createStore({ a: 1, b: "two" })
-    expect(store.get("a")).toBe(1)
-    expect(store.get("b")).toBe("two")
-    expect(store.get("missing")).toBeUndefined()
   })
 })

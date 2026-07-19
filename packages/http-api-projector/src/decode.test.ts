@@ -23,16 +23,27 @@ describe("httpStores", () => {
   it("path store returns slug values by key", () => {
     const req = new Request("http://localhost/books/book-1")
     const stores = httpStores(req, { bookId: "book-1" }, undefined)
-    expect(stores.path!.get("bookId")).toBe("book-1")
-    expect(stores.path!.get("missing")).toBeUndefined()
+    expect(stores.path!.bookId).toBe("book-1")
+    expect(stores.path!.missing).toBeUndefined()
   })
 
   it("query store returns query params by key", () => {
     const req = new Request("http://localhost/search?q=dune&limit=10")
     const stores = httpStores(req, {}, undefined)
-    expect(stores.query!.get("q")).toBe("dune")
-    expect(stores.query!.get("limit")).toBe("10")
-    expect(stores.query!.get("missing")).toBeUndefined()
+    expect(stores.query!.q).toBe("dune")
+    expect(stores.query!.limit).toBe("10")
+    // URLSearchParams.get() returns null (not undefined) for a missing key,
+    // and the shared mapLikeHandler proxy is a thin pass-through to .get() —
+    // it doesn't coerce null to undefined.
+    expect(stores.query!.missing).toBeNull()
+  })
+
+  it("query store is a lazily-constructed, memoized Proxy", () => {
+    const req = new Request("http://localhost/search?q=dune")
+    const stores = httpStores(req, {}, undefined)
+    const first = stores.query
+    const second = stores.query
+    expect(first).toBe(second)
   })
 
   it("header store returns headers by key (case-insensitive)", () => {
@@ -40,23 +51,25 @@ describe("httpStores", () => {
       headers: { "X-Api-Key": "secret-123", "Content-Type": "application/json" },
     })
     const stores = httpStores(req, {}, undefined)
-    expect(stores.header!.get("x-api-key")).toBe("secret-123")
-    expect(stores.header!.get("content-type")).toBe("application/json")
-    expect(stores.header!.get("missing")).toBeUndefined()
+    expect(stores.header!["x-api-key"]).toBe("secret-123")
+    expect(stores.header!["content-type"]).toBe("application/json")
+    // Headers.get() returns null (not undefined) for a missing key, same
+    // pass-through reasoning as the query store above.
+    expect(stores.header!.missing).toBeNull()
   })
 
   it("body store returns fields from parsed body object", () => {
     const req = new Request("http://localhost/")
     const stores = httpStores(req, {}, { title: "Dune", author: "Herbert" })
-    expect(stores.body!.get("title")).toBe("Dune")
-    expect(stores.body!.get("author")).toBe("Herbert")
-    expect(stores.body!.get("missing")).toBeUndefined()
+    expect(stores.body!.title).toBe("Dune")
+    expect(stores.body!.author).toBe("Herbert")
+    expect(stores.body!.missing).toBeUndefined()
   })
 
   it("body store returns undefined when body is not an object", () => {
     const req = new Request("http://localhost/")
     const stores = httpStores(req, {}, null)
-    expect(stores.body!.get("anything")).toBeUndefined()
+    expect(stores.body!.anything).toBeUndefined()
   })
 })
 

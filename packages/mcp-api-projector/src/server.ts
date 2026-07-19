@@ -65,7 +65,7 @@ import type {
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { assemble, createStore, isResultShape } from "@rhi-zone/fractal-api-tree"
+import { assemble, isResultShape } from "@rhi-zone/fractal-api-tree"
 import type { SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with MCP's store names — see
@@ -282,8 +282,8 @@ export function toResourceContent(result: unknown, uri: string, defaultMimeType:
  *
  * `extra` is the SDK's per-request `RequestHandlerExtra` (second argument to
  * every `setRequestHandler` callback below) — its `authInfo`/`sessionId`
- * populate the `caller` store: `caller.get("authInfo")` returns the SDK's
- * `AuthInfo` object, `caller.get("sessionId")` the session ID string. This
+ * populate the `caller` store: `caller.authInfo` returns the SDK's
+ * `AuthInfo` object, `caller.sessionId` the session ID string. This
  * replaces the reverted `extra`-into-`McpMiddlewareContext` threading (commit
  * `027baa6`) — `extra` now flows through `stores.caller` like every other
  * projector's caller context; it is never exposed to middleware directly. See
@@ -299,8 +299,8 @@ function assembleInput(
   // "uri-variable") at call sites below, but it's threaded through as a
   // plain string — cast past the declaration-merged `Stores`' literal keys.
   const stores = {
-    [storeName]: createStore(values),
-    caller: createStore({ authInfo: extra.authInfo, sessionId: extra.sessionId }),
+    [storeName]: values,
+    caller: { authInfo: extra.authInfo, sessionId: extra.sessionId },
   } as Stores
   const paramNames = [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
   return { input: assemble(stores, paramNames, sourceMap, storeName), stores }
