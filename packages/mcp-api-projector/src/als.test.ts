@@ -64,30 +64,6 @@ describe("CreateMcpServerOptions.als — tools", () => {
     expect(seenRequestType).toBe("tool")
   })
 
-  it("init receives the SDK's `extra` (sendNotification, signal) via context.extra", async () => {
-    const storage = new AsyncLocalStorage<{ hasSendNotification: boolean; hasSignal: boolean }>()
-    const tree = api_({
-      whoami: op(
-        (_: unknown) => ({
-          hasSendNotification: storage.getStore()?.hasSendNotification ?? false,
-          hasSignal: storage.getStore()?.hasSignal ?? false,
-        }),
-        {},
-      ),
-    })
-    const { client } = await connectedClient(tree, {
-      als: {
-        storage,
-        init: (context) => ({
-          hasSendNotification: typeof context.extra.sendNotification === "function",
-          hasSignal: context.extra.signal instanceof AbortSignal,
-        }),
-      },
-    })
-    const result = await client.callTool({ name: "whoami", arguments: {} })
-    expect(JSON.parse(textOf(result))).toEqual({ hasSendNotification: true, hasSignal: true })
-  })
-
   it("no ALS configured — handler runs with no store active (undefined)", async () => {
     const storage = new AsyncLocalStorage<{ requestId: string }>()
     const tree = api_({

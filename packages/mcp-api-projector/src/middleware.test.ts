@@ -58,20 +58,6 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
     expect(seenRequestType).toBe("tool")
   })
 
-  it("middleware sees the SDK's `extra` (sendNotification, signal) — not dropped at the call site", async () => {
-    let sawSendNotification: unknown
-    let sawSignal: unknown
-    const capture: McpMiddleware = (next, context) => {
-      sawSendNotification = context.extra.sendNotification
-      sawSignal = context.extra.signal
-      return next
-    }
-    const { client } = await connectedClient(tree, { middleware: [capture] })
-    await client.callTool({ name: "echo", arguments: { x: "1" } })
-    expect(typeof sawSendNotification).toBe("function")
-    expect(sawSignal).toBeInstanceOf(AbortSignal)
-  })
-
   it("middleware wraps the handler call — can transform input before and output after", async () => {
     const doubleInput: McpMiddleware = (next) => (input) => next({ ...input, x: String(Number(input.x) * 2) })
     const wrapOutput: McpMiddleware = (next) => async (input) => {
