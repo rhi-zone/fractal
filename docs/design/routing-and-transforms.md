@@ -357,3 +357,5 @@ Their underlying matchers compose via `chainMatchers` (first-wins).
 `withALS(router, storage, init)` wraps any `CompiledRouter` so every request
 runs inside its own `AsyncLocalStorage.run()` context. Opt-in via
 `createFetch`'s `als` option.
+
+**Side channel note**: ALS is a side channel and strongly discouraged as the primary data-flow mechanism. It exists as an opt-in escape hatch for cases where explicit data passing is impractical, but explicit arguments and return values are preferred.
