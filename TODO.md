@@ -2,8 +2,6 @@
 
 ## Next session (handoff)
 
-**On the table from this session (2026-07-19):**
-
 **From projector coverage audit (HIGH — blocks production use):**
 - **HTTP streaming responses** (SSE/chunked encoding) + **MCP progress notifications** — both need handler context design: how handlers receive transport-level capabilities (MCP: reportProgress/log; HTTP: setHeader/stream; CLI: writeStderr). Critical blocker for AI/realtime use cases.
 - **HTTP non-JSON content types** — multipart, form-data, file upload, octet-stream. Request/response payload currently JSON-only.
@@ -17,15 +15,15 @@
 - **Structured error types** — declare operation-specific error outcomes in the tree. Handlers throw or return Result; tree is currently silent.
 - **Extract improvements** — overloaded functions, generics, async generators currently degrade silently.
 
-**Architectural refinements (ongoing):**
-- **Middleware/layers for HTTP** — expose via `PresetOptions.layers` for consumers to supply cross-cutting layers. Mechanism is built; option threading and preset integration remaining.
-- **Middleware/layers for CLI and MCP** — added this session (2026-07-19) as the same `(inner) => ... => result` pattern HTTP uses. Mechanism is in place but consumer preset integration (`createCli`/`createMcpServer` option threading) pending.
-- **Coercion placement specifics** — currently handled in `parse()` (transform+validate single pass). Broader story for store-level coercion and pre-input coercion TBD.
-
 **Open threads:**
 - **Input pipeline wiring** (CLI/MCP) — `api-tree/src/input.ts` has core `assemble()`, but CLI and MCP still have own implementations. CLI needs stores (env, config, stdin); MCP needs (argument, uri-variable, session context). _Note: low priority — works as-is; consolidation is a quality improvement, not a blocker._
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 - **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
+- **Coercion placement specifics** — currently handled in `parse()` (transform+validate single pass). Broader story for store-level coercion and pre-input coercion TBD.
+
+---
+
+## Cross-projector consistency, middleware, and ALS support — DONE (2026-07-19)
 
 ---
 
