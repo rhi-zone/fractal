@@ -105,3 +105,49 @@ Stores use declaration merging, not a `Record<string, Store>` with
 
 This makes cross-cutting-vs-projector-specific a type-level distinction, not
 a documentation convention.
+
+---
+
+## Streaming and Progress — Async Generator Protocol
+
+A handler's return type widens from `T | Promise<T> | Result<T, E>` to also
+allow `AsyncIterable<T | StreamEffect<T>>`. This is how a handler expresses
+transport effects — progress, chunks — without knowing which transport it's
+running under. `StreamEffect<T>` (`packages/api-tree/src/index.ts`) is the
+tagged-value DU: `StreamProgress` (`{ kind: "progress", progress, total?,
+message? }`) and `StreamChunk<T>` (`{ kind: "chunk", data: T }`), detected at
+runtime with `isStreamEffect`/`isStreamProgress`/`isStreamChunk` — the same
+loose-structural, exact-on-`kind` pattern `isResultShape` uses for `Result`.
+
+- Projectors detect an async-generator return by checking for
+  `Symbol.asyncIterator`, the same way they detect a `Promise` by checking
+  for `.then` and a `Result` by checking `isResultShape`.
+- Each yielded value is inspected: if it matches a recognized `StreamEffect`
+  kind (`progress`, `chunk`), the projector interprets it per-transport (see
+  table below); anything else yielded is treated as a chunk by default —
+  the fallback keeps a plain `yield someValue` handler working without
+  requiring every handler to wrap its yields in `{ kind: "chunk", data }`.
+- The generator's return value (not a yielded value — the value the
+  generator function itself returns via `return`) is the final result,
+  handled the same way a non-streaming handler's return value is handled
+  today (goes through `Result` detection, then encoding).
+- Detection of stream-effect tags is **opt-in at the projector preset
+  level**, not automatic sniffing of every yielded value's shape. This is
+  the same concern `Result` detection already has (`decisions.md`): a
+  handler that legitimately yields user data shaped like
+  `{ kind: "progress", ... }` must not have it silently reinterpreted as a
+  transport effect. A preset that hasn't opted in treats every yielded
+  value as a chunk, full stop.
+- Middleware (`F => F`, see above) passes an `AsyncIterable` return value
+  through unchanged by default — it's just another value flowing through
+  the `input, stores => result` shape — and may transform it (e.g. wrap the
+  iterable to inject its own progress ticks, filter chunks, tee for
+  logging) since the iterable is a first-class value, not a special case.
+
+### Per-projector interpretation
+
+| Effect | HTTP | MCP | CLI |
+|--------|------|-----|-----|
+| progress | SSE comment or custom event | `notifications/progress` | stderr |
+| chunk | chunked transfer / SSE data | partial content | JSONL line |
+| return value | final response / close | final tool result | final output |

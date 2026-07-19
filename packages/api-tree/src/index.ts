@@ -120,6 +120,68 @@ export const match = <T, E, R>(
 ): R => (r.kind === "ok" ? arms.ok(r.value) : arms.err(r.error));
 
 // ============================================================================
+// StreamEffect<T> — tagged values an async-generator handler can yield
+// ============================================================================
+
+/**
+ * Progress effect: a handler yields this to report incremental progress
+ * without emitting a data chunk. Provenance-blind — the same shape is
+ * yielded whether the projector will render it as SSE, an MCP
+ * `notifications/progress`, or a CLI stderr line; each projector decides how
+ * (or whether) to surface it.
+ */
+export type StreamProgress = {
+  readonly kind: "progress";
+  readonly progress: number;
+  readonly total?: number;
+  readonly message?: string;
+};
+
+/**
+ * Chunk effect: a handler yields this to emit one piece of streamed data.
+ * `T` defaults to `unknown` because a handler's chunk type is generally
+ * inferred from its generator's yield type, not annotated here.
+ */
+export type StreamChunk<T = unknown> = {
+  readonly kind: "chunk";
+  readonly data: T;
+};
+
+/** Open DU of stream effects — progress and chunk today, extensible by
+ *  adding another `kind`-tagged member without touching existing arms. */
+export type StreamEffect<T = unknown> = StreamProgress | StreamChunk<T>;
+
+/**
+ * Loose structural check: true when `v` matches a recognized `StreamEffect`
+ * shape at runtime, mirroring `isResultShape`'s role for `Result`. Exact on
+ * `kind` (only `"progress"`/`"chunk"` match) so a handler's own chunk data
+ * with an unrelated `kind` field never false-positives — same reasoning as
+ * `isResultShape`. Detection is opt-in at the projector-preset level (see
+ * `docs/design/middleware-and-caller-context.md`), not automatic sniffing
+ * of every yielded value.
+ */
+export function isStreamEffect(value: unknown): value is StreamEffect {
+  if (typeof value !== "object" || value === null || !("kind" in value))
+    return false;
+  const kind = (value as { kind: unknown }).kind;
+  return kind === "progress" || kind === "chunk";
+}
+
+/** True when `value` is specifically a `StreamProgress` effect. */
+export function isStreamProgress(value: unknown): value is StreamProgress {
+  if (typeof value !== "object" || value === null || !("kind" in value))
+    return false;
+  return (value as { kind: unknown }).kind === "progress";
+}
+
+/** True when `value` is specifically a `StreamChunk` effect. */
+export function isStreamChunk(value: unknown): value is StreamChunk {
+  if (typeof value !== "object" || value === null || !("kind" in value))
+    return false;
+  return (value as { kind: unknown }).kind === "chunk";
+}
+
+// ============================================================================
 // Derived combinators — Kleisli + applicative. NEVER the base.
 // ============================================================================
 
