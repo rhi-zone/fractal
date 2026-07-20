@@ -23,8 +23,12 @@ describe("basic merging", () => {
     expect(fromJsonCorpus([])).toEqual(t(types.unknown))
   })
 
-  test("identical values -> same type", () => {
-    expect(fromJsonCorpus([42, 42, 42])).toEqual(uint8())
+  test("identical values -> literal (K=1 saturation is a constant signal)", () => {
+    // Every sample carries the exact same value — K=1 across N=3 samples is
+    // maximal saturation, strong evidence the field is a constant/literal
+    // rather than merely narrow-width. See looksLikeEnum in
+    // from-json-corpus.ts.
+    expect(fromJsonCorpus([42, 42, 42])).toEqual(t(types.literal(42)))
   })
 
   test("boolean values merge to boolean", () => {

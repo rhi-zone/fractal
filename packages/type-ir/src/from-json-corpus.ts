@@ -299,6 +299,45 @@ function detectEnums(
   return walkAndDetectEnums(ref, "$", fieldStats, minSamples)
 }
 
+/**
+ * Decide whether a field with K distinct values across N samples is
+ * enum-shaped, using three signals combined (not required to all agree):
+ *
+ *  - K saturation: distinct-value count stays low relative to sample count
+ *    (approximated in the batch case as K/N below a threshold).
+ *  - Uniqueness: K << N — heavy repetition is strong enum evidence; K == N
+ *    (every value unique) is conclusive evidence AGAINST enum.
+ *  - Clustering (integers only): sorted distinct values leave large gaps
+ *    relative to the value range. This alone is not sufficient (timestamps
+ *    cluster too) — it only corroborates a borderline saturation signal.
+ *
+ * K == 1 (every sample has the same value) is treated as maximal saturation
+ * — always a positive signal, independent of N.
+ *
+ * When signals disagree or are ambiguous, be conservative and say no.
+ */
+function looksLikeEnum(K: number, N: number, sortedValues?: readonly number[]): boolean {
+  if (K === 1) return true
+  if (K >= N) return false // every value unique — definitely not an enum
+  if (K > 50) return false // too many distinct values to be enum-like
+
+  const ratio = K / N
+  const saturated = ratio < 0.5 // K stopped growing relative to N
+  if (!saturated) return false
+
+  const stronglyRepetitive = ratio <= 1 / 3 // K << N
+  if (stronglyRepetitive) return true
+
+  // Borderline saturation (1/3 < ratio < 1/2): look for corroborating
+  // clustering evidence among integers before committing to enum.
+  if (sortedValues !== undefined && sortedValues.length >= 2) {
+    const range = sortedValues[sortedValues.length - 1]! - sortedValues[0]!
+    if (range > 0) return K <= range / 2
+  }
+
+  return false
+}
+
 function walkAndDetectEnums(
   ref: TypeRef,
   path: string,
@@ -312,13 +351,11 @@ function walkAndDetectEnums(
     if (stats !== undefined && stats.values.length >= minSamples) {
       const K = stats.distinctValues.size
       const N = stats.values.length
-      // Enum signal: K is small and K << N (saturation). At least 3
-      // samples per distinct value on average, and K itself is small.
-      if (K * 3 <= N && K <= 20 && K >= 2) {
+      if (looksLikeEnum(K, N)) {
         const members = [...stats.distinctValues].map((s) => JSON.parse(s) as string)
         // Only if all values are strings
         if (members.every((m) => typeof m === "string")) {
-          return t(types.enum(members))
+          return t(types.enum(members), ref.meta)
         }
       }
     }
@@ -330,21 +367,15 @@ function walkAndDetectEnums(
     if (stats !== undefined && stats.values.length >= minSamples) {
       const K = stats.distinctValues.size
       const N = stats.values.length
-      if (K * 3 <= N && K <= 20 && K >= 2) {
-        const values = [...stats.distinctValues].map((s) => JSON.parse(s) as number)
-        if (values.every((v) => typeof v === "number" && Number.isInteger(v))) {
-          // Check clumpiness: are values discrete/clustered?
-          // Simple heuristic: if number of distinct values is much smaller
-          // than the range they span, they're clumpy.
-          const sorted = values.sort((a, b) => a - b)
-          const range = sorted[sorted.length - 1]! - sorted[0]!
-          // If K distinct values span a range of >= 2*K, and K saturated,
-          // treat as enum-like.
-          if (range === 0 || K <= range / 2 || K <= 5) {
-            // Produce a union of literals
-            const variants = values.map((v) => t(types.literal(v)))
-            return t(types.union(variants))
-          }
+      const values = [...stats.distinctValues].map((s) => JSON.parse(s) as number)
+      if (values.every((v) => typeof v === "number" && Number.isInteger(v))) {
+        const sorted = [...values].sort((a, b) => a - b)
+        if (looksLikeEnum(K, N, sorted)) {
+          // K === 1 → single constant value, represent as a literal.
+          // K > 1 → union of literals.
+          if (values.length === 1) return t(types.literal(values[0]!), ref.meta)
+          const variants = values.map((v) => t(types.literal(v)))
+          return t(types.union(variants), ref.meta)
         }
       }
     }

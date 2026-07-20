@@ -917,41 +917,13 @@ describe("adversarial: misc numeric and structural edge cases", () => {
     )
   })
 
-  // FAILURE FOUND — see packages/type-ir/src/from-json-corpus.ts,
-  // walkAndDetectEnums (lines ~310-352, both the string-enum branch at line
-  // 321 and the integer-literal-union branch at line 346).
-  //
-  // Root cause: when enum detection replaces a field's TypeRef with
-  // `t(types.enum(members))` or `t(types.union(variants))`, it constructs a
-  // brand-new TypeRef and drops the original field's `meta` — in particular
-  // `meta.optional: true`, set upstream by mergeObjectTypes when the field
-  // isn't present in every sample. The result: a field that is genuinely
-  // optional (absent from some corpus samples) comes back marked required
-  // once enum detection kicks in, so the corpus-inferred type rejects the
-  // very samples that omitted the field.
-  //
-  // Minimal counterexample fast-check found (shrunk from a generated
-  // corpus, 18 shrink steps):
-  //   fromJsonCorpus([
-  //     { type: "a", x: 0 },
-  //     { type: "a", x: 0 },
-  //     { type: "a", x: 0 },
-  //     { type: "a", x: 0 },
-  //     { type: "a", x: 0 },
-  //     { y: 0 },            // <- no `x` field at all
-  //     { type: "a", x: 1 },
-  //   ])
-  // infers `x: union(literal(0), literal(1))` as REQUIRED (meta === {}),
-  // even though sample #6 has no `x` field — meta.optional was silently
-  // dropped by the enum/literal-union rewrite in walkAndDetectEnums.
-  //
-  // Fix direction (not applied — task is report-only): thread `ref.meta`
-  // through at both return sites, e.g.
-  //   return t(types.enum(members), ref.meta)
-  //   return t(types.union(variants), ref.meta)
-  // mirroring how the object/array/tuple/union recursive branches already
-  // do `t(..., ref.meta)` a few lines below.
-  test.todo("discriminant-like field missing from some elements does not crash DU detection", () => {
+  // Previously FAILED — see packages/type-ir/src/from-json-corpus.ts,
+  // walkAndDetectEnums. Enum detection replaced a field's TypeRef with
+  // `t(types.enum(members))` / `t(types.union(variants))` without carrying
+  // `ref.meta` through, dropping `meta.optional` set upstream by
+  // mergeObjectTypes when a field isn't present in every sample. Fixed by
+  // threading `ref.meta` through both return sites.
+  test("discriminant-like field missing from some elements does not crash DU detection", () => {
     fc.assert(
       fc.property(
         fc.array(
