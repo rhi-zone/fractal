@@ -1016,3 +1016,440 @@ describe("adversarial: large corpus", () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// 13. K=1 literal detection — is it too aggressive?
+//
+// `looksLikeEnum` treats K===1 (every sample shares one value) as maximal
+// saturation, unconditionally, regardless of N (from-json-corpus.ts:320).
+// The integer leaf path turns K=1 into `literal(v)`
+// (walkAndDetectEnums, integer branch, from-json-corpus.ts:376). The string
+// leaf path instead turns K=1 into a *one-member enum*
+// (walkAndDetectEnums, string branch, from-json-corpus.ts:355-360) — it
+// never special-cases K=1 to produce `literal`, unlike the integer branch.
+// Verified empirically against the current implementation below; this is an
+// asymmetry in the heuristic, not a crash, so it's recorded as a passing
+// characterization test rather than a `.todo`.
+// ---------------------------------------------------------------------------
+
+describe("adversarial: K=1 literal/enum aggressiveness", () => {
+  test("five identical zeros collapse to literal(0), not integer/uint8", () => {
+    const inferred = fromJsonCorpus([0, 0, 0, 0, 0])
+    expect(inferred.shape).toEqual({ kind: "literal", value: 0 })
+  })
+
+  test("three identical empty strings collapse to a one-member enum, NOT literal('') — asymmetric with the integer K=1 path", () => {
+    const inferred = fromJsonCorpus(["", "", ""])
+    // Documents the actual (asymmetric) behavior: string K=1 saturation goes
+    // through the enum branch (from-json-corpus.ts:349-363), which has no
+    // K===1 -> literal special case the way the integer branch does.
+    expect(inferred.shape).toEqual({ kind: "enum", members: [""] })
+  })
+
+  test("null repeated does NOT collapse to literal(null) — 'null' kind is unhandled by walkAndDetectEnums, so it passes through unchanged", () => {
+    const inferred = fromJsonCorpus([null, null, null])
+    expect(inferred.shape.kind).toBe("null")
+  })
+
+  test("boolean repeated does NOT collapse to literal(true) — 'boolean' kind is unhandled by walkAndDetectEnums, so it passes through unchanged", () => {
+    const inferred = fromJsonCorpus([true, true, true])
+    expect(inferred.shape.kind).toBe("boolean")
+  })
+
+  test("object with one constant field and one fully-varying field: only the constant field is flattened, the varying field is untouched", () => {
+    const samples = [
+      { status: "active", id: 1 },
+      { status: "active", id: 2 },
+      { status: "active", id: 3 },
+    ]
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    // status: K=1 -> string K=1 path -> one-member enum (see asymmetry test above)
+    expect(fields.status!.shape).toEqual({ kind: "enum", members: ["active"] })
+    // id: K=3, N=3 -> K>=N -> "every value unique", conclusive evidence AGAINST enum
+    expect(fields.id!.shape.kind).not.toBe("enum")
+    expect(fields.id!.shape.kind).not.toBe("union")
+    expect(fields.id!.shape.kind).not.toBe("literal")
+    for (const s of samples) {
+      const err = inhabits(s, inferred)
+      expect(err).toBeNull()
+    }
+  })
+
+  test("K=1 fires identically at N=3 and N=50 — the heuristic does not scale confidence with more evidence, it is already unconditional at K=1", () => {
+    const small = fromJsonCorpus(Array(3).fill(42))
+    const large = fromJsonCorpus(Array(50).fill(42))
+    // Both collapse to the exact same literal — no additional confidence
+    // signal from the larger sample size changes the outcome here, because
+    // `looksLikeEnum` returns `true` on the very first line for K===1,
+    // before N is consulted at all.
+    expect(small.shape).toEqual({ kind: "literal", value: 42 })
+    expect(large.shape).toEqual({ kind: "literal", value: 42 })
+    expect(small.shape).toEqual(large.shape)
+  })
+
+  test("property: K=1 integer field always collapses to literal regardless of corpus size", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: -1000, max: 1000 }),
+        fc.integer({ min: 3, max: 200 }),
+        (value, n) => {
+          const inferred = fromJsonCorpus(Array(n).fill(value))
+          expect(inferred.shape).toEqual({ kind: "literal", value })
+        },
+      ),
+      { numRuns: 200 },
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 14. K=1 in arrays of objects
+// ---------------------------------------------------------------------------
+
+describe("adversarial: K=1 in arrays of objects", () => {
+  test("array of objects with one constant string field and one all-unique integer field", () => {
+    const samples = [
+      { status: "active", id: 1 },
+      { status: "active", id: 2 },
+      { status: "active", id: 3 },
+    ]
+    const inferred = fromJson(samples)
+    expect(inferred.shape.kind).toBe("array")
+    // fromJson (single-value, no corpus enum detection) should NOT collapse
+    // status to an enum/literal at all — that signal only exists in
+    // fromJsonCorpus. Confirm the two entry points disagree here.
+    const el = (inferred.shape as { element: TypeRef }).element
+    const fields = objectFields(el)
+    expect(fields.status!.shape.kind).toBe("string")
+
+    const corpusInferred = fromJsonCorpus(samples)
+    const corpusFields = objectFields(corpusInferred)
+    expect(corpusFields.status!.shape).toEqual({ kind: "enum", members: ["active"] })
+    expect(corpusFields.id!.shape.kind).not.toBe("enum")
+    expect(corpusFields.id!.shape.kind).not.toBe("union")
+    expect(corpusFields.id!.shape.kind).not.toBe("literal")
+    for (const s of samples) {
+      expect(inhabits(s, corpusInferred)).toBeNull()
+    }
+  })
+
+  test("property: constant field in array-of-objects always saturates, all-unique field never does", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 3, max: 40 }),
+        fc.stringMatching(/^[a-z]{2,8}$/),
+        (n, constValue) => {
+          const samples = Array.from({ length: n }, (_, i) => ({ tag: constValue, idx: i }))
+          const inferred = fromJsonCorpus(samples)
+          const fields = objectFields(inferred)
+          // tag: K=1 -> saturates (enum or literal depending on leaf kind)
+          expect(["enum", "literal"]).toContain(fields.tag!.shape.kind)
+          // idx: every value 0..n-1 is unique -> K===N -> conclusive non-enum
+          expect(fields.idx!.shape.kind).not.toBe("enum")
+          expect(fields.idx!.shape.kind).not.toBe("union")
+          expect(fields.idx!.shape.kind).not.toBe("literal")
+          for (const s of samples) {
+            const err = inhabits(s, inferred)
+            if (err !== null) {
+              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            }
+          }
+        },
+      ),
+      { numRuns: 300 },
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 15. Boundary between enum and not-enum
+//
+// `looksLikeEnum` (from-json-corpus.ts:319-339):
+//   K===1                          -> enum (always)
+//   K>=N                           -> not enum (always)
+//   K>50                           -> not enum (always)
+//   ratio = K/N; ratio >= 0.5      -> not saturated -> not enum
+//   ratio <= 1/3                   -> strongly repetitive -> enum
+//   1/3 < ratio < 0.5              -> borderline: needs integer clustering
+//                                      corroboration; STRINGS HAVE NO
+//                                      CLUSTERING SIGNAL AVAILABLE (the
+//                                      string branch calls looksLikeEnum
+//                                      without sortedValues), so borderline
+//                                      string ratios can never become enum.
+//
+// Verified empirically against the current implementation.
+// ---------------------------------------------------------------------------
+
+describe("adversarial: enum/non-enum boundary thresholds", () => {
+  function makeStringField(members: readonly string[], n: number): { tag: string }[] {
+    return Array.from({ length: n }, (_, i) => ({ tag: members[i % members.length]! }))
+  }
+
+  test("string field at exactly ratio=1/3 (K=3,N=9) IS enum — inclusive boundary", () => {
+    const samples = makeStringField(["a", "b", "c"], 9)
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] })
+  })
+
+  test("string field at ratio=3/8=0.375 (strictly between 1/3 and 1/2) is NOT enum — no clustering corroboration exists for strings", () => {
+    const samples = makeStringField(["a", "b", "c"], 8)
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.tag!.shape.kind).toBe("string")
+  })
+
+  test("string field at exactly ratio=1/2 (K=4,N=8) is NOT enum — saturation boundary is exclusive (ratio < 0.5, not <=)", () => {
+    const samples = makeStringField(["a", "b", "c", "d"], 8)
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.tag!.shape.kind).toBe("string")
+  })
+
+  test("string field at ratio=3/7≈0.4286 (borderline) is NOT enum", () => {
+    const samples = makeStringField(["a", "b", "c"], 7)
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.tag!.shape.kind).toBe("string")
+  })
+
+  test("enum that saturates for 20 samples then gets one never-before-seen value at the very end still covers every sample (existing regression, re-verified at the exact K/N boundary)", () => {
+    // 20 samples over {a,b,c} (K=3, N=20, ratio=0.15, strongly repetitive)
+    // then a 21st distinct value pushes K to 4, N to 21 (ratio≈0.19) — still
+    // strongly repetitive, so the heuristic should (and does) keep it enum.
+    const samples = [
+      ...makeStringField(["a", "b", "c"], 20),
+      { tag: "surprise" },
+    ]
+    const inferred = fromJsonCorpus(samples)
+    for (const s of samples) {
+      const err = inhabits(s, inferred)
+      if (err !== null) {
+        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+      }
+    }
+  })
+
+  test("property: string field crossing from strongly-repetitive to borderline-non-enum as N grows at fixed K always covers every sample, even when the shape flips", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 3, max: 6 }),
+        fc.integer({ min: 6, max: 40 }),
+        (k, n) => {
+          const members = Array.from({ length: k }, (_, i) => `m${i}`)
+          const samples = makeStringField(members, n)
+          const inferred = fromJsonCorpus(samples)
+          for (const s of samples) {
+            const err = inhabits(s, inferred)
+            if (err !== null) {
+              throw new Error(`${err}\n  K=${k} N=${n}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            }
+          }
+        },
+      ),
+      { numRuns: 300 },
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 16. Clustering signal interaction
+//
+// The clustering corroboration (from-json-corpus.ts:333-336) is:
+//   range = max(sortedValues) - min(sortedValues)
+//   K <= range / 2
+//
+// This is really just an "average gap is at least 2" check over the full
+// span — it does NOT distinguish a true bimodal cluster (e.g. two tight
+// groups far apart) from uniformly-spread values with the same overall
+// range and the same K. Verified empirically below: a genuinely clustered
+// sequence and a uniformly-spread sequence with matching range/K produce
+// the IDENTICAL enum result. Small-range dense sequences (e.g. 1..4, which
+// look like a bounded counter rather than an enum) correctly stay
+// non-enum, because K > range/2 there.
+// ---------------------------------------------------------------------------
+
+describe("adversarial: clustering signal interaction", () => {
+  function repeatToN<T>(base: readonly T[], n: number): T[] {
+    const out: T[] = []
+    while (out.length < n) out.push(...base)
+    return out.slice(0, n)
+  }
+
+  test("genuinely clustered integers at borderline K/N ratio (0.4) become an enum via clustering corroboration", () => {
+    const base = [100, 101, 102, 200, 201, 202] // two tight clusters, big gap between
+    const values = repeatToN(base, 15) // K=6, N=15, ratio=0.4
+    const samples = values.map((v) => ({ code: v }))
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.code!.shape.kind).toBe("union")
+  })
+
+  test("uniformly-spread integers with the SAME range and SAME K/N ratio as the clustered case above ALSO become an enum — the heuristic can't tell them apart", () => {
+    const base = [100, 120, 140, 160, 180, 200] // evenly spread, same range (100) as the clustered base
+    const values = repeatToN(base, 15) // K=6, N=15, ratio=0.4
+    const samples = values.map((v) => ({ code: v }))
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    // Same shape.kind as the "genuinely clustered" case: the average-gap
+    // check treats a real cluster and a uniform spread identically as long
+    // as range and K match. This is the adversarial finding: "clustering"
+    // corroboration is actually just a coarse range/K bound, not a test for
+    // an actual bimodal/clustered distribution.
+    expect(fields.code!.shape.kind).toBe("union")
+  })
+
+  test("dense small-range integers (1..4, borderline K/N=0.4) do NOT become enum — K exceeds range/2, so clustering corroboration correctly withholds enum status", () => {
+    const base = [1, 2, 3, 4] // range=3, K=4 -> K <= range/2 is 4 <= 1.5, false
+    const values = repeatToN(base, 10) // K=4, N=10, ratio=0.4
+    const samples = values.map((v) => ({ code: v }))
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.code!.shape.kind).not.toBe("union")
+    expect(fields.code!.shape.kind).not.toBe("enum")
+    expect(fields.code!.shape.kind).not.toBe("literal")
+  })
+
+  test("property: borderline-ratio integer fields (whether clustered, spread, or dense) always cover every sample in the corpus, regardless of which way the clustering signal falls", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom("clustered", "spread", "dense"),
+        fc.integer({ min: 10, max: 30 }),
+        (mode, n) => {
+          const base =
+            mode === "clustered" ? [100, 101, 102, 500, 501, 502] :
+            mode === "spread" ? [100, 180, 260, 340, 420, 500] :
+            [10, 11, 12, 13]
+          const values = repeatToN(base, n)
+          const samples = values.map((v) => ({ code: v }))
+          const inferred = fromJsonCorpus(samples)
+          for (const s of samples) {
+            const err = inhabits(s, inferred)
+            if (err !== null) {
+              throw new Error(`${err}\n  mode=${mode} n=${n}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            }
+          }
+        },
+      ),
+      { numRuns: 300 },
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 17. Enum detection with optional fields
+//
+// Regression coverage for the fix noted in section 12 above (meta,
+// including `optional`, must survive `walkAndDetectEnums` replacing a
+// field's TypeRef with `enum(...)`, `literal(...)`, or `union(...)`).
+// Exercised across all three enum-detection output shapes: string enum,
+// integer K=1 literal, and integer K>1 union-of-literals — each combined
+// with a field that's entirely absent from some samples (forcing
+// `meta.optional = true` upstream in `mergeObjectTypes`).
+// ---------------------------------------------------------------------------
+
+describe("adversarial: enum detection with optional fields", () => {
+  test("string field saturates to enum AND is optional (missing from one sample) — optional survives enum detection", () => {
+    const samples: { status?: string; other?: number }[] = [
+      ...Array.from({ length: 9 }, (_, i) => ({ status: i % 2 === 0 ? "active" : "inactive" })),
+      { other: 1 },
+    ]
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.status!.shape).toEqual({ kind: "enum", members: ["active", "inactive"] })
+    expect(fields.status!.meta.optional).toBe(true)
+    for (const s of samples) {
+      const err = inhabits(s, inferred)
+      if (err !== null) {
+        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+      }
+    }
+  })
+
+  test("integer field is K=1 constant AND optional (missing from one sample) — optional survives the literal collapse", () => {
+    const samples: { v?: number; other?: number }[] = [
+      { v: 5 }, { v: 5 }, { v: 5 }, { other: 1 },
+    ]
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.v!.shape).toEqual({ kind: "literal", value: 5 })
+    expect(fields.v!.meta.optional).toBe(true)
+    for (const s of samples) {
+      const err = inhabits(s, inferred)
+      if (err !== null) {
+        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+      }
+    }
+  })
+
+  test("integer field saturates to a K>1 union-of-literals enum AND is optional — optional survives the union collapse", () => {
+    const samples: { code?: number; other?: number }[] = [
+      ...Array.from({ length: 9 }, (_, i) => ({ code: i % 2 === 0 ? 1 : 2 })),
+      { other: 1 },
+    ]
+    const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.code!.shape.kind).toBe("union")
+    const variants = (fields.code!.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants.map((v) => (v.shape as { value: unknown }).value).sort()).toEqual([1, 2])
+    expect(fields.code!.meta.optional).toBe(true)
+    for (const s of samples) {
+      const err = inhabits(s, inferred)
+      if (err !== null) {
+        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+      }
+    }
+  })
+
+  test("nested optional enum field (2 levels deep) preserves both nullable/optional meta and enum shape", () => {
+    const samples: Record<string, unknown>[] = [
+      { a: { status: "active" } },
+      { a: { status: "inactive" } },
+      { a: { status: "active" } },
+      { a: {} }, // status missing here
+      { a: { status: "inactive" } },
+      { a: { status: "active" } },
+      { a: { status: "inactive" } },
+      { a: { status: "active" } },
+      { a: { status: "inactive" } },
+    ]
+    const inferred = fromJsonCorpus(samples)
+    const aFields = objectFields(objectFields(inferred).a!)
+    expect(aFields.status!.shape).toEqual({ kind: "enum", members: ["active", "inactive"] })
+    expect(aFields.status!.meta.optional).toBe(true)
+    for (const s of samples) {
+      const err = inhabits(s, inferred)
+      if (err !== null) {
+        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+      }
+    }
+  })
+
+  test("property: optional enum-shaped fields always cover every sample and always keep meta.optional=true", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom("a", "b", "c"), { minLength: 6, maxLength: 30 }),
+        fc.integer({ min: 0, max: 5 }),
+        (tagPool, missingCount) => {
+          const n = Math.max(tagPool.length, missingCount + 3)
+          const samples: { tag?: string }[] = Array.from({ length: n }, (_, i) =>
+            i < missingCount ? {} : { tag: tagPool[i % tagPool.length]! },
+          )
+          const inferred = fromJsonCorpus(samples)
+          const fields = objectFields(inferred)
+          if (missingCount > 0 && fields.tag !== undefined) {
+            expect(fields.tag.meta.optional).toBe(true)
+          }
+          for (const s of samples) {
+            const err = inhabits(s, inferred)
+            if (err !== null) {
+              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            }
+          }
+        },
+      ),
+      { numRuns: 300 },
+    )
+  })
+})
