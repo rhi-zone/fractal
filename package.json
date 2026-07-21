@@ -9,6 +9,7 @@
     "packages/http-api-projector",
     "packages/mcp-api-projector",
     "packages/cli-api-projector",
+    "packages/graphql-api-projector",
     "examples/library-api"
   ],
   "scripts": {

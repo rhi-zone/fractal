@@ -47,6 +47,10 @@
       "types": "./src/openapi20.ts",
       "import": "./src/openapi20.ts"
     },
+    "./graphql": {
+      "types": "./src/graphql.ts",
+      "import": "./src/graphql.ts"
+    },
     "./typescript": {
       "types": "./src/typescript.ts",
       "import": "./src/typescript.ts"
