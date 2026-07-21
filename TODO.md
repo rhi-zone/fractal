@@ -18,13 +18,17 @@ sections below for what landed and where.
 
 **Open items (quality & design depth, not blockers):**
 - **Root tsconfig investigation** — workspace root `tsconfig.json` still needs a full audit for strictness/consistency across packages. (A narrower, related fix landed this session — commit 2411e3a corrected stale `../core` path mappings to `../api-tree` in three projector tsconfigs — but that was a specific bug fix, not the broader audit.)
-- **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains); lower priority.
 
-**From design backlog:**
+**From design backlog (now fully complete):**
 - ~~**Extract improvements**~~ — DONE (2026-07-21)
   - Overloaded functions: extracted as intersection of call signatures; implementation signature confirmed excluded by TS compiler API
   - Generics: type parameters extract their constraint bounds (T extends X → X's shape); unconstrained → unknown
   - Async generators: new `stream` TypeRef kind; AsyncIterable/AsyncGenerator/AsyncIterableIterator detection in extract; all 20+ type-ir projectors updated
+- ~~**MCP sampling support**~~ — DONE (2026-07-21)
+  - `createMessage` exposed to tool handlers via stores.caller
+  - Opt-in via `CreateMcpServerOptions.sampling`
+  - Sampling is a client capability in the MCP spec, not server — documented
+  - Re-exports SDK types (`CreateMessageRequestParams`, `CreateMessageResult`, `SamplingMessage`) so consumers don't need direct SDK import
 
 **Open threads:**
 - **Input pipeline wiring** (CLI/MCP) — `api-tree/src/input.ts` has core `assemble()`, but CLI and MCP still have own implementations. CLI needs stores (env, config, stdin); MCP needs (argument, uri-variable, session context). _Note: low priority — works as-is; consolidation is a quality improvement, not a blocker._
