@@ -45,5 +45,12 @@ export type {
 export { createClient, createClientFromRoute } from "./client.ts"
 export type { AnyClient, ClientOptions } from "./client.ts"
 export { ClientError } from "./client-error.ts"
-export { createFetch } from "./preset.ts"
-export type { CorsOptions, Fetch, HttpHandlerMiddleware, PresetOptions } from "./preset.ts"
+export { createFetch, httpErrors } from "./preset.ts"
+export type {
+  CorsOptions,
+  Fetch,
+  HttpErrorEncoder,
+  HttpErrorResponse,
+  HttpHandlerMiddleware,
+  PresetOptions,
+} from "./preset.ts"

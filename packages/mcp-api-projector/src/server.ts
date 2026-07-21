@@ -65,8 +65,8 @@ import type {
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { assemble, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with MCP's store names — see
 // http-api-projector/src/decode.ts for the matching augmentation and its doc.
@@ -422,6 +422,55 @@ async function collectStreamedMessages(
 }
 
 // ============================================================================
+// Structured error types — composable error-to-transport mapping
+//
+// A handler's `Result.err(E)` value is transport-agnostic (e.g.
+// `{ kind: "notFound", message: "Book not found" }`). `errorEncoder`
+// (`CreateMcpServerOptions.errorEncoder`) maps `E` to an `McpErrorResponse`
+// (error code + message) — mirrors HTTP's `HttpErrorEncoder`
+// (packages/http-api-projector/src/route.ts) and CLI's `CliErrorEncoder`
+// (packages/cli-api-projector/src/cli.ts). Returning `undefined` (including
+// when `errorEncoder` itself is omitted) falls back to the existing default:
+// an `isError` tool result with `Invalid input for tool "<name>": <JSON>`.
+// ============================================================================
+
+/** An error encoder's MCP-specific target shape — error code + message. */
+export type McpErrorResponse = {
+  readonly code: number
+  readonly message: string
+}
+
+/** `ErrorEncoder<E, McpErrorResponse>` — maps a handler's error value to an MCP error code/message. */
+export type McpErrorEncoder<E = unknown> = ErrorEncoder<E, McpErrorResponse>
+
+/**
+ * Pre-built `McpErrorEncoder`: maps error `kind` values to MCP error codes,
+ * e.g. `mcpErrors({ notFound: ErrorCode.InvalidParams })`. The response
+ * message defaults to the error value's own `JSON.stringify`, matching the
+ * existing default error text. Internally a `composeErrorEncoders` over one
+ * `matchKind` per mapping entry — first match wins (object key order).
+ */
+export function mcpErrors<E = unknown>(mapping: Record<string, number>): McpErrorEncoder<E> {
+  const encoders = Object.entries(mapping).map(([kind, code]) =>
+    matchKind<number>(kind, code),
+  )
+  const composed = composeErrorEncoders(...encoders)
+  return (error) => {
+    const code = composed(error)
+    if (code === undefined) return undefined
+    return { code, message: JSON.stringify(error) }
+  }
+}
+
+/** Render an `McpErrorResponse` as a `CallToolResult`'s error content, for a named tool. */
+function encodeToolError(name: string, response: McpErrorResponse): CallToolResult {
+  return {
+    isError: true,
+    content: [{ type: "text", text: `Error ${response.code} for tool "${name}": ${response.message}` }],
+  }
+}
+
+// ============================================================================
 // Input assembly — shared pipeline (packages/api-tree/src/input.ts)
 // ============================================================================
 
@@ -618,6 +667,21 @@ export type CreateMcpServerOptions<T = unknown> = {
    * `CliOpts.detection`.
    */
   readonly detection?: DetectionOptions
+  /**
+   * Maps a tool handler's `Result.err(E)` error value to an
+   * `McpErrorResponse` (error code + message) — see
+   * `McpErrorEncoder`/`mcpErrors` above. Called when `detection.result` is
+   * on (default `true`) and a tool handler returns `{kind:"err", error}`.
+   * Returning `undefined` (including when `errorEncoder` itself is omitted)
+   * falls back to the existing default: an `isError` tool result with
+   * `Invalid input for tool "<name>": <JSON>`. Compose several encoders with
+   * `composeErrorEncoders` (`@rhi-zone/fractal-api-tree`) — first match
+   * wins. Tools only, matching how `detection.result` itself only unwraps
+   * `Result` for tools, not resources/prompts. Mirrors HTTP's
+   * `PresetOptions.errorEncoder` (`packages/http-api-projector/src/preset.ts`)
+   * and CLI's `CliOpts.errorEncoder` (`packages/cli-api-projector/src/cli.ts`).
+   */
+  readonly errorEncoder?: McpErrorEncoder
 }
 
 /**
@@ -769,6 +833,8 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       // regardless of validator wiring.
       if (detectResult && isResultShape(result)) {
         if (result.kind === "err") {
+          const encoded = opts.errorEncoder?.(result.error)
+          if (encoded !== undefined) return encodeToolError(name, encoded)
           return {
             isError: true,
             content: [

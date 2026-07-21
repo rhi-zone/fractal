@@ -48,7 +48,7 @@ import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 import { makeRouterFromRoute } from "./route.ts"
-import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
+import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import { httpProjection } from "./dx.ts"
 import type { HttpProjectionOptions } from "./dx.ts"
 import { withALS } from "./compile.ts"
@@ -59,7 +59,8 @@ import { toOpenApiFromRoute } from "./openapi.ts"
 import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts"
 
 export type { CorsOptions, Fetch }
-export type { HttpHandlerMiddleware } from "./route.ts"
+export type { HttpErrorEncoder, HttpErrorResponse, HttpHandlerMiddleware } from "./route.ts"
+export { httpErrors } from "./route.ts"
 export type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 
 /** `PresetOptions.openapi` object form — `OpenApiOpts` plus the mount path. */
@@ -123,6 +124,7 @@ export type PresetOptions<T = unknown> = {
     route: HttpRoute,
     handlerMiddleware?: readonly HttpHandlerMiddleware[],
     detection?: DetectionOptions,
+    errorEncoder?: HttpErrorEncoder,
   ) => CompiledRouter
   /**
    * Wrap the compiled router so every request runs inside its own
@@ -180,6 +182,19 @@ export type PresetOptions<T = unknown> = {
    * built-in compiler in compile.ts accepts it as a third argument).
    */
   readonly detection?: DetectionOptions
+  /**
+   * Maps a handler's `Result.err(E)` error value to an `HttpErrorResponse`
+   * (status + optional body/headers) — see `HttpErrorEncoder`/`httpErrors`
+   * (route.ts). Called from `runRoute` when `detection.result` is on
+   * (default `true`) and a handler returns `{kind:"err", error}`. Returning
+   * `undefined` (including when `errorEncoder` itself is omitted) falls back
+   * to the existing default: a 400 JSON response wrapping `{ error }`.
+   * Compose several encoders with `composeErrorEncoders`
+   * (`@rhi-zone/fractal-api-tree`) — first match wins. Threaded through to
+   * whichever router compiler `opts.router` resolves to (every built-in
+   * compiler in compile.ts accepts it as a fourth argument).
+   */
+  readonly errorEncoder?: HttpErrorEncoder
   /**
    * Auto-serve a generated OpenAPI 3.1 document — OpenAPI only ever
    * describes HTTP APIs, so `createFetch` mounts it with zero extra setup.
@@ -255,7 +270,7 @@ export function createFetch<T = unknown>(
   for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
 
   const compileRouter = opts.router ?? makeRouterFromRoute
-  const router = compileRouter(routes, opts.handlerMiddleware, opts.detection)
+  const router = compileRouter(routes, opts.handlerMiddleware, opts.detection, opts.errorEncoder)
 
   const withContext =
     opts.als !== undefined ? withALS(router, opts.als.storage, opts.als.init) : router

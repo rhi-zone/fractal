@@ -3,5 +3,14 @@
 // CLI projection for the function-core tree.
 // Exports runCli, CliIO, CliMeta, CliOpts, walkCliCommands, CliCommandEntry, getCliMeta.
 
-export type { CliAlsContext, CliIO, CliMeta, CliMiddleware, CliOpts, CliCommandEntry } from "./cli.ts"
-export { getCliMeta, runCli, walkCliCommands } from "./cli.ts"
+export type {
+  CliAlsContext,
+  CliErrorEncoder,
+  CliErrorResponse,
+  CliIO,
+  CliMeta,
+  CliMiddleware,
+  CliOpts,
+  CliCommandEntry,
+} from "./cli.ts"
+export { cliErrors, getCliMeta, runCli, walkCliCommands } from "./cli.ts"

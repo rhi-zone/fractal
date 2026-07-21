@@ -36,8 +36,8 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, Stores } from "@rhi-zone/fractal-api-tree"
+import { composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, Stores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { httpStores, primaryStoreForMethod, assemble, parseRequestBody } from "./decode.ts"
 import type { SourceMap } from "./decode.ts"
@@ -858,6 +858,54 @@ function defaultEncodeError(error: unknown): Response {
 }
 
 // ============================================================================
+// Structured error types — composable error-to-transport mapping
+//
+// A handler's `Result.err(E)` value is transport-agnostic (e.g.
+// `{ kind: "notFound", message: "Book not found" }`). `errorEncoder` (see
+// `PresetOptions.errorEncoder`/`runRoute`'s parameter below) maps `E` to an
+// `HttpErrorResponse`; `undefined` means "not recognized," which falls back
+// to `defaultEncodeError`'s 400. See docs/design/middleware-and-caller-context.md.
+// ============================================================================
+
+/** An error encoder's HTTP-specific target shape — status + optional body/headers. */
+export type HttpErrorResponse = {
+  readonly status: number
+  readonly body?: unknown
+  readonly headers?: Record<string, string>
+}
+
+/** `ErrorEncoder<E, HttpErrorResponse>` — maps a handler's error value to an HTTP response. */
+export type HttpErrorEncoder<E = unknown> = ErrorEncoder<E, HttpErrorResponse>
+
+/**
+ * Pre-built `HttpErrorEncoder`: maps error `kind` values to HTTP status
+ * codes, e.g. `httpErrors({ notFound: 404, conflict: 409, forbidden: 403 })`.
+ * Internally a `composeErrorEncoders` over one `matchKind` per mapping entry
+ * — first match wins (object key order). The response body defaults to the
+ * error value itself, matching `defaultEncodeError`'s `{ error }` wrapping
+ * shape isn't reused here since the status is already known; instead the raw
+ * error is sent as the body directly.
+ */
+export function httpErrors<E = unknown>(mapping: Record<string, number>): HttpErrorEncoder<E> {
+  const encoders = Object.entries(mapping).map(([kind, status]) =>
+    matchKind<HttpErrorResponse>(kind, { status }),
+  )
+  const composed = composeErrorEncoders(...encoders)
+  return (error) => {
+    const matched = composed(error)
+    if (matched === undefined) return undefined
+    return { status: matched.status, body: error }
+  }
+}
+
+/** Encode an `HttpErrorResponse` into a `Response`. */
+function encodeHttpError(response: HttpErrorResponse): Response {
+  const init: ResponseInit = { status: response.status }
+  if (response.headers !== undefined) init.headers = response.headers
+  return jsonRouteResponse(response.body, init)
+}
+
+// ============================================================================
 // Handler-level middleware — around-hooks wrapping the handler call itself,
 // distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/
 // preset.ts (`PresetOptions.middleware`). Mirrors CliMiddleware
@@ -924,6 +972,7 @@ export async function runRoute(
   slugs: Readonly<Record<string, string>>,
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
+  errorEncoder?: HttpErrorEncoder,
 ): Promise<Response> {
   const detectStreaming = detection?.streaming ?? true
   const detectResult = detection?.result ?? true
@@ -966,7 +1015,10 @@ export async function runRoute(
     // — to avoid false-positives on user data that happens to have a `kind`
     // field with an unrelated value.
     if (detectResult && isResultShape(output)) {
-      if (output.kind === "err") return defaultEncodeError(output.error)
+      if (output.kind === "err") {
+        const encoded = errorEncoder?.(output.error)
+        return encoded !== undefined ? encodeHttpError(encoded) : defaultEncodeError(output.error)
+      }
       output = output.value
     }
 
@@ -982,12 +1034,13 @@ export function makeRouterFromRoute(
   root: HttpRoute,
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
+  errorEncoder?: HttpErrorEncoder,
 ): (req: Request) => Promise<Response> {
   return async (req) => {
     const segs = splitPath(new URL(req.url).pathname)
     const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware, detection)
+    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware, detection, errorEncoder)
   }
 }

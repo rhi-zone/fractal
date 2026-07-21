@@ -207,6 +207,63 @@ export function isStreamChunk(value: unknown): value is StreamChunk {
 }
 
 // ============================================================================
+// ErrorEncoder<E, R> — composable error-to-transport mapping
+// ============================================================================
+
+/**
+ * Maps a transport-agnostic error value `E` (the `E` in `Result<T, E>`,
+ * e.g. `{ kind: "notFound", message: "Book not found" }` — no transport
+ * concepts baked in) to a transport-specific response `R` (HTTP status,
+ * CLI exit code, MCP error code — see each projector's own
+ * `HttpErrorEncoder`/`CliErrorEncoder`/`McpErrorEncoder`). Returns
+ * `undefined` when this encoder doesn't recognize `error`, signaling the
+ * caller to fall through to the next encoder (`composeErrorEncoders`) or the
+ * projector's own default behavior.
+ */
+export type ErrorEncoder<E, R> = (error: E) => R | undefined
+
+/**
+ * Compose several `ErrorEncoder`s into one: tries each in order, returning
+ * the first defined result. `undefined` when none matched — the signal for
+ * a projector to fall back to its own default error response. The building
+ * block every projector's `httpErrors`/`cliErrors`/`mcpErrors` helper
+ * assembles internally from per-kind `matchKind` calls.
+ */
+export function composeErrorEncoders<E, R>(
+  ...encoders: ErrorEncoder<E, R>[]
+): (error: E) => R | undefined {
+  return (error) => {
+    for (const encoder of encoders) {
+      const result = encoder(error)
+      if (result !== undefined) return result
+    }
+    return undefined
+  }
+}
+
+/**
+ * Matches an error carrying a `kind` field (the open-DU convention this
+ * codebase already uses for `Result`/`StreamEffect`/tree meta) equal to
+ * `kind`, returning `response` on a match and `undefined` otherwise. `error`
+ * is typed `unknown` — an `ErrorEncoder<unknown, R>` composes with any `E`
+ * via `composeErrorEncoders`, since the match is a runtime shape check, not
+ * a static narrowing of a specific error union.
+ */
+export function matchKind<R>(kind: string, response: R): ErrorEncoder<unknown, R> {
+  return (error) => {
+    if (
+      error !== null &&
+      typeof error === "object" &&
+      "kind" in error &&
+      (error as { kind: unknown }).kind === kind
+    ) {
+      return response
+    }
+    return undefined
+  }
+}
+
+// ============================================================================
 // Derived combinators — Kleisli + applicative. NEVER the base.
 // ============================================================================
 

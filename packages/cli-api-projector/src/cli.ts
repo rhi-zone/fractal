@@ -50,8 +50,8 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import { assemble, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with CLI's store names — see
 // http-api-projector/src/decode.ts for the matching augmentation and its doc.
@@ -86,6 +86,54 @@ export class CliError extends Error {
     super(message)
     this.name = "CliError"
     this.exitCode = exitCode
+  }
+}
+
+// ============================================================================
+// Structured error types — composable error-to-transport mapping
+//
+// A handler's `Result.err(E)` value is transport-agnostic (e.g.
+// `{ kind: "notFound", message: "Book not found" }`). `CliOpts.errorEncoder`
+// maps `E` to a `CliErrorResponse` (exit code + message) — mirrors HTTP's
+// `HttpErrorEncoder` (packages/http-api-projector/src/route.ts) and MCP's
+// `McpErrorEncoder` (packages/mcp-api-projector/src/server.ts). Returning
+// `undefined` (including when `errorEncoder` itself is omitted) falls back
+// to the existing default: exit 1, `Error: ${JSON.stringify(error)}`.
+// ============================================================================
+
+/** An error encoder's CLI-specific target shape — exit code + message. */
+export type CliErrorResponse = {
+  readonly exitCode: number
+  readonly message: string
+}
+
+/** `ErrorEncoder<E, CliErrorResponse>` — maps a handler's error value to a CLI exit/message. */
+export type CliErrorEncoder<E = unknown> = ErrorEncoder<E, CliErrorResponse>
+
+/**
+ * Pre-built `CliErrorEncoder`: maps error `kind` values to an exit code
+ * and/or message, e.g. `cliErrors({ notFound: { exit: 2, message: "not
+ * found" } })`. `exit` defaults to `1` (the existing default exit code) and
+ * `message` defaults to `Error: ${JSON.stringify(error)}` (the existing
+ * default message) when omitted for a matched kind — so a mapping entry can
+ * override just the exit code, just the message, or both. Internally a
+ * `composeErrorEncoders` over one `matchKind` per mapping entry — first
+ * match wins (object key order).
+ */
+export function cliErrors<E = unknown>(
+  mapping: Record<string, { exit?: number; message?: string }>,
+): CliErrorEncoder<E> {
+  const encoders = Object.entries(mapping).map(([kind, override]) =>
+    matchKind<{ exit?: number; message?: string }>(kind, override),
+  )
+  const composed = composeErrorEncoders(...encoders)
+  return (error) => {
+    const matched = composed(error)
+    if (matched === undefined) return undefined
+    return {
+      exitCode: matched.exit ?? 1,
+      message: matched.message ?? `Error: ${JSON.stringify(error)}`,
+    }
   }
 }
 
@@ -188,6 +236,20 @@ export type CliOpts<T = unknown> = {
    * `CreateMcpServerOptions.detection`.
    */
   readonly detection?: DetectionOptions
+  /**
+   * Maps a handler's `Result.err(E)` error value to a `CliErrorResponse`
+   * (exit code + message) — see `CliErrorEncoder`/`cliErrors` above. Called
+   * from `runCli` when `detection.result` is on (default `true`) and a
+   * handler returns `{kind:"err", error}`. Returning `undefined` (including
+   * when `errorEncoder` itself is omitted) falls back to the existing
+   * default: exit 1, `Error: ${JSON.stringify(error)}`. Compose several
+   * encoders with `composeErrorEncoders` (`@rhi-zone/fractal-api-tree`) —
+   * first match wins. Mirrors HTTP's `PresetOptions.errorEncoder`
+   * (`packages/http-api-projector/src/preset.ts`) and MCP's
+   * `CreateMcpServerOptions.errorEncoder`
+   * (`packages/mcp-api-projector/src/server.ts`).
+   */
+  readonly errorEncoder?: CliErrorEncoder
 }
 
 // ============================================================================
@@ -1093,9 +1155,11 @@ export async function runCli<T = unknown>(
   // treated the same way regardless of validator wiring.
   if (detectResult && isResultShape(result)) {
     if (result.kind === "err") {
-      const msg = `Error: ${JSON.stringify(result.error)}`
+      const encoded = opts.errorEncoder?.(result.error)
+      const msg = encoded?.message ?? `Error: ${JSON.stringify(result.error)}`
+      const exitCode = encoded?.exitCode ?? 1
       ioResolved.stderr.write(`${msg}\n`)
-      throw new CliError(msg, 1)
+      throw new CliError(msg, exitCode)
     }
     result = result.value
   }
