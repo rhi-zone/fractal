@@ -5,6 +5,7 @@ import {
   date,
   datetime,
   duration,
+  email,
   float32,
   float64,
   int32,
@@ -48,6 +49,7 @@ describe("string subtypes", () => {
   const cases: Record<string, () => ReturnType<typeof t>> = {
     uuid: () => uuid(),
     uri: () => uri(),
+    email: () => email(),
     time: () => time(),
     duration: () => duration(),
   }

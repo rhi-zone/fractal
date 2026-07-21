@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toJsonSchema07 } from "./json-schema-07.ts"
 
 describe("draft-07 differences", () => {
@@ -63,6 +63,10 @@ describe("shared: formatted types", () => {
 
   test("uri", () => {
     expect(toJsonSchema07(uri())).toEqual({ type: "string", format: "uri" })
+  })
+
+  test("email", () => {
+    expect(toJsonSchema07(email())).toEqual({ type: "string", format: "email" })
   })
 
   test("int32", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toTypeBox, toTypeBoxDeclaration, toTypeBoxDeclarations } from "./typebox.ts"
 
 describe("leaf types", () => {
@@ -66,6 +66,9 @@ describe("formatted types", () => {
     expect(toTypeBox(uri())).toBe('Type.String({ format: "uri" })')
   })
 
+  test("email", () => {
+    expect(toTypeBox(email())).toBe('Type.String({ format: "email" })')
+  })
 })
 
 describe("temporal types", () => {

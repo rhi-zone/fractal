@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toEffectSchema, toEffectSchemaDeclaration, toEffectSchemaDeclarations } from "./effect-schema.ts"
 
 describe("leaf types", () => {
@@ -64,6 +64,10 @@ describe("formatted types", () => {
 
   test("uri", () => {
     expect(toEffectSchema(uri())).toBe("S.String")
+  })
+
+  test("email", () => {
+    expect(toEffectSchema(email())).toBe("S.String")
   })
 })
 

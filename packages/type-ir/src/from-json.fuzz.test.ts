@@ -11,7 +11,7 @@ import { t, types, ancestors, type TypeRef } from "./index.ts"
 import {
   int8, int16, int32, int64,
   uint8, uint16, uint32, uint64,
-  date, datetime, uuid, uri,
+  date, datetime, email, uuid, uri,
 } from "./kinds/common.ts"
 import { fromJson } from "./from-json.ts"
 
@@ -51,7 +51,7 @@ const arbIntWidth: fc.Arbitrary<TypeRef> = fc.constantFrom(
 )
 
 const arbStringFormat: fc.Arbitrary<TypeRef> = fc.constantFrom(
-  date(), datetime(), uuid(), uri(), t(types.string, { format: "email" }),
+  date(), datetime(), uuid(), uri(), email(),
 )
 
 const arbEnum: fc.Arbitrary<TypeRef> = fc.array(
@@ -182,7 +182,7 @@ function arbPlainString(): fc.Arbitrary<string> {
 }
 
 function arbValueForType(ref: TypeRef): fc.Arbitrary<unknown> {
-  const { shape, meta } = ref
+  const { shape } = ref
   switch (shape.kind) {
     case "null":
       return fc.constant(null)
@@ -202,7 +202,6 @@ function arbValueForType(ref: TypeRef): fc.Arbitrary<unknown> {
       return fc.integer({ min: -1000, max: 1000 })
 
     case "string":
-      if (meta.format === "email") return arbEmail()
       return arbPlainString()
 
     // Integer widths — generate within exact range
@@ -220,6 +219,7 @@ function arbValueForType(ref: TypeRef): fc.Arbitrary<unknown> {
     case "datetime": return arbDatetime()
     case "uuid":     return arbUuid()
     case "uri":      return arbUri()
+    case "email":    return arbEmail()
 
     case "object": {
       const fields = (shape as { kind: "object"; fields: Record<string, TypeRef> }).fields

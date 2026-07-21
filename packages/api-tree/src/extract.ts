@@ -29,6 +29,7 @@
 import ts from "typescript"
 import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir"
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
+import { email, uri, uuid } from "@rhi-zone/fractal-type-ir/kinds/common"
 
 // ============================================================================
 // JSON-Schema value (structural subset we emit)
@@ -247,6 +248,36 @@ function propertyDefaultOf(prop: ts.Symbol, checker: ts.TypeChecker): string | n
 const BRAND_PROP_NAMES = ["__brand", "__tag", "_brand", "_tag"]
 
 /**
+ * Brand names (matched case-insensitively — `"UUID"`/`"Uuid"`/`"uuid"` all
+ * hit the same entry) that promote to a real IR kind instead of degrading to
+ * `t(types.string, { brand: "..." })`. See `promoteBrand` below and
+ * type-ir's `kinds/semantic-strings.ts` (source of the canonical
+ * `Uuid`/`Uri`/`Email` brand types a consumer authors against).
+ */
+const BRAND_KIND_CTORS: Record<string, (meta?: Record<string, unknown>) => TypeRef> = {
+  uuid,
+  uri,
+  email,
+}
+
+/**
+ * Promote a recognized brand to its IR kind, e.g. `string & { __brand: "uuid" }`
+ * → `types.uuid` instead of `t(types.string, { brand: "uuid" })`. Only
+ * applies when the base shape is `string` — every current brand-promotable
+ * kind (uuid/uri/email) subtypes `string`, so a brand recognized over a
+ * non-string base (a mismatched or unrelated tag reuse) is left as an
+ * ordinary `meta.brand` annotation on its own base shape, never coerced.
+ * Returns `undefined` for an unrecognized brand name, letting the caller
+ * fall through to the plain `meta.brand` behavior.
+ */
+function promoteBrand(baseRef: TypeRef, brandValue: string): TypeRef | undefined {
+  if (baseRef.shape.kind !== "string") return undefined
+  const ctor = BRAND_KIND_CTORS[brandValue.toLowerCase()]
+  if (!ctor) return undefined
+  return ctor(baseRef.meta)
+}
+
+/**
  * Derive a brand name from a `unique symbol`-keyed brand property, e.g.
  * `declare const LocationIdBrand: unique symbol; type LocationId = string &
  * { readonly [LocationIdBrand]: never }`.
@@ -331,7 +362,7 @@ function brandFromIntersection(
 
       const nextSeen = new Set(seen).add(type)
       const baseRef = typeRefFromType(base, checker, loc, nextSeen)
-      return t(baseRef.shape, { ...baseRef.meta, brand: brandValue })
+      return promoteBrand(baseRef, brandValue) ?? t(baseRef.shape, { ...baseRef.meta, brand: brandValue })
     }
   }
 
@@ -520,10 +551,15 @@ export function typeRefFromType(
   // `type LocationId = string & { readonly __brand: "LocationId" }` compiles to
   // an IntersectionType of a primitive constituent and an object constituent
   // whose sole property is a brand tag (`__brand`/`__tag`/`_brand`/`_tag`, or a
-  // unique symbol key). When recognized, lower to the primitive's TypeRef with
-  // `meta.brand` set to the tag's literal string value — an open-metadata-bag
-  // annotation (see CLAUDE.md: open metadata over fixed schema) that
-  // brand-aware projectors (zod, typescript, valibot) read and others ignore.
+  // unique symbol key). When recognized, and the brand name (case-insensitively)
+  // matches a known semantic-string kind (`uuid`/`uri`/`email` — see
+  // `promoteBrand`/`BRAND_KIND_CTORS` above and type-ir's
+  // `kinds/semantic-strings.ts`), lower directly to that kind (`types.uuid`/
+  // `types.uri`/`types.email`) instead of the primitive. Any other brand name
+  // lowers to the primitive's TypeRef with `meta.brand` set to the tag's
+  // literal string value — an open-metadata-bag annotation (see CLAUDE.md:
+  // open metadata over fixed schema) that brand-aware projectors (zod,
+  // typescript, valibot) read and others ignore.
   //
   // Anything else intersecting is a genuine structural intersection — the
   // mixin pattern (`HasId & HasTimestamps & UserFields`). Each constituent is

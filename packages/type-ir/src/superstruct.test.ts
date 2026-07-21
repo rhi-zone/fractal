@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toSuperstruct, toSuperstructDeclaration, toSuperstructDeclarations } from "./superstruct.ts"
 
 describe("leaf types", () => {
@@ -66,6 +66,9 @@ describe("formatted types", () => {
     expect(toSuperstruct(uri())).toBe("s.string() /* uri */")
   })
 
+  test("email falls back to string with comment", () => {
+    expect(toSuperstruct(email())).toBe("s.string() /* email */")
+  })
 })
 
 describe("temporal types", () => {

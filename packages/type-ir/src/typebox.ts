@@ -68,6 +68,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("Type.String"),
   uuid: leaf("Type.String", [["format", '"uuid"']]),
   uri: leaf("Type.String", [["format", '"uri"']]),
+  email: leaf("Type.String", [["format", '"email"']]),
   // https://github.com/sinclairzx81/typebox#Date — Type.Date() validates a
   // native `Date` instance (`static: Date`), matching type-ir's
   // datetime/date domain type (see kinds/date-time.ts).

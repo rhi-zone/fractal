@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toArkType, toArkTypeDeclaration, toArkTypeDeclarations } from "./arktype.ts"
 
 describe("leaf types", () => {
@@ -64,6 +64,10 @@ describe("formatted types", () => {
 
   test("uri", () => {
     expect(toArkType(uri())).toBe('type("string")')
+  })
+
+  test("email", () => {
+    expect(toArkType(email())).toBe('type("string")')
   })
 })
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { fromJsonSchema } from "./from-json-schema.ts"
 import { toJsonSchema } from "./json-schema.ts"
 
@@ -61,6 +61,10 @@ describe("formatted types", () => {
 
   test("uri", () => {
     expect(fromJsonSchema({ type: "string", format: "uri" })).toEqual(uri())
+  })
+
+  test("email", () => {
+    expect(fromJsonSchema({ type: "string", format: "email" })).toEqual(email())
   })
 })
 
@@ -318,7 +322,7 @@ describe("metadata passthrough", () => {
 
 describe("unrecognized format fallback", () => {
   test("string format with no known constructor falls back to base type + meta.format", () => {
-    expect(fromJsonSchema({ type: "string", format: "email" })).toEqual(t(types.string, { format: "email" }))
+    expect(fromJsonSchema({ type: "string", format: "ipv4" })).toEqual(t(types.string, { format: "ipv4" }))
   })
 })
 
@@ -352,6 +356,7 @@ describe("round-trip: fromJsonSchema(toJsonSchema(ref))", () => {
     expect(fromJsonSchema(toJsonSchema(float64()))).toEqual(float64())
     expect(fromJsonSchema(toJsonSchema(uuid()))).toEqual(uuid())
     expect(fromJsonSchema(toJsonSchema(uri()))).toEqual(uri())
+    expect(fromJsonSchema(toJsonSchema(email()))).toEqual(email())
     expect(fromJsonSchema(toJsonSchema(datetime()))).toEqual(datetime())
     expect(fromJsonSchema(toJsonSchema(date()))).toEqual(date())
     expect(fromJsonSchema(toJsonSchema(time()))).toEqual(time())

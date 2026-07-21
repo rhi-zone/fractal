@@ -11,6 +11,10 @@ describe("ancestors", () => {
     expect(ancestors("uuid")).toEqual(["string"])
   })
 
+  test("walks email -> string", () => {
+    expect(ancestors("email")).toEqual(["string"])
+  })
+
   test("root type has no ancestors", () => {
     expect(ancestors("boolean")).toEqual([])
   })

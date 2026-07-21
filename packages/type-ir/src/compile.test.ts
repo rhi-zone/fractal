@@ -19,7 +19,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "bun:test"
 import { compileValidator, compileValidatorModule, type ValidationError } from "./compile.ts"
 import { t, types } from "./index.ts"
-import { bytes, date, datetime, duration, int32, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, int32, time, uri, uuid } from "./kinds/common.ts"
 import { int64 } from "./kinds/int-widths.ts"
 
 type Triple = {
@@ -172,10 +172,12 @@ describe("compileValidator — leaf kinds", () => {
     expect(v.parse(null)).toEqual({ kind: "ok", value: null })
   })
 
-  it("semantic string kinds (uuid/uri/time/duration/bytes)", () => {
+  it("semantic string kinds (uuid/uri/email/time/duration/bytes)", () => {
     expect(evalValidator(compileValidator(uuid())).check("550e8400-e29b-41d4-a716-446655440000")).toBe(true)
     expect(evalValidator(compileValidator(uuid())).check("not-a-uuid")).toBe(false)
     expect(evalValidator(compileValidator(uri())).check("https://example.com")).toBe(true)
+    expect(evalValidator(compileValidator(email())).check("user@example.com")).toBe(true)
+    expect(evalValidator(compileValidator(email())).check("not-an-email")).toBe(false)
     expect(evalValidator(compileValidator(time())).check("12:30:00")).toBe(true)
     expect(evalValidator(compileValidator(duration())).check("P1DT2H")).toBe(true)
     expect(evalValidator(compileValidator(bytes())).check("aGVsbG8=")).toBe(true)

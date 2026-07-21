@@ -70,6 +70,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("S.String"),
   uuid: leaf("S.UUID"),
   uri: leaf("S.String"),
+  email: leaf("S.String"),
   datetime: leaf("S.DateFromString"),
   date: leaf("S.DateFromString"),
   time: leaf("S.String"),

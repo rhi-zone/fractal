@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { columnDef, toCreateTable, toSqlDdl } from "./sql.ts"
 
 describe("leaf types (postgres)", () => {
@@ -42,6 +42,10 @@ describe("leaf types (postgres)", () => {
 
   test("uri", () => {
     expect(toSqlDdl(uri())).toEqual({ type: "TEXT", nullable: false })
+  })
+
+  test("email", () => {
+    expect(toSqlDdl(email())).toEqual({ type: "TEXT", nullable: false })
   })
 
   test("datetime", () => {

@@ -4,6 +4,7 @@ import {
   date,
   datetime,
   duration,
+  email,
   float32,
   float64,
   int32,
@@ -59,6 +60,7 @@ function isNullSchema(schema: JsonSchema): boolean {
 const stringFormats: Record<string, () => TypeRef> = {
   uuid: () => uuid(),
   uri: () => uri(),
+  email: () => email(),
   "date-time": () => datetime(),
   date: () => date(),
   time: () => time(),

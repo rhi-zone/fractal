@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { renderCapnp, toCapnpInterface, toCapnpStruct, toCapnpType } from "./capnp.ts"
 
 describe("leaf types", () => {
@@ -32,6 +32,10 @@ describe("string subtypes fall back to Text", () => {
 
   test("uri", () => {
     expect(toCapnpType(uri())).toBe("Text")
+  })
+
+  test("email", () => {
+    expect(toCapnpType(email())).toBe("Text")
   })
 
   test("time", () => {

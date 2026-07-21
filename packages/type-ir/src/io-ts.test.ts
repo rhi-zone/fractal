@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toIoTs, toIoTsDeclaration, toIoTsDeclarations } from "./io-ts.ts"
 
 describe("leaf types", () => {
@@ -62,6 +62,10 @@ describe("string subtypes fall back to t.string with a comment", () => {
 
   test("uri", () => {
     expect(toIoTs(uri())).toBe("t.string /* uri */")
+  })
+
+  test("email", () => {
+    expect(toIoTs(email())).toBe("t.string /* email */")
   })
 
   test("datetime", () => {

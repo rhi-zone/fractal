@@ -209,6 +209,7 @@ type CheckHandler = (ref: TypeRef, v: string, ctx: GenCtx) => string
 const FORMAT_PATTERNS: Record<string, string> = {
   uuid: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
   uri: "^[a-zA-Z][a-zA-Z0-9+.-]*:\\S*$",
+  email: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
   time: "^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})?$",
   duration: "^P(?:\\d+Y)?(?:\\d+M)?(?:\\d+D)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+(?:\\.\\d+)?S)?)?$",
   bytes: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
@@ -238,6 +239,7 @@ const checkHandlers: Record<string, CheckHandler> = {
   string: (_r, v) => `typeof ${v} === "string"`,
   uuid: formatCheck("uuid"),
   uri: formatCheck("uri"),
+  email: formatCheck("email"),
   date: dateCheck(),
   time: formatCheck("time"),
   datetime: dateCheck(),
@@ -661,6 +663,7 @@ const validateHandlers: Record<string, ValidateHandler> = {
   string: stringLeaf,
   uuid: formatLeaf("uuid"),
   uri: formatLeaf("uri"),
+  email: formatLeaf("email"),
   date: dateLeaf(),
   time: formatLeaf("time"),
   datetime: dateLeaf(),

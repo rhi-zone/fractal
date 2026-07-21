@@ -72,6 +72,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("s.string()"),
   uuid: leaf("s.string() /* uuid */"),
   uri: leaf("s.string() /* uri */"),
+  email: leaf("s.string() /* email */"),
   // https://docs.superstructjs.org/api-reference/types#date — s.date()
   // validates a native `Date` instance, matching type-ir's datetime/date
   // domain type (see kinds/date-time.ts) — unlike uuid/uri/time/duration

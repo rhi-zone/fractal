@@ -79,6 +79,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("string"),
   uuid: leaf("string"),
   uri: leaf("string"),
+  email: leaf("string"),
   // https://arktype.io/docs/keywords#js — "Date" is ArkType's built-in
   // keyword for a native `Date` instance, matching type-ir's datetime/date
   // domain type (see kinds/date-time.ts).

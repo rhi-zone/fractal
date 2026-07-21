@@ -19,7 +19,7 @@
 // design sketch for that follow-on work.
 
 import { t, types, type TypeRef } from "./index.ts"
-import { date, datetime, int8, int16, int32, int64, uint8, uint16, uint32, uint64, uuid, uri } from "./kinds/common.ts"
+import { date, datetime, email, int8, int16, int32, int64, uint8, uint16, uint32, uint64, uuid, uri } from "./kinds/common.ts"
 
 export interface InferConfig {
   /** Minimum elements before inferring `array` (vs. `tuple`) for a non-empty array. Default: 3. */
@@ -71,7 +71,7 @@ function inferString(value: string, config: ResolvedConfig): TypeRef {
     if (isoDateRe.test(value)) return date()
     if (isoDateTimeRe.test(value)) return datetime()
     if (uuidRe.test(value)) return uuid()
-    if (emailRe.test(value)) return t(types.string, { format: "email" })
+    if (emailRe.test(value)) return email()
     if (uriRe.test(value)) return uri()
   }
   return t(types.string)

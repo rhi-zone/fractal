@@ -35,6 +35,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("t.string"),
   uuid: leaf("t.string", "uuid"),
   uri: leaf("t.string", "uri"),
+  email: leaf("t.string", "email"),
   // datetime/date are type-ir's `Date` domain type (see kinds/date-time.ts),
   // not a wire-format string — io-ts core has no Date codec (io-ts-types'
   // `DateFromISOString` would fit, but that's an external package this

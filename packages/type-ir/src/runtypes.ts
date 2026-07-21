@@ -72,6 +72,7 @@ const handlers: Record<string, Converter> = {
   // with a comment naming the intended format.
   uuid: leaf("R.String /* uuid */"),
   uri: leaf("R.String /* uri */"),
+  email: leaf("R.String /* email */"),
   // https://github.com/pelotom/runtypes#instanceof — R.InstanceOf(Date) checks
   // the runtime prototype chain, matching type-ir's datetime/date domain type
   // (`Date`, not a wire-format string — see kinds/date-time.ts).

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
-import { date, datetime, int8, int16, int32, int64, uint8, uint16, uint32, uint64, uri, uuid } from "./kinds/common.ts"
+import { date, datetime, email, int8, int16, int32, int64, uint8, uint16, uint32, uint64, uri, uuid } from "./kinds/common.ts"
 import { fromJson, type LeafHeuristic } from "./from-json.ts"
 
 describe("leaf types", () => {
@@ -125,8 +125,8 @@ describe("string format detection", () => {
     expect(fromJson("123e4567-e89b-12d3-a456-426614174000")).toEqual(uuid())
   })
 
-  test("email falls back to string + meta.format", () => {
-    expect(fromJson("foo@bar.com")).toEqual(t(types.string, { format: "email" }))
+  test("email", () => {
+    expect(fromJson("foo@bar.com")).toEqual(email())
   })
 
   test("uri", () => {

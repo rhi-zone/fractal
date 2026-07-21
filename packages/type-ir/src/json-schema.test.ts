@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toJsonSchema } from "./json-schema.ts"
 
 describe("leaf types", () => {
@@ -64,6 +64,10 @@ describe("formatted types", () => {
 
   test("uri", () => {
     expect(toJsonSchema(uri())).toEqual({ type: "string", format: "uri" })
+  })
+
+  test("email", () => {
+    expect(toJsonSchema(email())).toEqual({ type: "string", format: "email" })
   })
 })
 

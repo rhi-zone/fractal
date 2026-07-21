@@ -25,6 +25,7 @@ const mssqlHandlers: Record<string, Converter> = {
   string: leaf("NVARCHAR(255)"),
   uuid: leaf("UNIQUEIDENTIFIER"),
   uri: leaf("NVARCHAR(MAX)"),
+  email: leaf("NVARCHAR(255)"),
   datetime: leaf("DATETIME2"),
   date: leaf("DATE"),
   time: leaf("TIME"),

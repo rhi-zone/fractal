@@ -658,6 +658,46 @@ describe("typeRefFromType gap fixes", () => {
     expect(fields.name?.meta.brand).toBeUndefined()
   })
 
+  // ── Brand→kind promotion (known brand names → the matching IR kind) ──────
+
+  it("promotes a brand matching a known kind name to that kind, not a plain string", () => {
+    const ref = typeRefFromType(typeOf("UserIdUuid"), checker, source)
+    expect(ref.shape).toEqual({ kind: "uuid" })
+  })
+
+  it("matches a known brand name case-insensitively (all-uppercase)", () => {
+    const ref = typeRefFromType(typeOf("UppercaseUuidBrand"), checker, source)
+    expect(ref.shape).toEqual({ kind: "uuid" })
+  })
+
+  it("matches a known brand name case-insensitively (mixed case)", () => {
+    const ref = typeRefFromType(typeOf("MixedCaseUuidBrand"), checker, source)
+    expect(ref.shape).toEqual({ kind: "uuid" })
+  })
+
+  it("promotes a uri-branded string to the uri kind", () => {
+    const ref = typeRefFromType(typeOf("UriBrand"), checker, source)
+    expect(ref.shape).toEqual({ kind: "uri" })
+  })
+
+  it("promotes an email-branded string to the email kind", () => {
+    const ref = typeRefFromType(typeOf("EmailBrand"), checker, source)
+    expect(ref.shape).toEqual({ kind: "email" })
+  })
+
+  it("promotes known-kind brands nested as object fields", () => {
+    const ref = typeRefFromType(typeOf("PromotedBrandField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.id?.shape).toEqual({ kind: "uuid" })
+    expect(fields.contact?.shape).toEqual({ kind: "email" })
+  })
+
+  it("does not promote a known brand name over a non-string base — falls through to meta.brand", () => {
+    const ref = typeRefFromType(typeOf("NumberBrandedUuid"), checker, source)
+    expect(ref.shape).toEqual({ kind: "number" })
+    expect(ref.meta.brand).toBe("uuid")
+  })
+
   // ── Symbol-branded types (`unique symbol` tag, not a string-literal tag) ──
 
   it("lowers a unique-symbol-branded string to its base shape, with brand name from the symbol declaration", () => {

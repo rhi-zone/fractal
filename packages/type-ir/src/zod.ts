@@ -59,6 +59,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("z.string()"),
   uuid: leaf("z.string().uuid()"),
   uri: leaf("z.string().url()"),
+  email: leaf("z.string().email()"),
   // https://zod.dev/?id=dates — z.coerce.date() validates/coerces to a `Date`
   // (accepts a `Date`, an ISO string, or a timestamp number), matching
   // type-ir's datetime/date domain type (`Date`, not a wire-format string —

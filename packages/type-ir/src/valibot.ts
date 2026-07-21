@@ -49,6 +49,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("v.string()"),
   uuid: leafWithAction("v.string()", "v.uuid()"),
   uri: leafWithAction("v.string()", "v.url()"),
+  email: leafWithAction("v.string()", "v.email()"),
   // https://valibot.dev/api/date/ — v.date() validates a `Date` instance,
   // matching type-ir's datetime/date domain type (`Date`, not a wire-format
   // string — see kinds/date-time.ts). Valibot has no built-in string->Date

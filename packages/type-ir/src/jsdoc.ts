@@ -22,6 +22,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("string"),
   uuid: leaf("string"),
   uri: leaf("string"),
+  email: leaf("string"),
   datetime: leaf("Date"),
   date: leaf("Date"),
   time: leaf("string"),

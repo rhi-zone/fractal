@@ -82,6 +82,7 @@ const handlers: Record<string, Converter> = {
   string: leaf("yup.string()"),
   uuid: leaf("yup.string().matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)"),
   uri: leaf("yup.string().url()"),
+  email: leaf("yup.string().email()"),
   datetime: leaf("yup.date()"),
   date: leaf("yup.date()"),
   time: leaf("yup.string() /* no native time type in Yup */"),

@@ -159,6 +159,40 @@ export type PositiveInt = number & { readonly __tag: "PositiveInt" }
 /** A branded type nested as an object field. */
 export type BrandedField = { locationId: LocationId; name: string }
 
+// ── Brand→kind promotion fixtures ───────────────────────────────────────────
+//
+// A brand tag whose value matches a known type-ir semantic-string kind
+// (uuid/uri/email — see kinds/semantic-strings.ts) promotes to that kind
+// instead of degrading to `t(types.string, { brand: "..." })`. These mirror
+// the canonical `Uuid`/`Uri`/`Email` brand types type-ir exports for this
+// exact purpose, but are hand-declared here (rather than imported) so the
+// fixture doesn't take a dependency on type-ir's export surface.
+
+/** Brand value matching the "uuid" kind exactly (lowercase, canonical form). */
+export type UserIdUuid = string & { readonly __brand: "uuid" }
+
+/** Brand value matching "uuid" case-insensitively (upper). */
+export type UppercaseUuidBrand = string & { readonly __brand: "UUID" }
+
+/** Brand value matching "uuid" case-insensitively (mixed case, as a
+ * hand-authored type name might read). */
+export type MixedCaseUuidBrand = string & { readonly __brand: "Uuid" }
+
+/** Brand value matching the "uri" kind. */
+export type UriBrand = string & { readonly __brand: "uri" }
+
+/** Brand value matching the "email" kind. */
+export type EmailBrand = string & { readonly __brand: "email" }
+
+/** A known-kind brand nested as an object field. */
+export type PromotedBrandField = { id: UserIdUuid; contact: EmailBrand }
+
+/** A brand tag matching a known kind name, but over `number` instead of
+ * `string` — every current promotable kind (uuid/uri/email) subtypes
+ * `string`, so this must NOT promote; it stays `types.number` with
+ * `meta.brand` set, same as any other unrecognized-base brand. */
+export type NumberBrandedUuid = number & { readonly __brand: "uuid" }
+
 /** A genuine structural intersection (not a brand pattern) — lowers to
  * `types.intersection`, each constituent extracted recursively. */
 export type PlainIntersection = { a: string } & { b: number }

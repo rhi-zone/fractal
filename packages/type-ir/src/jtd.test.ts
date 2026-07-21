@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import { toJtd } from "./jtd.ts"
 
 describe("leaf types", () => {
@@ -70,6 +70,10 @@ describe("string subtypes", () => {
 
   test("uri", () => {
     expect(toJtd(uri())).toEqual({ type: "string", metadata: { format: "uri" } })
+  })
+
+  test("email", () => {
+    expect(toJtd(email())).toEqual({ type: "string", metadata: { format: "email" } })
   })
 
   test("time", () => {

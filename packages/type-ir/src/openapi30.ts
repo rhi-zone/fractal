@@ -64,6 +64,7 @@ const handlers: Record<string, Converter> = {
   string: leaf({ type: "string" }),
   uuid: leaf({ type: "string", format: "uuid" }),
   uri: leaf({ type: "string", format: "uri" }),
+  email: leaf({ type: "string", format: "email" }),
   datetime: leaf({ type: "string", format: "date-time" }),
   date: leaf({ type: "string", format: "date" }),
   time: leaf({ type: "string", format: "time" }),

@@ -444,7 +444,7 @@ function arbDate(): fc.Arbitrary<string> {
 }
 
 function arbValueForTypeRef(ref: TypeRef): fc.Arbitrary<unknown> {
-  const { shape, meta } = ref
+  const { shape } = ref
   switch (shape.kind) {
     case "null": return fc.constant(null)
     case "boolean": return fc.boolean()
@@ -453,8 +453,9 @@ function arbValueForTypeRef(ref: TypeRef): fc.Arbitrary<unknown> {
         .map((n) => Number.isInteger(n) ? n + 0.5 : n)
     case "integer": return fc.integer({ min: -1000, max: 1000 })
     case "string":
-      if (meta.format === "email") return fc.stringMatching(/^[a-z]{2,8}$/).map((u) => `${u}@test.com`)
       return arbPlainString()
+    case "email":
+      return fc.stringMatching(/^[a-z]{2,8}$/).map((u) => `${u}@test.com`)
     case "uint8": return fc.integer({ min: 0, max: 255 })
     case "int8": return fc.integer({ min: -128, max: 127 })
     case "uint16": return fc.integer({ min: 0, max: 65535 })

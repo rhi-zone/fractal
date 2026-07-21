@@ -44,6 +44,7 @@ const handlers: Record<string, Converter> = {
   string: leaf({ type: "string" }),
   uuid: () => ({ form: { type: "string" }, metadata: { format: "uuid" } }),
   uri: () => ({ form: { type: "string" }, metadata: { format: "uri" } }),
+  email: () => ({ form: { type: "string" }, metadata: { format: "email" } }),
   // RFC 8927 §3.3.2 — the "timestamp" type form is JTD's own native
   // representation of a language-level Date/DateTime value (spec: "the
   // instance is a string encoding of an RFC3339 timestamp"), matching

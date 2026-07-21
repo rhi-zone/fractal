@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
-import { bytes, date, datetime, duration, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
+import { bytes, date, datetime, duration, email, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import {
   renderFlatBuffers,
   toFlatBuffers,
@@ -50,6 +50,10 @@ describe("string subtypes fall back to string", () => {
 
   test("uri", () => {
     expect(toFlatBuffers(uri())).toBe("string")
+  })
+
+  test("email", () => {
+    expect(toFlatBuffers(email())).toBe("string")
   })
 
   test("time", () => {
