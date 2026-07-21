@@ -18,6 +18,8 @@ input schemas.
 - `CliIO` — injectable stdin/stdout/stderr for testing
 - `CliOpts` — confirm/no-confirm and other run options
 - `CliCommandEntry` — one row of `walkCliCommands`'s output
+- Shell completion generation (bash/zsh/fish) from the tree's own shape (`src/completions.ts`)
+- JSONL streaming: a handler returning an `AsyncIterable` is streamed as one JSON line per yield, no extra opt-in required
 
 ## Usage
 
@@ -27,3 +29,11 @@ import { api } from "./tree.ts"
 
 await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert"])
 ```
+
+## Install
+
+```bash
+bun add @rhi-zone/fractal-cli-api-projector
+```
+
+See the [root README](../../README.md) for the full picture across all projections.

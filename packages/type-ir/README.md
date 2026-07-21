@@ -48,3 +48,11 @@ const toDescription = resolve("uuid", {
   string: (r: typeof book) => "a string",
 })
 ```
+
+## Install
+
+```bash
+bun add @rhi-zone/fractal-type-ir
+```
+
+See the [root README](../../README.md) for the full picture across all projections.

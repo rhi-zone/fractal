@@ -43,3 +43,11 @@ const double = (n: number) => n * 2
 const inc = (n: number) => n + 1
 pipe(3, double, inc) // 7
 ```
+
+## Install
+
+```bash
+bun add @rhi-zone/fractal-api-tree
+```
+
+See the [root README](../../README.md) for the full picture across all projections.

@@ -40,3 +40,11 @@ const tree = api({
 const fetch = createFetch(tree)
 const res = await fetch(new Request("http://localhost/books/list"))
 ```
+
+## Install
+
+```bash
+bun add @rhi-zone/fractal-http-api-projector
+```
+
+See the [root README](../../README.md) for the full picture across all projections.
