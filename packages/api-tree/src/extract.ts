@@ -669,7 +669,36 @@ export function typeRefFromType(
     return t(types.object(fields))
   }
 
-  // ── Everything else (generic param, unknown, any, branded, …) ─────────────
+  // ── Generic type parameters: extract the CONSTRAINT, not the unresolved
+  //    parameter itself. `T extends Searchable` guarantees the caller's `T`
+  //    is at least shaped like `Searchable` — that's real information worth
+  //    keeping instead of punting to `unknown`. `T extends string` likewise
+  //    extracts `string`. An unconstrained `T` truly has no information to
+  //    extract (its only guarantee is "anything"), so it stays `unknown` —
+  //    now with a descriptive comment instead of the generic "unsupported"
+  //    punt message. Only the `extends` clause is read; a type parameter's
+  //    DEFAULT (`T = string`) describes what the caller may omit, not what
+  //    the type guarantees, so `getDefault()` is deliberately not consulted.
+  //    The constraint is lowered recursively — `T extends Record<string, V>`
+  //    or `T extends OtherGeneric` both fall through this same path, so a
+  //    constrained-generic constraint referencing another type parameter (or
+  //    a named interface/object) resolves through the normal machinery
+  //    above, `seen` included. A constraint too exotic to lower structurally
+  //    (e.g. involving a conditional type) punts gracefully via the same
+  //    recursive call, same as any other unhandled type.
+  if (type.isTypeParameter()) {
+    const constraint = type.getConstraint()
+    if (constraint) {
+      const nextSeen = new Set(seen).add(type)
+      const constraintRef = typeRefFromType(constraint, checker, loc, nextSeen)
+      return t(constraintRef.shape, { ...constraintRef.meta, generic: true })
+    }
+    return t(types.unknown, {
+      $comment: `unconstrained generic type parameter (${checker.typeToString(type)}) — no bound to extract`,
+    })
+  }
+
+  // ── Everything else (unknown, any, branded, conditional types, …) ─────────
   return puntRef(`unsupported (${checker.typeToString(type)})`)
 }
 

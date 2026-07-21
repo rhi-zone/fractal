@@ -304,3 +304,25 @@ export type SharedSymbolLocationId = string & { readonly [BRAND]: "LocationId" }
 
 /** A second type sharing the same `BRAND` symbol key, distinguished by value. */
 export type SharedSymbolUserId = string & { readonly [BRAND]: "UserId" }
+
+// ── Generic type parameter fixtures ─────────────────────────────────────────
+// A type parameter unresolved at the extraction site (e.g. a handler's own
+// `<T>`) has no concrete type to lower — only its `extends` constraint (if
+// any) describes what it's guaranteed to look like.
+
+/** An interface used as a generic constraint's bound. */
+export interface Searchable {
+  query: string
+}
+
+/** `T extends { name: string }` — an inline-object constraint. */
+export const inlineConstraintFn = <T extends { name: string }>(input: T): T => input
+
+/** `T extends string` — a primitive constraint. */
+export const primitiveConstraintFn = <T extends string>(input: T): T => input
+
+/** `T extends Searchable` — a named-interface constraint. */
+export const interfaceConstraintFn = <T extends Searchable>(input: T): T => input
+
+/** Unconstrained `T` — no bound to extract, must stay `types.unknown`. */
+export const unconstrainedFn = <T>(input: T): T => input

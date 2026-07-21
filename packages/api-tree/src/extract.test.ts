@@ -992,6 +992,48 @@ describe("typeRefFromType gap fixes", () => {
     expect(okFieldsOf(numberOverloadReturn)).toEqual(["num"])
   })
 
+  // ── Generic type parameters — extract constraint bounds ───────────────────
+
+  it("extracts an inline-object constraint (`T extends { name: string }`) as the object shape, tagged meta.generic", () => {
+    const fn = findExportedFn(source, "inlineConstraintFn")
+    const ref = typeRefFromFunctionNode(fn, checker)
+    expect(ref.shape.kind).toBe("object")
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.name?.shape.kind).toBe("string")
+    expect(ref.meta.generic).toBe(true)
+  })
+
+  it("extracts a primitive constraint (`T extends string`) as types.string, tagged meta.generic", () => {
+    const fn = findExportedFn(source, "primitiveConstraintFn")
+    const ref = typeRefFromFunctionNode(fn, checker)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.generic).toBe(true)
+  })
+
+  it("extracts a named-interface constraint (`T extends Searchable`) as the interface's shape, tagged meta.generic", () => {
+    const fn = findExportedFn(source, "interfaceConstraintFn")
+    const ref = typeRefFromFunctionNode(fn, checker)
+    expect(ref.shape.kind).toBe("object")
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.query?.shape.kind).toBe("string")
+    expect(ref.meta.generic).toBe(true)
+  })
+
+  it("lowers an unconstrained type parameter to types.unknown with a descriptive comment, no meta.generic", () => {
+    const fn = findExportedFn(source, "unconstrainedFn")
+    const ref = typeRefFromFunctionNode(fn, checker)
+    expect(ref.shape.kind).toBe("unknown")
+    expect(ref.meta.generic).toBeUndefined()
+    expect(ref.meta.$comment).toMatch(/unconstrained generic type parameter/)
+  })
+
+  it("regression: non-generic functions are unaffected by type-parameter handling", () => {
+    const fn = findExportedFn(source, "sample")
+    const ref = typeRefFromFunctionNode(fn, checker)
+    expect(ref.shape.kind).toBe("object")
+    expect(ref.meta.generic).toBeUndefined()
+  })
+
   it("regression: a single-signature function still lowers to a bare types.function, no intersection wrapper", () => {
     const ref = typeRefFromType(typeOf("SingleSignatureFnField"), checker, source)
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
