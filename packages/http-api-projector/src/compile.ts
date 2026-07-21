@@ -22,7 +22,7 @@ import type { AsyncLocalStorage } from "node:async_hooks"
 import type { Handler, Meta } from "@rhi-zone/fractal-api-tree/node"
 import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 import { runRoute, splitPath } from "./route.ts"
-import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, Sources } from "./route.ts"
+import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, Sources, ThrownErrorEncoder } from "./route.ts"
 
 // ============================================================================
 // Shared types
@@ -45,12 +45,13 @@ export function toRouter(
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
   errorEncoder?: HttpErrorEncoder,
+  thrownErrorEncoder?: ThrownErrorEncoder,
 ): CompiledRouter {
   return async (req) => {
     const pathname = new URL(req.url).pathname
     const match = matcher(pathname, req.method)
     if (match === undefined) return new Response("Not Found", { status: 404 })
-    return runRoute(req, match.handler, match.meta, match.sources, match.slugs, handlerMiddleware, detection, errorEncoder)
+    return runRoute(req, match.handler, match.meta, match.sources, match.slugs, handlerMiddleware, detection, errorEncoder, thrownErrorEncoder)
   }
 }
 
@@ -244,8 +245,9 @@ export function radixRouter(
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
   errorEncoder?: HttpErrorEncoder,
+  thrownErrorEncoder?: ThrownErrorEncoder,
 ): CompiledRouter {
-  return toRouter(radixMatcher(route), handlerMiddleware, detection, errorEncoder)
+  return toRouter(radixMatcher(route), handlerMiddleware, detection, errorEncoder, thrownErrorEncoder)
 }
 
 // ============================================================================
@@ -372,8 +374,9 @@ export function compiledCharRouter(
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
   errorEncoder?: HttpErrorEncoder,
+  thrownErrorEncoder?: ThrownErrorEncoder,
 ): CompiledRouter {
-  return toRouter(compiledCharMatcher(route), handlerMiddleware, detection, errorEncoder)
+  return toRouter(compiledCharMatcher(route), handlerMiddleware, detection, errorEncoder, thrownErrorEncoder)
 }
 
 // ============================================================================
@@ -423,11 +426,12 @@ export function mapCharRouter(
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
   errorEncoder?: HttpErrorEncoder,
+  thrownErrorEncoder?: ThrownErrorEncoder,
 ): CompiledRouter {
   const routes = collectRoutes(route, [])
   const staticMatcher = buildMapMatcher(routes.filter((r) => !isDynamicPath(r.path)))
   const dynamicMatcher = buildCompiledCharMatcher(routes.filter((r) => isDynamicPath(r.path)))
-  return toRouter(chainMatchers(staticMatcher, dynamicMatcher), handlerMiddleware, detection, errorEncoder)
+  return toRouter(chainMatchers(staticMatcher, dynamicMatcher), handlerMiddleware, detection, errorEncoder, thrownErrorEncoder)
 }
 
 // ============================================================================

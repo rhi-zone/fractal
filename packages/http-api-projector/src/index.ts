@@ -53,4 +53,5 @@ export type {
   HttpErrorResponse,
   HttpHandlerMiddleware,
   PresetOptions,
+  ThrownErrorEncoder,
 } from "./preset.ts"

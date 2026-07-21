@@ -864,7 +864,13 @@ function defaultEncodeError(error: unknown): Response {
 // `{ kind: "notFound", message: "Book not found" }`). `errorEncoder` (see
 // `PresetOptions.errorEncoder`/`runRoute`'s parameter below) maps `E` to an
 // `HttpErrorResponse`; `undefined` means "not recognized," which falls back
-// to `defaultEncodeError`'s 400. See docs/design/middleware-and-caller-context.md.
+// to `defaultEncodeError`'s 400. `thrownErrorEncoder` is the parallel hook
+// for a THROWN error (a handler that throws instead of returning
+// `Result.err`) — same `(error: unknown) => HttpErrorResponse | undefined`
+// shape, called from `runRoute`'s catch block; `undefined` (including when
+// `thrownErrorEncoder` itself is omitted) falls back to the existing 500
+// "internal server error" response. See
+// docs/design/middleware-and-caller-context.md.
 // ============================================================================
 
 /** An error encoder's HTTP-specific target shape — status + optional body/headers. */
@@ -876,6 +882,18 @@ export type HttpErrorResponse = {
 
 /** `ErrorEncoder<E, HttpErrorResponse>` — maps a handler's error value to an HTTP response. */
 export type HttpErrorEncoder<E = unknown> = ErrorEncoder<E, HttpErrorResponse>
+
+/**
+ * Same shape as `HttpErrorEncoder` — maps a THROWN error (caught in
+ * `runRoute`'s catch block) to an `HttpErrorResponse`, instead of a
+ * `Result.err(E)` value. A distinct alias (not just reuse-in-place) because
+ * the two hooks answer different questions even though the signature is
+ * identical: `errorEncoder` sees an expected, handler-signaled `E`;
+ * `thrownErrorEncoder` sees whatever `catch` caught, which may not even be an
+ * `Error` instance. `undefined` (including when `thrownErrorEncoder` itself
+ * is omitted) falls back to the existing 500 "internal server error".
+ */
+export type ThrownErrorEncoder = HttpErrorEncoder
 
 /**
  * Pre-built `HttpErrorEncoder`: maps error `kind` values to HTTP status
@@ -962,7 +980,11 @@ function composeHandlerMiddleware(
  * transitively, `streamAsSse`'s `StreamEffect` tag interpretation, since
  * disabling `streaming` skips entering `streamAsSse` at all). Both default
  * to `true` when `detection` is omitted. `ResponseOverride` detection is
- * never gated — see its own doc comment above for why.
+ * never gated — see its own doc comment above for why. `errorEncoder` maps a
+ * `Result.err(E)` value to an `HttpErrorResponse`; `thrownErrorEncoder` is
+ * its parallel for whatever the catch block below actually caught (a thrown
+ * error, not a `Result`) — both fall back to their own default (400 / 500
+ * respectively) when the encoder is absent or returns `undefined`.
  */
 export async function runRoute(
   req: Request,
@@ -973,6 +995,7 @@ export async function runRoute(
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
   errorEncoder?: HttpErrorEncoder,
+  thrownErrorEncoder?: ThrownErrorEncoder,
 ): Promise<Response> {
   const detectStreaming = detection?.streaming ?? true
   const detectResult = detection?.result ?? true
@@ -1025,8 +1048,11 @@ export async function runRoute(
     return isResponseOverride(output)
       ? encodeOverride(output)
       : defaultEncode(output)
-  } catch {
-    return jsonRouteResponse({ error: "internal server error" }, { status: 500 })
+  } catch (error) {
+    const encoded = thrownErrorEncoder?.(error)
+    return encoded !== undefined
+      ? encodeHttpError(encoded)
+      : jsonRouteResponse({ error: "internal server error" }, { status: 500 })
   }
 }
 
@@ -1035,12 +1061,13 @@ export function makeRouterFromRoute(
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
   errorEncoder?: HttpErrorEncoder,
+  thrownErrorEncoder?: ThrownErrorEncoder,
 ): (req: Request) => Promise<Response> {
   return async (req) => {
     const segs = splitPath(new URL(req.url).pathname)
     const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware, detection, errorEncoder)
+    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware, detection, errorEncoder, thrownErrorEncoder)
   }
 }

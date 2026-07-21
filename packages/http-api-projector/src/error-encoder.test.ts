@@ -1,9 +1,13 @@
 // packages/http-api-projector/src/error-encoder.test.ts — structured error
-// types: composable error-to-transport mapping (HttpErrorEncoder/httpErrors).
+// types: composable error-to-transport mapping (HttpErrorEncoder/httpErrors)
+// and its thrown-error counterpart (ThrownErrorEncoder).
 //
 // Covers: a handler returns `err({ kind, ... })`; `httpErrors` maps `kind` to
 // an HTTP status; unmatched kinds and an absent `errorEncoder` fall back to
-// the existing default (400 wrapping `{ error }`). See
+// the existing default (400 wrapping `{ error }`). Also covers a handler that
+// THROWS: `thrownErrorEncoder` maps the caught value to an `HttpErrorResponse`;
+// an absent encoder, or one returning `undefined`, falls back to the existing
+// default (500 wrapping `{ error: "internal server error" }`). See
 // docs/design/middleware-and-caller-context.md.
 
 import { describe, expect, it } from "bun:test"
@@ -19,6 +23,16 @@ function tree() {
       if (input.id === "dupe") return err({ kind: "conflict", message: "already exists" })
       if (input.id === "weird") return err({ kind: "somethingElse", message: "???" })
       return ok({ id: input.id, title: "Dune" })
+    }, {}),
+  })
+}
+
+function throwingTree() {
+  return api_({
+    getBook: op((input: { id: string }) => {
+      if (input.id === "missing") throw { kind: "notFound", message: "Book not found" }
+      if (input.id === "boom") throw new Error("kaboom")
+      return { id: input.id, title: "Dune" }
     }, {}),
   })
 }
@@ -84,6 +98,81 @@ describe("httpErrors", () => {
     const res = await router(new Request("http://x/", { method: "POST", body: JSON.stringify({ id: "1" }), headers: { "content-type": "application/json" } }))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ id: "1", title: "Dune" })
+  })
+})
+
+describe("thrownErrorEncoder", () => {
+  it("handler throws, no encoder configured — falls back to the existing 500", async () => {
+    const route = naiveTransform(throwingTree())
+    const router = makeRouterFromRoute(route.children!.getBook!)
+    const res = await router(new Request("http://x/", { method: "POST", body: JSON.stringify({ id: "boom" }), headers: { "content-type": "application/json" } }))
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: "internal server error" })
+  })
+
+  it("handler throws, encoder returns an HttpErrorResponse — uses its status/body", async () => {
+    const route = naiveTransform(throwingTree())
+    const router = makeRouterFromRoute(
+      route.children!.getBook!,
+      undefined,
+      undefined,
+      undefined,
+      (error) => {
+        if (typeof error === "object" && error !== null && (error as { kind?: unknown }).kind === "notFound") {
+          return { status: 404, body: error }
+        }
+        return undefined
+      },
+    )
+    const res = await router(new Request("http://x/", { method: "POST", body: JSON.stringify({ id: "missing" }), headers: { "content-type": "application/json" } }))
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ kind: "notFound", message: "Book not found" })
+  })
+
+  it("handler throws, encoder returns undefined — falls back to the existing 500", async () => {
+    const route = naiveTransform(throwingTree())
+    const router = makeRouterFromRoute(
+      route.children!.getBook!,
+      undefined,
+      undefined,
+      undefined,
+      () => undefined,
+    )
+    const res = await router(new Request("http://x/", { method: "POST", body: JSON.stringify({ id: "boom" }), headers: { "content-type": "application/json" } }))
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: "internal server error" })
+  })
+
+  it("both encoders configured — a Result.err hits errorEncoder, a throw hits thrownErrorEncoder", async () => {
+    // A tree whose handler returns Result.err for one input and throws for another.
+    const mixedTree = api_({
+      getBook: op((input: { id: string }) => {
+        if (input.id === "missing") return err({ kind: "notFound", message: "Book not found" })
+        if (input.id === "boom") throw { kind: "explosive", message: "kaboom" }
+        return ok({ id: input.id, title: "Dune" })
+      }, {}),
+    })
+    const route = naiveTransform(mixedTree)
+    const router = makeRouterFromRoute(
+      route.children!.getBook!,
+      undefined,
+      undefined,
+      httpErrors({ notFound: 404 }),
+      (error) => {
+        if (typeof error === "object" && error !== null && (error as { kind?: unknown }).kind === "explosive") {
+          return { status: 502, body: error }
+        }
+        return undefined
+      },
+    )
+
+    const errRes = await router(new Request("http://x/", { method: "POST", body: JSON.stringify({ id: "missing" }), headers: { "content-type": "application/json" } }))
+    expect(errRes.status).toBe(404)
+    expect(await errRes.json()).toEqual({ kind: "notFound", message: "Book not found" })
+
+    const thrownRes = await router(new Request("http://x/", { method: "POST", body: JSON.stringify({ id: "boom" }), headers: { "content-type": "application/json" } }))
+    expect(thrownRes.status).toBe(502)
+    expect(await thrownRes.json()).toEqual({ kind: "explosive", message: "kaboom" })
   })
 })
 

@@ -48,7 +48,7 @@ import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 import { makeRouterFromRoute } from "./route.ts"
-import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute } from "./route.ts"
+import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, ThrownErrorEncoder } from "./route.ts"
 import { httpProjection } from "./dx.ts"
 import type { HttpProjectionOptions } from "./dx.ts"
 import { withALS } from "./compile.ts"
@@ -59,7 +59,7 @@ import { toOpenApiFromRoute } from "./openapi.ts"
 import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts"
 
 export type { CorsOptions, Fetch }
-export type { HttpErrorEncoder, HttpErrorResponse, HttpHandlerMiddleware } from "./route.ts"
+export type { HttpErrorEncoder, HttpErrorResponse, HttpHandlerMiddleware, ThrownErrorEncoder } from "./route.ts"
 export { httpErrors } from "./route.ts"
 export type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 
@@ -116,15 +116,18 @@ export type PresetOptions<T = unknown> = {
    * dispatch at a build-time cost, or supply your own — this is a plain
    * function value, not a string enum, so any conforming compiler works.
    * Every built-in compiler accepts `opts.handlerMiddleware` as its second
-   * argument and `opts.detection` as its third (see below) — `createFetch`
-   * always forwards both, so a custom compiler wanting to support handler
-   * middleware or detection config should accept them too.
+   * argument, `opts.detection` as its third, `opts.errorEncoder` as its
+   * fourth, and `opts.thrownErrorEncoder` as its fifth (see below) —
+   * `createFetch` always forwards all four, so a custom compiler wanting to
+   * support handler middleware, detection config, or error encoding should
+   * accept them too.
    */
   readonly router?: (
     route: HttpRoute,
     handlerMiddleware?: readonly HttpHandlerMiddleware[],
     detection?: DetectionOptions,
     errorEncoder?: HttpErrorEncoder,
+    thrownErrorEncoder?: ThrownErrorEncoder,
   ) => CompiledRouter
   /**
    * Wrap the compiled router so every request runs inside its own
@@ -195,6 +198,19 @@ export type PresetOptions<T = unknown> = {
    * compiler in compile.ts accepts it as a fourth argument).
    */
   readonly errorEncoder?: HttpErrorEncoder
+  /**
+   * Maps a THROWN error (caught in `runRoute`'s catch block, route.ts) to an
+   * `HttpErrorResponse` — the parallel hook to `errorEncoder` above, but for
+   * consumers who throw for expected errors instead of returning
+   * `Result.err`. Same `(error: unknown) => HttpErrorResponse | undefined`
+   * shape as `HttpErrorEncoder` (see `ThrownErrorEncoder`, route.ts).
+   * Returning `undefined` (including when `thrownErrorEncoder` itself is
+   * omitted) falls back to the existing default: a 500 JSON response
+   * wrapping `{ error: "internal server error" }`. Threaded through to
+   * whichever router compiler `opts.router` resolves to (every built-in
+   * compiler in compile.ts accepts it as a fifth argument).
+   */
+  readonly thrownErrorEncoder?: ThrownErrorEncoder
   /**
    * Auto-serve a generated OpenAPI 3.1 document — OpenAPI only ever
    * describes HTTP APIs, so `createFetch` mounts it with zero extra setup.
@@ -270,7 +286,7 @@ export function createFetch<T = unknown>(
   for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
 
   const compileRouter = opts.router ?? makeRouterFromRoute
-  const router = compileRouter(routes, opts.handlerMiddleware, opts.detection, opts.errorEncoder)
+  const router = compileRouter(routes, opts.handlerMiddleware, opts.detection, opts.errorEncoder, opts.thrownErrorEncoder)
 
   const withContext =
     opts.als !== undefined ? withALS(router, opts.als.storage, opts.als.init) : router
