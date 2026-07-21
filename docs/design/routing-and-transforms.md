@@ -134,98 +134,51 @@ transforms skip already-set directives).
 Declaration merging by the user happens next to the API tree definition so
 that `meta.http` type-checks at the authoring site.
 
-## Open items
+## Open items — both resolved
 
-### Constructor sugar (DX)
+### ~~Constructor sugar (DX)~~ — resolved, see "DX — constructor sugar" below
 
-The authoring surface needs convenience constructors that make DX competitive
-with Hono/Elysia — e.g., helpers that set common directive patterns in one
-call. Shape TBD; the requirement is "as good or better DX than incumbents."
+`api()`/`op()`, the `http.*` verb bundles, and `crud()` are the settled
+answer — see the "DX — constructor sugar" section further down this doc.
 
-### Input sources, validation, transformation
+### ~~Input sources, validation, transformation~~ — resolved
 
-How handler inputs are sourced from protocol-specific locations (HTTP: query,
-body, path segments, headers, cookies; CLI: params, env vars) and
-validated/transformed. Not yet designed — separate from the structural
-routing model.
+Input sourcing is the stores model (`docs/guide/decode.md`); validation is
+`wrapValidators` (see "Dispatch is not an interceptable multi-stage
+pipeline" below, and `docs/guide/codegen-cli.md`).
 
-## Interceptable pipeline
+## Dispatch is not an interceptable multi-stage pipeline
 
-The request/response lifecycle is decomposed into typed, interceptable stages.
-Every stage has access to operation metadata.
+> **Superseded (2026-07):** an earlier revision of this design decomposed
+> the request/response lifecycle into typed, interceptable stages
+> (`reqTransforms`/`decode`/`inputTransforms`/`validate`/`handler`/
+> `outputTransforms`/`encode`/`resTransforms`, each an array of `meta`-driven
+> functions) plus a `createApplyValidation` rewriter that injected generated
+> validators into a per-method `pipeline.validate` array. **None of this
+> exists in the current code.** `packages/http-api-projector/src/route.ts`'s
+> module doc states the reasoning directly: "nothing in this codebase used
+> those hooks outside of tests exercising the mechanism itself." The section
+> below describes what replaced it.
 
-```
-Request
-  → [Req => Req transforms (meta)]
-  → decode (Request → T)
-  → [T => T transforms (meta)]     ← audit, validation, session injection
-  → handler (T → U)
-  → [U => U transforms (meta)]     ← redaction, enrichment
-  → encode (U → Response)
-  → [Res => Res transforms (meta)] ← CORS, compression, caching
-Response
-```
+What's left is `runRoute` (`route.ts`): decode the request via `sources`
+(genuinely per-route — each route has its own parameter names and source
+overrides, see `docs/guide/decode.md`), call the handler, encode the
+response. Simple and linear, no loop over stage arrays. The one
+interceptable hook left in the request/response cycle is `handlerMiddleware`
+(`HttpHandlerMiddleware`, an around-hook wrapping the handler call itself —
+see `docs/design/middleware-and-caller-context.md`) plus the
+`PresetOptions.middleware` `Fetch => Fetch` layers `createFetch` composes
+around the whole router.
 
-`decode` and `encode` are the symmetric boundary between protocol-land and
-business-logic-land. `decode` deserializes the request into typed input T.
-`encode` serializes output U into a protocol response. They are practical
-inverses across the protocol boundary.
-
-Input parsing (how `decode` sources T from query, body, path segments,
-headers, cookies for HTTP; params, env for CLI) is still open. Placeholder:
-`await req.json()` for HTTP.
-
-The pipeline lives on `HttpRoute` (and equivalently on each projection's
-route type). Each stage is a typed function; transforms are arrays of
-functions composed in order.
-
-### `createApplyValidation` — generated validators, wired at runtime
-
-The `validate` slot (`Pipeline["validate"]`) is populated by codegen, not by
-hand. `packages/http-api-projector/src/route.ts` exports the runtime half of that wiring —
-`createApplyValidation(validators: ValidatorMap)` — which closes over a full
-key → path → validator map and returns an `applyValidation(key, route)`
-rewriter:
-
-```typescript
-import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
-
-const applyValidation = createApplyValidation({
-  books: {
-    "books": bookListValidator,       // GET/POST /books
-    "books/:bookId": bookItemValidator, // co-located GET/PUT/DELETE /books/{bookId}
-  },
-})
-
-const routes = applyValidation("books", httpProjection(api))
-```
-
-- `key` not present in the map → `route` returned unchanged. This is the
-  pass-through/stub case: codegen can emit `createApplyValidation({})` before
-  any validator source exists for a tree, and callers keep working unchanged.
-- Route-tree paths are the inner map's keys, path segments joined with `/`;
-  a fallback (wildcard-capture) segment renders as `:name` — the same
-  `:id`-style convention used throughout this document.
-- Each `key` may be consumed once per `createApplyValidation(...)` instance —
-  a second `applyValidation(sameKey, ...)` call throws, catching accidental
-  double registration (e.g. codegen run twice against the same tree).
-- `pipeline.validate` is an array, run sequentially — each validator's `Ok`
-  value feeds the next validator's input; the first `Err` short-circuits the
-  chain with a 400 response. Injection APPENDS the generated validator onto
-  that array rather than replacing it, so it composes alongside any
-  hand-authored validators already on the method instead of clobbering them.
-  Every other pipeline field (`decode`, `sources`, `inputTransforms`, …) on
-  that method is preserved untouched.
-
-Example of what codegen would generate before any validators are authored
-for a tree (the stub case exercised in `packages/http-api-projector/src/route.test.ts`):
-
-```typescript
-// GENERATED — codegen output placeholder, no validators yet for this tree.
-import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
-
-export const applyValidation = createApplyValidation({}) // empty = pass-through
-```
+**Validation** now happens at the `Node` level, before any HTTP-specific
+transform ever runs: `wrapValidators(node, validators)`
+(`packages/api-tree/src/build.ts`) wraps a leaf's handler directly to run a
+generated `parse()` first, success narrowing into the original handler,
+failure short-circuiting with `Result.err(...)`. `createFetch`'s
+`validators` option (`preset.ts`) calls `wrapValidators` on the tree before
+`httpProjection` runs. The same mechanism (and the same generated module)
+wires validation into MCP (`createMcpServer`'s `validators` option) and CLI
+(`runCli`'s `validators` option) — see `docs/guide/codegen-cli.md`.
 
 ## DX — constructor sugar
 
@@ -326,19 +279,13 @@ const routes = httpProjection(apiTree, {
 
 ## Build-time optimizations (2026-07-17)
 
-Two optional `HttpRoute => HttpRoute` visitors, both composable with the
-rewriters above via `composeTransforms`:
-
-- **`fusePipeline`** — composes each method entry's transform arrays
-  (`reqTransforms`, `inputTransforms`, `outputTransforms`, `resTransforms`,
-  `validate`) down to at most one entry, so `runPipeline`'s per-request
-  loops degrade to a single call. `decode`/`encode`/`sources` are untouched.
-
-- **`skipEmptyInput`** — for handlers declaring zero parameters
-  (`handler.length === 0`), swaps in a no-op `decode`/`validate` so decode +
-  validation are skipped entirely.
-
-Both are default-on in `createFetch` (see `packages/http-api-projector/src/preset.ts`).
+> **Superseded:** this section originally described two `HttpRoute => HttpRoute`
+> visitors, `fusePipeline` and `skipEmptyInput`, that fused/skipped stages of
+> the interceptable transform-array pipeline retired above. Neither function
+> exists in the current code — they applied to machinery that no longer
+> exists. The build-time optimization surface that remains is router
+> compilation (below): swapping `makeRouterFromRoute`'s zero-build-cost
+> tree-walk for a compiled matcher.
 
 ## Composable route compilers (2026-07-17)
 

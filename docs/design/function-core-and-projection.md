@@ -1,9 +1,11 @@
-# Function core and projection — the converged architecture
+> **Status: Partially superseded** — [`invariants.md`](./invariants.md) is the
+> authoritative model, mined verbatim from the design conversation, and supersedes
+> this doc wherever they conflict — specifically the authored-verb/placement
+> framing, the two-tree split, and the verb-convention scheme are superseded.
+> Everything not touched by `invariants.md` (the function-category core, one-
+> directional transforms, producer model, package boundaries) remains current.
 
-> **Superseded in part.** [`invariants.md`](./invariants.md) is the authoritative
-> model, mined verbatim from the design conversation, and supersedes this doc
-> wherever they conflict — specifically the authored-verb/placement framing, the
-> two-tree split, and the verb-convention scheme are superseded.
+# Function core and projection — the converged architecture
 
 ## Status
 

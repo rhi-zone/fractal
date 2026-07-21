@@ -81,9 +81,8 @@ bun packages/api-tree/src/cli.ts stub -o src/generated/validators.ts
 
 Use this to get a working `validators.ts` in place before real codegen has
 run (e.g. on first checkout of a repo, or scaffolding a new package) so
-downstream code that imports it compiles and runs — `createApplyValidation`
-treats a module with no entries as a no-op passthrough for every route (see
-§ below).
+downstream code that imports it compiles and runs — `wrapValidators` treats a
+module with no entries as a no-op passthrough for every leaf (see § below).
 
 ### `check <entry> -o <output>`
 
@@ -114,34 +113,38 @@ generated file by hand will show up as `stale` on the next CI run.
 
 ---
 
-## Connecting to `createApplyValidation`
+## Connecting to `wrapValidators`
 
-The generated module exports a `validators: Record<routePath, Validator>`
-map (per entry-file). `createApplyValidation` (in
-`packages/http-api-projector/src/route.ts`) closes over one or more such maps, keyed by
-name, and returns an `applyValidation(key, route)` rewriter:
+The generated module exports a `validators: Record<routePath, GeneratedEntry>`
+map (per entry-file), where each `GeneratedEntry` carries a `parse(value)`
+function performing coercion + validation + narrowing in one pass.
+`wrapValidators(node, validators)` (in `packages/api-tree/src/build.ts`) walks
+a `Node` tree and, for every leaf whose tree position (path segments joined
+by `/`, a `fallback` segment rendered as `:name`, e.g. `"books/:bookId"`)
+matches a path in `validators`, wraps that leaf's handler to run the
+generated `parse()` first — success calls the original handler with the
+parsed value; failure returns `Result.err(validationErrors)` without ever
+reaching it. A leaf with no matching entry passes through untouched, which is
+exactly the behavior a `stub`-generated module (empty `validators`) gives
+you. `wrapValidators` never mutates the input tree — it returns a fresh one.
+
+This happens at the `Node` level, **before** any protocol-specific
+projection runs, so one generated module wires validation into HTTP, MCP,
+and CLI alike:
 
 ```ts
-import { createApplyValidation } from "@rhi-zone/fractal-http-api-projector/route"
+import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import { validators } from "./generated/validators.ts"
 
-const applyValidation = createApplyValidation({ books: validators })
-const routed = applyValidation("books", httpProjection(api))
+const validated = wrapValidators(apiTree, validators)
 ```
 
-Walking `route`, for every leaf method entry whose tree position (path
-segments joined by `/`, fallback segments rendered as `:name`, e.g.
-`"books/:bookId"`) matches a path in `validators`, the matching validator is
-**appended** to that method's `pipeline.validate` array — composing
-alongside any hand-authored validators already there, never replacing them.
-A `key` not present in the outer map is a no-op passthrough, which is
-exactly the behavior a `stub`-generated module (empty `validators`) gives
-you.
-
-Each `key` may be used at most once across the returned function's
-lifetime — calling `applyValidation("books", ...)` twice throws, catching
-accidental double-registration (e.g. codegen run twice into the same
-pipeline).
+In practice you rarely call `wrapValidators` directly — each projector's OOTB
+preset takes a `validators` option and wires it in for you:
+`createFetch(node, { validators })`
+(`packages/http-api-projector/src/preset.ts`), `createMcpServer(node, { validators })`,
+and `runCli(node, { validators })` all wrap the tree with `wrapValidators`
+before their own projection/dispatch runs.
 
 ---
 

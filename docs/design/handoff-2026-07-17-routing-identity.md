@@ -1,3 +1,11 @@
+> **Note:** point-in-time snapshot. Two items below did not land as described:
+> the interceptable `Pipeline` (multi-stage `HttpRoute.pipeline`) was built
+> then removed — `packages/http-api-projector/src/route.ts` now does a single
+> linear decode → handler → encode with no stage-array abstraction, since
+> nothing used the interceptable hooks outside tests of the mechanism itself.
+> `service()` (referenced in "§7: service() as operation factory") was later
+> removed entirely (commit ba9f9d9); `api()`/`op()` covers that ground.
+
 # Handoff — 2026-07-17 session: identity settled, routing model built
 
 ## Identity (settled)

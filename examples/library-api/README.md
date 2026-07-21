@@ -13,10 +13,14 @@ three without redundant per-projection wiring.
 
 Patterns demonstrated:
 
-- **`service()` class authoring** — `BooksService`'s methods (`list`, `add`)
-  become leaf nodes automatically; a field literally named `fallback`
-  (`{ name, subtree }`) becomes the node's wildcard-capture, replacing the
-  old `param()`.
+- **`api()`/`op()` module-level authoring** — the `books` subtree's `list`/
+  `add` ops are plain module-level functions wrapped in `op(fn, ...metas)`,
+  grouped with `api_({ list, add }, { fallback })`; a `fallback: { name,
+  subtree }` option on the node captures any other path segment as `bookId`
+  and continues into the per-book fallback subtree. (`service()` — which
+  reflected class-instance methods into leaf nodes — was removed; TS already
+  has modules for namespacing, so `api()`/`op()` covers the same ground with
+  no separate authoring surface.)
 - **`moveTo` co-location** — `read`/`replace`/`remove` leaves live inside the
   `bookId` fallback subtree but each carries a `moveTo: ".."` directive so
   the HTTP pipeline places them at `/books/{bookId}` instead of nesting
@@ -36,8 +40,8 @@ Patterns demonstrated:
   pattern `crud()` automates for the standard 5-op case.
 - **Codegen entry point** — `tree.ts` exports `api` so
   `extractToolSchemas` can walk the `api()` call and derive input schemas
-  for inline ops (the `service()`-authored `books` subtree is skipped by
-  codegen and degrades to the MCP spec-minimum placeholder schema).
+  for inline ops, including the `books` subtree (also authored via `api()`,
+  so it is walked like every other node — nothing is skipped).
 
 ## Usage
 

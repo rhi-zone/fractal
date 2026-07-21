@@ -2,6 +2,12 @@
 
 Status: design draft, not settled. Presents tradeoffs for the author to decide.
 
+> **Note:** written 2026-07-16, before `service()` was removed (commit ba9f9d9,
+> 2026-07-18). References to `service()` below (§1's "built code", §6's open
+> question) describe a constructor that no longer exists — `api()`/`op()` with
+> module-level functions now covers that ground. The open questions in §6 are
+> otherwise moot.
+
 This document works through the operation layer from first principles, grounded
 in what's actually built and what the consumer-app evidence requires. It does
 NOT restate the requirements (see `operation-layer-spec.md` for those) — it

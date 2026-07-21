@@ -6,6 +6,18 @@
 
 ## Three independent layers
 
+> **Status note (added during docs verification):** the "Parsec-style
+> combinator" framing of layer 1 below was later found not to match the built
+> code — see `docs/design/invariants.md` § Identity and `TODO.md` ("Built code
+> doesn't match the combinator identity — RESOLVED 2026-07-16"): "the actual
+> pattern is inspectable declarations (data) interpreted by projectors to
+> produce surfaces," not chained router-combinators. The three-layer
+> *separation* (declarations / DU / interpreters) still holds and matches
+> current code (`op`/`api` constructors in `packages/api-tree/src/node.ts`
+> producing a `Node` DU, consumed by each projector's interpreter) — only the
+> "combinators take routers, produce routers, Parsec-style" description of
+> layer 1 is stale.
+
 The system separates into three layers that don't depend on each other's
 internals:
 
@@ -138,9 +150,18 @@ The IR has two parts:
 Design principles:
 
 - **Extensible hierarchy, not flat, not closed.** The hierarchy is
-  extensible via the augmentable interface pattern (same as
-  `DispatchKinds` for routing). Projections can introduce type concepts the
-  core doesn't know about.
+  extensible via the augmentable interface pattern (the same declaration-merging
+  approach `StoreRegistry` uses for stores — see
+  `docs/design/middleware-and-caller-context.md`). Projections can introduce
+  type concepts the core doesn't know about.
+
+  > **Stale reference:** this section originally cited `DispatchKinds` (an
+  > attribute-dispatch mechanism) as the precedent. `DispatchKinds` and the
+  > header/query/contentType attribute-dispatch it supported have since been
+  > retired with no current equivalent — see the module doc in
+  > `packages/http-api-projector/src/project.ts` and `TODO.md`. The
+  > augmentable-interface *pattern* itself is still current practice, just via
+  > `StoreRegistry` rather than the retired dispatch mechanism.
 - **Superset of all targets.** The IR should be able to represent anything
   any target needs, so projections are always narrowing (dropping what they
   can't express), never guessing (inventing what the IR didn't capture).
@@ -172,6 +193,15 @@ modify projection code.
 ---
 
 ## Current assessment
+
+> **Superseded (docs verification pass):** at the time this section was
+> written, the routing layer was still open. It has since settled: the node
+> shape is `op(fn, ...contributions)` / `api(children, opts?)`
+> (`packages/api-tree/src/node.ts`, see `docs/design/router-model.md`), and
+> all three HTTP/CLI/MCP projectors (plus GraphQL) implement it, including a
+> fully-implemented CLI (`runCli`, `packages/cli-api-projector/src/cli.ts`) —
+> not planned/future work. The paragraph below is kept as a historical
+> snapshot of the state at the time.
 
 **Fractal the router** — the combinator-based routing layer — is still not
 fully designed. The combinator primitives are unsettled. The core question

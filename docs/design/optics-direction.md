@@ -1,4 +1,4 @@
-> **Superseded by [function-core-and-projection.md](./function-core-and-projection.md).** Retained for the reasoning history (semiring framing, matcher insight, the names-not-verbs / tree×binding exploration — much of which the converged model adopts). NOTE: the converged model REJECTS the bidirectional view/review optic pairs proposed here as the core abstraction (transforms are one-directional); it keeps the protocol-neutral tree × per-protocol binding insight. The intervening `Handler<P>` model (handler-model.md) is also superseded.
+> **Status: Superseded** — replaced by [function-core-and-projection.md](./function-core-and-projection.md). Retained for the reasoning history (semiring framing, matcher insight, the names-not-verbs / tree×binding exploration — much of which the converged model adopts). NOTE: the converged model REJECTS the bidirectional view/review optic pairs proposed here as the core abstraction (transforms are one-directional); it keeps the protocol-neutral tree × per-protocol binding insight. The intervening `Handler<P>` model (handler-model.md) is also superseded.
 
 # Design direction: compositional optics for the node algebra
 

@@ -26,6 +26,18 @@ not a structural deficiency in the code.
 
 ### Structure is optionally part of the skeleton
 
+> **Stale constructor names (docs verification pass):** `node({children: ...})`
+> and `service()` below name constructors that existed at the time this was
+> written but have since been unified away — current code has only
+> `op(fn, ...contributions)` (leaf) and `api(children, opts?)` (branch), both
+> in `packages/api-tree/src/node.ts` (see commit `ebc0064`, "unify
+> node()/api() — single api() constructor"). Class-shape structure inference
+> (`service()`'s role, #3 below) is not implemented in current code — no
+> `fromClass`-style inference exists in any package. The general principle
+> (explicit vs flat vs inferred structure is a deployment choice) still holds;
+> only the concrete constructor names and the "already an instance of #3"
+> claim are stale.
+
 The skeleton's navigable structure (how operations are organized) can be:
 
 1. **Explicit** — declared as a tree (`node({children: ...})`)
@@ -254,19 +266,35 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 
 Unsettled — each must be resolved FROM the user's definition, not guessed.
 
-1. The full verb/method model beyond "POST = method call" (the access-verb mapping
-   is unconfirmed/assistant-invented).
+> **Status update (docs verification pass, cross-checked against `TODO.md`
+> § "Unsettled design questions"):** most of these have since moved. Kept
+> below as originally recorded; status noted inline. Only #5 and #7 remain
+> genuinely open.
+
+1. ~~The full verb/method model beyond "POST = method call"~~ — **RESOLVED
+   (2026-07-17)** per `TODO.md`.
 2. Can one tree auto-derive both HTTP and CLI, given "http path/headers vs cli
    subcommands/env vars have no 1:1 mapping"? (User "kms"'d at "no single tree
-   auto-derives both"; unreconciled.)
+   auto-derives both"; unreconciled.) — **Reframed, not literally resolved**:
+   structure is optionally part of the skeleton (see § Identity above); each
+   projector still derives its own protocol-specific tree from the one API
+   tree, rather than one tree mapping 1:1 onto both.
 3. Node disambiguation: segment vs operation vs param within one node; where the
-   input→options transform lives.
-4. Authoring form for bespoke verb/path overrides — inline on the node vs a
-   separate binding layer.
+   input→options transform lives. — **Partly addressed** via the `fallback`
+   field (`packages/api-tree/src/node.ts`); the input→options transform lives
+   in `assemble()` (`packages/api-tree/src/input.ts`).
+4. ~~Authoring form for bespoke verb/path overrides~~ — **SETTLED**:
+   `meta.http` is a DU interpreted by the projector (see
+   `docs/design/router-model.md`).
 5. Higher-level magic/decorator/metadata layer (user is "not against" it;
-   undesigned).
-6. Creation / non-record output encoding (user leans explicit `POST /…/new`).
-7. "Is it too general?" — never closed.
+   undesigned). — still open.
+6. ~~Creation / non-record output encoding~~ (user leans explicit `POST /…/new`)
+   — **CLOSED (2026-07-17)** per `TODO.md`: purely theoretical, no concrete
+   need materialized.
+7. "Is it too general?" — still open per `TODO.md`'s own "Unsettled design
+   questions" list, though a separate backlog entry in the same file marks a
+   same-named item "DISSOLVED" — the two `TODO.md` lists disagree with each
+   other; not resolved here.
 
 ---
 

@@ -1,11 +1,11 @@
-# Dispatch extensibility model
-
-> **Superseded (2026-07-17)**: The `DispatchMarker` extensibility model described
+> **Status: Retired** (2026-07-17) — the `DispatchMarker` extensibility model described
 > here was retired when the direct tree-walk dispatcher was deleted (commit
 > 18c5195) in favor of the `HttpRoute` pipeline. Attribute dispatch (header/
 > query/contentType) was subsequently parked as not a routing-tree concern —
 > see `docs/design/decisions.md` § "Attribute dispatch." Retained for design
 > reasoning history only.
+
+# Dispatch extensibility model
 
 > **Provenance:** Settled design from working session 2026-07-10. Extends the dispatch model
 > in [`router-model.md`](router-model.md).

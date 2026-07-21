@@ -18,7 +18,7 @@ interface Store {
 }
 ```
 
-`httpStores(req, slugs, parsedBody)` builds the four standard stores for a
+`httpStores(req, slugs, parsedBody)` builds the five standard stores for a
 request:
 
 | store    | source                                    |
@@ -26,10 +26,21 @@ request:
 | `path`   | route slugs (dynamic path segments)        |
 | `query`  | URL query string                            |
 | `header` | request headers                             |
-| `body`   | the pre-parsed JSON body                    |
+| `body`   | the pre-parsed request body                 |
+| `caller` | raw request headers, unparsed pass-through  |
 
-The body is parsed once, upstream, and handed in — the stores factory itself
-stays synchronous and never re-parses.
+The body is parsed once, upstream, via `parseRequestBody` — which WHATWG API
+handles it depends on `Content-Type` (`application/json` → `req.json()`;
+`multipart/form-data`/`application/x-www-form-urlencoded` → `req.formData()`,
+flattened to a plain object; `text/plain` → `{ _text: await req.text() }`;
+`application/octet-stream` → `{ _binary: await req.arrayBuffer() }`) — the
+stores factory itself stays synchronous and never re-parses.
+
+`caller` is a thin pass-through over the same request headers the `header`
+store wraps — `caller.authorization`, `caller.cookie`, etc. — for reading raw
+auth-related headers without going through a named param. Parsing what's
+inside (decoding a JWT, splitting a cookie string) is the consumer's job, not
+this store's; see `docs/design/middleware-and-caller-context.md`.
 
 An **assembler** (`assemble`) then builds the handler's input bag by reading
 named params out of these stores, one param at a time, following a
@@ -62,16 +73,21 @@ regardless of method.
 
 ## 3. Per-param source overrides — `sources.sourceMap`
 
+`Sources` (`packages/http-api-projector/src/route.ts`) is the declarative
+decode config: `{ sourceMap?, paramNames?, transform? }`. It attaches to one
+method entry on the `HttpRoute` tree (`route.methods[verb].sources`) — set it
+by constructing (or rewriting) `HttpRoute` values directly with `httpRoute()`;
+there is no `meta`-level directive that wires it in through `op()`/`api()`
+yet.
+
 Sometimes a param needs to come from somewhere other than its method's
 primary store — the textbook case is an API key read from a header on an
 otherwise query/body-driven route:
 
 ```ts
-const pipeline: Pipeline = {
-  sources: {
-    sourceMap: {
-      apiKey: { store: "header", key: "x-api-key" },
-    },
+const sources: Sources = {
+  sourceMap: {
+    apiKey: { store: "header", key: "x-api-key" },
   },
 }
 ```
@@ -92,12 +108,10 @@ the assembler reads exactly those names, nothing more, each via the
 resolution order:
 
 ```ts
-const pipeline: Pipeline = {
-  sources: {
-    paramNames: ["bookId", "q", "apiKey"],
-    sourceMap: {
-      apiKey: { store: "header", key: "x-api-key" },
-    },
+const sources: Sources = {
+  paramNames: ["bookId", "q", "apiKey"],
+  sourceMap: {
+    apiKey: { store: "header", key: "x-api-key" },
   },
 }
 ```
@@ -140,50 +154,34 @@ After the bag is assembled (by either path above), `sources.transform` gets
 one last pass to reshape it before the handler sees it:
 
 ```ts
-const pipeline: Pipeline = {
-  sources: {
-    paramNames: ["tags"],
-    transform: (bag) => ({
-      ...bag,
-      tags: typeof bag.tags === "string" ? bag.tags.split(",") : bag.tags,
-    }),
-  },
+const sources: Sources = {
+  paramNames: ["tags"],
+  transform: (bag) => ({
+    ...bag,
+    tags: typeof bag.tags === "string" ? bag.tags.split(",") : bag.tags,
+  }),
 }
 ```
 
-`paramNames`, `sourceMap`, and `transform` all live together under the same
-`sources` object. Use `transform` for coercions the assembler itself doesn't
+`paramNames`, `sourceMap`, and `transform` all live together on the same
+`Sources` object. Use `transform` for coercions the assembler itself doesn't
 do — splitting a comma-separated query value into an array, parsing a
 numeric string, defaulting an absent field.
 
----
-
-## 7. Overriding the whole system — `Pipeline.decode`
-
-`Pipeline.decode` is a full escape hatch: when set, the stores system is
-bypassed entirely and `decode(req, meta)` is solely responsible for
-producing the handler's input.
-
-```ts
-const pipeline: Pipeline = {
-  decode: async (req, meta) => {
-    const body = await req.json()
-    return { ...body, requestId: crypto.randomUUID() }
-  },
-}
-```
-
-`sources` is ignored whenever `decode` is present — the function always
-wins. This keeps existing hand-written `decode` pipelines working unchanged
-alongside the newer declarative `sources` config; migrate to `sources` only
-when convenient, not as a requirement.
+There is no further escape hatch below `sources` — the per-route
+`decode`/`encode` override that used to bypass the stores system entirely has
+been removed (see `route.ts`'s module doc: "Dispatch ... is NOT an
+interceptable multi-stage pipeline ... nothing in this codebase used those
+hooks outside of tests exercising the mechanism itself"). Validation is
+handled separately, one level down, by wrapping a leaf's handler directly —
+see `docs/guide/codegen-cli.md`'s `wrapValidators` section.
 
 ---
 
 ## Summary
 
-- Stores (`path`/`query`/`header`/`body`) are the uniform read surface over a
-  request.
+- Stores (`path`/`query`/`header`/`body`/`caller`) are the uniform read
+  surface over a request.
 - Method implies a primary store for non-path params (query for
   GET/HEAD/DELETE, body otherwise).
 - `sources.sourceMap` overrides individual params to a different
@@ -191,4 +189,6 @@ when convenient, not as a requirement.
 - `sources.paramNames` switches from the computed param list to an explicit,
   declarative param list — the mode codegen is expected to drive.
 - `sources.transform` reshapes the assembled bag as a final step.
-- `Pipeline.decode` bypasses stores entirely for full manual control.
+- `sources` lives on an `HttpRoute` method entry, set via `httpRoute()` or a
+  custom rewriter — there is no `meta`-level authoring surface for it yet,
+  and no further escape hatch below it.

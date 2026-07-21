@@ -1,8 +1,10 @@
-# Converged operation/projection model (session 2026-06/07)
+> **Status: Superseded** — the node shape (`{ops, children, meta}`) and dispatch model
+> described here are superseded by [`router-model.md`](./router-model.md) (current node
+> shape: `{handler?, children?, meta}`, attribute-dispatch). The tags/metadata sub-bag
+> design and projection principles below still hold; do not treat the concrete node
+> shape or AS-BUILT section as current.
 
-> **SUPERSEDED (node shape + dispatch only):** The node shape (`{ops, children, meta}`) and
-> dispatch model described here are superseded by [`router-model.md`](router-model.md).
-> The tags/metadata sub-bag design and projection principles below still hold.
+# Converged operation/projection model (session 2026-06/07)
 
 > Most of the originating session was exploratory thrash; the durable result is
 > small. Evidence trail: `docs/archive/fc-api-grouping/` and

@@ -1,4 +1,4 @@
-> **The model described here (§1–§3, the `Handler<R>` / `req.ctx` / `.meta` design) is superseded by [function-core-and-projection.md](./function-core-and-projection.md).** The repo-state snapshot, the scale evidence, the competitive scorecard, and the dogfood-derived backlog (§4–§8) remain useful history; the design model does not. Read §1–§3 as the prior model, not the current one.
+> **The model described here (§1–§3, the `Handler<R>` / `req.ctx` / `.meta` design) is superseded by [function-core-and-projection.md](./function-core-and-projection.md), itself superseded by the settled `op`/`api` node model — see [`invariants.md`](./invariants.md) and [`router-model.md`](./router-model.md).** The scale evidence and the competitive scorecard (§5) remain useful history. §4 (gotchas) and backlog items 1/4/5 in §6 are ALSO old-model-specific — they reference `param`/`provide`/`choice`/`withSegments`/`ctx` discharge and a `packages/openapi-api-projector` package that no longer exist in current code (OpenAPI generation now lives in `packages/http-api-projector/src/openapi.ts`; there is no separate `core`/`http`/`client`/`openapi`/`codegen` package split — current packages are `api-tree`, `type-ir`, `http-api-projector`, `cli-api-projector`, `mcp-api-projector`, `graphql-api-projector`). Read §1–§4 and §6 items 1/4/5 as prior-model history, not current design or an actionable backlog as written. §8's package list (`core`, `http`, `client`, `openapi`, `codegen`) is likewise the pre-rename snapshot, not current structure.
 
 # fractal — roadmap & handoff
 
@@ -137,6 +137,8 @@ without a non-compositional in-dispatch signal.
 
 ## 4. Known gotchas / limitations (verified)
 
+> **Superseded:** these gotchas are all specific to the retired `param`/`provide`/`choice`/`withSegments`/`ctx`-discharge model (§1). None of these constructs exist in current code (`packages/api-tree/src/node.ts` only has `op`/`api`). Kept as history, not current limitations.
+
 - **Bare inline param-reading infers `any`.** A `req => req.ctx.id` arrow has `req`
   contextually typed by the table bound, so `req.ctx` is `any` and the inferred obligation
   collapses (the contravariant-infer limit, documented at `CtxOf` in core). Param-reading
@@ -175,6 +177,8 @@ than Hono + Elysia combined — the backlog below is the path there.
 ---
 
 ## 6. Prioritized feature backlog (from the dogfood)
+
+> **Note:** items 1, 4, and 5 below reference the retired `req.ctx`/`param`/`provide`/`withSegments` model and a `packages/openapi-api-projector` package path that no longer exists — read them as historical backlog framing, not an actionable plan against current code. Items 2 and 3 (error-response modeling, nullable/optional fidelity) restate as general concerns that may still apply, independent of which node model implements them.
 
 ### 1. Typed `query(...)` combinator — HIGHEST VALUE
 Query params have no typed story today: they are read by hand off

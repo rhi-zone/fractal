@@ -1,10 +1,19 @@
 # API Reference
 
-The full API reference is in [`docs/design/handler-model.md`](../design/handler-model.md). This page is a summary index.
+For settled design rationale, see [`docs/design/invariants.md`](../design/invariants.md). For API reference, see the per-package READMEs:
+
+- [`packages/api-tree/README.md`](../../packages/api-tree/README.md)
+- [`packages/http-api-projector/README.md`](../../packages/http-api-projector/README.md)
+- [`packages/cli-api-projector/README.md`](../../packages/cli-api-projector/README.md)
+- [`packages/mcp-api-projector/README.md`](../../packages/mcp-api-projector/README.md)
+- [`packages/graphql-api-projector/README.md`](../../packages/graphql-api-projector/README.md)
+- [`packages/type-ir/README.md`](../../packages/type-ir/README.md)
+
+This page is a summary index.
 
 ## Packages
 
-All 5 packages built and passing tests. `@rhi-zone/fractal-codegen` was merged into `@rhi-zone/fractal-type-ir` 2026-07-18, then its extractor/tree-walker/CLI (`extract.ts`/`tree.ts`/`cli.ts`/`build.ts`) moved on to `@rhi-zone/fractal-api-tree` the same day — they walk `api()`/`op()` authoring source, an api-tree concern, not type-ir's. `compile.ts` (`TypeRef` → validator code) stayed in type-ir as one of its 20+ projectors. `@rhi-zone/fractal-openapi-api-projector` and `@rhi-zone/fractal-client-api-projector` were both merged into `@rhi-zone/fractal-http-api-projector` the same day — OpenAPI only ever describes HTTP APIs and the runtime client only ever builds HTTP requests, so both are HTTP concerns, not separate projection packages; `createFetch` now auto-serves the generated OpenAPI document at `/openapi.json`.
+All 6 packages built and passing tests. `@rhi-zone/fractal-codegen` was merged into `@rhi-zone/fractal-type-ir` 2026-07-18, then its extractor/tree-walker/CLI (`extract.ts`/`tree.ts`/`cli.ts`/`build.ts`) moved on to `@rhi-zone/fractal-api-tree` the same day — they walk `api()`/`op()` authoring source, an api-tree concern, not type-ir's. `compile.ts` (`TypeRef` → validator code) stayed in type-ir as one of its 20+ projectors. `@rhi-zone/fractal-openapi-api-projector` and `@rhi-zone/fractal-client-api-projector` were both merged into `@rhi-zone/fractal-http-api-projector` the same day — OpenAPI only ever describes HTTP APIs and the runtime client only ever builds HTTP requests, so both are HTTP concerns, not separate projection packages; `createFetch` now auto-serves the generated OpenAPI document at `/openapi.json`.
 
 | Package | Status | Description |
 |---------|--------|-------------|
@@ -13,6 +22,7 @@ All 5 packages built and passing tests. `@rhi-zone/fractal-codegen` was merged i
 | `@rhi-zone/fractal-type-ir` | Built & green | Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.), plus AOT validator codegen (`compile.ts`) |
 | `@rhi-zone/fractal-mcp-api-projector` | Built & green | MCP tool projection for the function-core tree — `toTools`, annotation hints derived from `meta.tags` |
 | `@rhi-zone/fractal-cli-api-projector` | Built & green | CLI projection for the function-core tree — subcommand dispatch, tag-driven confirm, codegen args |
+| `@rhi-zone/fractal-graphql-api-projector` | Built & green | GraphQL projection for the function-core tree — `projectGraphQL`/`toSDL`/`toSchema`, resolver map dispatching onto tree handlers, server/client/codegen wiring |
 
 ## Core: `@rhi-zone/fractal-api-tree`
 

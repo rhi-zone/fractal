@@ -22,16 +22,18 @@ not framework objects.
 ## 2. One tree = the router
 
 There is one tree. It is both the grouping structure and the router. There is no separate
-route table, no `ops` map, no two-level `{ops, children}` split. The tree IS the router.
+route table at the API-tree level, no `ops` map, no two-level `{ops, children}` split. The
+tree IS the router.
 
 ### Node shape
 
 Every node is a value of type `Node` (from `packages/api-tree/src/node.ts`):
 
 ```ts
-type Node = {
-  readonly handler?: Handler      // present on leaf nodes
-  readonly children?: Readonly<Record<string, ChildEntry>>
+type Node<H extends Handler = Handler> = {
+  readonly handler?: H            // present on leaf nodes
+  readonly children?: Readonly<Record<string, Node>>
+  readonly fallback?: { readonly name: string; readonly subtree: Node }
   readonly meta: Meta
 }
 ```
@@ -39,77 +41,91 @@ type Node = {
 - **Leaf node** — `handler` is present (a callable). May have no `children`.
 - **Branch node** — `children` is present. May have no `handler`.
 - A node may be both (uncommon but valid). `isLeaf(n)` tests `n.handler !== undefined`.
+- **`fallback`** — optional wildcard-capture child, `{ name, subtree }`. When keyed
+  dispatch at this node finds no static child matching the request value, the fallback
+  consumes it, binds it as `input[name]`, and continues into `subtree`. Static children
+  always win.
 
 Children are keyed by **agnostic, lowercase names** — never HTTP verbs. A child's key
 is its identity across all projections: a path segment for HTTP, a subcommand for CLI, a
 tool-name segment for MCP.
 
-### Two authoring surfaces, one primitive
+### One authoring primitive, two constructors
 
-Both supported surfaces lower to the same `Node` value:
+There is one `Node` primitive; two constructors produce it:
 
-- **`op(fn, ...meta)`** — produces a leaf node from a bare function.
-- **`node({ children?, meta? })`** — produces a branch node.
-- **`service(instance, opts?)`** — walks a class instance; each method becomes a
-  leaf-node child, each `Node`/`ParamNode`-valued field is mounted as-is.
+- **`op(fn, ...contributions)`** — produces a leaf node from a bare function; multiple
+  meta contributions deep-merge via `mergeMeta`.
+- **`api(children, opts?)`** — produces a branch node. `children` is positional; `opts`
+  holds `meta` and `fallback`.
 
-There is one `Node` primitive; `service()` and `node()` produce the identical
-`{ handler?, children, meta }` value.
-
-### Parameterized edges
-
-A `ParamNode` (from `param(name, subtree)`) is a parameterized child edge. It contributes
-`{name}` as an HTTP path segment and captures the runtime slug value into the handler's
-input object under `name`. The handler sees one flat input object — it cannot distinguish
-a path slug from a query param from a body field (provenance-blind by design).
+There is no `node()`, `param()`, or `service()` constructor, and no class-instance
+lowering surface — those existed in an earlier revision of this model and have been
+removed. `api()` is the only branch constructor; a parameterized child edge is expressed
+via a node's own `fallback` field, not a separate `ParamNode` type:
 
 ```ts
-// packages/api-tree/src/node.ts
-type ParamNode = { readonly _tag: "param"; readonly name: string; readonly subtree: Node }
+import { api, op } from "@rhi-zone/fractal-api-tree"
 
-// Usage:
-const routes = node({
-  children: {
-    books: node({
-      children: {
-        bookId: param("bookId", node({ children: { ... } }))
-      }
-    })
-  }
+const routes = api({
+  books: api({
+    list: op((_: unknown) => /* … */),
+  }, {
+    fallback: { name: "bookId", subtree: api({ get: op((input: { bookId: string }) => /* … */) }) },
+  }),
 })
 ```
 
+The handler sees one flat input object — it cannot distinguish a path slug from a query
+param from a body field (provenance-blind by design).
+
 ---
 
-## 3. Dispatch by attribute — path is not special
+## 3. Building the HTTP route tree — a separate transform, not attribute dispatch
 
-Every internal node dispatches its children by **one attribute of the request**. By default
-that attribute is the path segment (the child's key becomes the next path segment). But
-path-segment dispatch is not privileged — it is just the default.
+An earlier revision of this model let any node dispatch its children by an attribute
+other than path segment (`meta.http.dispatch: "method" | { by: "header" | "query" | "contentType", ... }`,
+with a direct tree-walk dispatcher interpreting it at request time). That mechanism has
+been retired — see `packages/http-api-projector/src/project.ts`'s module doc, which
+describes header/query/contentType attribute dispatch as "an open design question" with
+no current equivalent. Do not author against `meta.http.dispatch` today.
 
-The `meta.http.dispatch` field on a node selects the dispatch attribute for its children
-(type `DispatchMarker` in `packages/http-api-projector/src/project.ts`):
+The current HTTP projector instead produces a **separate route tree** (`HttpRoute`,
+organized by path segment + HTTP method) from the API tree (organized by domain) via a
+fixed transform pipeline in `packages/http-api-projector/src/route.ts`:
 
-| `dispatch` value | Children distinguished by |
-|---|---|
-| _(absent)_ | path segment (default) |
-| `"method"` | HTTP method (derived from tags) |
-| `{ by: "header", name: "X-Foo" }` | request header value |
-| `{ by: "query", name: "mode" }` | query parameter value |
-| `{ by: "contentType" }` | Content-Type header value |
+```
+Node --naiveTransform--> HttpRoute --applyMethods, applyMoveTo, applyResponse--> HttpRoute --makeRouterFromRoute--> Fetch
+```
 
-**Multi-verb same path** is expressed by setting `dispatch: "method"` on a node whose
-leaf children are the individual operations. Those children share the node's own URL path;
-HTTP distinguishes them by verb. No special node shape is needed — it is the same
-`Node` type, just a different dispatch attribute at that level.
+- **`naiveTransform`** — the mechanical baseline: every child becomes a path-segment
+  child, every handler becomes a single `POST` entry in `methods`.
+- **`applyMethods`** — reads `{ kind: "method", value }` directives (set by `http.*`
+  verb bundles or written by hand) and renames a method entry's key from `POST` to the
+  right verb.
+- **`applyMoveTo`** — reads `{ kind: "moveTo", path }` directives and repositions a
+  subtree within the route tree using relative-path algebra (`.`/`..`/`../name`/`*`).
+  Leaves that converge on the same target position (the REST-resource pattern: several
+  operations at one path, distinguished by verb) merge there; a real verb collision
+  throws.
+- **`applyResponse`** — reads `{ kind: "response", status?, headers? }` directives and
+  wraps the handler (function composition, not metadata) to produce the override.
 
-When a node uses non-segment dispatch, branch children still contribute a path segment as
-normal; only leaf children are resolved at the same URL path. Non-HTTP projections (MCP,
-CLI) ignore the `dispatch` marker and key children by their agnostic name as always.
+`httpProjection(tree)` (`packages/http-api-projector/src/dx.ts`) is the one-call preset
+composing all three rewriters over `naiveTransform`'s output; `crud(handlers)` is the
+convention constructor for the standard 5-op REST resource, wiring `http.*` bundles for
+you. `createFetch(node, opts?)` (`preset.ts`) is the full OOTB pipeline: optional
+`wrapValidators`, `httpProjection`, user rewriters, router compilation
+(`makeRouterFromRoute` by default; `radixRouter`/`compiledCharRouter`/`mapCharRouter` in
+`compile.ts` for faster dispatch at a build-time cost), and the auto-method layer
+(HEAD-from-GET, OPTIONS/405).
 
-The `buildRoutes` function in `packages/http-api-projector/src/project.ts` implements this at build time,
-producing a flat `Route[]` where each route carries a `conditions: MatchCondition[]` array
-that encodes whatever attribute dispatch was in effect.
+`makeRouterFromRoute` dispatches directly on the compiled `HttpRoute` tree — O(depth) via
+keyed child lookup at each node, walking `children` for static path segments and
+`fallback` for the wildcard-capture case. There is no flat route table.
+
+Non-HTTP projections (MCP, CLI) never see the `HttpRoute` tree — they dispatch/enumerate
+the original `Node` tree directly and key children by their agnostic name as always.
 
 ---
 
@@ -142,23 +158,27 @@ negated.
 - `readOnly = true` implies `idempotent = true`
 - `readOnly = true` AND `destructive = true` is a conflict (both cannot hold)
 
-### Inheritance — closest-wins
+### No inheritance — a node's tags are exactly what's on it
 
-Tags inherit down the tree. `effectiveTags(path)` (in `packages/api-tree/src/tags.ts`)
-walks an array of nodes from root to leaf; a defined value (`true` or `false`) at a closer
-node overrides a farther one. `undefined` defers upward. This means you can tag an entire
-subtree as `readOnly` at the branch node, and individual leaves can override.
+An earlier revision of this model had closest-wins tag inheritance
+(`effectiveTags(path)`, walking root-to-leaf and letting a defined value at a closer node
+override a farther one). That function has been removed: **a node's tags do not depend on
+its ancestors.** Inheritance-by-tree-position broke composability — moving a subtree would
+silently change its behavior. Tagging a whole subtree as `readOnly` now means tagging each
+leaf explicitly, or writing an explicit `(tree) => tree` transform (built on `mapNodes` in
+`packages/api-tree/src/tags.ts`, the shared pre-order-visitor primitive) that pushes the
+tag down as its own pass over the tree.
 
 ### How projections read tags
 
 | Projection | Tag use |
 |---|---|
-| HTTP (`buildRoutes`) | derives HTTP verb via the lattice |
+| HTTP (`verbFromTags`) | derives HTTP verb via the lattice |
 | MCP (`toTools`) | derives `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` |
-| CLI _(planned)_ | drives confirmation prompt on destructive ops |
+| CLI (`runCli`) | drives confirmation prompt on destructive ops |
 
-The same `effectiveTags` call and the same `meta.tags` bag drive all of these. One
-authoring site, consistent semantics everywhere.
+The same `meta.tags` bag drives all of these — read directly off each node, with no
+inheritance step. One authoring site, consistent semantics everywhere.
 
 > **Note:** The `readOnly` tag name is provisional. The canonical tag-set document uses
 > `safe`; `readOnly` is a working alias pending final naming resolution.
@@ -172,7 +192,7 @@ well-formed fractal tree. They are uppercase HTTP vocabulary; they are meaningle
 CLI, and any other projection.
 
 The verb for a leaf is **derived from tags** at build time by `verbFromTags(meta)` in
-`packages/http-api-projector/src/project.ts`:
+`packages/http-api-projector/src/tags.ts`:
 
 ```
 readOnly = true                           → GET
@@ -181,7 +201,9 @@ idempotent = true, destructive ≠ true     → PUT
 else                                      → POST  (conservative default)
 ```
 
-`meta.http.verb` is an escape hatch that overrides the derived verb when needed.
+An explicit `{ kind: "verb", value }` entry in `meta.http.directives` (set by an
+`http.*` bundle, or by hand) is an escape hatch that overrides the derived verb when
+needed — checked before tags.
 
 The `http.*` verb helpers (`http.get`, `http.put`, `http.post`, `http.patch`,
 `http.delete`) are **metadata value bundles**: each sets both the verb pin and the
@@ -211,17 +233,17 @@ verb, segment names, idempotency, auth hints.
 
 ### `mergeMeta`
 
-Composing meta bags — whether merging a verb helper bundle with explicit tags, or
-accumulating inherited tags down a tree walk — uses one primitive: `mergeMeta(...metas)`
+Composing meta bags — merging a verb helper bundle with explicit tags, or any other
+multi-contribution `op()`/`api()` call — uses one primitive: `mergeMeta(...metas)`
 (in `packages/api-tree/src/node.ts`).
 
 `mergeMeta` is a deep merge with precedence:
 - Later bags win per key; `undefined` defers (does not override a previously-set value).
-- Sub-bags that are plain objects (like `tags` or `http`) are merged **one level deep**
-  — not spread-replaced. Spreading would silently drop keys from the losing sub-bag.
+- Sub-bags that are plain objects (like `tags` or `http`) are merged recursively — not
+  spread-replaced. Spreading would silently drop keys from the losing sub-bag. Arrays
+  (e.g. `http.directives`) concatenate.
 
-This is the same closest-wins logic as `effectiveTags`, generalized to the whole meta
-bag. `op(fn, ...contributions)` applies `mergeMeta` across all provided meta contributions
+`op(fn, ...contributions)` applies `mergeMeta` across all provided meta contributions
 so a verb bundle and extra explicit tags compose without clobbering each other.
 
 ---
@@ -232,39 +254,37 @@ A **projection** reads the one Node tree and produces a surface. There are two m
 
 ### Dispatching projections
 
-**HTTP** and **CLI** (planned): a request arrives → walk the tree → find one leaf → call
-its handler → return a response.
+**HTTP** and **CLI**: a request arrives → walk the tree (or the derived route tree, for
+HTTP — see §3) → find one leaf → call its handler → return a response.
 
-`buildRoutes(node)` in `packages/http-api-projector/src/project.ts` compiles the tree to a flat
-`Route[]` at build time. `makeRouter(routes)` dispatches each live request against that
-table in O(routes) with full condition evaluation. The `createFetch(node, opts?)` preset in
-`packages/http-api-projector/src/preset.ts` composes `buildRoutes` + `makeRouter` +
-`autoMethodLayer` (HEAD-from-GET, OPTIONS/405) into a WHATWG
-`(req: Request) => Promise<Response>` handler suitable for Bun, Deno, Cloudflare Workers,
-and Node.
+`createFetch(node, opts?)` (`packages/http-api-projector/src/preset.ts`) is the OOTB HTTP
+pipeline described in §3. `runCli(node, opts?)` (`packages/cli-api-projector/src/cli.ts`)
+walks the `Node` tree directly for CLI subcommand dispatch — no separate route-tree
+transform, since a CLI's shape already matches the domain tree's shape.
 
 ### Enumerating projections
 
-**MCP** and (planned) **OpenAPI, GraphQL, generated client**: flatten all leaves in the
-tree to produce a surface — one tool / one schema object / one client method per leaf.
+**MCP** and **GraphQL**: flatten all leaves in the tree to produce a surface — one tool /
+one field per leaf.
 
 `toTools(node, opts?)` in `packages/mcp-api-projector/src/project.ts` walks the tree and emits one
 `McpTool` per leaf. Tool names are underscore-joined from tree position
 (`catalog_search`, `books_bookId_get`). The `meta.mcp.name` field is a full override;
-`meta.mcp.segment` overrides the per-node name contribution.
+`meta.mcp.segment` overrides the per-node name contribution. See
+`docs/design/graphql-projector.md` for the GraphQL enumerator.
 
-For both modes, the projection reads `meta.tags` via `effectiveTags` to derive
-projection-specific semantics (HTTP verb, MCP annotation hints). One authoring source,
-consistent behavior across surfaces.
+For both modes, the projection reads `meta.tags` directly off each node (no inheritance,
+see §4) to derive projection-specific semantics (HTTP verb, MCP annotation hints). One
+authoring source, consistent behavior across surfaces.
 
 ### Codegen bridge
 
 Projections that need runtime input schemas (MCP, OpenAPI) cannot read TypeScript types
-at runtime — types are erased. `@rhi-zone/fractal-type-ir` (`packages/type-ir`) bridges
-this gap: `extractToolSchemas(entryFile)` uses the TypeScript compiler API to walk the
-exported node tree at the AST level, derive JSON Schema from each leaf's first parameter
-type, and extract leading JSDoc text. The resulting `SchemaMap` is passed to `toTools` as
-`opts.schemas`.
+at runtime — types are erased. `extractToolSchemas(entryFile)`
+(`packages/api-tree/src/tree.ts`) uses the TypeScript compiler API (via
+`@rhi-zone/fractal-type-ir`'s JSON Schema derivation) to walk the exported node tree at
+the AST level, derive JSON Schema from each leaf's first parameter type, and extract
+leading JSDoc text. The resulting `SchemaMap` is passed to `toTools` as `opts.schemas`.
 
 ---
 
@@ -275,18 +295,18 @@ type, and extract leading JSDoc text. The resulting `SchemaMap` is passed to `to
 | `Node` | `@rhi-zone/fractal-api-tree/node` | The one tree node type |
 | `Handler<I,O>` | `@rhi-zone/fractal-api-tree/node` | A plain callable: `(input: I) => O \| Promise<O>` |
 | `Meta` | `@rhi-zone/fractal-api-tree/node` | Open metadata bag |
-| `op(fn, ...meta)` | `@rhi-zone/fractal-api-tree/node` | Construct a leaf node |
-| `node({ children?, meta? })` | `@rhi-zone/fractal-api-tree/node` | Construct a branch node |
-| `service(instance, opts?)` | `@rhi-zone/fractal-api-tree/node` | Lower a class instance to a branch node |
-| `param(name, subtree)` | `@rhi-zone/fractal-api-tree/node` | Parameterized child edge |
+| `op(fn, ...contributions)` | `@rhi-zone/fractal-api-tree` | Construct a leaf node |
+| `api(children, opts?)` | `@rhi-zone/fractal-api-tree` | Construct a branch node (children + optional meta/fallback) |
 | `mergeMeta(...metas)` | `@rhi-zone/fractal-api-tree/node` | Deep-merge meta bags, later wins |
 | `Tags` | `@rhi-zone/fractal-api-tree/tags` | Three-valued behavioral tag dict |
 | `resolveTags(tags)` | `@rhi-zone/fractal-api-tree/tags` | Apply the implication lattice |
-| `effectiveTags(path)` | `@rhi-zone/fractal-api-tree/tags` | Closest-wins tag inheritance down a path |
-| `dispatch(node, segs, input)` | `@rhi-zone/fractal-api-tree/node` | Minimal runtime tree walker |
-| `buildRoutes(node)` | `@rhi-zone/fractal-http-api-projector/project` | Compile tree → flat `Route[]` |
-| `verbFromTags(meta)` | `@rhi-zone/fractal-http-api-projector/project` | Derive HTTP verb from the tag lattice |
-| `makeRouter(routes)` | `@rhi-zone/fractal-http-api-projector/project` | Runtime verb+path+conditions dispatcher |
+| `mapNodes(tree, fn)` | `@rhi-zone/fractal-api-tree/tags` | Pre-order tree-transform primitive (replaces removed tag inheritance) |
+| `extractToolSchemas(entryFile)` | `@rhi-zone/fractal-api-tree/tree` | AST-level JSON Schema + JSDoc extraction |
+| `naiveTransform(node)` | `@rhi-zone/fractal-http-api-projector/route` | `Node => HttpRoute` mechanical baseline |
+| `httpProjection(node, opts?)` | `@rhi-zone/fractal-http-api-projector/dx` | One-call `Node => HttpRoute` with standard rewriters |
+| `crud(handlers)` | `@rhi-zone/fractal-http-api-projector/dx` | Convention constructor for the 5-op REST resource |
+| `verbFromTags(meta)` | `@rhi-zone/fractal-http-api-projector/tags` | Derive HTTP verb from the tag lattice |
+| `makeRouterFromRoute(route)` | `@rhi-zone/fractal-http-api-projector/route` | Zero-build-cost `HttpRoute` dispatcher |
 | `createFetch(node, opts?)` | `@rhi-zone/fractal-http-api-projector/preset` | OOTB HTTP handler (WHATWG `Request→Response`) |
 | `toTools(node, opts?)` | `@rhi-zone/fractal-mcp-api-projector/project` | Enumerate tree → flat `McpTool[]` |
-| `DispatchMarker` | `@rhi-zone/fractal-http-api-projector/project` | `"method"` \| header \| query \| contentType dispatch |
+| `runCli(node, opts?)` | `@rhi-zone/fractal-cli-api-projector/cli` | Dispatch the tree as a CLI |
