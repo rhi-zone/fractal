@@ -42,7 +42,7 @@
 //   packages/http-api-projector/src/preset.ts   — sibling preset (createFetch, structural mirror)
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js"
+import type { RequestHandlerExtra, RequestOptions } from "@modelcontextprotocol/sdk/shared/protocol.js"
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -57,6 +57,11 @@ import {
 import type {
   CallToolResult,
   ContentBlock,
+  CreateMessageRequestParams,
+  CreateMessageRequestParamsBase,
+  CreateMessageRequestParamsWithTools,
+  CreateMessageResult,
+  CreateMessageResultWithTools,
   GetPromptResult,
   Implementation,
   ReadResourceResult,
@@ -471,6 +476,52 @@ function encodeToolError(name: string, response: McpErrorResponse): CallToolResu
 }
 
 // ============================================================================
+// Sampling — MCP's `sampling/createMessage`, exposed to handlers via
+// `stores.caller.createMessage` (see `assembleInput` below).
+//
+// IMPORTANT: per the MCP spec, `sampling` is a CLIENT capability, not a
+// server one — `ClientCapabilitiesSchema` has a `sampling` field;
+// `ServerCapabilitiesSchema` does not (see the SDK's `types.d.ts`). The
+// SDK's own `Server.assertCapabilityForMethod`/`createMessage`
+// (`server/index.js`) gate the request on `this._clientCapabilities?.sampling`
+// — populated from what the CONNECTED CLIENT declared during `initialize`,
+// never from anything this server advertises. So `CreateMcpServerOptions
+// .sampling` intentionally does NOT add a `sampling` key to the
+// `capabilities` object passed to `new Server(...)` below — there is no such
+// key on `ServerCapabilities` to add (attempting it doesn't type-check).
+// What it DOES do: gate whether `stores.caller.createMessage` exists at all
+// — a deliberate opt-in, since not every MCP client implements sampling, and
+// a handler that reaches for it should fail loudly (missing field) rather
+// than silently getting a function that always rejects.
+// ============================================================================
+
+/**
+ * Opt-in configuration for `CreateMcpServerOptions.sampling` — currently no
+ * fields; reserved so a later per-server sampling default (e.g. a default
+ * `RequestOptions` applied to every `createMessage` call) can be added
+ * without a breaking change to the option's shape. Pass `true` instead for
+ * the common "just turn it on" case.
+ */
+export type SamplingConfig = Record<string, never>
+
+/**
+ * The overloaded signature of `stores.caller.createMessage`, exposed to
+ * tool/resource/prompt handlers when `CreateMcpServerOptions.sampling` is
+ * enabled — mirrors the SDK's own `Server.createMessage` overloads
+ * (`@modelcontextprotocol/sdk/server/index.js`) one-for-one, bound to this
+ * server instance so a handler doesn't need a reference to the `Server`
+ * itself. Calling it when the connected client hasn't declared `sampling`
+ * support rejects at call time (see this module's "Sampling" doc above for
+ * why that check is entirely client-declared, not something this option
+ * changes on the server side).
+ */
+export interface CreateMessageFn {
+  (params: CreateMessageRequestParamsBase, options?: RequestOptions): Promise<CreateMessageResult>
+  (params: CreateMessageRequestParamsWithTools, options?: RequestOptions): Promise<CreateMessageResultWithTools>
+  (params: CreateMessageRequestParams, options?: RequestOptions): Promise<CreateMessageResult | CreateMessageResultWithTools>
+}
+
+// ============================================================================
 // Input assembly — shared pipeline (packages/api-tree/src/input.ts)
 // ============================================================================
 
@@ -498,19 +549,29 @@ function encodeToolError(name: string, response: McpErrorResponse): CallToolResu
  * `027baa6`) — `extra` now flows through `stores.caller` like every other
  * projector's caller context; it is never exposed to middleware directly. See
  * docs/design/middleware-and-caller-context.md.
+ *
+ * `createMessage`, when passed (only when `CreateMcpServerOptions.sampling`
+ * is enabled — see call sites in `createMcpServer`), is threaded onto
+ * `caller` alongside `authInfo`/`sessionId` — see this module's "Sampling"
+ * doc section and `CreateMessageFn`.
  */
 function assembleInput(
   storeName: string,
   values: Record<string, unknown>,
   sourceMap: SourceMap,
   extra: McpRequestExtra,
+  createMessage?: CreateMessageFn,
 ): { readonly input: Record<string, unknown>; readonly stores: Stores } {
   // storeName is always one of MCP's declared store names ("argument" or
   // "uri-variable") at call sites below, but it's threaded through as a
   // plain string — cast past the declaration-merged `Stores`' literal keys.
   const stores = {
     [storeName]: values,
-    caller: { authInfo: extra.authInfo, sessionId: extra.sessionId },
+    caller: {
+      authInfo: extra.authInfo,
+      sessionId: extra.sessionId,
+      ...(createMessage !== undefined ? { createMessage } : {}),
+    },
   } as Stores
   const paramNames = [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
   return { input: assemble(stores, paramNames, sourceMap, storeName), stores }
@@ -682,6 +743,24 @@ export type CreateMcpServerOptions<T = unknown> = {
    * and CLI's `CliOpts.errorEncoder` (`packages/cli-api-projector/src/cli.ts`).
    */
   readonly errorEncoder?: McpErrorEncoder
+  /**
+   * Opt-in: expose `createMessage` on `stores.caller` so tool/resource/
+   * prompt handlers can request LLM sampling from the connected client
+   * mid-execution (MCP's `sampling/createMessage`), wired to this server's
+   * own `Server.createMessage` (see `CreateMessageFn`). Pass `true` to
+   * enable with defaults, or a `SamplingConfig` object (currently no fields,
+   * reserved for future config) for the same effect today.
+   *
+   * Absent by default — `stores.caller` has no `createMessage` field unless
+   * this is set, so a handler can't reach for a capability the connected
+   * client might not even support without the integrator opting in first.
+   * Note this does NOT add anything to this server's advertised
+   * `ServerCapabilities`: per the MCP spec `sampling` is a CLIENT
+   * capability, asserted from what the connected client declared during
+   * `initialize` — see this module's "Sampling" doc section above
+   * `CreateMessageFn` for the full explanation.
+   */
+  readonly sampling?: boolean | SamplingConfig
 }
 
 /**
@@ -763,8 +842,22 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       tools: { ...opts.capabilities?.tools },
       ...(hasResources ? { resources: { ...opts.capabilities?.resources } } : {}),
       ...(hasPrompts ? { prompts: { ...opts.capabilities?.prompts } } : {}),
+      // No `sampling` key here — see CreateMcpServerOptions.sampling's doc
+      // and this module's "Sampling" section above `CreateMessageFn`:
+      // `sampling` is a CLIENT capability in the MCP spec, not something a
+      // server advertises (`ServerCapabilitiesSchema` has no such field).
     },
   })
+
+  // Opt-in sampling (see CreateMcpServerOptions.sampling and this module's
+  // "Sampling" doc section) — gates whether `stores.caller.createMessage`
+  // exists at all; `true` and `{}` (a `SamplingConfig`, no fields yet) both
+  // enable it. Bound to `server.createMessage` so a handler never needs a
+  // reference to the `Server` instance itself.
+  const samplingEnabled = opts.sampling === true || (typeof opts.sampling === "object" && opts.sampling !== null)
+  const createMessage: CreateMessageFn | undefined = samplingEnabled
+    ? ((params: CreateMessageRequestParams, options?: RequestOptions) => server.createMessage(params, options)) as CreateMessageFn
+    : undefined
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }))
 
@@ -801,7 +894,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
     }
 
     try {
-      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra)
+      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra, createMessage)
       const toolContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "tool" }
       const base = toBase(withAls(dispatch.handler, toolContext))
       const callHandler = middleware.length === 0
@@ -885,7 +978,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
           : composeMiddleware(middleware, base)
         // No URI-variables for a fixed resource — assembleInput still builds
         // the `caller` store from `extra` so middleware sees it here too.
-        const { input, stores } = assembleInput("uri-variable", {}, {}, extra)
+        const { input, stores } = assembleInput("uri-variable", {}, {}, extra, createMessage)
         const result = await callHandler(input, stores)
         if (detectStreaming && isAsyncIterable(result)) {
           return { contents: await collectStreamedResourceContents(result, extra, uri, mimeType) }
@@ -900,7 +993,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         template.paramNames.forEach((name, i) => {
           captured[name] = match[i + 1] as string
         })
-        const { input, stores } = assembleInput("uri-variable", captured, template.sourceMap, extra)
+        const { input, stores } = assembleInput("uri-variable", captured, template.sourceMap, extra, createMessage)
         const templateContext: McpAlsContext = { meta: template.meta, name: uri, requestType: "resource" }
         const base = toBase(withAls(template.handler, templateContext))
         const callHandler = middleware.length === 0
@@ -928,7 +1021,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
       }
 
-      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra)
+      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra, createMessage)
       const promptContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "prompt" }
       const base = toBase(withAls(dispatch.handler, promptContext))
       const callHandler = middleware.length === 0

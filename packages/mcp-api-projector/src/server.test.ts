@@ -5,11 +5,14 @@
 // `tools/call` wire protocol, not just the internal `projectTools` walk
 // (already covered by project.test.ts).
 
+import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
+import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { createMcpServer } from "./server.ts"
+import type { CreateMessageFn, McpMiddleware } from "./server.ts"
 
 // ============================================================================
 // Fixture: a small Node tree with a happy-path leaf and a throwing leaf
@@ -786,5 +789,176 @@ describe("createMcpServer — sourceMap support (prompts)", () => {
       type: "text",
       text: JSON.stringify("summary of: hello"),
     })
+  })
+})
+
+// ============================================================================
+// 11. Sampling — CreateMcpServerOptions.sampling opts a handler into
+// `stores.caller.createMessage` (MCP's `sampling/createMessage`, wired to the
+// SDK's own `Server.createMessage`).
+//
+// Note there is no "sampling capability advertisement" test mirroring the
+// resources/prompts capability tests above: per the MCP spec, `sampling` is
+// a CLIENT capability (the CLIENT declares support for being asked to
+// sample), not a server one — `ServerCapabilitiesSchema`
+// (@modelcontextprotocol/sdk/types.js) has no `sampling` field at all, so
+// there is nothing for this server to advertise either way. What
+// `CreateMcpServerOptions.sampling` actually gates is covered directly
+// below: whether `stores.caller.createMessage` exists for a handler to call.
+// A mock CLIENT-side `sampling/createMessage` handler stands in for "the
+// connected client supports sampling" — the SDK's `Server.createMessage`
+// itself asserts against the CLIENT's declared `ClientCapabilities.sampling`
+// before sending the request, and `client.setRequestHandler` is how a test
+// double answers it over `InMemoryTransport`, same wiring `Client` uses for
+// real clients.
+// ============================================================================
+
+describe("createMcpServer — sampling", () => {
+  it("stores.caller.createMessage is unavailable to a handler when sampling is not enabled", async () => {
+    let sawCreateMessage: unknown = "not-checked"
+    const samplingOffTree = api_({
+      check: op((_: unknown) => ({ ok: true }), {}),
+    })
+    const server = createMcpServer(samplingOffTree, {
+      name: "sampling-off-server",
+      version: "1.0.0",
+      middleware: [
+        (next) => (input, stores) => {
+          sawCreateMessage = stores.caller?.createMessage
+          return next(input, stores)
+        },
+      ],
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: { sampling: {} } })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    await client.callTool({ name: "check", arguments: {} })
+    expect(sawCreateMessage).toBeUndefined()
+  })
+
+  it("stores.caller.createMessage is available to a handler when sampling: true is passed", async () => {
+    let sawCreateMessage: unknown = "not-checked"
+    const samplingOnTree = api_({
+      check: op((_: unknown) => ({ ok: true }), {}),
+    })
+    const server = createMcpServer(samplingOnTree, {
+      name: "sampling-on-server",
+      version: "1.0.0",
+      sampling: true,
+      middleware: [
+        (next) => (input, stores) => {
+          sawCreateMessage = stores.caller?.createMessage
+          return next(input, stores)
+        },
+      ],
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: { sampling: {} } })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    await client.callTool({ name: "check", arguments: {} })
+    expect(typeof sawCreateMessage).toBe("function")
+  })
+
+  // A leaf handler is always `(input) => output` (see api-tree's `Handler`
+  // type, node.ts) — it never receives `stores` directly, only middleware
+  // does (see this file's middleware.test.ts and server.ts's own doc on
+  // `McpMiddleware`). So "a tool handler that uses createMessage" is wired
+  // the same way any other caller-context value reaches a handler: a small
+  // bridging middleware reads `stores.caller.createMessage` and runs the
+  // rest of the call inside an `AsyncLocalStorage` context the handler can
+  // read from — the exact pattern middleware.test.ts already demonstrates
+  // for `stores.caller` in general ("middleware sets up an
+  // AsyncLocalStorage caller-context the handler can read").
+  const createMessageAls = new AsyncLocalStorage<CreateMessageFn>()
+  const bridgeCreateMessage: McpMiddleware = (next) => (input, stores) => {
+    const createMessage = stores.caller?.createMessage as CreateMessageFn | undefined
+    if (createMessage === undefined) return next(input, stores)
+    return createMessageAls.run(createMessage, () => next(input, stores))
+  }
+
+  it("a tool handler can call stores.caller.createMessage (bridged via ALS) and use the client's completion in its result", async () => {
+    // Handler asks the connected client to complete a prompt built from its
+    // own input, then folds the completion text into its return value — the
+    // LLM-in-the-loop pattern sampling exists for.
+    const askTree = api_({
+      askLlm: op(async (input: { question: string }) => {
+        const createMessage = createMessageAls.getStore()!
+        const result = await createMessage({
+          messages: [{ role: "user", content: { type: "text", text: input.question } }],
+          maxTokens: 100,
+        })
+        const text = result.content.type === "text" ? result.content.text : ""
+        return { question: input.question, answer: text }
+      }, {}),
+    })
+
+    const server = createMcpServer(askTree, {
+      name: "sampling-ask-server",
+      version: "1.0.0",
+      sampling: true,
+      middleware: [bridgeCreateMessage],
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" }, { capabilities: { sampling: {} } })
+    client.setRequestHandler(CreateMessageRequestSchema, async (request) => {
+      // `SamplingMessage.content` is single-block-or-array (tool-call
+      // support) — narrow to the single-text-block case this test sends.
+      const firstMessage = request.params.messages[0]
+      const firstBlock = firstMessage !== undefined
+        ? (Array.isArray(firstMessage.content) ? firstMessage.content[0] : firstMessage.content)
+        : undefined
+      const askedText = firstBlock !== undefined && firstBlock.type === "text" ? firstBlock.text : ""
+      return {
+        model: "mock-model",
+        role: "assistant",
+        content: { type: "text", text: `answer to: ${askedText}` },
+      }
+    })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    const result = await client.callTool({ name: "askLlm", arguments: { question: "what is 2+2?" } })
+
+    expect(result.isError).toBeFalsy()
+    const content = result.content as Array<{ type: string; text: string }>
+    expect(JSON.parse(content[0]!.text)).toEqual({
+      question: "what is 2+2?",
+      answer: "answer to: what is 2+2?",
+    })
+  })
+
+  it("stores.caller.createMessage rejects when the connected client hasn't declared sampling support", async () => {
+    // Sampling is enabled server-side (opts.sampling: true), but the
+    // connected CLIENT declares no `sampling` capability — the SDK's own
+    // `Server.createMessage` asserts against the client's declared
+    // capabilities and rejects before ever sending the request. Proves
+    // `CreateMcpServerOptions.sampling` only controls whether the FIELD
+    // exists on `stores.caller`, not whether the call itself can succeed —
+    // that remains gated by the client, exactly as the MCP spec intends.
+    const askTree = api_({
+      askLlm: op(async (_input: unknown) => {
+        const createMessage = createMessageAls.getStore()!
+        await createMessage({
+          messages: [{ role: "user", content: { type: "text", text: "hi" } }],
+          maxTokens: 10,
+        })
+        return { ok: true }
+      }, {}),
+    })
+
+    const server = createMcpServer(askTree, {
+      name: "sampling-unsupported-client-server",
+      version: "1.0.0",
+      sampling: true,
+      middleware: [bridgeCreateMessage],
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    // No `capabilities: { sampling: {} }` on the client this time.
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    const result = await client.callTool({ name: "askLlm", arguments: {} })
+    expect(result.isError).toBe(true)
   })
 })
