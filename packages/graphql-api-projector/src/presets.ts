@@ -30,9 +30,10 @@
 // standard subscription transport (the spec above is silent on it; the
 // de facto standard is `graphql-ws` over WebSocket). `createGraphQLServer`'s
 // `.subscribe()` already produces the `AsyncIterable<ExecutionResult>` a
-// `graphql-ws` transport would drain (see server.ts's module doc) — wiring an
-// actual WebSocket preset is future work, gated on picking a `graphql-ws`
-// dependency (see docs/design/graphql-projector.md's "Subscriptions" section).
+// `graphql-ws` transport drains (see server.ts's module doc) — see ws.ts for
+// that transport: a hand-rolled graphql-ws protocol implementation over
+// `.subscribe()`, with a Bun WebSocket adapter (`handleBunWebSocket`)
+// mirroring this module's own HTTP preset.
 
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { createGraphQLServer } from "./server.ts"

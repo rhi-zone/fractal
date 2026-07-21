@@ -30,6 +30,10 @@
     "./presets": {
       "types": "./src/presets.ts",
       "import": "./src/presets.ts"
+    },
+    "./ws": {
+      "types": "./src/ws.ts",
+      "import": "./src/ws.ts"
     }
   },
   "files": ["src"],
