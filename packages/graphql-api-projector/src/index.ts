@@ -33,6 +33,14 @@ export { createGraphQLServer } from "./server.ts"
 export type { CreateHttpGraphQLServerOptions, HttpGraphQLCorsOptions } from "./presets.ts"
 export { createHttpGraphQLServer } from "./presets.ts"
 export type {
+  BunServerWebSocketLike,
+  BunWebSocketHandlers,
+  GraphQLWsConnectionHandler,
+  GraphQLWsHandlerOptions,
+  GraphQLWsSender,
+} from "./ws.ts"
+export { createWsHandler, handleBunWebSocket } from "./ws.ts"
+export type {
   AnyGraphQLClient,
   GraphQLClientErrorEntry,
   GraphQLClientOptions,
@@ -40,3 +48,5 @@ export type {
   GraphQLTransportResult,
 } from "./client.ts"
 export { createGraphQLClient, GraphQLClientError } from "./client.ts"
+export type { GraphQLCodegenOptions } from "./codegen.ts"
+export { generateGraphQLClient } from "./codegen.ts"

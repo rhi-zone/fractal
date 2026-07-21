@@ -188,8 +188,15 @@ function buildSelectionSet(
   return ` { ${lines.join(" ")} }`
 }
 
-/** Top-level selection-set entry point: `""` for a scalar/unknown output (no subselection needed/possible), else `buildSelectionSet`'s result. */
-function selectionSetFor(output: TypeRef | undefined, namedTypes: Readonly<Record<string, TypeRef>>): string {
+/**
+ * Top-level selection-set entry point: `""` for a scalar/unknown output (no
+ * subselection needed/possible), else `buildSelectionSet`'s result. Exported
+ * so codegen.ts (a second consumer needing the exact same derivation to keep
+ * its precomputed documents from drifting out of sync with what this runtime
+ * client constructs) doesn't have to reimplement the recursive ref/object
+ * walk.
+ */
+export function selectionSetFor(output: TypeRef | undefined, namedTypes: Readonly<Record<string, TypeRef>>): string {
   if (output === undefined) return ""
   const elem = elementType(output)
   if (!isCompositeKind(elem.shape.kind)) return ""
@@ -208,7 +215,13 @@ function nestBody(path: readonly string[], inner: string, indent: string): strin
   return `${indent}${seg} {\n${nestBody(rest, inner, childIndent)}\n${indent}}`
 }
 
-function buildDocument(
+/**
+ * Assemble one query/mutation/subscription document string. Exported for the
+ * same reason as `selectionSetFor` above — codegen.ts precomputes documents
+ * at codegen time using this exact function, instead of duplicating document
+ * assembly and risking it drifting from what this runtime client builds.
+ */
+export function buildDocument(
   operationType: OperationType,
   path: readonly string[],
   fieldName: string,
