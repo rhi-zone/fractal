@@ -22,6 +22,14 @@
     "./resolve": {
       "types": "./src/resolve.ts",
       "import": "./src/resolve.ts"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "import": "./src/server.ts"
+    },
+    "./presets": {
+      "types": "./src/presets.ts",
+      "import": "./src/presets.ts"
     }
   },
   "files": ["src"],

@@ -15,7 +15,7 @@
 
 import { GraphQLError } from "graphql"
 import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { ErrorEncoder, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 import type { Dispatch } from "./project.ts"
 
 // Augment the shared StoreRegistry with the "argument" store name — see
@@ -105,10 +105,55 @@ function assembleGraphQLInput(
   return { input, stores }
 }
 
+// ============================================================================
+// Handler middleware — around-hooks wrapping the handler call, F => F where
+// F = (input, stores) => result (see docs/design/middleware-and-caller-
+// context.md). Mirrors HTTP's HttpHandlerMiddleware and MCP's McpMiddleware —
+// same shape, GraphQL's own name for it. Composes like an onion: the first
+// entry in `ResolverOptions.middleware` is the OUTERMOST wrapper.
+// ============================================================================
+
+/** A GraphQL resolver-scoped middleware — wraps the handler-invoking function `next`. */
+export type GraphQLHandlerMiddleware = (
+  next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
+
+/** Compose `middleware` around `base`, first entry outermost. An empty array returns `base` unchanged. */
+function composeMiddleware(
+  middleware: readonly GraphQLHandlerMiddleware[],
+  base: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+): (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown> {
+  let wrapped = base
+  for (let i = middleware.length - 1; i >= 0; i--) {
+    wrapped = middleware[i]!(wrapped)
+  }
+  return wrapped
+}
+
 /** Options for `createResolver`. */
 export type ResolverOptions = {
   /** Maps a handler's `Result.err(E)` error value to a `GraphQLErrorResponse`. `undefined` (including when omitted) falls back to a generic `GraphQLError` wrapping the raw error value. */
   readonly errorEncoder?: GraphQLErrorEncoder
+  /**
+   * Around-hooks wrapping the handler call — `F => F` where
+   * `F = (input, stores) => result`. `stores` is the raw pre-assembly stores
+   * built for input assembly (`assembleGraphQLInput` — today just the
+   * `argument` store, the resolver's own `args`); the handler itself never
+   * sees `stores`. Empty/absent by default (no-op, zero overhead).
+   */
+  readonly middleware?: readonly GraphQLHandlerMiddleware[]
+  /**
+   * Opt-in configuration for this resolver's structural sniffing of a
+   * handler's return value — `result` gates `Result`-shape
+   * (`{kind:"ok"|"err"}`) unwrapping for query/mutation fields. Defaults to
+   * `true` (existing behavior) when `detection` itself, or `result`, is
+   * omitted. Subscription fields always expect an `AsyncIterable` return
+   * value — that's structural to the GraphQL operation type itself, not an
+   * opt-in sniff (see project.ts's module doc), so `detection.streaming` has
+   * no effect here. Mirrors HTTP's `PresetOptions.detection` and MCP's
+   * `CreateMcpServerOptions.detection`.
+   */
+  readonly detection?: DetectionOptions
 }
 
 /** A plain graphql-js field resolver: `(parent, args, context, info) => result`. */
@@ -129,10 +174,15 @@ export type SubscriptionFieldConfig = {
  * direct return value is — so this only applies to the non-streaming call
  * shape).
  */
-async function runHandler(entry: Dispatch, input: Record<string, unknown>, errorEncoder: GraphQLErrorEncoder | undefined): Promise<unknown> {
+async function runHandler(
+  entry: Dispatch,
+  input: Record<string, unknown>,
+  errorEncoder: GraphQLErrorEncoder | undefined,
+  detectResult: boolean,
+): Promise<unknown> {
   let result: unknown = await entry.handler(input)
 
-  if (isResultShape(result)) {
+  if (detectResult && isResultShape(result)) {
     if (result.kind === "err") {
       const encoded = errorEncoder?.(result.error)
       throw encoded !== undefined ? toGraphQLError(encoded) : new GraphQLError(JSON.stringify(result.error))
@@ -154,9 +204,15 @@ async function runHandler(entry: Dispatch, input: Record<string, unknown>, error
  * same distinction on their own transports).
  */
 function createFieldResolver(entry: Dispatch, options: ResolverOptions): FieldResolver {
+  const middleware = options.middleware ?? []
+  const detectResult = options.detection?.result ?? true
+  const base = (input: Record<string, unknown>, _stores: Stores): unknown | Promise<unknown> =>
+    runHandler(entry, input, options.errorEncoder, detectResult)
+  const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base)
+
   return async (_parent, args) => {
-    const { input } = assembleGraphQLInput(entry, args)
-    return runHandler(entry, input, options.errorEncoder)
+    const { input, stores } = assembleGraphQLInput(entry, args)
+    return callHandler(input, stores)
   }
 }
 
@@ -195,11 +251,15 @@ async function* drainSubscription(iterable: AsyncIterable<unknown>): AsyncGenera
  * final resolved value (no further Result-unwrapping per-event — see
  * `drainSubscription`'s doc).
  */
-function createSubscriptionResolver(entry: Dispatch, _options: ResolverOptions): SubscriptionFieldConfig {
+function createSubscriptionResolver(entry: Dispatch, options: ResolverOptions): SubscriptionFieldConfig {
+  const middleware = options.middleware ?? []
+  const base = (input: Record<string, unknown>, _stores: Stores): unknown | Promise<unknown> => entry.handler(input)
+  const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base)
+
   return {
     subscribe: async (_parent, args) => {
-      const { input } = assembleGraphQLInput(entry, args)
-      const result: unknown = await entry.handler(input)
+      const { input, stores } = assembleGraphQLInput(entry, args)
+      const result: unknown = await callHandler(input, stores)
       if (!isAsyncIterable(result)) {
         throw new GraphQLError(
           `Subscription handler did not return an AsyncIterable (tags.streaming implies one) — got ${typeof result}`,

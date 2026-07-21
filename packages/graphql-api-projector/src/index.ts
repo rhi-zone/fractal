@@ -15,7 +15,12 @@ export type {
   FieldResolver,
   GraphQLErrorEncoder,
   GraphQLErrorResponse,
+  GraphQLHandlerMiddleware,
   ResolverOptions,
   SubscriptionFieldConfig,
 } from "./resolve.ts"
 export { createResolver, graphqlErrors } from "./resolve.ts"
+export type { CreateGraphQLServerOptions, GraphQLAlsContext, GraphQLServer } from "./server.ts"
+export { createGraphQLServer } from "./server.ts"
+export type { CreateHttpGraphQLServerOptions, HttpGraphQLCorsOptions } from "./presets.ts"
+export { createHttpGraphQLServer } from "./presets.ts"
