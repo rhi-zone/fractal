@@ -6,37 +6,209 @@
 // optional field detection — none of which are possible from a single
 // sample.
 //
-// Pipeline:
-//   1. Run fromJson on each value → per-value TypeRefs
-//   2. Merge/unify per-value TypeRefs into a corpus-level TypeRef
-//   3. Post-merge passes: enum detection, DU detection, dict detection
-//   4. Construct final TypeRef
+// Two-phase architecture:
+//
+//   Phase 1 — collectEvidence(values, config) -> EvidenceTree
+//     A purely mechanical upward pass over the raw corpus. It counts,
+//     buckets, and structurally mirrors the data (per-field evidence for
+//     objects, per-element evidence for arrays) but makes NO type
+//     commitment decisions — no enum/dict/DU calls, no union resolution.
+//
+//   Phase 2 — resolveEvidence(tree, strategy) -> TypeRef
+//     Reads the evidence tree and makes every heuristic decision:
+//     structural merge (incl. integer width widening), enum detection,
+//     discriminated-union detection, dict-vs-record detection, dirty-data
+//     detection. All the tunable heuristics live here, behind
+//     `ResolveStrategy`.
+//
+//   fromJsonCorpus(values, config) is a convenience wrapper that runs both
+//   phases back to back, so existing callers see identical behavior.
 
 import { t, types, ancestors, type TypeRef } from "./index.ts"
-import { fromJson, type InferConfig } from "./from-json.ts"
+import { fromJson, type InferConfig, type LeafHeuristic } from "./from-json.ts"
 import {
   int8, int16, int32, int64,
   uint8, uint16, uint32, uint64,
 } from "./kinds/common.ts"
 
 // ---------------------------------------------------------------------------
-// Config
+// Phase 1 types — the evidence tree
 // ---------------------------------------------------------------------------
 
-export interface CorpusInferConfig extends InferConfig {
-  /** Enable dirty-data detection. Default: false. */
+/**
+ * Evidence gathered for one structural position in the corpus (the root, an
+ * object field, or an array's elements). Mirrors the shape of the data —
+ * `object` positions carry per-field sub-evidence, `array` positions carry
+ * element sub-evidence — but never commits to a resolved TypeRef.
+ */
+export interface EvidenceNode {
+  /** Total number of raw values (of any JS type) observed at this position. */
+  readonly n: number
+  /** How many of those values were `null`. */
+  readonly nullCount: number
+  /** How many were non-container leaf values (null/boolean/number/string) — the population `distinctValues`/`sortedNumeric` are drawn from. */
+  readonly leafCount: number
+  /** Per-JS-type occurrence counts: "null" | "boolean" | "number" | "string" | "object" | "array". */
+  readonly typeCounts: Readonly<Record<string, number>>
+  /** Raw values observed at this position, in corpus order — used by dirty-data resolution, which needs to re-run `fromJson` per value. */
+  readonly values: readonly unknown[]
+  /** JSON-serialized distinct leaf values — the enum evidence's K. */
+  readonly distinctValues: ReadonlySet<string>
+  /** Distinct integer leaf values, sorted ascending — clustering evidence for integer enum detection. */
+  readonly sortedNumeric: readonly number[]
+  /** Present when at least one raw value at this position was a plain object. */
+  readonly object?: {
+    /** Sub-evidence per field name, merged across every sample that had that field. */
+    readonly fields: Readonly<Record<string, EvidenceNode>>
+    /** How many object-typed samples had each field present. */
+    readonly fieldPresenceCount: Readonly<Record<string, number>>
+    /** Number of object-typed samples observed at this position. */
+    readonly sampleCount: number
+    /** One key-set per object-typed sample, in corpus order — dict-vs-record growth evidence. */
+    readonly keySets: readonly ReadonlySet<string>[]
+  }
+  /** Present when at least one raw value at this position was an array. */
+  readonly array?: {
+    /** Sub-evidence merged across every element of every array at this position (index-agnostic — the "homogeneous array" bucket). */
+    readonly element: EvidenceNode
+    /** Sub-evidence per index, across arrays at this position (index-sensitive — the "fixed-arity tuple" bucket). */
+    readonly perIndex: readonly EvidenceNode[]
+    /** Length of each array-typed sample, in corpus order. */
+    readonly lengths: readonly number[]
+    /** Raw object elements across every array at this position — discriminated-union candidate data. */
+    readonly elementObjects: readonly Record<string, unknown>[]
+  }
+}
+
+export interface EvidenceTree {
+  /** The raw corpus, unmodified. */
+  readonly values: readonly unknown[]
+  /** Evidence for the corpus as a whole (the root structural position). */
+  readonly root: EvidenceNode
+  /** The config passed to `collectEvidence`, kept as `resolveEvidence`'s defaults when no `ResolveStrategy` override is given. */
+  readonly config?: CorpusInferConfig
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 types — the resolution strategy
+// ---------------------------------------------------------------------------
+
+/** A resolution hook tried at every node: return a replacement TypeRef to override the built-in decision, or `undefined` to leave it as-is. */
+export type EvidenceResolver = (node: EvidenceNode, ref: TypeRef) => TypeRef | undefined
+
+export interface ResolveStrategy extends InferConfig {
+  /** Enum detection: use the three-signal approach (saturation, uniqueness, clustering). Default: true. */
+  detectEnums?: boolean
+  /** Discriminated union detection. Default: true. */
+  detectDiscriminatedUnions?: boolean
+  /** Dict detection via key accumulation. Default: true. */
+  detectDicts?: boolean
+  /** Dirty-data detection (flag anomalous minority types). Default: false. */
   detectDirtyData?: boolean
   /** Minimum samples before enum detection fires. Default: 3. */
   enumMinSamples?: number
   /** Minimum samples before dict detection fires. Default: 3. */
   dictMinSamples?: number
+  /** Custom resolvers for specific evidence patterns, tried at every node after the built-in passes. First non-`undefined` result wins. */
+  customResolvers?: EvidenceResolver[]
 }
 
-interface ResolvedCorpusConfig {
-  readonly innerConfig: InferConfig
-  readonly detectDirtyData: boolean
-  readonly enumMinSamples: number
-  readonly dictMinSamples: number
+/** Back-compat alias — the config accepted by `fromJsonCorpus`/`collectEvidence` is exactly a `ResolveStrategy`. */
+export type CorpusInferConfig = ResolveStrategy
+
+// ---------------------------------------------------------------------------
+// Phase 1 — collectEvidence: mechanical, no decisions
+// ---------------------------------------------------------------------------
+
+function buildEvidenceNode(values: readonly unknown[]): EvidenceNode {
+  const typeCounts: Record<string, number> = {}
+  let nullCount = 0
+  const distinctValues = new Set<string>()
+  const numericSet = new Set<number>()
+  const objectSamples: Record<string, unknown>[] = []
+  const arraySamples: unknown[][] = []
+  const keySets: Set<string>[] = []
+
+  for (const v of values) {
+    if (v === null) {
+      nullCount++
+      typeCounts.null = (typeCounts.null ?? 0) + 1
+      distinctValues.add("null")
+      continue
+    }
+    if (Array.isArray(v)) {
+      typeCounts.array = (typeCounts.array ?? 0) + 1
+      arraySamples.push(v)
+      continue
+    }
+    if (typeof v === "object") {
+      typeCounts.object = (typeCounts.object ?? 0) + 1
+      const obj = v as Record<string, unknown>
+      objectSamples.push(obj)
+      keySets.push(new Set(Object.keys(obj)))
+      continue
+    }
+    typeCounts[typeof v] = (typeCounts[typeof v] ?? 0) + 1
+    distinctValues.add(JSON.stringify(v))
+    if (typeof v === "number" && Number.isInteger(v)) numericSet.add(v)
+  }
+
+  const leafCount = values.length - objectSamples.length - arraySamples.length
+
+  let objectEvidence: EvidenceNode["object"] | undefined
+  if (objectSamples.length > 0) {
+    const fieldNames = new Set<string>()
+    for (const o of objectSamples) for (const k of Object.keys(o)) fieldNames.add(k)
+    const fields: Record<string, EvidenceNode> = {}
+    const fieldPresenceCount: Record<string, number> = {}
+    for (const name of fieldNames) {
+      const fieldValues = objectSamples.filter((o) => Object.hasOwn(o, name)).map((o) => o[name])
+      fieldPresenceCount[name] = fieldValues.length
+      fields[name] = buildEvidenceNode(fieldValues)
+    }
+    objectEvidence = { fields, fieldPresenceCount, sampleCount: objectSamples.length, keySets }
+  }
+
+  let arrayEvidence: EvidenceNode["array"] | undefined
+  if (arraySamples.length > 0) {
+    const allElements = arraySamples.flat()
+    const elementObjects = allElements.filter(
+      (e) => e !== null && typeof e === "object" && !Array.isArray(e),
+    ) as Record<string, unknown>[]
+    const maxLength = Math.max(...arraySamples.map((a) => a.length))
+    const perIndex: EvidenceNode[] = []
+    for (let i = 0; i < maxLength; i++) {
+      perIndex.push(buildEvidenceNode(arraySamples.filter((a) => i < a.length).map((a) => a[i])))
+    }
+    arrayEvidence = {
+      element: buildEvidenceNode(allElements),
+      perIndex,
+      lengths: arraySamples.map((a) => a.length),
+      elementObjects,
+    }
+  }
+
+  return {
+    n: values.length,
+    nullCount,
+    leafCount,
+    typeCounts,
+    values,
+    distinctValues,
+    sortedNumeric: [...numericSet].sort((a, b) => a - b),
+    ...(objectEvidence !== undefined ? { object: objectEvidence } : {}),
+    ...(arrayEvidence !== undefined ? { array: arrayEvidence } : {}),
+  }
+}
+
+/**
+ * Walk a corpus of JSON values and collect statistical evidence — value
+ * counts, distinct-value sets, key-set growth, element evidence — without
+ * making any type-commitment decision. Purely mechanical: no enum/dict/DU
+ * heuristics run here.
+ */
+export function collectEvidence(values: unknown[], config?: CorpusInferConfig): EvidenceTree {
+  return { values, root: buildEvidenceNode(values), ...(config !== undefined ? { config } : {}) }
 }
 
 // ---------------------------------------------------------------------------
@@ -257,48 +429,6 @@ function mergeAll(refs: readonly TypeRef[]): TypeRef {
 // Enum detection
 // ---------------------------------------------------------------------------
 
-// Track observed values for leaf fields across the corpus. If distinct
-// count K saturates (K << N), the field is enum-shaped.
-interface FieldStats {
-  values: unknown[]
-  distinctValues: Set<string> // JSON-serialized for comparison
-}
-
-function collectFieldStats(values: unknown[]): Map<string, FieldStats> {
-  const stats = new Map<string, FieldStats>()
-
-  function visit(value: unknown, path: string): void {
-    if (value === null || typeof value !== "object") {
-      let entry = stats.get(path)
-      if (entry === undefined) {
-        entry = { values: [], distinctValues: new Set() }
-        stats.set(path, entry)
-      }
-      entry.values.push(value)
-      entry.distinctValues.add(JSON.stringify(value))
-      return
-    }
-    if (Array.isArray(value)) {
-      for (const el of value) visit(el, path + "[]")
-      return
-    }
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      visit(v, path + "." + k)
-    }
-  }
-
-  for (const v of values) visit(v, "$")
-  return stats
-}
-
-function detectEnums(
-  ref: TypeRef,
-  fieldStats: Map<string, FieldStats>,
-  minSamples: number,
-): TypeRef {
-  return walkAndDetectEnums(ref, "$", fieldStats, minSamples)
-}
-
 /**
  * Decide whether a field with K distinct values across N samples is
  * enum-shaped, using three signals combined (not required to all agree):
@@ -338,24 +468,18 @@ function looksLikeEnum(K: number, N: number, sortedValues?: readonly number[]): 
   return false
 }
 
-function walkAndDetectEnums(
-  ref: TypeRef,
-  path: string,
-  fieldStats: Map<string, FieldStats>,
-  minSamples: number,
-): TypeRef {
+function walkAndDetectEnums(ref: TypeRef, node: EvidenceNode, minSamples: number): TypeRef {
   const { shape } = ref
 
   if (shape.kind === "string" || isSubkind(shape.kind, "string")) {
-    const stats = fieldStats.get(path)
-    if (stats !== undefined && stats.values.length >= minSamples) {
-      const K = stats.distinctValues.size
-      const N = stats.values.length
+    if (node.leafCount >= minSamples) {
+      const K = node.distinctValues.size
+      const N = node.leafCount
       if (looksLikeEnum(K, N)) {
-        const members = [...stats.distinctValues].map((s) => JSON.parse(s) as string)
+        const members = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
         // Only if all values are strings
         if (members.every((m) => typeof m === "string")) {
-          return t(types.enum(members), ref.meta)
+          return t(types.enum(members as string[]), ref.meta)
         }
       }
     }
@@ -363,18 +487,17 @@ function walkAndDetectEnums(
   }
 
   if (integerKindSet.has(shape.kind)) {
-    const stats = fieldStats.get(path)
-    if (stats !== undefined && stats.values.length >= minSamples) {
-      const K = stats.distinctValues.size
-      const N = stats.values.length
-      const values = [...stats.distinctValues].map((s) => JSON.parse(s) as number)
+    if (node.leafCount >= minSamples) {
+      const K = node.distinctValues.size
+      const N = node.leafCount
+      const values = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
       if (values.every((v) => typeof v === "number" && Number.isInteger(v))) {
-        const sorted = [...values].sort((a, b) => a - b)
-        if (looksLikeEnum(K, N, sorted)) {
+        const numericValues = values as number[]
+        if (looksLikeEnum(K, N, node.sortedNumeric)) {
           // K === 1 → single constant value, represent as a literal.
           // K > 1 → union of literals.
-          if (values.length === 1) return t(types.literal(values[0]!), ref.meta)
-          const variants = values.map((v) => t(types.literal(v)))
+          if (numericValues.length === 1) return t(types.literal(numericValues[0]!), ref.meta)
+          const variants = numericValues.map((v) => t(types.literal(v)))
           return t(types.union(variants), ref.meta)
         }
       }
@@ -386,24 +509,31 @@ function walkAndDetectEnums(
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
-      newFields[name] = walkAndDetectEnums(fieldRef, path + "." + name, fieldStats, minSamples)
+      const childNode = node.object?.fields[name]
+      newFields[name] = childNode !== undefined ? walkAndDetectEnums(fieldRef, childNode, minSamples) : fieldRef
     }
     return t(types.object(newFields), ref.meta)
   }
 
   if (shape.kind === "array") {
     const el = (shape as { element: TypeRef }).element
-    return t(types.array(walkAndDetectEnums(el, path + "[]", fieldStats, minSamples)), ref.meta)
+    const childNode = node.array?.element
+    const newEl = childNode !== undefined ? walkAndDetectEnums(el, childNode, minSamples) : el
+    return t(types.array(newEl), ref.meta)
   }
 
   if (shape.kind === "tuple") {
     const els = (shape as { elements: readonly TypeRef[] }).elements
-    return t(types.tuple(els.map((el, i) => walkAndDetectEnums(el, path + `[${i}]`, fieldStats, minSamples))), ref.meta)
+    const perIndex = node.array?.perIndex
+    return t(types.tuple(els.map((el, i) => {
+      const childNode = perIndex?.[i]
+      return childNode !== undefined ? walkAndDetectEnums(el, childNode, minSamples) : el
+    })), ref.meta)
   }
 
   if (shape.kind === "union") {
     const variants = (shape as { variants: readonly TypeRef[] }).variants
-    return t(types.union(variants.map((v) => walkAndDetectEnums(v, path, fieldStats, minSamples))), ref.meta)
+    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, minSamples))), ref.meta)
   }
 
   return ref
@@ -413,40 +543,17 @@ function walkAndDetectEnums(
 // Discriminated union detection
 // ---------------------------------------------------------------------------
 
-function detectDiscriminatedUnions(ref: TypeRef, values: unknown[]): TypeRef {
-  return walkAndDetectDU(ref, values, "$")
-}
-
-function walkAndDetectDU(ref: TypeRef, values: unknown[], path: string): TypeRef {
+function walkAndDetectDU(ref: TypeRef, node: EvidenceNode): TypeRef {
   const { shape } = ref
 
   if (shape.kind === "array") {
     const el = (shape as { element: TypeRef }).element
-    if (el.shape.kind === "object") {
-      // Collect all array elements across the corpus at this path
-      const allElements: Record<string, unknown>[] = []
-      function collectElements(val: unknown, p: string): void {
-        if (p === path && Array.isArray(val)) {
-          for (const item of val) {
-            if (item !== null && typeof item === "object" && !Array.isArray(item)) {
-              allElements.push(item as Record<string, unknown>)
-            }
-          }
-        } else if (val !== null && typeof val === "object" && !Array.isArray(val)) {
-          for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-            collectElements(v, p + "." + k)
-          }
-        } else if (Array.isArray(val)) {
-          for (const item of val) collectElements(item, p + "[]")
-        }
-      }
-      for (const v of values) collectElements(v, "$")
-
-      const du = tryDetectDU(el, allElements)
+    if (el.shape.kind === "object" && node.array !== undefined) {
+      const du = tryDetectDU(el, node.array.elementObjects)
       if (du !== null) return t(types.array(du), ref.meta)
     }
-    // Recurse into element type
-    const newEl = walkAndDetectDU(el, values, path + "[]")
+    const childNode = node.array?.element
+    const newEl = childNode !== undefined ? walkAndDetectDU(el, childNode) : el
     return t(types.array(newEl), ref.meta)
   }
 
@@ -454,7 +561,8 @@ function walkAndDetectDU(ref: TypeRef, values: unknown[], path: string): TypeRef
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
-      newFields[name] = walkAndDetectDU(fieldRef, values, path + "." + name)
+      const childNode = node.object?.fields[name]
+      newFields[name] = childNode !== undefined ? walkAndDetectDU(fieldRef, childNode) : fieldRef
     }
     return t(types.object(newFields), ref.meta)
   }
@@ -469,7 +577,7 @@ function walkAndDetectDU(ref: TypeRef, values: unknown[], path: string): TypeRef
  */
 function tryDetectDU(
   objectRef: TypeRef,
-  elements: Record<string, unknown>[],
+  elements: readonly Record<string, unknown>[],
 ): TypeRef | null {
   if (elements.length < 3) return null
   const fields = (objectRef.shape as { fields: Record<string, TypeRef> }).fields
@@ -564,21 +672,19 @@ function tryDetectDU(
 // Dict detection (record vs. map)
 // ---------------------------------------------------------------------------
 
-function detectDicts(ref: TypeRef, values: unknown[], minSamples: number): TypeRef {
-  return walkAndDetectDicts(ref, values, "$", minSamples)
-}
-
 function walkAndDetectDicts(
   ref: TypeRef,
-  values: unknown[],
-  path: string,
+  node: EvidenceNode,
+  totalValues: number,
   minSamples: number,
 ): TypeRef {
   const { shape } = ref
   if (shape.kind !== "object") {
     if (shape.kind === "array") {
       const el = (shape as { element: TypeRef }).element
-      return t(types.array(walkAndDetectDicts(el, values, path + "[]", minSamples)), ref.meta)
+      const childNode = node.array?.element
+      const newEl = childNode !== undefined ? walkAndDetectDicts(el, childNode, totalValues, minSamples) : el
+      return t(types.array(newEl), ref.meta)
     }
     return ref
   }
@@ -588,25 +694,14 @@ function walkAndDetectDicts(
   // First, recurse into child fields
   const newFields: Record<string, TypeRef> = {}
   for (const [name, fieldRef] of Object.entries(fields)) {
-    newFields[name] = walkAndDetectDicts(fieldRef, values, path + "." + name, minSamples)
+    const childNode = node.object?.fields[name]
+    newFields[name] = childNode !== undefined ? walkAndDetectDicts(fieldRef, childNode, totalValues, minSamples) : fieldRef
   }
 
-  if (values.length < minSamples) return t(types.object(newFields), ref.meta)
+  if (totalValues < minSamples) return t(types.object(newFields), ref.meta)
 
-  // Collect all key sets observed at this path across the corpus
-  const allKeySets: Set<string>[] = []
-  function collectKeySets(val: unknown, p: string): void {
-    if (p === path && val !== null && typeof val === "object" && !Array.isArray(val)) {
-      allKeySets.push(new Set(Object.keys(val as Record<string, unknown>)))
-    } else if (val !== null && typeof val === "object" && !Array.isArray(val)) {
-      for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-        collectKeySets(v, p + "." + k)
-      }
-    } else if (Array.isArray(val)) {
-      for (const item of val) collectKeySets(item, p + "[]")
-    }
-  }
-  for (const v of values) collectKeySets(v, "$")
+  // Key sets observed at this path across the corpus
+  const allKeySets = node.object?.keySets ?? []
 
   if (allKeySets.length < minSamples) return t(types.object(newFields), ref.meta)
 
@@ -679,33 +774,14 @@ function walkAndDetectDicts(
 // Dirty data detection (opt-in)
 // ---------------------------------------------------------------------------
 
-function detectDirtyData(ref: TypeRef, values: unknown[]): TypeRef {
-  // For union types at the top level or in fields, check if one variant
-  // is overwhelmingly dominant — the minority is likely dirty data.
-  return walkAndDetectDirty(ref, values, "$")
-}
-
-function walkAndDetectDirty(ref: TypeRef, values: unknown[], path: string): TypeRef {
+function walkAndDetectDirty(ref: TypeRef, node: EvidenceNode): TypeRef {
   const { shape } = ref
 
   if (shape.kind === "union") {
     const variants = (shape as { variants: readonly TypeRef[] }).variants
     if (variants.length !== 2) return ref
 
-    // Collect values at this path
-    const pathValues: unknown[] = []
-    function collectValues(val: unknown, p: string): void {
-      if (p === path) {
-        pathValues.push(val)
-      } else if (val !== null && typeof val === "object" && !Array.isArray(val)) {
-        for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-          collectValues(v, p + "." + k)
-        }
-      } else if (Array.isArray(val)) {
-        for (const item of val) collectValues(item, p + "[]")
-      }
-    }
-    for (const v of values) collectValues(v, "$")
+    const pathValues = node.values
 
     if (pathValues.length < 5) return ref
 
@@ -737,17 +813,150 @@ function walkAndDetectDirty(ref: TypeRef, values: unknown[], path: string): Type
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
-      newFields[name] = walkAndDetectDirty(fieldRef, values, path + "." + name)
+      const childNode = node.object?.fields[name]
+      newFields[name] = childNode !== undefined ? walkAndDetectDirty(fieldRef, childNode) : fieldRef
     }
     return t(types.object(newFields), ref.meta)
   }
 
   if (shape.kind === "array") {
     const el = (shape as { element: TypeRef }).element
-    return t(types.array(walkAndDetectDirty(el, values, path + "[]")), ref.meta)
+    const childNode = node.array?.element
+    const newEl = childNode !== undefined ? walkAndDetectDirty(el, childNode) : el
+    return t(types.array(newEl), ref.meta)
   }
 
   return ref
+}
+
+// ---------------------------------------------------------------------------
+// Custom resolvers
+// ---------------------------------------------------------------------------
+
+function applyCustomResolvers(ref: TypeRef, node: EvidenceNode, resolvers: readonly EvidenceResolver[]): TypeRef {
+  let current = ref
+  for (const resolver of resolvers) {
+    const result = resolver(node, current)
+    if (result !== undefined) current = result
+  }
+
+  const { shape } = current
+  if (shape.kind === "object") {
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields
+    const newFields: Record<string, TypeRef> = {}
+    for (const [name, fieldRef] of Object.entries(fields)) {
+      const childNode = node.object?.fields[name]
+      newFields[name] = childNode !== undefined ? applyCustomResolvers(fieldRef, childNode, resolvers) : fieldRef
+    }
+    return t(types.object(newFields), current.meta)
+  }
+
+  if (shape.kind === "array") {
+    const el = (shape as { element: TypeRef }).element
+    const childNode = node.array?.element
+    const newEl = childNode !== undefined ? applyCustomResolvers(el, childNode, resolvers) : el
+    return t(types.array(newEl), current.meta)
+  }
+
+  if (shape.kind === "tuple") {
+    const els = (shape as { elements: readonly TypeRef[] }).elements
+    const perIndex = node.array?.perIndex
+    return t(types.tuple(els.map((el, i) => {
+      const childNode = perIndex?.[i]
+      return childNode !== undefined ? applyCustomResolvers(el, childNode, resolvers) : el
+    })), current.meta)
+  }
+
+  if (shape.kind === "union") {
+    const variants = (shape as { variants: readonly TypeRef[] }).variants
+    return t(types.union(variants.map((v) => applyCustomResolvers(v, node, resolvers))), current.meta)
+  }
+
+  return current
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — resolveEvidence: every heuristic decision lives here
+// ---------------------------------------------------------------------------
+
+interface ResolvedStrategy {
+  readonly innerConfig: InferConfig
+  readonly detectEnums: boolean
+  readonly detectDiscriminatedUnions: boolean
+  readonly detectDicts: boolean
+  readonly detectDirtyData: boolean
+  readonly enumMinSamples: number
+  readonly dictMinSamples: number
+  readonly customResolvers: readonly EvidenceResolver[]
+}
+
+function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): ResolvedStrategy {
+  const cfg = tree.config
+
+  const innerConfig: InferConfig = {}
+  const arrayThreshold = strategy?.arrayThreshold ?? cfg?.arrayThreshold
+  if (arrayThreshold !== undefined) innerConfig.arrayThreshold = arrayThreshold
+  const narrowIntegerWidth = strategy?.narrowIntegerWidth ?? cfg?.narrowIntegerWidth
+  if (narrowIntegerWidth !== undefined) innerConfig.narrowIntegerWidth = narrowIntegerWidth
+  const detectStringFormats = strategy?.detectStringFormats ?? cfg?.detectStringFormats
+  if (detectStringFormats !== undefined) innerConfig.detectStringFormats = detectStringFormats
+  const leafHeuristics = strategy?.leafHeuristics ?? cfg?.leafHeuristics
+  if (leafHeuristics !== undefined) innerConfig.leafHeuristics = leafHeuristics as LeafHeuristic[]
+
+  return {
+    innerConfig,
+    detectEnums: strategy?.detectEnums ?? cfg?.detectEnums ?? true,
+    detectDiscriminatedUnions: strategy?.detectDiscriminatedUnions ?? cfg?.detectDiscriminatedUnions ?? true,
+    detectDicts: strategy?.detectDicts ?? cfg?.detectDicts ?? true,
+    detectDirtyData: strategy?.detectDirtyData ?? cfg?.detectDirtyData ?? false,
+    enumMinSamples: strategy?.enumMinSamples ?? cfg?.enumMinSamples ?? 3,
+    dictMinSamples: strategy?.dictMinSamples ?? cfg?.dictMinSamples ?? 3,
+    customResolvers: strategy?.customResolvers ?? cfg?.customResolvers ?? [],
+  }
+}
+
+/**
+ * Resolve an evidence tree into a final TypeRef. All the commitment
+ * decisions — structural merge (incl. integer width widening), enum
+ * detection, discriminated-union detection, dict-vs-record detection,
+ * dirty-data detection — happen here, gated by `strategy`.
+ */
+export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy): TypeRef {
+  if (tree.values.length === 0) return t(types.unknown)
+
+  const resolved = resolveStrategy(tree, strategy)
+
+  // 1. Run fromJson on each raw value, then structurally merge (incl.
+  //    integer width widening, union flattening).
+  const perValue = tree.values.map((v) => fromJson(v, resolved.innerConfig))
+  let merged = mergeAll(perValue)
+
+  // 2. Enum detection
+  if (resolved.detectEnums) {
+    merged = walkAndDetectEnums(merged, tree.root, resolved.enumMinSamples)
+  }
+
+  // 3. Discriminated union detection
+  if (resolved.detectDiscriminatedUnions) {
+    merged = walkAndDetectDU(merged, tree.root)
+  }
+
+  // 4. Dict detection
+  if (resolved.detectDicts) {
+    merged = walkAndDetectDicts(merged, tree.root, tree.values.length, resolved.dictMinSamples)
+  }
+
+  // 5. Dirty data detection (opt-in)
+  if (resolved.detectDirtyData) {
+    merged = walkAndDetectDirty(merged, tree.root)
+  }
+
+  // 6. Custom resolvers
+  if (resolved.customResolvers.length > 0) {
+    merged = applyCustomResolvers(merged, tree.root, resolved.customResolvers)
+  }
+
+  return merged
 }
 
 // ---------------------------------------------------------------------------
@@ -759,43 +968,10 @@ function walkAndDetectDirty(ref: TypeRef, values: unknown[], path: string): Type
  * to be independent samples of the same type — the result is the tightest
  * type that covers all of them, with corpus-level signals (enums,
  * discriminated unions, dict-vs-record, optional fields) applied.
+ *
+ * Convenience wrapper over `collectEvidence` + `resolveEvidence`.
  */
 export function fromJsonCorpus(values: unknown[], config?: CorpusInferConfig): TypeRef {
-  if (values.length === 0) return t(types.unknown)
-
-  const innerConfig: InferConfig = {}
-  if (config?.arrayThreshold !== undefined) innerConfig.arrayThreshold = config.arrayThreshold
-  if (config?.narrowIntegerWidth !== undefined) innerConfig.narrowIntegerWidth = config.narrowIntegerWidth
-  if (config?.detectStringFormats !== undefined) innerConfig.detectStringFormats = config.detectStringFormats
-  if (config?.leafHeuristics !== undefined) innerConfig.leafHeuristics = config.leafHeuristics
-
-  const resolved: ResolvedCorpusConfig = {
-    innerConfig,
-    detectDirtyData: config?.detectDirtyData ?? false,
-    enumMinSamples: config?.enumMinSamples ?? 3,
-    dictMinSamples: config?.dictMinSamples ?? 3,
-  }
-
-  // 1. Run fromJson on each value
-  const perValue = values.map((v) => fromJson(v, resolved.innerConfig))
-
-  // 2. Merge/unify
-  let merged = mergeAll(perValue)
-
-  // 3. Enum detection
-  const fieldStats = collectFieldStats(values)
-  merged = detectEnums(merged, fieldStats, resolved.enumMinSamples)
-
-  // 4. Discriminated union detection
-  merged = detectDiscriminatedUnions(merged, values)
-
-  // 5. Dict detection
-  merged = detectDicts(merged, values, resolved.dictMinSamples)
-
-  // 6. Dirty data detection (opt-in)
-  if (resolved.detectDirtyData) {
-    merged = detectDirtyData(merged, values)
-  }
-
-  return merged
+  const evidence = collectEvidence(values, config)
+  return resolveEvidence(evidence, config)
 }

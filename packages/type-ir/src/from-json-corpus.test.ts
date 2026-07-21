@@ -6,7 +6,7 @@ import {
   uint8, uint16, uint32, uint64,
   date, datetime, uuid, uri,
 } from "./kinds/common.ts"
-import { fromJsonCorpus } from "./from-json-corpus.ts"
+import { fromJsonCorpus, collectEvidence, resolveEvidence } from "./from-json-corpus.ts"
 
 // ---------------------------------------------------------------------------
 // Unit tests — deterministic, verifying specific behavior
@@ -303,6 +303,124 @@ describe("dirty data detection", () => {
     }
     // If dirty data detection didn't fire (threshold not met), it's
     // still a union — that's also acceptable behavior
+  })
+})
+
+describe("two-phase API: collectEvidence / resolveEvidence", () => {
+  test("fromJsonCorpus is equivalent to collectEvidence + resolveEvidence", () => {
+    const samples = [
+      { id: 1, status: "active", tags: [1, 2, 3] },
+      { id: 2, status: "inactive", tags: [4, 5] },
+      { id: 3, status: "active", tags: [] },
+    ]
+    const direct = fromJsonCorpus(samples)
+    const evidence = collectEvidence(samples)
+    const twoPhase = resolveEvidence(evidence)
+    expect(twoPhase).toEqual(direct)
+  })
+
+  test("collectEvidence gathers value counts and type distribution without resolving", () => {
+    const evidence = collectEvidence([1, "a", null, 2, "b", 3])
+    expect(evidence.values.length).toBe(6)
+    expect(evidence.root.n).toBe(6)
+    expect(evidence.root.nullCount).toBe(1)
+    expect(evidence.root.typeCounts.number).toBe(3)
+    expect(evidence.root.typeCounts.string).toBe(2)
+    expect(evidence.root.typeCounts.null).toBe(1)
+  })
+
+  test("collectEvidence gathers enum evidence (distinct values) for a saturating field", () => {
+    const samples = Array.from({ length: 20 }, (_, i) => ({
+      status: ["active", "inactive", "pending"][i % 3],
+    }))
+    const evidence = collectEvidence(samples)
+    const statusNode = evidence.root.object!.fields.status!
+    expect(statusNode.leafCount).toBe(20)
+    expect(statusNode.distinctValues.size).toBe(3)
+    expect([...statusNode.distinctValues].sort()).toEqual(['"active"', '"inactive"', '"pending"'])
+    // Evidence collection does not decide enum-ness — the merged shape only
+    // emerges from resolveEvidence.
+    const resolved = resolveEvidence(evidence)
+    const fields = (resolved.shape as { fields: Record<string, TypeRef> }).fields
+    expect(fields.status!.shape.kind).toBe("enum")
+  })
+
+  test("collectEvidence gathers key-set growth evidence for dict detection", () => {
+    const samples: Record<string, number>[] = []
+    for (let i = 0; i < 10; i++) {
+      const obj: Record<string, number> = {}
+      for (let j = 0; j < 3; j++) obj[`key_${i}_${j}`] = i * 10 + j
+      samples.push(obj)
+    }
+    const evidence = collectEvidence(samples)
+    expect(evidence.root.object!.keySets.length).toBe(10)
+    // Every sample's key set is disjoint from the others -> 30 total distinct keys.
+    const allKeys = new Set<string>()
+    for (const ks of evidence.root.object!.keySets) for (const k of ks) allKeys.add(k)
+    expect(allKeys.size).toBe(30)
+  })
+
+  test("collectEvidence gathers element evidence for arrays, including raw object elements for DU detection", () => {
+    const samples = [
+      [
+        { type: "circle", radius: 5 },
+        { type: "rect", width: 3, height: 4 },
+        { type: "circle", radius: 10 },
+      ],
+    ]
+    const evidence = collectEvidence(samples)
+    const arrayEvidence = evidence.root.array!
+    expect(arrayEvidence.elementObjects.length).toBe(3)
+    expect(arrayEvidence.lengths).toEqual([3])
+  })
+
+  test("resolveEvidence with detectEnums: false skips enum detection even when evidence saturates", () => {
+    const samples = Array.from({ length: 20 }, (_, i) => ({
+      status: ["active", "inactive", "pending"][i % 3],
+    }))
+    const evidence = collectEvidence(samples)
+    const resolved = resolveEvidence(evidence, { detectEnums: false })
+    const fields = (resolved.shape as { fields: Record<string, TypeRef> }).fields
+    expect(fields.status!.shape.kind).toBe("string")
+  })
+
+  test("resolveEvidence with detectDicts: false keeps growing-key-set objects as plain records", () => {
+    const samples: Record<string, number>[] = []
+    for (let i = 0; i < 10; i++) {
+      const obj: Record<string, number> = {}
+      for (let j = 0; j < 3; j++) obj[`key_${i}_${j}`] = i * 10 + j
+      samples.push(obj)
+    }
+    const evidence = collectEvidence(samples)
+    const resolved = resolveEvidence(evidence, { detectDicts: false })
+    expect(resolved.shape.kind).toBe("object")
+  })
+
+  test("resolveEvidence supports customResolvers to override the default decision at a node", () => {
+    const samples = [{ id: 1 }, { id: 2 }, { id: 3 }]
+    const evidence = collectEvidence(samples)
+    const resolved = resolveEvidence(evidence, {
+      customResolvers: [
+        (node, ref) => {
+          if (ref.shape.kind === "object" && node.object?.fields.id !== undefined) {
+            return { shape: ref.shape, meta: { ...ref.meta, sawCustomResolver: true } }
+          }
+          return undefined
+        },
+      ],
+    })
+    expect(resolved.meta.sawCustomResolver).toBe(true)
+  })
+
+  test("resolveEvidence on an evidence tree collected once can be re-resolved under different strategies", () => {
+    const samples = [1, 2, 3, 4, 5, 6, 7, 8, 9, "oops"]
+    const evidence = collectEvidence(samples)
+    const withoutDirty = resolveEvidence(evidence, { detectDirtyData: false })
+    const withDirty = resolveEvidence(evidence, { detectDirtyData: true })
+    expect(withoutDirty.shape.kind).toBe("union")
+    // withDirty may or may not fire depending on the threshold, but must not
+    // require re-collecting evidence to try.
+    expect(withDirty).toBeDefined()
   })
 })
 
