@@ -858,6 +858,43 @@ describe("typeRefFromType gap fixes", () => {
     expect(fields.name?.meta.maxLength).toBe(100)
   })
 
+  // ── Combined brand + refinement intersections (any combination of base,
+  //    brand tag, refinement tag(s) in one intersection — not just either
+  //    pattern alone) ───────────────────────────────────────────────────────
+
+  it("promotes a brand alone with no refinements (baseline, still works)", () => {
+    const ref = typeRefFromType(typeOf("EmailBrand"), checker, source)
+    expect(ref.shape).toEqual({ kind: "email" })
+    expect(ref.meta.minLength).toBeUndefined()
+  })
+
+  it("merges refinement tags alone with no brand (baseline, still works)", () => {
+    const ref = typeRefFromType(typeOf("ValidName"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.minLength).toBe(2)
+    expect(ref.meta.maxLength).toBe(100)
+    expect(ref.meta.brand).toBeUndefined()
+  })
+
+  it("combines a brand tag with a single refinement tag: Email & MinLength<5>", () => {
+    const ref = typeRefFromType(typeOf("EmailMinLength"), checker, source)
+    expect(ref.shape).toEqual({ kind: "email" })
+    expect(ref.meta.minLength).toBe(5)
+  })
+
+  it("combines a brand tag with a Pattern refinement tag: Uuid & Pattern<...>", () => {
+    const ref = typeRefFromType(typeOf("UuidPattern"), checker, source)
+    expect(ref.shape).toEqual({ kind: "uuid" })
+    expect(ref.meta.pattern).toBe("^[0-9a-f-]{36}$")
+  })
+
+  it("combines a brand tag with multiple refinement tags: Email & MinLength<3> & MaxLength<254>", () => {
+    const ref = typeRefFromType(typeOf("EmailMinMaxLength"), checker, source)
+    expect(ref.shape).toEqual({ kind: "email" })
+    expect(ref.meta.minLength).toBe(3)
+    expect(ref.meta.maxLength).toBe(254)
+  })
+
   // ── Enums / literal unions ────────────────────────────────────────────────
 
   /** Resolve an exported function's single parameter type by name. */

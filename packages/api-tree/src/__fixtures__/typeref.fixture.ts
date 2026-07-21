@@ -5,6 +5,7 @@
 
 import type { Result } from "../index.ts"
 import type { Maximum, MaxLength, Minimum, MinLength, Pattern } from "@rhi-zone/fractal-type-ir/kinds/refinements"
+import type { Email, Uuid } from "@rhi-zone/fractal-type-ir/kinds/semantic-strings"
 
 export const sample = (input: {
   name: string
@@ -403,6 +404,25 @@ export type SlugPattern = string & Pattern<"^[a-z0-9-]+$">
 
 /** Refinement-tagged field nested inside an object. */
 export type RefinedIntersectionField = { code: ShortCode; name: ValidName }
+
+// ── Combined brand + refinement intersection fixtures ───────────────────────
+// A canonical semantic-string brand type (`Email`/`Uuid`, imported from
+// type-ir's `kinds/semantic-strings`) intersected with one or more
+// refinement tags — three constituents total (base + brand tag + refinement
+// tag), exercising the unified brand+refinement classification in
+// `typeRefFromBrandedIntersection` rather than either pattern alone.
+
+/** Brand + a single refinement tag: `string & { [BrandTag]: "email" } &
+ * { [RefinementTag]: { minLength: 5 } }`. */
+export type EmailMinLength = Email & MinLength<5>
+
+/** Brand + a differently-shaped refinement tag (`Pattern`, string-valued),
+ * over the `uuid` brand instead of `email`. */
+export type UuidPattern = Uuid & Pattern<"^[0-9a-f-]{36}$">
+
+/** Brand + more than one refinement tag, confirming all three constituents
+ * (base, brand, refinements) merge together. */
+export type EmailMinMaxLength = Email & MinLength<3> & MaxLength<254>
 
 // ── Generic type parameter fixtures ─────────────────────────────────────────
 // A type parameter unresolved at the extraction site (e.g. a handler's own

@@ -389,8 +389,8 @@ function literalValueOf(type: ts.Type): string | number | boolean | undefined {
  * the symbol declaration's own identifier" move, but confirms IDENTITY (is
  * this the refinement marker, as opposed to a brand's `BrandTag` or some
  * unrelated symbol-keyed member?) rather than deriving a brand NAME from it.
- * Declared ahead of `brandFromIntersection` so that loop can skip
- * refinement-tag props instead of misreading one as an (unrecognized)
+ * Declared ahead of `classifyIntersectionConstituent` so that function can
+ * skip refinement-tag props instead of misreading one as an (unrecognized)
  * brand — `RefinementTag`'s value type is a literal-bearing OBJECT, not a
  * plain string literal or `never`, so left unchecked it would otherwise fall
  * into `brandNameFromSymbolKeyedProp`'s "no literal value" branch and read
@@ -404,68 +404,6 @@ function isRefinementTagProp(prop: ts.Symbol, checker: ts.TypeChecker): boolean 
   if (!nameNode || !ts.isComputedPropertyName(nameNode)) return false
   const sym = checker.getSymbolAtLocation(nameNode.expression)
   return sym?.name === "RefinementTag"
-}
-
-/**
- * Detect `Base & { readonly <brandProp>: "Literal" }` — the standard
- * branded/opaque type pattern — within an intersection's two constituents.
- * Tries both orderings (brand marker may appear on either side). Returns the
- * base constituent's TypeRef with `meta.brand` set to the tag literal, or
- * `undefined` if the intersection doesn't match the pattern (a genuine
- * structural intersection, which the caller punts).
- */
-function brandFromIntersection(
-  type: ts.IntersectionType,
-  checker: ts.TypeChecker,
-  loc: ts.Node,
-  seen: Set<ts.Type>,
-): TypeRef | undefined {
-  const constituents = type.types
-  if (constituents.length !== 2) return undefined
-
-  for (const [base, tag] of [
-    [constituents[0]!, constituents[1]!],
-    [constituents[1]!, constituents[0]!],
-  ] as const) {
-    // The tag side is always an object literal type (`{ readonly __brand:
-    // "..." }`), never a primitive — a primitive constituent (`string`,
-    // `number`, …) carries plenty of its OWN symbol-keyed properties (e.g.
-    // `Symbol.iterator`) that would otherwise spuriously match the
-    // symbol-keyed check below once the genuine-tag ordering has already
-    // been tried and failed (e.g. a refinement-only intersection with no
-    // real brand tag on either side).
-    if ((tag.flags & ts.TypeFlags.Object) === 0) continue
-    for (const prop of checker.getPropertiesOfType(tag)) {
-      const isSymbolKeyed = prop.escapedName.toString().startsWith("__@")
-      const isNamedBrand = BRAND_PROP_NAMES.includes(prop.name)
-      if (!isSymbolKeyed && !isNamedBrand) continue
-      // A refinement tag (`MinLength<N>`/…) is also symbol-keyed but isn't a
-      // brand — its value is a literal-bearing object, not a name to read.
-      // Left to `refinementFromIntersection` instead.
-      if (isSymbolKeyed && isRefinementTagProp(prop, checker)) continue
-
-      // Named tags (`__brand`/`__tag`/…) and shared-symbol tags (one `unique
-      // symbol` key reused across types, e.g. `[BRAND]: "LocationId"`) both
-      // carry the brand name as a string-literal value — check that first.
-      // Only when a symbol-keyed tag carries no literal value (typically
-      // `never`) does the brand name fall back to the `unique symbol`
-      // declaration's own identifier.
-      const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
-      const brandValue =
-        propType.flags & ts.TypeFlags.StringLiteral
-          ? ((propType as ts.LiteralType).value as string)
-          : isSymbolKeyed
-            ? brandNameFromSymbolKeyedProp(prop, checker)
-            : undefined
-      if (brandValue === undefined) continue
-
-      const nextSeen = new Set(seen).add(type)
-      const baseRef = typeRefFromType(base, checker, loc, nextSeen)
-      return promoteBrand(baseRef, brandValue) ?? t(baseRef.shape, { ...baseRef.meta, brand: brandValue })
-    }
-  }
-
-  return undefined
 }
 
 /** The meta keys a refinement tag's value-object properties are read from — see `kinds/refinements.ts`. */
@@ -517,45 +455,125 @@ function refinementMetaOfConstituent(
 }
 
 /**
- * Detect `Base & RefinementTag & RefinementTag & …` — e.g. `string &
- * MinLength<2> & MaxLength<100>` — among an intersection's constituents.
- * Each refinement-tag constituent (recognized via
- * `refinementMetaOfConstituent`) contributes its literal values into a
- * shared meta bag; the one remaining non-tag constituent is the real base
- * type, extracted recursively and returned carrying that meta bag merged in.
- *
- * Unlike `brandFromIntersection` (exactly 2 constituents: base + one brand
- * tag), a refinement usage typically intersects several tags at once, so
- * this walks ALL constituents rather than assuming a fixed arity. Returns
- * `undefined` when no constituent contributes any refinement meta (nothing
- * to recognize here — the caller falls through to the brand check and then
- * plain structural intersection handling) or when more than one constituent
- * is left over after removing the recognized tags (an ambiguous base — e.g.
- * a genuine structural intersection that happens to also carry a
- * refinement tag — left to the caller's normal handling rather than guessed
- * at).
+ * How a single intersection constituent classifies for
+ * `typeRefFromBrandedIntersection` below: a refinement-tag value-object
+ * (contributes meta entries), a brand tag (contributes a brand name), or
+ * neither — a genuine base-shape constituent.
  */
-function refinementFromIntersection(
+type IntersectionConstituentKind =
+  | { kind: "refinement"; meta: Record<string, unknown> }
+  | { kind: "brand"; value: string }
+  | { kind: "base" }
+
+/**
+ * Classify one constituent of an intersection as a refinement tag, a brand
+ * tag, or a base-shape constituent — the per-constituent building block
+ * `typeRefFromBrandedIntersection` walks the whole intersection with.
+ *
+ * Refinement check runs first (`refinementMetaOfConstituent`, unchanged).
+ * Brand detection is the same pattern-match `brandFromIntersection` used to
+ * run over a fixed base/tag pairing, generalized to a single constituent:
+ * only OBJECT-flagged constituents are examined (a primitive constituent —
+ * `string`, `number`, … — carries its own symbol-keyed properties, e.g.
+ * `Symbol.iterator`, that would otherwise spuriously match), and a
+ * refinement-tag property is skipped so it isn't misread as an
+ * (unrecognized) brand. Named tags (`__brand`/`__tag`/…) and shared-symbol
+ * tags carry the brand name as a string-literal property value; a
+ * symbol-keyed tag with no literal value (typically `never`) falls back to
+ * the `unique symbol` declaration's own identifier.
+ */
+function classifyIntersectionConstituent(
+  constituent: ts.Type,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+): IntersectionConstituentKind {
+  const refinementMeta = refinementMetaOfConstituent(constituent, checker, loc)
+  if (refinementMeta) return { kind: "refinement", meta: refinementMeta }
+
+  if (constituent.flags & ts.TypeFlags.Object) {
+    for (const prop of checker.getPropertiesOfType(constituent)) {
+      const isSymbolKeyed = prop.escapedName.toString().startsWith("__@")
+      const isNamedBrand = BRAND_PROP_NAMES.includes(prop.name)
+      if (!isSymbolKeyed && !isNamedBrand) continue
+      if (isSymbolKeyed && isRefinementTagProp(prop, checker)) continue
+
+      const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
+      const brandValue =
+        propType.flags & ts.TypeFlags.StringLiteral
+          ? ((propType as ts.LiteralType).value as string)
+          : isSymbolKeyed
+            ? brandNameFromSymbolKeyedProp(prop, checker)
+            : undefined
+      if (brandValue !== undefined) return { kind: "brand", value: brandValue }
+    }
+  }
+
+  return { kind: "base" }
+}
+
+/**
+ * Detect a brand tag and/or one-or-more refinement tags intersected with a
+ * single base type — e.g. `string & { __brand: "LocationId" }`, `string &
+ * MinLength<2> & MaxLength<100>`, or both combined, `Email & MinLength<5>`
+ * (which itself expands to `string & { [BrandTag]: "email" } &
+ * { [RefinementTag]: { minLength: 5 } }`, three constituents). Any
+ * combination of base type, brand tag, and refinement tags in a single
+ * intersection collapses here — not just the brand-only or refinement-only
+ * shapes each used to be recognized by a separate, narrower function.
+ *
+ * Walks every constituent via `classifyIntersectionConstituent`: refinement
+ * tags merge their value objects into one meta bag; a brand tag's name is
+ * recorded (first one found wins — a second brand-shaped constituent is
+ * treated as an unrecognized base rather than silently dropped, so it makes
+ * the base count ambiguous and the whole intersection falls through instead
+ * of guessing which brand is real); everything else is a candidate base
+ * type. Returns `undefined` — falling through to plain structural
+ * `types.intersection` handling — when there's no brand and no refinement
+ * (nothing recognized here) or when more than one constituent is left over
+ * as a base (an ambiguous/genuine structural intersection, e.g. a mixin
+ * pattern that happens to carry no brand or refinement tag at all).
+ *
+ * When recognized: the base type is extracted recursively; a brand promotes
+ * via `promoteBrand` (known kind name over a `string` base) or falls back to
+ * plain `meta.brand`; refinement meta merges on top of whichever of those
+ * produced the working TypeRef, so brand promotion and refinement meta
+ * compose (`Email & MinLength<5>` → `t(types.email, { minLength: 5 })`).
+ */
+function typeRefFromBrandedIntersection(
   type: ts.IntersectionType,
   checker: ts.TypeChecker,
   loc: ts.Node,
   seen: Set<ts.Type>,
 ): TypeRef | undefined {
+  const bases: ts.Type[] = []
   const refinementMeta: Record<string, unknown> = {}
-  const baseConstituents: ts.Type[] = []
+  let brandValue: string | undefined
 
   for (const constituent of type.types) {
-    const m = refinementMetaOfConstituent(constituent, checker, loc)
-    if (m) Object.assign(refinementMeta, m)
-    else baseConstituents.push(constituent)
+    const classified = classifyIntersectionConstituent(constituent, checker, loc)
+    if (classified.kind === "refinement") {
+      Object.assign(refinementMeta, classified.meta)
+    } else if (classified.kind === "brand" && brandValue === undefined) {
+      brandValue = classified.value
+    } else {
+      bases.push(constituent)
+    }
   }
 
-  if (Object.keys(refinementMeta).length === 0) return undefined
-  if (baseConstituents.length !== 1) return undefined
+  if (brandValue === undefined && Object.keys(refinementMeta).length === 0) return undefined
+  if (bases.length !== 1) return undefined
 
   const nextSeen = new Set(seen).add(type)
-  const baseRef = typeRefFromType(baseConstituents[0]!, checker, loc, nextSeen)
-  return t(baseRef.shape, { ...baseRef.meta, ...refinementMeta })
+  const baseRef = typeRefFromType(bases[0]!, checker, loc, nextSeen)
+
+  const branded =
+    brandValue !== undefined
+      ? (promoteBrand(baseRef, brandValue) ?? t(baseRef.shape, { ...baseRef.meta, brand: brandValue }))
+      : baseRef
+
+  return Object.keys(refinementMeta).length > 0
+    ? t(branded.shape, { ...branded.meta, ...refinementMeta })
+    : branded
 }
 
 /**
@@ -734,33 +752,39 @@ export function typeRefFromType(
     return puntRef(`union (${checker.typeToString(type)})`)
   }
 
-  // ── Intersections: detect the branded/opaque type pattern, else lower
-  //    structurally ─────────────────────────────────────────────────────────
+  // ── Intersections: detect the branded/opaque and/or refinement-tag
+  //    pattern (any combination, single base only), else lower structurally ──
   //
   // `type LocationId = string & { readonly __brand: "LocationId" }` compiles to
   // an IntersectionType of a primitive constituent and an object constituent
   // whose sole property is a brand tag (`__brand`/`__tag`/`_brand`/`_tag`, or a
-  // unique symbol key). When recognized, and the brand name (case-insensitively)
-  // matches a known semantic-string kind (`uuid`/`uri`/`email` — see
-  // `promoteBrand`/`BRAND_KIND_CTORS` above and type-ir's
-  // `kinds/semantic-strings.ts`), lower directly to that kind (`types.uuid`/
-  // `types.uri`/`types.email`) instead of the primitive. Any other brand name
-  // lowers to the primitive's TypeRef with `meta.brand` set to the tag's
-  // literal string value — an open-metadata-bag annotation (see CLAUDE.md:
-  // open metadata over fixed schema) that brand-aware projectors (zod,
-  // typescript, valibot) read and others ignore.
+  // unique symbol key); `string & MinLength<2> & MaxLength<100>` compiles to a
+  // primitive constituent plus one or more `{ [RefinementTag]: {...} }`
+  // constituents; `Email & MinLength<5>` combines both (three constituents:
+  // base + brand tag + refinement tag). `typeRefFromBrandedIntersection`
+  // walks all constituents and recognizes any of these combinations, so long
+  // as exactly one constituent is left over as the base. When a brand is
+  // recognized, and the brand name (case-insensitively) matches a known
+  // semantic-string kind (`uuid`/`uri`/`email` — see `promoteBrand`/
+  // `BRAND_KIND_CTORS` above and type-ir's `kinds/semantic-strings.ts`), it
+  // lowers directly to that kind (`types.uuid`/`types.uri`/`types.email`)
+  // instead of the primitive; any other brand name lowers to the base's
+  // TypeRef with `meta.brand` set to the tag's literal string value — an
+  // open-metadata-bag annotation (see CLAUDE.md: open metadata over fixed
+  // schema) that brand-aware projectors (zod, typescript, valibot) read and
+  // others ignore. Refinement tags merge their value-object keys into the
+  // same meta bag, composing with a recognized brand or plain base alike.
   //
   // Anything else intersecting is a genuine structural intersection — the
-  // mixin pattern (`HasId & HasTimestamps & UserFields`). Each constituent is
+  // mixin pattern (`HasId & HasTimestamps & UserFields`), or an intersection
+  // with more than one leftover base (ambiguous). Each constituent is
   // extracted recursively and carried as `types.intersection(members)`;
   // projectors that can represent it natively (JSON Schema's `allOf`,
   // TypeScript's `&`, Zod's `z.intersection`, …) do, and the rest fall back to
   // their first member (lossy but safe — see each projector's handler).
   if (type.isIntersection()) {
-    const brand = brandFromIntersection(type, checker, loc, seen)
-    if (brand) return brand
-    const refinement = refinementFromIntersection(type, checker, loc, seen)
-    if (refinement) return refinement
+    const branded = typeRefFromBrandedIntersection(type, checker, loc, seen)
+    if (branded) return branded
     const nextSeen = new Set(seen).add(type)
     const members = type.types.map((member) => typeRefFromType(member, checker, loc, nextSeen))
     return t(types.intersection(members))
