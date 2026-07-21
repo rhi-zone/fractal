@@ -2,22 +2,26 @@
 
 ## Next session (handoff)
 
-**From projector coverage audit (HIGH — blocks production use):**
-- **HTTP non-JSON content types** — PARTIALLY DONE (response side complete as of 2026-07-20; request side still needs multipart/form-data/file upload). Response side: `ResponseOverride` now passes through binary/stream/text/blob bodies unchanged. **Request side (multipart/form-data/file upload parsing) — IN PROGRESS; remaining production blocker.**
+> *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
 
-**Completed this session (2026-07-20) — no longer blockers:**
-- **HTTP streaming responses** (SSE/chunked encoding) — DONE. Async generator handlers that `yield StreamEffect` now work across all projectors. Response side: `ResponseOverride` streams via `AsyncIterable<Uint8Array>`.
-- **MCP progress notifications** — DONE. Handlers receive `reportProgress(message, progress)` callback via caller store. Progress yields inside handler bodies are captured by `StreamProgress` extractor and sent as MCP notifications.
-- **Caller-context assembly** — DONE. Caller store (typed via declaration merging on `StoreRegistry` interface) provides transport-level capabilities to handlers. Pattern unified across HTTP/CLI/MCP via middleware/layer design.
+**All previously-tracked production blockers are now closed** (verified against
+the commit history below): HTTP streaming, MCP progress notifications, HTTP
+non-JSON content types (both request and response sides), caller-context
+assembly, and the middleware/layers redesign are all DONE. See the completed
+sections below for what landed and where.
+
+**New open threads from this session (2026-07-20/21):**
+- **Structured error types are projector-level config, not a tree-level declaration** — `ErrorEncoder<E,R>` (`packages/api-tree/src/index.ts`) and each projector's `httpErrors`/`cliErrors`/`mcpErrors` combinators let a handler's `Result.err()` values get mapped to transport responses, but this is all consumer-supplied config passed to the projector at wire-up time. There is still no way to *declare* an operation's possible error kinds in the tree/meta itself — the tree stays silent about what errors an operation can produce, same gap the pre-existing "Structured error types" backlog item named, just narrowed now that the encoder mechanism exists.
+- **Stores typing via declaration merging could go further** — `StoreRegistry` (landed 2026-07-19, commit f005c05) makes accessing an undeclared *store name* a compile error, but doesn't type individual *values* within a store — a store's contents are whatever the declaring package's augmentation says, with no per-key value-shape enforcement beyond that. Worth a follow-up pass if store misuse ever shows up in practice.
+- **Opt-in detection config for Result/streaming defaults to on** — `detection: { result?, streaming? }` (commit c1ef32b) lets a projector turn off automatic `Result`-unwrapping or `AsyncIterable`-streaming, but both default to `true` for backwards compatibility. Worth reconsidering whether on-by-default is the right long-term default or just the safe migration default.
+- **JSON-shape inference (`fromJson`/`fromJsonCorpus`) — landed and merged, not an open thread requiring a decision.** Single-value and corpus-level inferrers, integer-width narrowing, property-based fuzz harnesses, adversarial tests for enum-detection heuristics, and a prior-art survey (`docs/design/prior-art/json-shape-inference.md`, surveying quicktype's Markov-chain map/class detection among others) all landed this session on `master` (commits 97d8f5b through e292c9d). Known limitations (clustering, union splitting, K=1 confidence scaling) are parked and documented in the low-priority thread below — there is no separate unmerged branch or pending merge decision.
 
 **Open items (quality & design depth, not blockers):**
-- **Opt-in configuration for stream effect / Result detection** — design doc (`docs/design/middleware-and-caller-context.md`) notes that handlers returning async iterables or `Result` types should be auto-detected and wrapped. Not yet implemented; configurable opt-in needed (likely via metadata or compiler flag).
-- **Root tsconfig investigation** — workspace root `tsconfig.json` needs audit for strictness/consistency across packages.
+- **Root tsconfig investigation** — workspace root `tsconfig.json` still needs a full audit for strictness/consistency across packages. (A narrower, related fix landed this session — commit 2411e3a corrected stale `../core` path mappings to `../api-tree` in three projector tsconfigs — but that was a specific bug fix, not the broader audit.)
 - **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains); lower priority.
 
 **From design backlog:**
 - **GraphQL API projector** (server + client) — type-ir SDL projector done; API projector still open. Follows HTTP/CLI/MCP projection pattern.
-- **Structured error types** — declare operation-specific error outcomes in the tree. Handlers throw or return Result; tree is currently silent.
 - **Extract improvements** — overloaded functions, generics, async generators currently degrade silently.
 
 **Open threads:**
@@ -25,6 +29,18 @@
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 - **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
 - **Coercion placement specifics** — currently handled in `parse()` (transform+validate single pass). Broader story for store-level coercion and pre-input coercion TBD.
+
+---
+
+## Non-JSON request bodies, opt-in detection, structured errors, JSON-shape inference — DONE (2026-07-20/21)
+
+Second half of the 2026-07-20 session plus a follow-on 2026-07-21 session, picking up after the streaming/caller-store handoff below.
+
+- **HTTP non-JSON request bodies** (commit 218c845) — multipart/form-data, plain text, and binary request body parsing, completing the non-JSON content-type item (response side landed earlier the same session).
+- **Opt-in detection config** (commit c1ef32b) — each projector now accepts `detection: { result?, streaming? }` to toggle automatic `Result`-unwrapping and `AsyncIterable`-streaming independently; `ResponseOverride` (Symbol-based) is always active regardless. Both default `true`.
+- **Structured error types** (commit f53a43d) — `ErrorEncoder<E,R>` and `composeErrorEncoders`/`matchKind` (`packages/api-tree/src/index.ts`) give handlers a way to return typed errors via `Result.err()` that each projector maps to a transport-specific response through an `errorEncoder` option — pre-built `httpErrors`/`cliErrors`/`mcpErrors` combinators cover common patterns, unknown errors fall back to prior default behavior. This is projector-wiring-level, not a tree/meta declaration — see the open thread above.
+- **JSON-shape inference** (commits 97d8f5b, cd3c241, f922f76, 811448e, a1b3524, 9b90872, be2bdfd, f5f3aab, 78fdf87, e292c9d) — `fromJson` (single-value inference), `fromJsonCorpus` (corpus-level, later split into evidence-collection + resolution phases), full integer-width kind narrowing, property-based (`fast-check`) fuzz harnesses, adversarial tests targeting enum-detection heuristics (K=1 saturation, boundary conditions, clustering), and a prior-art survey document comparing the approach against quicktype and others. Tangential to the projector/middleware work; parked with known limitations, see low-priority thread below.
+- Misc: commit 2411e3a fixed stale `../core` → `../api-tree` tsconfig path mappings across three projector packages.
 
 ---
 
