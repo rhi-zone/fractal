@@ -52,6 +52,18 @@ export interface Meta {
   description?: string
 }
 
+/**
+ * True when `T` has at least one required key. `{}` is assignable from (and
+ * to) any object type with only optional keys, so `{} extends T` is false
+ * exactly when `T` has a required key.
+ *
+ * Used to make `op()`/`api()`'s meta-contribution rest parameter require at
+ * least one argument when a consumer declaration-merges a required field
+ * onto `Meta` — fractal's own default `Meta` (all-optional) keeps the
+ * zero-contribution call legal.
+ */
+type HasRequiredKeys<T> = {} extends T ? false : true
+
 /** The bare callable on a leaf node. Provenance-blind: handler sees one flat input. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Handler<I = any, O = any> = (input: I) => O | Promise<O>
@@ -182,7 +194,7 @@ export function mergeMeta(...metas: Array<Meta | undefined>): Meta {
  */
 export function op<H extends Handler>(
   fn: H,
-  ...contributions: Array<Meta>
+  ...contributions: HasRequiredKeys<Meta> extends true ? [Meta, ...Meta[]] : Meta[]
 ): Omit<Node, "handler"> & { readonly handler: H } {
   const meta = contributions.length === 0
     ? {}
@@ -198,7 +210,11 @@ export function op<H extends Handler>(
  * created with `op()`.
  *
  * `api(children, opts?)` — positional children for the common case, an
- * options object for the rare stuff (meta, fallback).
+ * options object for the rare stuff (meta, fallback). `opts` becomes a
+ * required argument (and `opts.meta` a required field) when a consumer
+ * declaration-merges a required field onto `Meta` — the same
+ * `HasRequiredKeys<Meta>` rest-tuple technique `op()` uses above, applied to
+ * a single options object instead of a spread of contributions.
  *
  * `api()` is the (only) branch-node constructor.
  *
@@ -236,8 +252,11 @@ export function api<
   const F extends { readonly name: string; readonly subtree: Node<any> } | undefined = undefined,
 >(
   children: C,
-  opts?: { meta?: Meta; fallback?: F },
+  ...rest: HasRequiredKeys<Meta> extends true
+    ? [opts: { meta: Meta; fallback?: F }]
+    : [opts?: { meta?: Meta; fallback?: F }]
 ): Omit<Node, "children" | "fallback"> & { readonly children: C } & (F extends undefined ? object : { readonly fallback: F }) {
+  const opts = rest[0]
   return {
     ...(children !== undefined ? { children } : {}),
     ...(opts?.fallback !== undefined ? { fallback: opts.fallback } : {}),
