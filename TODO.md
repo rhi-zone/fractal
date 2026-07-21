@@ -252,6 +252,10 @@ before acting.
   The old path is technically still on-disk but unreachable from the working tree.
   No action needed; noted for historical clarity.
 
+### Low Priority
+
+- **JSON shape inference from data** — single-value and corpus inferrers implemented (`fromJson`, `fromJsonCorpus`), two-phase architecture (evidence collection → configurable resolution), adversarial tests. Parked with known limitations (clustering, union splitting, K=1 confidence scaling). See `packages/type-ir/src/from-json*.ts` and recent commits (a1b3524, 811448e, f922f76, 97d8f5b).
+
 ### New threads from the 2026-07-17 validation/decode session (not yet built)
 
 - ~~**TypeBox AOT validator codegen**~~ — RESOLVED (2026-07-17): the compile
