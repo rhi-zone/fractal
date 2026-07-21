@@ -21,7 +21,6 @@ sections below for what landed and where.
 - **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains); lower priority.
 
 **From design backlog:**
-- **GraphQL API projector** (server + client) — type-ir SDL projector done; API projector still open. Follows HTTP/CLI/MCP projection pattern.
 - **Extract improvements** — overloaded functions, generics, async generators currently degrade silently.
 
 **Open threads:**
@@ -29,6 +28,21 @@ sections below for what landed and where.
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 - **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
 - **Coercion placement specifics** — currently handled in `parse()` (transform+validate single pass). Broader story for store-level coercion and pre-input coercion TBD.
+
+---
+
+## GraphQL API projector — DONE (2026-07-21)
+
+Server and client implementation complete. Projector includes:
+
+- **Server components**: `project.ts` (core projector), `schema.ts` (schema projection), `resolve.ts` (field resolver), `server.ts` (HTTP/WebSocket setup)
+- **Presets**: `presets.ts` (HTTP transport), `ws.ts` (WebSocket subscriptions)
+- **Client**: `client.ts` (runtime proxy), `codegen.ts` (typed code generation)
+- **Benchmarking**: `resolve.bench.ts` (performance profiling), `context.ts` (store integration)
+
+Follows HTTP/CLI/MCP projection pattern, integrated with middleware/store system.
+
+**Performance note**: Resolver wrapper overhead measured at ~0.28µs per call vs ~0.055µs for raw graphql-js resolver, with ~5x overhead ratio. Dominated by `assemble()` and Result-shape detection; absolute overhead is ~0.22µs/call. For typical single-field queries, this represents <1% of total query latency. Worth profiling if deep queries (hundreds of resolved fields) become a workload.
 
 ---
 
