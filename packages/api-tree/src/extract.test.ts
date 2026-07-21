@@ -808,6 +808,131 @@ describe("typeRefFromType gap fixes", () => {
     const thisShape = fn.thisType?.shape as { kind: "instance"; className: string }
     expect(thisShape.className).toBe("MethodOwner")
   })
+
+  // ── Overloaded functions/methods — intersection of call signatures ────────
+
+  type FnShape = {
+    kind: "function"
+    params: readonly { name: string; type: TypeRef }[]
+    returnType: TypeRef
+  }
+  type MethodShape = {
+    kind: "method"
+    params: readonly { name: string; type: TypeRef }[]
+    returnType: TypeRef
+    thisType?: TypeRef
+  }
+  type IntersectionShape = { kind: "intersection"; members: TypeRef[] }
+
+  it("lowers an overloaded function to types.intersection of one types.function per overload", () => {
+    const ref = typeRefFromType(typeOf("OverloadedFnField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    const handler = fields.handler!
+    expect(handler.shape.kind).toBe("intersection")
+    const members = (handler.shape as IntersectionShape).members
+    expect(members).toHaveLength(2)
+    expect(members.every((m) => m.shape.kind === "function")).toBe(true)
+
+    const [first, second] = members.map((m) => m.shape as FnShape)
+    expect(first!.params.map((p) => p.type.shape.kind)).toEqual(["string"])
+    expect(first!.returnType.shape.kind).toBe("number")
+    expect(second!.params.map((p) => p.type.shape.kind)).toEqual(["number"])
+    expect(second!.returnType.shape.kind).toBe("string")
+  })
+
+  it("does not include the implementation signature in the extracted overload intersection", () => {
+    // OverloadedFnField's declared type is `typeof overloadedFn`, whose two
+    // *public* overloads are `(a: string) => number` and `(a: number) =>
+    // string` — the wider implementation signature `(a: string | number) =>
+    // number | string` backs the body but is never callable from outside and
+    // must not appear as a third intersection member.
+    const ref = typeRefFromType(typeOf("OverloadedFnField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    const members = (fields.handler!.shape as IntersectionShape).members
+    expect(members).toHaveLength(2)
+    const paramKinds = members.map((m) => (m.shape as FnShape).params[0]!.type.shape.kind).sort()
+    expect(paramKinds).toEqual(["number", "string"])
+    // The implementation signature's union param (`string | number`) would
+    // show up as a third member with a `union`- or `unknown`-kind param —
+    // confirm no such member exists.
+    expect(members.some((m) => (m.shape as FnShape).params[0]!.type.shape.kind === "union")).toBe(
+      false,
+    )
+  })
+
+  it("lowers an overloaded class method to types.intersection of one types.method per overload, each carrying thisType", () => {
+    const ref = typeRefFromType(typeOf("OverloadedMethodClass"), checker, source)
+    expect(ref.shape.kind).toBe("instance")
+    const iface = ref.meta.interface as TypeRef
+    expect(iface).toBeDefined()
+    const methods = (iface.shape as { kind: "interface"; methods: Record<string, TypeRef> }).methods
+    const process = methods.process!
+    expect(process.shape.kind).toBe("intersection")
+    const members = (process.shape as IntersectionShape).members
+    expect(members).toHaveLength(2)
+    expect(members.every((m) => m.shape.kind === "method")).toBe(true)
+
+    const [first, second] = members.map((m) => m.shape as MethodShape)
+    expect(first!.params.map((p) => p.type.shape.kind)).toEqual(["string"])
+    expect(first!.returnType.shape.kind).toBe("number")
+    expect(second!.params.map((p) => p.type.shape.kind)).toEqual(["number"])
+    expect(second!.returnType.shape.kind).toBe("string")
+
+    for (const m of members) {
+      const thisType = (m.shape as MethodShape).thisType
+      expect(thisType?.shape.kind).toBe("instance")
+      expect((thisType?.shape as { className: string }).className).toBe("OverloadedMethodClass")
+    }
+  })
+
+  it("lowers each overload's independently-Result-shaped return type on its own — no cross-overload collapsing", () => {
+    const ref = typeRefFromType(typeOf("OverloadedResultFnField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    const members = (fields.handler!.shape as IntersectionShape).members
+    expect(members).toHaveLength(2)
+
+    const byParamKind = Object.fromEntries(
+      members.map((m) => {
+        const fn = m.shape as FnShape
+        return [fn.params[0]!.type.shape.kind, fn.returnType]
+      }),
+    )
+
+    // Each overload's return type is the (unwrapped-at-the-op-level-only)
+    // Result<T,E> alias, extracted structurally as its own discriminated
+    // union — `T` differs per overload (`{ text: string }` vs `{ num:
+    // number }`), proving each signature's return type was lowered
+    // independently rather than sharing one memoized result.
+    const stringOverloadReturn = byParamKind.string!
+    const numberOverloadReturn = byParamKind.number!
+    expect(stringOverloadReturn.shape.kind).toBe("union")
+    expect(numberOverloadReturn.shape.kind).toBe("union")
+    expect(stringOverloadReturn.meta.discriminator).toBe("kind")
+    expect(numberOverloadReturn.meta.discriminator).toBe("kind")
+
+    const okFieldsOf = (returnRef: TypeRef): string[] => {
+      const variants = (returnRef.shape as { kind: "union"; variants: TypeRef[] }).variants
+      const okVariant = variants.find((v) => {
+        const f = (v.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+        return (f.kind?.shape as { kind: "literal"; value: unknown })?.value === "ok"
+      })!
+      const valueFields = (okVariant.shape as { kind: "object"; fields: Record<string, TypeRef> })
+        .fields.value!.shape as { kind: "object"; fields: Record<string, TypeRef> }
+      return Object.keys(valueFields.fields)
+    }
+    expect(okFieldsOf(stringOverloadReturn)).toEqual(["text"])
+    expect(okFieldsOf(numberOverloadReturn)).toEqual(["num"])
+  })
+
+  it("regression: a single-signature function still lowers to a bare types.function, no intersection wrapper", () => {
+    const ref = typeRefFromType(typeOf("SingleSignatureFnField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    const handler = fields.handler!
+    expect(handler.shape.kind).toBe("function")
+    const fn = handler.shape as FnShape
+    expect(fn.params.map((p) => p.type.shape.kind)).toEqual(["string"])
+    expect(fn.returnType.shape.kind).toBe("number")
+  })
 })
 
 // ============================================================================

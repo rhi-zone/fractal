@@ -99,6 +99,27 @@ function functionRefFromSignature(
 }
 
 /**
+ * Lower ALL call signatures of a callable type to `types.function` TypeRefs.
+ * TypeScript represents an overloaded function as an intersection of its call
+ * signatures (`((A) => X) & ((B) => Y)`), so more than one signature wraps as
+ * `types.intersection([fn1, fn2, …])` — one member per overload. A single
+ * signature (the common case) keeps prior behavior exactly: a bare
+ * `types.function(...)`, no intersection wrapper. `seen` is shared across all
+ * signatures of the same overload set (they're siblings on the same
+ * type-position, not a recursion chain, but sharing avoids re-descending a
+ * type already seen via another overload).
+ */
+function functionRefFromSignatures(
+  sigs: readonly ts.Signature[],
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+): TypeRef {
+  const refs = sigs.map((sig) => functionRefFromSignature(sig, checker, loc, seen))
+  return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
+}
+
+/**
  * Lower a class method's call signature to a `types.method` TypeRef (not
  * `types.function` — a method belongs to the class's contract, not a
  * standalone callable; see type-ir's TypeKinds.method doc comment).
@@ -123,6 +144,23 @@ function methodRefFromSignature(
 }
 
 /**
+ * Lower ALL call signatures of a class method (overloads) to `types.method`
+ * TypeRefs, wrapped in `types.intersection` when there's more than one — same
+ * overload-as-intersection convention as `functionRefFromSignatures`, applied
+ * to the method kind instead of the standalone-function kind.
+ */
+function methodRefFromSignatures(
+  sigs: readonly ts.Signature[],
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+  thisType: TypeRef,
+): TypeRef {
+  const refs = sigs.map((sig) => methodRefFromSignature(sig, checker, loc, seen, thisType))
+  return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
+}
+
+/**
  * A class's method surface as a `Record<name, TypeRef>` (each a
  * `types.method`), for building a `types.interface` alongside the class's
  * `types.instance`. A property counts as a method when its own declaration is
@@ -144,10 +182,10 @@ function methodsFromClassType(
     if (isPrivateOrProtected(prop)) continue
     const isMethodDecl = (prop.declarations ?? []).some(ts.isMethodDeclaration)
     const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
-    const [sig] = checker.getSignaturesOfType(propType, ts.SignatureKind.Call)
-    if (!isMethodDecl && !sig) continue
-    if (!sig) continue
-    methods[prop.name] = methodRefFromSignature(sig, checker, loc, seen, thisType)
+    const sigs = checker.getSignaturesOfType(propType, ts.SignatureKind.Call)
+    if (!isMethodDecl && sigs.length === 0) continue
+    if (sigs.length === 0) continue
+    methods[prop.name] = methodRefFromSignatures(sigs, checker, loc, seen, thisType)
   }
   return methods
 }
@@ -509,7 +547,7 @@ export function typeRefFromType(
     // yet and still punt.
     const callSigs = checker.getSignaturesOfType(type, ts.SignatureKind.Call)
     if (callSigs.length > 0) {
-      return functionRefFromSignature(callSigs[0]!, checker, loc, seen)
+      return functionRefFromSignatures(callSigs, checker, loc, seen)
     }
     if (checker.getSignaturesOfType(type, ts.SignatureKind.Construct).length > 0) {
       return puntRef(`constructable (${checker.typeToString(type)})`)

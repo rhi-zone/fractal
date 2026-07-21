@@ -89,6 +89,62 @@ export class MethodOwner {
  * `MethodOwner.prototype.deposit` accessed as a value. */
 export type BoundMethodType = (this: MethodOwner, amount: number) => void
 
+// ── Overloaded-function fixtures ────────────────────────────────────────────
+// TypeScript lowers an overloaded function to an intersection of its call
+// signatures: `((A) => X) & ((B) => Y)`. The extractor mirrors that with
+// `types.intersection([types.function(...), types.function(...)])`. The
+// implementation signature (the final, widest signature that backs the
+// overloads) is never visible to callers and must NOT appear in the
+// extracted set — `checker.getSignaturesOfType` already excludes it.
+
+/** Overloaded free function: different param + return type per overload. */
+export function overloadedFn(a: string): number
+export function overloadedFn(a: number): string
+export function overloadedFn(a: string | number): number | string {
+  return typeof a === "string" ? a.length : String(a)
+}
+
+/** A field whose type is the overloaded function, to exercise the callable
+ * branch of the object-field walk (not just a top-level function type). */
+export type OverloadedFnField = { handler: typeof overloadedFn }
+
+/** A class whose method is overloaded — same intersection-of-signatures
+ * shape, but lowered through `methodsFromClassType` to `types.method`
+ * members instead of `types.function`. */
+export class OverloadedMethodClass {
+  process(a: string): number
+  process(a: number): string
+  process(a: string | number): number | string {
+    return typeof a === "string" ? a.length : String(a)
+  }
+}
+
+/** Each overload returns a distinct `Result<T, string>` — the per-signature
+ * `functionRefFromSignature` call independently lowers each return type, so
+ * the two overloads' return shapes stay distinct rather than collapsing to
+ * one. (`Result<T,E>` unwrapping to `T` is a return-type-of-the-op-itself
+ * concern (`typeRefFromReturnType`'s syntax/structural paths) — a signature's
+ * return type reached via plain `typeRefFromType` lowers the alias
+ * structurally, same as any other field/param position.) */
+export function overloadedResultFn(a: string): Result<{ text: string }, string>
+export function overloadedResultFn(a: number): Result<{ num: number }, string>
+export function overloadedResultFn(a: string | number): Result<{ text: string } | { num: number }, string> {
+  return typeof a === "string"
+    ? { kind: "ok", value: { text: a } }
+    : { kind: "ok", value: { num: a } }
+}
+
+export type OverloadedResultFnField = { handler: typeof overloadedResultFn }
+
+/** Single-signature function, named the same shape as the overloaded one
+ * above, minus the overloads — regression check that a plain (non-overloaded)
+ * function still lowers to a bare `types.function`, no intersection wrapper. */
+export function singleSignatureFn(a: string): number {
+  return a.length
+}
+
+export type SingleSignatureFnField = { handler: typeof singleSignatureFn }
+
 // ── Branded/opaque type fixtures ────────────────────────────────────────────
 
 /** Branded string — the standard nominal-typing pattern over a primitive. */
