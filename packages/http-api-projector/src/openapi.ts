@@ -193,10 +193,19 @@ export type OpenApiMeta = {
   readonly [key: string]: unknown
 }
 
+// Declaration merging: types this package's `meta.openapi` slot on the
+// shared `Meta` open bag (see api-tree/src/node.ts) so consumers get a
+// typed `meta.openapi` instead of an untyped index-signature fallback.
+declare module "@rhi-zone/fractal-api-tree/node" {
+  interface Meta {
+    openapi?: OpenApiMeta
+  }
+}
+
 function getOpenApiMeta(meta: Meta): OpenApiMeta {
   const o = meta.openapi
   if (typeof o !== "object" || o === null) return {}
-  return o as OpenApiMeta
+  return o
 }
 
 // ============================================================================

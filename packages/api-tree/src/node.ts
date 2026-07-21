@@ -42,7 +42,14 @@ import type { Tags } from "./tags.ts"
  */
 export interface Meta {
   tags?: Tags
-  readonly [key: string]: unknown
+  /**
+   * Agnostic description text — read by every projector (cli, mcp, graphql,
+   * …) as a fallback beneath their own namespaced `description` override
+   * (e.g. `meta.mcp.description`). See docs/design/converged-model.md's
+   * precedence chain: `meta.mcp.description > meta.description >
+   * derived.description > ...`.
+   */
+  description?: string
 }
 
 /** The bare callable on a leaf node. Provenance-blind: handler sees one flat input. */

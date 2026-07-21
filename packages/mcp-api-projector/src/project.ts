@@ -186,11 +186,20 @@ export type McpMeta = {
   readonly [key: string]: unknown
 }
 
+// Declaration merging: types this package's `meta.mcp` slot on the shared
+// `Meta` open bag (see api-tree/src/node.ts) so consumers get a typed
+// `meta.mcp` instead of an untyped index-signature fallback.
+declare module "@rhi-zone/fractal-api-tree/node" {
+  interface Meta {
+    mcp?: McpMeta
+  }
+}
+
 /** Safely extract the open meta.mcp bag from a Meta. */
 export function getMcpMeta(meta: Meta): McpMeta {
   const m = meta.mcp
   if (typeof m !== "object" || m === null) return {}
-  return m as McpMeta
+  return m
 }
 
 // ============================================================================

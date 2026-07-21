@@ -22,8 +22,9 @@
 //   packages/cli-api-projector/src/cli.ts — walkCliCommands, getCliMeta, resolveLeaf
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
+import { getCliMeta } from "./cli.ts"
 
 // ============================================================================
 // Shell selector
@@ -39,11 +40,9 @@ export function isShellName(v: string | undefined): v is ShellName {
 // Tree index — one flat pass over the Node tree, independent of shell
 // ============================================================================
 
-/** True when `meta.cli.hidden === true` — mirrors cli.ts's getCliMeta/hidden convention. */
-function isHiddenMeta(meta: { readonly [key: string]: unknown }): boolean {
-  const cli = meta["cli"]
-  if (typeof cli !== "object" || cli === null) return false
-  return (cli as Record<string, unknown>)["hidden"] === true
+/** True when `meta.cli.hidden === true`. */
+function isHiddenMeta(meta: Meta): boolean {
+  return getCliMeta(meta).hidden === true
 }
 
 type FlagInfo = {

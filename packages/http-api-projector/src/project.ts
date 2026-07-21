@@ -60,6 +60,15 @@ export function toHttpRoutes(node: Node): HttpRoute {
   return naiveTransform(node)
 }
 
+// Declaration merging: types this package's `meta.http` slot on the shared
+// `Meta` open bag (see api-tree/src/node.ts) so consumers get a typed
+// `meta.http` instead of an untyped index-signature fallback.
+declare module "@rhi-zone/fractal-api-tree/node" {
+  interface Meta {
+    http?: HttpMeta
+  }
+}
+
 // ============================================================================
 // meta.http DU types
 // ============================================================================
@@ -161,7 +170,6 @@ export type HttpMeta = {
 export function getHttpMeta(meta: Meta): HttpMeta {
   const h = meta.http
   if (typeof h !== "object" || h === null) return {}
-  const r = h as { dispatch?: unknown; directives?: unknown }
 
   const out: {
     dispatch?: { kind: "method" | "attr" }
@@ -175,13 +183,12 @@ export function getHttpMeta(meta: Meta): HttpMeta {
     response?: { status?: number; headers?: Record<string, string> }
   } = {}
 
-  if (typeof r.dispatch === "object" && r.dispatch !== null) {
-    const d = r.dispatch as Record<string, unknown>
-    out.dispatch = { kind: d.kind === "method" ? "method" : "attr" }
+  if (typeof h.dispatch === "object" && h.dispatch !== null) {
+    out.dispatch = { kind: h.dispatch.kind === "method" ? "method" : "attr" }
   }
 
-  if (Array.isArray(r.directives)) {
-    const directives = r.directives as HttpDirective[]
+  if (Array.isArray(h.directives)) {
+    const directives = h.directives
     out.directives = directives
     for (const d of directives) {
       switch (d.kind) {

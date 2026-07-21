@@ -1,5 +1,16 @@
 import { describe, expect, it } from "bun:test"
 import { verbFromTags } from "./tags.ts"
+import type { Meta } from "@rhi-zone/fractal-api-tree/node"
+
+// These tests deliberately feed malformed `meta.http` shapes (wrong type
+// for `http` itself, `directives` not an array, a directive `value` that
+// isn't a string) to verify verbFromTags's runtime defensive parsing still
+// degrades gracefully — the shape is invalid ON PURPOSE, so it's built as
+// `unknown` and cast, bypassing the compile-time `HttpMeta` shape that
+// declaration merging now gives `meta.http` (see node.ts / project.ts).
+function malformed(meta: unknown): Meta {
+  return meta as Meta
+}
 
 describe("verbFromTags — tag lattice dispatch", () => {
   it("no tags, no directives → POST", () => {
@@ -42,21 +53,21 @@ describe("verbFromTags — meta.http verb directive", () => {
   })
 
   it("meta.http not an object → falls through to tags", () => {
-    expect(verbFromTags({ tags: { readOnly: true }, http: "GET" })).toBe("GET")
+    expect(verbFromTags(malformed({ tags: { readOnly: true }, http: "GET" }))).toBe("GET")
   })
 
   it("meta.http.directives not an array → falls through to tags", () => {
     expect(
-      verbFromTags({ tags: { readOnly: true }, http: { directives: "verb" } }),
+      verbFromTags(malformed({ tags: { readOnly: true }, http: { directives: "verb" } })),
     ).toBe("GET")
   })
 
   it("verb directive with non-string value → ignored, falls through to tags", () => {
     expect(
-      verbFromTags({
+      verbFromTags(malformed({
         tags: { readOnly: true },
         http: { directives: [{ kind: "verb", value: 123 }] },
-      }),
+      })),
     ).toBe("GET")
   })
 })

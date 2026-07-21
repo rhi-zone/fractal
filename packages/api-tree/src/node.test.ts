@@ -20,6 +20,15 @@ import {
   type Tags,
 } from "./tags.ts"
 
+// `Meta` uses declaration merging (each projector package types its own
+// slot — see node.ts's doc comment). Tests below exercise the bag's
+// genuinely-open, undeclared-key runtime behavior — arbitrary keys still
+// pass through unchanged at the value level, they're just not statically
+// known here. `OpenMeta` is the test-only escape hatch for that: an index
+// signature back on top of `Meta`, used ONLY where a test's whole point is
+// an undeclared key.
+type OpenMeta = Meta & Record<string, unknown>
+
 // ============================================================================
 // 1. op() — leaf-node constructor
 // ============================================================================
@@ -120,15 +129,15 @@ describe("open metadata", () => {
     const leaf = op(() => "ok", {
       myCustomProjection: { foo: "bar", nested: { deep: 42 } },
       "acme:cache": { ttl: 300, varyOn: ["id"] },
-    })
-    expect(leaf.meta["myCustomProjection"]).toEqual({ foo: "bar", nested: { deep: 42 } })
-    expect(leaf.meta["acme:cache"]).toEqual({ ttl: 300, varyOn: ["id"] })
+    } as OpenMeta)
+    expect((leaf.meta as OpenMeta)["myCustomProjection"]).toEqual({ foo: "bar", nested: { deep: 42 } })
+    expect((leaf.meta as OpenMeta)["acme:cache"]).toEqual({ ttl: 300, varyOn: ["id"] })
   })
 
   it("arbitrary/unknown meta keys are preserved on node", () => {
-    const n = api({}, { meta: { internalFlag: true, analytics: { track: "pageview" } } })
-    expect(n.meta["internalFlag"]).toBe(true)
-    expect(n.meta["analytics"]).toEqual({ track: "pageview" })
+    const n = api({}, { meta: { internalFlag: true, analytics: { track: "pageview" } } as OpenMeta })
+    expect((n.meta as OpenMeta)["internalFlag"]).toBe(true)
+    expect((n.meta as OpenMeta)["analytics"]).toEqual({ track: "pageview" })
   })
 
   it("resolveTags leaves non-standard boolean keys in tags untouched (not consumed)", () => {
@@ -164,11 +173,11 @@ describe("op surfaces", () => {
   it("standalone function op with meta preserves meta", async () => {
     const leaf = op(
       (input: { id: string }) => ({ found: true, id: input.id }),
-      { tags: { [TAG_READ_ONLY]: true }, http: { segment: "detail" } },
+      { tags: { [TAG_READ_ONLY]: true }, http: { segment: "detail" } } as OpenMeta,
     )
     expect(await leaf.handler!({ id: "x" })).toEqual({ found: true, id: "x" })
     expect(leaf.meta.tags?.[TAG_READ_ONLY]).toBe(true)
-    expect(leaf.meta["http"]).toEqual({ segment: "detail" })
+    expect((leaf.meta as OpenMeta)["http"]).toEqual({ segment: "detail" })
   })
 
   it("isNode / isLeaf discriminators are correct", () => {
@@ -231,13 +240,13 @@ describe("mapNodes", () => {
 
 describe("mergeMeta", () => {
   it("later bag wins over earlier for scalar keys", () => {
-    const m = mergeMeta({ foo: 1 }, { foo: 2 })
-    expect(m["foo"]).toBe(2)
+    const m = mergeMeta({ foo: 1 } as OpenMeta, { foo: 2 } as OpenMeta)
+    expect((m as OpenMeta)["foo"]).toBe(2)
   })
 
   it("undefined in later bag defers — does not override", () => {
-    const m = mergeMeta({ foo: 1 }, { foo: undefined })
-    expect(m["foo"]).toBe(1)
+    const m = mergeMeta({ foo: 1 } as OpenMeta, { foo: undefined } as OpenMeta)
+    expect((m as OpenMeta)["foo"]).toBe(1)
   })
 
   it("sub-bag objects are merged one level deep (later wins per key)", () => {
@@ -250,29 +259,29 @@ describe("mergeMeta", () => {
   })
 
   it("arrays are concatenated, not replaced", () => {
-    const m = mergeMeta({ roles: ["a"] }, { roles: ["b", "c"] })
-    expect(m["roles"]).toEqual(["a", "b", "c"])
+    const m = mergeMeta({ roles: ["a"] } as OpenMeta, { roles: ["b", "c"] } as OpenMeta)
+    expect((m as OpenMeta)["roles"]).toEqual(["a", "b", "c"])
   })
 
   it("undefined metas are skipped", () => {
-    const m = mergeMeta(undefined, { x: 1 }, undefined)
-    expect(m["x"]).toBe(1)
+    const m = mergeMeta(undefined, { x: 1 } as OpenMeta, undefined)
+    expect((m as OpenMeta)["x"]).toBe(1)
   })
 
   it("key absent in later bag is inherited from earlier", () => {
-    const m = mergeMeta({ a: 1, b: 2 }, { b: 3 })
-    expect(m["a"]).toBe(1)
-    expect(m["b"]).toBe(3)
+    const m = mergeMeta({ a: 1, b: 2 } as OpenMeta, { b: 3 } as OpenMeta)
+    expect((m as OpenMeta)["a"]).toBe(1)
+    expect((m as OpenMeta)["b"]).toBe(3)
   })
 
   it("arrays at depth 2 (e.g. http.directives) concatenate", () => {
-    const a = { kind: "verb", method: "GET" }
+    const a = { kind: "verb", value: "GET" }
     const b = { kind: "moveTo", path: ".." }
     const m = mergeMeta(
-      { http: { directives: [a] } },
-      { http: { directives: [b] } },
+      { http: { directives: [a] } } as OpenMeta,
+      { http: { directives: [b] } } as OpenMeta,
     )
-    expect((m.http as { directives: unknown[] }).directives).toEqual([a, b])
+    expect(((m as OpenMeta).http as { directives: unknown[] }).directives).toEqual([a, b])
   })
 
   it("scalar keys nested in sub-bags still overwrite (later wins)", () => {
@@ -286,12 +295,12 @@ describe("mergeMeta", () => {
   it("composing a verb bundle with an extra http contribution preserves both directive sets", () => {
     const verbGet = {
       tags: { readOnly: true },
-      http: { directives: [{ kind: "verb", method: "GET" }, { kind: "method" }] },
-    }
-    const m = mergeMeta(verbGet, { http: { directives: [{ kind: "moveTo", path: ".." }] } })
-    expect((m.http as { directives: unknown[] }).directives).toEqual([
-      { kind: "verb", method: "GET" },
-      { kind: "method" },
+      http: { directives: [{ kind: "verb", value: "GET" }, { kind: "method", value: "GET" }] },
+    } as OpenMeta
+    const m = mergeMeta(verbGet, { http: { directives: [{ kind: "moveTo", path: ".." }] } } as OpenMeta)
+    expect(((m as OpenMeta).http as { directives: unknown[] }).directives).toEqual([
+      { kind: "verb", value: "GET" },
+      { kind: "method", value: "GET" },
       { kind: "moveTo", path: ".." },
     ])
     expect((m.tags as Tags).readOnly).toBe(true)

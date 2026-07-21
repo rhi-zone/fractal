@@ -329,10 +329,19 @@ export type CliMeta = {
   readonly [key: string]: unknown
 }
 
+// Declaration merging: types this package's `meta.cli` slot on the shared
+// `Meta` open bag (see api-tree/src/node.ts) so consumers get a typed
+// `meta.cli` instead of an untyped index-signature fallback.
+declare module "@rhi-zone/fractal-api-tree/node" {
+  interface Meta {
+    cli?: CliMeta
+  }
+}
+
 export function getCliMeta(meta: Meta): CliMeta {
   const c = meta.cli
   if (typeof c !== "object" || c === null) return {}
-  return c as CliMeta
+  return c
 }
 
 // ============================================================================

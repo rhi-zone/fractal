@@ -89,11 +89,20 @@ export type GraphQLMeta = {
   readonly [key: string]: unknown
 }
 
+// Declaration merging: types this package's `meta.graphql` slot on the
+// shared `Meta` open bag (see api-tree/src/node.ts) so consumers get a
+// typed `meta.graphql` instead of an untyped index-signature fallback.
+declare module "@rhi-zone/fractal-api-tree/node" {
+  interface Meta {
+    graphql?: GraphQLMeta
+  }
+}
+
 /** Safely extract the open `meta.graphql` bag from a `Meta`. */
 export function getGraphQLMeta(meta: Meta): GraphQLMeta {
   const g = meta.graphql
   if (typeof g !== "object" || g === null) return {}
-  return g as GraphQLMeta
+  return g
 }
 
 // ============================================================================
