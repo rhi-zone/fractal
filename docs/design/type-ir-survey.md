@@ -429,7 +429,7 @@ protobuf's discriminated union, but structured differently than JTD's: the "tag"
 implicit (which field is populated) rather than an explicit separate discriminator
 value — the field identity itself is the tag.
 
-**map<K, V>:** built-in homogeneous dictionary (K restricted to integral/string
+**`map<K, V>`:** built-in homogeneous dictionary (K restricted to integral/string
 scalar types — no message-typed keys), sugar over a repeated message of
 `{key: K, value: V}` entries under the hood.
 

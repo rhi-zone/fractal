@@ -360,7 +360,7 @@ actual position.
 - **The `read→GET/replace→PUT/remove→DELETE/partial→PATCH` table** — correctly flagged
   CRITICAL/assistant-invented. Keep the flag; do not let it drift into "settled."
 - **`NoInfer<T>` + a root anchor is the inference mechanism** — the user asserted `NoInfer`
-  ("NoInfer<T> says hello…") but the "+ root anchor" and the acceptance of a specific
+  ("`NoInfer<T>` says hello…") but the "+ root anchor" and the acceptance of a specific
   mechanism are more assistant than user; the user only rejected the *rationale* ("says who,
   exactly?"). Mild over-statement of settledness.
 - **INCOMPLETENESS is the bigger problem.** invariants.md predates the CURRENT session and
@@ -373,11 +373,9 @@ actual position.
   grouping is "weird";
   (4) the local-vs-global understandability tension, and the addressing-vs-behavior cut
   ("you don't need to know where it is to know what it does").
-- **The entire `fc-api-grouping/` carrier apparatus** (carrier<T>, .make/.op/.read,
+- **The entire `fc-api-grouping/` carrier apparatus** (`carrier<T>`, .make/.op/.read,
   reify-the-relation, capability/functor tiers, entropy partition, CLI-shaped-core claim) is
   [ASSISTANT-PROPOSED, not user-confirmed]. The user authorized the *method* ("single design
   + adversarial rounds"), liked the *subject-type hunch*, and rejected specific swings —
   none of the concrete apparatus is a user decision. It must NOT be promoted into
   invariants.md as settled.
-</content>
-</invoke>

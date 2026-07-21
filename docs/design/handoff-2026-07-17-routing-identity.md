@@ -148,4 +148,3 @@ functions, optional, not privileged), not implemented.
 - Design philosophy: `docs/design/design-philosophy.md`
 - Type layer (prior session): `docs/design/handoff-2026-07-16-type-layer.md`
 - TODO.md — open threads
-</content>

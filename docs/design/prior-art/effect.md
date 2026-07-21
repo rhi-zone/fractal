@@ -86,8 +86,8 @@ the edge. The handler code never references HTTP or WebSocket directly.
 ## Summary of Modeling Primitives
 
 1. **Tag** — type-level identity for a service slot.
-2. **Effect<A, E, R>** — lazy computation tracking success, failure, and requirements.
-3. **Layer<ROut, E, RIn>** — constructor for services, composable via merge/provide.
+2. **`Effect<A, E, R>`** — lazy computation tracking success, failure, and requirements.
+3. **`Layer<ROut, E, RIn>`** — constructor for services, composable via merge/provide.
 4. **Scope** — resource lifetime, wired automatically through layers.
 5. **Schema** — runtime codec that also serves as the type-level contract for RPC/HTTP.
 
