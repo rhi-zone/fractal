@@ -21,7 +21,10 @@ sections below for what landed and where.
 - **MCP sampling support** — blocks LLM-in-the-loop tool patterns (model-chooses-tool chains); lower priority.
 
 **From design backlog:**
-- **Extract improvements** — overloaded functions, generics, async generators currently degrade silently.
+- ~~**Extract improvements**~~ — DONE (2026-07-21)
+  - Overloaded functions: extracted as intersection of call signatures; implementation signature confirmed excluded by TS compiler API
+  - Generics: type parameters extract their constraint bounds (T extends X → X's shape); unconstrained → unknown
+  - Async generators: new `stream` TypeRef kind; AsyncIterable/AsyncGenerator/AsyncIterableIterator detection in extract; all 20+ type-ir projectors updated
 
 **Open threads:**
 - **Input pipeline wiring** (CLI/MCP) — `api-tree/src/input.ts` has core `assemble()`, but CLI and MCP still have own implementations. CLI needs stores (env, config, stdin); MCP needs (argument, uri-variable, session context). _Note: low priority — works as-is; consolidation is a quality improvement, not a blocker._
