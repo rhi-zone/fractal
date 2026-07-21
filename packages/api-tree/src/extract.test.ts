@@ -768,6 +768,96 @@ describe("typeRefFromType gap fixes", () => {
     expect(members.every((m) => m.shape.kind === "object")).toBe(true)
   })
 
+  // ── Property JSDoc refinement tags (@minLength/@maxLength/@pattern/@format/
+  //    @minimum/@maximum/@exclusiveMinimum/@exclusiveMaximum/@multipleOf) ────
+
+  it("reads @minLength/@maxLength off a property's JSDoc into meta", () => {
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.name?.meta.minLength).toBe(2)
+    expect(fields.name?.meta.maxLength).toBe(100)
+  })
+
+  it("reads @pattern off a property's JSDoc, stripping surrounding quotes", () => {
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.slug?.meta.pattern).toBe("^[a-z][a-z0-9-]*$")
+  })
+
+  it("reads @format off a property's JSDoc as a raw (unquoted) string", () => {
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.contact?.meta.format).toBe("email")
+  })
+
+  it("reads @minimum/@maximum off a property's JSDoc as numbers", () => {
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.percent?.meta.minimum).toBe(0)
+    expect(fields.percent?.meta.maximum).toBe(100)
+  })
+
+  it("reads @exclusiveMinimum/@exclusiveMaximum off a property's JSDoc as numbers", () => {
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.strictRange?.meta.exclusiveMinimum).toBe(0)
+    expect(fields.strictRange?.meta.exclusiveMaximum).toBe(1000)
+  })
+
+  it("reads @multipleOf off a property's JSDoc as a number", () => {
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.step?.meta.multipleOf).toBe(5)
+  })
+
+  it("carries no refinement meta for a property with no refinement JSDoc tags", () => {
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.plain?.meta.minLength).toBeUndefined()
+    expect(fields.plain?.meta.pattern).toBeUndefined()
+    expect(fields.plain?.meta.minimum).toBeUndefined()
+  })
+
+  // ── Branded intersection refinement tags (MinLength<N>/MaxLength<N>/… from
+  //    @rhi-zone/fractal-type-ir/kinds/refinements, shared `RefinementTag`
+  //    symbol key) ────────────────────────────────────────────────────────
+
+  it("extracts a single refinement tag intersected with a base type", () => {
+    const ref = typeRefFromType(typeOf("ShortCode"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.minLength).toBe(2)
+  })
+
+  it("merges two refinement tags intersected onto the same base type", () => {
+    const ref = typeRefFromType(typeOf("ValidName"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.minLength).toBe(2)
+    expect(ref.meta.maxLength).toBe(100)
+  })
+
+  it("extracts numeric Minimum/Maximum refinement tags over a number base", () => {
+    const ref = typeRefFromType(typeOf("Percent"), checker, source)
+    expect(ref.shape).toEqual({ kind: "number" })
+    expect(ref.meta.minimum).toBe(0)
+    expect(ref.meta.maximum).toBe(100)
+  })
+
+  it("extracts a Pattern refinement tag's string-literal value", () => {
+    const ref = typeRefFromType(typeOf("SlugPattern"), checker, source)
+    expect(ref.shape).toEqual({ kind: "string" })
+    expect(ref.meta.pattern).toBe("^[a-z0-9-]+$")
+  })
+
+  it("carries refinement-tag meta through fields on an object", () => {
+    const ref = typeRefFromType(typeOf("RefinedIntersectionField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.code?.shape).toEqual({ kind: "string" })
+    expect(fields.code?.meta.minLength).toBe(2)
+    expect(fields.name?.shape).toEqual({ kind: "string" })
+    expect(fields.name?.meta.minLength).toBe(2)
+    expect(fields.name?.meta.maxLength).toBe(100)
+  })
+
   // ── Enums / literal unions ────────────────────────────────────────────────
 
   /** Resolve an exported function's single parameter type by name. */

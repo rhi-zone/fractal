@@ -150,6 +150,10 @@
     "./kinds/common": {
       "types": "./src/kinds/common.ts",
       "import": "./src/kinds/common.ts"
+    },
+    "./kinds/refinements": {
+      "types": "./src/kinds/refinements.ts",
+      "import": "./src/kinds/refinements.ts"
     }
   },
   "files": ["src"],

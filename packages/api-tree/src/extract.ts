@@ -244,6 +244,67 @@ function propertyDefaultOf(prop: ts.Symbol, checker: ts.TypeChecker): string | n
   return undefined
 }
 
+/**
+ * JSDoc tag names carrying a refinement constraint, split by how their raw
+ * tag text is parsed. Numeric tags (`@minLength 2`) parse via `Number(...)`;
+ * string tags (`@pattern "^[a-z]+$"`/`@format email`) keep the raw text with
+ * one layer of surrounding quotes stripped, if present. These are exactly
+ * the meta keys `compile.ts` already validates and every projector
+ * (json-schema, effect-schema, sql, …) already reads — see
+ * `packages/type-ir/src/compile.ts` and `packages/type-ir/src/sql.ts`'s
+ * shared refinement-key comment.
+ */
+const NUMERIC_REFINEMENT_TAGS = new Set([
+  "minLength",
+  "maxLength",
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+])
+const STRING_REFINEMENT_TAGS = new Set(["pattern", "format"])
+
+/** Strip one layer of matching surrounding quotes (`"…"` or `'…'`), if present. */
+function unquote(text: string): string {
+  if (text.length >= 2) {
+    const first = text[0]
+    const last = text[text.length - 1]
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      return text.slice(1, -1)
+    }
+  }
+  return text
+}
+
+/**
+ * A property symbol's refinement-related JSDoc tags (`@minLength`/
+ * `@maxLength`/`@pattern`/`@format`/`@minimum`/`@maximum`/
+ * `@exclusiveMinimum`/`@exclusiveMaximum`/`@multipleOf`), read the same way
+ * as `@default` in `propertyDefaultOf` above: `Symbol.getJsDocTags`, one meta
+ * entry per recognized tag present on the property. Numeric tags with
+ * non-numeric/empty text are skipped rather than producing `NaN` in the meta
+ * bag. Unrecognized tag names are ignored — this reads only the refinement
+ * vocabulary `compile.ts` already validates, nothing broader.
+ */
+function propertyRefinementMetaOf(
+  prop: ts.Symbol,
+  checker: ts.TypeChecker,
+): Record<string, unknown> {
+  const meta: Record<string, unknown> = {}
+  for (const tag of prop.getJsDocTags(checker)) {
+    const text = tag.text ? ts.displayPartsToString(tag.text).trim() : ""
+    if (text.length === 0) continue
+    if (NUMERIC_REFINEMENT_TAGS.has(tag.name)) {
+      const n = Number(text)
+      if (!Number.isNaN(n)) meta[tag.name] = n
+    } else if (STRING_REFINEMENT_TAGS.has(tag.name)) {
+      meta[tag.name] = unquote(text)
+    }
+  }
+  return meta
+}
+
 /** Property names conventionally used to tag a branded/opaque type. */
 const BRAND_PROP_NAMES = ["__brand", "__tag", "_brand", "_tag"]
 
@@ -320,6 +381,32 @@ function literalValueOf(type: ts.Type): string | number | boolean | undefined {
 }
 
 /**
+ * True for a symbol-keyed property (`escapedName` starting `__@`, TS's
+ * internal spelling for a `unique symbol`-keyed member) whose `unique
+ * symbol` declaration is specifically named `RefinementTag` — the shared
+ * marker every refinement-tag type in `kinds/refinements.ts` carries its
+ * value under. Mirrors `brandNameFromSymbolKeyedProp`'s "read the tag off
+ * the symbol declaration's own identifier" move, but confirms IDENTITY (is
+ * this the refinement marker, as opposed to a brand's `BrandTag` or some
+ * unrelated symbol-keyed member?) rather than deriving a brand NAME from it.
+ * Declared ahead of `brandFromIntersection` so that loop can skip
+ * refinement-tag props instead of misreading one as an (unrecognized)
+ * brand — `RefinementTag`'s value type is a literal-bearing OBJECT, not a
+ * plain string literal or `never`, so left unchecked it would otherwise fall
+ * into `brandNameFromSymbolKeyedProp`'s "no literal value" branch and read
+ * the symbol's own name (`"RefinementTag"`) as a bogus brand.
+ */
+function isRefinementTagProp(prop: ts.Symbol, checker: ts.TypeChecker): boolean {
+  if (!prop.escapedName.toString().startsWith("__@")) return false
+  const decl = prop.declarations?.[0]
+  if (!decl) return false
+  const nameNode = (decl as ts.NamedDeclaration).name
+  if (!nameNode || !ts.isComputedPropertyName(nameNode)) return false
+  const sym = checker.getSymbolAtLocation(nameNode.expression)
+  return sym?.name === "RefinementTag"
+}
+
+/**
  * Detect `Base & { readonly <brandProp>: "Literal" }` — the standard
  * branded/opaque type pattern — within an intersection's two constituents.
  * Tries both orderings (brand marker may appear on either side). Returns the
@@ -340,10 +427,22 @@ function brandFromIntersection(
     [constituents[0]!, constituents[1]!],
     [constituents[1]!, constituents[0]!],
   ] as const) {
+    // The tag side is always an object literal type (`{ readonly __brand:
+    // "..." }`), never a primitive — a primitive constituent (`string`,
+    // `number`, …) carries plenty of its OWN symbol-keyed properties (e.g.
+    // `Symbol.iterator`) that would otherwise spuriously match the
+    // symbol-keyed check below once the genuine-tag ordering has already
+    // been tried and failed (e.g. a refinement-only intersection with no
+    // real brand tag on either side).
+    if ((tag.flags & ts.TypeFlags.Object) === 0) continue
     for (const prop of checker.getPropertiesOfType(tag)) {
       const isSymbolKeyed = prop.escapedName.toString().startsWith("__@")
       const isNamedBrand = BRAND_PROP_NAMES.includes(prop.name)
       if (!isSymbolKeyed && !isNamedBrand) continue
+      // A refinement tag (`MinLength<N>`/…) is also symbol-keyed but isn't a
+      // brand — its value is a literal-bearing object, not a name to read.
+      // Left to `refinementFromIntersection` instead.
+      if (isSymbolKeyed && isRefinementTagProp(prop, checker)) continue
 
       // Named tags (`__brand`/`__tag`/…) and shared-symbol tags (one `unique
       // symbol` key reused across types, e.g. `[BRAND]: "LocationId"`) both
@@ -367,6 +466,96 @@ function brandFromIntersection(
   }
 
   return undefined
+}
+
+/** The meta keys a refinement tag's value-object properties are read from — see `kinds/refinements.ts`. */
+const REFINEMENT_KEYS = [
+  "minLength",
+  "maxLength",
+  "pattern",
+  "format",
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+] as const
+
+/**
+ * Read a single intersection constituent's refinement contribution, if it's
+ * one of the branded refinement-tag types from
+ * `@rhi-zone/fractal-type-ir/kinds/refinements` (`MinLength<2>`,
+ * `Pattern<"^[a-z]+$">`, …). Each such type compiles to `{ readonly
+ * [RefinementTag]: { <key>: <literal> } }` — a `unique symbol`-keyed
+ * property (phantom, structurally inaccessible at runtime — same shape as a
+ * symbol-keyed brand, see `brandNameFromSymbolKeyedProp`'s doc comment)
+ * whose value is itself typed as a literal-bearing object. Reads the
+ * literal value off every key in `REFINEMENT_KEYS` present on that inner
+ * object type. Returns `undefined` when the constituent carries no
+ * `RefinementTag`-keyed property, or when it does but no recognized key on
+ * it resolves to a literal — i.e. this constituent isn't a refinement tag
+ * at all.
+ */
+function refinementMetaOfConstituent(
+  constituent: ts.Type,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+): Record<string, unknown> | undefined {
+  const tagProp = checker.getPropertiesOfType(constituent).find((p) => isRefinementTagProp(p, checker))
+  if (!tagProp) return undefined
+  const tagType = checker.getTypeOfSymbolAtLocation(tagProp, loc)
+  if ((tagType.flags & ts.TypeFlags.Object) === 0) return undefined
+
+  const meta: Record<string, unknown> = {}
+  for (const key of REFINEMENT_KEYS) {
+    const prop = tagType.getProperty(key)
+    if (!prop) continue
+    const value = literalValueOf(checker.getTypeOfSymbolAtLocation(prop, loc))
+    if (value !== undefined) meta[key] = value
+  }
+  return Object.keys(meta).length > 0 ? meta : undefined
+}
+
+/**
+ * Detect `Base & RefinementTag & RefinementTag & …` — e.g. `string &
+ * MinLength<2> & MaxLength<100>` — among an intersection's constituents.
+ * Each refinement-tag constituent (recognized via
+ * `refinementMetaOfConstituent`) contributes its literal values into a
+ * shared meta bag; the one remaining non-tag constituent is the real base
+ * type, extracted recursively and returned carrying that meta bag merged in.
+ *
+ * Unlike `brandFromIntersection` (exactly 2 constituents: base + one brand
+ * tag), a refinement usage typically intersects several tags at once, so
+ * this walks ALL constituents rather than assuming a fixed arity. Returns
+ * `undefined` when no constituent contributes any refinement meta (nothing
+ * to recognize here — the caller falls through to the brand check and then
+ * plain structural intersection handling) or when more than one constituent
+ * is left over after removing the recognized tags (an ambiguous base — e.g.
+ * a genuine structural intersection that happens to also carry a
+ * refinement tag — left to the caller's normal handling rather than guessed
+ * at).
+ */
+function refinementFromIntersection(
+  type: ts.IntersectionType,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+): TypeRef | undefined {
+  const refinementMeta: Record<string, unknown> = {}
+  const baseConstituents: ts.Type[] = []
+
+  for (const constituent of type.types) {
+    const m = refinementMetaOfConstituent(constituent, checker, loc)
+    if (m) Object.assign(refinementMeta, m)
+    else baseConstituents.push(constituent)
+  }
+
+  if (Object.keys(refinementMeta).length === 0) return undefined
+  if (baseConstituents.length !== 1) return undefined
+
+  const nextSeen = new Set(seen).add(type)
+  const baseRef = typeRefFromType(baseConstituents[0]!, checker, loc, nextSeen)
+  return t(baseRef.shape, { ...baseRef.meta, ...refinementMeta })
 }
 
 /**
@@ -570,6 +759,8 @@ export function typeRefFromType(
   if (type.isIntersection()) {
     const brand = brandFromIntersection(type, checker, loc, seen)
     if (brand) return brand
+    const refinement = refinementFromIntersection(type, checker, loc, seen)
+    if (refinement) return refinement
     const nextSeen = new Set(seen).add(type)
     const members = type.types.map((member) => typeRefFromType(member, checker, loc, nextSeen))
     return t(types.intersection(members))
@@ -689,8 +880,9 @@ export function typeRefFromType(
       // --help, OpenAPI specs, and MCP tool schemas.
       const description = propertyDescriptionOf(prop, checker)
       const defaultValue = propertyDefaultOf(prop, checker)
+      const refinementMeta = propertyRefinementMetaOf(prop, checker)
 
-      const extraMeta: Record<string, unknown> = {}
+      const extraMeta: Record<string, unknown> = { ...refinementMeta }
       if (optional) extraMeta.optional = true
       if (readonly) extraMeta.readonly = true
       if (description !== undefined) extraMeta.description = description

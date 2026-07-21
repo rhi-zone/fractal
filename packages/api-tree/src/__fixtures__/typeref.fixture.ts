@@ -4,6 +4,7 @@
 // / typeRefFromReturnType directly (not through the tree walker).
 
 import type { Result } from "../index.ts"
+import type { Maximum, MaxLength, Minimum, MinLength, Pattern } from "@rhi-zone/fractal-type-ir/kinds/refinements"
 
 export const sample = (input: {
   name: string
@@ -338,6 +339,70 @@ export type SharedSymbolLocationId = string & { readonly [BRAND]: "LocationId" }
 
 /** A second type sharing the same `BRAND` symbol key, distinguished by value. */
 export type SharedSymbolUserId = string & { readonly [BRAND]: "UserId" }
+
+// ── Property JSDoc refinement-tag fixtures ──────────────────────────────────
+// `@minLength`/`@maxLength`/`@pattern`/`@format`/`@minimum`/`@maximum`/
+// `@exclusiveMinimum`/`@exclusiveMaximum`/`@multipleOf` on a property's JSDoc
+// comment, read the same way `@default` already is (propertyDefaultOf).
+
+/** Object carrying refinement-tagged fields via JSDoc. */
+export type RefinedField = {
+  /**
+   * Display name.
+   * @minLength 2
+   * @maxLength 100
+   */
+  name: string
+  /**
+   * Slug pattern.
+   * @pattern "^[a-z][a-z0-9-]*$"
+   */
+  slug: string
+  /**
+   * Contact channel.
+   * @format email
+   */
+  contact: string
+  /**
+   * Percentage.
+   * @minimum 0
+   * @maximum 100
+   */
+  percent: number
+  /**
+   * Strictly positive.
+   * @exclusiveMinimum 0
+   * @exclusiveMaximum 1000
+   */
+  strictRange: number
+  /**
+   * Must land on a multiple of 5.
+   * @multipleOf 5
+   */
+  step: number
+  /** No refinement tags at all — must carry no refinement meta. */
+  plain: string
+}
+
+// ── Branded intersection refinement-tag fixtures ────────────────────────────
+// The type-ir-exported refinement tag types (`MinLength`/`MaxLength`/…),
+// intersected with a base type — the `RefinementTag`-shared-symbol pattern
+// from `@rhi-zone/fractal-type-ir/kinds/refinements`.
+
+/** A single refinement tag intersected with `string`. */
+export type ShortCode = string & MinLength<2>
+
+/** Two refinement tags intersected together — their value objects merge. */
+export type ValidName = string & MinLength<2> & MaxLength<100>
+
+/** Numeric refinement tags (`Minimum`/`Maximum`) over `number`. */
+export type Percent = number & Minimum<0> & Maximum<100>
+
+/** `Pattern` tag over `string`. */
+export type SlugPattern = string & Pattern<"^[a-z0-9-]+$">
+
+/** Refinement-tagged field nested inside an object. */
+export type RefinedIntersectionField = { code: ShortCode; name: ValidName }
 
 // ── Generic type parameter fixtures ─────────────────────────────────────────
 // A type parameter unresolved at the extraction site (e.g. a handler's own
