@@ -56,6 +56,13 @@ export type McpContextShape = {
   readonly requestType: "tool" | "resource" | "prompt";
 };
 
+/** Structural mirror of graphql-api-projector's `GraphQLAlsContext`. */
+export type GraphQLContextShape = {
+  readonly meta: Meta;
+  readonly fieldName: string;
+  readonly operationType: "query" | "mutation" | "subscription";
+};
+
 // ============================================================================
 // createContext
 // ============================================================================
@@ -77,6 +84,8 @@ export type ContextBuilder<T> = {
   readonly cli?: AlsConfig<CliContextShape, T>;
   /** Present iff an `mcp` extractor was provided — drop directly into `CreateMcpServerOptions.als`. */
   readonly mcp?: AlsConfig<McpContextShape, T>;
+  /** Present iff a `graphql` extractor was provided — drop directly into `CreateGraphQLServerOptions.als`. */
+  readonly graphql?: AlsConfig<GraphQLContextShape, T>;
 };
 
 /**
@@ -96,12 +105,13 @@ export type ContextBuilder<T> = {
  * createFetch(tree, { als: context.http })
  * runCli(tree, argv, io, { als: context.cli })
  * createMcpServer(tree, { name, version, als: context.mcp })
+ * createGraphQLServer(tree, { als: context.graphql })
  *
- * // anywhere downstream of a dispatched request, from any of the three surfaces:
+ * // anywhere downstream of a dispatched request, from any of the four surfaces:
  * context.getStore()?.requestId
  * ```
  *
- * All three configs share the SAME `AsyncLocalStorage` instance (`.storage`)
+ * All four configs share the SAME `AsyncLocalStorage` instance (`.storage`)
  * — `getStore()` returns whichever surface's context is currently active,
  * regardless of which one entered it.
  */
@@ -109,6 +119,7 @@ export function createContext<T>(extractors: {
   readonly http?: (req: Request) => T;
   readonly cli?: (context: CliContextShape) => T;
   readonly mcp?: (context: McpContextShape) => T;
+  readonly graphql?: (context: GraphQLContextShape) => T;
 }): ContextBuilder<T> {
   const storage = new AsyncLocalStorage<T>();
   const getStore = (): T | undefined => storage.getStore();
@@ -119,5 +130,6 @@ export function createContext<T>(extractors: {
     ...(extractors.http !== undefined ? { http: { storage, init: extractors.http } } : {}),
     ...(extractors.cli !== undefined ? { cli: { storage, init: extractors.cli } } : {}),
     ...(extractors.mcp !== undefined ? { mcp: { storage, init: extractors.mcp } } : {}),
+    ...(extractors.graphql !== undefined ? { graphql: { storage, init: extractors.graphql } } : {}),
   };
 }

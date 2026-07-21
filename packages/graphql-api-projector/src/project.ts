@@ -148,8 +148,12 @@ export type GraphQLField = {
   readonly deprecatedReason?: string
 }
 
-/** One resolved GraphQL argument — name + SDL type fragment. */
-type Arg = { readonly name: string; readonly typeSDL: string }
+/**
+ * One resolved GraphQL argument — name + SDL type fragment. Exported so
+ * client.ts (a second consumer of the same captured-fallback/declared-arg
+ * derivation) can share this shape instead of redeclaring it.
+ */
+export type Arg = { readonly name: string; readonly typeSDL: string }
 
 export type OperationType = "query" | "mutation" | "subscription"
 
@@ -194,13 +198,23 @@ function capitalize(s: string): string {
   return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1)
 }
 
-/** camelCase join — used for flat Mutation/Subscription field names. */
-function camelJoin(prefix: string, seg: string): string {
+/**
+ * camelCase join — used for flat Mutation/Subscription field names. Exported
+ * so client.ts derives the exact same flat field name this walk does (a
+ * second independent computation of the SAME derivation, not a different
+ * source of truth — same convention as mcp-api-projector's client/server
+ * name-derivation pairing).
+ */
+export function camelJoin(prefix: string, seg: string): string {
   return prefix.length === 0 ? seg : `${prefix}${capitalize(seg)}`
 }
 
-/** underscore join — the lookup key into `FieldTypeMap`, matching mcp-api-projector's `toTools` name convention. */
-function underscoreJoin(prefix: string, seg: string): string {
+/**
+ * underscore join — the lookup key into `FieldTypeMap`, matching
+ * mcp-api-projector's `toTools` name convention. Exported for the same
+ * reason as `camelJoin` above.
+ */
+export function underscoreJoin(prefix: string, seg: string): string {
   return prefix.length === 0 ? seg : `${prefix}_${seg}`
 }
 
@@ -220,7 +234,7 @@ function pascalJoin(path: readonly string[]): string {
  * flat named-param bag). A non-object (or absent) input contributes no
  * declared args — only captured-fallback args (if any) apply.
  */
-function argsFromInput(input: TypeRef | undefined): Arg[] {
+export function argsFromInput(input: TypeRef | undefined): Arg[] {
   if (input === undefined) return []
   const shape = input.shape
   if (shape.kind !== "object") return []
@@ -246,8 +260,13 @@ function formatArgs(args: readonly Arg[]): string {
  *   streaming === true → subscription
  *   readOnly === true  → query
  *   else               → mutation (conservative default)
+ *
+ * Exported so client.ts derives the exact same operation type this walk
+ * does — a second independent computation of the SAME derivation, not a
+ * different source of truth (same reasoning as `camelJoin`/`underscoreJoin`
+ * above).
  */
-function deriveOperationType(meta: Meta): OperationType {
+export function deriveOperationType(meta: Meta): OperationType {
   const gql = getGraphQLMeta(meta)
   if (gql.operation !== undefined) return gql.operation
 
