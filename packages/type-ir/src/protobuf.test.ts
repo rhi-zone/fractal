@@ -34,10 +34,6 @@ describe("string subtypes fall back to string", () => {
     expect(toProtoField(uri()).type).toBe("string")
   })
 
-  test("date", () => {
-    expect(toProtoField(date()).type).toBe("string")
-  })
-
   test("time", () => {
     expect(toProtoField(time()).type).toBe("string")
   })
@@ -46,6 +42,10 @@ describe("string subtypes fall back to string", () => {
 describe("well-known types", () => {
   test("datetime -> google.protobuf.Timestamp", () => {
     expect(toProtoField(datetime()).type).toBe("google.protobuf.Timestamp")
+  })
+
+  test("date -> google.protobuf.Timestamp (no calendar-only date well-known)", () => {
+    expect(toProtoField(date()).type).toBe("google.protobuf.Timestamp")
   })
 
   test("duration -> google.protobuf.Duration", () => {

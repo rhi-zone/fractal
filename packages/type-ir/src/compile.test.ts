@@ -172,16 +172,37 @@ describe("compileValidator — leaf kinds", () => {
     expect(v.parse(null)).toEqual({ kind: "ok", value: null })
   })
 
-  it("semantic string kinds (uuid/uri/date/time/datetime/duration/bytes)", () => {
+  it("semantic string kinds (uuid/uri/time/duration/bytes)", () => {
     expect(evalValidator(compileValidator(uuid())).check("550e8400-e29b-41d4-a716-446655440000")).toBe(true)
     expect(evalValidator(compileValidator(uuid())).check("not-a-uuid")).toBe(false)
     expect(evalValidator(compileValidator(uri())).check("https://example.com")).toBe(true)
-    expect(evalValidator(compileValidator(date())).check("2024-01-01")).toBe(true)
-    expect(evalValidator(compileValidator(date())).check("01-01-2024")).toBe(false)
     expect(evalValidator(compileValidator(time())).check("12:30:00")).toBe(true)
-    expect(evalValidator(compileValidator(datetime())).check("2024-01-01T12:30:00Z")).toBe(true)
     expect(evalValidator(compileValidator(duration())).check("P1DT2H")).toBe(true)
     expect(evalValidator(compileValidator(bytes())).check("aGVsbG8=")).toBe(true)
+  })
+
+  // datetime/date are type-ir's `Date` domain type, not a string subtype —
+  // see kinds/date-time.ts. check()/errors() require an actual (valid)
+  // `Date` instance; parse() additionally coerces an ISO string via
+  // `new Date(v)`.
+  it("datetime/date (Date domain type)", () => {
+    expect(evalValidator(compileValidator(datetime())).check(new Date("2024-01-01T12:30:00Z"))).toBe(true)
+    expect(evalValidator(compileValidator(datetime())).check(new Date("not-a-date"))).toBe(false)
+    expect(evalValidator(compileValidator(datetime())).check("2024-01-01T12:30:00Z")).toBe(false)
+    expect(evalValidator(compileValidator(date())).check(new Date("2024-01-01"))).toBe(true)
+    expect(evalValidator(compileValidator(date())).check("2024-01-01")).toBe(false)
+  })
+
+  it("datetime/date parse() coerces an ISO string to a Date", () => {
+    const v = evalValidator(compileValidator(datetime()))
+    const ok = v.parse("2024-01-01T12:30:00Z") as { kind: "ok"; value: Date }
+    expect(ok.kind).toBe("ok")
+    expect(ok.value instanceof Date).toBe(true)
+    expect(ok.value.toISOString()).toBe("2024-01-01T12:30:00.000Z")
+
+    const err = v.parse("not-a-date") as { kind: "err"; errors: ValidationError[] }
+    expect(err.kind).toBe("err")
+    expect(err.errors[0]!.kind).toBe("coerce")
   })
 
   it("int32 enforces range on top of integer-ness", () => {

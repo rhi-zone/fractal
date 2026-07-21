@@ -357,8 +357,14 @@ function valueInhabitsType(value: unknown, inferred: TypeRef): string | null {
   }
 
   if (typeof value === "string") {
-    // Any string subtype is valid for a string value
-    if (kind === "string" || isSubkind(kind, "string")) return null
+    // Any string subtype is valid for a string value. `date`/`datetime` are
+    // no longer string subtypes (they're type-ir's `Date` domain type — see
+    // kinds/date-time.ts), but `fromJson`'s string-format detection still
+    // infers them FROM a raw JSON string (from-json.ts's `inferString`) —
+    // this property is about that wire-to-inference relationship, not the
+    // compiled validator's domain-typed `check()`, so a string value
+    // inferred as date/datetime is still a valid inhabitant here.
+    if (kind === "string" || isSubkind(kind, "string") || kind === "date" || kind === "datetime") return null
     return `string "${value}" inferred as ${kind}`
   }
 

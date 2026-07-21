@@ -36,6 +36,14 @@ const handlers: Record<string, Converter> = {
   number: leaf("Float"),
   integer: leaf("Int"),
   string: leaf("String"),
+  // GraphQL's spec has no Date/DateTime scalar of its own (§ "Type System") —
+  // `DateTime`/`Date` are the de facto ecosystem convention (e.g. the
+  // `graphql-scalars` package), same "conventional custom scalar" idiom
+  // `JSON` uses elsewhere in this file. type-ir's datetime/date are the
+  // domain type `Date` (see kinds/date-time.ts), not a wire-format string,
+  // so they're named explicitly here rather than falling through to `String`.
+  datetime: leaf("DateTime"),
+  date: leaf("Date"),
   // GraphQL has no `null`/`void` type of its own — nullability is a property
   // of *other* types (§ "Type System — Nullability"), never a standalone
   // type. There is no non-lossy field-position fallback; `JSON` (a

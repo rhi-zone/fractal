@@ -35,8 +35,13 @@ const handlers: Record<string, Converter> = {
   string: leaf("t.string"),
   uuid: leaf("t.string", "uuid"),
   uri: leaf("t.string", "uri"),
-  datetime: leaf("t.string", "datetime"),
-  date: leaf("t.string", "date"),
+  // datetime/date are type-ir's `Date` domain type (see kinds/date-time.ts),
+  // not a wire-format string — io-ts core has no Date codec (io-ts-types'
+  // `DateFromISOString` would fit, but that's an external package this
+  // projector doesn't assume), so this degrades to t.unknown rather than
+  // t.string (which would actively reject a real Date instance).
+  datetime: leaf("t.unknown", "datetime: Date"),
+  date: leaf("t.unknown", "date: Date"),
   time: leaf("t.string", "time"),
   duration: leaf("t.string", "duration"),
   bytes: leaf("t.string", "bytes"),

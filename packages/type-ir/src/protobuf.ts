@@ -68,8 +68,12 @@ const handlers: Record<string, Converter> = {
   string: leaf("string"),
   uuid: leaf("string"),
   uri: leaf("string"),
+  // https://protobuf.dev/reference/protobuf/google.protobuf/#timestamp —
+  // both datetime and date (type-ir's `Date` domain type — see
+  // kinds/date-time.ts) map to the well-known Timestamp type; proto3 has no
+  // separate calendar-only date type in its core well-knowns.
   datetime: leaf("google.protobuf.Timestamp"),
-  date: leaf("string"),
+  date: leaf("google.protobuf.Timestamp"),
   time: leaf("string"),
   duration: leaf("google.protobuf.Duration"),
   bytes: leaf("bytes"),

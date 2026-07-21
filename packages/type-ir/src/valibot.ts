@@ -49,8 +49,12 @@ const handlers: Record<string, Converter> = {
   string: leaf("v.string()"),
   uuid: leafWithAction("v.string()", "v.uuid()"),
   uri: leafWithAction("v.string()", "v.url()"),
-  datetime: leafWithAction("v.string()", "v.isoDateTime()"),
-  date: leafWithAction("v.string()", "v.isoDate()"),
+  // https://valibot.dev/api/date/ — v.date() validates a `Date` instance,
+  // matching type-ir's datetime/date domain type (`Date`, not a wire-format
+  // string — see kinds/date-time.ts). Valibot has no built-in string->Date
+  // coercion action (unlike Zod's z.coerce.date()).
+  datetime: leaf("v.date()"),
+  date: leaf("v.date()"),
   time: leafWithAction("v.string()", "v.isoTime()"),
   duration: leaf("v.string()"),
   bytes: leafWithAction("v.string()", "v.base64()"),

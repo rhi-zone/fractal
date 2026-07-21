@@ -28,6 +28,10 @@ describe("leaf types", () => {
     expect(toJtd(datetime())).toEqual({ type: "timestamp" })
   })
 
+  test("date maps to timestamp (JTD has no calendar-only date form)", () => {
+    expect(toJtd(date())).toEqual({ type: "timestamp" })
+  })
+
   test("unknown is the empty form", () => {
     expect(toJtd(t(types.unknown))).toEqual({})
   })
@@ -66,10 +70,6 @@ describe("string subtypes", () => {
 
   test("uri", () => {
     expect(toJtd(uri())).toEqual({ type: "string", metadata: { format: "uri" } })
-  })
-
-  test("date", () => {
-    expect(toJtd(date())).toEqual({ type: "string", metadata: { format: "date" } })
   })
 
   test("time", () => {

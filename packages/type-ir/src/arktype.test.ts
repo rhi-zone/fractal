@@ -69,11 +69,11 @@ describe("formatted types", () => {
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toArkType(datetime())).toBe('type("string")')
+    expect(toArkType(datetime())).toBe('type("Date")')
   })
 
   test("date", () => {
-    expect(toArkType(date())).toBe('type("string")')
+    expect(toArkType(date())).toBe('type("Date")')
   })
 
   test("time", () => {

@@ -65,11 +65,11 @@ describe("string subtypes fall back to t.string with a comment", () => {
   })
 
   test("datetime", () => {
-    expect(toIoTs(datetime())).toBe("t.string /* datetime */")
+    expect(toIoTs(datetime())).toBe("t.unknown /* datetime: Date */")
   })
 
   test("date", () => {
-    expect(toIoTs(date())).toBe("t.string /* date */")
+    expect(toIoTs(date())).toBe("t.unknown /* date: Date */")
   })
 
   test("time", () => {

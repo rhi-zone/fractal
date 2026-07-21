@@ -78,9 +78,10 @@ const handlers: Record<string, Converter> = {
   string: leaf("string"),
   uuid: leaf("string"),
   uri: leaf("string"),
-  // No temporal type in FlatBuffers; datetime follows the unix-timestamp convention.
+  // No temporal type in FlatBuffers; datetime/date (type-ir's `Date` domain
+  // type — see kinds/date-time.ts) both follow the unix-timestamp convention.
   datetime: leaf("int64"),
-  date: leaf("string"),
+  date: leaf("int64"),
   time: leaf("string"),
   duration: leaf("int64"),
   bytes: leaf("[ubyte]"),

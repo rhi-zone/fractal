@@ -277,6 +277,23 @@ function isSubkind(child: string, parent: string): boolean {
   return ancestors(child).includes(parent)
 }
 
+// `date`/`datetime` are type-ir's `Date` domain type, not a string subtype
+// (see kinds/date-time.ts) — but `fromJson`'s string-format detection (see
+// from-json.ts's `inferString`) still guesses them FROM a raw JSON string
+// sample. When corpus evidence disagrees on which format a string-shaped
+// field actually is (e.g. some samples parse as a date, others don't, or
+// parse as a different format like uuid), the honest fallback is still
+// "it's a string, we're just not sure which format" — same as two
+// conflicting `string`-subtype format guesses (uuid vs. uri) always
+// widened to plain `string`. This set names the format-detected kinds that
+// need that string-widening path even though they're no longer literal
+// string subtypes in the type system.
+const stringDetectedFormatKinds = new Set(["date", "datetime"])
+
+function isStringLikeForUnification(kind: string): boolean {
+  return isSubkind(kind, "string") || stringDetectedFormatKinds.has(kind)
+}
+
 /**
  * Merge meta bags from two TypeRefs. Picks up `nullable`, `optional`,
  * and any other conventions that should survive unification.
@@ -306,11 +323,12 @@ function unifyTypes(a: TypeRef, b: TypeRef): TypeRef {
     return withMeta(widenIntegerKinds(ak, bk), meta)
   }
 
-  // String subtype unification — if both are string subtypes, widen to string
-  // (e.g. uuid + date → string; we can't narrow further)
-  if (isSubkind(ak, "string") && isSubkind(bk, "string")) {
+  // String subtype/format unification — if both are string subtypes (or a
+  // string-detected format like date/datetime — see isStringLikeForUnification),
+  // widen to string (e.g. uuid + date → string; we can't narrow further)
+  if (isStringLikeForUnification(ak) && isStringLikeForUnification(bk)) {
     if (ak === bk) return withMeta(a, meta) // same format
-    // Different string subtypes → plain string
+    // Different string subtypes/formats → plain string
     return withMeta(t(types.string), meta)
   }
 

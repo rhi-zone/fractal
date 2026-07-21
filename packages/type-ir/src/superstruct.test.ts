@@ -65,15 +65,16 @@ describe("formatted types", () => {
   test("uri falls back to string with comment", () => {
     expect(toSuperstruct(uri())).toBe("s.string() /* uri */")
   })
+
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toSuperstruct(datetime())).toBe("s.string() /* datetime */")
+    expect(toSuperstruct(datetime())).toBe("s.date()")
   })
 
   test("date", () => {
-    expect(toSuperstruct(date())).toBe("s.string() /* date */")
+    expect(toSuperstruct(date())).toBe("s.date()")
   })
 
   test("time", () => {

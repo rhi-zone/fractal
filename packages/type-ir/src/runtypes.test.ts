@@ -71,15 +71,16 @@ describe("formatted types", () => {
   test("uri", () => {
     expect(toRuntypes(uri())).toBe("R.String /* uri */")
   })
+
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toRuntypes(datetime())).toBe("R.String /* datetime */")
+    expect(toRuntypes(datetime())).toBe("R.InstanceOf(Date)")
   })
 
   test("date", () => {
-    expect(toRuntypes(date())).toBe("R.String /* date */")
+    expect(toRuntypes(date())).toBe("R.InstanceOf(Date)")
   })
 
   test("time", () => {

@@ -48,8 +48,6 @@ describe("string subtypes", () => {
   const cases: Record<string, () => ReturnType<typeof t>> = {
     uuid: () => uuid(),
     uri: () => uri(),
-    datetime: () => datetime(),
-    date: () => date(),
     time: () => time(),
     duration: () => duration(),
   }
@@ -58,6 +56,18 @@ describe("string subtypes", () => {
       expect(toTypeScript(make())).toBe("string")
     })
   }
+})
+
+// datetime/date are type-ir's `Date` domain type, not a string subtype —
+// see kinds/date-time.ts.
+describe("Date-domain kinds", () => {
+  test("datetime", () => {
+    expect(toTypeScript(datetime())).toBe("Date")
+  })
+
+  test("date", () => {
+    expect(toTypeScript(date())).toBe("Date")
+  })
 })
 
 test("bytes", () => {

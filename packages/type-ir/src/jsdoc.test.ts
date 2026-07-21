@@ -45,11 +45,11 @@ describe("leaf types", () => {
   })
 
   test("datetime", () => {
-    expect(toJsDocType(datetime())).toBe("string")
+    expect(toJsDocType(datetime())).toBe("Date")
   })
 
   test("date", () => {
-    expect(toJsDocType(date())).toBe("string")
+    expect(toJsDocType(date())).toBe("Date")
   })
 
   test("time", () => {

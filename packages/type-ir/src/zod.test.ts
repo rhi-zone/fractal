@@ -65,15 +65,16 @@ describe("formatted types", () => {
   test("uri", () => {
     expect(toZod(uri())).toBe("z.string().url()")
   })
+
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toZod(datetime())).toBe("z.string().datetime()")
+    expect(toZod(datetime())).toBe("z.coerce.date()")
   })
 
   test("date", () => {
-    expect(toZod(date())).toBe("z.string().date()")
+    expect(toZod(date())).toBe("z.coerce.date()")
   })
 
   test("time", () => {

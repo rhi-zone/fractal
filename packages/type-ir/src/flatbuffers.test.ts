@@ -52,10 +52,6 @@ describe("string subtypes fall back to string", () => {
     expect(toFlatBuffers(uri())).toBe("string")
   })
 
-  test("date", () => {
-    expect(toFlatBuffers(date())).toBe("string")
-  })
-
   test("time", () => {
     expect(toFlatBuffers(time())).toBe("string")
   })
@@ -64,6 +60,10 @@ describe("string subtypes fall back to string", () => {
 describe("temporal well-known conventions", () => {
   test("datetime -> int64 (unix-timestamp convention)", () => {
     expect(toFlatBuffers(datetime())).toBe("int64")
+  })
+
+  test("date -> int64 (unix-timestamp convention; no calendar-only date type)", () => {
+    expect(toFlatBuffers(date())).toBe("int64")
   })
 
   test("duration -> int64", () => {

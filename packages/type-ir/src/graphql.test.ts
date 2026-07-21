@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types, withMeta } from "./index.ts"
 import { toGraphQL, toGraphQLType, toGraphQLTypes } from "./graphql.ts"
+import { date, datetime } from "./kinds/common.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {
@@ -33,6 +34,17 @@ describe("leaf types", () => {
 
   test("void -> JSON (direct reference fallback)", () => {
     expect(toGraphQL(t(types.void))).toBe("JSON!")
+  })
+
+  // type-ir's datetime/date are the domain type `Date` (see kinds/date-time.ts),
+  // not a wire-format string — GraphQL has no native Date scalar, so these use
+  // the ecosystem-conventional custom scalar names (same idiom `JSON` uses above).
+  test("datetime -> DateTime (conventional custom scalar)", () => {
+    expect(toGraphQL(datetime())).toBe("DateTime!")
+  })
+
+  test("date -> Date (conventional custom scalar)", () => {
+    expect(toGraphQL(date())).toBe("Date!")
   })
 })
 

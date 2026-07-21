@@ -65,15 +65,16 @@ describe("formatted types", () => {
   test("uri", () => {
     expect(toTypeBox(uri())).toBe('Type.String({ format: "uri" })')
   })
+
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toTypeBox(datetime())).toBe('Type.String({ format: "date-time" })')
+    expect(toTypeBox(datetime())).toBe("Type.Date()")
   })
 
   test("date", () => {
-    expect(toTypeBox(date())).toBe('Type.String({ format: "date" })')
+    expect(toTypeBox(date())).toBe("Type.Date()")
   })
 
   test("time", () => {

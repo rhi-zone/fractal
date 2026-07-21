@@ -44,8 +44,14 @@ const handlers: Record<string, Converter> = {
   string: leaf({ type: "string" }),
   uuid: () => ({ form: { type: "string" }, metadata: { format: "uuid" } }),
   uri: () => ({ form: { type: "string" }, metadata: { format: "uri" } }),
+  // RFC 8927 §3.3.2 — the "timestamp" type form is JTD's own native
+  // representation of a language-level Date/DateTime value (spec: "the
+  // instance is a string encoding of an RFC3339 timestamp"), matching
+  // type-ir's datetime/date domain type (`Date`, not a wire-format string —
+  // see kinds/date-time.ts). `date` reuses the same form (JS has no
+  // calendar-only Date type to distinguish it from `datetime`).
   datetime: leaf({ type: "timestamp" }),
-  date: () => ({ form: { type: "string" }, metadata: { format: "date" } }),
+  date: leaf({ type: "timestamp" }),
   time: () => ({ form: { type: "string" }, metadata: { format: "time" } }),
   duration: () => ({ form: { type: "string" }, metadata: { format: "duration" } }),
   bytes: () => ({ form: { type: "string" }, metadata: { contentEncoding: "base64" } }),

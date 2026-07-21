@@ -34,10 +34,6 @@ describe("string subtypes fall back to Text", () => {
     expect(toCapnpType(uri())).toBe("Text")
   })
 
-  test("date", () => {
-    expect(toCapnpType(date())).toBe("Text")
-  })
-
   test("time", () => {
     expect(toCapnpType(time())).toBe("Text")
   })
@@ -46,6 +42,10 @@ describe("string subtypes fall back to Text", () => {
 describe("well-known conventions", () => {
   test("datetime -> Int64 (unix timestamp)", () => {
     expect(toCapnpType(datetime())).toBe("Int64")
+  })
+
+  test("date -> Int64 (unix timestamp; no calendar-only date type)", () => {
+    expect(toCapnpType(date())).toBe("Int64")
   })
 
   test("duration -> Int64", () => {

@@ -1,7 +1,8 @@
 // Superstruct schema code projector. Emits Superstruct schema source text, not runtime schemas.
 // Spec: https://docs.superstructjs.org/ (Types, Refinements, Coercions).
-// Superstruct has no native string-format validators (uuid, datetime, date, time, duration,
-// base64) — those fall back to `s.string()` with a trailing comment naming the intended format.
+// Superstruct has no native string-format validators (uuid, time, duration, base64) — those
+// fall back to `s.string()` with a trailing comment naming the intended format. `s.date()` IS
+// native, so datetime/date (domain type `Date` — see kinds/date-time.ts) use it directly.
 import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
 
 function isA(kind: string, target: string): boolean {
@@ -71,8 +72,12 @@ const handlers: Record<string, Converter> = {
   string: leaf("s.string()"),
   uuid: leaf("s.string() /* uuid */"),
   uri: leaf("s.string() /* uri */"),
-  datetime: leaf("s.string() /* datetime */"),
-  date: leaf("s.string() /* date */"),
+  // https://docs.superstructjs.org/api-reference/types#date — s.date()
+  // validates a native `Date` instance, matching type-ir's datetime/date
+  // domain type (see kinds/date-time.ts) — unlike uuid/uri/time/duration
+  // above, this one IS natively supported, no string-fallback comment needed.
+  datetime: leaf("s.date()"),
+  date: leaf("s.date()"),
   time: leaf("s.string() /* time */"),
   duration: leaf("s.string() /* duration */"),
   bytes: leaf("s.string() /* base64 */"),

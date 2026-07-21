@@ -49,9 +49,10 @@ const handlers: Record<string, Converter> = {
   string: leaf("Text"),
   uuid: leaf("Text"),
   uri: leaf("Text"),
-  // No temporal types in Cap'n Proto; datetime follows the unix-timestamp convention.
+  // No temporal types in Cap'n Proto; datetime/date (type-ir's `Date` domain
+  // type — see kinds/date-time.ts) both follow the unix-timestamp convention.
   datetime: leaf("Int64"),
-  date: leaf("Text"),
+  date: leaf("Int64"),
   time: leaf("Text"),
   duration: leaf("Int64"),
   bytes: leaf("Data"),

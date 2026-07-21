@@ -65,15 +65,16 @@ describe("formatted types", () => {
   test("uri", () => {
     expect(toValibot(uri())).toBe("v.pipe(v.string(), v.url())")
   })
+
 })
 
 describe("temporal types", () => {
   test("datetime", () => {
-    expect(toValibot(datetime())).toBe("v.pipe(v.string(), v.isoDateTime())")
+    expect(toValibot(datetime())).toBe("v.date()")
   })
 
   test("date", () => {
-    expect(toValibot(date())).toBe("v.pipe(v.string(), v.isoDate())")
+    expect(toValibot(date())).toBe("v.date()")
   })
 
   test("time", () => {

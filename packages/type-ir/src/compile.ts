@@ -209,15 +209,21 @@ type CheckHandler = (ref: TypeRef, v: string, ctx: GenCtx) => string
 const FORMAT_PATTERNS: Record<string, string> = {
   uuid: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
   uri: "^[a-zA-Z][a-zA-Z0-9+.-]*:\\S*$",
-  date: "^\\d{4}-\\d{2}-\\d{2}$",
   time: "^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})?$",
-  datetime: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})?$",
   duration: "^P(?:\\d+Y)?(?:\\d+M)?(?:\\d+D)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+(?:\\.\\d+)?S)?)?$",
   bytes: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
 }
 
 function formatCheck(formatName: keyof typeof FORMAT_PATTERNS): CheckHandler {
   return (_ref, v, ctx) => `typeof ${v} === "string" && ${ctx.addRegex(FORMAT_PATTERNS[formatName]!)}.test(${v})`
+}
+
+// datetime/date are the domain type `Date` (see kinds/date-time.ts), not a
+// string subtype — a valid value is a `Date` instance whose `getTime()`
+// isn't `NaN` (an "Invalid Date" is a `Date` instance too, so `instanceof`
+// alone isn't sufficient).
+function dateCheck(): CheckHandler {
+  return (_ref, v) => `(${v} instanceof Date && !Number.isNaN(${v}.getTime()))`
 }
 
 const checkHandlers: Record<string, CheckHandler> = {
@@ -232,9 +238,9 @@ const checkHandlers: Record<string, CheckHandler> = {
   string: (_r, v) => `typeof ${v} === "string"`,
   uuid: formatCheck("uuid"),
   uri: formatCheck("uri"),
-  date: formatCheck("date"),
+  date: dateCheck(),
   time: formatCheck("time"),
-  datetime: formatCheck("datetime"),
+  datetime: dateCheck(),
   duration: formatCheck("duration"),
   bytes: formatCheck("bytes"),
   null: (_r, v) => `${v} === null`,
@@ -359,6 +365,30 @@ function formatLeaf(formatName: keyof typeof FORMAT_PATTERNS): ValidateHandler {
       ...metaConstraintStmts(ref, v, pathExpr, ctx, `typeof ${v} === "string"`),
     ]
     return { stmts, outExpr: v }
+  }
+}
+
+/** datetime/date: valid input is a `Date` instance with a non-NaN
+ * `getTime()`; parse mode additionally coerces an ISO-ish string via
+ * `new Date(v)`, emitting a `coerce` error (not `type`) when that
+ * construction lands on Invalid Date — same "wrong shape entirely" vs.
+ * "right shape, unparseable content" split `numberFamilyLeaf` draws between
+ * `type` and `coerce` errors. */
+function dateLeaf(): ValidateHandler {
+  const isValidDate = (v: string) => `${v} instanceof Date && !Number.isNaN(${v}.getTime())`
+  return (ref, v, pathExpr, ctx, mode) => {
+    const c = isValidDate(v)
+    if (mode === "errors") {
+      return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v }
+    }
+    const out = ctx.fresh("d")
+    const stmts = [
+      `let ${out};`,
+      `if (${c}) { ${out} = ${v}; }`,
+      `else if (typeof ${v} === "string") { const __d = new Date(${v}); if (!Number.isNaN(__d.getTime())) { ${out} = __d; } else { errs.push({ kind: "coerce", path: ${pathExpr}, expected: ${JSON.stringify(ref.shape.kind)}, actual: ${v} }); ${out} = ${v}; } }`,
+      `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
+    ]
+    return { stmts, outExpr: out }
   }
 }
 
@@ -631,9 +661,9 @@ const validateHandlers: Record<string, ValidateHandler> = {
   string: stringLeaf,
   uuid: formatLeaf("uuid"),
   uri: formatLeaf("uri"),
-  date: formatLeaf("date"),
+  date: dateLeaf(),
   time: formatLeaf("time"),
-  datetime: formatLeaf("datetime"),
+  datetime: dateLeaf(),
   duration: formatLeaf("duration"),
   bytes: formatLeaf("bytes"),
   null: nonCoercingLeaf((v) => `${v} === null`),
