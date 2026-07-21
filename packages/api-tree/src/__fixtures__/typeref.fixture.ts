@@ -264,6 +264,35 @@ export type SymbolBrandedUserId = number & { readonly [UserIdBrand]: never }
 /** A symbol-branded field nested as an object field. */
 export type SymbolBrandedField = { id: SymbolBrandedId; name: string }
 
+// ── Async stream (AsyncIterable/AsyncGenerator) fixtures ────────────────────
+
+/** A field whose type is an AsyncIterable — must lower to types.stream. */
+export type AsyncIterableField = { events: AsyncIterable<string> }
+
+/** An AsyncGenerator field — TReturn/TNext are dropped, only the yielded type survives. */
+export type AsyncGeneratorField = { events: AsyncGenerator<number, void, never> }
+
+/** A field whose type is an AsyncIterableIterator — the return type of an
+ * `async function*` when spelled out explicitly rather than inferred. */
+export type AsyncIterableIteratorField = { events: AsyncIterableIterator<boolean> }
+
+/** A function returning `AsyncIterable<T>` directly, `T` a nested object —
+ * exercises stream detection at the top-level return-type position, not just
+ * field position, with a structural (not primitive) element type. */
+export const streamFn = (): AsyncIterable<{ id: string }> => (async function* () {})()
+
+/** An `async function*` — its return type is inferred as
+ * `AsyncGenerator<T, void, unknown>`, exercising the extractor's stream
+ * detection on a real generator function rather than an annotated field. */
+export async function* asyncGenFn(): AsyncGenerator<number, void, unknown> {
+  yield 1
+}
+
+/** `Promise<AsyncIterable<T>>` — the Promise unwrap must run before the
+ * stream detection so both layers resolve correctly. */
+export const promiseStreamFn = (): Promise<AsyncIterable<string>> =>
+  Promise.resolve((async function* () {})())
+
 // ── Shared-symbol branded type fixtures ─────────────────────────────────────
 // A single `unique symbol` key reused across types, with distinct string-literal
 // values (rather than `never`) distinguishing the brands — as opposed to the

@@ -134,6 +134,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { type: "object", additionalProperties: toOpenApi20(s.value) }
   },
+  // Swagger 2.0 has no streaming/async-sequence vocabulary — degrades to the
+  // same `array`-of-element shape used for a materialized sequence, carrying
+  // `x-stream: true` (vendor-extension-style key, same convention as
+  // `x-function`/`x-interface` below).
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return { type: "array", items: toOpenApi20(s.element), "x-stream": true }
+  },
   // Swagger 2.0 has no `oneOf`/`anyOf` (both OAS 3.0 additions — the only
   // JSON Schema combinator it kept was `allOf`, used solely for the
   // discriminator/inheritance pattern in §4.7.4). A union of variants has no

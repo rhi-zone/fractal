@@ -85,6 +85,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { form: { values: toJtd(s.value) } }
   },
+  // JTD has no streaming/async-sequence form — degrades to the same elements
+  // form the `array` handler above uses, flagged in metadata (§2.2.7's
+  // extension point) so consumers can tell a stream apart from an ordinary
+  // array.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return { form: { elements: toJtd(s.element) }, metadata: { stream: true } }
+  },
   // JTD's union equivalent (§3.3.7, discriminator form) requires a tag field
   // and object-shaped variants. General unions can't satisfy that; degrade to
   // empty + the variant schemas in metadata.

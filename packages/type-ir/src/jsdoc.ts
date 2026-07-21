@@ -56,6 +56,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return `Object.<string, ${toJsDocType(s.value)}>`
   },
+  // JSDoc/Closure Compiler's type-application syntax (`Foo.<T>`,
+  // https://jsdoc.app/tags-type.html#type-language) applies to any generic
+  // name, including a built-in async iterable — same pattern `Array.<T>`
+  // uses above.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `AsyncIterable.<${toJsDocType(s.element)}>`
+  },
   union: (shape) => {
     const s = shape as TypeShape & { kind: "union" }
     const types = [...new Set(s.variants.map(toJsDocType))]

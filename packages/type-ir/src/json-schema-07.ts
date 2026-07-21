@@ -107,6 +107,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { type: "object", additionalProperties: toJsonSchema07(s.value) }
   },
+  // draft-07 has no streaming/async-sequence vocabulary either — same
+  // `array`-of-element degrade as json-schema.ts (latest draft), carrying
+  // `x-stream: true`.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return { type: "array", items: toJsonSchema07(s.element), "x-stream": true }
+  },
   // draft-07 §9.2.1.3 defines `oneOf` (exactly one variant matches) but no
   // `discriminator` keyword; the OpenAPI-originated `discriminator: { propertyName }`
   // shape is a widely-recognized extension (carried by `meta.discriminator`, an open
@@ -152,6 +159,7 @@ const handlers: Record<string, Converter> = {
 const complexKinds = new Set([
   "object",
   "array",
+  "stream",
   "tuple",
   "map",
   "union",

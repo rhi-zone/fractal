@@ -33,6 +33,12 @@ export type ProtoRpc = {
   name: string
   requestType: string
   responseType: string
+  // Proto3 server-streaming RPC (§ "Services"): `returns (stream Response)`,
+  // set when the method's TypeRef return type is `stream` — the one place in
+  // this projector where `stream` DOES have a native keyword, since it's a
+  // real part of proto3's RPC syntax (unlike message-field position, where
+  // `toProtoField`'s `stream` handler degrades to `repeated` instead).
+  responseStreaming?: boolean
 }
 
 export type ProtoService = {
@@ -94,6 +100,16 @@ const handlers: Record<string, Converter> = {
     const [first] = elementTypes
     const uniform = first !== undefined && elementTypes.every((type) => type === first)
     return { type: uniform ? first : "google.protobuf.Any", repeated: true }
+  },
+  // Proto3's `stream` keyword (§ "Services") only appears in RPC method
+  // parameter/return position (`rpc Foo(stream Request) returns (stream
+  // Response)`) — there's no field-level streaming type to target here, so
+  // this degrades to `repeated`, the same fallback `array` uses above. The
+  // RPC-position case is handled directly by `toProtoService` below, which
+  // reads `interface.methods` rather than going through this field converter.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return { type: toProtoField(s.element).type, repeated: true }
   },
   // Map fields: https://protobuf.dev/programming-guides/proto3/#maps
   map: (shape) => {
@@ -242,12 +258,18 @@ export function toProtoService(name: string, ref: TypeRef): ProtoService {
 
     const responseType = `${rpcName}Response`
     const isVoid = returnType === undefined || returnType.shape.kind === "void"
+    // A `stream` return type maps to proto3's `stream` RPC keyword (see the
+    // `ProtoRpc.responseStreaming` doc comment) — the synthesized response
+    // message wraps the stream's *element* type, not the stream itself,
+    // since each streamed message is one element.
+    const isStreaming = returnType !== undefined && returnType.shape.kind === "stream"
+    const resultType = isStreaming ? (returnType.shape as TypeShape & { kind: "stream" }).element : returnType
     messages.push({
       name: responseType,
-      fields: isVoid ? [] : [{ name: "result", field: toProtoField(returnType), number: 1 }],
+      fields: isVoid ? [] : [{ name: "result", field: toProtoField(resultType as TypeRef), number: 1 }],
     })
 
-    rpcs.push({ name: rpcName, requestType, responseType })
+    rpcs.push({ name: rpcName, requestType, responseType, ...(isStreaming ? { responseStreaming: true } : {}) })
   }
 
   const service: ProtoService = { name, rpcs, messages }
@@ -302,7 +324,8 @@ function renderService(service: ProtoService, depth: number): string[] {
   if (typeof service.description === "string") lines.push(`${indent}// ${service.description}`)
   lines.push(`${indent}service ${service.name} {`)
   for (const rpc of service.rpcs) {
-    lines.push(`${inner}rpc ${rpc.name}(${rpc.requestType}) returns (${rpc.responseType});`)
+    const responseType = rpc.responseStreaming === true ? `stream ${rpc.responseType}` : rpc.responseType
+    lines.push(`${inner}rpc ${rpc.name}(${rpc.requestType}) returns (${responseType});`)
   }
   lines.push(`${indent}}`)
   return lines

@@ -376,3 +376,10 @@ describe("interface", () => {
     )
   })
 })
+
+describe("stream", () => {
+  test("degrades to z.array() of the element type", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toZod(ref)).toBe("z.array(z.number().int())")
+  })
+})

@@ -278,3 +278,14 @@ describe("toGraphQLTypes", () => {
     )
   })
 })
+
+describe("stream", () => {
+  test("resolves to the element's own SDL type (subscriptions yield individual values)", () => {
+    expect(toGraphQL(t(types.stream(t(types.string))))).toBe("String!")
+  })
+
+  test("nullable element stays nullable", () => {
+    const ref = t(types.stream(t(types.string, { nullable: true })))
+    expect(toGraphQL(ref)).toBe("String!")
+  })
+})

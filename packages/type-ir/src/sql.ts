@@ -59,6 +59,10 @@ const postgresHandlers: Record<string, Converter> = {
   // so this is treated the same as `unknown` (opaque data) rather than `object`.
   instance: leaf("JSONB"),
   array: leaf("JSONB"),
+  // A column stores a materialized value, not an ongoing async sequence —
+  // same opaque-fallback treatment as `array` above (the stream would need
+  // to be fully drained before it could be persisted anyway).
+  stream: leaf("JSONB"),
   tuple: leaf("JSONB"),
   map: leaf("JSONB"),
   union: leaf("JSONB"),
@@ -88,6 +92,7 @@ const sqliteHandlers: Record<string, Converter> = {
   object: leaf("TEXT"),
   instance: leaf("TEXT"),
   array: leaf("TEXT"),
+  stream: leaf("TEXT"),
   tuple: leaf("TEXT"),
   map: leaf("TEXT"),
   union: leaf("TEXT"),
@@ -202,6 +207,7 @@ const mysqlHandlers: Record<string, Converter> = {
   object: leaf("JSON"),
   instance: leaf("JSON"),
   array: leaf("JSON"),
+  stream: leaf("JSON"),
   tuple: leaf("JSON"),
   map: leaf("JSON"),
   union: leaf("JSON"),

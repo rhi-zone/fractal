@@ -71,6 +71,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "array" }
     return `List(${toCapnpType(s.element)})`
   },
+  // Cap'n Proto has no field-level streaming type (its streaming RPC support
+  // — https://capnproto.org/language.html — is an experimental method-level
+  // extension, not a value type constructible from a bare TypeRef) —
+  // degrades to the same `List(T)` encoding `array` uses above.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `List(${toCapnpType(s.element)})`
+  },
   // No tuple construct (§ "Structs"); lossy — degrades to a list of opaque pointers.
   tuple: leaf("List(AnyPointer)"),
   // No map built-in (§ "Language Reference" has no map primitive); toCapnpStruct

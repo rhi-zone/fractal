@@ -298,3 +298,10 @@ describe("function", () => {
     expect(toSuperstruct(ref)).toBe("s.unknown()")
   })
 })
+
+describe("stream", () => {
+  test("degrades to s.array() of the element type", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toSuperstruct(ref)).toBe("s.array(s.integer())")
+  })
+})

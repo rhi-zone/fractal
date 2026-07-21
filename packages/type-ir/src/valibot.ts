@@ -75,6 +75,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { schema: `v.record(v.string(), ${toValibot(s.value)})`, actions: [] }
   },
+  // Valibot validates materialized values, not an ongoing async sequence —
+  // degrades to `v.array()` of the element type, same fallback the other
+  // data-only projectors use for `stream`.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return { schema: `v.array(${toValibot(s.element)})`, actions: [] }
+  },
   // https://valibot.dev/api/variant/ — v.variant(key, [...]) is Valibot's
   // native discriminated-union schema, keyed on a shared literal field for
   // O(1) variant selection. Driven by `meta.discriminator` (open metadata bag

@@ -579,3 +579,12 @@ describe("function", () => {
     expect(toSqlDdl(ref, { dialect: "mysql" })).toEqual({ type: "JSON", nullable: false })
   })
 })
+
+describe("stream", () => {
+  test("degrades the same as array, not persistable as an ongoing sequence", () => {
+    const ref = t(types.stream(t(types.string)))
+    expect(toSqlDdl(ref)).toEqual({ type: "JSONB", nullable: false })
+    expect(toSqlDdl(ref, { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
+    expect(toSqlDdl(ref, { dialect: "mysql" })).toEqual({ type: "JSON", nullable: false })
+  })
+})

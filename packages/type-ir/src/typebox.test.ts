@@ -331,3 +331,10 @@ describe("function", () => {
     expect(toTypeBox(ref)).toBe("Type.Function([Type.Number()], Type.Void())")
   })
 })
+
+describe("stream", () => {
+  test("degrades to Type.Array() of the element type", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toTypeBox(ref)).toBe("Type.Array(Type.Integer())")
+  })
+})

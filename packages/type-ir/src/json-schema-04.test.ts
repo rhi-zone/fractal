@@ -324,3 +324,10 @@ describe("function", () => {
     expect(toJsonSchema04(ref)).toEqual({ "x-function": true })
   })
 })
+
+describe("stream", () => {
+  test("degrades to an array carrying x-stream: true (no native streaming vocabulary)", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toJsonSchema04(ref)).toEqual({ type: "array", items: { type: "integer" }, "x-stream": true })
+  })
+})

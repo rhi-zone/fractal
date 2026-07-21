@@ -339,3 +339,10 @@ describe("function", () => {
     expect(toOpenApi20(ref)).toEqual({ "x-function": true })
   })
 })
+
+describe("stream", () => {
+  test("degrades to an array carrying x-stream: true (no native streaming vocabulary)", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toOpenApi20(ref)).toEqual({ type: "array", items: { type: "integer" }, "x-stream": true })
+  })
+})

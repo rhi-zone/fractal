@@ -395,6 +395,50 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
 })
 
 // ============================================================================
+// AsyncIterable/AsyncGenerator return-type detection — types.stream
+// ============================================================================
+
+describe("typeRefFromReturnType detects AsyncIterable/AsyncGenerator return types", () => {
+  const program = createExtractorProgram(TYPEREF_FIXTURE)
+  const checker = program.getTypeChecker()
+  const source = program.getSourceFile(TYPEREF_FIXTURE)!
+
+  it("a function returning AsyncIterable<T> lowers to types.stream, T extracted fully", () => {
+    const fn = findExportedFn(source, "streamFn")
+    const ref = typeRefFromReturnType(fn, checker)
+    expect(ref.shape.kind).toBe("stream")
+    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element
+    expect(element.shape.kind).toBe("object")
+    const fields = (element.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.id?.shape.kind).toBe("string")
+    expect(toJsonSchema(ref)).toEqual({
+      type: "array",
+      items: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      "x-stream": true,
+    })
+  })
+
+  it("an async function* (AsyncGenerator<T, void, unknown> inferred return) lowers to types.stream", () => {
+    const fnDecl = source.statements.find(
+      (s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === "asyncGenFn",
+    )
+    if (!fnDecl) throw new Error("asyncGenFn not found")
+    const ref = typeRefFromReturnType(fnDecl, checker)
+    expect(ref.shape.kind).toBe("stream")
+    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element
+    expect(element.shape.kind).toBe("number")
+  })
+
+  it("Promise<AsyncIterable<T>> unwraps the Promise first, then detects the stream underneath", () => {
+    const fn = findExportedFn(source, "promiseStreamFn")
+    const ref = typeRefFromReturnType(fn, checker)
+    expect(ref.shape.kind).toBe("stream")
+    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element
+    expect(element.shape.kind).toBe("string")
+  })
+})
+
+// ============================================================================
 // 8. Gap fixes — tuples, index signatures, class filtering, nested Promise,
 //    single literals, recursive types
 // ============================================================================
@@ -524,6 +568,30 @@ describe("typeRefFromType gap fixes", () => {
     const ref = typeRefFromType(typeOf("PromiseField"), checker, source)
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
     expect(fields.data?.shape.kind).toBe("string")
+  })
+
+  it("lowers an AsyncIterable<T> field to types.stream with T's element TypeRef", () => {
+    const ref = typeRefFromType(typeOf("AsyncIterableField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.events?.shape.kind).toBe("stream")
+    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element
+    expect(element.shape.kind).toBe("string")
+  })
+
+  it("lowers an AsyncGenerator<T, TReturn, TNext> field to types.stream, dropping TReturn/TNext", () => {
+    const ref = typeRefFromType(typeOf("AsyncGeneratorField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.events?.shape.kind).toBe("stream")
+    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element
+    expect(element.shape.kind).toBe("number")
+  })
+
+  it("lowers an AsyncIterableIterator<T> field to types.stream (an async function*'s explicit return type)", () => {
+    const ref = typeRefFromType(typeOf("AsyncIterableIteratorField"), checker, source)
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.events?.shape.kind).toBe("stream")
+    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element
+    expect(element.shape.kind).toBe("boolean")
   })
 
   it("sets meta.readonly on a `readonly`-modified field, and leaves a plain field alone", () => {

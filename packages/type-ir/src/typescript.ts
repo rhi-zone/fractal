@@ -11,7 +11,7 @@ function quote(value: string): string {
   return JSON.stringify(value)
 }
 
-const complexKinds = new Set(["union", "object", "map", "intersection", "function"])
+const complexKinds = new Set(["union", "object", "map", "intersection", "function", "stream"])
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("boolean"),
@@ -56,6 +56,13 @@ const handlers: Record<string, Converter> = {
   tuple: (shape) => {
     const s = shape as TypeShape & { kind: "tuple" }
     return `[${s.elements.map(toTypeScript).join(", ")}]`
+  },
+  // `AsyncIterable<T>` is TypeScript's own native construct for an
+  // asynchronously-produced sequence — the same type `AsyncIterableIterator<T>`
+  // (an `async function*`'s return type) and `AsyncGenerator<T, ...>` widen to.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `AsyncIterable<${toTypeScript(s.element)}>`
   },
   map: (shape) => {
     const s = shape as TypeShape & { kind: "map" }

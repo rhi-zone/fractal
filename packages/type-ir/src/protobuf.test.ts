@@ -376,3 +376,27 @@ describe("interface -> service (the key use case)", () => {
     expect(output).toContain("rpc Deposit(DepositRequest) returns (DepositResponse);")
   })
 })
+
+describe("stream", () => {
+  test("field position degrades to repeated (no field-level streaming type)", () => {
+    expect(toProtoField(t(types.stream(t(types.string))))).toEqual({
+      type: "string",
+      repeated: true,
+      optional: false,
+    })
+  })
+
+  test("a method returning a stream renders a server-streaming RPC", () => {
+    const iface = t(
+      types.interface({
+        watch: t(types.method([], t(types.stream(t(types.string))))),
+      }),
+    )
+    const service = toProtoService("WatchService", iface)
+    expect(service.rpcs).toEqual([
+      { name: "Watch", requestType: "WatchRequest", responseType: "WatchResponse", responseStreaming: true },
+    ])
+    const output = renderProto([], [service])
+    expect(output).toContain("rpc Watch(WatchRequest) returns (stream WatchResponse);")
+  })
+})

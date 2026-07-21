@@ -283,3 +283,9 @@ describe("function", () => {
     expect(toMssqlType(ref)).toBe("NVARCHAR(MAX)")
   })
 })
+
+describe("stream", () => {
+  test("degrades to NVARCHAR(MAX), same as array (not persistable as an ongoing sequence)", () => {
+    expect(toMssqlType(t(types.stream(t(types.string))))).toBe("NVARCHAR(MAX)")
+  })
+})

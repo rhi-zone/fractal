@@ -102,6 +102,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return `z.record(${toZod(s.key)}, ${toZod(s.value)})`
   },
+  // Zod validates materialized values, not an ongoing async sequence — no
+  // AsyncIterable schema exists, so this degrades to `z.array()` of the
+  // element type, same as every other data-only projector's stream fallback.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `z.array(${toZod(s.element)})`
+  },
   // https://zod.dev/?id=discriminated-unions — z.discriminatedUnion(key, [...])
   // is Zod's native construct for object unions keyed on a shared literal
   // field; it validates in O(1) by reading the key instead of trying every

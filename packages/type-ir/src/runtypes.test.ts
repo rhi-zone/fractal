@@ -323,3 +323,10 @@ describe("function", () => {
     expect(toRuntypes(ref)).toBe("R.Unknown")
   })
 })
+
+describe("stream", () => {
+  test("degrades to R.Array() of the element type", () => {
+    const ref = t(types.stream(t(types.string)))
+    expect(toRuntypes(ref)).toBe("R.Array(R.String)")
+  })
+})

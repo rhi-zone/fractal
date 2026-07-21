@@ -108,6 +108,15 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { type: "object", additionalProperties: toOpenApi30(s.value) }
   },
+  // OAS 3.0 has no streaming/async-sequence vocabulary — degrades to the same
+  // `array`-of-element shape used for a materialized sequence, carrying
+  // `x-stream: true` (vendor-extension-style key, same convention as
+  // `x-function`/`x-interface` below) so tooling that cares can still tell a
+  // stream apart from an ordinary array.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return { type: "array", items: toOpenApi30(s.element), "x-stream": true }
+  },
   // OAS 3.0.3 §4.8.25 Discriminator Object: `discriminator.propertyName` names
   // the field OAS-aware tooling (codegen, some validators) reads to pick the
   // matching variant without trying each `oneOf` member — a native feature,

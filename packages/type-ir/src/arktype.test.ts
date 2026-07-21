@@ -357,3 +357,15 @@ describe("function", () => {
     expect(toArkType(ref)).toBe('type("unknown")')
   })
 })
+
+describe("stream", () => {
+  test("word-mode element uses the array shorthand", () => {
+    const ref = t(types.stream(t(types.string)))
+    expect(toArkType(ref)).toBe('type("string[]")')
+  })
+
+  test("complex element uses type.array", () => {
+    const ref = t(types.stream(t(types.object({ id: t(types.string) }))))
+    expect(toArkType(ref)).toBe('type.array({ id: "string" })')
+  })
+})

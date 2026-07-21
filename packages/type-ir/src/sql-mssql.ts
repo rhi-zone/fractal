@@ -36,6 +36,9 @@ const mssqlHandlers: Record<string, Converter> = {
   never: leaf("NVARCHAR(255)"),
   object: leaf("NVARCHAR(MAX)"),
   array: leaf("NVARCHAR(MAX)"),
+  // A column stores a materialized value, not an ongoing async sequence —
+  // same opaque-fallback treatment as `array` above.
+  stream: leaf("NVARCHAR(MAX)"),
   tuple: leaf("NVARCHAR(MAX)"),
   map: leaf("NVARCHAR(MAX)"),
   union: leaf("NVARCHAR(MAX)"),

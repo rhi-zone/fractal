@@ -310,3 +310,10 @@ describe("function", () => {
     expect(toYup(ref)).toBe("yup.mixed()")
   })
 })
+
+describe("stream", () => {
+  test("degrades to yup.array().of() of the element type", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toYup(ref)).toBe("yup.array().of(yup.number().integer())")
+  })
+})

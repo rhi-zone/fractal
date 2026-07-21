@@ -280,3 +280,14 @@ describe("interface", () => {
     expect(toTypeScript(ref)).toBe("{ deposit(amount: number): void; balance(): number }")
   })
 })
+
+describe("stream", () => {
+  test("emits AsyncIterable<T>", () => {
+    expect(toTypeScript(t(types.stream(t(types.string))))).toBe("AsyncIterable<string>")
+  })
+
+  test("emits AsyncIterable<T> for a complex element", () => {
+    const ref = t(types.stream(t(types.object({ id: t(types.string) }))))
+    expect(toTypeScript(ref)).toBe("AsyncIterable<{ id: string }>")
+  })
+})

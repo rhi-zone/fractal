@@ -69,6 +69,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { code: `t.record(t.string, ${toIoTs(s.value)})` }
   },
+  // io-ts validates materialized values, not an ongoing async sequence —
+  // degrades to `t.array()` of the element type, noted like every other
+  // unrepresentable case this projector handles.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return { code: `t.array(${toIoTs(s.element)})`, note: "stream" }
+  },
   union: (shape) => {
     const s = shape as TypeShape & { kind: "union" }
     return { code: `t.union([${s.variants.map(toIoTs).join(", ")}])` }

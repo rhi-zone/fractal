@@ -32,6 +32,21 @@ export interface TypeKinds {
     readonly source: string
   }
   array: { readonly kind: "array"; readonly element: TypeRef }
+  // An asynchronously-produced sequence of values — TypeScript's
+  // `AsyncIterable<T>`/`AsyncGenerator<T, TReturn, TNext>` (and the
+  // `AsyncIterableIterator<T>` an `async function*` returns), or a server-
+  // streaming gRPC/service response. Deliberately NOT a subtype of `array`:
+  // an array is a materialized, synchronously-indexable collection, while a
+  // stream is an ongoing production of values over time — collapsing the two
+  // would misrepresent backpressure/laziness semantics that matter to
+  // projectors capable of expressing them natively (TypeScript's
+  // `AsyncIterable<T>`, GraphQL subscriptions, gRPC server-streaming RPCs).
+  // Projectors without a native streaming construct degrade to their array/
+  // list equivalent over the element type (same honest-degrade convention
+  // `instance`/`interface` use elsewhere in this file), since a stream's
+  // element type is still the closest structural analogue once the
+  // asynchrony/laziness itself can't be preserved.
+  stream: { readonly kind: "stream"; readonly element: TypeRef }
   tuple: { readonly kind: "tuple"; readonly elements: readonly TypeRef[] }
   map: { readonly kind: "map"; readonly key: TypeRef; readonly value: TypeRef }
   union: { readonly kind: "union"; readonly variants: readonly TypeRef[] }
@@ -125,6 +140,8 @@ const parents: Record<string, string | null> = {
   // NOT a subtype of `object` — see the TypeKinds.instance doc comment above.
   instance: null,
   array: null,
+  // NOT a subtype of `array` — see TypeKinds.stream doc comment above.
+  stream: null,
   tuple: null,
   map: null,
   union: null,
@@ -181,6 +198,7 @@ export const types = {
   object: (fields: Record<string, TypeRef>) => ({ kind: "object", fields }) as const,
   instance: (className: string, source: string) => ({ kind: "instance", className, source }) as const,
   array: (element: TypeRef) => ({ kind: "array", element }) as const,
+  stream: (element: TypeRef) => ({ kind: "stream", element }) as const,
   tuple: (elements: readonly TypeRef[]) => ({ kind: "tuple", elements }) as const,
   map: (key: TypeRef, value: TypeRef) => ({ kind: "map", key, value }) as const,
   union: (variants: readonly TypeRef[]) => ({ kind: "union", variants }) as const,

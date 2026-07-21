@@ -110,6 +110,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return `S.Record({ key: ${toEffectSchema(s.key)}, value: ${toEffectSchema(s.value)} })`
   },
+  // Effect Schema validates materialized values, not an ongoing async
+  // sequence — degrades to `S.Array()` of the element type, same fallback
+  // the other data-only projectors use for `stream`.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `S.Array(${toEffectSchema(s.element)})`
+  },
   union: (shape) => {
     const s = shape as TypeShape & { kind: "union" }
     return `S.Union(${s.variants.map(toEffectSchema).join(", ")})`

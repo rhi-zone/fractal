@@ -102,6 +102,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return call("Type.Record", ["Type.String()", toTypeBox(s.value)], [], meta)
   },
+  // TypeBox validates materialized values, not an ongoing async sequence —
+  // degrades to `Type.Array()` of the element type, same fallback the other
+  // data-only projectors use for `stream`.
+  stream: (shape, meta) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return call("Type.Array", [toTypeBox(s.element)], [], meta)
+  },
   union: (shape, meta) => {
     const s = shape as TypeShape & { kind: "union" }
     return call("Type.Union", [`[${s.variants.map(toTypeBox).join(", ")}]`], [], meta)

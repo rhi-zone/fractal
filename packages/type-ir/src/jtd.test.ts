@@ -225,3 +225,10 @@ describe("function", () => {
     expect(toJtd(ref)).toEqual({ metadata: { function: true } })
   })
 })
+
+describe("stream", () => {
+  test("degrades to the elements form, flagged in metadata", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toJtd(ref)).toEqual({ elements: { type: "int32" }, metadata: { stream: true } })
+  })
+})

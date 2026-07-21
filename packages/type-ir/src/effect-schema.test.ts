@@ -314,3 +314,10 @@ describe("function", () => {
     expect(toEffectSchema(ref)).toBe("S.Unknown")
   })
 })
+
+describe("stream", () => {
+  test("degrades to S.Array() of the element type", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toEffectSchema(ref)).toBe("S.Array(S.Int)")
+  })
+})

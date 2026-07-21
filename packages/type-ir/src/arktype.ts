@@ -114,6 +114,15 @@ const handlers: Record<string, Converter> = {
     if (value.mode === "word") return { text: `Record<string, ${value.text}>`, mode: "word" }
     return { text: "Record<string, unknown>", mode: "word" }
   },
+  // ArkType's string DSL validates materialized values, not an ongoing async
+  // sequence — degrades to the same `element[]`/`type.array(...)` encoding
+  // the `array` handler above uses.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    const element = emitRef(s.element)
+    if (element.mode === "word") return { text: `${element.text}[]`, mode: "word" }
+    return { text: `type.array(${asDefArg(element)})`, mode: "expr" }
+  },
   union: (shape) => {
     const s = shape as TypeShape & { kind: "union" }
     const variants = s.variants.map(emitRef)

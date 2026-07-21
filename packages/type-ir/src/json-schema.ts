@@ -113,6 +113,15 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return { type: "object", additionalProperties: toJsonSchema(s.value) }
   },
+  // JSON Schema has no streaming/async-sequence vocabulary — degrades to the
+  // same `array`-of-element shape used elsewhere for a materialized sequence,
+  // carrying `x-stream: true` (vendor-extension-style key, same convention as
+  // `x-class-name`/`x-function`) so tooling that cares can still tell a
+  // stream apart from an ordinary array.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return { type: "array", items: toJsonSchema(s.element), "x-stream": true }
+  },
   // JSON Schema 2019-09 §9.2.1.2 defines no `discriminator` keyword itself,
   // but the OpenAPI-originated `discriminator: { propertyName }` shape is a
   // widely-recognized extension (carried by `meta.discriminator`, an open
@@ -166,6 +175,7 @@ const complexKinds = new Set([
   "object",
   "instance",
   "array",
+  "stream",
   "tuple",
   "map",
   "union",

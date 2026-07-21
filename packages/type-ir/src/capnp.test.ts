@@ -354,3 +354,9 @@ describe("interface -> Cap'n Proto interface (the key use case)", () => {
     expect(output).toContain("deposit @0 (amount :Float64) -> ();")
   })
 })
+
+describe("stream", () => {
+  test("degrades to the same List(T) encoding as array (no field-level streaming type)", () => {
+    expect(toCapnpType(t(types.stream(t(types.string))))).toBe("List(Text)")
+  })
+})

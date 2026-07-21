@@ -102,6 +102,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return `R.Dictionary(${toRuntypes(s.value)}, ${toRuntypes(s.key)})`
   },
+  // runtypes validates materialized values, not an ongoing async sequence —
+  // degrades to `R.Array()` of the element type, same fallback the other
+  // data-only projectors use for `stream`.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `R.Array(${toRuntypes(s.element)})`
+  },
   union: (shape) => {
     const s = shape as TypeShape & { kind: "union" }
     return `R.Union(${s.variants.map(toRuntypes).join(", ")})`

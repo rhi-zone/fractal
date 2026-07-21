@@ -106,6 +106,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "array" }
     return `[${toFlatBuffers(s.element)}]`
   },
+  // FlatBuffers's schema language has no streaming construct (§ "Tables" —
+  // it's a serialization format for materialized buffers, not a wire
+  // protocol with its own RPC streaming semantics like protobuf/gRPC) —
+  // degrades to the same `[T]` vector encoding `array` uses above.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `[${toFlatBuffers(s.element)}]`
+  },
   // No tuple construct (§ "Tables"); tuples lower to a table with positional
   // e0/e1/... fields — `buildTable`/`buildTupleTable` special-case tuple fields
   // to hoist a named sibling table. Standalone reference falls back to

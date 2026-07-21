@@ -203,4 +203,24 @@ describe("TypeRef construction", () => {
     })
     expect(handler).toBeUndefined()
   })
+
+  test("builds a stream of an element type", () => {
+    const ref = t(types.stream(t(types.string)))
+    expect(ref.shape).toEqual({
+      kind: "stream",
+      element: { shape: { kind: "string" }, meta: {} },
+    })
+  })
+
+  test("stream is a root kind with no ancestors (not a subtype of array)", () => {
+    expect(ancestors("stream")).toEqual([])
+  })
+
+  test("resolve does NOT fall back from stream to an array handler (async sequence, not a materialized collection)", () => {
+    const ref = t(types.stream(t(types.string)))
+    const handler = resolve(ref.shape.kind, {
+      array: (shape: { kind: string; element: unknown }) => shape.element,
+    })
+    expect(handler).toBeUndefined()
+  })
 })

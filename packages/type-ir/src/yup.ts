@@ -118,6 +118,13 @@ const handlers: Record<string, Converter> = {
     void s
     return "yup.object() /* lossy: Yup has no native record/map type; key/value types not preserved */"
   },
+  // Yup validates materialized values, not an ongoing async sequence —
+  // degrades to `yup.array().of()` of the element type, same fallback the
+  // other data-only projectors use for `stream`.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `yup.array().of(${toYup(s.element)})`
+  },
   union: (shape) => {
     const s = shape as TypeShape & { kind: "union" }
     if (s.variants.every((v) => v.shape.kind === "literal")) {

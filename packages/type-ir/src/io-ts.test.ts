@@ -310,3 +310,10 @@ describe("function", () => {
     expect(toIoTs(ref)).toBe("t.unknown /* function */")
   })
 })
+
+describe("stream", () => {
+  test("degrades to t.array(), noted", () => {
+    const ref = t(types.stream(t(types.string)))
+    expect(toIoTs(ref)).toBe("t.array(t.string) /* stream */")
+  })
+})

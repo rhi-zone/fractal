@@ -355,3 +355,9 @@ describe("unrecognized metadata (open metadata bag)", () => {
     expect(toFlatBuffers(t(types.string, { brand: "LocationId" }))).toBe("string")
   })
 })
+
+describe("stream", () => {
+  test("degrades to the same vector encoding as array (no streaming construct)", () => {
+    expect(toFlatBuffers(t(types.stream(t(types.string))))).toBe("[string]")
+  })
+})

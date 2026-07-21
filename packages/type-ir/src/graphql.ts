@@ -82,6 +82,17 @@ const handlers: Record<string, Converter> = {
   tuple: leaf("[JSON]"),
   // GraphQL has no map/dictionary construct.
   map: leaf("JSON"),
+  // GraphQL subscriptions (§ "Subscription") resolve to individual yielded
+  // values, not a wrapper type — a `Subscription` field's type IS the
+  // element type, unlike this projector's `array` handler (which wraps in
+  // `[...]`). Uses `baseType` (not `toGraphQL`) so the element's own `!`
+  // suffix isn't computed twice — the stream ref's own meta (not the
+  // element's) is what `toGraphQL` applies nullability from, same as every
+  // other handler here returning a bare base type.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return baseType(s.element)
+  },
   // GraphQL unions are always named (§ "Unions") — an inline reference needs
   // `meta.unionName` (this projector's naming convention, parallel to
   // `enumName`/`typeName` above); without one there's no name to reference,
@@ -115,9 +126,13 @@ const handlers: Record<string, Converter> = {
  * `meta.nullable` (this codebase's conventions for "may be absent") suppress
  * the `!` that otherwise marks a type as non-null.
  */
-export function toGraphQL(ref: TypeRef): string {
+function baseType(ref: TypeRef): string {
   const converter = resolve(ref.shape.kind, handlers)
-  const base = converter === undefined ? "JSON" : converter(ref.shape, ref.meta)
+  return converter === undefined ? "JSON" : converter(ref.shape, ref.meta)
+}
+
+export function toGraphQL(ref: TypeRef): string {
+  const base = baseType(ref)
   return isNullable(ref.meta) ? base : `${base}!`
 }
 

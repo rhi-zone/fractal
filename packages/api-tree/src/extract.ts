@@ -561,6 +561,32 @@ export function typeRefFromType(
       if (inner) return typeRefFromType(inner, checker, loc, nextSeen)
     }
 
+    // AsyncIterable<T>/AsyncGenerator<T, TReturn, TNext>/AsyncIterableIterator<T>
+    // (the return type of an `async function*`) all describe an
+    // asynchronously-produced sequence of `T` — lower to `types.stream(T)`,
+    // checked before the general object-type extraction below (same
+    // early-unwrap treatment as `Promise<T>` above, so `Promise<AsyncIterable<T>>`
+    // resolves correctly too: the Promise unwrap at the call site — either
+    // this branch on a re-entrant field-position call, or
+    // `typeRefFromReturnType`'s own Promise-stripping — runs first, then this
+    // branch catches the AsyncIterable underneath). Only the first type
+    // argument (the yielded type) is captured; `AsyncGenerator`'s
+    // `TReturn`/`TNext` have no IR slot, same as `Promise<T>`'s handling above
+    // only keeping the resolved value type.
+    if (
+      type.symbol &&
+      (type.symbol.name === "AsyncIterable" ||
+        type.symbol.name === "AsyncGenerator" ||
+        type.symbol.name === "AsyncIterableIterator")
+    ) {
+      const [elem] = checker.getTypeArguments(type as ts.TypeReference)
+      return t(
+        types.stream(
+          elem ? typeRefFromType(elem, checker, loc, nextSeen) : puntRef("unknown stream element"),
+        ),
+      )
+    }
+
     const properties = checker.getPropertiesOfType(type)
 
     // Pure index-signature types (Record<K,V>, `{ [key: string]: V }`) have no

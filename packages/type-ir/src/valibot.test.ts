@@ -310,3 +310,10 @@ describe("function", () => {
     expect(toValibot(ref)).toBe("v.unknown()")
   })
 })
+
+describe("stream", () => {
+  test("degrades to v.array() of the element type", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toValibot(ref)).toBe("v.array(v.pipe(v.number(), v.integer()))")
+  })
+})

@@ -533,3 +533,9 @@ describe("interface", () => {
     expect(toJsDocType(ref)).toBe("Object.<string, function()>")
   })
 })
+
+describe("stream", () => {
+  test("emits AsyncIterable.<T>", () => {
+    expect(toJsDocType(t(types.stream(t(types.string))))).toBe("AsyncIterable.<string>")
+  })
+})

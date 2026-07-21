@@ -101,6 +101,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "map" }
     return `s.record(s.string(), ${toSuperstruct(s.value)})`
   },
+  // Superstruct validates materialized values, not an ongoing async
+  // sequence — degrades to `s.array()` of the element type, same fallback
+  // the other data-only projectors use for `stream`.
+  stream: (shape) => {
+    const s = shape as TypeShape & { kind: "stream" }
+    return `s.array(${toSuperstruct(s.element)})`
+  },
   union: (shape) => {
     const s = shape as TypeShape & { kind: "union" }
     return `s.union([${s.variants.map(toSuperstruct).join(", ")}])`

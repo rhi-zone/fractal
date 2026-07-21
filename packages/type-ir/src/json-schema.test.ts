@@ -356,3 +356,10 @@ describe("unrecognized metadata (open metadata bag)", () => {
     })
   })
 })
+
+describe("stream", () => {
+  test("degrades to an array carrying x-stream: true (no native streaming vocabulary)", () => {
+    const ref = t(types.stream(t(types.integer)))
+    expect(toJsonSchema(ref)).toEqual({ type: "array", items: { type: "integer" }, "x-stream": true })
+  })
+})
