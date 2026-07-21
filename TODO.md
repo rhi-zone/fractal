@@ -4,34 +4,31 @@
 
 > *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
 
-**All previously-tracked production blockers are now closed** (verified against
-the commit history below): HTTP streaming, MCP progress notifications, HTTP
-non-JSON content types (both request and response sides), caller-context
-assembly, and the middleware/layers redesign are all DONE. See the completed
-sections below for what landed and where.
+**Design backlog is now fully cleared**: GraphQL API projector, extract
+improvements (overloads/generics/async-generator streams), and MCP sampling
+support are all DONE — see the completed sections below for what landed and
+where.
 
-**New open threads from this session (2026-07-20/21):**
-- **Structured error types are projector-level config, not a tree-level declaration** — `ErrorEncoder<E,R>` (`packages/api-tree/src/index.ts`) and each projector's `httpErrors`/`cliErrors`/`mcpErrors` combinators let a handler's `Result.err()` values get mapped to transport responses, but this is all consumer-supplied config passed to the projector at wire-up time. There is still no way to *declare* an operation's possible error kinds in the tree/meta itself — the tree stays silent about what errors an operation can produce, same gap the pre-existing "Structured error types" backlog item named, just narrowed now that the encoder mechanism exists.
-- **Stores typing via declaration merging could go further** — `StoreRegistry` (landed 2026-07-19, commit f005c05) makes accessing an undeclared *store name* a compile error, but doesn't type individual *values* within a store — a store's contents are whatever the declaring package's augmentation says, with no per-key value-shape enforcement beyond that. Worth a follow-up pass if store misuse ever shows up in practice.
-- **Opt-in detection config for Result/streaming defaults to on** — `detection: { result?, streaming? }` (commit c1ef32b) lets a projector turn off automatic `Result`-unwrapping or `AsyncIterable`-streaming, but both default to `true` for backwards compatibility. Worth reconsidering whether on-by-default is the right long-term default or just the safe migration default.
-- **JSON-shape inference (`fromJson`/`fromJsonCorpus`) — landed and merged, not an open thread requiring a decision.** Single-value and corpus-level inferrers, integer-width narrowing, property-based fuzz harnesses, adversarial tests for enum-detection heuristics, and a prior-art survey (`docs/design/prior-art/json-shape-inference.md`, surveying quicktype's Markov-chain map/class detection among others) all landed this session on `master` (commits 97d8f5b through e292c9d). Known limitations (clustering, union splitting, K=1 confidence scaling) are parked and documented in the low-priority thread below — there is no separate unmerged branch or pending merge decision.
+**New open threads from this session (2026-07-21):**
+- **GraphQL resolver wrapper overhead** — measured ~0.28µs/call vs ~0.055µs for a raw graphql-js resolver (~5x, ~0.22µs absolute), dominated by `assemble()` and Result-shape detection. <1% of query latency for single-field queries; worth profiling if deep queries with hundreds of resolved fields become a real workload.
+- **`compile.ts` AOT validator codegen has no `stream` case** — runtime check/errors/parse for the `AsyncIterable`/stream TypeRef kind is unhandled; a distinct feature needing its own design pass.
+- **`derive.ts`'s `deepPartial`/`deepRequired` don't recurse through `stream` kind** — only object/array are recursed into today.
+- **`tags.ts` `TAG_STREAMING` is still manual-meta-only** — now derivable from a handler's return type via the `stream` TypeRef kind, but the automatic derivation isn't wired up yet.
+- **GraphQL codegen client exists; MCP/CLI typed codegen doesn't** — whether that gap is worth closing depends on usage patterns.
+- **Protobuf got real `stream` RPC support; FlatBuffers/Cap'n Proto didn't** — those two binary-format projectors degrade `stream` to their vector/list constructs since they have no native streaming concept.
+- **MCP sampling is wired for tool handlers only** — resource and prompt handlers also receive `stores.caller.createMessage`, but it's unclear if that's useful; the MCP spec doesn't define sampling use cases for resource/prompt handlers.
+- **GitHub repo is live** (`rhi-zone/fractal`, public) — no CI/CD configured yet.
 
 **Open items (quality & design depth, not blockers):**
-- **Root tsconfig investigation** — workspace root `tsconfig.json` still needs a full audit for strictness/consistency across packages. (A narrower, related fix landed this session — commit 2411e3a corrected stale `../core` path mappings to `../api-tree` in three projector tsconfigs — but that was a specific bug fix, not the broader audit.)
-
-**From design backlog (now fully complete):**
-- ~~**Extract improvements**~~ — DONE (2026-07-21)
-  - Overloaded functions: extracted as intersection of call signatures; implementation signature confirmed excluded by TS compiler API
-  - Generics: type parameters extract their constraint bounds (T extends X → X's shape); unconstrained → unknown
-  - Async generators: new `stream` TypeRef kind; AsyncIterable/AsyncGenerator/AsyncIterableIterator detection in extract; all 20+ type-ir projectors updated
-- ~~**MCP sampling support**~~ — DONE (2026-07-21)
-  - `createMessage` exposed to tool handlers via stores.caller
-  - Opt-in via `CreateMcpServerOptions.sampling`
-  - Sampling is a client capability in the MCP spec, not server — documented
-  - Re-exports SDK types (`CreateMessageRequestParams`, `CreateMessageResult`, `SamplingMessage`) so consumers don't need direct SDK import
+- **Root tsconfig investigation** — workspace root `tsconfig.json` still needs a full audit for strictness/consistency across packages. (A narrower, related fix landed 2026-07-21 — commit 2411e3a corrected stale `../core` path mappings to `../api-tree` in three projector tsconfigs — but that was a specific bug fix, not the broader audit.)
+- **Structured error types are projector-level config, not a tree-level declaration** — `ErrorEncoder<E,R>` (`packages/api-tree/src/index.ts`) and each projector's `httpErrors`/`cliErrors`/`mcpErrors` combinators let a handler's `Result.err()` values get mapped to transport responses, but this is all consumer-supplied config passed to the projector at wire-up time. There is still no way to *declare* an operation's possible error kinds in the tree/meta itself.
+- **Stores typing via declaration merging could go further** — `StoreRegistry` (commit f005c05) makes accessing an undeclared *store name* a compile error, but doesn't type individual *values* within a store. Worth a follow-up pass if store misuse ever shows up in practice.
+- **Opt-in detection config for Result/streaming defaults to on** — `detection: { result?, streaming? }` (commit c1ef32b) lets a projector turn off automatic `Result`-unwrapping or `AsyncIterable`-streaming, but both default to `true` for backwards compatibility. Worth reconsidering whether on-by-default is the right long-term default or just the safe migration default.
+- **JSON-shape inference (`fromJson`/`fromJsonCorpus`)** — landed and merged (commits 97d8f5b through e292c9d), not an open decision. Known limitations (clustering, union splitting, K=1 confidence scaling) are parked in the low-priority thread below.
 
 **Open threads:**
 - **Input pipeline wiring** (CLI/MCP) — `api-tree/src/input.ts` has core `assemble()`, but CLI and MCP still have own implementations. CLI needs stores (env, config, stdin); MCP needs (argument, uri-variable, session context). _Note: low priority — works as-is; consolidation is a quality improvement, not a blocker._
+- **MCP Tier 2** — logging (`notifications/message` + log-level negotiation) still not implemented.
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 - **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
 - **Coercion placement specifics** — currently handled in `parse()` (transform+validate single pass). Broader story for store-level coercion and pre-input coercion TBD.
