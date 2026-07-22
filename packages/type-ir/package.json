@@ -23,6 +23,10 @@
       "types": "./src/from-standard-schema.ts",
       "import": "./src/from-standard-schema.ts"
     },
+    "./standard-schema": {
+      "types": "./src/standard-schema.ts",
+      "import": "./src/standard-schema.ts"
+    },
     "./from-openapi": {
       "types": "./src/from-openapi.ts",
       "import": "./src/from-openapi.ts"
