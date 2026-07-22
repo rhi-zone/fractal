@@ -7,9 +7,11 @@ representation (type-ir) that ingests type and schema information from
 across the software ecosystem — programming language source, schema
 languages, IDLs, wire formats, and runtime validation libraries — and
 projects it back out to any of them. Where a tool like quicktype turns
-sample data into types for a handful of target languages, and a tool like
-Terraform's providers model infrastructure state, fractal's job is
-narrower and deeper: it is the hub through which type information moves
+sample data into types for a handful of target languages, 1Password's
+typeshare shares Rust types out to a smaller set of client languages from
+a Rust-first entry point, and a tool like Terraform's providers model
+infrastructure state, fractal's job is narrower and deeper: it is the hub
+through which type information moves
 *between* representations that were never designed to talk to each other
 — a Zod schema becomes a Rust struct, an OpenAPI document becomes a SQL
 table, a Protobuf message becomes a Pydantic model — without every pair of
@@ -159,16 +161,18 @@ Acceptance criteria for green:
 
 **Status: NOT GREEN**
 
-What exists (`packages/type-ir/src/*.ts`):
-- Zod (`zod.ts`)
-- Valibot (`valibot.ts`)
-- io-ts (`io-ts.ts`)
-- ArkType (`arktype.ts`)
-- TypeBox (`typebox.ts`)
-- Superstruct (`superstruct.ts`)
-- Runtypes (`runtypes.ts`)
-- Yup (`yup.ts`)
-- Effect Schema (`effect-schema.ts`)
+What exists (`packages/type-ir/src/*.ts`, following the `{language}-{library}`
+naming convention — see "Projector naming convention" note in the
+General-Purpose Languages slice below):
+- Zod (`typescript-zod.ts`)
+- Valibot (`typescript-valibot.ts`)
+- io-ts (`typescript-io-ts.ts`)
+- ArkType (`typescript-arktype.ts`)
+- TypeBox (`typescript-typebox.ts`)
+- Superstruct (`typescript-superstruct.ts`)
+- Runtypes (`typescript-runtypes.ts`)
+- Yup (`typescript-yup.ts`)
+- Effect Schema (`typescript-effect-schema.ts`)
 
 All nine libraries named in the 1.0 scope are implemented, each with a
 matching test file.
@@ -188,41 +192,61 @@ Acceptance criteria for green:
 
 **Status: NOT GREEN**
 
-These are actively in flight — status varies module by module. Current
-state, audited directly against `packages/type-ir/src/`:
+All sixteen general-purpose target languages now have an implemented,
+tested projector. Current state, audited directly against
+`packages/type-ir/src/` and each package's `package.json` `exports` map:
 
-| Language | Source module | Tests | Published export |
-|---|---|---|---|
-| TypeScript | `typescript.ts` | yes | yes |
-| Python | `python.ts` | yes | yes |
-| Go | `go.ts` | yes | yes |
-| Rust | `rust.ts` | yes | yes |
-| Java | `java.ts` | yes | yes |
-| Swift | `swift.ts` | yes | yes |
-| Kotlin | `kotlin.ts` | yes | yes |
-| PHP | `php.ts` | yes | yes |
-| Flow | `flow.ts` | yes | yes |
-| Ruby | `ruby.ts` | no | yes |
-| C# | `csharp.ts` | no | no |
-| C++ | `cpp.ts` | no | no |
-| Crystal | `crystal.ts` | no | no |
-| Dart | — | — | — |
-| Elm | — | — | — |
-| Haskell | — | — | — |
-| Objective-C | — | — | — |
+| Language | Source module | Tests | Test count | Published export |
+|---|---|---|---|---|
+| TypeScript | `typescript-native.ts` | yes | — | yes |
+| Python | `python-dataclass.ts` | yes | 28 | yes |
+| Go | `go-encoding-json.ts` | yes | 27 | yes |
+| Rust | `rust-serde.ts` | yes | 27 | yes |
+| Java | `java-jackson.ts` | yes | 35 | **no** |
+| C# | `csharp-systemtextjson.ts` | yes | 19 | yes |
+| Swift | `swift-codable.ts` | yes | 24 | yes |
+| Kotlin | `kotlin-kotlinx.ts` | yes | 29 | yes |
+| Dart | `dart-json-serializable.ts` | yes | 21 | yes |
+| Elm | `elm-json.ts` | yes | 24 | yes |
+| Haskell | `haskell-aeson.ts` | yes | 41 | yes |
+| Ruby | `ruby-sorbet.ts` | yes | 75 | yes |
+| C++ | `cpp-nlohmann.ts` | yes | 27 | yes |
+| PHP | `php-native.ts` | yes | 31 | yes |
+| Crystal | `crystal-json-serializable.ts` | yes | 43 | yes |
+| Objective-C | `objc-foundation.ts` | yes | 26 | yes |
+| Flow | `flow-native.ts` | yes | 36 | yes |
 
-Reading this table: "no" under Tests/Published export means the module
-exists on disk but hasn't cleared the bar this project uses elsewhere
-(a test file, and a subpath entry in `package.json`'s `exports` map) — a
-deliberate in-progress state, not an oversight. A dash means no module
-exists yet.
+Test counts are `it(`/`test(` occurrences in each module's `.test.ts`
+file, as a rough size signal, not a quality measure. Every module here
+has cleared the bar this project uses elsewhere (a test file, and a
+subpath entry in `package.json`'s `exports` map) with one exception:
+**Java has a full module and 35 tests but no `exports` subpath entry
+at all** — not even under an alias — so it isn't currently importable
+by consumers as `@rhi-zone/fractal-type-ir/java` or any equivalent path.
+
+Note — projector naming convention: modules now follow a
+`{language}-{library}.ts` naming scheme (e.g. `typescript-zod.ts`,
+`rust-serde.ts`, `python-dataclass.ts`) instead of a bare language name,
+anticipating the "Per-Language Serialization Library Variants" slice
+below where a single language will have more than one projector. Each
+renamed module keeps a backward-compatible `exports` alias at the old
+bare-language path (e.g. `./python` and `./python-dataclass` both
+resolve to `python-dataclass.ts`) — confirmed for Python, Go, Rust,
+Swift, Kotlin, Dart, Elm, Haskell, Ruby, C++, PHP, Crystal, Objective-C,
+and Flow. Java has neither the bare alias nor the qualified path
+exported (see above).
 
 Acceptance criteria for green:
 - Every language in the 1.0 scope list has a source module, a test
-  suite, and a published export subpath.
-- Ruby, C#, C++, and Crystal specifically need test coverage added
-  before they're export-ready.
-- Dart, Elm, Haskell, and Objective-C need to be started.
+  suite, and a published export subpath — sixteen of sixteen now have
+  the first two; Java is the one outstanding gap on the third.
+- Java's `exports` entry (bare `./java` and/or `./java-jackson`) needs
+  to be added.
+- The bare-language `exports` aliases audited for completeness once the
+  serialization-library-variants slice lands, since a language with
+  multiple libraries can no longer have its bare name mean only one of
+  them by default without an explicit decision on which library "wins"
+  the unqualified path.
 - A decision on whether all sixteen are truly 1.0-blocking, or whether
   a subset ships in 1.0 with the rest following after, is open and
   belongs to the project owner.
@@ -233,22 +257,86 @@ Acceptance criteria for green:
 
 **Status: NOT GREEN**
 
-Planned, not yet started. No source modules exist for this slice as of
-this audit.
-
-Scope under consideration:
-- Python — Pydantic
-- Rust — serde (with `validator` for refinements)
-- Java — Jackson (serialization) / Jakarta Bean Validation (constraints)
-- C# — `System.Text.Json` (serialization) / FluentValidation (constraints)
-- Swift — `Codable`
-- Kotlin — kotlinx.serialization
+Superseded in substance by the "Per-Language Serialization Library
+Variants" slice directly below: every language named in the original
+scope list here (Python/Pydantic-adjacent, Rust/serde, Java/Jackson,
+C#/`System.Text.Json`, Swift/`Codable`, Kotlin/kotlinx.serialization) now
+has its first serialization projector implemented as part of the
+General-Purpose Languages slice — see that table's "Source module"
+column (`python-dataclass.ts`, `rust-serde.ts`, `java-jackson.ts`,
+`csharp-systemtextjson.ts`, `swift-codable.ts`, `kotlin-kotlinx.ts`).
+This section is kept for history; treat the slice below as the current
+source of truth for what remains open (additional libraries per
+language, constraint-validation libraries like Jakarta Bean Validation
+or FluentValidation layered on top of the serialization projector, etc).
 
 Acceptance criteria for green:
-- At minimum, one validation/serialization library per general-purpose
-  language that has reached export-ready status in the previous slice.
-- Each follows the same "verify against the real runtime" bar as the
-  TypeScript validation library slice.
+- Folded into the acceptance criteria of "Per-Language Serialization
+  Library Variants" below.
+
+---
+
+### Per-Language Serialization Library Variants
+
+**Status: NOT GREEN**
+
+The expansion beyond quicktype-style parity (one library per language):
+for each general-purpose target language, support multiple serialization
+ecosystems rather than a single fixed one, since real codebases in every
+one of these languages routinely standardize on a library other than the
+one fractal happens to have implemented first.
+
+What exists today (one projector per language, named for its library
+under the `{language}-{library}` convention):
+- Python — `dataclasses` (`python-dataclass.ts`)
+- Rust — `serde` (`rust-serde.ts`) — serde is the dominant/near-universal
+  choice in Rust, so this alone may already satisfy the language's
+  practical need
+- Java — Jackson (`java-jackson.ts`)
+- C# — `System.Text.Json` (`csharp-systemtextjson.ts`)
+- Swift — `Codable` (`swift-codable.ts`) — also the dominant/native
+  choice in Swift
+- Kotlin — kotlinx.serialization (`kotlin-kotlinx.ts`)
+- Go — `encoding/json` (`go-encoding-json.ts`)
+- Ruby — Sorbet (`ruby-sorbet.ts`); RBS is scoped as a future variant
+  below but has **not** been started — no `ruby-rbs.ts` module exists
+  as of this audit, despite being an earlier candidate for "already
+  covered"
+- Dart — `json_serializable` (`dart-json-serializable.ts`)
+- PHP — native (`php-native.ts`)
+- C++ — nlohmann/json (`cpp-nlohmann.ts`)
+- Crystal, Objective-C, Haskell, Elm, Flow — each has exactly one
+  projector today (`crystal-json-serializable.ts`, `objc-foundation.ts`,
+  `haskell-aeson.ts`, `elm-json.ts`, `flow-native.ts`); no additional
+  variants scoped yet for these five
+
+What's planned / open — additional variants per language, none started:
+- C++ — RapidJSON, simdjson, Boost.JSON, glaze
+- Java — Gson, Moshi, Jakarta JSON-B
+- C# — Newtonsoft.Json, ServiceStack.Text
+- Python — Pydantic, attrs/cattrs, msgspec
+- Kotlin — Jackson, Moshi, Gson
+- Swift — SwiftyJSON, ObjectMapper
+- Go — easyjson, jsoniter, sonic
+- Ruby — RBS, dry-types
+- Dart — freezed, built_value
+- PHP — Symfony Serializer, JMS Serializer
+
+Acceptance criteria for green:
+- At least one additional serialization-library variant implemented and
+  tested for each language listed above, beyond the existing default.
+- Each new variant follows the same "verify against the real runtime"
+  bar as the TypeScript validation library slice, not just structural
+  assertions on generated code.
+- A decision on whether the bare `{language}` `exports` alias should
+  keep pointing at the original/default library once a second variant
+  exists, or whether the bare alias should be deprecated in favor of
+  always requiring the qualified `{language}-{library}` path — currently
+  open, belongs to the project owner (see the note on this in the
+  General-Purpose Languages slice above).
+- Scope call on which languages' single existing library (Rust/serde,
+  Swift/Codable) are exempted as "already the de facto standard" versus
+  which need real breadth.
 
 ---
 
@@ -260,6 +348,10 @@ Acceptance criteria for green:
 interface (`~standard.validate`, and the JSON-Schema-emitting
 `~standard.jsonSchema` extension) that Zod, Valibot, ArkType, and others
 implement natively.
+
+All three pieces of this integration — ingestion, emission (with
+runtime validator), and the fractal `http.validate()` boundary directive
+— are now implemented.
 
 What exists:
 - Ingestion — `from-standard-schema.ts`: any compliant validator →
@@ -288,24 +380,36 @@ Acceptance criteria for green:
 
 **Status: NOT GREEN — parked, not blocked**
 
+The intended shape of this slice is broader than its current name: a
+library for state-of-the-art inference of type structure from limited
+sample data, across structured data formats generally — not only JSON.
+YAML, KDL, and other structured formats are in scope for the same
+inference approach; only the JSON path has been started.
+
 What exists (`packages/type-ir/src/from-json.ts`,
 `from-json-corpus.ts`): single-value inference (`fromJson`) and
 corpus-level inference (`fromJsonCorpus`, split into an evidence-collection
 phase and a configurable resolution phase), full integer-width kind
 narrowing, property-based (fast-check) fuzz tests, and adversarial tests
-targeting enum-detection heuristics.
+targeting enum-detection heuristics. This is JSON-only; no YAML, KDL, or
+other format has an inference path yet.
 
 This work is intentionally parked rather than actively driven toward
 1.0 — it surfaces a set of difficult design decisions (around clustering,
 union splitting, and confidence scaling at low sample counts) that need
 a dedicated design pass before further building on top of the current
-heuristics. This roadmap does not attempt to enumerate those decisions
-here; see `TODO.md`'s "Low Priority" section and the module's own tests
-for the specifics.
+heuristics, and needs substantial further work even within JSON alone
+before the broader multi-format library shape is worth starting. This
+roadmap does not attempt to enumerate those decisions here; see
+`TODO.md`'s "Low Priority" section and the module's own tests for the
+specifics.
 
 Acceptance criteria for green:
 - The parked design decisions revisited and settled (or explicitly
   scoped out of 1.0) by the project owner.
+- A decision on whether multi-format inference (YAML, KDL, etc.) is
+  1.0-scope, a post-1.0 direction, or a separate package entirely —
+  currently open, belongs to the project owner.
 
 ---
 
@@ -375,11 +479,37 @@ What's planned / open:
   test suite, not just structurally asserted. The current flake
   (`flake.nix`) provides only `nodejs_20` and `bun`.
 
+**Battle testing** — every projector and ingester currently has unit-test
+coverage, but none has been exercised against real-world corpora at
+scale. This is a distinct, larger category of open work, not yet
+started:
+- Round-trip testing against real schemas: ingest → project → ingest,
+  verifying the second ingest is equivalent to the first, rather than
+  the current practice of hand-written fixtures per module.
+- Real-world schema corpora as test input — OpenAPI specs from
+  APIs.guru, JSON Schemas from SchemaStore, `.proto` files from
+  googleapis, and equivalents for the other ingested formats (SQL DDL,
+  CQL, Cap'n Proto, FlatBuffers, GraphQL SDL).
+- Fuzz testing specifically targeted at the text/binary parsers
+  (protobuf, Cap'n Proto, FlatBuffers, SQL, CQL) as a category distinct
+  from the property-based fuzzing already in place for JSON inference —
+  these are hand-written parsers, not heuristic inference, and need
+  malformed-input robustness testing.
+- Cross-language compilation testing: generated Go actually compiles
+  with `go build`, generated Rust with `cargo build`, etc. — this is the
+  concrete, testable form of "adding target languages to the Nix flake"
+  above; the flake work is the prerequisite, this is the test suite that
+  uses it.
+
 Acceptance criteria for green:
 - CI pipeline running typecheck + test on every push/PR.
 - At least the general-purpose-language emit targets have flake-provided
   toolchains and a compile-check step exercising generated output.
 - Cross-format round-trip tests exist as a named, discoverable category.
+- Battle-testing suite in place: real-world corpora wired into round-trip
+  tests, parser fuzz tests running, and cross-language compilation
+  checks passing for every general-purpose-language target with a
+  flake-provided toolchain.
 
 ---
 
@@ -397,8 +527,14 @@ What exists:
   `fractal-api-tree` CLI (`build`/`watch`/`stub`/`check`).
 - HTTP projector (`packages/http-api-projector`) — verb-helper bundles
   (`http.get/post/put/patch/delete/head/options`), `http.moveTo`,
-  `http.source()` (per-param store overrides), `http.validate()`
-  (Standard Schema boundary validation — both confirmed present in
+  `http.source()` (per-param store overrides — a type-safe `sourceMap`
+  built via declaration-merging into a store registry, so a param's
+  origin — query, body, path, header — is checked at the type level
+  rather than a bare string union), `http.validate()` (Standard Schema
+  boundary validation: attaches any Standard-Schema-compliant validator
+  to a route, `runRoute` runs it against the decoded input bag before
+  the handler executes and short-circuits to a 422 with the validator's
+  own `issues` on failure — both directives confirmed present in
   `verbs.ts`), `createFetch`, multiple composable router strategies
   (`radixRouter`, `compiledCharRouter`, `mapCharRouter`), OpenAPI 3.1
   projection (`toOpenApi`, auto-served at `/openapi.json`), a runtime
@@ -466,6 +602,24 @@ What's planned / open:
   external contributor onboarding.
 - Root `tsconfig.json` strictness/consistency audit across packages —
   flagged as still open in `TODO.md`.
+- **Codegen quality — Arborium evaluation.** Every projector currently
+  builds output via string concatenation/template literals rather than
+  an AST. `@arborium/javascript` (by Amos Wenger / fasterthanlime) has
+  been raised as a candidate for generating code through an actual AST
+  instead, to improve correctness of generated output — indentation,
+  string/identifier escaping, and comment placement are all currently
+  the projector author's manual responsibility per-language. Not yet
+  evaluated: whether Arborium's model (JavaScript-shaped, per its
+  package name) generalizes usefully across fractal's sixteen
+  general-purpose-language targets, or whether it's JS/TS-projector-only
+  in scope. No spike has been done.
+- **Competitive landscape.** quicktype (sample-data-driven, broad
+  language coverage, narrower per-language depth) and 1Password's
+  typeshare (Rust-first entry point, narrower target-language set) are
+  both noted as comparison points with overlapping output targets to
+  fractal's, despite different entry points (format-agnostic ingestion
+  for fractal vs. a single source language for typeshare). No structured
+  comparison has been written up yet.
 
 Acceptance criteria for green:
 - Every package publishable and published to npm at a coordinated 1.0
