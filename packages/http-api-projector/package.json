@@ -94,7 +94,8 @@
   },
   "files": ["src"],
   "dependencies": {
-    "@rhi-zone/fractal-api-tree": "workspace:*"
+    "@rhi-zone/fractal-api-tree": "workspace:*",
+    "@standard-schema/spec": "^1.1.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

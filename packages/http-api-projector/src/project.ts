@@ -30,7 +30,7 @@
 import { makeRouterFromRoute, naiveTransform } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { SourceMap } from "./decode.ts"
+import type { SourceMap, StandardSchemaV1 } from "./decode.ts"
 
 export { verbFromTags } from "./tags.ts"
 export type { HttpRoute } from "./route.ts"
@@ -47,8 +47,8 @@ export {
   routeCandidatesForUrl,
 } from "./route.ts"
 export type { ResponseOverride } from "./route.ts"
-export type { Store, Stores, ParamSource, SourceMap } from "./decode.ts"
-export { assemble, httpStores, primaryStoreForMethod } from "./decode.ts"
+export type { Store, Stores, ParamSource, SourceMap, StandardSchemaV1, StandardSchemaOutcome } from "./decode.ts"
+export { assemble, httpStores, primaryStoreForMethod, runStandardSchema } from "./decode.ts"
 
 /**
  * Produce the HTTP route tree from an API tree — the naive transform (see
@@ -120,6 +120,16 @@ declare module "@rhi-zone/fractal-api-tree/node" {
  *   win on overlap) — `naiveTransform` (route.ts) reads THAT resolved map
  *   into the matched route's `sources.sourceMap`.
  *
+ * - `{ kind: "validate"; schema }` — a Standard Schema
+ *   (https://standardschema.dev/) validator attached via `http.validate()`
+ *   (verbs.ts). `naiveTransform` (route.ts) reads the LAST such directive
+ *   (later call wins, same convention as every other single-valued
+ *   directive here) into the matched route's `sources.validate`; `runRoute`
+ *   (route.ts) runs it (via `runStandardSchema`, decode.ts) on the assembled
+ *   input, after decode and before the handler. See decode.ts's own module
+ *   doc for how this differs from type-ir's `fromStandardSchema` (shape
+ *   ingestion) and api-tree's `wrapValidators` (AOT-compiled validators).
+ *
  * Interpreted by `verbFromTags` (tags.ts):
  *
  * - `{ kind: "verb", value }` — explicit verb override; wins over tags.
@@ -166,6 +176,7 @@ export type HttpDirective<M extends string = string, P extends string = string> 
       readonly inputLimitParam?: string
     }
   | { readonly kind: "source"; readonly map: SourceMap }
+  | { readonly kind: "validate"; readonly schema: StandardSchemaV1 }
 
 // ============================================================================
 // getHttpMeta — the ONE canonical `meta.http` parser
@@ -198,6 +209,8 @@ export type HttpMeta = {
   readonly directives?: readonly HttpDirective[]
   /** Per-param HTTP store overrides — see `http.source()` in verbs.ts. */
   readonly sourceMap?: SourceMap
+  /** Resolved `{ kind: "validate" }` directive schema — see `http.validate()` in verbs.ts. */
+  readonly validate?: StandardSchemaV1
   /** Resolved `{ kind: "verb" }` directive value. */
   readonly verb?: string
   /** Resolved `{ kind: "segment" }` directive value. */
@@ -230,6 +243,7 @@ export function getHttpMeta(meta: Meta): HttpMeta {
     dispatch?: { kind: "method" | "attr" }
     directives?: readonly HttpDirective[]
     sourceMap?: SourceMap
+    validate?: StandardSchemaV1
     verb?: string
     segment?: string
     legacyPath?: string
@@ -283,6 +297,12 @@ export function getHttpMeta(meta: Meta): HttpMeta {
           // `http.source()` calls resolves to the LATER call's entry, same
           // "later wins per key" convention as every other meta merge.
           out.sourceMap = { ...out.sourceMap, ...d.map }
+          break
+        case "validate":
+          // Last directive wins — same "later wins" convention as verb/
+          // method/moveTo/response above (unlike `source`, which folds
+          // key-by-key since each call only carries a partial map).
+          out.validate = d.schema
           break
         case "paginated":
           out.paginated = {

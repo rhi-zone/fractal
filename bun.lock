@@ -71,6 +71,7 @@
       "version": "0.1.0-alpha.0",
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
+        "@standard-schema/spec": "^1.1.0",
       },
     },
     "packages/mcp-api-projector": {

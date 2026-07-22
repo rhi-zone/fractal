@@ -23,6 +23,7 @@ import type { Meta } from "@rhi-zone/fractal-api-tree/node"
 import type { ParamSource } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import type { HttpStore } from "./decode.ts"
+import type { StandardSchemaV1 } from "@standard-schema/spec"
 
 // ============================================================================
 // HttpMethods — extensible method union
@@ -309,6 +310,53 @@ export function source(map: SourceMapInput): { readonly http: { readonly directi
 }
 
 // ============================================================================
+// http.validate(schema) — attach a Standard Schema validator to a route
+// ============================================================================
+
+/** A `{ kind: "validate" }` directive carrying a `http.validate()` call's Standard Schema. */
+type ValidateDirective = Extract<HttpDirective, { readonly kind: "validate" }>
+
+/**
+ * `http.validate(schema)` — attaches a Standard Schema
+ * (https://standardschema.dev/) validator to a leaf: any object exposing
+ * `~standard.validate` (Zod, Valibot, ArkType, and other Standard
+ * Schema–compliant libraries all implement this out of the box). Returns a
+ * `{ kind: "validate", schema }` DIRECTIVE (like `moveTo`/`paginated`/
+ * `source` above) — appended to `meta.http.directives` — rather than a plain
+ * merged field, following the same directive-array composition every other
+ * `http.*` helper here uses.
+ *
+ * `naiveTransform` (route.ts) resolves the LAST `validate` directive on a
+ * leaf's meta into that leaf's `sources.validate` (single-valued — later
+ * call wins, same convention `getHttpMeta`, project.ts, already applies to
+ * `verb`/`method`/`moveTo`/`response`). `runRoute` (route.ts) then runs the
+ * schema — via `runStandardSchema`, decode.ts — against the request's
+ * ALREADY-DECODED input bag (after stores → assembled input, before the
+ * handler ever sees it): on success the handler receives the validator's own
+ * (possibly coerced/transformed) output value instead of the raw assembled
+ * bag; on failure the request short-circuits with a 422 response carrying
+ * the validator's own `issues`, and the handler never runs.
+ *
+ * A route with no `http.validate()` call behaves exactly as before —
+ * `sources.validate` is simply absent, and `runRoute` skips the validation
+ * step entirely.
+ *
+ * ```ts
+ * import { z } from "zod"
+ *
+ * op(createBook, http.post, http.validate(z.object({
+ *   title: z.string().min(1),
+ *   year: z.number().int(),
+ * })))
+ * ```
+ */
+export function validate(
+  schema: StandardSchemaV1,
+): { readonly http: { readonly directives: readonly [ValidateDirective] } } {
+  return { http: { directives: [{ kind: "validate", schema } as ValidateDirective] } }
+}
+
+// ============================================================================
 // Exported namespace
 // ============================================================================
 
@@ -347,7 +395,8 @@ export const http = {
   options,
   moveTo,
   source,
+  validate,
 } as const satisfies Record<
   string,
-  VerbBundle | ((path: string) => Meta) | ((map: SourceMapInput) => Meta)
+  VerbBundle | ((path: string) => Meta) | ((map: SourceMapInput) => Meta) | ((schema: StandardSchemaV1) => Meta)
 >

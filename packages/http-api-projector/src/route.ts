@@ -26,21 +26,25 @@
 // pipeline — that abstraction (reqTransforms/inputTransforms/validate/
 // outputTransforms/resTransforms, plus per-route `decode`/`encode`
 // overrides) was removed: nothing in this codebase used those hooks outside
-// of tests exercising the mechanism itself. Validation now happens at the
-// `Node` level, before this file's transforms ever run — see
+// of tests exercising the mechanism itself. AOT-COMPILED validation happens
+// at the `Node` level, before this file's transforms ever run — see
 // `@rhi-zone/fractal-api-tree/build`'s `wrapValidators`, which wraps a
 // leaf's handler directly. What's left here is `runRoute` (below): decode
 // the request via `sources` (still genuinely per-route — each route has its
-// own parameter names and source overrides), call the handler, encode the
-// response. Simple, linear, no loop over stage arrays.
+// own parameter names and source overrides), optionally run a Standard
+// Schema validator declared via `http.validate()` (verbs.ts) against the
+// decoded input, call the handler, encode the response. Simple, linear, no
+// loop over stage arrays — the one added step (Standard Schema validation)
+// is a fixed, single check on `sources.validate`, not a re-introduction of
+// the removed interceptable-array abstraction.
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
 import type { DetectionOptions, ErrorEncoder, Stores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
-import { httpStores, primaryStoreForMethod, assemble, parseRequestBody } from "./decode.ts"
-import type { ParamSource, SourceMap } from "./decode.ts"
+import { httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
+import type { ParamSource, SourceMap, StandardSchemaV1 } from "./decode.ts"
 
 // ============================================================================
 // Sources — declarative per-route decode configuration. Real, protocol-
@@ -55,6 +59,13 @@ export type Sources = {
   readonly paramNames?: readonly string[]
   /** optional reshape after assembly, before the handler sees the input */
   readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>
+  /**
+   * A Standard Schema (https://standardschema.dev/) validator attached via
+   * `http.validate()` (verbs.ts) — run by `runRoute` against the assembled
+   * input, after decode/transform and before the handler. See
+   * `http.validate()`'s own doc comment for the full contract.
+   */
+  readonly validate?: StandardSchemaV1
 }
 
 // ============================================================================
@@ -139,6 +150,22 @@ function sourceMapOf(meta: Meta): SourceMap | undefined {
   return merged
 }
 
+/**
+ * Resolves `meta.http`'s `{ kind: "validate", schema }` directive
+ * (`http.validate()`, verbs.ts) back out of a node/entry's meta — the LAST
+ * such directive wins (single-valued, unlike `sourceMapOf`'s per-key fold
+ * above; a leaf attaching more than one validator is replacing the prior
+ * one, not composing with it — same "later wins" convention `getHttpMeta`
+ * (project.ts) already applies to `verb`/`method`/`moveTo`/`response`).
+ */
+function validateOf(meta: Meta): StandardSchemaV1 | undefined {
+  let schema: StandardSchemaV1 | undefined
+  for (const d of directivesOf(meta)) {
+    if (d.kind === "validate") schema = d.schema
+  }
+  return schema
+}
+
 function withoutDirective(meta: Meta, directive: HttpDirective): Meta {
   const h = meta.http as { directives?: readonly HttpDirective[] } | undefined
   if (h === undefined) return meta
@@ -197,12 +224,20 @@ export type NaiveRoute<N extends Node> =
 
 export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
   const sourceMap = sourceMapOf(node.meta)
+  const validateSchema = validateOf(node.meta)
+  const sources: Sources | undefined =
+    sourceMap !== undefined || validateSchema !== undefined
+      ? {
+          ...(sourceMap !== undefined ? { sourceMap } : {}),
+          ...(validateSchema !== undefined ? { validate: validateSchema } : {}),
+        }
+      : undefined
   const methods = isLeaf(node)
     ? {
         POST: {
           handler: node.handler!,
           meta: node.meta,
-          ...(sourceMap !== undefined ? { sources: { sourceMap } } : {}),
+          ...(sources !== undefined ? { sources } : {}),
         },
       }
     : undefined
@@ -1046,6 +1081,28 @@ export async function runRoute(
   }
 
   try {
+    // Standard Schema validation (`http.validate()`, verbs.ts) — runs on the
+    // freshly-assembled input, after decode/transform and before the
+    // handler ever sees it. A rejection short-circuits with a 422 carrying
+    // the validator's own `issues`; the handler never runs (mirrors how a
+    // `wrapValidators`-wrapped handler's `err(...)` Result short-circuits
+    // below, but resolved HERE — before the handler is even called — since a
+    // Standard Schema validator isn't wired onto the handler itself, only
+    // declared on this route's `sources`). A genuine THROW out of
+    // `~standard.validate` (a broken validator, not an expected rejection)
+    // falls through to this same try's catch block below, same as any other
+    // unexpected handler-path failure.
+    if (sources?.validate !== undefined) {
+      const result = await runStandardSchema(sources.validate, input)
+      if (!result.ok) {
+        return jsonRouteResponse(
+          { error: "validation failed", issues: result.issues },
+          { status: 422 },
+        )
+      }
+      input = result.value
+    }
+
     // Bridge the plain handler `(input) => result` into `F => F`'s base case
     // `(input, stores) => handler(input)` — the handler never sees `stores`,
     // structurally (see HttpHandlerMiddleware's module doc above).

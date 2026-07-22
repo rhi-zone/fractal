@@ -25,6 +25,7 @@ export type { Store, Stores, ParamSource, SourceMap } from "@rhi-zone/fractal-ap
 export { assemble } from "@rhi-zone/fractal-api-tree"
 
 import type { Stores } from "@rhi-zone/fractal-api-tree"
+import type { StandardSchemaV1 } from "@standard-schema/spec"
 
 // Augment the shared StoreRegistry with HTTP's store names, so `Stores`
 // (declaration-merged across all projectors that are loaded) exposes exactly
@@ -227,5 +228,51 @@ export function primaryStoreForMethod(method: string): string {
     default:
       return "body"
   }
+}
+
+// ============================================================================
+// Standard Schema validation — https://standardschema.dev/
+// ============================================================================
+//
+// A route/op can attach any Standard Schema–compliant validator (Zod,
+// Valibot, ArkType, ...) via `http.validate(schema)` (verbs.ts). It runs
+// AFTER decode (stores → assembled input bag, above) and BEFORE the handler:
+// `runRoute` (route.ts) calls `runStandardSchema` on the freshly-assembled
+// input, and either passes the validator's own (possibly transformed) output
+// through to the handler, or short-circuits with a structured 422 carrying
+// the validator's `issues` — see route.ts's `runRoute` for exactly where this
+// slots into the decode → handler → encode pipeline.
+//
+// This is a RUNTIME, per-route concern — distinct from
+// `@rhi-zone/fractal-type-ir`'s `fromStandardSchema` (ingests a Standard
+// Schema's shape into a `TypeRef`, e.g. for OpenAPI/docs generation) and from
+// `@rhi-zone/fractal-api-tree/build`'s `wrapValidators` (wires AOT-COMPILED,
+// codegen-derived validators onto `Node` handlers, shared across HTTP/MCP/CLI
+// dispatch). All three read a schema; only this one calls a Standard
+// Schema's own `~standard.validate` at request time.
+
+export type { StandardSchemaV1 } from "@standard-schema/spec"
+
+/** Outcome of running a Standard Schema validator — mirrors `StandardSchemaV1.Result` but discriminated on `ok` rather than `issues` presence, for a plain if/else at call sites. */
+export type StandardSchemaOutcome<T = unknown> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly issues: readonly StandardSchemaV1.Issue[] }
+
+/**
+ * Run a Standard Schema validator against `value`. `~standard.validate` may
+ * return its `Result` synchronously or as a `Promise` (the spec allows
+ * either) — `await`ing unconditionally handles both without a
+ * `Promise`-vs-plain-value branch, since awaiting a non-Promise value just
+ * resolves to it immediately.
+ */
+export async function runStandardSchema<T = unknown>(
+  schema: StandardSchemaV1<unknown, T>,
+  value: unknown,
+): Promise<StandardSchemaOutcome<T>> {
+  const result = await schema["~standard"].validate(value)
+  if (result.issues !== undefined && result.issues.length > 0) {
+    return { ok: false, issues: result.issues }
+  }
+  return { ok: true, value: (result as { value: T }).value }
 }
 

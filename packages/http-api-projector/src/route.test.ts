@@ -20,6 +20,7 @@ import {
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
 import { http } from "./verbs.ts"
+import type { StandardSchemaV1 } from "@standard-schema/spec"
 
 // ============================================================================
 // naiveTransform — basic tree → HttpRoute conversion
@@ -1063,5 +1064,165 @@ describe("runRoute — handler-level middleware", () => {
     const res = await router(new Request("http://localhost/echo?x=1"))
     expect(res.status).toBe(400)
     expect(await res.json()).toEqual({ error: "rejected by middleware" })
+  })
+})
+
+// ============================================================================
+// http.validate() — Standard Schema (https://standardschema.dev/) validation
+// at the HTTP decode boundary. Runs AFTER defaultDecode assembles the input
+// bag and BEFORE the handler — see decode.ts's `runStandardSchema` and
+// route.ts's `runRoute` (the `sources.validate` branch).
+//
+// Minimal hand-written StandardSchemaV1 mocks throughout, same technique
+// type-ir's from-standard-schema.test.ts uses — no need for a real vendor
+// (Zod/Valibot/...) to exercise the `~standard.validate` contract.
+// ============================================================================
+
+/** A Standard Schema requiring `title` to be a non-empty string; coerces `year` to a number. */
+function bookSchema(): StandardSchemaV1<{ title: unknown; year?: unknown }, { title: string; year?: number }> {
+  return {
+    "~standard": {
+      version: 1,
+      vendor: "test",
+      validate: (value: unknown) => {
+        if (typeof value !== "object" || value === null) {
+          return { issues: [{ message: "expected an object" }] }
+        }
+        const v = value as Record<string, unknown>
+        const issues: StandardSchemaV1.Issue[] = []
+        if (typeof v.title !== "string" || v.title.length === 0) {
+          issues.push({ message: "title must be a non-empty string", path: ["title"] })
+        }
+        if (v.year !== undefined && Number.isNaN(Number(v.year))) {
+          issues.push({ message: "year must be numeric", path: ["year"] })
+        }
+        if (issues.length > 0) return { issues }
+        return {
+          value: {
+            title: v.title as string,
+            ...(v.year !== undefined ? { year: Number(v.year) } : {}),
+          },
+        }
+      },
+    },
+  }
+}
+
+describe("http.validate() — Standard Schema at the decode boundary", () => {
+  it("valid input: handler receives the validator's own (coerced) output value", async () => {
+    let capturedInput: unknown
+    const createBook = (input: unknown) => {
+      capturedInput = input
+      return { ok: true }
+    }
+    const api = op(createBook, http.post, http.validate(bookSchema()))
+    const route = applyMethods(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Dune", year: "1965" }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+    // year coerced string -> number by the validator; the handler never sees
+    // the raw assembled bag once a validator is attached.
+    expect(capturedInput).toEqual({ title: "Dune", year: 1965 })
+  })
+
+  it("invalid input: 422 with the validator's own issues, handler never runs", async () => {
+    let handlerRan = false
+    const createBook = () => {
+      handlerRan = true
+      return { ok: true }
+    }
+    const api = op(createBook, http.post, http.validate(bookSchema()))
+    const route = applyMethods(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "" }),
+      }),
+    )
+    expect(res.status).toBe(422)
+    expect(await res.json()).toEqual({
+      error: "validation failed",
+      issues: [{ message: "title must be a non-empty string", path: ["title"] }],
+    })
+    expect(handlerRan).toBe(false)
+  })
+
+  it("a route with no http.validate() is unaffected — backward compatible", async () => {
+    let capturedInput: unknown
+    const createBook = (input: unknown) => {
+      capturedInput = input
+      return { ok: true }
+    }
+    const api = op(createBook, http.post)
+    const route = applyMethods(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Would fail bookSchema() (empty title) — proves no validator ran.
+        body: JSON.stringify({ title: "" }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+    expect(capturedInput).toEqual({ title: "" })
+  })
+
+  it("an async validator (Promise-returning ~standard.validate) is awaited correctly", async () => {
+    const asyncSchema: StandardSchemaV1<{ title: unknown }, { title: string }> = {
+      "~standard": {
+        version: 1,
+        vendor: "test-async",
+        validate: async (value: unknown) => {
+          await Promise.resolve()
+          const v = value as Record<string, unknown>
+          if (typeof v.title !== "string" || v.title.length === 0) {
+            return { issues: [{ message: "title required" }] }
+          }
+          return { value: { title: v.title } }
+        },
+      },
+    }
+    let capturedInput: unknown
+    const createBook = (input: unknown) => {
+      capturedInput = input
+      return { ok: true }
+    }
+    const api = op(createBook, http.post, http.validate(asyncSchema))
+    const route = applyMethods(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+
+    const ok = await router(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Dune" }),
+      }),
+    )
+    expect(ok.status).toBe(200)
+    expect(capturedInput).toEqual({ title: "Dune" })
+
+    const rejected = await router(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "" }),
+      }),
+    )
+    expect(rejected.status).toBe(422)
+    expect(await rejected.json()).toEqual({
+      error: "validation failed",
+      issues: [{ message: "title required" }],
+    })
   })
 })
