@@ -29,6 +29,8 @@
 
 - **Per-language serialization library variants (Java/Gson, Python/attrs, C#/Newtonsoft.Json)** — DONE (2026-07-22). Three new serialization library projectors completed, extending the matrix started by Pydantic v2. Modules: `java-gson.ts`, `python-attrs.ts`, `csharp-newtonsoft.ts` in `packages/type-ir/src/`. All tests passing (2706/2706), typecheck clean.
 
+- **Battle testing completed (2026-07-22)** — Round-trip fidelity tests: 22 pass, 1 todo — JSON Schema and OpenAPI schemas survive ingestion → projection → re-ingestion. Cross-projector smoke tests: 171 pass, 5 todo — 4 realistic fixture schemas through all 41 projectors. Findings: (1) `title` metadata (JSON Schema §9.1) has no handler in either ingestion or projection — dropped silently (gap, not regression); (2) Integer enums re-project as `type: "string"` in JSON Schema layer (TypeRef tree is correct — cosmetic schema-layer issue); (3) Struct-only projectors (protobuf, capnp, flatbuffers, sql, sql-mssql) cannot handle union-rooted schemas — they assume object-shaped input.
+
 - **deepPartial/deepRequired for stream/page** — DONE. Added recursion cases in derive.ts.
 
 - **AOT validator for stream/page** — DONE. Added codegen cases in compile.ts.
