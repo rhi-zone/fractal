@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { renderProto, toProtoField, toProtoMessage, toProtoService } from "./protobuf.ts"
+import { renderProto, toProtoField, toProtoMessage, toProtoService, toProtoUnionMessage } from "./protobuf.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {
@@ -250,6 +250,113 @@ describe("toProtoMessage", () => {
       { name: "status", field: { type: "Status", repeated: false, optional: false }, number: 1 },
     ])
     expect(message.nestedEnums).toEqual([{ name: "Status", values: ["ACTIVE", "INACTIVE"] }])
+  })
+})
+
+describe("union root -> oneof wrapper message", () => {
+  test("discriminated union: variant field names come from the literal discriminator tag", () => {
+    const successResponse = t(
+      types.object({
+        type: t(types.literal("success")),
+        data: t(types.object({ result: t(types.string) })),
+      }),
+    )
+    const errorResponse = t(
+      types.object({
+        type: t(types.literal("error")),
+        code: t(types.integer),
+        message: t(types.string),
+      }),
+    )
+    const ref = t(types.union([successResponse, errorResponse]), { discriminator: "type" })
+    const message = toProtoUnionMessage("ApiResponse", ref)
+
+    expect(message.name).toBe("ApiResponse")
+    expect(message.fields).toEqual([])
+    expect(message.oneofs).toEqual([
+      {
+        name: "type",
+        fields: [
+          { name: "success", field: { type: "Success", repeated: false, optional: false }, number: 1 },
+          { name: "error", field: { type: "Error", repeated: false, optional: false }, number: 2 },
+        ],
+      },
+    ])
+    expect(message.nestedMessages?.map((m) => m.name)).toEqual(["Success", "Error"])
+    expect(message.nestedMessages?.[0]?.fields).toEqual([
+      { name: "type", field: { type: "string", repeated: false, optional: false }, number: 1 },
+      { name: "data", field: { type: "Data", repeated: false, optional: false }, number: 2 },
+    ])
+
+    const output = renderProto([message])
+    expect(output).toContain("message ApiResponse {")
+    expect(output).toContain("oneof type {")
+    expect(output).toContain("Success success = 1;")
+    expect(output).toContain("Error error = 2;")
+    expect(output).toContain("message Success {")
+    expect(output).toContain("message Error {")
+  })
+
+  test("plain union (no discriminator): variant fields fall back to positional names", () => {
+    const cat = t(types.object({ meow: t(types.boolean) }))
+    const dog = t(types.object({ bark: t(types.boolean) }))
+    const ref = t(types.union([cat, dog]))
+    const message = toProtoUnionMessage("Pet", ref)
+
+    expect(message.oneofs).toEqual([
+      {
+        name: "variant",
+        fields: [
+          { name: "variant1", field: { type: "Variant1", repeated: false, optional: false }, number: 1 },
+          { name: "variant2", field: { type: "Variant2", repeated: false, optional: false }, number: 2 },
+        ],
+      },
+    ])
+    expect(message.nestedMessages?.map((m) => m.name)).toEqual(["Variant1", "Variant2"])
+  })
+
+  test("mixed object + primitive variants: primitives sit directly in the oneof", () => {
+    const success = t(types.object({ result: t(types.string) }))
+    const ref = t(types.union([success, t(types.string), int32()]))
+    const message = toProtoUnionMessage("Mixed", ref)
+
+    expect(message.oneofs).toEqual([
+      {
+        name: "variant",
+        fields: [
+          { name: "variant1", field: { type: "Variant1", repeated: false, optional: false }, number: 1 },
+          { name: "variant2", field: { type: "string", repeated: false, optional: false }, number: 2 },
+          { name: "variant3", field: { type: "int32", repeated: false, optional: false }, number: 3 },
+        ],
+      },
+    ])
+    expect(message.nestedMessages?.map((m) => m.name)).toEqual(["Variant1"])
+
+    const output = renderProto([message])
+    expect(output).toContain("oneof variant {")
+    expect(output).toContain("string variant2 = 2;")
+    expect(output).toContain("int32 variant3 = 3;")
+  })
+
+  test("toProtoMessage routes a union-root TypeRef to the oneof wrapper", () => {
+    const ref = t(types.union([t(types.string), int32()]))
+    const viaMessage = toProtoMessage("Root", ref)
+    const viaUnion = toProtoUnionMessage("Root", ref)
+    expect(viaMessage).toEqual(viaUnion)
+  })
+
+  test("union-typed object field synthesizes a nested oneof wrapper message", () => {
+    const ref = t(
+      types.object({
+        payload: t(types.union([t(types.object({ a: t(types.string) })), t(types.object({ b: t(types.integer) }))])),
+      }),
+    )
+    const message = toProtoMessage("Envelope", ref)
+    expect(message.fields).toEqual([
+      { name: "payload", field: { type: "Payload", repeated: false, optional: false }, number: 1 },
+    ])
+    const nested = message.nestedMessages?.find((m) => m.name === "Payload")
+    expect(nested?.oneofs).toBeDefined()
   })
 })
 

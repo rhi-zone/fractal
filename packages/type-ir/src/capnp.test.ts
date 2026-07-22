@@ -249,6 +249,84 @@ describe("toCapnpStruct", () => {
   })
 })
 
+describe("union root", () => {
+  const successResponse = t(
+    types.object({
+      type: t(types.literal("success")),
+      data: t(types.object({ result: t(types.string) })),
+    }),
+  )
+  const errorResponse = t(
+    types.object({
+      type: t(types.literal("error")),
+      code: t(types.integer),
+      message: t(types.string),
+    }),
+  )
+  const paginatedResponse = t(
+    types.object({
+      type: t(types.literal("paginated")),
+      items: t(types.array(t(types.string))),
+      cursor: t(types.string),
+      hasMore: t(types.boolean),
+    }),
+  )
+
+  test("discriminated union: arm names come from the discriminator literal", () => {
+    const ref = t(types.union([successResponse, errorResponse, paginatedResponse]), { discriminator: "type" })
+    const struct = toCapnpStruct("ApiResponse", ref)
+    expect(struct.name).toBe("ApiResponse")
+    expect(struct.fields).toEqual([])
+    expect(struct.unionFields).toEqual([
+      { name: "success", type: "Success", ordinal: 0 },
+      { name: "error", type: "Error", ordinal: 1 },
+      { name: "paginated", type: "Paginated", ordinal: 2 },
+    ])
+    expect(struct.nestedStructs?.map((s) => s.name)).toEqual(["Success", "Error", "Paginated"])
+    // Each variant lowers to a full nested struct via the ordinary object path.
+    const errorStruct = struct.nestedStructs?.find((s) => s.name === "Error")
+    expect(errorStruct?.fields).toEqual([
+      { name: "type", type: "Text", ordinal: 0 },
+      { name: "code", type: "Int64", ordinal: 1 },
+      { name: "message", type: "Text", ordinal: 2 },
+    ])
+  })
+
+  test("plain union (no discriminator) falls back to positional variant names", () => {
+    const ref = t(types.union([successResponse, errorResponse]))
+    const struct = toCapnpStruct("ApiResponse", ref)
+    expect(struct.unionFields).toEqual([
+      { name: "variant0", type: "Variant0", ordinal: 0 },
+      { name: "variant1", type: "Variant1", ordinal: 1 },
+    ])
+  })
+
+  test("mixed union: non-object variants become direct union arms", () => {
+    const ref = t(types.union([t(types.string), int32(), successResponse]), { discriminator: "type" })
+    const struct = toCapnpStruct("Mixed", ref)
+    expect(struct.unionFields).toEqual([
+      { name: "variant0", type: "Text", ordinal: 0 },
+      { name: "variant1", type: "Int32", ordinal: 1 },
+      { name: "success", type: "Success", ordinal: 2 },
+    ])
+    // Only the object variant produces a nested struct.
+    expect(struct.nestedStructs?.map((s) => s.name)).toEqual(["Success"])
+  })
+
+  test("renders as a wrapper struct with an anonymous union block", () => {
+    const ref = t(types.union([successResponse, errorResponse]), { discriminator: "type" })
+    const struct = toCapnpStruct("ApiResponse", ref)
+    const output = renderCapnp([struct])
+    expect(output).toContain("struct ApiResponse {")
+    expect(output).toContain("  union {")
+    expect(output).toContain("    success @0 :Success;")
+    expect(output).toContain("    error @1 :Error;")
+    expect(output).toContain("  }")
+    expect(output).toContain("struct Success {")
+    expect(output).toContain("struct Error {")
+  })
+})
+
 describe("renderCapnp", () => {
   test("renders a flat struct with a placeholder id comment", () => {
     const struct = toCapnpStruct(

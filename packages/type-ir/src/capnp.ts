@@ -8,6 +8,10 @@ function isA(kind: string, target: string): boolean {
 export type CapnpStruct = {
   name: string
   fields: Array<{ name: string; type: string; ordinal: number; description?: string }>
+  // An anonymous union (§ "Unions": https://capnproto.org/language.html#unions)
+  // nested directly inside the struct — used to lower a union-rooted TypeRef,
+  // where each variant becomes one arm of the union rather than a plain field.
+  unionFields?: Array<{ name: string; type: string; ordinal: number; description?: string }>
   nestedStructs?: CapnpStruct[]
   nestedEnums?: Array<{ name: string; values: readonly string[] }>
   description?: string
@@ -136,7 +140,54 @@ function toLowerCamel(name: string): string {
   return name.toLowerCase()
 }
 
+/**
+ * Lower a union-rooted TypeRef to a wrapper struct containing an anonymous
+ * union (§ "Unions": https://capnproto.org/language.html#unions) — Cap'n
+ * Proto has no top-level union declaration, only a `union { ... }` block
+ * nested inside a struct, so a bare union TypeRef needs a synthesized
+ * wrapper. Each `object`-kind variant becomes a nested struct referenced
+ * from a union arm; other variant kinds are inlined directly as union arms.
+ * The arm name comes from the variant's discriminator literal
+ * (`meta.discriminator` names the field — see the TypeRef union model in
+ * index.ts) when available, falling back to a positional `variantN` name.
+ */
+function toCapnpUnionStruct(name: string, ref: TypeRef): CapnpStruct {
+  const shape = ref.shape as TypeShape & { kind: "union" }
+  const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
+  const unionFields: CapnpStruct["fields"] = []
+  const nestedStructs: CapnpStruct[] = []
+
+  shape.variants.forEach((variant, ordinal) => {
+    const description: { description: string } | Record<string, never> =
+      typeof variant.meta.description === "string" ? { description: variant.meta.description } : {}
+
+    if (isA(variant.shape.kind, "object")) {
+      const objShape = variant.shape as TypeShape & { kind: "object" }
+      let armName = `variant${ordinal}`
+      if (discriminator !== undefined) {
+        const discField = objShape.fields[discriminator]
+        if (discField !== undefined && discField.shape.kind === "literal") {
+          const value = (discField.shape as TypeShape & { kind: "literal" }).value
+          if (typeof value === "string" && value.length > 0) armName = value
+        }
+      }
+      const structName = capitalize(armName)
+      nestedStructs.push(toCapnpStruct(structName, variant))
+      unionFields.push({ name: armName, type: structName, ordinal, ...description })
+    } else {
+      unionFields.push({ name: `variant${ordinal}`, type: toCapnpType(variant), ordinal, ...description })
+    }
+  })
+
+  const result: CapnpStruct = { name, fields: [], unionFields }
+  if (nestedStructs.length > 0) result.nestedStructs = nestedStructs
+  if (typeof ref.meta.description === "string") result.description = ref.meta.description
+  return result
+}
+
 export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
+  if (ref.shape.kind === "union") return toCapnpUnionStruct(name, ref)
+
   const shape = ref.shape as TypeShape & { kind: "object" }
   const fields: CapnpStruct["fields"] = []
   const nestedStructs: CapnpStruct[] = []
@@ -240,6 +291,13 @@ function renderStruct(struct: CapnpStruct, depth: number): string[] {
   lines.push(`${indent}struct ${struct.name} {`)
 
   for (const field of struct.fields) lines.push(...renderField(field, inner))
+
+  if (struct.unionFields !== undefined && struct.unionFields.length > 0) {
+    const unionInner = "  ".repeat(depth + 2)
+    lines.push(`${inner}union {`)
+    for (const field of struct.unionFields) lines.push(...renderField(field, unionInner))
+    lines.push(`${inner}}`)
+  }
 
   for (const e of struct.nestedEnums ?? []) {
     lines.push(`${inner}enum ${e.name} {`)

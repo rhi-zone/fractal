@@ -15,9 +15,20 @@ export type ProtoField = {
   description?: string
 }
 
+// Proto3 `oneof` (§ "Using Oneof"): a field-level construct, not a
+// standalone type — a set of fields inside a message where at most one is
+// set at a time. This is the natural target for a type-ir `union` root: see
+// `toProtoUnionMessage` below, which synthesizes a wrapper `ProtoMessage`
+// holding one of these per union.
+export type ProtoOneof = {
+  name: string
+  fields: Array<{ name: string; field: ProtoField; number: number }>
+}
+
 export type ProtoMessage = {
   name: string
   fields: Array<{ name: string; field: ProtoField; number: number }>
+  oneofs?: ProtoOneof[]
   nestedMessages?: ProtoMessage[]
   nestedEnums?: Array<{ name: string; values: readonly string[] }>
   description?: string
@@ -187,6 +198,7 @@ function capitalize(name: string): string {
 }
 
 export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
+  if (isA(ref.shape.kind, "union")) return toProtoUnionMessage(name, ref)
   const shape = ref.shape as TypeShape & { kind: "object" }
   const fields: ProtoMessage["fields"] = []
   const nestedMessages: ProtoMessage[] = []
@@ -220,6 +232,25 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
       const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
       nestedEnums.push({ name: enumName, values: members })
       fields.push({ name: fieldName, field: { type: enumName, repeated: false, optional, ...deprecated, ...description }, number })
+    } else if (isA(fieldRef.shape.kind, "union")) {
+      // A union-typed field synthesizes a nested wrapper message holding a
+      // `oneof` (see toProtoUnionMessage) rather than degrading to Any — the
+      // same treatment a union gets at the root.
+      const nestedName = capitalize(fieldName)
+      nestedMessages.push(toProtoUnionMessage(nestedName, fieldRef))
+      fields.push({ name: fieldName, field: { type: nestedName, repeated: false, optional, ...deprecated, ...description }, number })
+    } else if (
+      fieldRef.shape.kind === "array" &&
+      isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "union")
+    ) {
+      const nestedName = capitalize(fieldName)
+      const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
+      nestedMessages.push(toProtoUnionMessage(nestedName, element))
+      fields.push({
+        name: fieldName,
+        field: { type: nestedName, repeated: true, optional: false, ...deprecated, ...description },
+        number,
+      })
     } else {
       fields.push({ name: fieldName, field: toProtoField(fieldRef), number })
     }
@@ -229,6 +260,65 @@ export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {
   const message: ProtoMessage = { name, fields }
   if (nestedMessages.length > 0) message.nestedMessages = nestedMessages
   if (nestedEnums.length > 0) message.nestedEnums = nestedEnums
+  if (typeof ref.meta.description === "string") message.description = ref.meta.description
+  return message
+}
+
+/**
+ * Lower a `union` TypeRef to a `ProtoMessage` wrapping a proto3 `oneof`
+ * (§ "Using Oneof": https://protobuf.dev/programming-guides/proto3/#oneof) —
+ * `oneof` is field-level, not a standalone type, so a union root has no
+ * direct proto3 message-level equivalent; the idiomatic encoding is a
+ * synthesized wrapper message whose entire body is a single `oneof` with one
+ * field per variant. `object` variants become nested messages referenced
+ * from the oneof (mirroring `toProtoMessage`'s nested-object handling);
+ * non-object variants (primitives, enums, etc.) sit directly in the oneof
+ * via `toProtoField`.
+ *
+ * Field naming: when `meta.discriminator` names a field and a variant's
+ * shape carries a string `literal` at that field (the tagged-union
+ * convention — e.g. `{ type: "success", ... }`), the literal's value names
+ * the oneof field/nested message (`success`/`Success`), which reads far
+ * better than a positional `variant1`. Untagged variants (no discriminator,
+ * or no matching string literal) fall back to a positional `variantN` name.
+ * The oneof itself is named after the discriminator field when present,
+ * otherwise the generic `variant`.
+ */
+export function toProtoUnionMessage(name: string, ref: TypeRef): ProtoMessage {
+  const shape = ref.shape as TypeShape & { kind: "union" }
+  const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
+  const oneofName = discriminator ?? "variant"
+  const nestedMessages: ProtoMessage[] = []
+  const oneofFields: ProtoOneof["fields"] = []
+  let number = 1
+
+  for (const variant of shape.variants) {
+    const positionalName = `variant${number}`
+    if (isA(variant.shape.kind, "object")) {
+      const vShape = variant.shape as TypeShape & { kind: "object" }
+      const tagRef = discriminator === undefined ? undefined : vShape.fields[discriminator]
+      const tagShape = tagRef?.shape
+      const tag =
+        tagShape !== undefined && tagShape.kind === "literal" && typeof (tagShape as TypeShape & { kind: "literal" }).value === "string"
+          ? ((tagShape as TypeShape & { kind: "literal" }).value as string)
+          : undefined
+      const fieldName = tag ?? positionalName
+      const messageName = capitalize(fieldName)
+      nestedMessages.push(toProtoMessage(messageName, variant))
+      oneofFields.push({ name: fieldName, field: { type: messageName, repeated: false, optional: false }, number })
+    } else {
+      const field = toProtoField(variant)
+      // Proto3 forbids the `optional`/`repeated` labels inside a oneof
+      // (§ "Using Oneof": oneof fields "cannot be repeated" and are
+      // implicitly optional via which field is set) — strip any label
+      // `toProtoField` derived from the variant's own metadata.
+      oneofFields.push({ name: positionalName, field: { ...field, optional: false, repeated: false }, number })
+    }
+    number++
+  }
+
+  const message: ProtoMessage = { name, fields: [], oneofs: [{ name: oneofName, fields: oneofFields }] }
+  if (nestedMessages.length > 0) message.nestedMessages = nestedMessages
   if (typeof ref.meta.description === "string") message.description = ref.meta.description
   return message
 }
@@ -308,6 +398,16 @@ function renderMessage(message: ProtoMessage, depth: number): string[] {
   lines.push(`${indent}message ${message.name} {`)
 
   for (const entry of message.fields) lines.push(...renderField(entry, inner))
+
+  // Proto3 `oneof` block (§ "Using Oneof") — see toProtoUnionMessage. Its
+  // member fields render with the same syntax as ordinary fields, just
+  // nested one level deeper inside the `oneof name { ... }` block; none of
+  // them carry the `optional`/`repeated` label (forbidden inside a oneof).
+  for (const oneof of message.oneofs ?? []) {
+    lines.push(`${inner}oneof ${oneof.name} {`)
+    for (const entry of oneof.fields) lines.push(...renderField(entry, "  ".repeat(depth + 2)))
+    lines.push(`${inner}}`)
+  }
 
   for (const e of message.nestedEnums ?? []) {
     lines.push(`${inner}enum ${e.name} {`)

@@ -49,7 +49,7 @@ import { toOpenApi20 } from "./openapi20.ts"
 import { toGraphQLType } from "./graphql.ts"
 import { toProtoMessage, renderProto } from "./protobuf.ts"
 import { toCapnpStruct, renderCapnp } from "./capnp.ts"
-import { toFlatBuffersTable } from "./flatbuffers.ts"
+import { toFlatBuffersTable, toFlatBuffersDeclarations } from "./flatbuffers.ts"
 import { toCreateTable } from "./sql.ts"
 import { toMssqlCreateTable } from "./sql-mssql.ts"
 import { toJtd } from "./jtd.ts"
@@ -110,9 +110,12 @@ const treeNode = obj({
 })
 
 // (c) Discriminated Union API Response — polymorphism via a union of tagged
-// objects. Root kind is `union`, not `object` — struct-shaped projectors
-// (protobuf/capnp/flatbuffers/sql) require an `object` root and are expected
-// to throw on this fixture; see the `.todo` block below.
+// objects. Root kind is `union`, not `object` — most struct-shaped projectors
+// (capnp/flatbuffers/sql) require an `object` root and are expected to throw
+// on this fixture; see the `.todo` block below. protobuf is the exception:
+// toProtoMessage synthesizes a `oneof` wrapper message for a union root (see
+// toProtoUnionMessage in protobuf.ts), so it's a real test in the matrix
+// below instead of a `.todo`.
 const successResponse = obj({
   type: t(types.literal("success")),
   data: obj({ result: t(types.string) }),
@@ -225,14 +228,27 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
     },
   },
   { name: "compile (AOT validator)", fn: (ref, name) => compileValidator(ref) + name },
-  // Struct-shaped projectors: `object`-root only (each casts `ref.shape` to
-  // the `object` variant internally — see toProtoMessage/toCapnpStruct in
-  // protobuf.ts/capnp.ts). Non-object roots (the discriminated union fixture)
-  // are expected to throw here; see the `.todo` block below instead of this
-  // list for that combination.
+  // protobuf is NOT struct-only: toProtoMessage handles a union-rooted
+  // TypeRef directly by synthesizing a wrapper message with a `oneof` (§
+  // "Using Oneof") holding one field per variant — see toProtoUnionMessage
+  // in protobuf.ts.
   { name: "protobuf", fn: (ref, name) => renderProto([toProtoMessage(name, ref)]) },
+  // capnp is NOT struct-only: toCapnpStruct handles a union-rooted TypeRef
+  // directly by synthesizing a wrapper struct with an anonymous union (§
+  // "Unions") — see toCapnpUnionStruct in capnp.ts.
   { name: "capnp", fn: (ref, name) => renderCapnp([toCapnpStruct(name, ref)]) },
-  { name: "flatbuffers", fn: (ref, name) => toFlatBuffersTable(name, ref) },
+  {
+    name: "flatbuffers",
+    // toFlatBuffersTable only lowers `object`/`tuple` roots (a single table
+    // declaration). A `union` root (e.g. the discriminated-union fixture) has
+    // no table to build — it must go through toFlatBuffersDeclarations, which
+    // dispatches per-kind (table/enum/union/service) over a registry, unlike
+    // protobuf/capnp/sql which have no non-object-root entry point at all.
+    fn: (ref, name) =>
+      ref.shape.kind === "object" || ref.shape.kind === "tuple"
+        ? toFlatBuffersTable(name, ref)
+        : toFlatBuffersDeclarations({ [name]: ref }),
+  },
   { name: "sql", fn: (ref, name) => toCreateTable(name, ref) },
   {
     name: "sql-mssql",
@@ -243,14 +259,21 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
   },
 ]
 
-// Struct-shaped projectors that require an `object` (or, for flatbuffers,
-// `object`/`tuple`) root and cannot represent a bare `union` root directly.
-// The discriminated-union fixture legitimately can't go through these without
-// the caller pre-flattening the union into a oneof/service construct that
-// isn't this package's concern at the TypeRef level — tracked as `.todo`
-// rather than asserted to throw, since a future projector enhancement (e.g.
-// protobuf `oneof` synthesis from a tagged union) could close this gap.
-const structOnlyProjectorNames = new Set(["protobuf", "capnp", "flatbuffers", "sql", "sql-mssql"])
+// Struct-shaped projectors that require an `object` root and cannot represent
+// a bare `union` root directly. The discriminated-union fixture legitimately
+// can't go through these without the caller pre-flattening the union into a
+// oneof/service construct that isn't this package's concern at the TypeRef
+// level — tracked as `.todo` rather than asserted to throw.
+//
+// protobuf, flatbuffers, and capnp are NOT in this set: protobuf's
+// toProtoMessage synthesizes a `oneof` wrapper message for a union root (see
+// the protobuf wrapper above); flatbuffers has a second entry point
+// (toFlatBuffersDeclarations) that dispatches per-kind over a registry, so a
+// `union` root lowers to a `union` declaration directly (see the flatbuffers
+// wrapper above); capnp's toCapnpStruct now synthesizes a wrapper struct with
+// an anonymous union for a union-rooted TypeRef (see toCapnpUnionStruct in
+// capnp.ts).
+const structOnlyProjectorNames = new Set(["sql", "sql-mssql"])
 
 describe("cross-projector smoke tests", () => {
   for (const { name: fixtureName, ref } of fixtures) {
