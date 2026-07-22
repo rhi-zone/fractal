@@ -135,6 +135,10 @@
       "types": "./src/go-encoding-json.ts",
       "import": "./src/go-encoding-json.ts"
     },
+    "./go-easyjson": {
+      "types": "./src/go-easyjson.ts",
+      "import": "./src/go-easyjson.ts"
+    },
     "./haskell": {
       "types": "./src/haskell-aeson.ts",
       "import": "./src/haskell-aeson.ts"
