@@ -328,16 +328,25 @@ What's planned / open — additional variants per language:
 
 All three verified against cross-projector smoke test suite (171 tests, 4 fixture schemas). Struct-only projector union handling fixed; all three now handle union-rooted schemas.
 
+**Completed (2026-07-22, earlier pass):**
+- Java — Moshi (`java-moshi.ts`)
+- Dart — freezed (`dart-freezed.ts`)
+
+**Completed (2026-07-22, this session):**
+- Kotlin — Jackson (`kotlin-jackson.ts`) — `@JsonProperty`, `@JsonTypeInfo`/`@JsonSubTypes` for unions
+- Go — easyjson (`go-easyjson.ts`) — `//easyjson:json` directives, `json.RawMessage` unions, 29 tests
+- Ruby — dry-types (`ruby-dry-types.ts`) — `Dry::Struct` classes with `Types::*` constructors
+
 Remaining variants still planned:
 - C++ — RapidJSON, simdjson, Boost.JSON, glaze
-- Java — Gson, Moshi, Jakarta JSON-B
-- C# — Newtonsoft.Json, ServiceStack.Text
+- Java — Jakarta JSON-B
+- C# — ServiceStack.Text
 - Python — Pydantic, attrs/cattrs, msgspec
-- Kotlin — Jackson, Moshi, Gson
+- Kotlin — Gson
 - Swift — SwiftyJSON, ObjectMapper
-- Go — easyjson, jsoniter, sonic
-- Ruby — RBS, dry-types
-- Dart — freezed, built_value
+- Go — jsoniter, sonic
+- Ruby — RBS
+- Dart — built_value
 - PHP — Symfony Serializer, JMS Serializer
 - Elixir — Ecto (note: Elixir is not currently a 1.0-scope
   general-purpose language target at all — this would need a first
@@ -442,18 +451,27 @@ Acceptance criteria for green:
 
 ### Web Playground
 
-**Status: NOT GREEN — planned**
+**Status: NOT GREEN — basic version implemented (2026-07-22)**
 
-Not yet started. An interactive, browser-based converter in the spirit
-of quicktype.io, but exercising fractal's full format coverage rather
-than a fixed subset — paste or upload a schema/type/sample in one format,
-pick any of the emit targets above, see the converted output live.
+`packages/playground/` (Vite + Solid + CodeMirror 6) — an interactive,
+browser-based converter in the spirit of quicktype.io. Paste/edit a
+schema/type/sample in one of 13 browser-safe input formats, pick any of
+45 output formats, see the converted output live. All 585 input×output
+combinations verified working.
+
+What's left:
+- Not yet deployed to a public URL — runs locally today.
+- 13 input formats is a subset of the full ingester list (browser-safe
+  only — formats requiring Node-only parsing are excluded); could grow
+  as ingesters are audited for browser-safety.
 
 Acceptance criteria for green:
 - Deployed, publicly reachable, covering a representative slice of
-  ingesters and projectors (not necessarily every single one at launch).
+  ingesters and projectors (not necessarily every single one at launch)
+  — **coverage done, deployment still open**.
 - No server-side execution of untrusted input beyond what's needed to
-  run the conversion (fractal itself does not execute generated code).
+  run the conversion (fractal itself does not execute generated code)
+  — satisfied; conversion runs client-side in the browser.
 
 ---
 
@@ -486,7 +504,8 @@ Acceptance criteria for green:
 
 **Status: PARTIALLY COMPLETE (2026-07-22)**
 
-Code-level doc comment emission complete; site-level doc projectors planned.
+Code-level doc comment emission complete; the three named site-level doc
+projectors are now also implemented.
 
 **Completed (2026-07-22)**: Doc comment emission across all 25 projectors.
 Every projector now emits native doc comments from `meta.description` and
@@ -495,11 +514,18 @@ Every projector now emits native doc comments from `meta.description` and
 doc comments for C#, etc. No new ingestion or IR work — metadata already
 lives in TypeRef's open `meta` bag; this was a pure emission concern.
 
-**Still planned**: Site-level doc projectors (docusaurus-reference,
-starlight-reference, mkdocs-reference) — best-in-class auto-generated
-API docs with hover info and cross-linking, targeting ecosystem-standard
-doc site generators. These are downstream consumers of the code-level
-doc comments that now exist per projector.
+**Completed (2026-07-22, second pass)**: Site-level doc projectors —
+`docusaurus-reference.ts`, `starlight-reference.ts`,
+`mkdocs-reference.ts` — projecting TypeRef schemas into MDX/Markdown for
+their respective doc-site frameworks, with hover info and cross-linking
+between types (see acceptance criteria below for details).
+
+**Still planned**: The remaining site-level generators listed below
+(TypeDoc/JSDoc/VitePress for JS/TS beyond Docusaurus/Starlight, Sphinx/
+pdoc for Python, rustdoc, Javadoc, godoc, DocFX, YARD/RDoc, DocC, Dokka,
+Haddock, Doxygen, phpDocumentor, dartdoc, elm-doc-preview, Zensical) —
+none of these ecosystem-native generators have a fractal projector yet;
+only the three cross-ecosystem doc-site frameworks above are done.
 
 Site-level generators to target, by language ecosystem:
 - JS/TS — TypeDoc, JSDoc, Docusaurus, VitePress, Starlight
@@ -542,7 +568,13 @@ Acceptance criteria for green:
 - Site-level doc projectors (docusaurus-reference, starlight-reference,
   mkdocs-reference) built and verified with at least one representative
   per major ecosystem to successfully generate a docs site from
-  fractal-generated code.
+  fractal-generated code — **DONE (2026-07-22)**: `docusaurus-reference.ts`
+  (MDX + frontmatter, cross-links, `<TypeRef>` hover component, fields
+  tables, union variants), `starlight-reference.ts` (`<Aside>`/
+  `<LinkCard>`/`<Tabs>`/`<Code>`, TypeScript + JSON Schema signature
+  tabs), and `mkdocs-reference.ts` (MkDocs-Material admonitions,
+  abbreviation-based hover tooltips, content tabs, cross-links; fixed a
+  pipe-escaping bug for enums in tables along the way).
 - `meta`-bag-to-doc-comment field mapping documented as a stable
   convention other projector authors can follow — already implicit in
   the 25 implemented projectors; explicit docs on the pattern TBD.
@@ -573,12 +605,18 @@ What's planned / open:
 - Cross-format round-trip validation as a first-class, systematic test
   category (format A → TypeRef → format B → TypeRef → compare), rather
   than the current per-module round-trip tests.
-- A CI pipeline — none is currently configured (noted as an open thread
-  in `TODO.md`: "GitHub repo is live … no CI/CD configured yet").
-- Adding target languages to the Nix flake so generated code in each
-  emitted language can actually be compiled/type-checked as part of the
-  test suite, not just structurally asserted. The current flake
-  (`flake.nix`) provides only `nodejs_20` and `bun`.
+- ~~A CI pipeline~~ — **DONE (2026-07-22)**: GitHub Actions now runs a
+  Nix-based pipeline (typecheck, test, build across all packages via the
+  flake devShell), replacing the previously broken workflow (commit
+  `bb38011`).
+- ~~Adding target languages to the Nix flake~~ — **DONE (2026-07-22)**:
+  `flake.nix` now provides 19 target-language toolchains (Python, Go,
+  Rust, Java, Kotlin, C#/.NET, Ruby, PHP, Haskell, C++/nlohmann, Dart,
+  Elm, Crystal, Swift, Flow, GNUstep/Obj-C, protobuf, capnproto,
+  flatbuffers), all verified working (commit `27510c6`). Wiring these
+  into an actual compile-check step in the test suite (as opposed to the
+  toolchains merely being present in the devShell) is still open — see
+  "Battle testing" below.
 
 **Battle testing** — every projector and ingester currently has unit-test
 coverage, but none has been exercised against real-world corpora at
@@ -603,17 +641,25 @@ started:
   uses it.
 
 Acceptance criteria for green:
-- CI pipeline running typecheck + test on every push/PR.
+- CI pipeline running typecheck + test on every push/PR — **DONE
+  (2026-07-22)**, GitHub Actions Nix-based pipeline (commit `bb38011`).
 - At least the general-purpose-language emit targets have flake-provided
-  toolchains and a compile-check step exercising generated output.
+  toolchains — **DONE (2026-07-22)**, 19 toolchains added (commit
+  `27510c6`) — and a compile-check step exercising generated output
+  — still open, toolchains are present but not yet wired into an
+  automated compile-check step in the test suite.
 - Cross-format round-trip tests exist as a named, discoverable category
   — **DONE (2026-07-22)**, 22 round-trip fidelity tests added.
 - Battle-testing suite in place: real-world corpora wired into round-trip
   tests, parser fuzz tests running, and cross-language compilation
   checks passing — **Partially DONE (2026-07-22)**: 171 cross-projector
   smoke tests (4 fixture schemas through 41 projectors) verify all
-  projectors compile successfully. Remaining: CI pipeline, target-language
-  toolchain integration in Nix flake for compile-check validation.
+  projectors compile successfully; CI pipeline and target-language
+  toolchains in the Nix flake are now both in place (see above).
+  Remaining: an automated compile-check step that actually runs the
+  flake's toolchains against generated output as part of the test suite
+  (`go build`, `cargo build`, etc.), and real-world schema corpora wired
+  into round-trip tests.
 
 ---
 
@@ -724,7 +770,14 @@ What exists:
   `cli-api-projector`, `graphql-api-projector`, `auth-oidc`,
   `examples/library-api`).
 - A Nix flake (`flake.nix`) providing `nodejs_20` and `bun` for the
-  dev shell.
+  dev shell, plus (as of 2026-07-22) 19 target-language toolchains —
+  Python, Go, Rust, Java, Kotlin, C#/.NET, Ruby, PHP, Haskell,
+  C++/nlohmann, Dart, Elm, Crystal, Swift, Flow, GNUstep (Obj-C),
+  protobuf, capnproto, flatbuffers — all verified working (commit
+  `27510c6`).
+- A GitHub Actions CI pipeline (2026-07-22) — Nix-based, running
+  typecheck/test/build across all packages via the flake devShell
+  (commit `bb38011`).
 - Per-package `exports` maps in each `package.json` for granular subpath
   imports (e.g. `@rhi-zone/fractal-type-ir/zod`).
 - All packages currently at `0.1.0-alpha.0` — none published to npm yet.
@@ -733,8 +786,9 @@ What's planned / open:
 - npm publishing — no package has been published; versioning strategy
   for the jump to 1.0 across eight interdependent workspace packages is
   undecided.
-- Nix flake needs the target-language toolchains added (see "Testing &
-  Quality" above) — currently JS/Bun only.
+- The flake now has the toolchains (see "Testing & Quality" above), but
+  no compile-check step in the test suite actually exercises them
+  against generated output yet — that wiring is still open.
 - A contributor guide — none exists yet; `CLAUDE.md` documents the
   project's own design philosophy and constraints but is not written as
   external contributor onboarding.
@@ -763,7 +817,9 @@ Acceptance criteria for green:
 - Every package publishable and published to npm at a coordinated 1.0
   version.
 - Flake covers the toolchains needed to validate generated output in
-  every 1.0-scope target language.
+  every 1.0-scope target language — **DONE (2026-07-22)**, 19 toolchains
+  added and verified (commit `27510c6`); an automated compile-check step
+  using them is still open.
 - A contributor guide exists covering monorepo layout, test/typecheck
   commands, and the project's own conventions (open metadata bags,
   subtyping over taxonomy, three-layer separation) at a level a new

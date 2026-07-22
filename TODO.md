@@ -1,16 +1,19 @@
 # fractal — TODO
 
+## Completed this session (2026-07-22)
+
+- **Web playground** — `packages/playground/` (Vite + Solid + CodeMirror 6). 13 browser-safe input formats × 45 output formats, all 585 combinations verified. Commit `2eea560`.
+- **Language toolchains in `flake.nix`** — Python, Go, Rust, Java, Kotlin, C#/.NET, Ruby, PHP, Haskell, C++/nlohmann, Dart, Elm, Crystal, Swift, Flow, GNUstep (Obj-C), protobuf, capnproto, flatbuffers — 19 toolchains, all verified working. Commit `27510c6`.
+- **GitHub Actions CI pipeline** — Nix-based CI: typecheck, test, build across all packages via flake devShell, replacing the previously broken workflow. Commit `bb38011`.
+- **Site-level doc projectors** — `docusaurus-reference.ts` (MDX + frontmatter + `<TypeRef>` hover component, commit `056dd6f`), `starlight-reference.ts` (`<Aside>`/`<LinkCard>`/`<Tabs>`/`<Code>`, TS + JSON Schema signature tabs, commit `506b279`), `mkdocs-reference.ts` (MkDocs-Material admonitions, abbreviation-based hover tooltips, content tabs; fixed a pipe-escaping bug for enums in tables, commit `1756409`).
+- **Library variants** — Kotlin/Jackson (`kotlin-jackson.ts`, commit `f38bc68`), Go/easyjson (`go-easyjson.ts`, 29-test suite, commit `cb9f8fa`), Ruby/dry-types (`ruby-dry-types.ts`, commit `6937e37`).
+- **Bug fix** — added missing `"./flatbuffers"` export to `packages/type-ir/package.json`, found while wiring the playground.
+
 ## Open threads
 
 *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
 
-- **Site-level doc projectors** — projecting TypeRef schemas into doc framework input formats (mkdocs-reference, starlight-reference, docusaurus-reference, etc.). Bar is best-in-class: hover info, extensive cross-linking between types. The TypeRef tree has all the information; the question is which frameworks to target first and whether to emit plain markdown or framework-specific components (MDX, Astro components). User expressed strong interest.
-
-- **Web playground** — not started. Would let people try the type-ir pipeline interactively in a browser.
-
-- **CI/CD + language toolchains** — Nix flake doesn't have target-language compilers yet. Generated code isn't validated by compilation. CI pipeline not configured.
-
-- **More library variants** — the matrix is still wide (Kotlin/Jackson, Go/easyjson, Ruby/dry-types, etc.). Mechanical expansion, well-understood pattern.
+- **More library variants** — the matrix is still wide. Kotlin/Jackson, Go/easyjson, and Ruby/dry-types shipped this session (commits `f38bc68`, `cb9f8fa`, `6937e37`); still open: C++ (RapidJSON, simdjson, Boost.JSON, glaze), Java (Jakarta JSON-B), Python (Pydantic, msgspec), Kotlin (Gson), Swift (SwiftyJSON, ObjectMapper), Go (jsoniter, sonic), Ruby (RBS), Dart (built_value), PHP (Symfony Serializer, JMS Serializer). Mechanical expansion, well-understood pattern.
 
 - **SQL union layout design** — `stiLayout` and `tpvLayout` shipped as composable functions. The `baseTable` option for TPV (shared base table with discriminator + FKs) was discussed but not implemented — might be worth adding as a third built-in layout.
 
