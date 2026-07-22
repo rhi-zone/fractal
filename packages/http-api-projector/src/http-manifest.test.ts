@@ -69,7 +69,7 @@ describe("HttpManifest type safety", () => {
   })
 
   it(
-    "a leaf carrying moveTo keeps its RAW tree-position path — moveTo resolution is out of scope, see module doc",
+    "a leaf carrying moveTo resolves to its runtime (applyMoveTo) path, not its raw authored position",
     () => {
       const bookItem = api({
         read: op((input: { bookId: string }) => ({ id: input.bookId }), http.get, http.moveTo("..")),
@@ -78,15 +78,44 @@ describe("HttpManifest type safety", () => {
         books: api({}, { fallback: { name: "bookId", subtree: bookItem } }),
       })
       type Manifest = HttpManifest<typeof tree>
-      // NOT "/books/:bookId" (the runtime-resolved position after
-      // applyMoveTo) — the raw authored position, one level deeper.
+      // "/books/:bookId" — moveTo("..") drops "read", landing at the
+      // fallback's own position, matching applyMoveTo's runtime resolution.
       expectTypeOf<Manifest>().toEqualTypeOf<{
-        readonly "/books/:bookId/read": {
+        readonly "/books/:bookId": {
           readonly GET: { readonly input: { bookId: string }; readonly output: { id: string } }
         }
       }>()
     },
   )
+
+  it("moveTo(\"../rename\") drops the last segment and appends a new one (sibling rename)", () => {
+    const tree = api({
+      books: api({
+        legacyList: op((_: unknown): string[] => [], http.get, http.moveTo("../list")),
+      }),
+    })
+    type Manifest = HttpManifest<typeof tree>
+    expectTypeOf<Manifest>().toEqualTypeOf<{
+      readonly "/books/list": { readonly GET: { readonly input: unknown; readonly output: string[] } }
+    }>()
+  })
+
+  it("distinct leaves with moveTo converging on the same target become sibling methods at that path", () => {
+    const bookItem = api({
+      read: op((input: { bookId: string }) => ({ id: input.bookId }), http.get, http.moveTo("..")),
+      remove: op((input: { bookId: string }) => ({ ok: true }), http.delete, http.moveTo("..")),
+    })
+    const tree = api({
+      books: api({}, { fallback: { name: "bookId", subtree: bookItem } }),
+    })
+    type Manifest = HttpManifest<typeof tree>
+    expectTypeOf<Manifest>().toEqualTypeOf<{
+      readonly "/books/:bookId": {
+        readonly GET: { readonly input: { bookId: string }; readonly output: { id: string } }
+        readonly DELETE: { readonly input: { bookId: string }; readonly output: { ok: boolean } }
+      }
+    }>()
+  })
 
   it("an async handler's output is Awaited, not Promise-wrapped", () => {
     const tree = api({
