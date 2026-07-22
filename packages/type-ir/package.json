@@ -79,6 +79,10 @@
       "types": "./src/jsdoc.ts",
       "import": "./src/jsdoc.ts"
     },
+    "./starlight-reference": {
+      "types": "./src/starlight-reference.ts",
+      "import": "./src/starlight-reference.ts"
+    },
     "./json-schema-07": {
       "types": "./src/json-schema-07.ts",
       "import": "./src/json-schema-07.ts"
