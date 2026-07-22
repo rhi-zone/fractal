@@ -43,6 +43,10 @@
       "types": "./src/from-sql.ts",
       "import": "./src/from-sql.ts"
     },
+    "./from-cql": {
+      "types": "./src/from-cql.ts",
+      "import": "./src/from-cql.ts"
+    },
     "./from-capnp": {
       "types": "./src/from-capnp.ts",
       "import": "./src/from-capnp.ts"
