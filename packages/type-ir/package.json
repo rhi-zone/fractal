@@ -19,6 +19,10 @@
       "types": "./src/from-json-schema.ts",
       "import": "./src/from-json-schema.ts"
     },
+    "./from-openapi": {
+      "types": "./src/from-openapi.ts",
+      "import": "./src/from-openapi.ts"
+    },
     "./from-json": {
       "types": "./src/from-json.ts",
       "import": "./src/from-json.ts"
