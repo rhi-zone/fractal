@@ -47,6 +47,10 @@
       "types": "./src/from-capnp.ts",
       "import": "./src/from-capnp.ts"
     },
+    "./from-elasticsearch": {
+      "types": "./src/from-elasticsearch.ts",
+      "import": "./src/from-elasticsearch.ts"
+    },
     "./from-json": {
       "types": "./src/from-json.ts",
       "import": "./src/from-json.ts"
