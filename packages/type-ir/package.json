@@ -51,6 +51,10 @@
       "types": "./src/graphql.ts",
       "import": "./src/graphql.ts"
     },
+    "./from-graphql": {
+      "types": "./src/from-graphql.ts",
+      "import": "./src/from-graphql.ts"
+    },
     "./typescript": {
       "types": "./src/typescript.ts",
       "import": "./src/typescript.ts"
@@ -157,6 +161,9 @@
     }
   },
   "files": ["src"],
+  "dependencies": {
+    "graphql": "^16.9.0"
+  },
   "devDependencies": {
     "@sinclair/typebox": "^0.34.41",
     "fast-check": "^4.9.0"

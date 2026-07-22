@@ -87,6 +87,9 @@
     "packages/type-ir": {
       "name": "@rhi-zone/fractal-type-ir",
       "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "graphql": "^16.9.0",
+      },
       "devDependencies": {
         "@sinclair/typebox": "^0.34.41",
         "fast-check": "^4.9.0",
