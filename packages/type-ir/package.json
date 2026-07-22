@@ -27,6 +27,10 @@
       "types": "./src/from-json-corpus.ts",
       "import": "./src/from-json-corpus.ts"
     },
+    "./from-jtd": {
+      "types": "./src/from-jtd.ts",
+      "import": "./src/from-jtd.ts"
+    },
     "./jsdoc": {
       "types": "./src/jsdoc.ts",
       "import": "./src/jsdoc.ts"
