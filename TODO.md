@@ -17,15 +17,43 @@
   - `Page<T>` types (CursorPage, OffsetPage) in `api-tree/src/page.ts` + `page` TypeRef kind in type-ir
   - `paginated()` directive in http-api-projector verb helpers
 
+- **Response validation extension** — DONE. `validation()` extension validates response bodies against declared schemas. Configurable modes: throw/warn/strip. Both runtime + codegen.
+
+- **Structured error types extension** — DONE. `errors()` extension with typed error classes (BadRequestError, AuthenticationError, NotFoundError, RateLimitError, etc.). Rate limit header parsing.
+
+- **Logging extension** — DONE. `logging()` extension with configurable log levels, header redaction, request ID correlation, timing.
+
+- **Streaming client extension** — DONE. `streaming()` extension consuming SSE responses as `AsyncIterable<T>`. Matches server's `streamAsSse()` format.
+
+- **Pagination** — DONE. `Page<T>` types (CursorPage, OffsetPage) in api-tree. `page` TypeRef kind in type-ir. `paginated()` directive. `pagination()` client extension with auto-page iteration.
+
+- **deepPartial/deepRequired for stream/page** — DONE. Added recursion cases in derive.ts.
+
+- **AOT validator for stream/page** — DONE. Added codegen cases in compile.ts.
+
+- **TAG_STREAMING auto-derivation** — DONE. `resolveTags` derives streaming from `stream` return type. Wired for GraphQL; HTTP/CLI/MCP need separate plumbing (work from JSON Schema, not TypeRef).
+
+- **Auth adapter contract** — DONE. `AuthAdapter<TUser>` and `AuthClientAdapter` interfaces in api-tree. `authLayer`, `authMiddleware`, `authExtension` bridges.
+
+- **OIDC/JWT auth package** — DONE. New `@rhi-zone/fractal-auth-oidc` package. JWT verification via Web Crypto API. JWKS discovery + caching. Server + client adapters.
+
+- **TypeRefDocument with defs** — DONE. Self-contained `{ root, defs }` structure. `nodeCount`, `walkTypeRef`, `resolveRef` helpers. Recursive validator codegen emits real named functions. Configurable `shouldShare` predicate for structural sharing.
+
+- **Projector defs support** — DONE. JSON Schema `$defs`, OpenAPI `components/schemas`, Zod `z.lazy()` fix for recursive entries.
+
+- **Set/Map extraction fix** — DONE. Fixed dangling `ref("Set")`/`ref("Map")` from generic container self-referential methods.
+
 ### Remaining open threads from 2026-07-22
 
 - **`moveTo` resolution in `HttpManifest`** — wildcard `"*"` token's synthesized `:param` name can diverge from another leaf's authored `fallback.name` at the same converged position. Per-leaf type information can't see whole-tree facts, creating a potential naming mismatch in the manifest.
 
 - **Extension commit `24bf12c` history issue** — accidentally includes some `HttpManifest` export/subpath changes beyond what the commit message describes. Cosmetic issue in history; code is correct.
 
-- **Streaming extension API incomplete** — `codegen.streamingCall` and `decodeResponse` were added to the extension API for streaming support. Existing extensions don't yet exercise these axes; consumer patterns remain to be established.
+- **TAG_STREAMING wiring for HTTP/CLI/MCP projectors** — they work from JSON Schema (not TypeRef), so `stream` kind info is lost. Need separate plumbing or carry `stream` through JSON Schema degrade.
 
-- **Response validation against schema** — table-stakes for production SDKs. Not yet implemented as an extension; blocking no current work but worth tracking as a pending capability.
+- **Auth provider-specific packages** — adapter contract shipped, OIDC generic package shipped. Provider-specific packages (Clerk, Auth0, Supabase, Firebase, Cognito) are thin wrappers on top — community or fractal-maintained.
+
+- **Production-grade codegen: remaining nice-to-have features** — OpenTelemetry tracing, idempotency keys, webhook validation not yet implemented as extensions.
 
 ## Next session (handoff)
 
