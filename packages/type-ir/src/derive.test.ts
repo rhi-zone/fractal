@@ -329,6 +329,43 @@ describe("deepPartial", () => {
     if (userShape.kind !== "object") throw new Error("unreachable")
     expect(userShape.fields.name!.meta.optional).toBe(true)
   })
+
+  test("stream field: element's object fields become optional", () => {
+    const ref = deepPartial(
+      t(
+        types.object({
+          feed: t(types.stream(t(types.object({ id: uuid(), label: t(types.string) })))),
+        }),
+      ),
+    )
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.feed!.meta.optional).toBe(true)
+    const streamShape = ref.shape.fields.feed!.shape
+    if (streamShape.kind !== "stream") throw new Error("unreachable")
+    const elementShape = streamShape.element.shape
+    if (elementShape.kind !== "object") throw new Error("unreachable")
+    expect(elementShape.fields.id!.meta.optional).toBe(true)
+    expect(elementShape.fields.label!.meta.optional).toBe(true)
+  })
+
+  test("page field: element's object fields become optional, style is preserved", () => {
+    const ref = deepPartial(
+      t(
+        types.object({
+          results: t(types.page(t(types.object({ id: uuid(), label: t(types.string) })), "cursor")),
+        }),
+      ),
+    )
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.results!.meta.optional).toBe(true)
+    const pageShape = ref.shape.fields.results!.shape
+    if (pageShape.kind !== "page") throw new Error("unreachable")
+    expect(pageShape.style).toBe("cursor")
+    const elementShape = pageShape.element.shape
+    if (elementShape.kind !== "object") throw new Error("unreachable")
+    expect(elementShape.fields.id!.meta.optional).toBe(true)
+    expect(elementShape.fields.label!.meta.optional).toBe(true)
+  })
 })
 
 describe("deepRequired", () => {
@@ -413,6 +450,41 @@ describe("deepRequired", () => {
   test("non-object refs pass through unchanged", () => {
     const ref = t(types.string)
     expect(deepRequired(ref)).toEqual(ref)
+  })
+
+  test("stream field: element's object fields lose optional", () => {
+    const original = t(
+      types.object({
+        feed: t(types.stream(t(types.object({ id: uuid(), label: t(types.string) })))),
+      }),
+    )
+    const ref = deepRequired(deepPartial(original))
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.feed!.meta.optional).toBeUndefined()
+    const streamShape = ref.shape.fields.feed!.shape
+    if (streamShape.kind !== "stream") throw new Error("unreachable")
+    const elementShape = streamShape.element.shape
+    if (elementShape.kind !== "object") throw new Error("unreachable")
+    expect(elementShape.fields.id!.meta.optional).toBeUndefined()
+    expect(elementShape.fields.label!.meta.optional).toBeUndefined()
+  })
+
+  test("page field: element's object fields lose optional, style is preserved", () => {
+    const original = t(
+      types.object({
+        results: t(types.page(t(types.object({ id: uuid(), label: t(types.string) })), "offset")),
+      }),
+    )
+    const ref = deepRequired(deepPartial(original))
+    if (ref.shape.kind !== "object") throw new Error("unreachable")
+    expect(ref.shape.fields.results!.meta.optional).toBeUndefined()
+    const pageShape = ref.shape.fields.results!.shape
+    if (pageShape.kind !== "page") throw new Error("unreachable")
+    expect(pageShape.style).toBe("offset")
+    const elementShape = pageShape.element.shape
+    if (elementShape.kind !== "object") throw new Error("unreachable")
+    expect(elementShape.fields.id!.meta.optional).toBeUndefined()
+    expect(elementShape.fields.label!.meta.optional).toBeUndefined()
   })
 })
 

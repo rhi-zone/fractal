@@ -85,6 +85,14 @@ function deepPartialShape(shape: TypeShape, seen: Set<TypeShape>): TypeShape {
     seen.add(shape)
     return { kind: "array", element: t(deepPartialShape(shape.element.shape, seen), shape.element.meta) }
   }
+  if (shape.kind === "stream") {
+    seen.add(shape)
+    return { kind: "stream", element: t(deepPartialShape(shape.element.shape, seen), shape.element.meta) }
+  }
+  if (shape.kind === "page") {
+    seen.add(shape)
+    return { kind: "page", element: t(deepPartialShape(shape.element.shape, seen), shape.element.meta), style: shape.style }
+  }
   return shape
 }
 
@@ -113,6 +121,14 @@ function deepRequiredShape(shape: TypeShape, seen: Set<TypeShape>): TypeShape {
   if (shape.kind === "array") {
     seen.add(shape)
     return { kind: "array", element: t(deepRequiredShape(shape.element.shape, seen), shape.element.meta) }
+  }
+  if (shape.kind === "stream") {
+    seen.add(shape)
+    return { kind: "stream", element: t(deepRequiredShape(shape.element.shape, seen), shape.element.meta) }
+  }
+  if (shape.kind === "page") {
+    seen.add(shape)
+    return { kind: "page", element: t(deepRequiredShape(shape.element.shape, seen), shape.element.meta), style: shape.style }
   }
   return shape
 }
