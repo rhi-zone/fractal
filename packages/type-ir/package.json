@@ -243,6 +243,10 @@
       "types": "./src/ruby-sorbet.ts",
       "import": "./src/ruby-sorbet.ts"
     },
+    "./ruby-dry-types": {
+      "types": "./src/ruby-dry-types.ts",
+      "import": "./src/ruby-dry-types.ts"
+    },
     "./php": {
       "types": "./src/php-native.ts",
       "import": "./src/php-native.ts"
