@@ -74,6 +74,10 @@
     "./extensions/errors": {
       "types": "./src/extensions/errors.ts",
       "import": "./src/extensions/errors.ts"
+    },
+    "./extensions/logging": {
+      "types": "./src/extensions/logging.ts",
+      "import": "./src/extensions/logging.ts"
     }
   },
   "files": ["src"],

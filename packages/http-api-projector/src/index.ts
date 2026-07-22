@@ -54,6 +54,8 @@ export { timeout } from "./extensions/timeout.ts"
 export type { TimeoutOptions } from "./extensions/timeout.ts"
 export { interceptors } from "./extensions/interceptors.ts"
 export type { InterceptorsOptions } from "./extensions/interceptors.ts"
+export { DEFAULT_SENSITIVE_HEADERS, logging } from "./extensions/logging.ts"
+export type { LogEntry, LoggingOptions, LogLevel } from "./extensions/logging.ts"
 export {
   errors,
   BadRequestError,
