@@ -179,6 +179,50 @@ describe("description", () => {
   })
 })
 
+describe("deprecated", () => {
+  test("meta.deprecated true sets the field deprecated flag", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string, { deprecated: true }) })))
+    expect(struct.fields[0]?.deprecated).toBe(true)
+  })
+
+  test("meta.deprecated string is preserved as the field's deprecation reason", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string, { deprecated: "use fullName" }) })))
+    expect(struct.fields[0]?.deprecated).toBe("use fullName")
+  })
+
+  test("meta.deprecated is absent by default", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string) })))
+    expect(struct.fields[0]?.deprecated).toBeUndefined()
+  })
+
+  test("renders as a # Deprecated comment above the field", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string, { deprecated: true }) })))
+    const rendered = renderCapnp([struct])
+    expect(rendered).toContain("  # Deprecated\n  name @0 :Text;")
+  })
+
+  test("renders with a reason when meta.deprecated is a string", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string, { deprecated: "use fullName" }) })))
+    const rendered = renderCapnp([struct])
+    expect(rendered).toContain("  # Deprecated: use fullName\n  name @0 :Text;")
+  })
+
+  test("renders as a # Deprecated comment above the struct", () => {
+    const struct = toCapnpStruct("Person", t(types.object({ name: t(types.string) }), { deprecated: true }))
+    const rendered = renderCapnp([struct])
+    expect(rendered).toContain("# Deprecated\nstruct Person {")
+  })
+
+  test("interface: meta.deprecated renders as a # Deprecated comment", () => {
+    const iface = toCapnpInterface(
+      "Greeter",
+      t(types.interface({ greet: t(types.method([], t(types.void))) }), { deprecated: "use Greeter2" }),
+    )
+    const rendered = renderCapnp([], undefined, [iface])
+    expect(rendered).toContain("# Deprecated: use Greeter2\ninterface Greeter {")
+  })
+})
+
 describe("toCapnpStruct", () => {
   test("flat object with auto-numbered ordinals starting at 0", () => {
     const ref = t(

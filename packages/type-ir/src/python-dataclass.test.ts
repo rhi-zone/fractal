@@ -122,6 +122,54 @@ describe("objects", () => {
     )
   })
 
+  test("object-level description becomes the class docstring", () => {
+    const ref = t(types.object({ id: t(types.string) }), { description: "A user record." })
+    expect(toPython(ref, "User")).toBe(
+      [
+        "from __future__ import annotations",
+        "from dataclasses import dataclass",
+        "",
+        "@dataclass",
+        "class User:",
+        '    "A user record."',
+        "    id: str",
+        "",
+      ].join("\n"),
+    )
+  })
+
+  test("deprecated object emits a # Deprecated comment", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: true })
+    expect(toPython(ref, "User")).toBe(
+      [
+        "from __future__ import annotations",
+        "from dataclasses import dataclass",
+        "",
+        "@dataclass",
+        "class User:",
+        "    # Deprecated",
+        "    id: str",
+        "",
+      ].join("\n"),
+    )
+  })
+
+  test("deprecated with string message includes the message in the comment", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: "Use NewUser instead." })
+    expect(toPython(ref, "User")).toBe(
+      [
+        "from __future__ import annotations",
+        "from dataclasses import dataclass",
+        "",
+        "@dataclass",
+        "class User:",
+        "    # Deprecated: Use NewUser instead.",
+        "    id: str",
+        "",
+      ].join("\n"),
+    )
+  })
+
   test("empty object emits pass", () => {
     expect(toPython(t(types.object({})), "Empty")).toBe(
       ["from __future__ import annotations", "from dataclasses import dataclass", "", "@dataclass", "class Empty:", "    pass", ""].join(

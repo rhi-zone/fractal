@@ -130,6 +130,32 @@ describe("Codable structs", () => {
       ].join("\n"),
     )
   })
+
+  test("description renders as a /// doc comment above the struct", () => {
+    const ref = t(types.object({ id: t(types.string) }), { description: "A person record." })
+    expect(toSwift(ref, "Person")).toBe(
+      ["/// A person record.", "struct Person: Codable {", "    var id: String", "}"].join("\n"),
+    )
+  })
+
+  test("deprecated true renders a bare @available(*, deprecated) attribute", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: true })
+    expect(toSwift(ref, "Person")).toBe(
+      ["@available(*, deprecated)", "struct Person: Codable {", "    var id: String", "}"].join("\n"),
+    )
+  })
+
+  test("deprecated string message renders @available(*, deprecated, message:)", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: "Use NewPerson instead." })
+    expect(toSwift(ref, "Person")).toBe(
+      [
+        '@available(*, deprecated, message: "Use NewPerson instead.")',
+        "struct Person: Codable {",
+        "    var id: String",
+        "}",
+      ].join("\n"),
+    )
+  })
 })
 
 describe("enums", () => {
@@ -153,6 +179,20 @@ describe("enums", () => {
         "enum Direction: String, Codable, CaseIterable {",
         '    case northEast = "north-east"',
         "    case south",
+        "}",
+      ].join("\n"),
+    )
+  })
+
+  test("description and deprecated render doc comment + @available above the enum", () => {
+    const ref = t(types.enum(["red", "green"]), { description: "A color.", deprecated: true })
+    expect(toSwift(ref, "Color")).toBe(
+      [
+        "/// A color.",
+        "@available(*, deprecated)",
+        "enum Color: String, Codable, CaseIterable {",
+        "    case red",
+        "    case green",
         "}",
       ].join("\n"),
     )
@@ -208,5 +248,14 @@ describe("unions", () => {
     expect(result).toContain('case "square": self = .square(try Square(from: decoder))')
     expect(result).toContain("struct Circle: Codable {")
     expect(result).toContain("struct Square: Codable {")
+  })
+
+  test("union-level description and deprecated render doc comment + @available above the enum", () => {
+    const ref = t(types.union([t(types.string), t(types.integer)]), {
+      description: "A string or int.",
+      deprecated: "Use NewValue instead.",
+    })
+    const result = toSwift(ref, "StringOrInt")
+    expect(result.startsWith('/// A string or int.\n@available(*, deprecated, message: "Use NewValue instead.")\nenum StringOrInt: Codable {')).toBe(true)
   })
 })

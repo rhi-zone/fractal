@@ -27,7 +27,7 @@ type FieldDecl = {
 }
 
 type Decl =
-  | { kind: "dataclass"; name: string; fields: FieldDecl[] }
+  | { kind: "dataclass"; name: string; fields: FieldDecl[]; docstring?: string; deprecated?: string | true }
   | { kind: "enum"; name: string; members: readonly string[] }
   | { kind: "protocol"; name: string; methodLines: string[] }
 
@@ -117,7 +117,13 @@ const handlers: Record<string, Converter> = {
         : { name: fieldName, type: fieldType, optional: isOptional, comment }
       ;(isOptional ? optional : required).push(decl)
     }
-    ctx.decls.push({ kind: "dataclass", name, fields: [...required, ...optional] })
+    const docstring = typeof _ref.meta.description === "string" ? _ref.meta.description : undefined
+    const deprecated =
+      typeof _ref.meta.deprecated === "string" ? _ref.meta.deprecated : _ref.meta.deprecated === true ? true : undefined
+    const decl: Decl = { kind: "dataclass", name, fields: [...required, ...optional] }
+    if (docstring !== undefined) decl.docstring = docstring
+    if (deprecated !== undefined) decl.deprecated = deprecated
+    ctx.decls.push(decl)
     return name
   },
   // A class instance carries only nominal identity (className/source), never
@@ -266,8 +272,12 @@ function renderDecl(decl: Decl): string[] {
     return lines
   }
   const lines = ["@dataclass", `class ${decl.name}:`]
+  if (decl.docstring !== undefined) lines.push(`    ${quote(decl.docstring)}`)
+  if (decl.deprecated !== undefined) {
+    lines.push(`    # Deprecated${decl.deprecated === true ? "" : `: ${decl.deprecated}`}`)
+  }
   if (decl.fields.length === 0) {
-    lines.push("    pass")
+    if (decl.docstring === undefined && decl.deprecated === undefined) lines.push("    pass")
     return lines
   }
   for (const field of decl.fields) {

@@ -165,6 +165,27 @@ function fieldType(ref: TypeRef, hint: string, ctx: Ctx): string {
   return base
 }
 
+// Swift doc comments (`///`, https://www.swift.org/documentation/docc/) from
+// `meta.description`, plus `@available(*, deprecated, ...)` — Swift's native
+// compiler-recognized deprecation attribute (a warning at every use site) —
+// from `meta.deprecated` (`true` for a bare marker, or a string that becomes
+// the attribute's `message:` argument).
+function docComment(ref: TypeRef): string[] {
+  const description = typeof ref.meta.description === "string" ? ref.meta.description : undefined
+  const deprecatedMessage = typeof ref.meta.deprecated === "string" ? ref.meta.deprecated : undefined
+  const isDeprecated = ref.meta.deprecated === true || deprecatedMessage !== undefined
+  const lines: string[] = []
+  if (description !== undefined) lines.push(`/// ${description}`)
+  if (isDeprecated) {
+    lines.push(
+      deprecatedMessage !== undefined
+        ? `@available(*, deprecated, message: ${quote(deprecatedMessage)})`
+        : "@available(*, deprecated)",
+    )
+  }
+  return lines
+}
+
 function structDecl(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "object" }
   const ctx: Ctx = { nested: [] }
@@ -181,7 +202,7 @@ function structDecl(name: string, ref: TypeRef): string {
     codingKeyLines.push(swiftName === fieldName ? `        case ${swiftName}` : `        case ${swiftName} = ${quote(fieldName)}`)
   }
 
-  const lines = [`struct ${name}: Codable {`, ...propLines]
+  const lines = [...docComment(ref), `struct ${name}: Codable {`, ...propLines]
   if (needsCodingKeys) {
     lines.push("", "    enum CodingKeys: String, CodingKey {", ...codingKeyLines, "    }")
   }
@@ -195,7 +216,7 @@ function structDecl(name: string, ref: TypeRef): string {
 
 function enumDecl(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "enum" }
-  const lines = [`enum ${name}: String, Codable, CaseIterable {`]
+  const lines = [...docComment(ref), `enum ${name}: String, Codable, CaseIterable {`]
   for (const member of s.members) {
     const ident = swiftIdentifier(member)
     lines.push(ident === member ? `    case ${ident}` : `    case ${ident} = ${quote(member)}`)
@@ -224,14 +245,14 @@ function variantCaseName(ref: TypeRef, index: number): string {
 // (first successful decode wins — same "structural probing" approach
 // several dynamically-typed union decoders use), encoding just re-encodes
 // whichever payload is currently held.
-function plainUnionDecl(name: string, variants: readonly TypeRef[]): string {
+function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[]): string {
   const ctx: Ctx = { nested: [] }
   const cases = variants.map((variant, i) => ({
     caseName: variantCaseName(variant, i),
     typeName: fieldType(variant, capitalize(variantCaseName(variant, i)), ctx),
   }))
 
-  const lines = [`enum ${name}: Codable {`]
+  const lines = [...docComment(ref), `enum ${name}: Codable {`]
   for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
   lines.push("", "    init(from decoder: Decoder) throws {", "        let container = try decoder.singleValueContainer()")
   for (const c of cases) {
@@ -283,7 +304,7 @@ function discriminatorTag(ref: TypeRef, discriminator: string, index: number): s
 // idiomatic Swift for a JSON tagged union, in place of the probe-every-
 // variant approach `plainUnionDecl` falls back to when there's no
 // discriminator to key off of.
-function discriminatedUnionDecl(name: string, variants: readonly TypeRef[], discriminator: string): string {
+function discriminatedUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[], discriminator: string): string {
   const key = swiftIdentifier(discriminator)
   const ctx: Ctx = { nested: [] }
   const cases = variants.map((variant, i) => {
@@ -293,7 +314,7 @@ function discriminatedUnionDecl(name: string, variants: readonly TypeRef[], disc
     return { tag, caseName: swiftIdentifier(tag), typeName }
   })
 
-  const lines = [`enum ${name}: Codable {`]
+  const lines = [...docComment(ref), `enum ${name}: Codable {`]
   for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
   lines.push(
     "",
@@ -331,8 +352,8 @@ function discriminatedUnionDecl(name: string, variants: readonly TypeRef[], disc
 function unionDecl(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "union" }
   return typeof ref.meta.discriminator === "string"
-    ? discriminatedUnionDecl(name, s.variants, ref.meta.discriminator)
-    : plainUnionDecl(name, s.variants)
+    ? discriminatedUnionDecl(name, ref, s.variants, ref.meta.discriminator)
+    : plainUnionDecl(name, ref, s.variants)
 }
 
 /**

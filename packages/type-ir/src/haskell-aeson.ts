@@ -229,6 +229,30 @@ function fieldHaskellType(prefix: string, fieldName: string, ref: TypeRef, decls
   return ref.meta.optional === true || ref.meta.nullable === true ? `Maybe ${wrapType(base)}` : base
 }
 
+// Haddock doc comment (https://haskell-haddock.readthedocs.io/en/latest/markup.html) —
+// `-- | first line` then `-- continued` for every subsequent line, placed
+// immediately above the declaration it documents. Driven by
+// `meta.description`, same open-metadata-bag convention rust-serde.ts's/
+// kotlin-kotlinx.ts's own doc-comment helpers use.
+function haddockComment(meta: Readonly<Record<string, unknown>>): string[] {
+  const description = typeof meta.description === "string" ? meta.description : undefined
+  if (description === undefined) return []
+  const lines = description.split("\n")
+  return lines.map((line, i) => (i === 0 ? `-- | ${line}` : `-- ${line}`))
+}
+
+// `{-# DEPRECATED Name "reason" #-}` (https://wiki.haskell.org/Pragmas#DEPRECATED_pragma) —
+// GHC's native deprecation pragma, emitted as a standalone line ahead of the
+// `data` declaration it targets. `meta.deprecated` may be a bare `true` (no
+// reason given — GHC requires a message string, so this falls back to a
+// generic one) or a string (the reason itself, used verbatim).
+function deprecatedPragma(name: string, meta: Readonly<Record<string, unknown>>): string[] {
+  const deprecated = meta.deprecated
+  if (deprecated === true) return [`{-# DEPRECATED ${name} "deprecated" #-}`]
+  if (typeof deprecated === "string") return [`{-# DEPRECATED ${name} ${quote(deprecated)} #-}`]
+  return []
+}
+
 /**
  * `object` -> a Haskell record `data` declaration. Field names are prefixed
  * with `lowerFirst(name)` (`Person` -> `personName`/`personAge`) since
@@ -257,6 +281,7 @@ function buildRecordDecl(name: string, ref: TypeRef, outerDecls: string[]): stri
           `  { ${fields.map((f) => `${f.hsField} :: ${f.hsType}`).join("\n  , ")}`,
           `  } deriving (Show, Eq, Generic)`,
         ].join("\n")
+  const decorated = [...haddockComment(ref.meta), ...deprecatedPragma(name, ref.meta), dataDecl].join("\n")
 
   const modifierName = `${prefix}FieldLabel`
   const modifierDecl = [
@@ -275,7 +300,7 @@ function buildRecordDecl(name: string, ref: TypeRef, outerDecls: string[]): stri
     `  parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = ${modifierName} }`,
   ].join("\n")
 
-  return [dataDecl, "", modifierDecl, "", toJsonInstance, "", fromJsonInstance].join("\n")
+  return [decorated, "", modifierDecl, "", toJsonInstance, "", fromJsonInstance].join("\n")
 }
 
 /**
@@ -290,6 +315,7 @@ function buildEnumDecl(name: string, ref: TypeRef): string {
   const ctors = shape.members.map((m) => `${name}${capitalize(sanitizeIdent(m))}`)
 
   const dataDecl = [`data ${name}`, `  = ${ctors.join("\n  | ")}`, `  deriving (Show, Eq, Generic)`].join("\n")
+  const decorated = [...haddockComment(ref.meta), ...deprecatedPragma(name, ref.meta), dataDecl].join("\n")
 
   const toJsonInstance = [
     `instance ToJSON ${name} where`,
@@ -303,7 +329,7 @@ function buildEnumDecl(name: string, ref: TypeRef): string {
     `    other -> fail ("Unknown ${name} value: " ++ T.unpack other)`,
   ].join("\n")
 
-  return [dataDecl, "", toJsonInstance, "", fromJsonInstance].join("\n")
+  return [decorated, "", toJsonInstance, "", fromJsonInstance].join("\n")
 }
 
 /**
@@ -327,9 +353,17 @@ function buildEnumDecl(name: string, ref: TypeRef): string {
 function buildUnionDecl(name: string, ref: TypeRef, outerDecls: string[]): string {
   const shape = ref.shape as TypeShape & { kind: "union" }
   const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
-  return discriminator === undefined
-    ? buildPlainUnionDecl(name, shape.variants, outerDecls)
-    : buildDiscriminatedUnionDecl(name, shape.variants, discriminator, outerDecls)
+  const decl =
+    discriminator === undefined
+      ? buildPlainUnionDecl(name, shape.variants, outerDecls)
+      : buildDiscriminatedUnionDecl(name, shape.variants, discriminator, outerDecls)
+  // Both `build*UnionDecl` helpers always emit the `data` declaration as their
+  // string's leading lines (see each one's own `dataDecl` construction) —
+  // splicing the Haddock comment/DEPRECATED pragma in ahead of the whole
+  // returned block puts them directly above that `data` keyword, same as
+  // `buildRecordDecl`/`buildEnumDecl` do for their own declarations.
+  const prefix = [...haddockComment(ref.meta), ...deprecatedPragma(name, ref.meta)]
+  return prefix.length === 0 ? decl : [...prefix, decl].join("\n")
 }
 
 function buildDiscriminatedUnionDecl(

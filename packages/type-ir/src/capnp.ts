@@ -5,16 +5,26 @@ function isA(kind: string, target: string): boolean {
 }
 
 // Cap'n Proto schema language: https://capnproto.org/language.html
+// `deprecated` mirrors `description`'s shape: `true` (no reason given) or a
+// string (the reason), matching `meta.deprecated`'s own open-metadata-bag
+// convention. Cap'n Proto has no native deprecation construct (§ "Language
+// Reference" has no such annotation/attribute) — `renderField`/`renderStruct`/
+// `renderInterface` render it as a `# Deprecated` (or `# Deprecated: reason`)
+// line comment, same convention `description` already uses for its own `#`
+// comment.
+type Deprecated = true | string
+
 export type CapnpStruct = {
   name: string
-  fields: Array<{ name: string; type: string; ordinal: number; description?: string }>
+  fields: Array<{ name: string; type: string; ordinal: number; description?: string; deprecated?: Deprecated }>
   // An anonymous union (§ "Unions": https://capnproto.org/language.html#unions)
   // nested directly inside the struct — used to lower a union-rooted TypeRef,
   // where each variant becomes one arm of the union rather than a plain field.
-  unionFields?: Array<{ name: string; type: string; ordinal: number; description?: string }>
+  unionFields?: Array<{ name: string; type: string; ordinal: number; description?: string; deprecated?: Deprecated }>
   nestedStructs?: CapnpStruct[]
   nestedEnums?: Array<{ name: string; values: readonly string[] }>
   description?: string
+  deprecated?: Deprecated
 }
 
 // Cap'n Proto interfaces (§ "Interfaces": https://capnproto.org/language.html#interfaces)
@@ -32,6 +42,7 @@ export type CapnpInterface = {
   name: string
   methods: CapnpMethod[]
   description?: string
+  deprecated?: Deprecated
 }
 
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
@@ -126,6 +137,16 @@ const handlers: Record<string, Converter> = {
   interface: leaf("AnyPointer"),
 }
 
+// Reads `meta.deprecated` into the `Deprecated` shape struct/field/interface
+// builders below carry through to rendering — `true` (bare) or a string
+// (reason) pass through, anything else (absent, `false`) is "not deprecated".
+function readDeprecated(meta: Readonly<Record<string, unknown>>): Deprecated | undefined {
+  const deprecated = meta.deprecated
+  if (deprecated === true) return true
+  if (typeof deprecated === "string") return deprecated
+  return undefined
+}
+
 export function toCapnpType(ref: TypeRef): string {
   const converter = resolve(ref.shape.kind, handlers)
   return converter === undefined ? "AnyPointer" : converter(ref.shape, ref.meta)
@@ -160,6 +181,8 @@ function toCapnpUnionStruct(name: string, ref: TypeRef): CapnpStruct {
   shape.variants.forEach((variant, ordinal) => {
     const description: { description: string } | Record<string, never> =
       typeof variant.meta.description === "string" ? { description: variant.meta.description } : {}
+    const deprecated = readDeprecated(variant.meta)
+    const deprecatedField: { deprecated: Deprecated } | Record<string, never> = deprecated === undefined ? {} : { deprecated }
 
     if (isA(variant.shape.kind, "object")) {
       const objShape = variant.shape as TypeShape & { kind: "object" }
@@ -173,15 +196,17 @@ function toCapnpUnionStruct(name: string, ref: TypeRef): CapnpStruct {
       }
       const structName = capitalize(armName)
       nestedStructs.push(toCapnpStruct(structName, variant))
-      unionFields.push({ name: armName, type: structName, ordinal, ...description })
+      unionFields.push({ name: armName, type: structName, ordinal, ...description, ...deprecatedField })
     } else {
-      unionFields.push({ name: `variant${ordinal}`, type: toCapnpType(variant), ordinal, ...description })
+      unionFields.push({ name: `variant${ordinal}`, type: toCapnpType(variant), ordinal, ...description, ...deprecatedField })
     }
   })
 
   const result: CapnpStruct = { name, fields: [], unionFields }
   if (nestedStructs.length > 0) result.nestedStructs = nestedStructs
   if (typeof ref.meta.description === "string") result.description = ref.meta.description
+  const structDeprecated = readDeprecated(ref.meta)
+  if (structDeprecated !== undefined) result.deprecated = structDeprecated
   return result
 }
 
@@ -197,10 +222,12 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
     const description: { description: string } | Record<string, never> =
       typeof fieldRef.meta.description === "string" ? { description: fieldRef.meta.description } : {}
+    const deprecated = readDeprecated(fieldRef.meta)
+    const deprecatedField: { deprecated: Deprecated } | Record<string, never> = deprecated === undefined ? {} : { deprecated }
     if (isA(fieldRef.shape.kind, "object")) {
       const nestedName = capitalize(fieldName)
       nestedStructs.push(toCapnpStruct(nestedName, fieldRef))
-      fields.push({ name: fieldName, type: nestedName, ordinal, ...description })
+      fields.push({ name: fieldName, type: nestedName, ordinal, ...description, ...deprecatedField })
     } else if (
       fieldRef.shape.kind === "array" &&
       isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
@@ -208,12 +235,12 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
       const nestedName = capitalize(fieldName)
       const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
       nestedStructs.push(toCapnpStruct(nestedName, element))
-      fields.push({ name: fieldName, type: `List(${nestedName})`, ordinal, ...description })
+      fields.push({ name: fieldName, type: `List(${nestedName})`, ordinal, ...description, ...deprecatedField })
     } else if (fieldRef.shape.kind === "enum") {
       const enumName = capitalize(fieldName)
       const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
       nestedEnums.push({ name: enumName, values: members })
-      fields.push({ name: fieldName, type: enumName, ordinal, ...description })
+      fields.push({ name: fieldName, type: enumName, ordinal, ...description, ...deprecatedField })
     } else if (fieldRef.shape.kind === "map") {
       const mapShape = fieldRef.shape as TypeShape & { kind: "map" }
       const entryName = `${capitalize(fieldName)}Entry`
@@ -227,9 +254,9 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
         ],
       }
       nestedStructs.push(entryStruct)
-      fields.push({ name: fieldName, type: `List(${entryName})`, ordinal, ...description })
+      fields.push({ name: fieldName, type: `List(${entryName})`, ordinal, ...description, ...deprecatedField })
     } else {
-      fields.push({ name: fieldName, type: toCapnpType(fieldRef), ordinal, ...description })
+      fields.push({ name: fieldName, type: toCapnpType(fieldRef), ordinal, ...description, ...deprecatedField })
     }
     ordinal++
   }
@@ -238,6 +265,8 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
   if (nestedStructs.length > 0) result.nestedStructs = nestedStructs
   if (nestedEnums.length > 0) result.nestedEnums = nestedEnums
   if (typeof ref.meta.description === "string") result.description = ref.meta.description
+  const structDeprecated = readDeprecated(ref.meta)
+  if (structDeprecated !== undefined) result.deprecated = structDeprecated
   return result
 }
 
@@ -269,7 +298,18 @@ export function toCapnpInterface(name: string, ref: TypeRef): CapnpInterface {
 
   const result: CapnpInterface = { name, methods }
   if (typeof ref.meta.description === "string") result.description = ref.meta.description
+  const interfaceDeprecated = readDeprecated(ref.meta)
+  if (interfaceDeprecated !== undefined) result.deprecated = interfaceDeprecated
   return result
+}
+
+// Renders a `deprecated` marker as its own `#` line comment — `# Deprecated`
+// (bare) or `# Deprecated: reason` (a string reason) — same idiomatic `#`
+// line-comment convention `description` uses (Cap'n Proto has no native
+// deprecation annotation, § "Language Reference").
+function deprecatedCommentLine(deprecated: Deprecated | undefined, indent: string): string[] {
+  if (deprecated === undefined) return []
+  return [deprecated === true ? `${indent}# Deprecated` : `${indent}# Deprecated: ${deprecated}`]
 }
 
 function renderField(field: CapnpStruct["fields"][number], indent: string): string[] {
@@ -277,6 +317,7 @@ function renderField(field: CapnpStruct["fields"][number], indent: string): stri
   // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
   // comments immediately above the field are the idiomatic convention.
   if (typeof field.description === "string") lines.push(`${indent}# ${field.description}`)
+  lines.push(...deprecatedCommentLine(field.deprecated, indent))
   lines.push(`${indent}${field.name} @${field.ordinal} :${field.type};`)
   return lines
 }
@@ -288,6 +329,7 @@ function renderStruct(struct: CapnpStruct, depth: number): string[] {
   // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
   // comments immediately above the struct are the idiomatic convention.
   if (typeof struct.description === "string") lines.push(`${indent}# ${struct.description}`)
+  lines.push(...deprecatedCommentLine(struct.deprecated, indent))
   lines.push(`${indent}struct ${struct.name} {`)
 
   for (const field of struct.fields) lines.push(...renderField(field, inner))
@@ -325,6 +367,7 @@ function renderInterface(iface: CapnpInterface, depth: number): string[] {
   // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
   // comments immediately above the interface are the idiomatic convention.
   if (typeof iface.description === "string") lines.push(`${indent}# ${iface.description}`)
+  lines.push(...deprecatedCommentLine(iface.deprecated, indent))
   lines.push(`${indent}interface ${iface.name} {`)
   for (const method of iface.methods) lines.push(renderMethodLine(method, inner))
   lines.push(`${indent}}`)

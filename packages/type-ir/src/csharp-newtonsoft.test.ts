@@ -92,6 +92,24 @@ describe("records", () => {
     expect(out).toContain('[JsonProperty("count", DefaultValueHandling = DefaultValueHandling.Populate)]')
     expect(out).toContain("using System.ComponentModel;")
   })
+
+  test("description renders as an XML <summary> doc comment", () => {
+    const ref = t(types.object({ id: t(types.string) }), { description: "A person record." })
+    const out = toCSharpNewtonsoft(ref, "Person")
+    expect(out).toContain("/// <summary>\n/// A person record.\n/// </summary>\npublic record Person")
+  })
+
+  test("deprecated true renders a bare [Obsolete] attribute", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: true })
+    const out = toCSharpNewtonsoft(ref, "Person")
+    expect(out).toContain("[Obsolete]\npublic record Person")
+  })
+
+  test("deprecated string message renders [Obsolete(\"...\")]", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: "Use NewPerson instead." })
+    const out = toCSharpNewtonsoft(ref, "Person")
+    expect(out).toContain('[Obsolete("Use NewPerson instead.")]\npublic record Person')
+  })
 })
 
 describe("collections", () => {
@@ -128,6 +146,14 @@ describe("enum", () => {
     expect(out).toContain("Medium")
     expect(out).toContain("Large")
     expect(out).toContain("using Newtonsoft.Json.Converters;")
+  })
+
+  test("description and deprecated render doc comment + [Obsolete] above the enum", () => {
+    const ref = t(types.enum(["small", "large"]), { description: "A size tier.", deprecated: true })
+    const out = toCSharpNewtonsoft(ref, "Size")
+    expect(out).toContain(
+      "/// <summary>\n/// A size tier.\n/// </summary>\n[Obsolete]\n[JsonConverter(typeof(StringEnumConverter))]\npublic enum Size",
+    )
   })
 })
 

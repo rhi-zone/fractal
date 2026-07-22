@@ -82,6 +82,18 @@ function docComment(meta: Readonly<Record<string, unknown>>, indent = ""): strin
   return `${indent}/// ${description}\n`
 }
 
+// `@Deprecated('reason')` (https://api.dart.dev/stable/dart-core/Deprecated-class.html) —
+// Dart's native deprecation annotation, analyzer-recognized (unlike a doc
+// comment's own free text). Dart's `Deprecated` constructor requires a
+// message argument, so a bare `meta.deprecated === true` (no reason given)
+// falls back to a generic one.
+function deprecatedAnnotation(meta: Readonly<Record<string, unknown>>, indent = ""): string {
+  const deprecated = meta.deprecated
+  if (deprecated === true) return `${indent}@Deprecated('deprecated')\n`
+  if (typeof deprecated === "string") return `${indent}@Deprecated(${quote(deprecated)})\n`
+  return ""
+}
+
 // A type "needs custom (de)serialization" when its own or an element/value's
 // kind is one this projector generates a `fromJson`/`toJson` pair for
 // (object/enum/union) — everything else round-trips through `Map<String,
@@ -302,7 +314,7 @@ function emitClass(name: string, ref: TypeRef, ctx: Ctx, extendsName?: string): 
   const ctorLine = `  ${isVariant ? "const " : ""}${name}(${ctorArgs})${isVariant ? " : super()" : ""};`
 
   const lines: string[] = []
-  lines.push(`${docComment(ref.meta)}class ${name}${extendsClause} {`)
+  lines.push(`${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}class ${name}${extendsClause} {`)
   lines.push(...fieldLines.filter((l) => l.length > 0))
   lines.push("")
   lines.push(ctorLine)
@@ -330,7 +342,7 @@ function emitEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "enum" }
   const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quote(member)})`).join(",\n")
 
-  const decl = `${docComment(ref.meta)}enum ${name} {
+  const decl = `${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}enum ${name} {
 ${members};
 
   final String value;
@@ -421,7 +433,7 @@ ${cases}
     throw ArgumentError('No variant of ${name} matched the given JSON');`
   }
 
-  const decl = `${docComment(ref.meta)}sealed class ${name} {
+  const decl = `${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}sealed class ${name} {
   const ${name}();
 
   factory ${name}.fromJson(Map<String, dynamic> json) {

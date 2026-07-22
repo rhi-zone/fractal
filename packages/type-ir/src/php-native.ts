@@ -166,6 +166,22 @@ export function toPhpType(ref: TypeRef): PhpType {
   return nullable ? applyNullable(base) : base
 }
 
+// PHPDoc block (https://docs.phpdoc.org/guide/guides/docblocks.html) —
+// `/** ... */` immediately above the declaration it documents, driven by
+// `meta.description`/`meta.deprecated`, same open-metadata-bag convention
+// rust-serde.ts's/kotlin-kotlinx.ts's own doc-comment helpers use.
+// `meta.deprecated` becomes an `@deprecated` tag
+// (https://docs.phpdoc.org/guide/references/phpdoc/tags/deprecated.html) —
+// with its reason text when `deprecated` is a string, bare otherwise.
+function docComment(meta: Readonly<Record<string, unknown>>): string {
+  const description = typeof meta.description === "string" ? meta.description : undefined
+  const deprecated = meta.deprecated
+  const deprecatedTag = deprecated === true ? "@deprecated" : typeof deprecated === "string" ? `@deprecated ${deprecated}` : undefined
+  if (description === undefined && deprecatedTag === undefined) return ""
+  const lines = [description, deprecatedTag].filter((line): line is string => line !== undefined)
+  return ["/**", ...lines.map((line) => ` * ${line}`), " */\n"].join("\n")
+}
+
 /**
  * PHP 8.1 backed enum (https://www.php.net/manual/en/language.enumerations.backed.php):
  * `enum Name: string { case Member = "member"; }`. Always string-backed since
@@ -176,7 +192,7 @@ export function toPhpType(ref: TypeRef): PhpType {
 export function toPhpEnum(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "enum" }
   const cases = s.members.map((member) => `    case ${caseName(member)} = ${quote(member)};`)
-  return [`enum ${name}: string`, "{", ...cases, "}"].join("\n")
+  return docComment(ref.meta) + [`enum ${name}: string`, "{", ...cases, "}"].join("\n")
 }
 
 /**
@@ -212,7 +228,7 @@ export function toPhpClass(name: string, ref: TypeRef): string {
   const docBlock = docParams.length === 0 ? "" : ["    /**", ...docParams, "     */"].join("\n") + "\n"
 
   return [
-    `final readonly class ${name} implements \\JsonSerializable`,
+    docComment(ref.meta) + `final readonly class ${name} implements \\JsonSerializable`,
     "{",
     docBlock + "    public function __construct(",
     ...paramLines,

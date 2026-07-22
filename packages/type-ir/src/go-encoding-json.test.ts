@@ -90,6 +90,32 @@ describe("struct with json tags", () => {
   })
 })
 
+describe("doc comments", () => {
+  test("description renders as a leading // Name comment", () => {
+    const ref = t(types.object({ id: t(types.string) }), { description: "represents a person." })
+    expect(toGo(ref, "User")).toBe(
+      '// User represents a person.\ntype User struct {\n\tId string `json:"id"`\n}',
+    )
+  })
+
+  test("deprecated true renders a // Deprecated: line", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: true })
+    expect(toGo(ref, "User")).toBe(
+      '// Deprecated: User is deprecated.\ntype User struct {\n\tId string `json:"id"`\n}',
+    )
+  })
+
+  test("deprecated string message and description combine with a blank comment line", () => {
+    const ref = t(types.object({ id: t(types.string) }), {
+      description: "represents a person.",
+      deprecated: "Use NewUser instead.",
+    })
+    expect(toGo(ref, "User")).toBe(
+      '// User represents a person.\n//\n// Deprecated: Use NewUser instead.\ntype User struct {\n\tId string `json:"id"`\n}',
+    )
+  })
+})
+
 describe("nested objects", () => {
   test("nested object field hoists a separate named struct", () => {
     const ref = t(

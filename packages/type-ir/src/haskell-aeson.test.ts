@@ -189,6 +189,50 @@ describe("toHaskell: object -> record", () => {
   })
 })
 
+describe("toHaskell: doc comments and deprecation", () => {
+  test("meta.description -> Haddock -- | comment above the data decl", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { description: "A person." })
+    const out = toHaskell(ref, "Person")
+    expect(out).toContain("-- | A person.\ndata Person = Person")
+  })
+
+  test("multi-line description continues with plain -- lines", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { description: "A person.\nHas a name." })
+    const out = toHaskell(ref, "Person")
+    expect(out).toContain("-- | A person.\n-- Has a name.\ndata Person = Person")
+  })
+
+  test("meta.deprecated true -> bare DEPRECATED pragma", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { deprecated: true })
+    const out = toHaskell(ref, "Person")
+    expect(out).toContain('{-# DEPRECATED Person "deprecated" #-}\ndata Person = Person')
+  })
+
+  test("meta.deprecated string -> DEPRECATED pragma with reason", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { deprecated: "use NewPerson" })
+    const out = toHaskell(ref, "Person")
+    expect(out).toContain('{-# DEPRECATED Person "use NewPerson" #-}\ndata Person = Person')
+  })
+
+  test("enum decl gets doc comment and pragma", () => {
+    const ref = withMeta(t(types.enum(["active", "inactive"])), { description: "Account status.", deprecated: true })
+    const out = toHaskell(ref, "Status")
+    expect(out).toContain('-- | Account status.\n{-# DEPRECATED Status "deprecated" #-}\ndata Status')
+  })
+
+  test("union decl gets doc comment and pragma", () => {
+    const ref = withMeta(t(types.union([t(types.string), t(types.integer)])), { description: "A value." })
+    const out = toHaskell(ref, "Val")
+    expect(out).toContain("-- | A value.\ndata Val")
+  })
+
+  test("no description/deprecated -> no comment/pragma", () => {
+    const out = toHaskell(t(types.object({ id: t(types.string) })), "Person")
+    expect(out).not.toContain("-- |")
+    expect(out).not.toContain("DEPRECATED")
+  })
+})
+
 describe("toHaskell: enum -> sum type of nullary constructors", () => {
   test("basic enum with custom ToJSON/FromJSON", () => {
     const ref = t(types.enum(["active", "inactive", "pending"]))

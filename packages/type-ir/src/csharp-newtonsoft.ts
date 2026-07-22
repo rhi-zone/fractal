@@ -63,11 +63,36 @@ const leaf =
   () =>
     type
 
-function emitObjectType(shape: TypeShape & { kind: "object" }, name: string, ctx: Ctx): string {
+// XML doc-comment convention (https://learn.microsoft.com/dotnet/csharp/language-reference/xmldoc/)
+// — `<summary>` from `meta.description`, rendered as a `///`-prefixed block
+// immediately above the declaration it documents.
+function xmlDocComment(meta: Readonly<Record<string, unknown>>): string {
+  const description = typeof meta.description === "string" ? meta.description : undefined
+  if (description === undefined) return ""
+  return `/// <summary>\n/// ${description}\n/// </summary>\n`
+}
+
+// [Obsolete] (https://learn.microsoft.com/dotnet/api/system.obsoleteattribute)
+// is C#'s native deprecation marker, recognized by the compiler (a warning at
+// every use site) — `meta.deprecated` may be `true` (no message) or a string
+// (becomes the attribute's message argument).
+function obsoleteAttr(meta: Readonly<Record<string, unknown>>): string {
+  if (typeof meta.deprecated === "string") return `[Obsolete(${quote(meta.deprecated)})]\n`
+  if (meta.deprecated === true) return "[Obsolete]\n"
+  return ""
+}
+
+function emitObjectType(
+  shape: TypeShape & { kind: "object" },
+  name: string,
+  ctx: Ctx,
+  meta: Readonly<Record<string, unknown>> = {},
+): string {
   const props = Object.entries(shape.fields).map(([fieldName, fieldRef]) =>
     renderProperty(fieldName, fieldRef, name, ctx),
   )
-  ctx.decls.push(`public record ${name}\n{\n${props.join("\n\n")}\n}`)
+  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`
+  ctx.decls.push(`${doc}public record ${name}\n{\n${props.join("\n\n")}\n}`)
   return name
 }
 
@@ -99,9 +124,17 @@ function renderProperty(fieldName: string, fieldRef: TypeRef, ownerName: string,
   return `${attrs.join("\n")}\n    public ${type} ${propName} { get; init; }`
 }
 
-function emitEnumType(shape: TypeShape & { kind: "enum" }, name: string, ctx: Ctx): string {
+function emitEnumType(
+  shape: TypeShape & { kind: "enum" },
+  name: string,
+  ctx: Ctx,
+  meta: Readonly<Record<string, unknown>> = {},
+): string {
   const members = shape.members.map((m) => `    ${pascalCase(m)}`)
-  ctx.decls.push(`[JsonConverter(typeof(StringEnumConverter))]\npublic enum ${name}\n{\n${members.join(",\n")}\n}`)
+  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`
+  ctx.decls.push(
+    `${doc}[JsonConverter(typeof(StringEnumConverter))]\npublic enum ${name}\n{\n${members.join(",\n")}\n}`,
+  )
   return name
 }
 
@@ -146,7 +179,8 @@ function emitUnionType(
   const names = shape.variants.map((variant, i) => variantName(variant, discriminator, name, i))
   const converterName = `${name}JsonConverter`
 
-  ctx.decls.push(`[JsonConverter(typeof(${converterName}))]\npublic abstract record ${name};`)
+  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`
+  ctx.decls.push(`${doc}[JsonConverter(typeof(${converterName}))]\npublic abstract record ${name};`)
 
   shape.variants.forEach((variant, i) => {
     const vName = names[i]!
@@ -317,9 +351,9 @@ function typeExpr(ref: TypeRef, suggestedName: string, ctx: Ctx): string {
 
   let type: string
   if (isA(kind, "object")) {
-    type = emitObjectType(shape as TypeShape & { kind: "object" }, suggestedName, ctx)
+    type = emitObjectType(shape as TypeShape & { kind: "object" }, suggestedName, ctx, meta)
   } else if (isA(kind, "enum")) {
-    type = emitEnumType(shape as TypeShape & { kind: "enum" }, suggestedName, ctx)
+    type = emitEnumType(shape as TypeShape & { kind: "enum" }, suggestedName, ctx, meta)
   } else if (isA(kind, "union")) {
     type = emitUnionType(shape as TypeShape & { kind: "union" }, meta, suggestedName, ctx)
   } else {

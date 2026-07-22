@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { t, types } from "./index.ts"
+import { t, types, withMeta } from "./index.ts"
 import { toPhp, toPhpClass, toPhpEnum, toPhpType } from "./php-native.ts"
 
 describe("primitives", () => {
@@ -155,6 +155,43 @@ describe("readonly class", () => {
   test("toPhp dispatches object TypeRefs to toPhpClass", () => {
     const ref = t(types.object({ id: t(types.string) }))
     expect(toPhp(ref, "User")).toBe(toPhpClass("User", ref))
+  })
+})
+
+describe("doc comments and deprecation", () => {
+  test("meta.description -> PHPDoc block above the class", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { description: "A user." })
+    const out = toPhpClass("User", ref)
+    expect(out.startsWith("/**\n * A user.\n */\nfinal readonly class User")).toBe(true)
+  })
+
+  test("meta.deprecated true -> bare @deprecated tag", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { deprecated: true })
+    const out = toPhpClass("User", ref)
+    expect(out.startsWith("/**\n * @deprecated\n */\nfinal readonly class User")).toBe(true)
+  })
+
+  test("meta.deprecated string -> @deprecated tag with reason", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { deprecated: "use NewUser instead" })
+    const out = toPhpClass("User", ref)
+    expect(out).toContain(" * @deprecated use NewUser instead")
+  })
+
+  test("description and deprecated combine in one PHPDoc block", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { description: "A user.", deprecated: true })
+    const out = toPhpClass("User", ref)
+    expect(out.startsWith("/**\n * A user.\n * @deprecated\n */\nfinal readonly class User")).toBe(true)
+  })
+
+  test("no description/deprecated -> no PHPDoc block prefix", () => {
+    const out = toPhpClass("User", t(types.object({ id: t(types.string) })))
+    expect(out.startsWith("final readonly class User")).toBe(true)
+  })
+
+  test("enum: meta.description -> PHPDoc, meta.deprecated -> @deprecated", () => {
+    const ref = withMeta(t(types.enum(["active", "inactive"])), { description: "Account status.", deprecated: "old" })
+    const out = toPhpEnum("Status", ref)
+    expect(out.startsWith("/**\n * Account status.\n * @deprecated old\n */\nenum Status: string")).toBe(true)
   })
 })
 

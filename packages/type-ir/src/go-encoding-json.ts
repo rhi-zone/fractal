@@ -115,6 +115,25 @@ function uniqueLabel(base: string, used: Set<string>): string {
   return label
 }
 
+// Go doc-comment convention (https://go.dev/doc/comment): a comment
+// immediately preceding a declaration IS its doc comment, and godoc/golint
+// expect the first line to begin with the declared identifier's name.
+// Deprecation notices follow the standard "Deprecated: ..." paragraph
+// convention (https://go.dev/wiki/Deprecated), set off from the description
+// by a blank comment line when both are present.
+function docComment(name: string, meta: Readonly<Record<string, unknown>>): string {
+  const description = typeof meta.description === "string" ? meta.description : undefined
+  const deprecatedMessage = typeof meta.deprecated === "string" ? meta.deprecated : undefined
+  const isDeprecated = meta.deprecated === true || deprecatedMessage !== undefined
+  const lines: string[] = []
+  if (description !== undefined) lines.push(`// ${name} ${description}`)
+  if (isDeprecated) {
+    if (lines.length > 0) lines.push("//")
+    lines.push(`// Deprecated: ${deprecatedMessage ?? `${name} is deprecated.`}`)
+  }
+  return lines.length === 0 ? "" : `${lines.join("\n")}\n`
+}
+
 function fieldLine(name: string, jsonName: string, goFieldType: string, optional: boolean): string {
   const jsonTag = optional ? `${jsonName},omitempty` : jsonName
   return `\t${ident(name)} ${goFieldType} \`json:${quote(jsonTag)}\``
@@ -129,7 +148,7 @@ function objectDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
     const goFieldType = optional && !referenceKinds.has(fieldRef.shape.kind) ? `*${baseType}` : baseType
     return fieldLine(fieldName, fieldName, goFieldType, optional)
   })
-  ctx.decls.push(`type ${name} struct {\n${fields.join("\n")}\n}`)
+  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`)
   return name
 }
 
@@ -140,7 +159,7 @@ function tupleDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
     const fieldType = goType(element, `${name}F${i}`, ctx)
     return fieldLine(`F${i}`, String(i), fieldType, false)
   })
-  ctx.decls.push(`type ${name} struct {\n${fields.join("\n")}\n}`)
+  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`)
   return name
 }
 
@@ -155,7 +174,7 @@ function enumDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
     const memberName = uniqueLabel(`${name}${ident(member)}`, used)
     return `\t${memberName} ${name} = ${quote(member)}`
   })
-  ctx.decls.push(`type ${name} string`)
+  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} string`)
   ctx.decls.push(`const (\n${constLines.join("\n")}\n)`)
   return name
 }
@@ -172,7 +191,7 @@ function unionDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "union" }
   const name = ident(hint)
   const markerMethod = `is${name}`
-  ctx.decls.push(`type ${name} interface {\n\t${markerMethod}()\n}`)
+  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} interface {\n\t${markerMethod}()\n}`)
 
   const used = new Set<string>()
   for (const variant of shape.variants) {
@@ -212,7 +231,7 @@ function interfaceDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
     const returnType = isVoid ? "" : ` ${goType(m.returnType, `${name}${ident(methodName)}Result`, ctx)}`
     return `\t${ident(methodName)}(${paramTypes.join(", ")})${returnType}`
   })
-  ctx.decls.push(`type ${name} interface {\n${methods.join("\n")}\n}`)
+  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} interface {\n${methods.join("\n")}\n}`)
   return name
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { t, types } from "./index.ts"
+import { t, types, withMeta } from "./index.ts"
 import { toElm, toElmType } from "./elm-json.ts"
 
 describe("primitive types", () => {
@@ -179,5 +179,43 @@ describe("toElm defaults name to Value", () => {
 describe("ref", () => {
   test("references another named decoder/encoder by convention", () => {
     expect(toElmType(t(types.ref("User")))).toBe("User")
+  })
+})
+
+describe("doc comments", () => {
+  test("meta.description -> {-| ... -} above the type alias", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { description: "A person." })
+    const out = toElm(ref, "Person")
+    expect(out.startsWith("{-| A person.\n-}\ntype alias Person =")).toBe(true)
+  })
+
+  test("meta.deprecated true adds a **Deprecated.** note", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { deprecated: true })
+    const out = toElm(ref, "Person")
+    expect(out.startsWith("{-| **Deprecated.**\n-}\ntype alias Person =")).toBe(true)
+  })
+
+  test("meta.deprecated string reason is included", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { deprecated: "use NewPerson instead" })
+    const out = toElm(ref, "Person")
+    expect(out).toContain("**Deprecated:** use NewPerson instead")
+  })
+
+  test("description and deprecated combine in one comment block", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { description: "A person.", deprecated: true })
+    const out = toElm(ref, "Person")
+    expect(out.startsWith("{-| **Deprecated.**\n\nA person.\n-}\ntype alias Person =")).toBe(true)
+  })
+
+  test("no description/deprecated -> no doc comment", () => {
+    const ref = t(types.object({ id: t(types.string) }))
+    const out = toElm(ref, "Person")
+    expect(out.startsWith("{-|")).toBe(false)
+  })
+
+  test("enum with description", () => {
+    const ref = withMeta(t(types.enum(["active", "inactive"])), { description: "Account status." })
+    const out = toElm(ref, "Status")
+    expect(out.startsWith("{-| Account status.\n-}\ntype Status")).toBe(true)
   })
 })

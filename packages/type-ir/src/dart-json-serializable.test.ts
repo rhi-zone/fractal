@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { t, types } from "./index.ts"
+import { t, types, withMeta } from "./index.ts"
 import { bytes } from "./kinds/bytes.ts"
 import { toDart } from "./dart-json-serializable.ts"
 
@@ -139,6 +139,44 @@ describe("object classes", () => {
     expect(out).toContain("final List<String> tags;")
     expect(out).toContain(`tags: (json['tags'] as List).cast<String>(),`)
     expect(out).toContain(`'tags': tags,`)
+  })
+})
+
+describe("doc comments and deprecation", () => {
+  test("meta.description -> /// doc comment above the class", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { description: "A person." })
+    const out = toDart(ref, "Person")
+    expect(out).toContain("/// A person.\nclass Person {")
+  })
+
+  test("meta.deprecated true -> @Deprecated with a generic reason", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { deprecated: true })
+    const out = toDart(ref, "Person")
+    expect(out).toContain("@Deprecated('deprecated')\nclass Person {")
+  })
+
+  test("meta.deprecated string -> @Deprecated with the given reason", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { deprecated: "use NewPerson instead" })
+    const out = toDart(ref, "Person")
+    expect(out).toContain("@Deprecated('use NewPerson instead')\nclass Person {")
+  })
+
+  test("description and deprecated combine, doc comment then annotation", () => {
+    const ref = withMeta(t(types.object({ id: t(types.string) })), { description: "A person.", deprecated: true })
+    const out = toDart(ref, "Person")
+    expect(out).toContain("/// A person.\n@Deprecated('deprecated')\nclass Person {")
+  })
+
+  test("enum: description and deprecated", () => {
+    const ref = withMeta(t(types.enum(["active", "inactive"])), { description: "Account status.", deprecated: true })
+    const out = toDart(ref, "Status")
+    expect(out).toContain("/// Account status.\n@Deprecated('deprecated')\nenum Status {")
+  })
+
+  test("no description/deprecated -> no doc comment or annotation", () => {
+    const out = toDart(t(types.object({ id: t(types.string) })), "Person")
+    expect(out).not.toContain("///")
+    expect(out).not.toContain("@Deprecated")
   })
 })
 

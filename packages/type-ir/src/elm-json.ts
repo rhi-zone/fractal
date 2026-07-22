@@ -656,21 +656,42 @@ function renderPositionalUnion(typeName: string, variants: readonly TypeRef[], c
   return [typeDecl, "", decoder, "", encoder].join("\n\n")
 }
 
+// Elm doc comment (https://package.elm-lang.org/help/documentation-format) —
+// `{-| ... -}` immediately above the declaration it documents, driven by
+// `meta.description`/`meta.deprecated`, same open-metadata-bag convention
+// rust-serde.ts's/kotlin-kotlinx.ts's own `docComment` helpers use. Elm has no
+// native deprecation annotation (no compiler-recognized `@deprecated`
+// pragma), so a truthy `deprecated` instead becomes a leading
+// `**Deprecated.**` (or `**Deprecated:** reason` for a string reason) line
+// inside the doc comment body — the elm-lang community convention
+// (https://package.elm-lang.org/help/documentation-format) for flagging a
+// deprecated value from within a doc comment.
+function docComment(meta: Readonly<Record<string, unknown>>): string {
+  const description = typeof meta.description === "string" ? meta.description : undefined
+  const deprecated = meta.deprecated
+  const deprecatedNote =
+    deprecated === true ? "**Deprecated.**" : typeof deprecated === "string" ? `**Deprecated:** ${deprecated}` : undefined
+  if (description === undefined && deprecatedNote === undefined) return ""
+  const body = [deprecatedNote, description].filter((line): line is string => line !== undefined).join("\n\n")
+  return `{-| ${body}\n-}\n`
+}
+
 /** Renders a complete named declaration — type alias/custom type + decoder +
  * encoder — for `ref` under `name`. Used both for the top-level `toElm` call
  * and (recursively, via `hoistedName`) for nested unions/enums. */
 function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
   const typeName = toPascalCase(name)
   const kind = ref.shape.kind
+  const doc = docComment(ref.meta)
 
   if (kind === "enum") {
     const s = ref.shape as TypeShape & { kind: "enum" }
-    return renderEnumLike(typeName, s.members, ctx)
+    return doc + renderEnumLike(typeName, s.members, ctx)
   }
 
   const literalMembers = stringLiteralMembers(ref)
   if (kind === "union" && literalMembers !== undefined) {
-    return renderEnumLike(typeName, literalMembers, ctx)
+    return doc + renderEnumLike(typeName, literalMembers, ctx)
   }
 
   if (kind === "union") {
@@ -678,9 +699,9 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
     const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
     if (discriminator !== undefined) {
       const tagged = renderTaggedUnion(typeName, discriminator, s.variants, ctx)
-      if (tagged !== undefined) return tagged
+      if (tagged !== undefined) return doc + tagged
     }
-    return renderPositionalUnion(typeName, s.variants, ctx)
+    return doc + renderPositionalUnion(typeName, s.variants, ctx)
   }
 
   if (kind === "object") {
@@ -702,7 +723,7 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
       "\n",
     )
 
-    return [typeDecl, "", decoder, "", encoder].join("\n\n")
+    return doc + [typeDecl, "", decoder, "", encoder].join("\n\n")
   }
 
   // Any other kind (a primitive, array, tuple, map, ref, …) at the top level:
@@ -713,7 +734,7 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
   const decoder = `${decoderFn} : Decoder ${typeName}\n${decoderFn} =\n    ${elmDecoder(ref, ctx, typeName)}`
   const encoderFn = `encode${typeName}`
   const encoder = `${encoderFn} : ${typeName} -> Encode.Value\n${encoderFn} value =\n    ${elmEncoder(ref, ctx, typeName, "value")}`
-  return [typeDecl, "", decoder, "", encoder].join("\n\n")
+  return doc + [typeDecl, "", decoder, "", encoder].join("\n\n")
 }
 
 const encodeMaybeHelper = [

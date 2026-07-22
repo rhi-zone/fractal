@@ -76,6 +76,24 @@ describe("records", () => {
     expect(out).toContain("public PersonAddress Address { get; init; }")
     expect(out).toContain("public string City { get; init; }")
   })
+
+  test("description renders as an XML <summary> doc comment", () => {
+    const ref = t(types.object({ id: t(types.string) }), { description: "A person record." })
+    const out = toCSharp(ref, "Person")
+    expect(out).toContain("/// <summary>\n/// A person record.\n/// </summary>\npublic record Person")
+  })
+
+  test("deprecated true renders a bare [Obsolete] attribute", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: true })
+    const out = toCSharp(ref, "Person")
+    expect(out).toContain("[Obsolete]\npublic record Person")
+  })
+
+  test("deprecated string message renders [Obsolete(\"...\")]", () => {
+    const ref = t(types.object({ id: t(types.string) }), { deprecated: "Use NewPerson instead." })
+    const out = toCSharp(ref, "Person")
+    expect(out).toContain('[Obsolete("Use NewPerson instead.")]\npublic record Person')
+  })
 })
 
 describe("collections", () => {
@@ -111,6 +129,12 @@ describe("enum", () => {
     expect(out).toContain("Small")
     expect(out).toContain("Medium")
     expect(out).toContain("Large")
+  })
+
+  test("description and deprecated render doc comment + [Obsolete] above the enum", () => {
+    const ref = t(types.enum(["small", "large"]), { description: "A size tier.", deprecated: true })
+    const out = toCSharp(ref, "Size")
+    expect(out).toContain("/// <summary>\n/// A size tier.\n/// </summary>\n[Obsolete]\n[JsonConverter(typeof(JsonStringEnumConverter))]\npublic enum Size")
   })
 })
 
