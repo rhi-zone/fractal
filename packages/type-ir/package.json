@@ -227,6 +227,14 @@
       "types": "./src/kotlin-kotlinx.ts",
       "import": "./src/kotlin-kotlinx.ts"
     },
+    "./java": {
+      "types": "./src/java-jackson.ts",
+      "import": "./src/java-jackson.ts"
+    },
+    "./java-jackson": {
+      "types": "./src/java-jackson.ts",
+      "import": "./src/java-jackson.ts"
+    },
     "./sql": {
       "types": "./src/sql.ts",
       "import": "./src/sql.ts"
