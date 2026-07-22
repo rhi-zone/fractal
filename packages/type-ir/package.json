@@ -103,6 +103,10 @@
       "types": "./src/typescript.ts",
       "import": "./src/typescript.ts"
     },
+    "./elm": {
+      "types": "./src/elm.ts",
+      "import": "./src/elm.ts"
+    },
     "./go": {
       "types": "./src/go.ts",
       "import": "./src/go.ts"
