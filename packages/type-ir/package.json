@@ -23,6 +23,10 @@
       "types": "./src/from-openapi.ts",
       "import": "./src/from-openapi.ts"
     },
+    "./from-protobuf": {
+      "types": "./src/from-protobuf.ts",
+      "import": "./src/from-protobuf.ts"
+    },
     "./from-json": {
       "types": "./src/from-json.ts",
       "import": "./src/from-json.ts"
