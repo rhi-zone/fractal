@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - 'docs/**'
+      - 'packages/playground/**'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
@@ -31,6 +32,13 @@ jobs:
       - name: Build docs
         run: bun run build
         working-directory: docs
+      - name: Install monorepo dependencies
+        run: bun install
+      - name: Build playground
+        run: bun run build
+        working-directory: packages/playground
+      - name: Copy playground into docs output
+        run: cp -r packages/playground/dist docs/.vitepress/dist/playground
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
