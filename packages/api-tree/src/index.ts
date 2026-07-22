@@ -28,6 +28,13 @@ export type { AnyApi, DirectApi } from "./direct.ts"
 // http-api-projector) so it stays projector-agnostic — see "./typed-client.ts".
 export type { TypedClient } from "./typed-client.ts"
 
+// `TreeManifest` — flattens a Node tree into a map of dot-separated paths to
+// each leaf's `{ input; output }` contract. Sibling to `TypedClient` above,
+// but discards nesting entirely instead of preserving it — see
+// "./tree-manifest.ts" for the full doc, including why an HTTP-specific
+// manifest isn't implemented here.
+export type { TreeManifest } from "./tree-manifest.ts"
+
 // The input-source resolution mechanism — stores, sourceMap, and the
 // assembler that resolves each handler param to a store + key. Extracted
 // from the HTTP projector so CLI, MCP, and any future projector can share
