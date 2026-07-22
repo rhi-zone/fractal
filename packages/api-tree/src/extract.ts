@@ -1138,6 +1138,50 @@ function typeRefFromTypeStructural(
       )
     }
 
+    // Set<T>/ReadonlySet<T>: checked before the general object-type properties
+    // loop below for the same reason Array<T>/Tuple are special-cased earlier
+    // in this function (before the Object-flag branch even starts) — Set<T>'s
+    // OWN interface methods are themselves self-referential
+    // (`forEach(callback: (value: T, value2: T, set: Set<T>) => void): void`,
+    // whose third parameter's type resolves to the SAME cached `Set<T>` type
+    // object as the outer type being extracted). Left unhandled, walking
+    // Set<T>'s public method surface as a plain object would re-enter that
+    // identical `Set<T>` type via `forEach`'s `set` parameter (or similarly
+    // through other methods); the `seen` check's recursive-type fallback
+    // (`type.symbol?.name`) would then name the match after the CONTAINER —
+    // `ref("Set")` — since `Set<T>` itself is never a named/registered type,
+    // producing a dangling ref no `defs` entry ever resolves. This is the
+    // container-mediated-recursion failure the array/generic-wrapper case
+    // above is exempt from purely because `checker.isArrayType`/tuple checks
+    // return before ever reaching this properties walk. Lowers to
+    // `types.array(T)` — a Set serializes the same way an Array does (an
+    // ordered sequence of elements) and type-ir has no dedicated `set` kind.
+    if (type.symbol && (type.symbol.name === "Set" || type.symbol.name === "ReadonlySet")) {
+      const [elem] = checker.getTypeArguments(type as ts.TypeReference)
+      return t(
+        types.array(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry) : puntRef("unknown set element")),
+      )
+    }
+
+    // Map<K, V>/ReadonlyMap<K, V>: same rationale as Set<T> immediately above
+    // — Map's own interface methods are self-referential (`set(key, value):
+    // Map<K, V>`, `forEach(callback: (value: V, key: K, map: Map<K, V>) =>
+    // void)`, …), so left unhandled they would recurse back into the
+    // (unnamed, unregistered) `Map<K, V>` type itself via those methods'
+    // parameter/return positions and emit a dangling `ref("Map")`. Lowers
+    // directly to `types.map(K, V)` — the same IR kind already used for
+    // plain index-signature types (`Record<K, V>`/`{ [k: string]: V }`)
+    // immediately below.
+    if (type.symbol && (type.symbol.name === "Map" || type.symbol.name === "ReadonlyMap")) {
+      const [key, value] = checker.getTypeArguments(type as ts.TypeReference)
+      return t(
+        types.map(
+          key ? typeRefFromType(key, checker, loc, nextSeen, registry) : puntRef("unknown map key"),
+          value ? typeRefFromType(value, checker, loc, nextSeen, registry) : puntRef("unknown map value"),
+        ),
+      )
+    }
+
     const properties = checker.getPropertiesOfType(type)
 
     // Pure index-signature types (Record<K,V>, `{ [key: string]: V }`) have no

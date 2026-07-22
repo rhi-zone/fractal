@@ -46,6 +46,17 @@ export type RecursiveType = { name: string; children: RecursiveType[] }
 /** Directly self-referential (no array indirection). */
 export type DirectRecursive = { self: DirectRecursive }
 
+/** Recursive via a `Set<T>` of self — Set's own interface methods
+ * (`forEach(callback: (value: T, value2: T, set: Set<T>) => void)`) are
+ * themselves self-referential, so this exercises the same
+ * container-mediated-recursion path as `RecursiveType` above, but through a
+ * generic container that ISN'T special-cased by `checker.isArrayType`. */
+export type SetRecursiveType = { name: string; children: Set<SetRecursiveType> }
+
+/** Recursive via a `Map<K, T>` value of self — same rationale as
+ * `SetRecursiveType` above, for `Map` instead of `Set`. */
+export type MapRecursiveType = { name: string; children: Map<string, MapRecursiveType> }
+
 /** A field whose type is a Promise — must unwrap like the return-type path. */
 export type PromiseField = { data: Promise<string> }
 

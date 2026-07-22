@@ -685,6 +685,41 @@ describe("typeRefFromType gap fixes", () => {
     expect((self.shape as { kind: "ref"; target: string }).target).toBe("DirectRecursive")
   })
 
+  // Regression: Set<T>/Map<K,T>'s OWN interface methods (`forEach(callback:
+  // (value: T, value2: T, set: Set<T>) => void)`, `set(key, value): Map<K,
+  // V>`, …) are themselves self-referential. Before Set/Map got the same
+  // early elem-extraction treatment as Array/Tuple, recursing through one of
+  // these containers fell through to the generic object-properties walk,
+  // which re-entered the container's own (unnamed, unregistered) type via
+  // those methods and emitted a dangling `ref("Set")`/`ref("Map")` — pointing
+  // at the CONTAINER, not the real named type the recursion is actually
+  // through.
+  it("does not emit a dangling ref('Set') on a Set-mediated recursive type — refs the named type instead", () => {
+    const ref = typeRefFromType(typeOf("SetRecursiveType"), checker, source)
+    expect(ref.shape.kind).toBe("object")
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.name?.shape.kind).toBe("string")
+    const children = fields.children!
+    expect(children.shape.kind).toBe("array")
+    const elemRef = (children.shape as { kind: "array"; element: TypeRef }).element
+    expect(elemRef.shape.kind).toBe("ref")
+    expect((elemRef.shape as { kind: "ref"; target: string }).target).toBe("SetRecursiveType")
+  })
+
+  it("does not emit a dangling ref('Map') on a Map-mediated recursive type — refs the named type instead", () => {
+    const ref = typeRefFromType(typeOf("MapRecursiveType"), checker, source)
+    expect(ref.shape.kind).toBe("object")
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.name?.shape.kind).toBe("string")
+    const children = fields.children!
+    expect(children.shape.kind).toBe("map")
+    const keyRef = (children.shape as { kind: "map"; key: TypeRef; value: TypeRef }).key
+    const valueRef = (children.shape as { kind: "map"; key: TypeRef; value: TypeRef }).value
+    expect(keyRef.shape.kind).toBe("string")
+    expect(valueRef.shape.kind).toBe("ref")
+    expect((valueRef.shape as { kind: "ref"; target: string }).target).toBe("MapRecursiveType")
+  })
+
   // ── Branded/opaque types ──────────────────────────────────────────────────
 
   it("lowers a branded string to its base shape with meta.brand set", () => {
