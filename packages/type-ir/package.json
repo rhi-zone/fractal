@@ -19,6 +19,10 @@
       "types": "./src/from-json-schema.ts",
       "import": "./src/from-json-schema.ts"
     },
+    "./from-protobuf": {
+      "types": "./src/from-protobuf.ts",
+      "import": "./src/from-protobuf.ts"
+    },
     "./from-json": {
       "types": "./src/from-json.ts",
       "import": "./src/from-json.ts"
