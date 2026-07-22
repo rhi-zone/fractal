@@ -2,9 +2,30 @@
 
 ## Open threads (2026-07-22)
 
-- **Typed JIT client (`TypedClient<N>`)** — recursive mapped type in `api-tree` that walks Node's generic type structure to produce a typed client interface. Each projector's `createClient` returns `TypedClient<typeof node>` instead of `AnyClient`. Runtime unchanged; purely type-level. Foundation: Node types already preserve handler signatures through generics (`op(fn: H) → Node<H>`, `api(children: C)` preserves literal keys). tRPC-like DX: zero codegen, types from the tree.
-- **Route manifest** — typed contract as a first-class artifact. Base `TreeManifest<N>` in `api-tree` (projector-agnostic: dot-path → {input, output}). Protocol-specific manifests in projectors (HTTP: path → method → {input, output}). Serves tooling, testing, third-party integration, cross-service contracts without coupling to fractal's client machinery.
-- **Production-grade codegen** (design backlog) — Stainless-level external SDK: retries, pagination, streaming, configurable error handling, request/response interceptors. Needs design decisions on retry strategy, pagination model (cursor/offset/keyset), streaming interface before implementation.
+### DONE (2026-07-22)
+
+- **Typed JIT client (`TypedClient<N>`)** — DONE. Recursive mapped type in `api-tree/src/typed-client.ts` walks Node's generic type structure to produce a typed client interface. `createClient` in http-api-projector returns `TypedClient<N, CallOptions>` instead of `AnyClient`. Also exported `DirectApi<N>`. Type-level tests with `expectTypeOf` verify the structure preservation through generic handlers and literal keys.
+
+- **Route manifest** — DONE. Two levels implemented:
+  - `TreeManifest<N>` in `api-tree/src/tree-manifest.ts` (projector-agnostic: dot-path → {input, output})
+  - `HttpManifest<N>` in `http-api-projector/src/http-manifest.ts` (HTTP-specific: `/path` → method → {input, output}, with moveTo resolution at the type level)
+  - Typed literal directives: `op()` preserves literal meta types via `FoldMeta`; verb helpers (`get`, `post`, etc.) carry literal types through `httpVerbBundle`
+
+- **Production-grade codegen** — DONE. Extension system + 7 built-in extensions:
+  - Extension API (`ClientExtension`) in `http-api-projector/src/extension.ts` with runtime `wrapFetch`, `decodeResponse`, and codegen hooks
+  - Built-in extensions: `retry`, `timeout`, `interceptors`, `errors`, `logging`, `streaming`, `pagination`
+  - `Page<T>` types (CursorPage, OffsetPage) in `api-tree/src/page.ts` + `page` TypeRef kind in type-ir
+  - `paginated()` directive in http-api-projector verb helpers
+
+### Remaining open threads from 2026-07-22
+
+- **`moveTo` resolution in `HttpManifest`** — wildcard `"*"` token's synthesized `:param` name can diverge from another leaf's authored `fallback.name` at the same converged position. Per-leaf type information can't see whole-tree facts, creating a potential naming mismatch in the manifest.
+
+- **Extension commit `24bf12c` history issue** — accidentally includes some `HttpManifest` export/subpath changes beyond what the commit message describes. Cosmetic issue in history; code is correct.
+
+- **Streaming extension API incomplete** — `codegen.streamingCall` and `decodeResponse` were added to the extension API for streaming support. Existing extensions don't yet exercise these axes; consumer patterns remain to be established.
+
+- **Response validation against schema** — table-stakes for production SDKs. Not yet implemented as an extension; blocking no current work but worth tracking as a pending capability.
 
 ## Next session (handoff)
 
