@@ -624,6 +624,39 @@ export function typeRefFromType(
   if (flags & ts.TypeFlags.Void) return t(types.void)
   if (flags & ts.TypeFlags.Null) return t(types.null)
 
+  // ── Page<T>/CursorPage<T>/OffsetPage<T> (packages/api-tree/src/page.ts) —
+  //    a handler returning one of these shapes signals "this endpoint is
+  //    paginated," the same convention role AsyncIterable plays for `stream`
+  //    (see the Object-types section below). Checked here, BEFORE the
+  //    tuple/array/union branches, via `aliasSymbol` — the alias name
+  //    survives regardless of whether the ALIASED type resolves structurally
+  //    to a plain object (`CursorPage<T>`/`OffsetPage<T>`) or a union
+  //    (`Page<T> = CursorPage<T> | OffsetPage<T>`), and checking it early
+  //    (rather than only inside the object-types branch) is what catches the
+  //    union case before `type.isUnion()` below claims it first and flattens
+  //    it to a structural `union` TypeRef, losing the pagination signal.
+  //    `CursorPage`/`OffsetPage` resolve to their own literal style directly;
+  //    the general `Page<T>` alias is ambiguous between the two (a handler
+  //    typed with the reader-facing union, not one concrete variant) and
+  //    defaults to `"cursor"` — the more common convention of the two, and a
+  //    deliberate, documented fallback rather than a silent guess. ──────────
+  if (
+    type.aliasSymbol &&
+    (type.aliasSymbol.name === "CursorPage" ||
+      type.aliasSymbol.name === "OffsetPage" ||
+      type.aliasSymbol.name === "Page")
+  ) {
+    const nextSeen = new Set(seen).add(type)
+    const [elem] = type.aliasTypeArguments ?? []
+    const style = type.aliasSymbol.name === "OffsetPage" ? "offset" : "cursor"
+    return t(
+      types.page(
+        elem ? typeRefFromType(elem, checker, loc, nextSeen) : puntRef("unknown page element"),
+        style,
+      ),
+    )
+  }
+
   // ── Tuples (checked before isArrayType — tuples fail that check and would
   //    otherwise fall through to the object branch as `{"0":…,"1":…,"length":…}`) ──
   if (checker.isTupleType(type)) {

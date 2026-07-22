@@ -11,7 +11,7 @@ function quote(value: string): string {
   return JSON.stringify(value)
 }
 
-const complexKinds = new Set(["union", "object", "map", "intersection", "function", "stream"])
+const complexKinds = new Set(["union", "object", "map", "intersection", "function", "stream", "page"])
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("boolean"),
@@ -64,6 +64,14 @@ const handlers: Record<string, Converter> = {
   stream: (shape) => {
     const s = shape as TypeShape & { kind: "stream" }
     return `AsyncIterable<${toTypeScript(s.element)}>`
+  },
+  // Renders back to the same named alias the extractor matched against
+  // (`@rhi-zone/fractal-api-tree`'s `CursorPage<T>`/`OffsetPage<T>` — see
+  // extract.ts's `pageAliasName` check) — the caller assembling this emitted
+  // source is responsible for importing the name, same as `instance` above.
+  page: (shape) => {
+    const s = shape as TypeShape & { kind: "page" }
+    return s.style === "offset" ? `OffsetPage<${toTypeScript(s.element)}>` : `CursorPage<${toTypeScript(s.element)}>`
   },
   map: (shape) => {
     const s = shape as TypeShape & { kind: "map" }

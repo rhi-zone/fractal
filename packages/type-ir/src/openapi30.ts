@@ -118,6 +118,12 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "stream" }
     return { type: "array", items: toOpenApi30(s.element), "x-stream": true }
   },
+  // Same degrade as `stream` — OAS 3.0 has no pagination vocabulary either —
+  // carrying `x-page-style` (vendor-extension key) instead of `x-stream`.
+  page: (shape) => {
+    const s = shape as TypeShape & { kind: "page" }
+    return { type: "array", items: toOpenApi30(s.element), "x-page-style": s.style }
+  },
   // OAS 3.0.3 §4.8.25 Discriminator Object: `discriminator.propertyName` names
   // the field OAS-aware tooling (codegen, some validators) reads to pick the
   // matching variant without trying each `oneOf` member — a native feature,

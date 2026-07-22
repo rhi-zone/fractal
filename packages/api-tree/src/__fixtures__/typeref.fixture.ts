@@ -4,6 +4,7 @@
 // / typeRefFromReturnType directly (not through the tree walker).
 
 import type { Result } from "../index.ts"
+import type { CursorPage, OffsetPage, Page } from "../page.ts"
 import type { Maximum, MaxLength, Minimum, MinLength, Pattern } from "@rhi-zone/fractal-type-ir/kinds/refinements"
 import type { Email, Uuid } from "@rhi-zone/fractal-type-ir/kinds/semantic-strings"
 
@@ -328,6 +329,23 @@ export async function* asyncGenFn(): AsyncGenerator<number, void, unknown> {
  * stream detection so both layers resolve correctly. */
 export const promiseStreamFn = (): Promise<AsyncIterable<string>> =>
   Promise.resolve((async function* () {})())
+
+/** A function returning `CursorPage<T>` directly — exercises `page` detection
+ * (cursor style) at the top-level return-type position. */
+export const cursorPageFn = (): CursorPage<{ id: string }> => ({ items: [], hasMore: false })
+
+/** A function returning `OffsetPage<T>` directly — exercises `page` detection
+ * (offset style). */
+export const offsetPageFn = (): OffsetPage<number> => ({ items: [], offset: 0, total: 0, hasMore: false })
+
+/** A function returning the reader-facing `Page<T>` union — ambiguous between
+ * styles, defaults to `"cursor"` (see extract.ts's `pageAliasName` check). */
+export const pageUnionFn = (): Page<string> => ({ items: [], hasMore: false })
+
+/** `Promise<CursorPage<T>>` — the Promise unwrap must run before `page`
+ * detection so both layers resolve correctly. */
+export const promiseCursorPageFn = (): Promise<CursorPage<string>> =>
+  Promise.resolve({ items: [], hasMore: false })
 
 // ── Shared-symbol branded type fixtures ─────────────────────────────────────
 // A single `unique symbol` key reused across types, with distinct string-literal

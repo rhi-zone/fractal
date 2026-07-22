@@ -439,6 +439,58 @@ describe("typeRefFromReturnType detects AsyncIterable/AsyncGenerator return type
 })
 
 // ============================================================================
+// CursorPage<T>/OffsetPage<T>/Page<T> return-type detection — types.page
+// ============================================================================
+
+describe("typeRefFromReturnType detects CursorPage/OffsetPage/Page return types", () => {
+  const program = createExtractorProgram(TYPEREF_FIXTURE)
+  const checker = program.getTypeChecker()
+  const source = program.getSourceFile(TYPEREF_FIXTURE)!
+
+  it("a function returning CursorPage<T> lowers to types.page with style 'cursor'", () => {
+    const fn = findExportedFn(source, "cursorPageFn")
+    const ref = typeRefFromReturnType(fn, checker)
+    expect(ref.shape.kind).toBe("page")
+    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" }
+    expect(shape.style).toBe("cursor")
+    const fields = (shape.element.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.id?.shape.kind).toBe("string")
+    expect(toJsonSchema(ref)).toEqual({
+      type: "array",
+      items: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      "x-page-style": "cursor",
+    })
+  })
+
+  it("a function returning OffsetPage<T> lowers to types.page with style 'offset'", () => {
+    const fn = findExportedFn(source, "offsetPageFn")
+    const ref = typeRefFromReturnType(fn, checker)
+    expect(ref.shape.kind).toBe("page")
+    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" }
+    expect(shape.style).toBe("offset")
+    expect(shape.element.shape.kind).toBe("number")
+  })
+
+  it("a function returning the reader-facing Page<T> union defaults to style 'cursor'", () => {
+    const fn = findExportedFn(source, "pageUnionFn")
+    const ref = typeRefFromReturnType(fn, checker)
+    expect(ref.shape.kind).toBe("page")
+    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" }
+    expect(shape.style).toBe("cursor")
+    expect(shape.element.shape.kind).toBe("string")
+  })
+
+  it("Promise<CursorPage<T>> unwraps the Promise first, then detects the page underneath", () => {
+    const fn = findExportedFn(source, "promiseCursorPageFn")
+    const ref = typeRefFromReturnType(fn, checker)
+    expect(ref.shape.kind).toBe("page")
+    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" }
+    expect(shape.style).toBe("cursor")
+    expect(shape.element.shape.kind).toBe("string")
+  })
+})
+
+// ============================================================================
 // 8. Gap fixes — tuples, index signatures, class filtering, nested Promise,
 //    single literals, recursive types
 // ============================================================================

@@ -35,6 +35,12 @@ export type { TypedClient } from "./typed-client.ts"
 // manifest isn't implemented here.
 export type { TreeManifest } from "./tree-manifest.ts"
 
+// Page<T> — the pagination convention (CursorPage/OffsetPage/Page + runtime
+// shape checks), sibling to StreamEffect<T> below. See "./page.ts" for the
+// full doc.
+export type { CursorPage, OffsetPage, Page } from "./page.ts"
+export { isCursorPage, isOffsetPage, isPageShape } from "./page.ts"
+
 // The input-source resolution mechanism — stores, sourceMap, and the
 // assembler that resolves each handler param to a store + key. Extracted
 // from the HTTP projector so CLI, MCP, and any future projector can share

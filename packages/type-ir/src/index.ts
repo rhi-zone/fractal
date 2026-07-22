@@ -47,6 +47,20 @@ export interface TypeKinds {
   // element type is still the closest structural analogue once the
   // asynchrony/laziness itself can't be preserved.
   stream: { readonly kind: "stream"; readonly element: TypeRef }
+  // A paginated collection — TypeScript's `CursorPage<T>`/`OffsetPage<T>`/
+  // `Page<T>` convention (`@rhi-zone/fractal-api-tree`'s pagination types): a
+  // handler returning one of these shapes (or `Promise<...>` of one) signals
+  // "this endpoint is paginated," the same convention-detection role
+  // `AsyncIterable<T>` plays for `stream` above. `style` records which
+  // variant was matched — `"cursor"` for `CursorPage<T>` (an opaque
+  // `cursor`/`hasMore` continuation token) or `"offset"` for `OffsetPage<T>`
+  // (a numeric `offset`/`total`/`hasMore` window). Deliberately NOT a subtype
+  // of `array` (same reasoning as `stream`): a page is one WINDOW over a
+  // larger, not-yet-fetched collection, not the collection itself — a
+  // projector that can't express pagination natively degrades to its
+  // array/list equivalent over `element` (the page's item type), same
+  // honest-degrade convention `stream` uses.
+  page: { readonly kind: "page"; readonly element: TypeRef; readonly style: "cursor" | "offset" }
   tuple: { readonly kind: "tuple"; readonly elements: readonly TypeRef[] }
   map: { readonly kind: "map"; readonly key: TypeRef; readonly value: TypeRef }
   union: { readonly kind: "union"; readonly variants: readonly TypeRef[] }
@@ -142,6 +156,8 @@ const parents: Record<string, string | null> = {
   array: null,
   // NOT a subtype of `array` — see TypeKinds.stream doc comment above.
   stream: null,
+  // NOT a subtype of `array` — see TypeKinds.page doc comment above.
+  page: null,
   tuple: null,
   map: null,
   union: null,
@@ -199,6 +215,7 @@ export const types = {
   instance: (className: string, source: string) => ({ kind: "instance", className, source }) as const,
   array: (element: TypeRef) => ({ kind: "array", element }) as const,
   stream: (element: TypeRef) => ({ kind: "stream", element }) as const,
+  page: (element: TypeRef, style: "cursor" | "offset") => ({ kind: "page", element, style }) as const,
   tuple: (elements: readonly TypeRef[]) => ({ kind: "tuple", elements }) as const,
   map: (key: TypeRef, value: TypeRef) => ({ kind: "map", key, value }) as const,
   union: (variants: readonly TypeRef[]) => ({ kind: "union", variants }) as const,

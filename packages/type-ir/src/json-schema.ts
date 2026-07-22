@@ -123,6 +123,14 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "stream" }
     return { type: "array", items: toJsonSchema(s.element), "x-stream": true }
   },
+  // JSON Schema has no pagination vocabulary either — degrade to the same
+  // array-of-element shape, carrying `x-page-style` (vendor-extension-style
+  // key, same convention as `x-stream`) so tooling that cares can still tell
+  // a paginated endpoint's items apart from a plain array.
+  page: (shape) => {
+    const s = shape as TypeShape & { kind: "page" }
+    return { type: "array", items: toJsonSchema(s.element), "x-page-style": s.style }
+  },
   // JSON Schema 2019-09 §9.2.1.2 defines no `discriminator` keyword itself,
   // but the OpenAPI-originated `discriminator: { propertyName }` shape is a
   // widely-recognized extension (carried by `meta.discriminator`, an open
@@ -177,6 +185,7 @@ const complexKinds = new Set([
   "instance",
   "array",
   "stream",
+  "page",
   "tuple",
   "map",
   "union",

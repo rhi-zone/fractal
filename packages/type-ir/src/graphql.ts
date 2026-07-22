@@ -101,6 +101,15 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "stream" }
     return baseType(s.element)
   },
+  // GraphQL has no pagination vocabulary of its own (Relay's cursor
+  // connections are a schema-authoring convention, not a language
+  // primitive) — a paginated field degrades to an ordinary list of its item
+  // type, same as `array` above; the pagination signal itself is lost, same
+  // honest-degrade tradeoff `union`'s unnamed-variant fallback makes.
+  page: (shape) => {
+    const s = shape as TypeShape & { kind: "page" }
+    return `[${toGraphQL(s.element)}]`
+  },
   // GraphQL unions are always named (§ "Unions") — an inline reference needs
   // `meta.unionName` (this projector's naming convention, parallel to
   // `enumName`/`typeName` above); without one there's no name to reference,
