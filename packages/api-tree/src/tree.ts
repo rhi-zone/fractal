@@ -46,12 +46,15 @@ import ts from "typescript"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import {
   createExtractorProgram,
+  createSharingRegistry,
   extractJsDoc,
+  finalizeSharedDefs,
   schemaFromFunctionNode,
   schemaFromReturnType,
   typeRefFromFunctionNode,
   typeRefFromReturnType,
   type JsonSchema,
+  type ShouldShare,
 } from "./extract.ts"
 
 /** Per-tool derived facts: real input schema + JSDoc-derived description. */
@@ -251,23 +254,44 @@ export function extractToolSchemas(entryFile: string): SchemaMap {
   return out
 }
 
+/** Every leaf's derived input/output TypeRef, PLUS the shared `defs` map a
+ * `shouldShare`-driven extraction produced — see `finalizeSharedDefs`
+ * (extract.ts) and `SharingRegistry`'s doc comment. Sharing spans the WHOLE
+ * tree (every leaf's input and output alike), since that's the entire point:
+ * a type reused ACROSS tools, not just within one, is exactly the case
+ * structural sharing exists for. */
+export type TypeRefMapWithDefs = { readonly types: TypeRefMap; readonly defs: Record<string, TypeRef> }
+
 /**
  * Extract the tool-name → TypeRef map for every exported `api(children, opts?)`
  * tree in a source file. Mirrors toTools' name construction. Same tree walk as
  * `extractToolSchemas`, but yields TypeRefs (pre-projection) instead of
  * JSON Schema.
+ *
+ * Passing `options.shouldShare` (default omitted — plain `TypeRefMap`, exact
+ * prior behavior, no sharing) opts into structural sharing across every
+ * leaf's input/output TypeRefs: the return shape becomes
+ * `{ types, defs }`, `types` value TypeRefs may contain `{ kind: "ref" }`
+ * nodes resolving into `defs` (see type-ir's `TypeRefDocument`).
  */
-export function extractToolTypeRefs(entryFile: string): TypeRefMap {
+export function extractToolTypeRefs(entryFile: string): TypeRefMap
+export function extractToolTypeRefs(entryFile: string, options: { shouldShare: ShouldShare }): TypeRefMapWithDefs
+export function extractToolTypeRefs(
+  entryFile: string,
+  options?: { shouldShare: ShouldShare },
+): TypeRefMap | TypeRefMapWithDefs {
+  const registry = options ? createSharingRegistry() : undefined
   const out: TypeRefMap = {}
   walkTree(entryFile, (name, _path, fn, descriptionSource, checker) => {
     const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
     out[name] = {
-      input: typeRefFromFunctionNode(fn, checker),
-      output: typeRefFromReturnType(fn, checker),
+      input: typeRefFromFunctionNode(fn, checker, registry),
+      output: typeRefFromReturnType(fn, checker, registry),
       ...(description !== undefined ? { description } : {}),
     }
   })
-  return out
+  if (!options || !registry) return out
+  return finalizeWithDefs(out, registry, options.shouldShare)
 }
 
 /**
@@ -277,17 +301,54 @@ export function extractToolTypeRefs(entryFile: string): TypeRefMap {
  * `wrapValidators` uses (fallback segments rendered as `:name`) instead of
  * the underscore-joined MCP tool name. This is the key shape
  * `wrapValidators`'s generated-entry map expects.
+ *
+ * Same `options.shouldShare` opt-in as `extractToolTypeRefs` — see its doc
+ * comment.
  */
-export function extractRouteTypeRefs(entryFile: string): TypeRefMap {
+export function extractRouteTypeRefs(entryFile: string): TypeRefMap
+export function extractRouteTypeRefs(entryFile: string, options: { shouldShare: ShouldShare }): TypeRefMapWithDefs
+export function extractRouteTypeRefs(
+  entryFile: string,
+  options?: { shouldShare: ShouldShare },
+): TypeRefMap | TypeRefMapWithDefs {
+  const registry = options ? createSharingRegistry() : undefined
   const out: TypeRefMap = {}
   walkTree(entryFile, (_name, path, fn, descriptionSource, checker) => {
     const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
     const key = path.join("/")
     out[key] = {
-      input: typeRefFromFunctionNode(fn, checker),
-      output: typeRefFromReturnType(fn, checker),
+      input: typeRefFromFunctionNode(fn, checker, registry),
+      output: typeRefFromReturnType(fn, checker, registry),
       ...(description !== undefined ? { description } : {}),
     }
   })
-  return out
+  if (!options || !registry) return out
+  return finalizeWithDefs(out, registry, options.shouldShare)
+}
+
+/** Shared plumbing for both `extractToolTypeRefs`/`extractRouteTypeRefs`'s
+ * sharing opt-in: flattens every leaf's input/output into the
+ * `Record<string, TypeRef>` `finalizeSharedDefs` expects (keyed
+ * `${leafKey}\0input`/`${leafKey}\0output` so the two never collide), then
+ * reassembles the per-leaf `TypeRefMap` shape from the rewritten roots. */
+function finalizeWithDefs(
+  map: TypeRefMap,
+  registry: ReturnType<typeof createSharingRegistry>,
+  shouldShare: ShouldShare,
+): TypeRefMapWithDefs {
+  const flatRoots: Record<string, TypeRef> = {}
+  for (const [key, info] of Object.entries(map)) {
+    flatRoots[`${key}\0input`] = info.input
+    if (info.output !== undefined) flatRoots[`${key}\0output`] = info.output
+  }
+  const { roots, defs } = finalizeSharedDefs(registry, flatRoots, shouldShare)
+  const types: TypeRefMap = {}
+  for (const [key, info] of Object.entries(map)) {
+    types[key] = {
+      input: roots[`${key}\0input`]!,
+      ...(info.output !== undefined ? { output: roots[`${key}\0output`]! } : {}),
+      ...(info.description !== undefined ? { description: info.description } : {}),
+    }
+  }
+  return { types, defs }
 }

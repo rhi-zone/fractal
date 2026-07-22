@@ -27,7 +27,7 @@
 //   packages/mcp-api-projector/src/project.ts  — the consumer (toTools inputSchema/description)
 
 import ts from "typescript"
-import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir"
+import { nodeCount, t, types, type TypeRef, type TypeShape } from "@rhi-zone/fractal-type-ir"
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
 import { email, uri, uuid } from "@rhi-zone/fractal-type-ir/kinds/common"
 
@@ -74,6 +74,221 @@ export type JsonSchema = {
 const puntRef = (reason: string): TypeRef =>
   t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` })
 
+// ============================================================================
+// Structural sharing — an opt-in `SharingRegistry` threaded through
+// `typeRefFromType` (and everything it calls) accumulates named-type use
+// counts and builds a `defs` map, so a type used in multiple places is
+// extracted ONCE and referenced by `{ kind: "ref", target }` everywhere else,
+// instead of being inlined (and re-descended) at every use site. Omitting the
+// registry entirely (every function's default) preserves exact prior
+// behavior: no sharing, every named type still inlines structurally except
+// true self-recursion (which already always produced a `ref`, registry or
+// not).
+// ============================================================================
+
+/** Symbol/alias names that name a STRUCTURAL CONVENTION this extractor
+ * special-cases (Promise/AsyncIterable unwrapping, CursorPage/OffsetPage/Page
+ * pagination, the TS lib's own generic container names) rather than a
+ * "real" user-declared type worth sharing. Excluded from registry-based
+ * naming so e.g. `Promise<Foo>`'s outer `Promise` type itself never becomes
+ * a spurious `defs` entry. */
+const NON_SHAREABLE_SYMBOL_NAMES = new Set([
+  "Promise",
+  "AsyncIterable",
+  "AsyncGenerator",
+  "AsyncIterableIterator",
+  "CursorPage",
+  "OffsetPage",
+  "Page",
+  "Array",
+  "ReadonlyArray",
+  "Map",
+  "ReadonlyMap",
+  "Set",
+  "ReadonlySet",
+  "Record",
+])
+
+/** The name a `ts.Type` would be shared under, if it has one worth sharing:
+ * a real alias (`type X = …`) or interface/class symbol name — not an
+ * anonymous object-literal type (synthesized `__type` symbol), and not one of
+ * `NON_SHAREABLE_SYMBOL_NAMES`'s structural-convention names. Restricted to
+ * `ts.TypeFlags.Object` (interfaces/object literals/classes) — the shapes
+ * `typeRefFromType`'s object branch actually builds `defs`-worthy bodies for;
+ * primitive/literal aliases (`type Status = "a" | "b"`) are cheap enough
+ * in-line that sharing them isn't worth a `defs` indirection in this v1. */
+function shareableTypeName(type: ts.Type): string | undefined {
+  if (type.aliasSymbol) {
+    return NON_SHAREABLE_SYMBOL_NAMES.has(type.aliasSymbol.name) ? undefined : type.aliasSymbol.name
+  }
+  if (!(type.flags & ts.TypeFlags.Object)) return undefined
+  const symbol = type.symbol
+  const name = symbol?.name
+  if (!name || name === "__type" || NON_SHAREABLE_SYMBOL_NAMES.has(name)) return undefined
+  return name
+}
+
+/** Mutable bookkeeping shared across one whole extraction pass (e.g. every
+ * leaf `extractToolTypeRefs`/`extractRouteTypeRefs` walks) — accumulates
+ * which `ts.Type`s got which `defs` name, how many times each was referenced,
+ * which are self-recursive (must stay shared — see `shouldShare`'s "always
+ * share recursive types" rule), and the def bodies themselves. Construct via
+ * `createSharingRegistry()`; `finalizeSharedDefs` consumes it after the whole
+ * pass to decide, per `defs` entry, whether to keep it shared or inline it
+ * back everywhere it's referenced. */
+export interface SharingRegistry {
+  readonly names: Map<ts.Type, string>
+  readonly usedNames: Set<string>
+  readonly useCounts: Map<string, number>
+  readonly defs: Map<string, TypeRef>
+  readonly recursive: Set<string>
+}
+
+export function createSharingRegistry(): SharingRegistry {
+  return { names: new Map(), usedNames: new Set(), useCounts: new Map(), defs: new Map(), recursive: new Set() }
+}
+
+function uniqueRegistryName(registry: SharingRegistry, base: string): string {
+  if (!registry.usedNames.has(base)) {
+    registry.usedNames.add(base)
+    return base
+  }
+  let i = 2
+  while (registry.usedNames.has(`${base}_${i}`)) i++
+  const name = `${base}_${i}`
+  registry.usedNames.add(name)
+  return name
+}
+
+function bumpUseCount(registry: SharingRegistry, name: string): void {
+  registry.useCounts.set(name, (registry.useCounts.get(name) ?? 0) + 1)
+}
+
+/** The predicate a caller supplies to decide whether a REUSED (not
+ * self-recursive — those always share, unconditionally) named type is worth
+ * extracting to `defs` rather than inlining at every use site. */
+export type ShouldShare = (info: { node: TypeRef; tree: TypeRef; useCount: number; typeName?: string }) => boolean
+
+/** Default heuristic: share when a type is both reused (appears more than
+ * once) AND big enough that duplicating its structure at every use site would
+ * actually cost something (`nodeCount > 5` — small types like `{ id: string
+ * }` are cheap enough inlined that a `defs` indirection isn't worth it even
+ * when reused). */
+export const defaultShouldShare: ShouldShare = (info) => info.useCount > 1 && nodeCount(info.node) > 5
+
+/** Duck-types `v` as a `TypeRef` — mirrors type-ir's own private `isTypeRef`
+ * (not exported, so re-derived locally); every `TypeRef` carries `shape.kind`
+ * + `meta`, which no other value nested inside a `TypeShape` does. */
+function isTypeRefLike(v: unknown): v is TypeRef {
+  if (typeof v !== "object" || v === null) return false
+  const shape = (v as { shape?: unknown }).shape
+  return (
+    "meta" in v &&
+    typeof shape === "object" &&
+    shape !== null &&
+    typeof (shape as { kind?: unknown }).kind === "string"
+  )
+}
+
+/** Rebuild a shape with every immediate TypeRef child replaced via `fn` —
+ * the reconstruct-not-just-collect counterpart to type-ir's `childTypeRefs`
+ * (same generic-over-kind walk: a bare TypeRef field, an array of TypeRef or
+ * `{ name, type: TypeRef }`, or a `Record<string, TypeRef>`). Used by
+ * `finalizeSharedDefs` to rewrite `ref` nodes after deciding which shared
+ * defs to keep vs. inline. */
+function mapTypeRefChildren(shape: TypeShape, fn: (ref: TypeRef) => TypeRef): TypeShape {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(shape)) {
+    if (isTypeRefLike(value)) {
+      out[key] = fn(value)
+    } else if (Array.isArray(value)) {
+      out[key] = value.map((item) => {
+        if (isTypeRefLike(item)) return fn(item)
+        if (typeof item === "object" && item !== null && isTypeRefLike((item as { type?: unknown }).type)) {
+          return { ...(item as object), type: fn((item as { type: TypeRef }).type) }
+        }
+        return item
+      })
+    } else if (typeof value === "object" && value !== null) {
+      const entries = Object.entries(value as Record<string, unknown>)
+      out[key] =
+        entries.length > 0 && entries.every(([, v]) => isTypeRefLike(v))
+          ? Object.fromEntries(entries.map(([k, v]) => [k, fn(v as TypeRef)]))
+          : value
+    } else {
+      out[key] = value
+    }
+  }
+  return out as TypeShape
+}
+
+/** Rewrite every `ref` node in `ref`'s subtree via `replace` — `replace(target)`
+ * returns the def body to inline IN PLACE OF the ref (recursively substituted
+ * further, so a chain of demoted refs fully resolves), or `undefined` to leave
+ * the ref as-is (a KEPT shared def, or a target `replace` doesn't know about).
+ * Terminates even on defs that reference each other, because `replace` never
+ * returns a body for a name flagged recursive (see `finalizeSharedDefs`) —
+ * the one case where re-expanding could recurse forever. */
+function substituteRefs(ref: TypeRef, replace: (target: string) => TypeRef | undefined): TypeRef {
+  if (ref.shape.kind === "ref") {
+    const target = (ref.shape as TypeShape & { kind: "ref"; target: string }).target
+    const replacement = replace(target)
+    if (replacement !== undefined) return substituteRefs(replacement, replace)
+    return ref
+  }
+  return t(
+    mapTypeRefChildren(ref.shape, (child) => substituteRefs(child, replace)),
+    ref.meta,
+  )
+}
+
+/**
+ * Decide, per `SharingRegistry` entry, whether to keep it in `defs` (shared)
+ * or inline it back everywhere it's referenced — run ONCE, after the whole
+ * extraction pass (every leaf a caller cares about) has populated `registry`
+ * via `typeRefFromType`/`typeRefFromFunctionNode`/`typeRefFromReturnType`.
+ *
+ * Every named type encountered during extraction is unconditionally shared
+ * AT EXTRACTION TIME (see `typeRefFromType`'s registry branch) — final counts
+ * aren't known until the whole pass finishes, so "share everything, then
+ * demote" is the only single-pass-generation option that still lets
+ * `shouldShare` see accurate `useCount`s. This function is that demotion
+ * pass: self-recursive names (`registry.recursive`) are always kept — a
+ * recursive type has nowhere finite to inline TO — everything else is kept
+ * only if `shouldShare` (default: `defaultShouldShare`) says so, and demoted
+ * names are substituted back into every remaining ref (roots and kept defs
+ * alike) via `substituteRefs`.
+ *
+ * `roots` is every top-level TypeRef the caller extracted (e.g. one entry per
+ * tool/route) keyed however the caller likes — the keys are preserved on the
+ * returned `roots`, only the TypeRefs themselves are rewritten.
+ */
+export function finalizeSharedDefs(
+  registry: SharingRegistry,
+  roots: Record<string, TypeRef>,
+  shouldShare: ShouldShare = defaultShouldShare,
+): { roots: Record<string, TypeRef>; defs: Record<string, TypeRef> } {
+  const kept = new Set<string>()
+  for (const [name, body] of registry.defs) {
+    if (registry.recursive.has(name)) {
+      kept.add(name)
+      continue
+    }
+    const useCount = registry.useCounts.get(name) ?? 0
+    if (shouldShare({ node: body, tree: body, useCount, typeName: name })) kept.add(name)
+  }
+
+  const replace = (target: string): TypeRef | undefined => (kept.has(target) ? undefined : registry.defs.get(target))
+
+  const defs: Record<string, TypeRef> = {}
+  for (const name of kept) defs[name] = substituteRefs(registry.defs.get(name)!, replace)
+
+  const finalRoots: Record<string, TypeRef> = {}
+  for (const [name, ref] of Object.entries(roots)) finalRoots[name] = substituteRefs(ref, replace)
+
+  return { roots: finalRoots, defs }
+}
+
 /**
  * Lower a call signature to a `types.function` TypeRef: ordered params (name +
  * type), return type, and — when the signature carries an explicit/implicit
@@ -86,15 +301,16 @@ function functionRefFromSignature(
   checker: ts.TypeChecker,
   loc: ts.Node,
   seen: Set<ts.Type>,
+  registry?: SharingRegistry,
 ): TypeRef {
   const params = sig.getParameters().map((param) => ({
     name: param.name,
-    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen),
+    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen, registry),
   }))
-  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen)
+  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry)
   const thisParam = sig.thisParameter
   const thisType = thisParam
-    ? typeRefFromType(checker.getTypeOfSymbolAtLocation(thisParam, loc), checker, loc, seen)
+    ? typeRefFromType(checker.getTypeOfSymbolAtLocation(thisParam, loc), checker, loc, seen, registry)
     : undefined
   return t(types.function(params, returnType, thisType))
 }
@@ -115,8 +331,9 @@ function functionRefFromSignatures(
   checker: ts.TypeChecker,
   loc: ts.Node,
   seen: Set<ts.Type>,
+  registry?: SharingRegistry,
 ): TypeRef {
-  const refs = sigs.map((sig) => functionRefFromSignature(sig, checker, loc, seen))
+  const refs = sigs.map((sig) => functionRefFromSignature(sig, checker, loc, seen, registry))
   return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
 }
 
@@ -135,12 +352,13 @@ function methodRefFromSignature(
   loc: ts.Node,
   seen: Set<ts.Type>,
   thisType: TypeRef,
+  registry?: SharingRegistry,
 ): TypeRef {
   const params = sig.getParameters().map((param) => ({
     name: param.name,
-    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen),
+    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen, registry),
   }))
-  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen)
+  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry)
   return t(types.method(params, returnType, thisType))
 }
 
@@ -156,8 +374,9 @@ function methodRefFromSignatures(
   loc: ts.Node,
   seen: Set<ts.Type>,
   thisType: TypeRef,
+  registry?: SharingRegistry,
 ): TypeRef {
-  const refs = sigs.map((sig) => methodRefFromSignature(sig, checker, loc, seen, thisType))
+  const refs = sigs.map((sig) => methodRefFromSignature(sig, checker, loc, seen, thisType, registry))
   return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
 }
 
@@ -177,6 +396,7 @@ function methodsFromClassType(
   loc: ts.Node,
   seen: Set<ts.Type>,
   thisType: TypeRef,
+  registry?: SharingRegistry,
 ): Record<string, TypeRef> {
   const methods: Record<string, TypeRef> = {}
   for (const prop of checker.getPropertiesOfType(type)) {
@@ -186,7 +406,7 @@ function methodsFromClassType(
     const sigs = checker.getSignaturesOfType(propType, ts.SignatureKind.Call)
     if (!isMethodDecl && sigs.length === 0) continue
     if (sigs.length === 0) continue
-    methods[prop.name] = methodRefFromSignatures(sigs, checker, loc, seen, thisType)
+    methods[prop.name] = methodRefFromSignatures(sigs, checker, loc, seen, thisType, registry)
   }
   return methods
 }
@@ -544,6 +764,7 @@ function typeRefFromBrandedIntersection(
   checker: ts.TypeChecker,
   loc: ts.Node,
   seen: Set<ts.Type>,
+  registry?: SharingRegistry,
 ): TypeRef | undefined {
   const bases: ts.Type[] = []
   const refinementMeta: Record<string, unknown> = {}
@@ -564,7 +785,7 @@ function typeRefFromBrandedIntersection(
   if (bases.length !== 1) return undefined
 
   const nextSeen = new Set(seen).add(type)
-  const baseRef = typeRefFromType(bases[0]!, checker, loc, nextSeen)
+  const baseRef = typeRefFromType(bases[0]!, checker, loc, nextSeen, registry)
 
   const branded =
     brandValue !== undefined
@@ -586,18 +807,64 @@ function typeRefFromBrandedIntersection(
  * (ancestors on this recursion path only — siblings don't share it). Re-entering
  * a type already on the path means the type is recursive; it lowers to
  * `t(types.ref(name))` when a name is recoverable, else punts.
+ *
+ * `registry` (optional, omitted by every existing caller — exact prior
+ * behavior when absent) opts into structural sharing (see the "Structural
+ * sharing" section above): a NAMED type (`shareableTypeName`) is extracted to
+ * `registry.defs` under a unique name on first encounter and returned as
+ * `{ kind: "ref", target: name }` on every encounter, first or not — including
+ * nested occurrences (a field typed `Address` shares just as readily as the
+ * op's own top-level input type). `finalizeSharedDefs` runs AFTER the whole
+ * extraction pass (every leaf, not just one) to decide which shared names are
+ * worth KEEPING shared (per the caller's `ShouldShare` predicate) versus
+ * inlining back — self-recursive names are never inlined, everything else is
+ * a genuine choice.
  */
 export function typeRefFromType(
   type: ts.Type,
   checker: ts.TypeChecker,
   loc: ts.Node,
   seen: Set<ts.Type> = new Set(),
+  registry?: SharingRegistry,
 ): TypeRef {
   if (seen.has(type)) {
-    const typeName = type.aliasSymbol?.name ?? type.symbol?.name
+    const registered = registry?.names.get(type)
+    const typeName = registered ?? type.aliasSymbol?.name ?? type.symbol?.name
+    if (registry && typeName) {
+      registry.recursive.add(typeName)
+      bumpUseCount(registry, typeName)
+    }
     return typeName ? t(types.ref(typeName)) : puntRef("recursive type")
   }
 
+  if (registry) {
+    const shareName = shareableTypeName(type)
+    if (shareName) {
+      const existing = registry.names.get(type)
+      if (existing !== undefined) {
+        bumpUseCount(registry, existing)
+        return t(types.ref(existing))
+      }
+      const assignedName = uniqueRegistryName(registry, shareName)
+      registry.names.set(type, assignedName)
+      bumpUseCount(registry, assignedName)
+      const nextSeen = new Set(seen).add(type)
+      const bodyRef = typeRefFromTypeStructural(type, checker, loc, nextSeen, registry)
+      registry.defs.set(assignedName, bodyRef)
+      return t(types.ref(assignedName))
+    }
+  }
+
+  return typeRefFromTypeStructural(type, checker, loc, seen, registry)
+}
+
+function typeRefFromTypeStructural(
+  type: ts.Type,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+  registry: SharingRegistry | undefined,
+): TypeRef {
   const flags = type.flags
 
   // ── Literals (checked before the widening StringLike/NumberLike/BooleanLike
@@ -651,7 +918,7 @@ export function typeRefFromType(
     const style = type.aliasSymbol.name === "OffsetPage" ? "offset" : "cursor"
     return t(
       types.page(
-        elem ? typeRefFromType(elem, checker, loc, nextSeen) : puntRef("unknown page element"),
+        elem ? typeRefFromType(elem, checker, loc, nextSeen, registry) : puntRef("unknown page element"),
         style,
       ),
     )
@@ -663,7 +930,7 @@ export function typeRefFromType(
     const nextSeen = new Set(seen).add(type)
     const elements = checker.getTypeArguments(type as ts.TypeReference)
     return t(
-      types.tuple(elements.map((el) => typeRefFromType(el, checker, loc, nextSeen))),
+      types.tuple(elements.map((el) => typeRefFromType(el, checker, loc, nextSeen, registry))),
     )
   }
 
@@ -674,7 +941,7 @@ export function typeRefFromType(
     return t(
       types.array(
         elem
-          ? typeRefFromType(elem, checker, loc, nextSeen)
+          ? typeRefFromType(elem, checker, loc, nextSeen, registry)
           : puntRef("unknown array element"),
       ),
     )
@@ -727,7 +994,7 @@ export function typeRefFromType(
     // `enum` kind is `readonly string[]` only, so numeric/mixed cases use
     // `types.union` of literals instead.
     if (members.every(isLiteralMember)) {
-      return t(types.union(members.map((m) => typeRefFromType(m, checker, loc, seen))))
+      return t(types.union(members.map((m) => typeRefFromType(m, checker, loc, seen, registry))))
     }
 
     // ── Object-like unions: lower to `types.union([...variants])`, each
@@ -778,7 +1045,7 @@ export function typeRefFromType(
         }
       }
 
-      const variants = members.map((m) => typeRefFromType(m, checker, loc, nextSeen))
+      const variants = members.map((m) => typeRefFromType(m, checker, loc, nextSeen, registry))
       return t(types.union(variants), discriminator ? { discriminator } : {})
     }
 
@@ -816,10 +1083,10 @@ export function typeRefFromType(
   // TypeScript's `&`, Zod's `z.intersection`, …) do, and the rest fall back to
   // their first member (lossy but safe — see each projector's handler).
   if (type.isIntersection()) {
-    const branded = typeRefFromBrandedIntersection(type, checker, loc, seen)
+    const branded = typeRefFromBrandedIntersection(type, checker, loc, seen, registry)
     if (branded) return branded
     const nextSeen = new Set(seen).add(type)
-    const members = type.types.map((member) => typeRefFromType(member, checker, loc, nextSeen))
+    const members = type.types.map((member) => typeRefFromType(member, checker, loc, nextSeen, registry))
     return t(types.intersection(members))
   }
 
@@ -831,7 +1098,7 @@ export function typeRefFromType(
     // yet and still punt.
     const callSigs = checker.getSignaturesOfType(type, ts.SignatureKind.Call)
     if (callSigs.length > 0) {
-      return functionRefFromSignatures(callSigs, checker, loc, seen)
+      return functionRefFromSignatures(callSigs, checker, loc, seen, registry)
     }
     if (checker.getSignaturesOfType(type, ts.SignatureKind.Construct).length > 0) {
       return puntRef(`constructable (${checker.typeToString(type)})`)
@@ -842,7 +1109,7 @@ export function typeRefFromType(
     // Promise<T> in field position: unwrap to T, same as the return-type path.
     if (type.symbol?.name === "Promise") {
       const [inner] = checker.getTypeArguments(type as ts.TypeReference)
-      if (inner) return typeRefFromType(inner, checker, loc, nextSeen)
+      if (inner) return typeRefFromType(inner, checker, loc, nextSeen, registry)
     }
 
     // AsyncIterable<T>/AsyncGenerator<T, TReturn, TNext>/AsyncIterableIterator<T>
@@ -866,7 +1133,7 @@ export function typeRefFromType(
       const [elem] = checker.getTypeArguments(type as ts.TypeReference)
       return t(
         types.stream(
-          elem ? typeRefFromType(elem, checker, loc, nextSeen) : puntRef("unknown stream element"),
+          elem ? typeRefFromType(elem, checker, loc, nextSeen, registry) : puntRef("unknown stream element"),
         ),
       )
     }
@@ -880,7 +1147,7 @@ export function typeRefFromType(
     if (properties.length === 0 && (stringIndex || numberIndex)) {
       const valueType = stringIndex ?? numberIndex!
       const keyRef = stringIndex ? t(types.string) : t(types.number)
-      return t(types.map(keyRef, typeRefFromType(valueType, checker, loc, nextSeen)))
+      return t(types.map(keyRef, typeRefFromType(valueType, checker, loc, nextSeen, registry)))
     }
 
     // Class instances: a symbol with a ts.ClassDeclaration among its
@@ -903,7 +1170,7 @@ export function typeRefFromType(
       // additive and non-breaking for every existing consumer of this
       // function. `instance` itself stays purely nominal; nothing here adds
       // fields to it.
-      const methods = methodsFromClassType(type, checker, loc, nextSeen, instanceRef)
+      const methods = methodsFromClassType(type, checker, loc, nextSeen, instanceRef, registry)
       if (Object.keys(methods).length > 0) {
         return t(instanceRef.shape, { ...instanceRef.meta, interface: t(types.interface(methods)) })
       }
@@ -929,7 +1196,7 @@ export function typeRefFromType(
       // Method-shaped fields (call signature) lower to `types.function` —
       // e.g. `callback: (x: number) => void` — same as any other callable
       // type position (see the call-signature branch above).
-      const fieldRef = typeRefFromType(propType, checker, loc, nextSeen)
+      const fieldRef = typeRefFromType(propType, checker, loc, nextSeen, registry)
 
       // Per-field JSDoc: `/** … */` above a property → `meta.description`;
       // `@default` tag → `meta.default`. Both flow through the type-ir
@@ -975,7 +1242,7 @@ export function typeRefFromType(
     const constraint = type.getConstraint()
     if (constraint) {
       const nextSeen = new Set(seen).add(type)
-      const constraintRef = typeRefFromType(constraint, checker, loc, nextSeen)
+      const constraintRef = typeRefFromType(constraint, checker, loc, nextSeen, registry)
       return t(constraintRef.shape, { ...constraintRef.meta, generic: true })
     }
     return t(types.unknown, {
@@ -1054,6 +1321,7 @@ function typeProvenanceOf(
 export function typeRefFromFunctionNode(
   fn: ts.Node,
   checker: ts.TypeChecker,
+  registry?: SharingRegistry,
 ): TypeRef {
   const fnType = checker.getTypeAtLocation(fn)
   const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
@@ -1061,7 +1329,7 @@ export function typeRefFromFunctionNode(
   const [param] = sig.getParameters()
   if (!param) return t(types.object({}))
   const paramType = checker.getTypeOfSymbolAtLocation(param, fn)
-  const ref = typeRefFromType(paramType, checker, fn)
+  const ref = typeRefFromType(paramType, checker, fn, undefined, registry)
   const provenance = typeProvenanceOf(paramType, checker)
   return provenance
     ? t(ref.shape, { ...ref.meta, typeName: provenance.name, declarationFile: provenance.declarationFile })
@@ -1289,6 +1557,7 @@ function structuralResultValueType(
 export function typeRefFromReturnType(
   fn: ts.Node,
   checker: ts.TypeChecker,
+  registry?: SharingRegistry,
 ): TypeRef {
   const fnType = checker.getTypeAtLocation(fn)
   const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
@@ -1310,7 +1579,7 @@ export function typeRefFromReturnType(
       const tNode = resultTypeArgNodeFrom(retTypeNode, checker)
       if (tNode !== undefined) {
         const tType = checker.getTypeAtLocation(tNode)
-        return typeRefFromType(tType, checker, fn)
+        return typeRefFromType(tType, checker, fn, undefined, registry)
       }
     }
   }
@@ -1335,7 +1604,7 @@ export function typeRefFromReturnType(
     returnType = structuralValue
   }
 
-  return typeRefFromType(returnType, checker, fn)
+  return typeRefFromType(returnType, checker, fn, undefined, registry)
 }
 
 /**
