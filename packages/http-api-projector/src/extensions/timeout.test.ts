@@ -41,7 +41,7 @@ describe("timeout — runtime (wrapFetch)", () => {
 describe("timeout — codegen", () => {
   it("wraps the inner expression with __withTimeout and baked-in ms", () => {
     const ext = timeout({ ms: 3000 })
-    expect(ext.codegen?.wrap("options.fetch ?? fetch")).toBe(
+    expect(ext.codegen?.wrap?.("options.fetch ?? fetch")).toBe(
       '__withTimeout(options.fetch ?? fetch, {"ms":3000})',
     )
   })

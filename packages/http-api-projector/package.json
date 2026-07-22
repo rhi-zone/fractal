@@ -78,6 +78,14 @@
     "./extensions/logging": {
       "types": "./src/extensions/logging.ts",
       "import": "./src/extensions/logging.ts"
+    },
+    "./extensions/pagination": {
+      "types": "./src/extensions/pagination.ts",
+      "import": "./src/extensions/pagination.ts"
+    },
+    "./extensions/streaming": {
+      "types": "./src/extensions/streaming.ts",
+      "import": "./src/extensions/streaming.ts"
     }
   },
   "files": ["src"],

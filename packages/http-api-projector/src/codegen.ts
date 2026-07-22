@@ -58,8 +58,8 @@ import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import { httpProjection } from "./dx.ts"
 import type { HttpRoute } from "./route.ts"
-import { composeCodegenFetch } from "./extension.ts"
-import type { ClientExtension } from "./extension.ts"
+import { composeCodegenFetch, findStreamingCall } from "./extension.ts"
+import type { ClientExtension, StreamingCallArgs } from "./extension.ts"
 
 // ============================================================================
 // Public API
@@ -106,7 +106,8 @@ export function generateClient(
   schemas?: SchemaMap,
   options: CodegenOptions = {},
 ): string {
-  return render(buildTree(route, "", new Set(), schemas, undefined, undefined), options)
+  const streamingEnabled = findStreamingCall(options.extensions) !== undefined
+  return render(buildTree(route, "", new Set(), schemas, undefined, undefined, streamingEnabled), options)
 }
 
 /**
@@ -129,7 +130,8 @@ export function generateClientFromNode(
   const route = httpProjection(node)
   const codegenNames = buildCodegenNameMap(node)
   const memberNames = buildMemberNameMap(node)
-  return render(buildTree(route, "", new Set(), schemas, codegenNames, memberNames), options)
+  const streamingEnabled = findStreamingCall(options.extensions) !== undefined
+  return render(buildTree(route, "", new Set(), schemas, codegenNames, memberNames, streamingEnabled), options)
 }
 
 // ============================================================================
@@ -206,6 +208,16 @@ type OperationEntry = {
   readonly verb: string // uppercase HTTP method
   readonly requestSchema?: JsonSchema
   readonly responseSchema?: JsonSchema
+  /**
+   * True when this operation's output is tagged `x-stream` (see
+   * `@rhi-zone/fractal-type-ir`'s `toJsonSchema`, `stream` kind) AND a
+   * streaming-aware codegen extension (`extensions/streaming.ts`) is
+   * included — see `unwrapStreamSchema` below. Only then does emission
+   * (`nodeTypeLiteral`/`nodeRuntimeLiteral`) use `AsyncIterable<T>` and the
+   * extension's `streamingCall` instead of the default `Promise<T>`/
+   * `__request(...)`.
+   */
+  readonly streaming: boolean
 }
 
 type ClientTreeNode = {
@@ -217,6 +229,26 @@ type ClientTreeNode = {
 /** True when `schema` has at least one property left after path-param stripping. */
 function hasContent(schema: JsonSchema | undefined): schema is JsonSchema {
   return schema?.properties !== undefined && Object.keys(schema.properties).length > 0
+}
+
+/**
+ * Vendor-extension key `toJsonSchema` (type-ir/src/json-schema.ts) stamps on
+ * a `stream` TypeRef's JSON Schema projection: `{ type: "array", items,
+ * "x-stream": true }` — JSON Schema has no native streaming vocabulary, so
+ * this is the only way an `AsyncIterable<T>` output schema round-trips
+ * through `SchemaMap`/`ToolSchema` to reach codegen. `JsonSchema`
+ * (api-tree/src/extract.ts) doesn't declare the key in its type (it's a
+ * vendor extension, same convention as `x-class-name`/`x-function`), hence
+ * the local cast.
+ */
+function unwrapStreamSchema(
+  schema: JsonSchema | undefined,
+): { readonly schema: JsonSchema | undefined; readonly isStream: boolean } {
+  const tagged = schema as (JsonSchema & { readonly ["x-stream"]?: boolean }) | undefined
+  if (tagged?.["x-stream"] === true) {
+    return { schema: tagged.items === false ? undefined : tagged.items, isStream: true }
+  }
+  return { schema, isStream: false }
 }
 
 /**
@@ -267,10 +299,23 @@ function attachOperation(
   pathParamNames: ReadonlySet<string>,
   schemas: SchemaMap | undefined,
   codegenNames: ReadonlyMap<Handler, string> | undefined,
+  streamingEnabled: boolean,
 ): void {
   const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(path, verb)
   const toolSchema = schemas?.[codegenName]
   const requestSchema = stripPathParams(toolSchema?.inputSchema, pathParamNames)
+  // Only unwrap the `x-stream` array-of-element schema down to the bare
+  // element schema when a streaming-aware extension is actually in play
+  // (`streamingEnabled`) — otherwise the operation stays `Promise<Array<T>>`-
+  // shaped (schemaToType's plain `array` branch, ignorant of `x-stream`,
+  // same as before this feature existed) since the client's `__request`
+  // still runs its default JSON/text decode against what will actually be an
+  // SSE-formatted response body: unwrapping the schema without also
+  // changing the runtime call would claim a `T` output the client can't
+  // actually produce.
+  const { schema: outputSchema, isStream } = streamingEnabled
+    ? unwrapStreamSchema(toolSchema?.outputSchema)
+    : { schema: toolSchema?.outputSchema, isStream: false }
 
   node.operations.set(memberName, {
     memberName,
@@ -278,7 +323,8 @@ function attachOperation(
     path,
     verb: verb.toUpperCase(),
     ...(hasContent(requestSchema) ? { requestSchema } : {}),
-    ...(toolSchema?.outputSchema !== undefined ? { responseSchema: toolSchema.outputSchema } : {}),
+    ...(outputSchema !== undefined ? { responseSchema: outputSchema } : {}),
+    streaming: streamingEnabled && isStream,
   })
 }
 
@@ -306,13 +352,14 @@ function buildTree(
   schemas: SchemaMap | undefined,
   codegenNames: ReadonlyMap<Handler, string> | undefined,
   memberNames: ReadonlyMap<Handler, string> | undefined,
+  streamingEnabled: boolean,
 ): ClientTreeNode {
   const node: ClientTreeNode = { children: new Map(), operations: new Map() }
   const displayPath = path === "" ? "/" : path
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
     const memberName = memberNames?.get(entry.handler) ?? verb.toLowerCase()
-    attachOperation(node, memberName, verb, entry, displayPath, pathParamNames, schemas, codegenNames)
+    attachOperation(node, memberName, verb, entry, displayPath, pathParamNames, schemas, codegenNames, streamingEnabled)
   }
 
   for (const [seg, child] of Object.entries(route.children ?? {})) {
@@ -322,9 +369,12 @@ function buildTree(
       const [verb] = Object.keys(child.methods!)
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const entry = child.methods![verb!]!
-      attachOperation(node, seg, verb!, entry, childPath, pathParamNames, schemas, codegenNames)
+      attachOperation(node, seg, verb!, entry, childPath, pathParamNames, schemas, codegenNames, streamingEnabled)
     } else {
-      node.children.set(seg, buildTree(child, childPath, pathParamNames, schemas, codegenNames, memberNames))
+      node.children.set(
+        seg,
+        buildTree(child, childPath, pathParamNames, schemas, codegenNames, memberNames, streamingEnabled),
+      )
     }
   }
 
@@ -339,6 +389,7 @@ function buildTree(
         schemas,
         codegenNames,
         memberNames,
+        streamingEnabled,
       ),
     }
   }
@@ -463,7 +514,8 @@ function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
       entry.requestSchema !== undefined
         ? `(input: ${base}Input, callOpts?: CallOptions)`
         : `(callOpts?: CallOptions)`
-    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${sig} => Promise<${outputType}>`)
+    const returnType = entry.streaming ? `AsyncIterable<${outputType}>` : `Promise<${outputType}>`
+    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${sig} => ${returnType}`)
   }
 
   return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
@@ -471,20 +523,31 @@ function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
 
 // ============================================================================
 // Internal: createClient runtime factory renderer — walks the SAME tree as
-// nodeTypeLiteral, producing the matching object literal.
+// nodeTypeLiteral, producing the matching object literal. `streamingCall`
+// (from `findStreamingCall`, extension.ts) is threaded through so a
+// `streaming: true` operation can emit a call into the streaming extension's
+// helper instead of the default `__request(...)` — `undefined` when no
+// streaming-aware extension was passed, in which case `entry.streaming` is
+// already forced `false` by `attachOperation`, so this parameter is unused.
 // ============================================================================
 
-function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
+function nodeRuntimeLiteral(
+  node: ClientTreeNode,
+  indent: string,
+  streamingCall: ((args: StreamingCallArgs) => string) | undefined,
+): string {
   const nextIndent = indent + "  "
   const lines: string[] = []
 
   for (const [key, child] of node.children) {
-    lines.push(`${nextIndent}${safeKey(key)}: ${nodeRuntimeLiteral(child, nextIndent)},`)
+    lines.push(`${nextIndent}${safeKey(key)}: ${nodeRuntimeLiteral(child, nextIndent, streamingCall)},`)
   }
 
   if (node.param !== undefined) {
     const { name, subtree } = node.param
-    lines.push(`${nextIndent}${safeKey(name)}: (${name}: string) => (${nodeRuntimeLiteral(subtree, nextIndent)}),`)
+    lines.push(
+      `${nextIndent}${safeKey(name)}: (${name}: string) => (${nodeRuntimeLiteral(subtree, nextIndent, streamingCall)}),`,
+    )
   }
 
   for (const [memberName, entry] of node.operations) {
@@ -494,11 +557,30 @@ function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
     const params = hasInput ? `input: ${base}Input, callOpts?: CallOptions` : `callOpts?: CallOptions`
     const inputArg = hasInput ? "input" : "undefined"
     const pathLit = pathTemplateLiteral(entry.path)
-    lines.push(
-      `${nextIndent}${safeKey(memberName)}: (${params}): Promise<${outputType}> => ` +
-        `__request(baseUrl, fetchImpl, headers, "${entry.verb}", \`${pathLit}\`, ${inputArg}, ` +
-        `baseTimeout, baseSignal, callOpts) as Promise<${outputType}>,`,
-    )
+
+    if (entry.streaming && streamingCall !== undefined) {
+      const callExpr = streamingCall({
+        baseUrlExpr: "baseUrl",
+        fetchExpr: "fetchImpl",
+        headersExpr: "headers",
+        method: entry.verb,
+        pathLiteral: pathLit,
+        inputExpr: inputArg,
+        baseTimeoutExpr: "baseTimeout",
+        baseSignalExpr: "baseSignal",
+        callOptsExpr: "callOpts",
+      })
+      lines.push(
+        `${nextIndent}${safeKey(memberName)}: (${params}): AsyncIterable<${outputType}> => ` +
+          `${callExpr} as unknown as AsyncIterable<${outputType}>,`,
+      )
+    } else {
+      lines.push(
+        `${nextIndent}${safeKey(memberName)}: (${params}): Promise<${outputType}> => ` +
+          `__request(baseUrl, fetchImpl, headers, "${entry.verb}", \`${pathLit}\`, ${inputArg}, ` +
+          `baseTimeout, baseSignal, callOpts) as Promise<${outputType}>,`,
+      )
+    }
   }
 
   return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
@@ -542,7 +624,8 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
   }
 
   const clientTypeDecl = `export type ${clientName} = ${nodeTypeLiteral(root, "")}`
-  const factoryBody = nodeRuntimeLiteral(root, "  ")
+  const streamingCall = findStreamingCall(options.extensions)
+  const factoryBody = nodeRuntimeLiteral(root, "  ", streamingCall)
 
   // Extensions are baked in at generation time: each contributes an
   // expression wrapping the base fetch impl (`expr`), plus any helper

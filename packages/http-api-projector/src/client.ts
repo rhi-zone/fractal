@@ -65,12 +65,12 @@
 //   packages/api-tree/src/node.ts               — Node, Handler, fallback, isLeaf
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { TypedClient } from "@rhi-zone/fractal-api-tree"
 import { httpProjection } from "./dx.ts"
 import type { HttpRoute } from "./route.ts"
 import { ClientError } from "./client-error.ts"
-import { composeFetch } from "./extension.ts"
+import { composeDecodeResponse, composeFetch } from "./extension.ts"
 import type { ClientExtension } from "./extension.ts"
 
 export { ClientError } from "./client-error.ts"
@@ -207,6 +207,8 @@ function makeCaller(
   fetchImpl: FetchImpl,
   baseTimeout: number | undefined,
   baseSignal: AbortSignal | undefined,
+  extensions: readonly ClientExtension[] | undefined,
+  meta: Meta,
 ): (input?: unknown, callOpts?: CallOptions) => Promise<unknown> {
   return async (input?: unknown, callOpts?: CallOptions): Promise<unknown> => {
     const timeout = callOpts?.timeout ?? baseTimeout
@@ -248,6 +250,9 @@ function makeCaller(
     } catch (err) {
       throw describeAbort(err, verb, path, timeout)
     }
+
+    const decoded = composeDecodeResponse(res, { request: req, refetch: fetchImpl, meta }, extensions)
+    if (decoded !== undefined) return decoded.value
 
     let body: unknown
     const ct = res.headers.get("Content-Type") ?? ""
@@ -294,19 +299,21 @@ function buildClientNode(
   handlerNames: ReadonlyMap<Handler, string> | undefined,
   baseTimeout: number | undefined,
   baseSignal: AbortSignal | undefined,
+  extensions: readonly ClientExtension[] | undefined,
 ): AnyClient | ((input?: unknown, callOpts?: CallOptions) => Promise<unknown>) {
   if (isSingleLeafMethod(route)) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const [verb] = Object.keys(route.methods!)
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return makeCaller(verb!, path, slugValues, baseUrl, fetchImpl, baseTimeout, baseSignal)
+    const entry = route.methods![verb!]!
+    return makeCaller(verb!, path, slugValues, baseUrl, fetchImpl, baseTimeout, baseSignal, extensions, entry.meta)
   }
 
   const client: AnyClient = {}
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
     const name = handlerNames?.get(entry.handler) ?? verb.toLowerCase()
-    client[name] = makeCaller(verb, path, slugValues, baseUrl, fetchImpl, baseTimeout, baseSignal)
+    client[name] = makeCaller(verb, path, slugValues, baseUrl, fetchImpl, baseTimeout, baseSignal, extensions, entry.meta)
   }
 
   for (const [seg, child] of Object.entries(route.children ?? {})) {
@@ -319,6 +326,7 @@ function buildClientNode(
       handlerNames,
       baseTimeout,
       baseSignal,
+      extensions,
     )
   }
 
@@ -334,6 +342,7 @@ function buildClientNode(
         handlerNames,
         baseTimeout,
         baseSignal,
+        extensions,
       ) as AnyClient
   }
 
@@ -363,7 +372,17 @@ function buildClientNode(
 export function createClientFromRoute(route: HttpRoute, opts: ClientOptions = {}): AnyClient {
   const baseUrl = opts.baseUrl ?? ""
   const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions)
-  return buildClientNode(route, "", new Set(), baseUrl, fetchImpl, undefined, opts.timeout, opts.signal) as AnyClient
+  return buildClientNode(
+    route,
+    "",
+    new Set(),
+    baseUrl,
+    fetchImpl,
+    undefined,
+    opts.timeout,
+    opts.signal,
+    opts.extensions,
+  ) as AnyClient
 }
 
 // ============================================================================
@@ -411,5 +430,6 @@ export function createClient<N extends Node>(n: N, opts: ClientOptions = {}): Ty
     handlerNames,
     opts.timeout,
     opts.signal,
+    opts.extensions,
   ) as TypedClient<N, CallOptions>
 }

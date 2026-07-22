@@ -102,7 +102,7 @@ describe("retry — codegen", () => {
   it("wraps the inner expression with __withRetry and baked-in options", () => {
     const ext = retry({ maxRetries: 5, baseDelayMs: 200, jitter: false })
     expect(ext.codegen).toBeDefined()
-    const wrapped = ext.codegen?.wrap("options.fetch ?? fetch")
+    const wrapped = ext.codegen?.wrap?.("options.fetch ?? fetch")
     expect(wrapped).toBe(
       '__withRetry(options.fetch ?? fetch, {"maxRetries":5,"baseDelayMs":200,"jitter":false})',
     )

@@ -134,14 +134,14 @@ describe("logging — codegen", () => {
   it("wraps the inner expression with __withLogging and baked-in level", () => {
     const ext = logging({ level: "debug" })
     expect(ext.codegen).toBeDefined()
-    expect(ext.codegen?.wrap("options.fetch ?? fetch")).toBe(
+    expect(ext.codegen?.wrap?.("options.fetch ?? fetch")).toBe(
       '__withLogging(options.fetch ?? fetch, {"level":"debug"})',
     )
   })
 
   it("defaults to level 'info' in codegen when unspecified", () => {
     const ext = logging()
-    expect(ext.codegen?.wrap("fetch")).toBe('__withLogging(fetch, {"level":"info"})')
+    expect(ext.codegen?.wrap?.("fetch")).toBe('__withLogging(fetch, {"level":"info"})')
   })
 
   it("emits __withLogging helper source", () => {

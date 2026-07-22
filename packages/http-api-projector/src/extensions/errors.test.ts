@@ -104,7 +104,7 @@ describe("errors — codegen", () => {
   it("wraps the inner expression with __withErrors", () => {
     const ext = errors()
     expect(ext.codegen).toBeDefined()
-    expect(ext.codegen?.wrap("options.fetch ?? fetch")).toBe("__withErrors(options.fetch ?? fetch)")
+    expect(ext.codegen?.wrap?.("options.fetch ?? fetch")).toBe("__withErrors(options.fetch ?? fetch)")
   })
 
   it("emits the typed error classes and __withErrors helper source", () => {

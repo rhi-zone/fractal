@@ -46,8 +46,15 @@ export type {
 export { createClient, createClientFromRoute } from "./client.ts"
 export type { AnyClient, ClientOptions } from "./client.ts"
 export { ClientError } from "./client-error.ts"
-export { composeCodegenFetch, composeFetch } from "./extension.ts"
-export type { ClientExtension, ClientExtensionCodegen, FetchImpl } from "./extension.ts"
+export { composeCodegenFetch, composeDecodeResponse, composeFetch, findStreamingCall } from "./extension.ts"
+export type {
+  ClientExtension,
+  ClientExtensionCodegen,
+  DecodeContext,
+  DecodedResponse,
+  FetchImpl,
+  StreamingCallArgs,
+} from "./extension.ts"
 export { retry } from "./extensions/retry.ts"
 export type { RetryOptions } from "./extensions/retry.ts"
 export { timeout } from "./extensions/timeout.ts"
@@ -67,6 +74,9 @@ export {
   RateLimitError,
   InternalServerError,
 } from "./extensions/errors.ts"
+export { pagination } from "./extensions/pagination.ts"
+export type { PageIterator, PaginationOptions } from "./extensions/pagination.ts"
+export { streaming } from "./extensions/streaming.ts"
 export { createFetch, httpErrors } from "./preset.ts"
 export type {
   CorsOptions,
