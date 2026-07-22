@@ -103,6 +103,46 @@
       "types": "./src/typescript.ts",
       "import": "./src/typescript.ts"
     },
+    "./cpp": {
+      "types": "./src/cpp.ts",
+      "import": "./src/cpp.ts"
+    },
+    "./csharp": {
+      "types": "./src/csharp.ts",
+      "import": "./src/csharp.ts"
+    },
+    "./crystal": {
+      "types": "./src/crystal.ts",
+      "import": "./src/crystal.ts"
+    },
+    "./python": {
+      "types": "./src/python.ts",
+      "import": "./src/python.ts"
+    },
+    "./flow": {
+      "types": "./src/flow.ts",
+      "import": "./src/flow.ts"
+    },
+    "./swift": {
+      "types": "./src/swift.ts",
+      "import": "./src/swift.ts"
+    },
+    "./rust": {
+      "types": "./src/rust.ts",
+      "import": "./src/rust.ts"
+    },
+    "./ruby": {
+      "types": "./src/ruby.ts",
+      "import": "./src/ruby.ts"
+    },
+    "./php": {
+      "types": "./src/php.ts",
+      "import": "./src/php.ts"
+    },
+    "./kotlin": {
+      "types": "./src/kotlin.ts",
+      "import": "./src/kotlin.ts"
+    },
     "./sql": {
       "types": "./src/sql.ts",
       "import": "./src/sql.ts"
