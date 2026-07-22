@@ -35,6 +35,14 @@
       "types": "./src/from-protobuf.ts",
       "import": "./src/from-protobuf.ts"
     },
+    "./from-sql": {
+      "types": "./src/from-sql.ts",
+      "import": "./src/from-sql.ts"
+    },
+    "./from-capnp": {
+      "types": "./src/from-capnp.ts",
+      "import": "./src/from-capnp.ts"
+    },
     "./from-json": {
       "types": "./src/from-json.ts",
       "import": "./src/from-json.ts"
