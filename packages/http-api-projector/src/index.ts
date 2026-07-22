@@ -54,6 +54,17 @@ export { timeout } from "./extensions/timeout.ts"
 export type { TimeoutOptions } from "./extensions/timeout.ts"
 export { interceptors } from "./extensions/interceptors.ts"
 export type { InterceptorsOptions } from "./extensions/interceptors.ts"
+export {
+  errors,
+  BadRequestError,
+  AuthenticationError,
+  ForbiddenError,
+  NotFoundError,
+  ConflictError,
+  UnprocessableEntityError,
+  RateLimitError,
+  InternalServerError,
+} from "./extensions/errors.ts"
 export { createFetch, httpErrors } from "./preset.ts"
 export type {
   CorsOptions,

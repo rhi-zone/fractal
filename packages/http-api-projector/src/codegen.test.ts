@@ -24,6 +24,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { generateClient, generateClientFromNode } from "./codegen.ts"
+import { errors } from "./extensions/errors.ts"
 import { httpProjection } from "./dx.ts"
 import { createFetch } from "./preset.ts"
 import { serveBun } from "./adapter.ts"
@@ -337,5 +338,86 @@ describe("generated createClient — timeout / AbortSignal support", () => {
     const client = createClient(`http://localhost:${ownServer!.port}`)
     const books = (await client.books.list()) as unknown[]
     expect(Array.isArray(books)).toBe(true)
+  })
+})
+
+describe("generated createClient — errors() extension", () => {
+  let tmpDir: string | undefined
+  let createClient: (
+    baseUrl: string,
+    options?: unknown,
+  ) => { readonly books: { readonly list: (input?: unknown, callOpts?: unknown) => Promise<unknown> } }
+  let NotFoundError: new (...args: unknown[]) => Error & { status: number; body: unknown }
+  let RateLimitError: new (...args: unknown[]) => Error & { status: number; retryAfterMs?: number }
+  let InternalServerError: new (...args: unknown[]) => Error & { status: number }
+
+  beforeAll(async () => {
+    const errorsSource = generateClientFromNode(api, schemas, { clientName: "Client", extensions: [errors()] })
+    tmpDir = await mkdtemp(join(tmpdir(), "fractal-codegen-errors-"))
+    const modulePath = join(tmpDir, "client.ts")
+    await writeFile(modulePath, errorsSource, "utf8")
+    const mod = (await import(pathToFileURL(modulePath).href)) as {
+      createClient: typeof createClient
+      NotFoundError: typeof NotFoundError
+      RateLimitError: typeof RateLimitError
+      InternalServerError: typeof InternalServerError
+    }
+    createClient = mod.createClient
+    NotFoundError = mod.NotFoundError
+    RateLimitError = mod.RateLimitError
+    InternalServerError = mod.InternalServerError
+  })
+
+  afterAll(async () => {
+    if (tmpDir !== undefined) await rm(tmpDir, { recursive: true, force: true })
+  })
+
+  function fetchReturning(status: number, body: unknown, headers?: Record<string, string>): typeof fetch {
+    return (async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json", ...headers },
+      })) as unknown as typeof fetch
+  }
+
+  it("emits the typed error classes as named exports", () => {
+    expect(NotFoundError).toBeDefined()
+    expect(RateLimitError).toBeDefined()
+    expect(InternalServerError).toBeDefined()
+  })
+
+  it("throws NotFoundError (not generic ClientError) on a 404 response", async () => {
+    const client = createClient("http://localhost", { fetch: fetchReturning(404, { message: "gone" }) })
+    const caught = await client.books.list().catch((e: unknown) => e)
+    expect(caught).toBeInstanceOf(NotFoundError)
+    expect((caught as { status: number }).status).toBe(404)
+    expect((caught as { body: unknown }).body).toEqual({ message: "gone" })
+  })
+
+  it("throws RateLimitError with a parsed Retry-After on a 429 response", async () => {
+    const client = createClient("http://localhost", {
+      fetch: fetchReturning(429, {}, { "Retry-After": "7" }),
+    })
+    const caught = await client.books.list().catch((e: unknown) => e)
+    expect(caught).toBeInstanceOf(RateLimitError)
+    expect((caught as { retryAfterMs?: number }).retryAfterMs).toBe(7000)
+  })
+
+  it("throws InternalServerError on a 5xx response", async () => {
+    const client = createClient("http://localhost", { fetch: fetchReturning(502, { message: "bad gateway" }) })
+    const caught = await client.books.list().catch((e: unknown) => e)
+    expect(caught).toBeInstanceOf(InternalServerError)
+    expect((caught as { status: number }).status).toBe(502)
+  })
+
+  it("real server round-trip still works unchanged with errors() present", async () => {
+    const server = serveBun(createFetch(api, { openapi: false }), { port: 0 })
+    try {
+      const client = createClient(`http://localhost:${server.port}`)
+      const books = (await client.books.list()) as unknown[]
+      expect(Array.isArray(books)).toBe(true)
+    } finally {
+      server.stop(true)
+    }
   })
 })

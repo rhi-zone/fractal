@@ -12,6 +12,7 @@ import { api, clearStore } from "../../../examples/library-api/src/tree.ts"
 import { createClient } from "./client.ts"
 import { createFetch } from "./preset.ts"
 import { retry } from "./extensions/retry.ts"
+import { errors, InternalServerError, NotFoundError, RateLimitError } from "./extensions/errors.ts"
 
 beforeEach(() => {
   clearStore()
@@ -74,5 +75,45 @@ describe("createClient — extensions integration", () => {
 
     const books = (await client.books.list()) as unknown[]
     expect(Array.isArray(books)).toBe(true)
+  })
+
+  it("errors() classifies a 404 response as NotFoundError instead of generic ClientError", async () => {
+    const notFound = async () =>
+      new Response(JSON.stringify({ message: "no such book" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      })
+    const client = createClient(api, { baseUrl: "http://localhost", fetch: notFound, extensions: [errors()] })
+
+    const caught = await client.books.bookId("does-not-exist").read().catch((e: unknown) => e)
+    expect(caught).toBeInstanceOf(NotFoundError)
+    expect((caught as NotFoundError).status).toBe(404)
+    expect((caught as NotFoundError).body).toEqual({ message: "no such book" })
+  })
+
+  it("errors() classifies a 429 response as RateLimitError with parsed Retry-After", async () => {
+    const rateLimited = async () =>
+      new Response(JSON.stringify({}), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "3" },
+      })
+    const client = createClient(api, { baseUrl: "http://localhost", fetch: rateLimited, extensions: [errors()] })
+
+    const caught = await client.books.list().catch((e: unknown) => e)
+    expect(caught).toBeInstanceOf(RateLimitError)
+    expect((caught as RateLimitError).retryAfterMs).toBe(3000)
+  })
+
+  it("composes with retry(): retry() (outer) retries 5xx, errors() (inner) classifies the final failure", async () => {
+    const serverFetch = createFetch(api)
+    const flaky = makeFlakyFetch(serverFetch, 10)
+    const client = createClient(api, {
+      baseUrl: "http://localhost",
+      fetch: flaky,
+      extensions: [retry({ maxRetries: 2, baseDelayMs: 1 }), errors()],
+    })
+
+    const caught = await client.books.list().catch((e: unknown) => e)
+    expect(caught).toBeInstanceOf(InternalServerError)
   })
 })

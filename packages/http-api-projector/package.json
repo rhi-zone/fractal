@@ -70,6 +70,10 @@
     "./extensions/interceptors": {
       "types": "./src/extensions/interceptors.ts",
       "import": "./src/extensions/interceptors.ts"
+    },
+    "./extensions/errors": {
+      "types": "./src/extensions/errors.ts",
+      "import": "./src/extensions/errors.ts"
     }
   },
   "files": ["src"],
