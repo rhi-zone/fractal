@@ -39,6 +39,10 @@
       "types": "./src/from-jtd.ts",
       "import": "./src/from-jtd.ts"
     },
+    "./from-typescript": {
+      "types": "./src/from-typescript.ts",
+      "import": "./src/from-typescript.ts"
+    },
     "./jsdoc": {
       "types": "./src/jsdoc.ts",
       "import": "./src/jsdoc.ts"
@@ -176,9 +180,18 @@
   "dependencies": {
     "graphql": "^16.9.0"
   },
+  "peerDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@sinclair/typebox": "^0.34.41",
-    "fast-check": "^4.9.0"
+    "fast-check": "^4.9.0",
+    "typescript": "^6.0.3"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -21,19 +21,20 @@ export const uri = (meta?: Record<string, unknown>): TypeRef => t({ kind: "uri" 
 export const email = (meta?: Record<string, unknown>): TypeRef => t({ kind: "email" }, meta)
 
 // ============================================================================
-// Canonical brand types — for consumers authoring TS source that the
-// api-tree extractor reads. A field typed as one of these brands (rather
-// than plain `string`) round-trips through extraction as the matching IR
-// kind (`types.uuid`/`types.uri`/`types.email`) instead of degrading to
-// `t(types.string, { brand: "..." })` — see
-// packages/api-tree/src/extract.ts's brand→kind promotion.
+// Canonical brand types — for consumers authoring TS source that
+// `from-typescript.ts`'s ingester reads. A field typed as one of these
+// brands (rather than plain `string`) round-trips through extraction as the
+// matching IR kind (`types.uuid`/`types.uri`/`types.email`) instead of
+// degrading to `t(types.string, { brand: "..." })` — see
+// `../from-typescript.ts`'s `promoteBrand`.
 //
 // The brand lives behind a shared `unique symbol` key (`BrandTag`) rather
 // than a named string property (`__brand`/`__tag`) — phantom, structurally
 // inaccessible at runtime, same shape as the refinement tags in
 // `refinements.ts`. This is the "shared-symbol" branded-type pattern the
 // extractor already recognizes (`brandNameFromSymbolKeyedProp` /
-// `brandFromIntersection`'s literal-value-on-a-symbol-keyed-prop case): the
+// `classifyIntersectionConstituent`'s literal-value-on-a-symbol-keyed-prop
+// case): the
 // tag's STRING LITERAL value (not the symbol's own declared name) is what
 // carries the brand name, so `BrandTag` can be reused across all three
 // (and any consumer-authored brand) without them colliding. `BrandTag` is
