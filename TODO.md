@@ -43,6 +43,17 @@
 
 - **Set/Map extraction fix** — DONE. Fixed dangling `ref("Set")`/`ref("Map")` from generic container self-referential methods.
 
+### Open threads from a previous session
+
+*Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
+
+- **Per-language serialization library variants** — the main differentiator over quicktype. Python-Pydantic just landed as the first variant. Next candidates: Java-Gson, C#-Newtonsoft, Kotlin-Moshi, Go-easyjson, etc. See `docs/roadmap.md` for the full matrix.
+- **Battle testing** — all projectors and ingesters need validation against real-world schemas (APIs.guru OpenAPI specs, SchemaStore JSON Schemas, googleapis .proto files). Cross-language compilation testing needs target toolchains in the nix flake.
+- **JSON/YAML/KDL inference** — parked design decisions in from-json/from-json-corpus. Intended as a library for state-of-the-art inference from limited data. Needs substantial work.
+- **Arborium evaluation** — consider @arborium/javascript for code generation AST instead of string concatenation across all projectors.
+- **JSON-RPC** — needs both type-ir format support (ingest/emit method signatures) and a fractal projector (like HTTP/CLI/MCP/GraphQL).
+- **Documentation generation** — new roadmap slice: emit doc comments in each language's native format, target all major doc site generators (Sphinx, rustdoc, Javadoc, DocC, Dokka, Doxygen, Material for MkDocs, Zensical, etc.)
+
 ### Remaining open threads from 2026-07-22
 
 - **`moveTo` resolution in `HttpManifest`** — wildcard `"*"` token's synthesized `:param` name can diverge from another leaf's authored `fallback.name` at the same converged position. Per-leaf type information can't see whole-tree facts, creating a potential naming mismatch in the manifest.
