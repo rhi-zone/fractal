@@ -51,7 +51,7 @@ import { toProtoMessage, renderProto } from "./protobuf.ts"
 import { toCapnpStruct, renderCapnp } from "./capnp.ts"
 import { toFlatBuffersTable, toFlatBuffersDeclarations } from "./flatbuffers.ts"
 import { toCreateTable } from "./sql.ts"
-import { toMssqlCreateTable } from "./sql-mssql.ts"
+import { toMssqlCreateTableFromRef } from "./sql-mssql.ts"
 import { toJtd } from "./jtd.ts"
 import { toStandardSchema } from "./standard-schema.ts"
 import { compileValidator } from "./compile.ts"
@@ -249,31 +249,36 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
         ? toFlatBuffersTable(name, ref)
         : toFlatBuffersDeclarations({ [name]: ref }),
   },
+  // toCreateTable now handles both `object` and `union` roots — a union root
+  // lowers via `opts.unionLayout` (default: `singleTableInheritanceSqlLayout()`),
+  // same as `toMssqlCreateTableFromRef` below. See sql.ts's `SqlUnionLayout`.
   { name: "sql", fn: (ref, name) => toCreateTable(name, ref) },
-  {
-    name: "sql-mssql",
-    fn: (ref, name) => {
-      if (ref.shape.kind !== "object") throw new Error("sql-mssql requires an object-root TypeRef")
-      return toMssqlCreateTable(name, ref.shape.fields)
-    },
-  },
+  // toMssqlCreateTableFromRef (unlike the older, still-exported
+  // `toMssqlCreateTable`, which only ever took an already-extracted `fields`
+  // record) accepts the TypeRef directly, so it can see and dispatch on a
+  // union root the same way sql.ts's `toCreateTable` does.
+  { name: "sql-mssql", fn: (ref, name) => toMssqlCreateTableFromRef(name, ref) },
 ]
 
 // Struct-shaped projectors that require an `object` root and cannot represent
-// a bare `union` root directly. The discriminated-union fixture legitimately
-// can't go through these without the caller pre-flattening the union into a
-// oneof/service construct that isn't this package's concern at the TypeRef
-// level — tracked as `.todo` rather than asserted to throw.
+// a bare `union` root directly. Empty for now — every projector in the matrix
+// above can now take a union root:
 //
-// protobuf, flatbuffers, and capnp are NOT in this set: protobuf's
-// toProtoMessage synthesizes a `oneof` wrapper message for a union root (see
-// the protobuf wrapper above); flatbuffers has a second entry point
+// protobuf's toProtoMessage synthesizes a `oneof` wrapper message for a union
+// root (see the protobuf wrapper above); flatbuffers has a second entry point
 // (toFlatBuffersDeclarations) that dispatches per-kind over a registry, so a
 // `union` root lowers to a `union` declaration directly (see the flatbuffers
-// wrapper above); capnp's toCapnpStruct now synthesizes a wrapper struct with
-// an anonymous union for a union-rooted TypeRef (see toCapnpUnionStruct in
-// capnp.ts).
-const structOnlyProjectorNames = new Set(["sql", "sql-mssql"])
+// wrapper above); capnp's toCapnpStruct synthesizes a wrapper struct with an
+// anonymous union for a union-rooted TypeRef (see toCapnpUnionStruct in
+// capnp.ts); sql's toCreateTable and sql-mssql's toMssqlCreateTableFromRef
+// both dispatch a union root through a pluggable `SqlUnionLayout`/
+// `MssqlUnionLayout` strategy (default: single-table-inheritance) — see
+// `singleTableInheritanceSqlLayout`/`tablePerVariantSqlLayout` in sql.ts.
+//
+// Kept as a live mechanism (not deleted) so a future struct-only projector
+// added to the matrix has somewhere to register itself as `.todo` rather than
+// asserted to throw.
+const structOnlyProjectorNames = new Set<string>([])
 
 describe("cross-projector smoke tests", () => {
   for (const { name: fixtureName, ref } of fixtures) {

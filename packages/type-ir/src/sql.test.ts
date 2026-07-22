@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { columnDef, toCreateTable, toSqlDdl } from "./sql.ts"
+import {
+  columnDef,
+  singleTableInheritanceSqlLayout,
+  tablePerVariantSqlLayout,
+  toCreateTable,
+  toSqlDdl,
+} from "./sql.ts"
 
 describe("leaf types (postgres)", () => {
   test("boolean", () => {
@@ -590,5 +596,105 @@ describe("stream", () => {
     expect(toSqlDdl(ref)).toEqual({ type: "JSONB", nullable: false })
     expect(toSqlDdl(ref, { dialect: "sqlite" })).toEqual({ type: "TEXT", nullable: false })
     expect(toSqlDdl(ref, { dialect: "mysql" })).toEqual({ type: "JSON", nullable: false })
+  })
+})
+
+describe("union roots", () => {
+  const successResponse = t(
+    types.object({
+      type: t(types.literal("success")),
+      data: t(types.object({ result: t(types.string) })),
+    }),
+  )
+  const errorResponse = t(
+    types.object({
+      type: t(types.literal("error")),
+      code: t(types.integer),
+      message: t(types.string),
+    }),
+  )
+  const discriminatedUnion = t(types.union([successResponse, errorResponse]), { discriminator: "type" })
+
+  describe("default layout (single-table-inheritance)", () => {
+    test("discriminated union: discriminator column + nullable variant columns, shared fields not duplicated", () => {
+      expect(toCreateTable("ApiResponse", discriminatedUnion)).toBe(
+        "CREATE TABLE ApiResponse (\n" +
+          "  type TEXT NOT NULL,\n" +
+          "  data JSONB,\n" +
+          "  code INTEGER,\n" +
+          "  message TEXT\n" +
+          ");",
+      )
+    })
+
+    test("plain (undiscriminated) union: falls back to a bare 'kind' discriminator column", () => {
+      const plainUnion = t(types.union([t(types.string), t(types.integer)]))
+      expect(toCreateTable("Plain", plainUnion)).toBe("CREATE TABLE Plain (\n  kind TEXT NOT NULL\n);")
+    })
+
+    test("discriminatorColumn overrides the fallback name when the union carries no meta.discriminator", () => {
+      const plainUnion = t(types.union([t(types.string), t(types.integer)]))
+      expect(
+        toCreateTable("Plain", plainUnion, {
+          unionLayout: singleTableInheritanceSqlLayout({ discriminatorColumn: "variant_kind" }),
+        }),
+      ).toBe("CREATE TABLE Plain (\n  variant_kind TEXT NOT NULL\n);")
+    })
+
+    test("respects dialect for the discriminator column type", () => {
+      expect(toCreateTable("ApiResponse", discriminatedUnion, { dialect: "mysql" })).toBe(
+        "CREATE TABLE ApiResponse (\n" +
+          "  type VARCHAR(255) NOT NULL,\n" +
+          "  data JSON,\n" +
+          "  code INT,\n" +
+          "  message VARCHAR(255)\n" +
+          ");",
+      )
+    })
+  })
+
+  describe("tablePerVariantSqlLayout", () => {
+    test("one CREATE TABLE per variant, each with proper NOT NULL constraints", () => {
+      expect(
+        toCreateTable("ApiResponse", discriminatedUnion, { unionLayout: tablePerVariantSqlLayout() }),
+      ).toBe(
+        "CREATE TABLE ApiResponse_success (\n" +
+          "  type TEXT NOT NULL,\n" +
+          "  data JSONB NOT NULL\n" +
+          ");\n\n" +
+          "CREATE TABLE ApiResponse_error (\n" +
+          "  type TEXT NOT NULL,\n" +
+          "  code INTEGER NOT NULL,\n" +
+          "  message TEXT NOT NULL\n" +
+          ");",
+      )
+    })
+
+    test("plain union falls back to positional variant names and a single 'value' column", () => {
+      const plainUnion = t(types.union([t(types.string), t(types.integer)]))
+      expect(toCreateTable("Plain", plainUnion, { unionLayout: tablePerVariantSqlLayout() })).toBe(
+        "CREATE TABLE Plain_variant1 (\n  value TEXT NOT NULL\n);\n\n" +
+          "CREATE TABLE Plain_variant2 (\n  value INTEGER NOT NULL\n);",
+      )
+    })
+
+    test("tableName callback overrides the default {union}_{variant} naming", () => {
+      const plainUnion = t(types.union([t(types.string)]))
+      expect(
+        toCreateTable("Plain", plainUnion, {
+          unionLayout: tablePerVariantSqlLayout({ tableName: (root, variant) => `${root}__${variant}` }),
+        }),
+      ).toBe("CREATE TABLE Plain__variant1 (\n  value TEXT NOT NULL\n);")
+    })
+  })
+
+  describe("custom layout function", () => {
+    test("a caller's own SqlUnionLayout is honored — no closed set of built-in strategies", () => {
+      const countingLayout = (input: { name: string; variants: { name: string }[] }) =>
+        `-- ${input.name} has ${input.variants.length} variants: ${input.variants.map((v) => v.name).join(", ")}`
+      expect(toCreateTable("ApiResponse", discriminatedUnion, { unionLayout: countingLayout })).toBe(
+        "-- ApiResponse has 2 variants: success, error",
+      )
+    })
   })
 })

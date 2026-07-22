@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { mssqlColumnDef, toMssqlCreateTable, toMssqlType } from "./sql-mssql.ts"
+import {
+  mssqlColumnDef,
+  singleTableInheritanceMssqlLayout,
+  tablePerVariantMssqlLayout,
+  toMssqlCreateTable,
+  toMssqlCreateTableFromRef,
+  toMssqlType,
+} from "./sql-mssql.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {
@@ -291,5 +298,114 @@ describe("function", () => {
 describe("stream", () => {
   test("degrades to NVARCHAR(MAX), same as array (not persistable as an ongoing sequence)", () => {
     expect(toMssqlType(t(types.stream(t(types.string))))).toBe("NVARCHAR(MAX)")
+  })
+})
+
+describe("union roots (toMssqlCreateTableFromRef)", () => {
+  const successResponse = t(
+    types.object({
+      type: t(types.literal("success")),
+      data: t(types.object({ result: t(types.string) })),
+    }),
+  )
+  const errorResponse = t(
+    types.object({
+      type: t(types.literal("error")),
+      code: t(types.integer),
+      message: t(types.string),
+    }),
+  )
+  const discriminatedUnion = t(types.union([successResponse, errorResponse]), { discriminator: "type" })
+
+  test("object root behaves exactly like toMssqlCreateTable", () => {
+    const ref = t(
+      types.object({
+        id: int32({ identity: true }),
+        name: t(types.string),
+      }),
+    )
+    expect(toMssqlCreateTableFromRef("users", ref)).toBe(
+      toMssqlCreateTable("users", { id: int32({ identity: true }), name: t(types.string) }),
+    )
+  })
+
+  describe("default layout (single-table-inheritance)", () => {
+    test("discriminated union: discriminator column NOT NULL + nullable variant columns, shared fields not duplicated", () => {
+      expect(toMssqlCreateTableFromRef("ApiResponse", discriminatedUnion)).toBe(
+        "CREATE TABLE ApiResponse (\n" +
+          "  type NVARCHAR(255) NOT NULL,\n" +
+          "  data NVARCHAR(MAX) NULL,\n" +
+          "  code INT NULL,\n" +
+          "  message NVARCHAR(255) NULL\n" +
+          ");",
+      )
+    })
+
+    test("plain (undiscriminated) union: falls back to a bare 'kind' discriminator column", () => {
+      const plainUnion = t(types.union([t(types.string), t(types.integer)]))
+      expect(toMssqlCreateTableFromRef("Plain", plainUnion)).toBe(
+        "CREATE TABLE Plain (\n  kind NVARCHAR(255) NOT NULL\n);",
+      )
+    })
+
+    test("discriminatorColumn overrides the fallback name when the union carries no meta.discriminator", () => {
+      const plainUnion = t(types.union([t(types.string), t(types.integer)]))
+      expect(
+        toMssqlCreateTableFromRef("Plain", plainUnion, {
+          unionLayout: singleTableInheritanceMssqlLayout({ discriminatorColumn: "variant_kind" }),
+        }),
+      ).toBe("CREATE TABLE Plain (\n  variant_kind NVARCHAR(255) NOT NULL\n);")
+    })
+  })
+
+  describe("tablePerVariantMssqlLayout", () => {
+    test("one CREATE TABLE per variant, each with proper NOT NULL constraints", () => {
+      expect(
+        toMssqlCreateTableFromRef("ApiResponse", discriminatedUnion, { unionLayout: tablePerVariantMssqlLayout() }),
+      ).toBe(
+        "CREATE TABLE ApiResponse_success (\n" +
+          "  type NVARCHAR(255) NOT NULL,\n" +
+          "  data NVARCHAR(MAX) NOT NULL\n" +
+          ");\n\n" +
+          "CREATE TABLE ApiResponse_error (\n" +
+          "  type NVARCHAR(255) NOT NULL,\n" +
+          "  code INT NOT NULL,\n" +
+          "  message NVARCHAR(255) NOT NULL\n" +
+          ");",
+      )
+    })
+
+    test("plain union falls back to positional variant names and a single 'value' column", () => {
+      const plainUnion = t(types.union([t(types.string), t(types.integer)]))
+      expect(
+        toMssqlCreateTableFromRef("Plain", plainUnion, { unionLayout: tablePerVariantMssqlLayout() }),
+      ).toBe(
+        "CREATE TABLE Plain_variant1 (\n  value NVARCHAR(255) NOT NULL\n);\n\n" +
+          "CREATE TABLE Plain_variant2 (\n  value INT NOT NULL\n);",
+      )
+    })
+
+    test("tableName callback overrides the default {union}_{variant} naming", () => {
+      const plainUnion = t(types.union([t(types.string)]))
+      expect(
+        toMssqlCreateTableFromRef("Plain", plainUnion, {
+          unionLayout: tablePerVariantMssqlLayout({ tableName: (root, variant) => `${root}__${variant}` }),
+        }),
+      ).toBe("CREATE TABLE Plain__variant1 (\n  value NVARCHAR(255) NOT NULL\n);")
+    })
+  })
+
+  describe("custom layout function", () => {
+    test("a caller's own MssqlUnionLayout is honored — no closed set of built-in strategies", () => {
+      const countingLayout = (input: { name: string; variants: { name: string }[] }) =>
+        `-- ${input.name} has ${input.variants.length} variants: ${input.variants.map((v) => v.name).join(", ")}`
+      expect(toMssqlCreateTableFromRef("ApiResponse", discriminatedUnion, { unionLayout: countingLayout })).toBe(
+        "-- ApiResponse has 2 variants: success, error",
+      )
+    })
+  })
+
+  test("throws for a non-object, non-union root", () => {
+    expect(() => toMssqlCreateTableFromRef("x", t(types.string))).toThrow()
   })
 })
