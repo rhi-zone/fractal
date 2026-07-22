@@ -319,7 +319,14 @@ under the `{language}-{library}` convention):
   `haskell-aeson.ts`, `elm-json.ts`, `flow-native.ts`); no additional
   variants scoped yet for these five
 
-What's planned / open — additional variants per language, none started:
+What's planned / open — additional variants per language:
+
+**Completed (2026-07-22):**
+- Java — Gson (`java-gson.ts`)
+- Python — attrs (`python-attrs.ts`)
+- C# — Newtonsoft.Json (`csharp-newtonsoft.ts`)
+
+Remaining variants still planned:
 - C++ — RapidJSON, simdjson, Boost.JSON, glaze
 - Java — Gson, Moshi, Jakarta JSON-B
 - C# — Newtonsoft.Json, ServiceStack.Text

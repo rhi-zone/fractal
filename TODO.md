@@ -27,6 +27,8 @@
 
 - **Pagination** — DONE. `Page<T>` types (CursorPage, OffsetPage) in api-tree. `page` TypeRef kind in type-ir. `paginated()` directive. `pagination()` client extension with auto-page iteration.
 
+- **Per-language serialization library variants (Java/Gson, Python/attrs, C#/Newtonsoft.Json)** — DONE (2026-07-22). Three new serialization library projectors completed, extending the matrix started by Pydantic v2. Modules: `java-gson.ts`, `python-attrs.ts`, `csharp-newtonsoft.ts` in `packages/type-ir/src/`. All tests passing (2706/2706), typecheck clean.
+
 - **deepPartial/deepRequired for stream/page** — DONE. Added recursion cases in derive.ts.
 
 - **AOT validator for stream/page** — DONE. Added codegen cases in compile.ts.
