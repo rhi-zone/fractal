@@ -1,13 +1,6 @@
 # API Reference
 
-For settled design rationale, see [`docs/design/invariants.md`](../design/invariants.md). For API reference, see the per-package READMEs:
-
-- [`packages/api-tree/README.md`](../../packages/api-tree/README.md)
-- [`packages/http-api-projector/README.md`](../../packages/http-api-projector/README.md)
-- [`packages/cli-api-projector/README.md`](../../packages/cli-api-projector/README.md)
-- [`packages/mcp-api-projector/README.md`](../../packages/mcp-api-projector/README.md)
-- [`packages/graphql-api-projector/README.md`](../../packages/graphql-api-projector/README.md)
-- [`packages/type-ir/README.md`](../../packages/type-ir/README.md)
+For settled design rationale, see [`docs/design/invariants.md`](../design/invariants.md). For API reference, see the per-package READMEs.
 
 This page is a summary index.
 
