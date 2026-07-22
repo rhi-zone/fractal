@@ -4,6 +4,7 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 export default withMermaid(defineConfig({
   title: 'fractal',
   description: 'HTTP/RPC/IPC API library with composition via combinators',
+  base: '/fractal/',
   themeConfig: {
     nav: [
       { text: 'Guide', link: '/guide/' },
