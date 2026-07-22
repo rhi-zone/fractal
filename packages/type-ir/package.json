@@ -251,6 +251,10 @@
       "types": "./src/java-gson.ts",
       "import": "./src/java-gson.ts"
     },
+    "./java-moshi": {
+      "types": "./src/java-moshi.ts",
+      "import": "./src/java-moshi.ts"
+    },
     "./sql": {
       "types": "./src/sql.ts",
       "import": "./src/sql.ts"
