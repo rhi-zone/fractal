@@ -1,4 +1,4 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeRefDocument, type TypeShape } from "./index.ts"
 
 export type OpenApi30Schema = Record<string, unknown>
 
@@ -174,4 +174,25 @@ export function toOpenApi30(ref: TypeRef): OpenApi30Schema {
   const converter = resolve(ref.shape.kind, handlers)
   const schema = converter === undefined ? {} : converter(ref.shape, ref.meta)
   return withMeta(schema, ref.meta)
+}
+
+/**
+ * Project a whole `TypeRefDocument` (see type-ir/src/index.ts) to a schema
+ * plus the `components.schemas` map its `ref` handler's `#/components/
+ * schemas/NAME` `$ref`s (see above, OAS 3.0.3 §4.8.24.2) resolve against.
+ * `components.schemas` is `{}` when `doc.defs` is empty or absent — the
+ * return shape is always `{ schema, components }`, never a bare schema, so
+ * callers don't need to branch on whether sharing was in play. The caller is
+ * responsible for merging `components.schemas` into a full OAS document's own
+ * top-level `components` object (this function only produces one schema's
+ * worth — see http-api-projector's `openapi.ts` for the document-assembly
+ * layer that already exists one level up).
+ */
+export function toOpenApi30Document(
+  doc: TypeRefDocument,
+): { schema: OpenApi30Schema; components: { schemas: Record<string, OpenApi30Schema> } } {
+  const schema = toOpenApi30(doc.root)
+  const schemas: Record<string, OpenApi30Schema> = {}
+  for (const name of Object.keys(doc.defs)) schemas[name] = toOpenApi30(doc.defs[name]!)
+  return { schema, components: { schemas } }
 }

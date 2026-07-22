@@ -18,6 +18,7 @@
 import * as path from "node:path"
 import { compileValidatorModule } from "@rhi-zone/fractal-type-ir"
 import { extractRouteTypeRefs } from "./tree.ts"
+import type { ShouldShare } from "./extract.ts"
 import type { Handler, Node } from "./node.ts"
 import { err } from "./index.ts"
 
@@ -157,16 +158,29 @@ function relativeImportSpecifier(outFile: string, declarationFile: string): stri
  * `meta.typeName`/`meta.declarationFile`). Without it, every parameter type
  * inlines its structural TypeScript rendering instead — still typed, just
  * without an import.
+ *
+ * `shouldShare`, when given, opts into structural sharing across every
+ * route's input type (see `extractRouteTypeRefs`'s `options.shouldShare` and
+ * type-ir's `SharingRegistry`/`ShouldShare`) — a type reused across routes
+ * (or self-recursive) compiles to ONE generated validator function, called
+ * from every `ref` site, instead of being re-inlined (and, for a truly
+ * recursive type, infinitely re-descended) at each one. Omitted, this is
+ * exactly the prior behavior: every route's input inlines its full structure
+ * independently, no `defs`.
  */
-export function buildValidatorModuleSource(entryFile: string, outFile?: string): string {
-  const typeRefs = extractRouteTypeRefs(entryFile)
-  const entries = Object.entries(typeRefs).map(([name, info]) => ({ name, ref: info.input }))
-  return compileValidatorModule(
-    entries,
+export function buildValidatorModuleSource(entryFile: string, outFile?: string, shouldShare?: ShouldShare): string {
+  const resolveImportOpt =
     outFile === undefined
-      ? undefined
-      : { resolveImport: (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile) },
-  )
+      ? {}
+      : { resolveImport: (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile) }
+  if (shouldShare === undefined) {
+    const typeRefs = extractRouteTypeRefs(entryFile)
+    const entries = Object.entries(typeRefs).map(([name, info]) => ({ name, ref: info.input }))
+    return compileValidatorModule(entries, resolveImportOpt)
+  }
+  const { types, defs } = extractRouteTypeRefs(entryFile, { shouldShare })
+  const entries = Object.entries(types).map(([name, info]) => ({ name, ref: info.input }))
+  return compileValidatorModule(entries, { ...resolveImportOpt, defs })
 }
 
 /** An empty validator module — the pre-codegen dev-time stub. */

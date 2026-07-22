@@ -1,4 +1,4 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeRefDocument, type TypeShape } from "./index.ts"
 
 export type JsonSchema = Record<string, unknown>
 
@@ -200,4 +200,22 @@ export function toJsonSchema(ref: TypeRef): JsonSchema {
   const schema = converter === undefined ? {} : converter(ref.shape, ref.meta)
   const complex = complexKinds.has(ref.shape.kind)
   return withMeta(schema, ref.meta, complex)
+}
+
+/**
+ * Project a whole `TypeRefDocument` (see type-ir/src/index.ts) to a
+ * self-contained JSON Schema: the root schema plus a top-level `$defs` object
+ * — one entry per `doc.defs` name — that the `ref` handler's `#/$defs/NAME`
+ * `$ref`s (see above) resolve against, per draft 2020-12 §8.2.4. `doc.defs`
+ * empty or absent (a bare TypeRef wrapped via `typeRefDocument`) omits `$defs`
+ * entirely, so this is a strict superset of calling `toJsonSchema(doc.root)`
+ * directly for the no-sharing case.
+ */
+export function toJsonSchemaDocument(doc: TypeRefDocument): JsonSchema {
+  const schema = toJsonSchema(doc.root)
+  const defNames = Object.keys(doc.defs)
+  if (defNames.length === 0) return schema
+  const $defs: Record<string, JsonSchema> = {}
+  for (const name of defNames) $defs[name] = toJsonSchema(doc.defs[name]!)
+  return { ...schema, $defs }
 }

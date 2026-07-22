@@ -183,7 +183,27 @@ export function toZodDeclaration(name: string, ref: TypeRef): string {
   return `const ${name} = ${toZod(ref)};`
 }
 
+/**
+ * Same single declaration as `toZodDeclaration`, but wrapped in `z.lazy(() =>
+ * ...)` with an explicit `z.ZodType<any>` annotation — the standard Zod
+ * pattern for a schema that may reference itself or a sibling declared later
+ * in the same `toZodDeclarations` batch (https://zod.dev/?id=recursive-types).
+ * A plain `const NAME = z.object({ self: NAME })` throws `ReferenceError:
+ * Cannot access 'NAME' before initialization` at MODULE-EVAL time — `z.lazy`
+ * defers evaluating its callback until the schema is actually USED (parse
+ * time), by which point every const in the batch has finished initializing,
+ * so a reference to itself OR to a not-yet-declared sibling both resolve
+ * correctly. Used by `toZodDeclarations` for every entry (not just the
+ * self/mutually-recursive ones) — the one extra thunk indirection this costs
+ * for a non-recursive entry is cheap, and it avoids having to prove which
+ * entries in an arbitrary `defs` registry are (mutually, transitively)
+ * recursive just to decide which need it.
+ */
+export function toZodLazyDeclaration(name: string, ref: TypeRef): string {
+  return `const ${name}: z.ZodType<any> = z.lazy(() => (${toZod(ref)}));`
+}
+
 export function toZodDeclarations(registry: Record<string, TypeRef>): string {
-  const declarations = Object.entries(registry).map(([name, ref]) => toZodDeclaration(name, ref))
+  const declarations = Object.entries(registry).map(([name, ref]) => toZodLazyDeclaration(name, ref))
   return [`import { z } from "zod";`, "", ...declarations].join("\n")
 }

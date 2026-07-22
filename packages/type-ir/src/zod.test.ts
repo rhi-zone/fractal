@@ -318,7 +318,7 @@ describe("toZodDeclaration", () => {
 })
 
 describe("toZodDeclarations", () => {
-  test("emits import and multiple declarations", () => {
+  test("emits import and multiple declarations, each wrapped in z.lazy for recursive-safety", () => {
     const registry = {
       User: t(types.object({ id: uuid() })),
       Age: t(types.integer),
@@ -327,8 +327,8 @@ describe("toZodDeclarations", () => {
       [
         'import { z } from "zod";',
         "",
-        "const User = z.object({ id: z.string().uuid() });",
-        "const Age = z.number().int();",
+        "const User: z.ZodType<any> = z.lazy(() => (z.object({ id: z.string().uuid() })));",
+        "const Age: z.ZodType<any> = z.lazy(() => (z.number().int()));",
       ].join("\n"),
     )
   })
