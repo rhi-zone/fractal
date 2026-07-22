@@ -227,6 +227,41 @@ function dateCheck(): CheckHandler {
   return (_ref, v) => `(${v} instanceof Date && !Number.isNaN(${v}.getTime()))`
 }
 
+// `stream` (AsyncIterable<T>) is a runtime construct, not a materialized
+// value — its elements are only observable by consuming the iterator, which
+// validation must not do (that would drain a live generator as a side
+// effect of a type check). The only structural fact checkable without
+// consuming it is "does this look like an async iterable at all" — the
+// `Symbol.asyncIterator` duck-check every native `for await` loop relies on.
+// Elements are NOT validated (see the `stream` doc comment in index.ts and
+// TODO.md — this is the documented carve-out, not an oversight).
+function isAsyncIterableExpr(v: string): string {
+  return `(typeof ${v} === "object" && ${v} !== null && typeof ${v}[Symbol.asyncIterator] === "function")`
+}
+
+// `page` (CursorPage<T>/OffsetPage<T>, see api-tree/src/page.ts) IS a
+// materialized value — `items`/`hasMore` plus either `cursor` (cursor style)
+// or `offset`/`total` (offset style) — so unlike `stream` it validates like
+// any other structural shape. Modeled as a synthetic `object` TypeRef and
+// delegated to the `object` handlers (`genCheckExpr`/`genValidate` below),
+// reusing `objectValidate`'s per-field optional handling for `cursor?`
+// rather than duplicating it.
+function pageAsObjectRef(ref: TypeRef): TypeRef {
+  const s = ref.shape as TypeShape & { kind: "page" }
+  const items: TypeRef = { shape: { kind: "array", element: s.element }, meta: {} }
+  const hasMore: TypeRef = { shape: { kind: "boolean" }, meta: {} }
+  const fields: Record<string, TypeRef> =
+    s.style === "cursor"
+      ? { items, cursor: { shape: { kind: "string" }, meta: { optional: true } }, hasMore }
+      : {
+          items,
+          offset: { shape: { kind: "number" }, meta: {} },
+          total: { shape: { kind: "number" }, meta: {} },
+          hasMore,
+        }
+  return { shape: { kind: "object", fields }, meta: {} }
+}
+
 const checkHandlers: Record<string, CheckHandler> = {
   boolean: (_r, v) => `typeof ${v} === "boolean"`,
   number: (_r, v) => `typeof ${v} === "number"`,
@@ -274,6 +309,10 @@ const checkHandlers: Record<string, CheckHandler> = {
     const s = ref.shape as TypeShape & { kind: "array" }
     return `(Array.isArray(${v}) && ${v}.every((__e) => (${genCheckExpr(s.element, "__e", ctx)})))`
   },
+  // See `isAsyncIterableExpr`'s doc comment above — elements aren't checked.
+  stream: (_ref, v) => isAsyncIterableExpr(v),
+  // See `pageAsObjectRef`'s doc comment above — delegates to `object`.
+  page: (ref, v, ctx) => genCheckExpr(pageAsObjectRef(ref), v, ctx),
   tuple: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "tuple" }
     const elementChecks = s.elements.map((e, i) => `(${genCheckExpr(e, `${v}[${i}]`, ctx)})`)
@@ -688,6 +727,12 @@ const validateHandlers: Record<string, ValidateHandler> = {
   enum: enumLeaf(),
   object: objectValidate,
   array: arrayValidate,
+  // Same carve-out as `unknown`/`instance`/`ref` above: nothing to coerce or
+  // rebuild from without consuming the iterator, so parse() aliases the
+  // input. See `isAsyncIterableExpr`'s doc comment above.
+  stream: nonCoercingLeaf((v) => isAsyncIterableExpr(v)),
+  // See `pageAsObjectRef`'s doc comment above — delegates to `object`.
+  page: (ref, v, pathExpr, ctx, mode) => genValidate(pageAsObjectRef(ref), v, pathExpr, ctx, mode),
   tuple: tupleValidate,
   map: mapValidate,
   union: unionValidate,

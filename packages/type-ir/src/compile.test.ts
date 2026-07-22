@@ -304,6 +304,61 @@ describe("compileValidator — composite kinds", () => {
     expect(evalValidator(compileValidator(t(types.function([], t(types.void))))).check(() => {})).toBe(true)
     expect(evalValidator(compileValidator(t(types.function([], t(types.void))))).check("not a fn")).toBe(false)
   })
+
+  it("stream: check accepts an async iterable without consuming/validating its elements", () => {
+    const ref = t(types.stream(t(types.number)))
+    const v = evalValidator(compileValidator(ref))
+    async function* gen() {
+      yield "not a number" // elements are never validated — see the stream doc comment
+    }
+    expect(v.check(gen())).toBe(true)
+    expect(v.check([1, 2, 3])).toBe(false) // a plain array has no Symbol.asyncIterator
+    expect(v.check({})).toBe(false)
+    expect(v.check(null)).toBe(false)
+  })
+
+  it("stream: errors/parse report a type error for a non-async-iterable, and alias the input otherwise", () => {
+    const ref = t(types.stream(t(types.number)))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.errors({})).toHaveLength(1)
+    expect(v.errors({})[0]!.kind).toBe("type")
+    async function* gen() {
+      yield 1
+    }
+    const g = gen()
+    expect(v.errors(g)).toHaveLength(0)
+    const parsed = v.parse(g)
+    expect(parsed).toEqual({ kind: "ok", value: g })
+  })
+
+  it("page (cursor style): check enforces items/hasMore/cursor shape", () => {
+    const ref = t(types.page(t(types.string), "cursor"))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.check({ items: ["a", "b"], hasMore: false })).toBe(true)
+    expect(v.check({ items: ["a", "b"], cursor: "abc", hasMore: true })).toBe(true)
+    expect(v.check({ items: ["a", 1], hasMore: false })).toBe(false) // wrong element type
+    expect(v.check({ items: ["a"], hasMore: "no" })).toBe(false) // hasMore must be boolean
+    expect(v.check({ items: ["a"] })).toBe(false) // missing hasMore
+  })
+
+  it("page (offset style): check enforces items/offset/total/hasMore shape", () => {
+    const ref = t(types.page(t(types.string), "offset"))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.check({ items: ["a"], offset: 0, total: 10, hasMore: true })).toBe(true)
+    expect(v.check({ items: ["a"], hasMore: true })).toBe(false) // missing offset/total
+  })
+
+  it("page: errors/parse validate per-field and coerce items' elements", () => {
+    const ref = t(types.page(t(types.number), "offset"))
+    const v = evalValidator(compileValidator(ref))
+    expect(v.errors({ items: [1, 2], offset: 0, total: 2, hasMore: false })).toHaveLength(0)
+    const errs = v.errors({ items: [1], hasMore: false })
+    expect(errs.length).toBeGreaterThan(0)
+    expect(v.parse({ items: ["1", "2"], offset: "0", total: "2", hasMore: true })).toEqual({
+      kind: "ok",
+      value: { items: [1, 2], offset: 0, total: 2, hasMore: true },
+    })
+  })
 })
 
 describe("compileValidatorModule — full module emission", () => {
