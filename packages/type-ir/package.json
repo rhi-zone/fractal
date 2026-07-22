@@ -35,6 +35,10 @@
       "types": "./src/from-protobuf.ts",
       "import": "./src/from-protobuf.ts"
     },
+    "./from-flatbuffers": {
+      "types": "./src/from-flatbuffers.ts",
+      "import": "./src/from-flatbuffers.ts"
+    },
     "./from-sql": {
       "types": "./src/from-sql.ts",
       "import": "./src/from-sql.ts"
