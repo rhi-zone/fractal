@@ -19,6 +19,10 @@
       "types": "./src/from-json-schema.ts",
       "import": "./src/from-json-schema.ts"
     },
+    "./from-standard-schema": {
+      "types": "./src/from-standard-schema.ts",
+      "import": "./src/from-standard-schema.ts"
+    },
     "./from-openapi": {
       "types": "./src/from-openapi.ts",
       "import": "./src/from-openapi.ts"
@@ -178,6 +182,7 @@
   },
   "files": ["src"],
   "dependencies": {
+    "@standard-schema/spec": "^1.1.0",
     "graphql": "^16.9.0"
   },
   "peerDependencies": {
