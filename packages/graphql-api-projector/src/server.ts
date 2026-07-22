@@ -253,7 +253,14 @@ export function createGraphQLServer<T = unknown>(
   // the handler than `opts.middleware` (which resolve.ts's createResolver
   // applies). Absent opts.als degrades to identity — zero overhead.
   const withAls = (handler: Handler, context: GraphQLAlsContext): Handler =>
-    opts.als === undefined ? handler : (input: unknown) => opts.als!.storage.run(opts.als!.init(context), () => handler(input))
+    opts.als === undefined
+      ? handler
+      : (input: unknown) => {
+          const store = opts.als!.init(context)
+          return store instanceof Promise
+            ? store.then((resolved) => opts.als!.storage.run(resolved, () => handler(input)))
+            : opts.als!.storage.run(store, () => handler(input))
+        }
 
   const wrapDispatch = (dispatch: Dispatch, fieldName: string): Dispatch => {
     if (opts.als === undefined) return dispatch

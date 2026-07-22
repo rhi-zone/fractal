@@ -304,4 +304,68 @@ describe("withALS", () => {
       expect(await wrappedRes.json()).toEqual(await plainRes.json())
     }
   })
+
+  it("awaits an async init before entering the ALS scope", async () => {
+    const storage = new AsyncLocalStorage<RequestContext>()
+    let observedDuringHandler: string | undefined
+
+    const route = httpRoute({
+      meta: {},
+      methods: {
+        GET: {
+          handler: () => {
+            observedDuringHandler = storage.getStore()?.requestId
+            return { ok: true }
+          },
+          meta: {},
+        },
+      },
+    })
+
+    const router = withALS(makeRouterFromRoute(route), storage, async () => {
+      // Simulate an async session-cookie DB lookup.
+      await Promise.resolve()
+      await Promise.resolve()
+      return { requestId: "req-async" }
+    })
+    const res = await router(new Request("http://localhost/"))
+
+    expect(res.status).toBe(200)
+    expect(observedDuringHandler).toBe("req-async")
+  })
+
+  it("gives each concurrent request its own isolated context with an async init", async () => {
+    const storage = new AsyncLocalStorage<RequestContext>()
+    const observed: string[] = []
+
+    const route = httpRoute({
+      meta: {},
+      methods: {
+        GET: {
+          handler: async () => {
+            await Promise.resolve()
+            const id = storage.getStore()?.requestId
+            if (id !== undefined) observed.push(id)
+            return { ok: true }
+          },
+          meta: {},
+        },
+      },
+    })
+
+    let counter = 0
+    const router = withALS(makeRouterFromRoute(route), storage, async () => {
+      const id = counter++
+      await Promise.resolve()
+      return { requestId: `req-${id}` }
+    })
+
+    await Promise.all(
+      Array.from({ length: 10 }, () => router(new Request("http://localhost/"))),
+    )
+
+    expect(observed.sort()).toEqual(
+      Array.from({ length: 10 }, (_, i) => `req-${i}`).sort(),
+    )
+  })
 })

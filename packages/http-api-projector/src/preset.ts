@@ -132,10 +132,12 @@ export type PresetOptions<T = unknown> = {
   /**
    * Wrap the compiled router so every request runs inside its own
    * `AsyncLocalStorage` context (compile.ts's `withALS`). `init` computes
-   * the per-request context value from the incoming `Request`. Applied
-   * before `autoMethodLayer`, so HEAD-as-GET and OPTIONS/405 short-circuits
-   * that still call through to the router also run inside the context.
-   * Absent by default (no ALS wrapping).
+   * the per-request context value from the incoming `Request` — synchronously
+   * or by returning a `Promise` (e.g. a session-cookie DB lookup), which is
+   * awaited before the ALS scope is entered. Applied before
+   * `autoMethodLayer`, so HEAD-as-GET and OPTIONS/405 short-circuits that
+   * still call through to the router also run inside the context. Absent by
+   * default (no ALS wrapping).
    */
   readonly als?: AlsConfig<Request, T>
   /**

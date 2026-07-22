@@ -1101,8 +1101,12 @@ export async function runCli<T = unknown>(
     leafName: target.leafName,
   }
   const alsHandler = opts.als !== undefined
-    ? (input: Record<string, unknown>) =>
-        opts.als!.storage.run(opts.als!.init(alsContext), () => target.handler(input))
+    ? (input: Record<string, unknown>) => {
+        const store = opts.als!.init(alsContext)
+        return store instanceof Promise
+          ? store.then((resolved) => opts.als!.storage.run(resolved, () => target.handler(input)))
+          : opts.als!.storage.run(store, () => target.handler(input))
+      }
     : target.handler
   // Bridge the plain handler `(input) => result` into `F => F`'s base case
   // `(input, stores) => handler(input)` — the handler never sees `stores`,

@@ -450,11 +450,20 @@ export function mapCharRouter(
  * it via `storage.getStore()`. Composable: since the return type is itself a
  * `CompiledRouter`, `withALS` can wrap the output of `radixRouter`,
  * `toRouter`, `makeRouterFromRoute`, or another `withALS` layer.
+ *
+ * `init` may return `T` synchronously (e.g. reading a header) or a
+ * `Promise<T>` (e.g. a session-cookie DB lookup) — a promise is awaited
+ * before entering the ALS scope; a sync return runs with no added overhead.
  */
 export function withALS<T>(
   router: CompiledRouter,
   storage: AsyncLocalStorage<T>,
-  init: (req: Request) => T,
+  init: (req: Request) => T | Promise<T>,
 ): CompiledRouter {
-  return (req) => storage.run(init(req), () => router(req))
+  return (req) => {
+    const store = init(req)
+    return store instanceof Promise
+      ? store.then((resolved) => storage.run(resolved, () => router(req)))
+      : storage.run(store, () => router(req))
+  }
 }

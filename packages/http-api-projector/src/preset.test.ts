@@ -354,6 +354,33 @@ describe("OOTB preset — als", () => {
     expect(res.status).toBe(200)
     expect(observedInsideHandler).toBe("req-head")
   })
+
+  it("supports an async init — e.g. a session-cookie DB lookup — awaited before the ALS scope is entered", async () => {
+    const storage = new AsyncLocalStorage<{ userId: string }>()
+    let observedInsideHandler: string | undefined
+
+    const alsNode = api_({
+      whoami: op((_: unknown) => {
+        observedInsideHandler = storage.getStore()?.userId
+        return { ok: true }
+      }, { http: { directives: [{ kind: "method", value: "GET" }] } }),
+    })
+
+    const lookupUserFromCookie = async (req: Request): Promise<{ userId: string }> => {
+      await Promise.resolve() // simulate an async DB lookup
+      return { userId: req.headers.get("cookie") === "session=abc" ? "user-abc" : "anonymous" }
+    }
+
+    const f = createFetch(alsNode, {
+      als: { storage, init: lookupUserFromCookie },
+    })
+
+    const res = await f(
+      new Request("http://localhost/whoami", { headers: { cookie: "session=abc" } }),
+    )
+    expect(res.status).toBe(200)
+    expect(observedInsideHandler).toBe("user-abc")
+  })
 })
 
 // ============================================================================

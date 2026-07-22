@@ -819,7 +819,12 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   ): (input: Record<string, unknown>) => unknown | Promise<unknown> =>
     opts.als === undefined
       ? handler
-      : (input) => opts.als!.storage.run(opts.als!.init(context), () => handler(input))
+      : (input) => {
+          const store = opts.als!.init(context)
+          return store instanceof Promise
+            ? store.then((resolved) => opts.als!.storage.run(resolved, () => handler(input)))
+            : opts.als!.storage.run(store, () => handler(input))
+        }
 
   // Bridge a plain handler `(input) => result` into `F => F`'s base case
   // `(input, stores) => handler(input)` — the handler never sees `stores`,

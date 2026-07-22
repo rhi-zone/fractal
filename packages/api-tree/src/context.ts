@@ -67,10 +67,16 @@ export type GraphQLContextShape = {
 // createContext
 // ============================================================================
 
-/** Per-projector `als` config — the exact shape `PresetOptions.als` / `CliOpts.als` / `CreateMcpServerOptions.als` accept. */
+/**
+ * Per-projector `als` config — the exact shape `PresetOptions.als` /
+ * `CliOpts.als` / `CreateMcpServerOptions.als` accept. `init` may return `T`
+ * synchronously or `Promise<T>` — a sync return is run with no added
+ * overhead; a returned promise is awaited before entering the ALS scope.
+ * Either way the store itself is always the unwrapped `T`, never a promise.
+ */
 export type AlsConfig<Ctx, T> = {
   readonly storage: AsyncLocalStorage<T>;
-  readonly init: (context: Ctx) => T;
+  readonly init: (context: Ctx) => T | Promise<T>;
 };
 
 export type ContextBuilder<T> = {
