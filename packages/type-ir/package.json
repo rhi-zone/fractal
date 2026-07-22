@@ -15,6 +15,10 @@
       "types": "./src/json-schema.ts",
       "import": "./src/json-schema.ts"
     },
+    "./docusaurus-reference": {
+      "types": "./src/docusaurus-reference.ts",
+      "import": "./src/docusaurus-reference.ts"
+    },
     "./from-json-schema": {
       "types": "./src/from-json-schema.ts",
       "import": "./src/from-json-schema.ts"
