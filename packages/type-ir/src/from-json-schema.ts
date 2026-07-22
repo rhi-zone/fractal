@@ -35,6 +35,7 @@ const passthroughKeys = [
 function extractMeta(schema: JsonSchema): Record<string, unknown> {
   const meta: Record<string, unknown> = {}
 
+  if (typeof schema.title === "string") meta.title = schema.title
   if (typeof schema.description === "string") meta.description = schema.description
   if (schema.deprecated === true) meta.deprecated = true
   if (schema.default !== undefined) meta.default = schema.default

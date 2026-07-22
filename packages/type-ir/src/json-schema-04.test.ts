@@ -243,6 +243,13 @@ describe("shared: enum", () => {
       enum: ["a", "b", "c"],
     })
   })
+
+  // See json-schema.test.ts's "integer members" test for why `enum.members`
+  // (declared `readonly string[]`) can carry non-string runtime values.
+  test("enum of integer members", () => {
+    const ref = t(types.enum([0, 1, 2] as unknown as readonly string[]))
+    expect(toJsonSchema04(ref)).toEqual({ type: "integer", enum: [0, 1, 2] })
+  })
 })
 
 describe("shared: meta", () => {

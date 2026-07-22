@@ -142,12 +142,6 @@ describe("JSON Schema round-trips", () => {
   })
 
   test("integer enum", () => {
-    // json-schema.ts's `enum` handler always re-emits `{ type: "string", ... }`
-    // (see its handlers.enum) — a JSON-literal-level lossy quirk (the
-    // projected schema no longer says "these are integers"), but the
-    // TypeRef tree itself round-trips: `fromJsonSchema` dispatches on
-    // `Array.isArray(schema.enum)` before ever looking at `type`, so the
-    // reingested members are unchanged.
     roundTrip({ type: "integer", enum: [1, 2, 3] })
   })
 
@@ -268,14 +262,10 @@ describe("JSON Schema round-trips", () => {
     expect(ref.meta.description).toBe("a human name")
   })
 
-  // `title` (JSON Schema draft 2020-12 §9.1) has no handler on either side:
-  // from-json-schema.ts's `extractMeta` doesn't read it, and json-schema.ts's
-  // `withMeta` doesn't write it — it isn't merely lossy on the round trip,
-  // it's dropped on first ingestion, before a round trip even enters the
-  // picture. Not a round-trip bug per se (there's no regression to catch),
-  // but flagged here since the task calls it out explicitly as a category to
-  // verify.
-  test.todo("title metadata (currently dropped entirely — no extractMeta/withMeta handler for `title`)")
+  test("title metadata", () => {
+    const ref = roundTrip({ type: "string", title: "User Name" })
+    expect(ref.meta.title).toBe("User Name")
+  })
 })
 
 // ============================================================================

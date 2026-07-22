@@ -225,9 +225,34 @@ describe("literal", () => {
 })
 
 describe("enum", () => {
-  test("enum members", () => {
+  test("string members", () => {
     const ref = t(types.enum(["a", "b", "c"]))
     expect(toJsonSchema(ref)).toEqual({ type: "string", enum: ["a", "b", "c"] })
+  })
+
+  // `TypeShape`'s `enum.members` is declared `readonly string[]`, but ingesters
+  // (see from-json-schema.ts's `fromJsonSchema`) cast arbitrary JSON `enum`
+  // values into it verbatim — a source enum can carry integers, floats, or
+  // booleans. The projector must infer `type` from the actual runtime values
+  // rather than assuming `string` (see json-schema.ts's `enumSchema`).
+  test("integer members", () => {
+    const ref = t(types.enum([0, 1, 2] as unknown as readonly string[]))
+    expect(toJsonSchema(ref)).toEqual({ type: "integer", enum: [0, 1, 2] })
+  })
+
+  test("number members", () => {
+    const ref = t(types.enum([1.5, 2.5] as unknown as readonly string[]))
+    expect(toJsonSchema(ref)).toEqual({ type: "number", enum: [1.5, 2.5] })
+  })
+
+  test("boolean members", () => {
+    const ref = t(types.enum([true, false] as unknown as readonly string[]))
+    expect(toJsonSchema(ref)).toEqual({ type: "boolean", enum: [true, false] })
+  })
+
+  test("mixed-type members omit type", () => {
+    const ref = t(types.enum([1, "a"] as unknown as readonly string[]))
+    expect(toJsonSchema(ref)).toEqual({ enum: [1, "a"] })
   })
 })
 
@@ -252,6 +277,11 @@ describe("nullable", () => {
 })
 
 describe("metadata passthrough", () => {
+  test("title", () => {
+    const ref = t(types.string, { title: "User Name" })
+    expect(toJsonSchema(ref)).toEqual({ type: "string", title: "User Name" })
+  })
+
   test("description", () => {
     const ref = t(types.string, { description: "a name" })
     expect(toJsonSchema(ref)).toEqual({ type: "string", description: "a name" })

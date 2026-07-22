@@ -277,6 +277,12 @@ describe("nullable", () => {
 })
 
 describe("metadata passthrough", () => {
+  test("title", () => {
+    expect(fromJsonSchema({ type: "string", title: "User Name" })).toEqual(
+      t(types.string, { title: "User Name" }),
+    )
+  })
+
   test("description", () => {
     expect(fromJsonSchema({ type: "string", description: "a name" })).toEqual(
       t(types.string, { description: "a name" }),

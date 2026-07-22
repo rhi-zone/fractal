@@ -77,6 +77,27 @@ function withMeta(schema: JsonSchema04, meta: Readonly<Record<string, unknown>>)
   return result
 }
 
+// Infers the JSON Schema `type` for an enum's members from their actual
+// runtime types, rather than assuming `string` — an enum's members are
+// frequently integers (or other primitives) carried verbatim from the
+// source type system (see type-ir's TypeKinds.enum doc comment). Mixed-type
+// membership (or a type JSON Schema has no single keyword for) omits `type`
+// entirely and relies on `enum` alone, which is valid per draft-04 §5.20
+// (`type` is optional; `enum` alone still constrains to the listed values).
+function enumSchema(members: readonly unknown[]): JsonSchema04 {
+  if (members.length > 0 && members.every((m) => typeof m === "boolean")) {
+    return { type: "boolean", enum: [...members] }
+  }
+  if (members.length > 0 && members.every((m) => typeof m === "number")) {
+    const type = members.every((m) => Number.isInteger(m)) ? "integer" : "number"
+    return { type, enum: [...members] }
+  }
+  if (members.length > 0 && members.every((m) => typeof m === "string")) {
+    return { type: "string", enum: [...members] }
+  }
+  return { enum: [...members] }
+}
+
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => JsonSchema04
 
 const leaf =
@@ -159,7 +180,7 @@ const handlers: Record<string, Converter> = {
   },
   enum: (shape) => {
     const s = shape as TypeShape & { kind: "enum" }
-    return { type: "string", enum: [...s.members] }
+    return enumSchema(s.members)
   },
   ref: (shape) => {
     const s = shape as TypeShape & { kind: "ref" }
