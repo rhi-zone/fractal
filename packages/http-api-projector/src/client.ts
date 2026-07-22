@@ -70,6 +70,8 @@ import type { TypedClient } from "@rhi-zone/fractal-api-tree"
 import { httpProjection } from "./dx.ts"
 import type { HttpRoute } from "./route.ts"
 import { ClientError } from "./client-error.ts"
+import { composeFetch } from "./extension.ts"
+import type { ClientExtension } from "./extension.ts"
 
 export { ClientError } from "./client-error.ts"
 
@@ -99,6 +101,15 @@ export type ClientOptions = {
    * `CallOptions.signal`.
    */
   readonly signal?: AbortSignal
+  /**
+   * Extensions composing around the fetch implementation — retry, request/
+   * response interceptors, a fixed timeout, or a user-authored
+   * `ClientExtension`. Applied outermost-first (see extension.ts's module
+   * doc). Composed once at client construction, wrapping every call this
+   * client makes. See `packages/http-api-projector/src/extensions/` for the
+   * built-ins and `./extension.ts` for the API a custom extension implements.
+   */
+  readonly extensions?: readonly ClientExtension[]
 }
 
 /** Per-call overrides for `timeout`/`signal`, layered on top of the client-level `ClientOptions`. */
@@ -351,7 +362,7 @@ function buildClientNode(
  */
 export function createClientFromRoute(route: HttpRoute, opts: ClientOptions = {}): AnyClient {
   const baseUrl = opts.baseUrl ?? ""
-  const fetchImpl = opts.fetch ?? globalThis.fetch.bind(globalThis)
+  const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions)
   return buildClientNode(route, "", new Set(), baseUrl, fetchImpl, undefined, opts.timeout, opts.signal) as AnyClient
 }
 
@@ -390,7 +401,7 @@ export function createClient<N extends Node>(n: N, opts: ClientOptions = {}): Ty
   const route = httpProjection(n)
   const handlerNames = buildHandlerNames(n)
   const baseUrl = opts.baseUrl ?? ""
-  const fetchImpl = opts.fetch ?? globalThis.fetch.bind(globalThis)
+  const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions)
   return buildClientNode(
     route,
     "",

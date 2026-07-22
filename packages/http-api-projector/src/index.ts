@@ -20,6 +20,7 @@ export { crud, httpProjection } from "./dx.ts"
 export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
 export { getHttpMeta } from "./project.ts"
 export type { HttpDirective, HttpMeta } from "./project.ts"
+export type { HttpManifest } from "./http-manifest.ts"
 export { mapRoute } from "./route.ts"
 export {
   chainMatchers,
@@ -45,6 +46,14 @@ export type {
 export { createClient, createClientFromRoute } from "./client.ts"
 export type { AnyClient, ClientOptions } from "./client.ts"
 export { ClientError } from "./client-error.ts"
+export { composeCodegenFetch, composeFetch } from "./extension.ts"
+export type { ClientExtension, ClientExtensionCodegen, FetchImpl } from "./extension.ts"
+export { retry } from "./extensions/retry.ts"
+export type { RetryOptions } from "./extensions/retry.ts"
+export { timeout } from "./extensions/timeout.ts"
+export type { TimeoutOptions } from "./extensions/timeout.ts"
+export { interceptors } from "./extensions/interceptors.ts"
+export type { InterceptorsOptions } from "./extensions/interceptors.ts"
 export { createFetch, httpErrors } from "./preset.ts"
 export type {
   CorsOptions,

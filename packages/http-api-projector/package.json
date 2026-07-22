@@ -50,6 +50,26 @@
     "./codegen": {
       "types": "./src/codegen.ts",
       "import": "./src/codegen.ts"
+    },
+    "./http-manifest": {
+      "types": "./src/http-manifest.ts",
+      "import": "./src/http-manifest.ts"
+    },
+    "./extension": {
+      "types": "./src/extension.ts",
+      "import": "./src/extension.ts"
+    },
+    "./extensions/retry": {
+      "types": "./src/extensions/retry.ts",
+      "import": "./src/extensions/retry.ts"
+    },
+    "./extensions/timeout": {
+      "types": "./src/extensions/timeout.ts",
+      "import": "./src/extensions/timeout.ts"
+    },
+    "./extensions/interceptors": {
+      "types": "./src/extensions/interceptors.ts",
+      "import": "./src/extensions/interceptors.ts"
     }
   },
   "files": ["src"],

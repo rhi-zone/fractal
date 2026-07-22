@@ -58,6 +58,8 @@ import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import { httpProjection } from "./dx.ts"
 import type { HttpRoute } from "./route.ts"
+import { composeCodegenFetch } from "./extension.ts"
+import type { ClientExtension } from "./extension.ts"
 
 // ============================================================================
 // Public API
@@ -66,6 +68,18 @@ import type { HttpRoute } from "./route.ts"
 export type CodegenOptions = {
   /** Name of the emitted `Client` type and factory return type. Defaults to "Client". */
   readonly clientName?: string
+  /**
+   * Extensions composed into the generated client's fetch call, baked in at
+   * GENERATION time (unlike the runtime client's `ClientOptions.extensions`,
+   * which composes at construction time) — each extension's `codegen.wrap`
+   * contributes an expression wrapping the emitted fetch call, and its
+   * `codegen.helpers` (if any) are emitted once as top-level declarations.
+   * Extensions without a `codegen` hook (e.g. `interceptors()`) are skipped
+   * here — they're runtime-only, see extensions/interceptors.ts. Omitting
+   * `extensions` (or passing `[]`) produces output byte-for-byte identical
+   * to the pre-extension standalone client.
+   */
+  readonly extensions?: readonly ClientExtension[]
 }
 
 /**
@@ -530,14 +544,25 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
   const clientTypeDecl = `export type ${clientName} = ${nodeTypeLiteral(root, "")}`
   const factoryBody = nodeRuntimeLiteral(root, "  ")
 
+  // Extensions are baked in at generation time: each contributes an
+  // expression wrapping the base fetch impl (`expr`), plus any helper
+  // declarations it depends on (`helpers`, emitted once, deduplicated).
+  // With no extensions this is a no-op — `expr` is exactly `options.fetch ?? fetch`
+  // and `helpers` is empty, so output is unchanged from the pre-extension shape.
+  const { expr: fetchExpr, helpers: extensionHelpers } = composeCodegenFetch(
+    "options.fetch ?? fetch",
+    options.extensions,
+  )
+
   return [
     HEADER,
     typeDecls.join("\n\n"),
     clientTypeDecl,
     RUNTIME_HELPERS,
+    ...extensionHelpers,
     [
       `export function createClient(baseUrl: string, options: CreateClientOptions = {}): ${clientName} {`,
-      `  const fetchImpl = options.fetch ?? fetch`,
+      `  const fetchImpl = ${fetchExpr}`,
       `  const headers = options.headers`,
       `  const baseTimeout = options.timeout`,
       `  const baseSignal = options.signal`,
