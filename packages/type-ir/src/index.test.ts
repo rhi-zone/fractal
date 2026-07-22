@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { ancestors, registerParent, resolve, t, types } from "./index.ts"
+import {
+  ancestors,
+  nodeCount,
+  registerParent,
+  resolve,
+  resolveRef,
+  t,
+  types,
+  typeRefDocument,
+  walkTypeRef,
+  type TypeRef,
+} from "./index.ts"
 import "./kinds/common.ts"
 
 describe("ancestors", () => {
@@ -226,5 +237,121 @@ describe("TypeRef construction", () => {
       array: (shape: { kind: string; element: unknown }) => shape.element,
     })
     expect(handler).toBeUndefined()
+  })
+})
+
+describe("typeRefDocument", () => {
+  test("wraps a bare TypeRef with empty defs by default", () => {
+    const root = t(types.string)
+    expect(typeRefDocument(root)).toEqual({ root, defs: {} })
+  })
+
+  test("carries an explicit defs map", () => {
+    const root = t(types.ref("User"))
+    const defs = { User: t(types.object({ id: t(types.string) })) }
+    expect(typeRefDocument(root, defs)).toEqual({ root, defs })
+  })
+})
+
+describe("nodeCount", () => {
+  test("a leaf counts as 1", () => {
+    expect(nodeCount(t(types.string))).toBe(1)
+  })
+
+  test("counts nested object fields", () => {
+    const ref = t(types.object({ a: t(types.string), b: t(types.number) }))
+    // self (1) + a (1) + b (1)
+    expect(nodeCount(ref)).toBe(3)
+  })
+
+  test("counts array/tuple/union/intersection/map elements generically", () => {
+    expect(nodeCount(t(types.array(t(types.string))))).toBe(2)
+    expect(nodeCount(t(types.tuple([t(types.string), t(types.number)])))).toBe(3)
+    expect(nodeCount(t(types.union([t(types.string), t(types.number)])))).toBe(3)
+    expect(nodeCount(t(types.intersection([t(types.string), t(types.number)])))).toBe(3)
+    expect(nodeCount(t(types.map(t(types.string), t(types.number))))).toBe(3)
+  })
+
+  test("counts function params + returnType (and thisType, when present)", () => {
+    const fn = t(types.function([{ name: "x", type: t(types.number) }], t(types.void)))
+    // self + param + returnType
+    expect(nodeCount(fn)).toBe(3)
+    const method = t(types.method([], t(types.void), t(types.instance("Foo", "foo.ts"))))
+    // self + returnType + thisType
+    expect(nodeCount(method)).toBe(3)
+  })
+
+  test("a ref does not expand into its target — target is a string, not a TypeRef", () => {
+    expect(nodeCount(t(types.ref("Whatever")))).toBe(1)
+  })
+
+  test("a recursive def's own body (containing a ref to itself) is finite to count", () => {
+    // { kind: "object", fields: { next: { kind: "ref", target: "Self" } } }
+    const body = t(types.object({ next: t(types.ref("Self")) }))
+    expect(nodeCount(body)).toBe(2)
+  })
+})
+
+describe("resolveRef", () => {
+  test("resolves a ref against defs", () => {
+    const user = t(types.object({ id: t(types.string) }))
+    const doc = typeRefDocument(t(types.ref("User")), { User: user })
+    expect(resolveRef(doc, doc.root)).toEqual(user)
+  })
+
+  test("returns non-ref input unchanged", () => {
+    const doc = typeRefDocument(t(types.string))
+    const ref = t(types.number)
+    expect(resolveRef(doc, ref)).toBe(ref)
+  })
+
+  test("throws on an unresolved ref target", () => {
+    const doc = typeRefDocument(t(types.ref("Missing")))
+    expect(() => resolveRef(doc, doc.root)).toThrow(/unresolved ref target "Missing"/)
+  })
+})
+
+describe("walkTypeRef", () => {
+  test("visits every node reachable from root, pre-order", () => {
+    const root = t(types.object({ a: t(types.string), b: t(types.array(t(types.number))) }))
+    const doc = typeRefDocument(root)
+    const kinds: string[] = []
+    walkTypeRef(doc, (node) => kinds.push(node.shape.kind))
+    expect(kinds).toEqual(["object", "string", "array", "number"])
+  })
+
+  test("also visits every defs entry, each with its own ancestors chain starting empty", () => {
+    const doc = typeRefDocument(t(types.ref("User")), {
+      User: t(types.object({ id: t(types.string) })),
+    })
+    const visited: { kind: string; ancestorCount: number }[] = []
+    walkTypeRef(doc, (node, ctx) => visited.push({ kind: node.shape.kind, ancestorCount: ctx.ancestors.length }))
+    // root: ref (0 ancestors); defs.User: object (0 ancestors), then id: string (1 ancestor)
+    expect(visited).toEqual([
+      { kind: "ref", ancestorCount: 0 },
+      { kind: "object", ancestorCount: 0 },
+      { kind: "string", ancestorCount: 1 },
+    ])
+  })
+
+  test("ctx.resolveRef resolves a ref against the document's defs", () => {
+    const user = t(types.object({ id: t(types.string) }))
+    const doc = typeRefDocument(t(types.ref("User")), { User: user })
+    let resolved: TypeRef | undefined
+    walkTypeRef(doc, (node, ctx) => {
+      if (node.shape.kind === "ref") resolved = ctx.resolveRef(node)
+    })
+    expect(resolved).toEqual(user)
+  })
+
+  test("ctx.isRecursionTarget is true for a node reference-equal to an ancestor", () => {
+    const inner = t(types.string)
+    const outer = t(types.object({ a: inner }))
+    const doc = typeRefDocument(outer)
+    const flags: boolean[] = []
+    walkTypeRef(doc, (node, ctx) => flags.push(ctx.isRecursionTarget(outer)))
+    // At the root (outer itself), outer is not yet an ancestor of itself; at
+    // the child (inner), outer IS now an ancestor.
+    expect(flags).toEqual([false, true])
   })
 })

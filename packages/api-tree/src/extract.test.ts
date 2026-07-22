@@ -10,9 +10,12 @@ import { describe, expect, it } from "bun:test"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import { extractToolSchemas, extractToolTypeRefs } from "./tree.ts"
+import { extractRouteTypeRefs, extractToolSchemas, extractToolTypeRefs } from "./tree.ts"
 import {
   createExtractorProgram,
+  createSharingRegistry,
+  defaultShouldShare,
+  finalizeSharedDefs,
   opFunctionNode,
   schemaFromFunctionNode,
   schemaFromReturnType,
@@ -21,6 +24,7 @@ import {
   typeRefFromReturnType,
   typeRefFromType,
 } from "./extract.ts"
+import { nodeCount } from "@rhi-zone/fractal-type-ir"
 import { tree } from "./__fixtures__/tree.fixture.ts"
 import ts from "typescript"
 
@@ -1284,5 +1288,98 @@ describe("end-to-end: CLI --help renders JSDoc-derived field descriptions", () =
     const help = out.join("")
     expect(help).toContain("The user's display name.")
     expect(help).toContain("Age in years.")
+  })
+})
+
+// ============================================================================
+// 10. Structural sharing — SharingRegistry / shouldShare / finalizeSharedDefs,
+//     and the extractToolTypeRefs/extractRouteTypeRefs shouldShare opt-in.
+// ============================================================================
+
+describe("structural sharing", () => {
+  const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing.fixture.ts`
+
+  it("without shouldShare, extractToolTypeRefs returns the exact prior TypeRefMap shape — no defs, Address inlined at every use", () => {
+    const plain = extractToolTypeRefs(SHARING_FIXTURE)
+    expect(Object.keys(plain)).toEqual(["getUser", "getOrder", "getProduct"])
+    // Every output is a plain TypeRef, not { types, defs } — the type system
+    // already enforces this via the overload, but confirm at runtime too.
+    expect((plain as unknown as { defs?: unknown }).defs).toBeUndefined()
+    const userOut = plain.getUser!.output!
+    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.billing!.shape.kind).toBe("object")
+  })
+
+  it("with shouldShare, Address (reused 3x, big enough) is extracted to defs and referenced via ref", () => {
+    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: defaultShouldShare })
+    expect(Object.keys(defs)).toContain("Address")
+    const userOut = shared.getUser!.output!
+    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.billing!.shape).toEqual({ kind: "ref", target: "Address" })
+    expect(fields.shipping!.shape).toEqual({ kind: "ref", target: "Address" })
+    const orderFields = (shared.getOrder!.output!.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(orderFields.address!.shape).toEqual({ kind: "ref", target: "Address" })
+  })
+
+  it("a self-recursive type (Category.parent: Category) is ALWAYS shared, regardless of shouldShare", () => {
+    // A predicate that never shares anything — recursive types bypass it entirely.
+    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => false })
+    expect(Object.keys(defs)).toContain("Category")
+    const category = defs.Category!
+    const fields = (category.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(fields.parent!.shape).toEqual({ kind: "ref", target: "Category" })
+  })
+
+  it("a predicate that always returns false still keeps recursive defs but drops non-recursive ones (Address inlined back)", () => {
+    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => false })
+    expect(Object.keys(defs)).toEqual(["Category"])
+    const userOut = shared.getUser!.output!
+    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    // Inlined back — no ref, real object structure restored.
+    expect(fields.billing!.shape.kind).toBe("object")
+  })
+
+  it("a predicate that always returns true shares every named type encountered", () => {
+    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => true })
+    expect(Object.keys(defs).sort()).toEqual(["Address", "Category"])
+  })
+
+  it("extractRouteTypeRefs supports the same shouldShare opt-in, keyed by route path", () => {
+    const { types: shared, defs } = extractRouteTypeRefs(SHARING_FIXTURE, { shouldShare: defaultShouldShare })
+    expect(Object.keys(shared)).toEqual(["getUser", "getOrder", "getProduct"])
+    expect(Object.keys(defs)).toContain("Address")
+  })
+
+  it("finalizeSharedDefs: recursive names are always kept even when shouldShare rejects everything", () => {
+    const registry = createSharingRegistry()
+    // Simulate what typeRefFromType would have recorded for a self-recursive def.
+    const selfRef = { shape: { kind: "ref", target: "Self" }, meta: {} } as TypeRef
+    const body = { shape: { kind: "object", fields: { next: selfRef } }, meta: {} } as TypeRef
+    registry.defs.set("Self", body)
+    registry.useCounts.set("Self", 5)
+    registry.recursive.add("Self")
+
+    const { defs } = finalizeSharedDefs(registry, {}, () => false)
+    expect(Object.keys(defs)).toEqual(["Self"])
+    expect(defs.Self).toEqual(body)
+  })
+
+  it("finalizeSharedDefs: a non-recursive def below the useCount/nodeCount bar is inlined back into every root", () => {
+    const registry = createSharingRegistry()
+    const smallBody = { shape: { kind: "object", fields: { id: { shape: { kind: "string" }, meta: {} } } }, meta: {} } as TypeRef
+    registry.defs.set("Small", smallBody)
+    registry.useCounts.set("Small", 3)
+
+    const root = { shape: { kind: "ref", target: "Small" }, meta: {} } as TypeRef
+    const { roots, defs } = finalizeSharedDefs(registry, { root }, defaultShouldShare)
+    expect(defs).toEqual({})
+    expect(roots.root).toEqual(smallBody)
+  })
+
+  it("defaultShouldShare requires BOTH useCount > 1 AND nodeCount > 5", () => {
+    const small = { shape: { kind: "object", fields: { a: { shape: { kind: "string" }, meta: {} } } }, meta: {} } as TypeRef
+    expect(nodeCount(small)).toBeLessThanOrEqual(5)
+    expect(defaultShouldShare({ node: small, tree: small, useCount: 10, typeName: "Small" })).toBe(false)
+    expect(defaultShouldShare({ node: small, tree: small, useCount: 1, typeName: "Small" })).toBe(false)
   })
 })

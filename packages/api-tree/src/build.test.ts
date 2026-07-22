@@ -16,6 +16,7 @@ import type { GeneratedEntry } from "./build.ts"
 import { api, op } from "./node.ts"
 import type { Node } from "./node.ts"
 import { isResultShape } from "./index.ts"
+import { defaultShouldShare } from "./extract.ts"
 
 /** Strip TypeScript syntax (type annotations, `as` casts, `import type`) via
  * Bun's transpiler — `buildValidatorModuleSource` now emits typed guards, so
@@ -38,6 +39,7 @@ function evalModule(source: string): Record<string, Triple> {
 
 describe("build orchestrator — entryFile -> compiled module, end-to-end", () => {
   const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`
+  const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing-input.fixture.ts`
 
   it("builds a validator module from the tree fixture, keyed by route path", () => {
     const source = buildValidatorModuleSource(FIXTURE)
@@ -81,6 +83,22 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     const validators = evalModule(source)
     expect(validators["namedType/search"]!.check({ q: "x" })).toBe(true)
     expect(validators["namedType/search"]!.check({})).toBe(true)
+  })
+
+  it("without shouldShare, no defs are emitted — every route's input inlines its full structure (prior behavior)", () => {
+    const source = buildValidatorModuleSource(SHARING_FIXTURE)
+    expect(source).not.toContain("__def_Address_check")
+  })
+
+  it("with shouldShare, a type reused across routes' inputs compiles to ONE shared def, called from every ref site", () => {
+    const source = buildValidatorModuleSource(SHARING_FIXTURE, undefined, defaultShouldShare)
+    expect(source.match(/function __def_Address_check\(/g) ?? []).toHaveLength(1)
+
+    const validators = evalModule(source)
+    const validAddress = { street: "Main", city: "X", zip: "1", country: "Y", region: "Z", landmark: "L" }
+    expect(validators["setBilling"]!.check({ userId: "u1", billing: validAddress })).toBe(true)
+    expect(validators["setBilling"]!.check({ userId: "u1", billing: {} })).toBe(false)
+    expect(validators["setShipping"]!.check({ userId: "u1", shipping: validAddress })).toBe(true)
   })
 })
 

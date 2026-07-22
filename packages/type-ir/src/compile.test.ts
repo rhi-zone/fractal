@@ -615,3 +615,75 @@ describe("compileValidator — duplicate const hoisting (quality: enum/known-fie
     expect(occurrences).toBe(1)
   })
 })
+
+describe("compileValidator/compileValidatorModule — defs + recursive validator codegen", () => {
+  // A self-recursive tree: { value: number; children: Tree[] }, where `Tree`
+  // (the def) refs itself.
+  const treeRef = t(
+    types.object({
+      value: t(types.number),
+      children: t(types.array(t(types.ref("Tree")))),
+    }),
+  )
+  const defs = { Tree: treeRef }
+  const validTree = { value: 1, children: [{ value: 2, children: [{ value: 3, children: [] }] }] }
+  const invalidTree = { value: 1, children: [{ value: "x", children: [] }] }
+
+  it("compileValidator: a bare ref with no defs passed is a structural no-op (prior behavior preserved)", () => {
+    const v = evalValidator(compileValidator(t(types.ref("Whatever"))))
+    expect(v.check("anything")).toBe(true)
+    expect(v.errors("anything")).toEqual([])
+  })
+
+  it("compileValidator: check/errors/parse all validate through a recursive def correctly", () => {
+    const v = evalValidator(compileValidator(treeRef, defs))
+    expect(v.check(validTree)).toBe(true)
+    expect(v.check(invalidTree)).toBe(false)
+
+    const errs = v.errors(invalidTree)
+    expect(errs).toEqual([
+      { kind: "type", path: ["children", "0", "value"], expected: expect.anything(), actual: expect.anything() },
+    ])
+
+    const ok = v.parse(validTree)
+    expect(ok).toEqual({ kind: "ok", value: validTree })
+    const err = v.parse(invalidTree)
+    expect(err.kind).toBe("err")
+  })
+
+  it("compileValidator: parse rebuilds a FRESH value through the recursive def, not an alias of the input", () => {
+    const v = evalValidator(compileValidator(treeRef, defs))
+    const result = v.parse(validTree) as { kind: "ok"; value: typeof validTree }
+    expect(result.value).toEqual(validTree)
+    expect(result.value).not.toBe(validTree)
+    expect(result.value.children[0]).not.toBe(validTree.children[0])
+  })
+
+  it("compileValidatorModule: a def declared once at module scope is shared across every entry that refs it", () => {
+    const source = compileValidatorModule(
+      [
+        { name: "a", ref: treeRef },
+        { name: "b", ref: t(types.array(t(types.ref("Tree")))) },
+      ],
+      { defs },
+    )
+    // Exactly one declaration of each def facet — not one per entry.
+    expect(source.match(/function __def_Tree_check\(/g) ?? []).toHaveLength(1)
+    expect(source.match(/function __def_Tree_errors\(/g) ?? []).toHaveLength(1)
+    expect(source.match(/function __def_Tree_parse\(/g) ?? []).toHaveLength(1)
+
+    const validators = evalModule(source)
+    expect(validators.a!.check(validTree)).toBe(true)
+    expect(validators.a!.check(invalidTree)).toBe(false)
+    expect(validators.b!.check([validTree, validTree])).toBe(true)
+    expect(validators.b!.check([invalidTree])).toBe(false)
+  })
+
+  it("mutually recursive defs (A refs B, B refs A) validate correctly in both directions", () => {
+    const aRef = t(types.object({ kind: t(types.literal("a")), next: t(types.ref("B"), { optional: true }) }))
+    const bRef = t(types.object({ kind: t(types.literal("b")), next: t(types.ref("A"), { optional: true }) }))
+    const v = evalValidator(compileValidator(aRef, { A: aRef, B: bRef }))
+    expect(v.check({ kind: "a", next: { kind: "b", next: { kind: "a" } } })).toBe(true)
+    expect(v.check({ kind: "a", next: { kind: "b", next: { kind: "wrong" } } })).toBe(false)
+  })
+})

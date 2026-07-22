@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { registerParent, t, types } from "./index.ts"
+import { registerParent, t, typeRefDocument, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { toJsonSchema } from "./json-schema.ts"
+import { toJsonSchema, toJsonSchemaDocument } from "./json-schema.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {
@@ -365,5 +365,29 @@ describe("stream", () => {
   test("degrades to an array carrying x-stream: true (no native streaming vocabulary)", () => {
     const ref = t(types.stream(t(types.integer)))
     expect(toJsonSchema(ref)).toEqual({ type: "array", items: { type: "integer" }, "x-stream": true })
+  })
+})
+
+describe("toJsonSchemaDocument", () => {
+  test("a bare TypeRef (no defs) omits $defs entirely — same output as toJsonSchema alone", () => {
+    const doc = typeRefDocument(t(types.object({ id: t(types.string) })))
+    expect(toJsonSchemaDocument(doc)).toEqual(toJsonSchema(doc.root))
+  })
+
+  test("populates $defs from doc.defs, resolving the root's ref via #/$defs/NAME", () => {
+    const user = t(types.object({ id: t(types.string) }))
+    const doc = typeRefDocument(t(types.ref("User")), { User: user })
+    expect(toJsonSchemaDocument(doc)).toEqual({
+      $ref: "#/$defs/User",
+      $defs: { User: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+    })
+  })
+
+  test("every defs entry is converted, not just ones reachable from root", () => {
+    const doc = typeRefDocument(t(types.string), {
+      Unused: t(types.object({ x: t(types.number) })),
+    })
+    const result = toJsonSchemaDocument(doc)
+    expect(result.$defs).toEqual({ Unused: { type: "object", properties: { x: { type: "number" } }, required: ["x"] } })
   })
 })

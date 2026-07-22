@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { registerParent, t, types } from "./index.ts"
+import { registerParent, t, typeRefDocument, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { toOpenApi30 } from "./openapi30.ts"
+import { toOpenApi30, toOpenApi30Document } from "./openapi30.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {
@@ -298,5 +298,21 @@ describe("stream", () => {
   test("degrades to an array carrying x-stream: true (no native streaming vocabulary)", () => {
     const ref = t(types.stream(t(types.integer)))
     expect(toOpenApi30(ref)).toEqual({ type: "array", items: { type: "integer" }, "x-stream": true })
+  })
+})
+
+describe("toOpenApi30Document", () => {
+  test("no defs — components.schemas is empty, schema matches toOpenApi30 alone", () => {
+    const doc = typeRefDocument(t(types.object({ id: t(types.string) })))
+    expect(toOpenApi30Document(doc)).toEqual({ schema: toOpenApi30(doc.root), components: { schemas: {} } })
+  })
+
+  test("populates components.schemas from doc.defs, resolving the root's ref via #/components/schemas/NAME", () => {
+    const user = t(types.object({ id: t(types.string) }))
+    const doc = typeRefDocument(t(types.ref("User")), { User: user })
+    expect(toOpenApi30Document(doc)).toEqual({
+      schema: { $ref: "#/components/schemas/User" },
+      components: { schemas: { User: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } } },
+    })
   })
 })
