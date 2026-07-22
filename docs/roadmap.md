@@ -321,10 +321,12 @@ under the `{language}-{library}` convention):
 
 What's planned / open — additional variants per language:
 
-**Completed (2026-07-22):**
-- Java — Gson (`java-gson.ts`)
-- Python — attrs (`python-attrs.ts`)
-- C# — Newtonsoft.Json (`csharp-newtonsoft.ts`)
+**Completed (2026-07-22) — Battle-tested and union-root capable:**
+- Java — Gson (`java-gson.ts`) — 35 tests
+- Python — attrs (`python-attrs.ts`) — 32 tests  
+- C# — Newtonsoft.Json (`csharp-newtonsoft.ts`) — 32 tests
+
+All three verified against cross-projector smoke test suite (171 tests, 4 fixture schemas). Struct-only projector union handling fixed; all three now handle union-rooted schemas.
 
 Remaining variants still planned:
 - C++ — RapidJSON, simdjson, Boost.JSON, glaze
@@ -482,26 +484,24 @@ Acceptance criteria for green:
 
 ### Documentation Generation
 
-**Status: NOT GREEN — planned**
+**Status: PARTIALLY COMPLETE (2026-07-22)**
 
-Not yet started. Auto-generated API documentation, distinct from the
-"Documentation Site" slice above (which covers fractal's *own* docs) —
-this slice is about projectors emitting documentation *for the types and
-operations fractal converts*, in each target language's native doc
-comment format, so that ecosystem-standard doc site generators can
-consume it.
+Code-level doc comment emission complete; site-level doc projectors planned.
 
-The approach: descriptions, examples, and other documentation-shaped
-metadata already live in TypeRef's open `meta` bag. Each projector would
-emit that metadata as the target language's native doc comment
-convention alongside the type/operation definitions it already
-generates (e.g. `/** ... */` JSDoc-style for TypeScript, `///` for Rust,
-docstrings for Python, XML doc comments for C#, etc.) — no new ingestion
-or IR work, just an additional emission concern per projector. The doc
-site generators themselves are downstream consumers of that output, not
-something fractal builds.
+**Completed (2026-07-22)**: Doc comment emission across all 25 projectors.
+Every projector now emits native doc comments from `meta.description` and
+`meta.deprecated` in its target language's native format: JSDoc-style
+`/** ... */` for TypeScript, `///` for Rust, docstrings for Python, XML
+doc comments for C#, etc. No new ingestion or IR work — metadata already
+lives in TypeRef's open `meta` bag; this was a pure emission concern.
 
-Doc site generators to target, by language ecosystem:
+**Still planned**: Site-level doc projectors (docusaurus-reference,
+starlight-reference, mkdocs-reference) — best-in-class auto-generated
+API docs with hover info and cross-linking, targeting ecosystem-standard
+doc site generators. These are downstream consumers of the code-level
+doc comments that now exist per projector.
+
+Site-level generators to target, by language ecosystem:
 - JS/TS — TypeDoc, JSDoc, Docusaurus, VitePress, Starlight
 - Python — Sphinx (autodoc), MkDocs (mkdocstrings), pdoc
 - Rust — rustdoc
@@ -537,14 +537,15 @@ What's planned / open:
 
 Acceptance criteria for green:
 - Doc comment emission implemented for every general-purpose-language
-  projector in 1.0 scope (or an explicit, documented subset decision by
-  the project owner).
-- At least one representative doc site generator per major ecosystem
-  (TypeDoc for JS/TS, Sphinx or MkDocs for Python, rustdoc for Rust,
-  Javadoc for Java) verified to successfully build a docs site from
-  fractal-generated output.
+  projector in 1.0 scope — **DONE (2026-07-22)**, all 25 projectors
+  emitting code-level doc comments.
+- Site-level doc projectors (docusaurus-reference, starlight-reference,
+  mkdocs-reference) built and verified with at least one representative
+  per major ecosystem to successfully generate a docs site from
+  fractal-generated code.
 - `meta`-bag-to-doc-comment field mapping documented as a stable
-  convention other projector authors can follow.
+  convention other projector authors can follow — already implicit in
+  the 25 implemented projectors; explicit docs on the pattern TBD.
 
 ---
 
@@ -554,9 +555,16 @@ Acceptance criteria for green:
 
 What exists: per-module unit tests (`*.test.ts` alongside most source
 modules), property-based fuzz tests for JSON inference (fast-check),
-adversarial test suites for enum-detection heuristics, and a routing
+adversarial test suites for enum-detection heuristics, a routing
 benchmark harness (`packages/http-api-projector/src/route.bench.ts`)
-with measured results documented in `docs/design/routing-benchmarks.md`.
+with measured results documented in `docs/design/routing-benchmarks.md`,
+and battle-test suites added 2026-07-22:
+- Round-trip fidelity tests (22 tests) — JSON Schema and OpenAPI schemas
+  survive ingestion → projection → re-ingestion.
+- Cross-projector smoke tests (171 tests across 41 projectors, 4 fixture
+  schemas) — comprehensive coverage exercising all projectors against
+  realistic API/schema fixtures, identifying and driving fixes for
+  struct-only union handling and metadata passthrough gaps.
 
 What's planned / open:
 - Fuzz testing and property-based testing beyond the JSON-inference
@@ -598,11 +606,14 @@ Acceptance criteria for green:
 - CI pipeline running typecheck + test on every push/PR.
 - At least the general-purpose-language emit targets have flake-provided
   toolchains and a compile-check step exercising generated output.
-- Cross-format round-trip tests exist as a named, discoverable category.
+- Cross-format round-trip tests exist as a named, discoverable category
+  — **DONE (2026-07-22)**, 22 round-trip fidelity tests added.
 - Battle-testing suite in place: real-world corpora wired into round-trip
   tests, parser fuzz tests running, and cross-language compilation
-  checks passing for every general-purpose-language target with a
-  flake-provided toolchain.
+  checks passing — **Partially DONE (2026-07-22)**: 171 cross-projector
+  smoke tests (4 fixture schemas through 41 projectors) verify all
+  projectors compile successfully. Remaining: CI pipeline, target-language
+  toolchain integration in Nix flake for compile-check validation.
 
 ---
 

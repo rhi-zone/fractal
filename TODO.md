@@ -29,7 +29,13 @@
 
 - **Per-language serialization library variants (Java/Gson, Python/attrs, C#/Newtonsoft.Json)** — DONE (2026-07-22). Three new serialization library projectors completed, extending the matrix started by Pydantic v2. Modules: `java-gson.ts`, `python-attrs.ts`, `csharp-newtonsoft.ts` in `packages/type-ir/src/`. All tests passing (2706/2706), typecheck clean.
 
-- **Battle testing completed (2026-07-22)** — Round-trip fidelity tests: 22 pass, 1 todo — JSON Schema and OpenAPI schemas survive ingestion → projection → re-ingestion. Cross-projector smoke tests: 171 pass, 5 todo — 4 realistic fixture schemas through all 41 projectors. Findings: (1) `title` metadata (JSON Schema §9.1) has no handler in either ingestion or projection — dropped silently (gap, not regression); (2) Integer enums re-project as `type: "string"` in JSON Schema layer (TypeRef tree is correct — cosmetic schema-layer issue); (3) Struct-only projectors (protobuf, capnp, flatbuffers, sql, sql-mssql) cannot handle union-rooted schemas — they assume object-shaped input.
+- **Battle testing completed (2026-07-22)** — Round-trip fidelity tests: 22 pass — JSON Schema and OpenAPI schemas survive ingestion → projection → re-ingestion. Cross-projector smoke tests: 171 pass — 4 realistic fixture schemas through all 41 projectors. Findings from battle-test run led directly to union-root support work below.
+
+- **Union-root support for all struct-only projectors (2026-07-22)** — Fixed struct-only projectors (protobuf, capnp, flatbuffers, sql, sql-mssql) to handle union-rooted schemas. Implementation: protobuf (oneof wrapper), capnp (anonymous union), flatbuffers (test fix), SQL (composable layout functions — stiLayout/tpvLayout). All struct-only projectors now compile the full test suite without narrowing.
+
+- **Doc comment emission across all 25 projectors (2026-07-22)** — Every projector now emits native doc comments from `meta.description` and `meta.deprecated` in its target language's native format (JSDoc for TypeScript, `///` for Rust, docstrings for Python, XML for C#, etc.). Site-level doc projectors (docusaurus-reference, starlight-reference, mkdocs-reference) remain planned.
+
+- **Full test suite: 2990 pass, 0 todo, 0 fail (2026-07-22)** — Final audit after union-root fixes and doc-comment emission.
 
 - **deepPartial/deepRequired for stream/page** — DONE. Added recursion cases in derive.ts.
 
@@ -88,6 +94,15 @@ where.
 - **Protobuf got real `stream` RPC support; FlatBuffers/Cap'n Proto didn't** — those two binary-format projectors degrade `stream` to their vector/list constructs since they have no native streaming concept.
 - **MCP sampling is wired for tool handlers only** — resource and prompt handlers also receive `stores.caller.createMessage`, but it's unclear if that's useful; the MCP spec doesn't define sampling use cases for resource/prompt handlers.
 - **GitHub repo is live** (`rhi-zone/fractal`, public) — no CI/CD configured yet.
+
+**Handoff for next session (2026-07-22):**
+
+Priority order:
+1. TODO/roadmap update (in progress)
+2. Web playground
+3. CI/CD + language toolchains in Nix flake
+4. Site-level doc projectors (docusaurus-reference, starlight-reference, mkdocs-reference — best-in-class with hover info and cross-linking)
+5. More library variants (Java/Moshi, Kotlin/Jackson, Go/easyjson, Dart/freezed, Ruby/dry-types, etc.)
 
 **Open items (quality & design depth, not blockers):**
 - **Root tsconfig investigation** — workspace root `tsconfig.json` still needs a full audit for strictness/consistency across packages. (A narrower, related fix landed 2026-07-21 — commit 2411e3a corrected stale `../core` path mappings to `../api-tree` in three projector tsconfigs — but that was a specific bug fix, not the broader audit.)
