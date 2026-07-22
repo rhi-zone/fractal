@@ -19,6 +19,7 @@ import {
 } from "./route.ts"
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
+import { http } from "./verbs.ts"
 
 // ============================================================================
 // naiveTransform — basic tree → HttpRoute conversion
@@ -65,6 +66,37 @@ describe("naiveTransform", () => {
     expect(route.fallback?.name).toBe("bookId")
     expect(route.fallback?.subtree.methods?.POST).toBeDefined()
   })
+
+  it("reads meta.http's source directives into the method entry's sources.sourceMap", () => {
+    const api = op((_: unknown) => ({}), {
+      http: { directives: [{ kind: "source", map: { apiKey: { store: "header", key: "x-api-key" } } }] },
+    })
+    const route = naiveTransform(api)
+    expect(route.methods?.POST?.sources?.sourceMap).toEqual({
+      apiKey: { store: "header", key: "x-api-key" },
+    })
+  })
+
+  it("folds multiple source directives into one sourceMap (later wins per key)", () => {
+    const api = op((_: unknown) => ({}), {
+      http: {
+        directives: [
+          { kind: "source", map: { year: { store: "query", key: "fiscal_year" } } },
+          { kind: "source", map: { year: { store: "header", key: "year" } } },
+        ],
+      },
+    })
+    const route = naiveTransform(api)
+    expect(route.methods?.POST?.sources?.sourceMap).toEqual({
+      year: { store: "header", key: "year" },
+    })
+  })
+
+  it("omits sources entirely when meta.http.sourceMap is absent", () => {
+    const api = op((_: unknown) => ({}))
+    const route = naiveTransform(api)
+    expect(route.methods?.POST?.sources).toBeUndefined()
+  })
 })
 
 // ============================================================================
@@ -102,6 +134,22 @@ describe("applyMethods", () => {
     const route = applyMethods(naiveTransform(api))
     expect(Object.keys(route.children?.items?.methods ?? {})).toEqual(["GET"])
     expect(Object.keys(route.fallback?.subtree.methods ?? {})).toEqual(["PUT"])
+  })
+
+  it("preserves sources.sourceMap through a method rename (naiveTransform's sourceMap survives applyMethods rebuilding the entry)", () => {
+    const api = op((_: unknown) => ({}), {
+      http: {
+        directives: [
+          { kind: "method", value: "GET" },
+          { kind: "source", map: { apiKey: { store: "header", key: "x-api-key" } } },
+        ],
+      },
+    })
+    const route = applyMethods(naiveTransform(api))
+    expect(Object.keys(route.methods ?? {})).toEqual(["GET"])
+    expect(route.methods?.GET?.sources?.sourceMap).toEqual({
+      apiKey: { store: "header", key: "x-api-key" },
+    })
   })
 })
 
@@ -747,6 +795,60 @@ describe("runRoute — per-route sources", () => {
     const router = makeRouterFromRoute(route)
     await router(new Request("http://localhost/?name=Alice"))
     expect(capturedInput).toEqual({ name: "Alice", injected: true })
+  })
+
+  it("end-to-end: op(fn, http.get, http.source(...)) decodes params from the declared stores through the full pipeline", async () => {
+    let capturedInput: unknown
+    const getBudget = (input: unknown) => {
+      capturedInput = input
+      return { ok: true }
+    }
+    const api = op(getBudget, http.get, http.source({
+      year: "query",
+      months: { store: "header", key: "x-months" },
+    }))
+    const route = applyMethods(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(
+      new Request("http://localhost/?year=2026", {
+        method: "GET",
+        headers: { "x-months": "6" },
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(capturedInput).toEqual({ year: "2026", months: "6" })
+  })
+
+  it("end-to-end: two composed http.source() calls both take effect (POST, query override + renamed body field)", async () => {
+    let capturedInput: unknown
+    const updateBudget = (input: unknown) => {
+      capturedInput = input
+      return { ok: true }
+    }
+    const api = op(
+      updateBudget,
+      http.post,
+      // Params not listed here still follow the POST convention (body) —
+      // `year` is pulled from the query string instead, as an override.
+      http.source({ year: "query" }),
+      http.source({ months: { store: "body", key: "budgetMonths" } }),
+    )
+    const route = applyMethods(naiveTransform(api))
+    const router = makeRouterFromRoute(route)
+    const res = await router(
+      new Request("http://localhost/?year=2026", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ budgetMonths: 6 }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    // No explicit paramNames were declared, so defaultDecode bulk-collects
+    // every name any store could produce (see route.ts's defaultDecode doc
+    // comment) — budgetMonths (the body's own raw key) AND months (the
+    // sourceMap-declared alias reading the same body field) both show up
+    // alongside year.
+    expect(capturedInput).toEqual({ year: "2026", budgetMonths: 6, months: 6 })
   })
 })
 

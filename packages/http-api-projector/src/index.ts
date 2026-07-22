@@ -15,11 +15,13 @@
 // two HTTP-derived projections.
 
 export { http, httpVerbBundle } from "./verbs.ts"
-export type { HttpMethods, Method, VerbBundle } from "./verbs.ts"
+export type { HttpMethods, Method, SourceMapInput, VerbBundle } from "./verbs.ts"
 export { crud, httpProjection } from "./dx.ts"
 export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
 export { getHttpMeta } from "./project.ts"
-export type { HttpDirective, HttpMeta } from "./project.ts"
+export type { HttpDirective, HttpMeta, ParamSource, SourceMap } from "./project.ts"
+export type { HttpStore, HttpStoreRegistry } from "./decode.ts"
+export type { Sources } from "./route.ts"
 export type { HttpManifest } from "./http-manifest.ts"
 export { mapRoute } from "./route.ts"
 export {

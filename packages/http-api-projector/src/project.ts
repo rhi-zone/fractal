@@ -30,6 +30,7 @@
 import { makeRouterFromRoute, naiveTransform } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
 import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { SourceMap } from "./decode.ts"
 
 export { verbFromTags } from "./tags.ts"
 export type { HttpRoute } from "./route.ts"
@@ -101,6 +102,24 @@ declare module "@rhi-zone/fractal-api-tree/node" {
  *   (which style to trust when the shape is ambiguous, and which input
  *   field name carries the cursor/offset/limit) when they don't apply.
  *
+ * - `{ kind: "source", map }` — per-param HTTP store overrides, one directive
+ *   PER `http.source()` CALL (see verbs.ts), each carrying that call's whole
+ *   (shorthand-expanded) `SourceMap`. Deliberately a directive — appended to
+ *   the array — rather than a plain merged object on `meta.http.sourceMap`:
+ *   `mergeMeta`'s type-level counterpart (`FoldMeta`/`MergeTwoMeta`, node.ts)
+ *   can't soundly merge two open `Record<string, ParamSource>` index-signature
+ *   types at the type level (a real TypeScript limitation — recursing into an
+ *   index-signature-only object via a keyed mapped type surfaces spurious
+ *   `| undefined` on every entry), the same class of problem `VerbBundle`'s
+ *   own doc comment (above) already works around for arrays vs.
+ *   intersections. Arrays dodge it entirely: `MergeMetaValue`'s array branch
+ *   concatenates without recursing into elements, so two `http.source()`
+ *   calls compose as two separate directive entries instead of one merged
+ *   object. `getHttpMeta` (below) resolves the array of `source` directives
+ *   into a single `sourceMap` field, in array order (later directive's keys
+ *   win on overlap) — `naiveTransform` (route.ts) reads THAT resolved map
+ *   into the matched route's `sources.sourceMap`.
+ *
  * Interpreted by `verbFromTags` (tags.ts):
  *
  * - `{ kind: "verb", value }` — explicit verb override; wins over tags.
@@ -146,6 +165,7 @@ export type HttpDirective<M extends string = string, P extends string = string> 
       readonly inputOffsetParam?: string
       readonly inputLimitParam?: string
     }
+  | { readonly kind: "source"; readonly map: SourceMap }
 
 // ============================================================================
 // getHttpMeta — the ONE canonical `meta.http` parser
@@ -176,6 +196,8 @@ export type HttpMeta = {
   readonly dispatch?: { readonly kind: "method" | "attr" }
   /** The raw directives array, passed through unresolved for callers that need it. */
   readonly directives?: readonly HttpDirective[]
+  /** Per-param HTTP store overrides — see `http.source()` in verbs.ts. */
+  readonly sourceMap?: SourceMap
   /** Resolved `{ kind: "verb" }` directive value. */
   readonly verb?: string
   /** Resolved `{ kind: "segment" }` directive value. */
@@ -207,6 +229,7 @@ export function getHttpMeta(meta: Meta): HttpMeta {
   const out: {
     dispatch?: { kind: "method" | "attr" }
     directives?: readonly HttpDirective[]
+    sourceMap?: SourceMap
     verb?: string
     segment?: string
     legacyPath?: string
@@ -254,6 +277,12 @@ export function getHttpMeta(meta: Meta): HttpMeta {
             ...(d.status !== undefined ? { status: d.status } : {}),
             ...(d.headers !== undefined ? { headers: d.headers } : {}),
           }
+          break
+        case "source":
+          // Fold in array order — a param name repeated across multiple
+          // `http.source()` calls resolves to the LATER call's entry, same
+          // "later wins per key" convention as every other meta merge.
+          out.sourceMap = { ...out.sourceMap, ...d.map }
           break
         case "paginated":
           out.paginated = {

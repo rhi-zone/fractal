@@ -10,14 +10,18 @@
 //      that drops the bundle's tags
 //   6. verbFromTags respects the meta.http verb directive from the bundle (GET, not POST)
 //   7. head / options helpers exist and carry readOnly
+//   8. http.source(map): string shorthand expands to a full ParamSource,
+//      full-form values pass through unchanged, and two http.source() calls
+//      compose their sourceMaps via ordinary meta merge (mergeMeta)
 
 import { describe, expect, it } from "bun:test"
 import { mergeMeta, op } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
+import type { ParamSource } from "@rhi-zone/fractal-api-tree"
 import { http } from "./verbs.ts"
-import { verbFromTags } from "./project.ts"
-import type { HttpDirective } from "./project.ts"
+import { getHttpMeta, verbFromTags } from "./project.ts"
+import type { HttpDirective, HttpMeta } from "./project.ts"
 
 // ============================================================================
 // Helpers
@@ -291,5 +295,114 @@ describe("http.moveTo", () => {
     expect(verbDirective(n)).toBe("GET")
     const directives = (n.meta.http as { directives: readonly HttpDirective[] }).directives
     expect(directives.find((d) => d.kind === "moveTo")).toEqual({ kind: "moveTo", path: ".." })
+  })
+})
+
+// ============================================================================
+// 10. http.source(map) — per-param HTTP store overrides. A `{ kind: "source",
+// map }` directive (like moveTo/paginated), NOT a plain merged object on
+// meta.http.sourceMap — composing two http.source() calls concatenates their
+// directive entries (mergeMeta's array branch), which getHttpMeta then folds
+// back into one resolved sourceMap, in array order (later wins per key). See
+// verbs.ts's source() doc comment for why: mergeMeta's type-level counterpart
+// can't soundly merge two open Record<string, ParamSource> objects.
+// ============================================================================
+
+function sourceMapOf(n: ReturnType<typeof op>): Record<string, ParamSource> | undefined {
+  return getHttpMeta(n.meta).sourceMap as Record<string, ParamSource> | undefined
+}
+
+function sourceDirectives(meta: HttpMeta): readonly HttpDirective[] {
+  return (meta as { directives?: readonly HttpDirective[] }).directives ?? []
+}
+
+describe("http.source", () => {
+  it("expands string shorthand to a full ParamSource, keyed by the param's own name", () => {
+    expect(http.source({ year: "query" })).toEqual({
+      http: { directives: [{ kind: "source", map: { year: { store: "query", key: "year" } } }] },
+    })
+  })
+
+  it("passes the full form through unchanged", () => {
+    expect(http.source({ months: { store: "body", key: "budgetMonths" } })).toEqual({
+      http: {
+        directives: [{ kind: "source", map: { months: { store: "body", key: "budgetMonths" } } }],
+      },
+    })
+  })
+
+  it("mixes shorthand and full form in one call", () => {
+    expect(
+      http.source({
+        year: "query",
+        months: { store: "body", key: "budgetMonths" },
+      }),
+    ).toEqual({
+      http: {
+        directives: [
+          {
+            kind: "source",
+            map: {
+              year: { store: "query", key: "year" },
+              months: { store: "body", key: "budgetMonths" },
+            },
+          },
+        ],
+      },
+    })
+  })
+
+  it("op(fn, http.source(map)) carries the sourceMap onto the leaf's meta (via getHttpMeta)", () => {
+    const n = op(noop, http.source({ year: "query" }))
+    expect(sourceMapOf(n)).toEqual({ year: { store: "query", key: "year" } })
+  })
+
+  it("two http.source() calls concatenate as two directive entries", () => {
+    const merged = mergeMeta(http.source({ year: "query" }), http.source({ months: "body" }))
+    expect(sourceDirectives(merged.http as HttpMeta)).toEqual([
+      { kind: "source", map: { year: { store: "query", key: "year" } } },
+      { kind: "source", map: { months: { store: "body", key: "months" } } },
+    ])
+  })
+
+  it("getHttpMeta folds two composed http.source() calls into one sourceMap (later wins per key)", () => {
+    const merged = mergeMeta(http.source({ year: "query" }), http.source({ months: "body" }))
+    expect(getHttpMeta(merged).sourceMap).toEqual({
+      year: { store: "query", key: "year" },
+      months: { store: "body", key: "months" },
+    })
+  })
+
+  it("a later http.source() call overrides an earlier one's key on overlap, once resolved", () => {
+    const merged = mergeMeta(
+      http.source({ year: { store: "query", key: "fiscal_year" } }),
+      http.source({ year: "header" }),
+    )
+    expect(getHttpMeta(merged).sourceMap).toEqual({
+      year: { store: "header", key: "year" },
+    })
+  })
+
+  it("composes with a verb bundle without either clobbering the other", () => {
+    const n = op(noop, http.get, http.source({ year: "query" }))
+    expect(methodDirective(n)).toBe("GET")
+    expect(sourceMapOf(n)).toEqual({ year: { store: "query", key: "year" } })
+  })
+
+  it("type safety: only registered HTTP store names compile (checked by `bun run typecheck`, not at runtime)", () => {
+    // All five built-in stores (decode.ts's HttpStoreRegistry) compile, both
+    // shorthand and full form.
+    http.source({ a: "path", b: "query", c: "header", d: "body", e: "caller" })
+    http.source({ a: { store: "path" }, b: { store: "query", key: "k" } })
+
+    // An unregistered store name is a compile-time error — this line only
+    // typechecks BECAUSE it's wrong; if `store` accepted a bare `string`
+    // (the design decision this test guards against), `@ts-expect-error`
+    // itself would fail with "Unused '@ts-expect-error' directive" under
+    // `bun run typecheck`.
+    // @ts-expect-error — "carrierPigeon" is not a registered HttpStore
+    http.source({ f: "carrierPigeon" })
+
+    expect(true).toBe(true)
   })
 })

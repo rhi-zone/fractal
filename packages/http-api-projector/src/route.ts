@@ -40,7 +40,7 @@ import { composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, m
 import type { DetectionOptions, ErrorEncoder, Stores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { httpStores, primaryStoreForMethod, assemble, parseRequestBody } from "./decode.ts"
-import type { SourceMap } from "./decode.ts"
+import type { ParamSource, SourceMap } from "./decode.ts"
 
 // ============================================================================
 // Sources — declarative per-route decode configuration. Real, protocol-
@@ -121,6 +121,24 @@ function directivesOf(meta: Meta): readonly HttpDirective[] {
   return Array.isArray(d) ? (d as HttpDirective[]) : []
 }
 
+/**
+ * Resolves `meta.http.sourceMap` — the `{ kind: "source", map }` directives
+ * `http.source()` (verbs.ts) appends, folded into a single `SourceMap` — back
+ * out of a node/entry's meta. Folds in array order: a param name repeated
+ * across multiple `http.source()` calls resolves to the LATER call's entry,
+ * same "later wins per key" convention `getHttpMeta` (project.ts) applies for
+ * its own copy of this same resolution (this function is route.ts's OWN copy,
+ * not a call to `getHttpMeta` — route.ts can't import project.ts, since
+ * project.ts imports FROM route.ts and a reverse import would cycle).
+ */
+function sourceMapOf(meta: Meta): SourceMap | undefined {
+  let merged: Record<string, ParamSource> | undefined
+  for (const d of directivesOf(meta)) {
+    if (d.kind === "source") merged = { ...merged, ...d.map }
+  }
+  return merged
+}
+
 function withoutDirective(meta: Meta, directive: HttpDirective): Meta {
   const h = meta.http as { directives?: readonly HttpDirective[] } | undefined
   if (h === undefined) return meta
@@ -158,10 +176,16 @@ function withoutDirective(meta: Meta, directive: HttpDirective): Meta {
  * (see node.ts), so a fallback subtree is typically already the erased `Node`
  * by the time it reaches here; this type still recurses correctly in that
  * case, just inherits that upstream limitation rather than papering over it.
+ *
+ * `sources` is always OPTIONAL here, regardless of whether the input leaf's
+ * meta actually carries `http.source()` directives — whether it does is a
+ * runtime fact read out of the open `meta` bag (`sourceMapOf`, below), not
+ * something knowable from `N`'s static shape, so the type can't narrow it to
+ * "present" the way `handler`/`meta` are.
  */
 export type NaiveRoute<N extends Node> =
   & (N extends { readonly handler: infer H extends Handler }
-      ? { readonly methods: { readonly POST: { readonly handler: H; readonly meta: Meta } } }
+      ? { readonly methods: { readonly POST: { readonly handler: H; readonly meta: Meta; readonly sources?: Sources } } }
       : {})
   & (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
       ? { readonly children: { readonly [K in keyof C]: NaiveRoute<C[K]> } }
@@ -172,8 +196,15 @@ export type NaiveRoute<N extends Node> =
   & { readonly meta: Meta }
 
 export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
+  const sourceMap = sourceMapOf(node.meta)
   const methods = isLeaf(node)
-    ? { POST: { handler: node.handler!, meta: node.meta } }
+    ? {
+        POST: {
+          handler: node.handler!,
+          meta: node.meta,
+          ...(sourceMap !== undefined ? { sources: { sourceMap } } : {}),
+        },
+      }
     : undefined
   const children = node.children !== undefined
     ? Object.fromEntries(
@@ -260,7 +291,7 @@ export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R
   return mapRoute(route, (node) => {
     let methods = node.methods
     if (methods !== undefined) {
-      const rebuilt: Record<string, { handler: Handler; meta: Meta }> = {}
+      const rebuilt: Record<string, { handler: Handler; meta: Meta; sources?: Sources }> = {}
       let changed = false
       for (const [key, entry] of Object.entries(methods)) {
         const directive = directivesOf(entry.meta).find(
@@ -269,7 +300,11 @@ export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R
         const newKey = directive !== undefined ? directive.value.toUpperCase() : key
         if (newKey !== key) changed = true
         rebuilt[newKey] = directive !== undefined
-          ? { handler: entry.handler, meta: withoutDirective(entry.meta, directive) }
+          ? {
+              handler: entry.handler,
+              meta: withoutDirective(entry.meta, directive),
+              ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
+            }
           : entry
       }
       methods = changed ? rebuilt : methods
@@ -515,7 +550,7 @@ export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute
   return mapRoute(route, (node) => {
     let methods = node.methods
     if (methods !== undefined) {
-      const rebuilt: Record<string, { handler: Handler; meta: Meta }> = {}
+      const rebuilt: Record<string, { handler: Handler; meta: Meta; sources?: Sources }> = {}
       let changed = false
       for (const [key, entry] of Object.entries(methods)) {
         const directive = directivesOf(entry.meta).find(
@@ -529,6 +564,7 @@ export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute
         rebuilt[key] = {
           handler: wrapResponse(entry.handler, directive.status, directive.headers),
           meta: withoutDirective(entry.meta, directive),
+          ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
         }
       }
       methods = changed ? rebuilt : methods

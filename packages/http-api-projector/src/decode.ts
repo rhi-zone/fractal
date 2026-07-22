@@ -43,6 +43,43 @@ declare module "@rhi-zone/fractal-api-tree" {
 // rather than re-declared here.
 
 // ============================================================================
+// HttpStoreRegistry — the store names `http.source()` (verbs.ts) accepts
+// ============================================================================
+
+/**
+ * Registry of store names `http.source()` accepts, populated via declaration
+ * merging — same mechanism as the shared `StoreRegistry` above, but scoped to
+ * HTTP specifically. `StoreRegistry`/`Stores` is shared across every
+ * projector (CLI's `flag`/`positional`, MCP's `argument`, ...) once they're
+ * all part of the same compilation; `http.source()`'s own `store` field
+ * should only accept HTTP's stores, not that whole cross-projector union —
+ * this is a NARROWER, HTTP-only registry rather than a re-export of
+ * `StoreRegistry`.
+ *
+ * Extend via:
+ * ```ts
+ * declare module "@rhi-zone/fractal-http-api-projector/decode" {
+ *   interface HttpStoreRegistry { cookie: true }
+ * }
+ * ```
+ *
+ * Deliberately an interface (declaration-mergeable), not `string & {}` —
+ * the latter widens to accept ANY string literal (TypeScript's usual
+ * "nominal-ish primitive" escape hatch), which loses the "only registered
+ * stores compile" property this type exists to enforce.
+ */
+export interface HttpStoreRegistry {
+  path: true
+  query: true
+  header: true
+  body: true
+  caller: true
+}
+
+/** A registered HTTP store name — the key set of `HttpStoreRegistry`, open via merging. */
+export type HttpStore = keyof HttpStoreRegistry
+
+// ============================================================================
 // Body parsing — Content-Type-driven request body decode
 // ============================================================================
 //

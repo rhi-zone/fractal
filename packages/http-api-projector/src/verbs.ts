@@ -20,7 +20,9 @@
 // See docs/design/router-model.md §"Verb helpers are verb+implied-tags BUNDLES"
 
 import type { Meta } from "@rhi-zone/fractal-api-tree/node"
+import type { ParamSource } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
+import type { HttpStore } from "./decode.ts"
 
 // ============================================================================
 // HttpMethods — extensible method union
@@ -221,6 +223,92 @@ export function paginated(
 }
 
 // ============================================================================
+// http.source(map) — per-param HTTP store overrides
+// ============================================================================
+
+/**
+ * The shorthand + full form `http.source()`'s map argument accepts. A string
+ * value is shorthand for "read this param from this store, under its own
+ * name" — equivalent to `{ store: value }` (key omitted; `assemble()` in
+ * api-tree/src/input.ts already defaults an omitted key to the param name, so
+ * the expansion below fills it in explicitly rather than leaning on that
+ * default, keeping the stored `SourceMap` shape self-describing). The full
+ * form (`{ store, key? }`) is for when the param's own name diverges from the
+ * store's key, e.g. pulling `months` from the request body's `budgetMonths`
+ * field.
+ *
+ * `store` is typed to `HttpStore` (decode.ts) — the registered-store
+ * registry, extensible via declaration merging — rather than a bare
+ * `string`, so only stores some projector (or a user's own `declare module`)
+ * actually registered compile. Deliberately NOT `string & {}`: that would
+ * accept any string literal and defeat the "only registered stores compile"
+ * property this type exists for.
+ */
+export type SourceMapInput = Readonly<
+  Record<string, HttpStore | { readonly store: HttpStore; readonly key?: string }>
+>
+
+/** A `{ kind: "source" }` directive carrying a whole `http.source()` call's map. */
+type SourceDirective = Extract<HttpDirective, { readonly kind: "source" }>
+
+/**
+ * `http.source(map)` — declares which HTTP store (query, body, path, header,
+ * caller) each of a leaf's params should be read from, overriding the
+ * method-derived convention (`primaryStoreForMethod`, decode.ts) for just the
+ * params listed here.
+ *
+ * Returns a `{ kind: "source", map }` DIRECTIVE (like `moveTo`/`paginated`
+ * above) — appended to `meta.http.directives` — rather than setting a plain
+ * merged object directly on `meta.http.sourceMap`. This is NOT the same
+ * choice `moveTo`/`paginated` made for their own reasons (literal-type
+ * preservation, see `VerbBundle`'s doc comment in this file): here it's
+ * because `mergeMeta`'s TYPE-LEVEL counterpart (`FoldMeta`/`MergeTwoMeta`,
+ * node.ts) cannot soundly merge two open `Record<string, ParamSource>`
+ * index-signature objects — recursing into a keyed mapped type over an
+ * index-signature-only type is a genuine TypeScript limitation, surfacing a
+ * spurious `| undefined` on every merged entry. Arrays dodge this class of
+ * problem entirely (`MergeMetaValue`'s array branch concatenates without
+ * recursing into elements), so composing TWO `http.source()` calls produces
+ * TWO directive entries instead of one type-level-merged object:
+ *
+ * ```ts
+ * op(fn, http.source({ year: "query" }), http.source({ months: "body" }))
+ * // → meta.http.directives === [
+ * //     { kind: "source", map: { year: {store:"query",key:"year"} } },
+ * //     { kind: "source", map: { months: {store:"body",key:"months"} } },
+ * //   ]
+ * ```
+ *
+ * `getHttpMeta` (project.ts) resolves the array of `source` directives back
+ * into a single `sourceMap`, in array order (later call's keys win on
+ * overlap — same "later wins per key" semantics as every other meta merge,
+ * just resolved at READ time instead of at merge time). `naiveTransform`
+ * (route.ts) reads that resolved map into the matched route's
+ * `sources.sourceMap`, which `defaultDecode` (route.ts) then consults during
+ * request assembly.
+ *
+ * String shorthand values are expanded to a full `ParamSource` HERE, eagerly,
+ * at the value level — not left for `naiveTransform`/`assemble` (route.ts) to
+ * interpret two shapes — so each directive's `map` is always a uniform
+ * `SourceMap`, the same shape CLI's `meta.cli.sourceMap` and MCP's own
+ * sourceMap field already store.
+ *
+ * ```ts
+ * op(getBudget, http.get, http.source({
+ *   year: "query",
+ *   months: { store: "body", key: "budgetMonths" },
+ * }))
+ * ```
+ */
+export function source(map: SourceMapInput): { readonly http: { readonly directives: readonly [SourceDirective] } } {
+  const sourceMap: Record<string, ParamSource> = {}
+  for (const [key, value] of Object.entries(map)) {
+    sourceMap[key] = typeof value === "string" ? { store: value, key } : value
+  }
+  return { http: { directives: [{ kind: "source", map: sourceMap } as SourceDirective] } }
+}
+
+// ============================================================================
 // Exported namespace
 // ============================================================================
 
@@ -258,4 +346,8 @@ export const http = {
   head,
   options,
   moveTo,
-} as const satisfies Record<string, VerbBundle | ((path: string) => Meta)>
+  source,
+} as const satisfies Record<
+  string,
+  VerbBundle | ((path: string) => Meta) | ((map: SourceMapInput) => Meta)
+>
