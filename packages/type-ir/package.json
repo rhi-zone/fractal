@@ -83,6 +83,10 @@
       "types": "./src/starlight-reference.ts",
       "import": "./src/starlight-reference.ts"
     },
+    "./mkdocs-reference": {
+      "types": "./src/mkdocs-reference.ts",
+      "import": "./src/mkdocs-reference.ts"
+    },
     "./json-schema-07": {
       "types": "./src/json-schema-07.ts",
       "import": "./src/json-schema-07.ts"
