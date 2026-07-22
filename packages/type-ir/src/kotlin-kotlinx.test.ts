@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes } from "./kinds/common.ts"
-import { toKotlin, toKotlinDeclarations, toKotlinType } from "./kotlin.ts"
+import { toKotlin, toKotlinDeclarations, toKotlinType } from "./kotlin-kotlinx.ts"
 
 describe("primitives", () => {
   test("boolean", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
-import { toPython } from "./python.ts"
+import { toPython } from "./python-dataclass.ts"
 
 describe("primitives", () => {
   test("boolean", () => {

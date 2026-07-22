@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes, datetime, float32, int32, int64, uuid } from "./kinds/common.ts"
-import { toGo } from "./go.ts"
+import { toGo } from "./go-encoding-json.ts"
 
 describe("primitives", () => {
   test("boolean", () => {

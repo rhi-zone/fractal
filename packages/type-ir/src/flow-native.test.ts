@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
-import { toFlow, toFlowType } from "./flow.ts"
+import { toFlow, toFlowType } from "./flow-native.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {

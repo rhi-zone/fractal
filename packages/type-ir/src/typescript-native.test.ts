@@ -14,7 +14,7 @@ import {
   uri,
   uuid,
 } from "./kinds/common.ts"
-import { toTypeDeclaration, toTypeDeclarations, toTypeScript } from "./typescript.ts"
+import { toTypeDeclaration, toTypeDeclarations, toTypeScript } from "./typescript-native.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {

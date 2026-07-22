@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { toEffectSchema, toEffectSchemaDeclaration, toEffectSchemaDeclarations } from "./effect-schema.ts"
+import { toEffectSchema, toEffectSchemaDeclaration, toEffectSchemaDeclarations } from "./typescript-effect-schema.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {

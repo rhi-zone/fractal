@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes } from "./kinds/bytes.ts"
 import { int32, int64 } from "./kinds/int-widths.ts"
-import { toObjC, toObjCEnum, toObjCInterface, toObjCType } from "./objc.ts"
+import { toObjC, toObjCEnum, toObjCInterface, toObjCType } from "./objc-foundation.ts"
 
 describe("primitives", () => {
   test("boolean -> BOOL", () => {

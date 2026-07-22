@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, int32, uri, uuid } from "./kinds/common.ts"
-import { toRuby, toRubyClass, toRubyEnum, toRubyMethodSig, toRubyType, toRbsClass, toRbsType } from "./ruby.ts"
+import { toRuby, toRubyClass, toRubyEnum, toRubyMethodSig, toRubyType, toRbsClass, toRbsType } from "./ruby-sorbet.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
-import { toPhp, toPhpClass, toPhpEnum, toPhpType } from "./php.ts"
+import { toPhp, toPhpClass, toPhpEnum, toPhpType } from "./php-native.ts"
 
 describe("primitives", () => {
   test("boolean", () => {

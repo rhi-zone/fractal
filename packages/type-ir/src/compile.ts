@@ -32,7 +32,7 @@
 // its parent's via `ancestors()`).
 
 import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { toTypeScript } from "./typescript.ts"
+import { toTypeScript } from "./typescript-native.ts"
 
 // ============================================================================
 // ValidationError — the structured error shape `errors()`/`parse()` emit.

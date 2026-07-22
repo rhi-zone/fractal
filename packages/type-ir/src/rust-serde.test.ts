@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types, withMeta } from "./index.ts"
 import { bytes, int32, int64, uint32, uint64 } from "./kinds/common.ts"
-import { toRust, toRustType } from "./rust.ts"
+import { toRust, toRustType } from "./rust-serde.ts"
 
 describe("primitives", () => {
   test("boolean -> bool", () => {

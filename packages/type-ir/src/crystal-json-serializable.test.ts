@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, float32, int32, int64, time, uri, uuid } from "./kinds/common.ts"
-import { renderClass, renderEnum, toCrystal, toCrystalDeclarations, toCrystalType } from "./crystal.ts"
+import { renderClass, renderEnum, toCrystal, toCrystalDeclarations, toCrystalType } from "./crystal-json-serializable.ts"
 
 describe("leaf types", () => {
   test("boolean", () => {

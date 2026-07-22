@@ -100,68 +100,132 @@
       "import": "./src/from-graphql.ts"
     },
     "./typescript": {
-      "types": "./src/typescript.ts",
-      "import": "./src/typescript.ts"
+      "types": "./src/typescript-native.ts",
+      "import": "./src/typescript-native.ts"
+    },
+    "./typescript-native": {
+      "types": "./src/typescript-native.ts",
+      "import": "./src/typescript-native.ts"
     },
     "./elm": {
-      "types": "./src/elm.ts",
-      "import": "./src/elm.ts"
+      "types": "./src/elm-json.ts",
+      "import": "./src/elm-json.ts"
+    },
+    "./elm-json": {
+      "types": "./src/elm-json.ts",
+      "import": "./src/elm-json.ts"
     },
     "./go": {
-      "types": "./src/go.ts",
-      "import": "./src/go.ts"
+      "types": "./src/go-encoding-json.ts",
+      "import": "./src/go-encoding-json.ts"
+    },
+    "./go-encoding-json": {
+      "types": "./src/go-encoding-json.ts",
+      "import": "./src/go-encoding-json.ts"
     },
     "./haskell": {
-      "types": "./src/haskell.ts",
-      "import": "./src/haskell.ts"
+      "types": "./src/haskell-aeson.ts",
+      "import": "./src/haskell-aeson.ts"
+    },
+    "./haskell-aeson": {
+      "types": "./src/haskell-aeson.ts",
+      "import": "./src/haskell-aeson.ts"
     },
     "./dart": {
-      "types": "./src/dart.ts",
-      "import": "./src/dart.ts"
+      "types": "./src/dart-json-serializable.ts",
+      "import": "./src/dart-json-serializable.ts"
+    },
+    "./dart-json-serializable": {
+      "types": "./src/dart-json-serializable.ts",
+      "import": "./src/dart-json-serializable.ts"
     },
     "./objc": {
-      "types": "./src/objc.ts",
-      "import": "./src/objc.ts"
+      "types": "./src/objc-foundation.ts",
+      "import": "./src/objc-foundation.ts"
+    },
+    "./objc-foundation": {
+      "types": "./src/objc-foundation.ts",
+      "import": "./src/objc-foundation.ts"
     },
     "./cpp": {
-      "types": "./src/cpp.ts",
-      "import": "./src/cpp.ts"
+      "types": "./src/cpp-nlohmann.ts",
+      "import": "./src/cpp-nlohmann.ts"
+    },
+    "./cpp-nlohmann": {
+      "types": "./src/cpp-nlohmann.ts",
+      "import": "./src/cpp-nlohmann.ts"
     },
     "./csharp": {
-      "types": "./src/csharp.ts",
-      "import": "./src/csharp.ts"
+      "types": "./src/csharp-systemtextjson.ts",
+      "import": "./src/csharp-systemtextjson.ts"
+    },
+    "./csharp-systemtextjson": {
+      "types": "./src/csharp-systemtextjson.ts",
+      "import": "./src/csharp-systemtextjson.ts"
     },
     "./crystal": {
-      "types": "./src/crystal.ts",
-      "import": "./src/crystal.ts"
+      "types": "./src/crystal-json-serializable.ts",
+      "import": "./src/crystal-json-serializable.ts"
+    },
+    "./crystal-json-serializable": {
+      "types": "./src/crystal-json-serializable.ts",
+      "import": "./src/crystal-json-serializable.ts"
     },
     "./python": {
-      "types": "./src/python.ts",
-      "import": "./src/python.ts"
+      "types": "./src/python-dataclass.ts",
+      "import": "./src/python-dataclass.ts"
+    },
+    "./python-dataclass": {
+      "types": "./src/python-dataclass.ts",
+      "import": "./src/python-dataclass.ts"
     },
     "./flow": {
-      "types": "./src/flow.ts",
-      "import": "./src/flow.ts"
+      "types": "./src/flow-native.ts",
+      "import": "./src/flow-native.ts"
+    },
+    "./flow-native": {
+      "types": "./src/flow-native.ts",
+      "import": "./src/flow-native.ts"
     },
     "./swift": {
-      "types": "./src/swift.ts",
-      "import": "./src/swift.ts"
+      "types": "./src/swift-codable.ts",
+      "import": "./src/swift-codable.ts"
+    },
+    "./swift-codable": {
+      "types": "./src/swift-codable.ts",
+      "import": "./src/swift-codable.ts"
     },
     "./rust": {
-      "types": "./src/rust.ts",
-      "import": "./src/rust.ts"
+      "types": "./src/rust-serde.ts",
+      "import": "./src/rust-serde.ts"
+    },
+    "./rust-serde": {
+      "types": "./src/rust-serde.ts",
+      "import": "./src/rust-serde.ts"
     },
     "./ruby": {
-      "types": "./src/ruby.ts",
-      "import": "./src/ruby.ts"
+      "types": "./src/ruby-sorbet.ts",
+      "import": "./src/ruby-sorbet.ts"
+    },
+    "./ruby-sorbet": {
+      "types": "./src/ruby-sorbet.ts",
+      "import": "./src/ruby-sorbet.ts"
     },
     "./php": {
-      "types": "./src/php.ts",
-      "import": "./src/php.ts"
+      "types": "./src/php-native.ts",
+      "import": "./src/php-native.ts"
+    },
+    "./php-native": {
+      "types": "./src/php-native.ts",
+      "import": "./src/php-native.ts"
     },
     "./kotlin": {
-      "types": "./src/kotlin.ts",
-      "import": "./src/kotlin.ts"
+      "types": "./src/kotlin-kotlinx.ts",
+      "import": "./src/kotlin-kotlinx.ts"
+    },
+    "./kotlin-kotlinx": {
+      "types": "./src/kotlin-kotlinx.ts",
+      "import": "./src/kotlin-kotlinx.ts"
     },
     "./sql": {
       "types": "./src/sql.ts",
@@ -184,40 +248,76 @@
       "import": "./src/jtd.ts"
     },
     "./zod": {
-      "types": "./src/zod.ts",
-      "import": "./src/zod.ts"
+      "types": "./src/typescript-zod.ts",
+      "import": "./src/typescript-zod.ts"
+    },
+    "./typescript-zod": {
+      "types": "./src/typescript-zod.ts",
+      "import": "./src/typescript-zod.ts"
     },
     "./runtypes": {
-      "types": "./src/runtypes.ts",
-      "import": "./src/runtypes.ts"
+      "types": "./src/typescript-runtypes.ts",
+      "import": "./src/typescript-runtypes.ts"
+    },
+    "./typescript-runtypes": {
+      "types": "./src/typescript-runtypes.ts",
+      "import": "./src/typescript-runtypes.ts"
     },
     "./superstruct": {
-      "types": "./src/superstruct.ts",
-      "import": "./src/superstruct.ts"
+      "types": "./src/typescript-superstruct.ts",
+      "import": "./src/typescript-superstruct.ts"
+    },
+    "./typescript-superstruct": {
+      "types": "./src/typescript-superstruct.ts",
+      "import": "./src/typescript-superstruct.ts"
     },
     "./arktype": {
-      "types": "./src/arktype.ts",
-      "import": "./src/arktype.ts"
+      "types": "./src/typescript-arktype.ts",
+      "import": "./src/typescript-arktype.ts"
+    },
+    "./typescript-arktype": {
+      "types": "./src/typescript-arktype.ts",
+      "import": "./src/typescript-arktype.ts"
     },
     "./typebox": {
-      "types": "./src/typebox.ts",
-      "import": "./src/typebox.ts"
+      "types": "./src/typescript-typebox.ts",
+      "import": "./src/typescript-typebox.ts"
+    },
+    "./typescript-typebox": {
+      "types": "./src/typescript-typebox.ts",
+      "import": "./src/typescript-typebox.ts"
     },
     "./valibot": {
-      "types": "./src/valibot.ts",
-      "import": "./src/valibot.ts"
+      "types": "./src/typescript-valibot.ts",
+      "import": "./src/typescript-valibot.ts"
+    },
+    "./typescript-valibot": {
+      "types": "./src/typescript-valibot.ts",
+      "import": "./src/typescript-valibot.ts"
     },
     "./io-ts": {
-      "types": "./src/io-ts.ts",
-      "import": "./src/io-ts.ts"
+      "types": "./src/typescript-io-ts.ts",
+      "import": "./src/typescript-io-ts.ts"
+    },
+    "./typescript-io-ts": {
+      "types": "./src/typescript-io-ts.ts",
+      "import": "./src/typescript-io-ts.ts"
     },
     "./yup": {
-      "types": "./src/yup.ts",
-      "import": "./src/yup.ts"
+      "types": "./src/typescript-yup.ts",
+      "import": "./src/typescript-yup.ts"
+    },
+    "./typescript-yup": {
+      "types": "./src/typescript-yup.ts",
+      "import": "./src/typescript-yup.ts"
     },
     "./effect-schema": {
-      "types": "./src/effect-schema.ts",
-      "import": "./src/effect-schema.ts"
+      "types": "./src/typescript-effect-schema.ts",
+      "import": "./src/typescript-effect-schema.ts"
+    },
+    "./typescript-effect-schema": {
+      "types": "./src/typescript-effect-schema.ts",
+      "import": "./src/typescript-effect-schema.ts"
     },
     "./derive": {
       "types": "./src/derive.ts",

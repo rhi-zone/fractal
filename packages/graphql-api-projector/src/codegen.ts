@@ -51,7 +51,7 @@
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import { toTypeScript } from "@rhi-zone/fractal-type-ir/typescript"
+import { toTypeScript } from "@rhi-zone/fractal-type-ir/typescript-native"
 import { buildDocument, selectionSetFor } from "./client.ts"
 import { argsFromInput, camelJoin, deriveOperationType, getGraphQLMeta, underscoreJoin } from "./project.ts"
 import type { Arg, FieldTypeMap, OperationType } from "./project.ts"

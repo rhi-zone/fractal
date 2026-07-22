@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types, withMeta } from "./index.ts"
 import { bytes, int32, int64, uuid } from "./kinds/common.ts"
-import { toJava, toJavaDeclaration } from "./java.ts"
+import { toJava, toJavaDeclaration } from "./java-jackson.ts"
 
 describe("primitives — bare type expressions", () => {
   test("boolean -> boolean (non-nullable, primitive)", () => {

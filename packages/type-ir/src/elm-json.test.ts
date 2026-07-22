@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
-import { toElm, toElmType } from "./elm.ts"
+import { toElm, toElmType } from "./elm-json.ts"
 
 describe("primitive types", () => {
   test("boolean", () => {

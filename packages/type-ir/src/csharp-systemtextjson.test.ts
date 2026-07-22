@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { int32, int64, uint8 } from "./kinds/int-widths.ts"
 import { float32 } from "./kinds/float-widths.ts"
-import { toCSharp } from "./csharp.ts"
+import { toCSharp } from "./csharp-systemtextjson.ts"
 
 describe("primitives", () => {
   test("boolean", () => {

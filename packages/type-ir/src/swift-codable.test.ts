@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes, int32, int64, uuid } from "./kinds/common.ts"
-import { toSwift } from "./swift.ts"
+import { toSwift } from "./swift-codable.ts"
 
 describe("primitives", () => {
   test("boolean", () => {

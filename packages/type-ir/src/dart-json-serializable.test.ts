@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "./index.ts"
 import { bytes } from "./kinds/bytes.ts"
-import { toDart } from "./dart.ts"
+import { toDart } from "./dart-json-serializable.ts"
 
 describe("primitives", () => {
   test("boolean", () => {
