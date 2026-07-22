@@ -19,11 +19,13 @@ import { toGo } from "./go-encoding-json.ts"
 import { toRust } from "./rust-serde.ts"
 import { toJavaDeclaration } from "./java-jackson.ts"
 import { toGsonDeclaration } from "./java-gson.ts"
+import { toMoshi } from "./java-moshi.ts"
 import { toCSharp } from "./csharp-systemtextjson.ts"
 import { toCSharpNewtonsoft } from "./csharp-newtonsoft.ts"
 import { toSwift } from "./swift-codable.ts"
 import { toKotlin } from "./kotlin-kotlinx.ts"
 import { toDart } from "./dart-json-serializable.ts"
+import { toFreezed } from "./dart-freezed.ts"
 import { toObjC } from "./objc-foundation.ts"
 import { toCpp } from "./cpp-nlohmann.ts"
 import { toCrystal } from "./crystal-json-serializable.ts"
@@ -200,11 +202,13 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
   { name: "rust-serde", fn: (ref, name) => toRust(ref, name) },
   { name: "java-jackson", fn: (ref, name) => toJavaDeclaration(name, ref) },
   { name: "java-gson", fn: (ref, name) => toGsonDeclaration(name, ref) },
+  { name: "java-moshi", fn: (ref, name) => toMoshi(ref, name) },
   { name: "csharp-systemtextjson", fn: (ref, name) => toCSharp(ref, name) },
   { name: "csharp-newtonsoft", fn: (ref, name) => toCSharpNewtonsoft(ref, name) },
   { name: "swift-codable", fn: (ref, name) => toSwift(ref, name) },
   { name: "kotlin-kotlinx", fn: (ref, name) => toKotlin(ref, name) },
   { name: "dart-json-serializable", fn: (ref, name) => toDart(ref, name) },
+  { name: "dart-freezed", fn: (ref, name) => toFreezed(ref, name) },
   { name: "objc-foundation", fn: (ref, name) => JSON.stringify(toObjC(ref, name)) },
   { name: "cpp-nlohmann", fn: (ref, name) => toCpp(ref, name) },
   { name: "crystal-json-serializable", fn: (ref, name) => toCrystal(ref, name) },
