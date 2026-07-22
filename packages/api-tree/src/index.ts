@@ -20,7 +20,13 @@ export { api, mergeMeta, op } from "./node.ts"
 // that calls tree handlers in-process (no HTTP, no serialization). See
 // "./direct.ts" for the full doc.
 export { createDirectApi } from "./direct.ts"
-export type { AnyApi } from "./direct.ts"
+export type { AnyApi, DirectApi } from "./direct.ts"
+
+// `TypedClient` — the remote-client analogue of `DirectApi`, parameterized
+// over a projector-supplied `CallOpts` type for per-call transport options
+// (e.g. HTTP's `{ timeout, signal }`). Lives here (not in
+// http-api-projector) so it stays projector-agnostic — see "./typed-client.ts".
+export type { TypedClient } from "./typed-client.ts"
 
 // The input-source resolution mechanism — stores, sourceMap, and the
 // assembler that resolves each handler param to a store + key. Extracted

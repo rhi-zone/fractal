@@ -66,6 +66,7 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { TypedClient } from "@rhi-zone/fractal-api-tree"
 import { httpProjection } from "./dx.ts"
 import type { HttpRoute } from "./route.ts"
 import { ClientError } from "./client-error.ts"
@@ -375,10 +376,17 @@ export function createClientFromRoute(route: HttpRoute, opts: ClientOptions = {}
  *   - a route position with multiple co-located methods and/or children → an
  *     object whose method entries are named callables
  *
+ * The return type is `TypedClient<N, CallOptions>` (see
+ * @rhi-zone/fractal-api-tree's typed-client.ts): computed structurally from
+ * `n`'s own type, so `client.books.bookId(id).read()` is typed all the way
+ * down to the handler's real input/output — no `AnyClient`/`any` at the call
+ * site. Only the return TYPE changed here; the runtime proxy (`buildClientNode`)
+ * is unchanged and still built dynamically.
+ *
  * @param n - The root node to project.
  * @param opts - Optional: baseUrl (default ""), fetch (default global fetch).
  */
-export function createClient(n: Node, opts: ClientOptions = {}): AnyClient {
+export function createClient<N extends Node>(n: N, opts: ClientOptions = {}): TypedClient<N, CallOptions> {
   const route = httpProjection(n)
   const handlerNames = buildHandlerNames(n)
   const baseUrl = opts.baseUrl ?? ""
@@ -392,5 +400,5 @@ export function createClient(n: Node, opts: ClientOptions = {}): AnyClient {
     handlerNames,
     opts.timeout,
     opts.signal,
-  ) as AnyClient
+  ) as TypedClient<N, CallOptions>
 }

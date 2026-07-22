@@ -11,12 +11,13 @@
 //   remove  → DELETE /books/{bookId}
 // MCP/CLI keep the agnostic child names; only HTTP changes (path assignment).
 
-import { beforeEach, describe, expect, it } from "bun:test"
-import { api, clearStore } from "../../../examples/library-api/src/tree.ts"
+import { beforeEach, describe, expect, expectTypeOf, it } from "bun:test"
+import { api, clearStore, type Book } from "../../../examples/library-api/src/tree.ts"
 import { httpProjection } from "./dx.ts"
 import { createFetch } from "./preset.ts"
 import { createClient, createClientFromRoute } from "./client.ts"
 import { ClientError } from "./client-error.ts"
+import type { CallOptions } from "./client.ts"
 
 // In-process fetch handler — the server-side stack for round-trip tests
 const serverFetch = createFetch(api)
@@ -299,5 +300,51 @@ describe("timeout / AbortSignal support", () => {
     const client = makeClient()
     const result = (await client.catalog.search({ q: "anything" })) as unknown[]
     expect(Array.isArray(result)).toBe(true)
+  })
+})
+
+// ============================================================================
+// 8. createClient's return type — TypedClient<N, CallOptions>
+//
+// `createClient` used to return `AnyClient` (`Record<string, any>`); it now
+// returns `TypedClient<typeof api, CallOptions>` (packages/api-tree/src/typed-client.ts),
+// computed structurally from the library-api tree's own type. These are
+// type-only checks — `expectTypeOf` never runs the assertions, the type
+// checker evaluates them. Mirrors direct.test.ts's "DirectApi type safety"
+// block for the in-process analogue.
+// ============================================================================
+
+describe("createClient — TypedClient return type", () => {
+  it("a plain (non-fallback, no-input) leaf's input arg is optional; CallOptions is the second arg", () => {
+    const client = makeClient()
+    expectTypeOf(client.books.list).toEqualTypeOf<
+      (input?: undefined, opts?: CallOptions) => Promise<Book[]>
+    >()
+  })
+
+  it("a leaf with a real input type keeps it, plus the CallOptions second arg", () => {
+    const client = makeClient()
+    expectTypeOf(client.catalog.search).toEqualTypeOf<
+      (input: { q?: string }, opts?: CallOptions) => Promise<Book[]>
+    >()
+  })
+
+  it("a fallback-gated leaf subtracts the captured slug (bookId) from its input", () => {
+    const client = makeClient()
+    expectTypeOf(client.books.bookId).toEqualTypeOf<
+      (slugValue: string) => ReturnType<typeof client.books.bookId>
+    >()
+    const sub = client.books.bookId("some-id")
+    // bookId is slug-subtracted — read takes no input beyond CallOptions
+    expectTypeOf(sub.read).toEqualTypeOf<
+      (input?: undefined, opts?: CallOptions) => Promise<Book>
+    >()
+    // replace keeps its other (non-slug) optional fields
+    expectTypeOf(sub.replace).toEqualTypeOf<
+      (
+        input: { title?: string; author?: string; genre?: string },
+        opts?: CallOptions,
+      ) => Promise<Book>
+    >()
   })
 })
