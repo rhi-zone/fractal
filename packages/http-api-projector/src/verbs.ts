@@ -59,21 +59,55 @@ export type Method = keyof HttpMethods
  * A verb-helper bundle: a Meta value carrying both a verb directive and
  * implied tags. Attach to a handler via `op(fn, http.put)` or compose with
  * extra contributions via `op(fn, http.put, { tags: { openWorld: true } })`.
+ *
+ * Generic in `V` (the verb's own literal, e.g. `"GET"`) so `http.get`'s type
+ * is `VerbBundle<"GET">` — the `method` directive's `value` carries the
+ * literal, not just `string`. Defaults to `string` so a bare `VerbBundle`
+ * reference (no type argument) keeps working wherever one already appeared.
+ *
+ * Deliberately NOT `Meta & {...}` (an earlier revision was) — `Meta`'s own
+ * `http?: HttpMeta` (declaration-merged in project.ts) declares `directives?:
+ * readonly HttpDirective[]`, a LOOSE array type; intersecting it with this
+ * type's own literal 2-tuple produces `readonly HttpDirective[] & readonly
+ * [...]`, and TypeScript does not reliably preserve tuple arity when
+ * spreading/recursing over an intersection like that (confirmed directly: a
+ * `[...A, ...B]` concatenation of two such intersections collapses to a
+ * plain, non-tuple array, and `infer`-based rest-decomposition through it can
+ * even produce a distributed union of results depending on which conjunct
+ * TS's inference draws from at each step) — which silently defeated
+ * `HttpManifest<N>`'s method extraction the moment two contributions were
+ * merged (`op(fn, http.get, http.moveTo(".."))`, this package's own
+ * `examples/library-api/src/tree.ts` pattern). A plain, self-contained object
+ * type is still structurally assignable to `Meta` (all of `Meta`'s own
+ * fields are optional) without ever forming that intersection.
  */
-export type VerbBundle = Meta & {
-  readonly http: { readonly directives: readonly HttpDirective[] }
+export type VerbBundle<V extends string = string> = {
+  readonly http: { readonly directives: readonly [HttpDirective<V>, HttpDirective<V>] }
   readonly tags: Record<string, boolean | undefined>
 }
 
-export const httpVerbBundle = (verb: string, tags: Record<string, boolean | undefined>): VerbBundle => ({
+/**
+ * `const V` (TS 5.0+) keeps `verb`'s literal type at the call site instead of
+ * widening to `string` — `httpVerbBundle("GET", {...})` infers `V = "GET"`,
+ * so the returned bundle is `VerbBundle<"GET">`, not `VerbBundle<string>`.
+ * This is what lets `http.get`/`http.post`/etc. below carry their literal
+ * method through `op()` into a leaf's `meta` (see node.ts's `op()`) and, from
+ * there, into `HttpManifest<N>` (http-manifest.ts).
+ */
+export function httpVerbBundle<const V extends string>(
+  verb: V,
+  tags: Record<string, boolean | undefined>,
+): VerbBundle<V> {
   // Carries BOTH the `kind: "verb"` directive (read by `verbFromTags` in
   // tags.ts — also used by openapi/client's own self-contained tree walks)
   // and the `kind: "method"` directive (read by `applyMethods`, the
   // HttpRoute rewriter in route.ts). Both directives describe the same
   // fact; two projectors read two shapes.
-  http: { directives: [{ kind: "verb", value: verb }, { kind: "method", value: verb }] },
-  tags,
-})
+  return {
+    http: { directives: [{ kind: "verb", value: verb }, { kind: "method", value: verb }] },
+    tags,
+  }
+}
 
 // ============================================================================
 // Verb-helper bundles
@@ -84,43 +118,46 @@ export const httpVerbBundle = (verb: string, tags: Record<string, boolean | unde
  * readOnly ⇒ idempotent (via lattice in resolveTags).
  * Lights up: MCP readOnlyHint, CLI no-confirm, HTTP GET.
  */
-const get: VerbBundle = httpVerbBundle("GET", { readOnly: true })
+const get: VerbBundle<"GET"> = httpVerbBundle("GET", { readOnly: true })
 
 /**
  * `http.post` — verb POST, no implied tags (plain mutation).
  * Conservative: unknown idempotency, unknown destructiveness.
  */
-const post: VerbBundle = httpVerbBundle("POST", {})
+const post: VerbBundle<"POST"> = httpVerbBundle("POST", {})
 
 /**
  * `http.put` — verb PUT + idempotent tag.
  * Lights up: MCP idempotentHint, gRPC idempotency, HTTP PUT.
  */
-const put: VerbBundle = httpVerbBundle("PUT", { idempotent: true })
+const put: VerbBundle<"PUT"> = httpVerbBundle("PUT", { idempotent: true })
 
 /**
  * `http.patch` — verb PATCH, no implied tags (plain mutation).
  * Conservative: unknown idempotency.
  */
-const patch: VerbBundle = httpVerbBundle("PATCH", {})
+const patch: VerbBundle<"PATCH"> = httpVerbBundle("PATCH", {})
 
 /**
  * `http.delete` — verb DELETE + destructive and idempotent tags.
  * Lights up: MCP destructiveHint + idempotentHint, CLI confirm, HTTP DELETE.
  */
-const _delete: VerbBundle = httpVerbBundle("DELETE", { destructive: true, idempotent: true })
+const _delete: VerbBundle<"DELETE"> = httpVerbBundle("DELETE", { destructive: true, idempotent: true })
 
 /**
  * `http.head` — verb HEAD + readOnly tag (semantically identical to GET).
  * Rarely needed directly — autoMethodLayer derives HEAD from GET automatically.
  */
-const head: VerbBundle = httpVerbBundle("HEAD", { readOnly: true })
+const head: VerbBundle<"HEAD"> = httpVerbBundle("HEAD", { readOnly: true })
 
 /**
  * `http.options` — verb OPTIONS + readOnly tag.
  * Rarely needed directly — autoMethodLayer handles OPTIONS automatically.
  */
-const options: VerbBundle = httpVerbBundle("OPTIONS", { readOnly: true })
+const options: VerbBundle<"OPTIONS"> = httpVerbBundle("OPTIONS", { readOnly: true })
+
+/** A `{ kind: "moveTo" }` directive carrying its `path` as literal `P`. */
+type MoveToDirective<P extends string> = Extract<HttpDirective<string, P>, { readonly kind: "moveTo" }>
 
 /**
  * `http.moveTo(path)` — DX helper for the `{ kind: "moveTo", path }` directive
@@ -133,10 +170,23 @@ const options: VerbBundle = httpVerbBundle("OPTIONS", { readOnly: true })
  * // Equivalent to:
  * op(fn, http.get, { http: { directives: [{ kind: "moveTo", path: ".." }] } })
  * ```
+ *
+ * `const P` (same technique as `httpVerbBundle`'s `const V`) keeps the
+ * argument's literal type — `http.moveTo("..")` returns a bundle whose
+ * `directives[0].path` is `".."`, not `string`.
+ *
+ * Deliberately NOT `Meta & {...}` — same reason as `VerbBundle` above (see
+ * its doc comment): intersecting with `Meta`'s own declaration-merged,
+ * loosely-typed `http?: HttpMeta` would contaminate this literal 1-tuple the
+ * same way, defeating array concatenation across contributions.
  */
-export const moveTo = (path: string): Meta => ({
-  http: { directives: [{ kind: "moveTo" as const, path }] },
-})
+export function moveTo<const P extends string>(
+  path: P,
+): { readonly http: { readonly directives: readonly [MoveToDirective<P>] } } {
+  return {
+    http: { directives: [{ kind: "moveTo", path } as MoveToDirective<P>] },
+  }
+}
 
 // ============================================================================
 // Exported namespace

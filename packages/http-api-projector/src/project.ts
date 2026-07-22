@@ -107,14 +107,25 @@ declare module "@rhi-zone/fractal-api-tree/node" {
  *   non-method attribute dispatch (key ≠ match value).
  * - `{ kind: "legacyPath", value }` — [DEBT] full-path override, bypasses
  *   the tree-walk address entirely.
+ *
+ * `method`'s `value` and `moveTo`'s `path` are generic (`M`/`P`, both
+ * defaulting to plain `string`) so a constructor that knows its own literal
+ * value — `http.get`/`http.post`/etc. and `http.moveTo(path)` (verbs.ts) —
+ * can return `HttpDirective<"GET">` / a moveTo variant carrying `".."`
+ * instead of widening to `string`. Every existing reference to the bare
+ * `HttpDirective` (no type argument) keeps working unchanged — the defaults
+ * reproduce today's `string`-typed fields exactly, so this is a
+ * backwards-compatible narrowing, not a breaking change. The other variants
+ * (`verb`/`segment`/`when`/`legacyPath`/`response`) aren't parameterized —
+ * nothing in this task's scope constructs them with a literal to preserve.
  */
-export type HttpDirective =
+export type HttpDirective<M extends string = string, P extends string = string> =
   | { readonly kind: "verb"; readonly value: string }
   | { readonly kind: "segment"; readonly value: string }
   | { readonly kind: "when"; readonly value: string }
   | { readonly kind: "legacyPath"; readonly value: string }
-  | { readonly kind: "method"; readonly value: string }
-  | { readonly kind: "moveTo"; readonly path: string }
+  | { readonly kind: "method"; readonly value: M }
+  | { readonly kind: "moveTo"; readonly path: P }
   | {
       readonly kind: "response"
       readonly status?: number

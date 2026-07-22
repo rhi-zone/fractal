@@ -64,6 +64,130 @@ export interface Meta {
  */
 type HasRequiredKeys<T> = {} extends T ? false : true
 
+// ============================================================================
+// Type-level meta merge — mirrors `mergeRecords`'/`mergeMeta`'s runtime
+// semantics (below) so `op()`'s return type can carry the EXACT merged meta
+// type instead of widening every contribution to the erased `Meta`. This is
+// what lets a leaf's meta — e.g. `op(fn, http.get, http.moveTo(".."))` from
+// http-api-projector's verbs.ts — carry literal directive values
+// (`"GET"`, `".."`) all the way into `Node["meta"]`, which
+// `HttpManifest<N>` (packages/http-api-projector/src/http-manifest.ts) reads
+// back out.
+// ============================================================================
+
+/** Force eager evaluation of a mapped/intersection type into a plain object type. */
+type Simplify<T> = { readonly [K in keyof T]: T[K] } & {}
+
+/**
+ * Merge two meta VALUES at the type level, matching `mergeRecords`: arrays
+ * concatenate (`http.directives`'s case), two plain objects merge
+ * recursively (`tags`/`http`'s case), anything else resolves to `B` (later
+ * wins) — same three-way branch as the runtime function, just as a
+ * conditional type instead of an `Array.isArray`/`typeof` check.
+ *
+ * `A`/`B` here are frequently an OPTIONAL property's type (e.g.
+ * `Tags | undefined`, when only one of two merged contributions declares
+ * that key required) — `mergeRecords` itself special-cases this at runtime
+ * (`if (v === undefined) continue` — an absent contribution never overrides
+ * an existing value). The leading `B extends undefined ? A : A extends
+ * undefined ? B : ...` branch mirrors that, and DELIBERATELY distributes
+ * over `A`/`B`'s naked union (rather than defeating distribution) — for
+ * `MergeMetaValue<Record<...>, Tags | undefined>` this evaluates once per
+ * union member of `B` and unions the results, producing exactly "the merged
+ * object, OR plain `A` if the caller's `B` turns out to have been absent" —
+ * which is the honest static type given the input actually is optional.
+ *
+ * `Depth` caps object recursion at 2 levels (Meta's own keys, e.g. `http`;
+ * then that value's own keys, e.g. `directives`/`response`) — deep enough to
+ * concatenate `http.directives` (an ARRAY field, whose branch above doesn't
+ * even consult `Depth`) and to merge `http`'s own immediate fields, but not
+ * so deep that an incidental nested object arbitrarily far down a
+ * projector's own meta namespace (e.g. a `response` directive's `headers:
+ * Record<string,string>`) gets recursively torn apart into a
+ * per-string-key mapped type — `Record<string,string>`'s single index
+ * signature has no discrete `keyof` for `Omit`/`Pick` to preserve modifiers
+ * over, which produces a bogus optional string index incompatible with the
+ * plain `Record<string,string>` `exactOptionalPropertyTypes` expects. Beyond
+ * the cap, `MergeMetaValue` takes the plain-override branch (`B` wins) —
+ * losing recursive-merge precision for that deep a nesting, never losing the
+ * value itself.
+ */
+type MergeMetaValue<A, B, Depth extends readonly unknown[] = []> = B extends undefined
+  ? A
+  : A extends undefined
+    ? B
+    : A extends readonly unknown[]
+      ? B extends readonly unknown[]
+        ? readonly [...A, ...B]
+        : B
+      : A extends object
+        ? B extends readonly unknown[]
+          ? B
+          : B extends object
+            ? Depth["length"] extends 2
+              ? B
+              : MergeTwoMeta<A, B, [...Depth, unknown]>
+            : B
+        : B
+
+/**
+ * True when key `K` is optional on BOTH `A` and `B` — the only case where
+ * the merged key may still be legally absent (if either contribution always
+ * supplies it, the merge always will too, regardless of the other side).
+ */
+type IsOptionalOnBoth<A, B, K extends keyof A & keyof B> =
+  {} extends Pick<A, K> ? ({} extends Pick<B, K> ? true : false) : false
+
+/**
+ * Merge two meta OBJECTS at the type level, key by key, via `MergeMetaValue`.
+ * Built from `Omit`/`Pick`-shaped pieces (not one mapped type over
+ * `keyof A | keyof B`) specifically so each key's optional/readonly modifier
+ * survives — `Omit` is a homomorphic mapped type that copies a property's
+ * own modifiers through; a single mapped type keyed by a COMPUTED union like
+ * `keyof A | keyof B` is not homomorphic and would flatten every key back to
+ * required, which fails under `exactOptionalPropertyTypes` the moment an
+ * optional-only field (`tags?`, `description?`, …) meets `Node["meta"]`'s own
+ * optional declaration. The keys common to both sides are split further, via
+ * key remapping (`as`), into a required-in-the-merge piece and an
+ * optional-in-the-merge piece (`IsOptionalOnBoth`) so THEIR modifier is
+ * correct too, not just copied from whichever side happened to be picked.
+ */
+type MergeTwoMeta<A, B, Depth extends readonly unknown[] = []> =
+  & Omit<A, keyof B>
+  & Omit<B, keyof A>
+  & {
+      [K in keyof A & keyof B as IsOptionalOnBoth<A, B, K> extends true ? never : K]:
+        // `NonNullable` — a key present in the merged object always has a
+        // defined value (`mergeRecords` never assigns `undefined` itself;
+        // it `continue`s past it), even though `MergeMetaValue<A[K], B[K]>`
+        // can otherwise carry a stray `| undefined` through from an
+        // optional-on-one-side source field. Required under
+        // `exactOptionalPropertyTypes`: a property typed `X | undefined`
+        // (present, but with an explicit `undefined` value type) is not the
+        // same thing as one typed `X` that merely happens to be optional.
+        NonNullable<MergeMetaValue<A[K], B[K], Depth>>
+    }
+  & {
+      [K in keyof A & keyof B as IsOptionalOnBoth<A, B, K> extends true ? K : never]?:
+        NonNullable<MergeMetaValue<A[K], B[K], Depth>>
+    }
+
+/**
+ * Fold a tuple of meta contributions into their merged type, right-to-left
+ * (equivalent to `mergeMeta`'s left-to-right runtime fold for this
+ * operation — array concatenation and later-key-wins are both associative,
+ * see node.test.ts for the check). `[]` folds to `{}`, a single contribution
+ * folds to itself unchanged (no merge needed, and no risk of the recursive
+ * case's `Simplify` masking a already-precise type).
+ */
+type FoldMeta<T extends readonly unknown[]> = T extends readonly []
+  ? object
+  : T extends readonly [infer Only]
+    ? Only
+    : T extends readonly [infer First, ...infer Rest extends readonly unknown[]]
+      ? MergeTwoMeta<First, FoldMeta<Rest>>
+      : Meta
+
 /** The bare callable on a leaf node. Provenance-blind: handler sees one flat input. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Handler<I = any, O = any> = (input: I) => O | Promise<O>
@@ -191,17 +315,38 @@ export function mergeMeta(...metas: Array<Meta | undefined>): Meta {
  * shape) can key a conditional type off "does this type have a required
  * `handler`," which a branch produced by `api()` alone never structurally
  * satisfies.
+ *
+ * Generic in `C` (the exact tuple of meta contributions) the same way `H` is
+ * generic in the handler: a `const` type parameter (see `api()`'s `F` for
+ * the same technique) keeps each contribution's own literal type instead of
+ * widening to the erased `Meta`, and the return type's `meta` field is
+ * `FoldMeta<C>` — the type-level equivalent of `mergeMeta(...contributions)`
+ * above — instead of the constant `Meta`. This is what lets `op(fn,
+ * http.get)`'s `.meta` carry the literal `"GET"` (see verbs.ts) rather than
+ * `string`, all the way through into `HttpManifest<N>`
+ * (packages/http-api-projector/src/http-manifest.ts).
+ *
+ * When `HasRequiredKeys<Meta>` is true (a consumer declaration-merged a
+ * required field onto `Meta`), `contributions` falls back to the erased
+ * `[Meta, ...Meta[]]` it always had — literal-preservation is not attempted
+ * for that (rare, opt-in) shape, so `meta` falls back to `Meta` too.
  */
-export function op<H extends Handler>(
+export function op<H extends Handler, const C extends readonly Meta[] = []>(
   fn: H,
-  ...contributions: HasRequiredKeys<Meta> extends true ? [Meta, ...Meta[]] : Meta[]
-): Omit<Node, "handler"> & { readonly handler: H } {
+  ...contributions: HasRequiredKeys<Meta> extends true ? [Meta, ...Meta[]] : C
+): Omit<Node, "handler" | "meta"> & {
+  readonly handler: H
+  readonly meta: HasRequiredKeys<Meta> extends true ? Meta : Simplify<FoldMeta<C>>
+} {
   const meta = contributions.length === 0
     ? {}
     : contributions.length === 1
       ? contributions[0]!
       : mergeMeta(...contributions)
-  return { handler: fn, meta }
+  return { handler: fn, meta } as Omit<Node, "handler" | "meta"> & {
+    readonly handler: H
+    readonly meta: HasRequiredKeys<Meta> extends true ? Meta : Simplify<FoldMeta<C>>
+  }
 }
 
 /**
