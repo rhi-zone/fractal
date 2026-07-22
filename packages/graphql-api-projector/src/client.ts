@@ -306,10 +306,10 @@ function buildLeaf(
   transport: GraphQLTransport,
   opts: ResolvedOptions,
 ): (input?: unknown) => Promise<unknown> {
-  const operationType = deriveOperationType(child.meta)
   const gql = getGraphQLMeta(child.meta)
   const lookupKey = [...path, key].reduce(underscoreJoin, "")
   const typeInfo = opts.types[lookupKey]
+  const operationType = deriveOperationType(child.meta, typeInfo?.output)
 
   const declaredArgs = argsFromInput(typeInfo?.input)
   const declaredNames = new Set(declaredArgs.map((a) => a.name))

@@ -19,6 +19,7 @@ import {
   TAG_STREAMING,
   type Tags,
 } from "./tags.ts"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 
 // `Meta` uses declaration merging (each projector package types its own
 // slot — see node.ts's doc comment). Tests below exercise the bag's
@@ -117,6 +118,24 @@ describe("resolveTags", () => {
     expect(result.streaming).toBe(true)
     expect(result.openWorld).toBe(true)
     expect(result.conflict).toBeUndefined()
+  })
+
+  it("a `stream` outputType derives streaming: true when the tag is unasserted", () => {
+    const streamRef: TypeRef = { shape: { kind: "stream", element: { shape: { kind: "string" }, meta: {} } }, meta: {} }
+    const result = resolveTags({}, streamRef)
+    expect(result.streaming).toBe(true)
+  })
+
+  it("a non-stream outputType does not derive streaming", () => {
+    const arrayRef: TypeRef = { shape: { kind: "array", element: { shape: { kind: "string" }, meta: {} } }, meta: {} }
+    const result = resolveTags({}, arrayRef)
+    expect(result.streaming).toBeUndefined()
+  })
+
+  it("an explicit streaming tag (true or false) wins over a `stream` outputType", () => {
+    const streamRef: TypeRef = { shape: { kind: "stream", element: { shape: { kind: "string" }, meta: {} } }, meta: {} }
+    expect(resolveTags({ [TAG_STREAMING]: false }, streamRef).streaming).toBe(false)
+    expect(resolveTags({ [TAG_STREAMING]: true }, streamRef).streaming).toBe(true)
   })
 })
 

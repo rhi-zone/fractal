@@ -266,20 +266,28 @@ function formatArgs(args: readonly Arg[]): string {
 
 /**
  * `meta.graphql.operation` always wins; else tag inference:
- *   streaming === true → subscription
+ *   streaming === true → subscription   (asserted OR derived from `output`
+ *                                        being a `stream` TypeRef kind — see
+ *                                        `resolveTags`'s `outputType` param)
  *   readOnly === true  → query
  *   else               → mutation (conservative default)
+ *
+ * `output` (optional) is the leaf's derived return TypeRef (a `FieldTypeMap`
+ * entry's `.output`, see `FieldTypeInfo` above) — passed through to
+ * `resolveTags` so an `op()` returning `AsyncIterable<T>` (type-ir's `stream`
+ * TypeRef kind) is recognized as a subscription without hand-authoring
+ * `tags: { streaming: true }`. An explicit `meta.tags.streaming` still wins.
  *
  * Exported so client.ts derives the exact same operation type this walk
  * does — a second independent computation of the SAME derivation, not a
  * different source of truth (same reasoning as `camelJoin`/`underscoreJoin`
  * above).
  */
-export function deriveOperationType(meta: Meta): OperationType {
+export function deriveOperationType(meta: Meta, output?: TypeRef): OperationType {
   const gql = getGraphQLMeta(meta)
   if (gql.operation !== undefined) return gql.operation
 
-  const resolved = resolveTags((meta.tags ?? {}) as Tags)
+  const resolved = resolveTags((meta.tags ?? {}) as Tags, output)
   if (resolved.streaming === true) return "subscription"
   if (resolved.readOnly === true) return "query"
   return "mutation"
@@ -466,10 +474,10 @@ export function projectGraphQL(n: Node, opts: ProjectGraphQLOptions = {}): Proje
   const queryRoot = emptyNamespace()
 
   for (const leaf of leaves) {
-    const operationType = deriveOperationType(leaf.node.meta)
     const gql = getGraphQLMeta(leaf.node.meta)
     const lookupKey = [...leaf.path, leaf.key].reduce(underscoreJoin, "")
     const typeInfo = typeMap[lookupKey]
+    const operationType = deriveOperationType(leaf.node.meta, typeInfo?.output)
 
     if (operationType === "query") {
       // Namespace path: meta.graphql.namespace overrides a branch segment

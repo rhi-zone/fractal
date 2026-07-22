@@ -163,10 +163,10 @@ function buildLeafEntry(
   types: FieldTypeMap,
   namedTypes: Readonly<Record<string, TypeRef>>,
 ): OperationEntry {
-  const operationType = deriveOperationType(child.meta)
   const gql = getGraphQLMeta(child.meta)
   const lookupKey = [...path, key].reduce(underscoreJoin, "")
   const typeInfo = types[lookupKey]
+  const operationType = deriveOperationType(child.meta, typeInfo?.output)
 
   const declaredArgs = argsFromInput(typeInfo?.input)
   const declaredNames = new Set(declaredArgs.map((a) => a.name))

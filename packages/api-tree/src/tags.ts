@@ -15,6 +15,12 @@
 //   docs/design/converged-model.md          — open-bag constraint [CERTIFIED]
 // ============================================================================
 
+// Type-only import: `resolveTags`'s optional `outputType` parameter reads
+// only `.shape.kind`, never constructs or otherwise touches a `TypeRef` at
+// runtime, so this stays a type-only import (no runtime dependency on
+// type-ir, matching tree.ts's own type-only `TypeRef` import).
+import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+
 // ============================================================================
 // Standard tag keys
 // ============================================================================
@@ -56,8 +62,10 @@ export const TAG_OPEN_WORLD = "openWorld" as const
  * `streaming`: The operation yields a sequence of items over time rather than
  * a single value.
  * Orthogonal to all other standard tags.
- * NOTE: This will be derivable from the return type (e.g. `AsyncIterable<T>`)
- * via codegen later; for now it is read directly from meta.
+ * Derivable from the handler's return type — a `stream` TypeRef kind (i.e.
+ * `AsyncIterable<T>`) implies `streaming: true` — see `resolveTags`'s
+ * optional `outputType` parameter. An explicit `meta.tags.streaming` still
+ * wins outright (authored fact over derived one).
  */
 export const TAG_STREAMING = "streaming" as const
 
@@ -121,19 +129,32 @@ export type ResolvedTags = {
  * Lattice rules applied:
  *   readOnly ⇒ idempotent   (if readOnly=true and idempotent=undefined → set idempotent=true)
  *   readOnly ∧ destructive  → conflict (both true is a contradiction)
+ *   outputType.shape.kind === "stream" ⇒ streaming (if streaming=undefined → set streaming=true)
  *
  * Unknowns stay unknown — absence does NOT default to false. The `streaming`,
- * `openWorld`, and `deprecated` tags are orthogonal and pass through untouched.
+ * `openWorld`, and `deprecated` tags are orthogonal and pass through untouched
+ * (aside from the return-type-derived `streaming` default above).
  *
  * Standard tag keys are read from the Tags bag; any additional keys the
  * caller added are ignored here (they remain in the bag, untouched).
+ *
+ * `outputType` (optional) is a leaf's derived return TypeRef — when supplied
+ * and the tags bag doesn't already assert `streaming` one way or the other,
+ * a `stream` TypeRef kind (`AsyncIterable<T>`, see type-ir's TypeKinds.stream)
+ * derives `streaming: true`. An explicit `meta.tags.streaming` (true OR
+ * false) always wins over this derivation — authored fact over inferred one.
+ * Callers that have a leaf's derived output TypeRef in scope (e.g. a
+ * TypeRefMap entry from api-tree's tree.ts) should pass it here instead of
+ * hand-authoring `tags: { streaming: true }` on every streaming op.
  */
-export function resolveTags(tags: Tags): ResolvedTags {
+export function resolveTags(tags: Tags, outputType?: TypeRef): ResolvedTags {
   const readOnly = tags[TAG_READ_ONLY] as TagValue
   const destructive = tags[TAG_DESTRUCTIVE] as TagValue
   const rawIdempotent = tags[TAG_IDEMPOTENT] as TagValue
   const openWorld = tags[TAG_OPEN_WORLD] as TagValue
-  const streaming = tags[TAG_STREAMING] as TagValue
+  const rawStreaming = tags[TAG_STREAMING] as TagValue
+  const streaming: TagValue =
+    rawStreaming === undefined && outputType?.shape.kind === "stream" ? true : rawStreaming
   const deprecated = tags[TAG_DEPRECATED] as TagValue
 
   // readOnly ⇒ idempotent: lift unknown to true when readOnly is asserted

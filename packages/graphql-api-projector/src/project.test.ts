@@ -33,6 +33,23 @@ describe("operation-type derivation", () => {
     expect(mutationFields.map((f) => f.name)).toEqual(["create"])
   })
 
+  it("a `stream` output TypeRef (no tags asserted) → subscription", () => {
+    const n = api_({ watch: op((_: unknown) => ({})) })
+    const types_: FieldTypeMap = { watch: { output: t(types.stream(t(types.string))) } }
+    const { queryFields, mutationFields, subscriptionFields } = projectGraphQL(n, { types: types_ })
+    expect(subscriptionFields.map((f) => f.name)).toEqual(["watch"])
+    expect(queryFields).toHaveLength(0)
+    expect(mutationFields).toHaveLength(0)
+  })
+
+  it("an explicit tags.streaming:false wins over a `stream` output TypeRef", () => {
+    const n = api_({ watch: op((_: unknown) => ({}), { tags: { streaming: false } }) })
+    const types_: FieldTypeMap = { watch: { output: t(types.stream(t(types.string))) } }
+    const { mutationFields, subscriptionFields } = projectGraphQL(n, { types: types_ })
+    expect(subscriptionFields).toHaveLength(0)
+    expect(mutationFields.map((f) => f.name)).toEqual(["watch"])
+  })
+
   it("meta.graphql.operation overrides tag inference", () => {
     const n = api_({
       // readOnly would normally mean "query" — explicit override forces mutation.
