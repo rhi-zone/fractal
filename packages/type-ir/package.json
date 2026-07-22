@@ -179,6 +179,10 @@
       "types": "./src/python-dataclass.ts",
       "import": "./src/python-dataclass.ts"
     },
+    "./python-pydantic": {
+      "types": "./src/python-pydantic.ts",
+      "import": "./src/python-pydantic.ts"
+    },
     "./flow": {
       "types": "./src/flow-native.ts",
       "import": "./src/flow-native.ts"
