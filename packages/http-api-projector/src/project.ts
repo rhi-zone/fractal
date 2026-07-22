@@ -92,6 +92,14 @@ declare module "@rhi-zone/fractal-api-tree/node" {
  *   rename, `*` = wildcard segment).
  * - `{ kind: "response", status?, headers? }` — response overrides,
  *   materialized into the handler via composition (read by `applyResponse`).
+ * - `{ kind: "paginated", style?, cursorParam?, offsetParam?, limitParam? }`
+ *   — pagination hints, read by `extensions/pagination.ts`'s client
+ *   extension (see `paginated()` in verbs.ts). Detection of "is this
+ *   endpoint paginated at all" is a RUNTIME shape check on the actual
+ *   response (`isPageShape`, mirroring streaming's `isStreamEffect`
+ *   convention) — this directive only overrides the client's defaults
+ *   (which style to trust when the shape is ambiguous, and which input
+ *   field name carries the cursor/offset/limit) when they don't apply.
  *
  * Interpreted by `verbFromTags` (tags.ts):
  *
@@ -130,6 +138,13 @@ export type HttpDirective<M extends string = string, P extends string = string> 
       readonly kind: "response"
       readonly status?: number
       readonly headers?: Record<string, string>
+    }
+  | {
+      readonly kind: "paginated"
+      readonly style?: "cursor" | "offset"
+      readonly inputCursorParam?: string
+      readonly inputOffsetParam?: string
+      readonly inputLimitParam?: string
     }
 
 // ============================================================================
@@ -175,6 +190,13 @@ export type HttpMeta = {
   readonly moveTo?: string
   /** Resolved `{ kind: "response" }` directive fields. */
   readonly response?: { readonly status?: number; readonly headers?: Record<string, string> }
+  /** Resolved `{ kind: "paginated" }` directive fields — see `paginated()` in verbs.ts. */
+  readonly paginated?: {
+    readonly style?: "cursor" | "offset"
+    readonly inputCursorParam?: string
+    readonly inputOffsetParam?: string
+    readonly inputLimitParam?: string
+  }
 }
 
 /** Parse `meta.http` into the resolved `HttpMeta` shape — see module doc above. */
@@ -192,6 +214,12 @@ export function getHttpMeta(meta: Meta): HttpMeta {
     method?: string
     moveTo?: string
     response?: { status?: number; headers?: Record<string, string> }
+    paginated?: {
+      style?: "cursor" | "offset"
+      inputCursorParam?: string
+      inputOffsetParam?: string
+      inputLimitParam?: string
+    }
   } = {}
 
   if (typeof h.dispatch === "object" && h.dispatch !== null) {
@@ -225,6 +253,14 @@ export function getHttpMeta(meta: Meta): HttpMeta {
           out.response = {
             ...(d.status !== undefined ? { status: d.status } : {}),
             ...(d.headers !== undefined ? { headers: d.headers } : {}),
+          }
+          break
+        case "paginated":
+          out.paginated = {
+            ...(d.style !== undefined ? { style: d.style } : {}),
+            ...(d.inputCursorParam !== undefined ? { inputCursorParam: d.inputCursorParam } : {}),
+            ...(d.inputOffsetParam !== undefined ? { inputOffsetParam: d.inputOffsetParam } : {}),
+            ...(d.inputLimitParam !== undefined ? { inputLimitParam: d.inputLimitParam } : {}),
           }
           break
       }

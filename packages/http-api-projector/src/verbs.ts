@@ -188,6 +188,38 @@ export function moveTo<const P extends string>(
   }
 }
 
+/** A `{ kind: "paginated" }` directive. See `paginated()` below. */
+type PaginatedDirective = Extract<HttpDirective, { readonly kind: "paginated" }>
+
+/**
+ * `paginated(options?)` — DX helper for the `{ kind: "paginated" }` directive
+ * (see project.ts § HttpDirective and extensions/pagination.ts's client
+ * extension). Optional: detection of "is this endpoint paginated at all"
+ * already happens by convention — a handler returning `CursorPage<T>`/
+ * `OffsetPage<T>` (packages/api-tree/src/page.ts) is recognized at build time
+ * by the extractor (extract.ts) and at client runtime by shape
+ * (`isPageShape`), the same two-layer convention `AsyncIterable<T>` uses for
+ * streaming. Reach for `paginated()` only to override a default the shape
+ * convention can't express on its own — a non-default input field name for
+ * the cursor/offset/limit, or an explicit style pin when a response
+ * genuinely needs one:
+ *
+ * ```ts
+ * op(listBooks, http.get, paginated({ style: "cursor", inputCursorParam: "after" }))
+ * ```
+ *
+ * Returns a plain `Meta` (no verb, no tags) so it composes with a verb
+ * bundle via `mergeMeta`'s array-concatenation of `http.directives`, same as
+ * `moveTo()` above.
+ */
+export function paginated(
+  options: Omit<PaginatedDirective, "kind"> = {},
+): { readonly http: { readonly directives: readonly [PaginatedDirective] } } {
+  return {
+    http: { directives: [{ kind: "paginated", ...options } as PaginatedDirective] },
+  }
+}
+
 // ============================================================================
 // Exported namespace
 // ============================================================================
