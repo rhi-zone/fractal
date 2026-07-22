@@ -181,9 +181,13 @@
     "graphql": "^16.9.0"
   },
   "peerDependencies": {
+    "protobufjs": "^8.7.1",
     "typescript": "^6.0.3"
   },
   "peerDependenciesMeta": {
+    "protobufjs": {
+      "optional": true
+    },
     "typescript": {
       "optional": true
     }
@@ -191,6 +195,7 @@
   "devDependencies": {
     "@sinclair/typebox": "^0.34.41",
     "fast-check": "^4.9.0",
+    "protobufjs": "^8.7.1",
     "typescript": "^6.0.3"
   },
   "scripts": {

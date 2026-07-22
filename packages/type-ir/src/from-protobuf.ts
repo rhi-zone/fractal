@@ -13,15 +13,13 @@
 //     JS/TS protobuf codegen's descriptor `toObject()`/`toJSON()` produces).
 //     This is the format protobuf uses to describe itself, so it needs no
 //     bespoke grammar.
-//   - parseProtoText(text) / fromProtoText(text) — CONVENIENCE. A lightweight
-//     structural parser for the `.proto` text subset needed here (message /
-//     enum / oneof / map / repeated / optional / nested types / `//`
-//     comments / the `[deprecated = true]` field option). It is NOT a
-//     protoc-equivalent grammar: no custom options, no extensions, no
-//     proto2, no service/rpc bodies (skipped, not parsed) — "minimal", per
-//     the brief. It parses straight into the same descriptor shape
-//     `fromProtoDescriptor` consumes, so both paths share one conversion
-//     core and one set of tests-worth of behavior.
+//   - parseProtoText(text) / fromProtoText(text) — CONVENIENCE. Parses `.proto`
+//     text via `protobufjs`'s real grammar (protobuf.parse), then adapts its
+//     reflection tree (Type/Enum/Field/OneOf) into the same descriptor shape
+//     `fromProtoDescriptor` consumes, so both paths share one conversion core
+//     and one set of tests-worth of behavior. `protobufjs` is an optional
+//     peer dependency (see package.json) — this module only needs it when
+//     `parseProtoText`/`fromProtoText` are actually called.
 //
 // Both entry points return a `TypeRefDocument`: every message/enum in the
 // file becomes a named entry in `defs` (keyed by its dotted nested path,
@@ -33,6 +31,7 @@
 // single-schema shape the way `fromJsonSchema` does for JSON Schema's
 // single-root convention.
 
+import protobuf from "protobufjs"
 import { t, types, typeRefDocument, type TypeRef, type TypeRefDocument } from "./index.ts"
 import { bytes, datetime, duration, float32, float64, int32, int64, uint32, uint64 } from "./kinds/common.ts"
 
@@ -414,16 +413,19 @@ const protoKeywordToType: Record<string, ProtoFieldType> = {
   bytes: "TYPE_BYTES",
 }
 
-/** Resolve a bare type-string token from `.proto` source into a field's
- * `type`/`typeName`. Scalars map to their real `TYPE_*` code (preserving
- * fidelity, e.g. `sint32` stays distinguishable from `int32` at the
- * descriptor level — the int32()/int64() collapse happens later, only at
- * TypeRef-selection time via `scalarHandlers`). Anything else is tagged
- * `TYPE_MESSAGE` provisionally; `fieldBaseType` corrects this against the
- * registry's actual entry kind during conversion (see its doc comment) — the
- * parser itself never needs to know whether an identifier names a message or
- * an enum, since both message and enum declarations may appear anywhere in
- * the file (including after first use). */
+/** Resolve a bare type-string token from `protobufjs`'s reflection tree (a
+ * `Field#type`/`MapField#keyType`, always unqualified as written — parsing
+ * doesn't resolve type references) into a field's `type`/`typeName`. Scalars
+ * map to their real `TYPE_*` code (preserving fidelity, e.g. `sint32` stays
+ * distinguishable from `int32` at the descriptor level — the int32()/int64()
+ * collapse happens later, only at TypeRef-selection time via
+ * `scalarHandlers`). Anything else is tagged `TYPE_MESSAGE` provisionally;
+ * `fieldBaseType` corrects this against the registry's actual entry kind
+ * during conversion (see its doc comment) — this converter never needs to
+ * know whether an identifier names a message or an enum, since both message
+ * and enum declarations may appear anywhere in the file (including after
+ * first use), and `fromProtoDescriptor`'s registry-based resolution already
+ * handles that scoping. */
 function resolveTokenType(token: string): { type: ProtoFieldType; typeName?: string } {
   const scalar = protoKeywordToType[token]
   if (scalar !== undefined) return { type: scalar }
@@ -434,232 +436,157 @@ function capitalize(name: string): string {
   return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
 }
 
-type MutableMessage = {
-  name: string
-  field: ProtoFieldDescriptor[]
-  nestedType: MutableMessage[]
-  enumType: ProtoEnumDescriptorMutable[]
-  oneofDecl: ProtoOneofDescriptor[]
-  options?: { mapEntry?: boolean }
-  description?: string
-}
-type ProtoEnumDescriptorMutable = { name: string; value: ProtoEnumValueDescriptor[]; description?: string }
-
-function newMessage(name: string, description?: string): MutableMessage {
-  const m: MutableMessage = { name, field: [], nestedType: [], enumType: [], oneofDecl: [] }
-  if (description !== undefined) m.description = description
-  return m
-}
-
-type StackFrame =
-  | { readonly kind: "message"; readonly node: MutableMessage }
-  | { readonly kind: "enum"; readonly node: ProtoEnumDescriptorMutable }
-  | { readonly kind: "oneof"; readonly message: MutableMessage; readonly oneofIndex: number }
-  | { readonly kind: "skip" } // service/rpc/option blocks — structurally skipped
-
-const messageOpenRe = /^message\s+(\w+)\s*\{$/
-const enumOpenRe = /^enum\s+(\w+)\s*\{$/
-const oneofOpenRe = /^oneof\s+(\w+)\s*\{$/
-const serviceOpenRe = /^service\s+\w+\s*\{$/
-const closeBraceRe = /^\}$/
-const packageRe = /^package\s+([\w.]+)\s*;$/
-const syntaxRe = /^syntax\s*=\s*"proto3"\s*;$/
-const importRe = /^import\s+.*;$/
-const topOptionRe = /^option\s+.*;$/
-const mapFieldRe = /^(repeated\s+)?map\s*<\s*([\w.]+)\s*,\s*([\w.]+)\s*>\s+(\w+)\s*=\s*(\d+)\s*(\[[^\]]*\])?\s*;$/
-const normalFieldRe = /^(repeated\s+|optional\s+)?([\w.]+)\s+(\w+)\s*=\s*(\d+)\s*(\[[^\]]*\])?\s*;$/
-const enumValueRe = /^(\w+)\s*=\s*(-?\d+)\s*(\[[^\]]*\])?\s*;$/
-
-function parseFieldOptions(bracket: string | undefined): { deprecated?: boolean } | undefined {
-  if (bracket === undefined) return undefined
-  if (/deprecated\s*=\s*true/.test(bracket)) return { deprecated: true }
+function fieldOptionsOf(options: { readonly [k: string]: unknown } | undefined): { deprecated?: boolean } | undefined {
+  if (options?.deprecated === true) return { deprecated: true }
   return undefined
 }
 
-/**
- * Parse the proto3 structural subset needed here — messages, enums, oneofs,
- * map/repeated/optional fields, nested types, `//` line comments (attached
- * as `description` to the declaration immediately following them) and the
- * `[deprecated = true]` field option — into the same descriptor shape
- * `fromProtoDescriptor` consumes. `service`/`rpc`/top-level `option` blocks
- * are recognized only well enough to be skipped structurally (brace-depth
- * tracked), not parsed — RPCs are a projector-output-only concept in this
- * package's protobuf.ts (`toProtoService`), and this ingester's job is
- * message/enum schema, not service surfaces.
- */
-export function parseProtoText(source: string): ProtoFileDescriptor {
-  // Strip block comments (kept simple: no nesting, matches proto3's own
-  // grammar — https://protobuf.dev/programming-guides/proto3/#language which
-  // uses plain C-style /* */ comments).
-  const withoutBlockComments = source.replace(/\/\*[\s\S]*?\*\//g, " ")
+/** Convert a `protobufjs` map field into its `ProtoFieldDescriptor` plus the
+ * synthetic `<Field>Entry` nested message it references — proto3's own wire
+ * representation of `map<K, V>` fields (see `ProtoMessageDescriptor`'s
+ * `options.mapEntry` doc comment), which `protobufjs`'s reflection tree
+ * doesn't materialize as a nested type the way real `descriptor.proto` JSON
+ * does, so it's synthesized here to keep both `parseProtoText` and
+ * `fromProtoDescriptor` working from the same descriptor shape. */
+function convertMapField(field: InstanceType<typeof protobuf.MapField>): { field: ProtoFieldDescriptor; entry: ProtoMessageDescriptor } {
+  const entryName = `${capitalize(field.name)}Entry`
+  const keyResolved = resolveTokenType(field.keyType)
+  const valueResolved = resolveTokenType(field.type)
+  const entry: ProtoMessageDescriptor = {
+    name: entryName,
+    options: { mapEntry: true },
+    field: [
+      { name: "key", number: 1, type: keyResolved.type, ...(keyResolved.typeName !== undefined ? { typeName: keyResolved.typeName } : {}) },
+      { name: "value", number: 2, type: valueResolved.type, ...(valueResolved.typeName !== undefined ? { typeName: valueResolved.typeName } : {}) },
+    ],
+  }
+  const options = fieldOptionsOf(field.options)
+  const descriptor: ProtoFieldDescriptor = {
+    name: field.name,
+    number: field.id,
+    type: "TYPE_MESSAGE",
+    typeName: entryName,
+    label: "LABEL_REPEATED",
+    ...(typeof field.comment === "string" ? { description: field.comment } : {}),
+    ...(options !== undefined ? { options } : {}),
+  }
+  return { field: descriptor, entry }
+}
 
-  const topMessages: MutableMessage[] = []
-  const topEnums: ProtoEnumDescriptorMutable[] = []
-  let pkg: string | undefined
-  const stack: StackFrame[] = []
-  let pendingComment: string[] = []
-  let skipDepth = 0
+/** Convert a `protobufjs` message field into a `ProtoFieldDescriptor`.
+ * `oneofIndexOf` maps each *real* (user-declared) oneof to its index in the
+ * message's `oneofDecl` — proto3's explicit `optional` keyword is
+ * represented internally by `protobufjs` (and by real `descriptor.proto`) as
+ * a synthetic single-member oneof (`OneOf#isProto3Optional`); such synthetic
+ * oneofs are excluded from `oneofIndexOf` (see `convertMessage`), so a field
+ * belonging to one falls through to the plain `proto3Optional: true` case
+ * here rather than an `oneofIndex`. */
+function convertField(field: InstanceType<typeof protobuf.Field>, oneofIndexOf: ReadonlyMap<InstanceType<typeof protobuf.OneOf>, number>): ProtoFieldDescriptor {
+  const resolved = resolveTokenType(field.type)
+  const proto3Optional = field.options?.proto3_optional === true
+  const oneofIndex = !proto3Optional && field.partOf !== null ? oneofIndexOf.get(field.partOf) : undefined
+  const options = fieldOptionsOf(field.options)
+  return {
+    name: field.name,
+    number: field.id,
+    type: resolved.type,
+    ...(resolved.typeName !== undefined ? { typeName: resolved.typeName } : {}),
+    ...(field.repeated ? { label: "LABEL_REPEATED" as const } : {}),
+    ...(proto3Optional ? { proto3Optional: true } : {}),
+    ...(oneofIndex !== undefined ? { oneofIndex } : {}),
+    ...(typeof field.comment === "string" ? { description: field.comment } : {}),
+    ...(options !== undefined ? { options } : {}),
+  }
+}
 
-  const currentMessage = (): MutableMessage | undefined => {
-    for (let i = stack.length - 1; i >= 0; i--) {
-      const frame = stack[i]!
-      if (frame.kind === "message") return frame.node
-    }
-    return undefined
+function convertEnum(node: InstanceType<typeof protobuf.Enum>): ProtoEnumDescriptor {
+  const value: ProtoEnumValueDescriptor[] = Object.entries(node.values).map(([name, number]) => {
+    const description = node.comments[name]
+    return { name, number, ...(typeof description === "string" ? { description } : {}) }
+  })
+  return { name: node.name, value, ...(typeof node.comment === "string" ? { description: node.comment } : {}) }
+}
+
+function convertMessage(node: InstanceType<typeof protobuf.Type>): ProtoMessageDescriptor {
+  const nestedType: ProtoMessageDescriptor[] = []
+  const enumType: ProtoEnumDescriptor[] = []
+  for (const nested of node.nestedArray) {
+    if (nested instanceof protobuf.Type) nestedType.push(convertMessage(nested))
+    else if (nested instanceof protobuf.Enum) enumType.push(convertEnum(nested))
+    // Other nested kinds (nested services) aren't message/enum schema — see
+    // parseProtoText's doc comment on why services are out of scope here.
   }
 
-  const registerMessage = (m: MutableMessage): void => {
-    const parent = currentMessage()
-    if (parent === undefined) topMessages.push(m)
-    else parent.nestedType.push(m)
-  }
+  // Real (user-declared) oneofs only — see convertField's doc comment on why
+  // proto3's synthetic `optional`-field oneofs are excluded.
+  const realOneofs = node.oneofsArray.filter((o) => !o.isProto3Optional)
+  const oneofDecl: ProtoOneofDescriptor[] = realOneofs.map((o) => ({ name: o.name }))
+  const oneofIndexOf = new Map(realOneofs.map((o, i) => [o, i] as const))
 
-  const registerEnum = (e: ProtoEnumDescriptorMutable): void => {
-    const parent = currentMessage()
-    if (parent === undefined) topEnums.push(e)
-    else parent.enumType.push(e)
-  }
-
-  for (const rawLine of withoutBlockComments.split("\n")) {
-    if (skipDepth > 0) {
-      const opens = (rawLine.match(/\{/g) ?? []).length
-      const closes = (rawLine.match(/\}/g) ?? []).length
-      skipDepth += opens - closes
-      continue
+  const field: ProtoFieldDescriptor[] = []
+  for (const f of node.fieldsArray) {
+    if (f instanceof protobuf.MapField) {
+      const converted = convertMapField(f)
+      field.push(converted.field)
+      nestedType.push(converted.entry)
+    } else {
+      field.push(convertField(f, oneofIndexOf))
     }
-
-    const commentIdx = rawLine.indexOf("//")
-    const codePart = (commentIdx === -1 ? rawLine : rawLine.slice(0, commentIdx)).trim()
-    const commentPart = commentIdx === -1 ? undefined : rawLine.slice(commentIdx + 2).trim()
-
-    if (codePart === "") {
-      if (commentPart !== undefined) pendingComment.push(commentPart)
-      else pendingComment = []
-      continue
-    }
-
-    const description = pendingComment.length > 0 ? pendingComment.join(" ") : undefined
-    pendingComment = commentPart !== undefined ? [commentPart] : []
-
-    let match: RegExpMatchArray | null
-
-    if (syntaxRe.test(codePart) || importRe.test(codePart)) continue
-
-    if ((match = codePart.match(packageRe)) !== null) {
-      pkg = match[1]
-      continue
-    }
-
-    if (serviceOpenRe.test(codePart)) {
-      skipDepth = 1
-      continue
-    }
-
-    if (topOptionRe.test(codePart) && stack.length === 0) continue
-
-    if ((match = codePart.match(messageOpenRe)) !== null) {
-      const m = newMessage(match[1]!, description)
-      registerMessage(m)
-      stack.push({ kind: "message", node: m })
-      continue
-    }
-
-    if ((match = codePart.match(enumOpenRe)) !== null) {
-      const e: ProtoEnumDescriptorMutable = { name: match[1]!, value: [] }
-      if (description !== undefined) e.description = description
-      registerEnum(e)
-      stack.push({ kind: "enum", node: e })
-      continue
-    }
-
-    if ((match = codePart.match(oneofOpenRe)) !== null) {
-      const message = currentMessage()
-      if (message !== undefined) {
-        const oneofIndex = message.oneofDecl.length
-        message.oneofDecl.push({ name: match[1]! })
-        stack.push({ kind: "oneof", message, oneofIndex })
-      } else {
-        stack.push({ kind: "skip" })
-      }
-      continue
-    }
-
-    if (closeBraceRe.test(codePart)) {
-      stack.pop()
-      continue
-    }
-
-    const top = stack[stack.length - 1]
-
-    if (top?.kind === "enum" && (match = codePart.match(enumValueRe)) !== null) {
-      const value: ProtoEnumValueDescriptor = { name: match[1]!, number: Number(match[2]) }
-      if (description !== undefined) (value as { description?: string }).description = description
-      top.node.value.push(value)
-      continue
-    }
-
-    if ((match = codePart.match(mapFieldRe)) !== null) {
-      const message = top?.kind === "oneof" ? top.message : currentMessage()
-      if (message === undefined) continue
-      const [, , keyToken, valueToken, fieldName, numberStr, bracket] = match
-      const entryName = `${capitalize(fieldName!)}Entry`
-      const keyResolved = resolveTokenType(keyToken!)
-      const valueResolved = resolveTokenType(valueToken!)
-      const entry = newMessage(entryName)
-      entry.options = { mapEntry: true }
-      entry.field.push({ name: "key", number: 1, type: keyResolved.type, ...(keyResolved.typeName !== undefined ? { typeName: keyResolved.typeName } : {}) })
-      entry.field.push({ name: "value", number: 2, type: valueResolved.type, ...(valueResolved.typeName !== undefined ? { typeName: valueResolved.typeName } : {}) })
-      message.nestedType.push(entry)
-
-      const fieldOptions = parseFieldOptions(bracket)
-      const field: ProtoFieldDescriptor = {
-        name: fieldName!,
-        number: Number(numberStr),
-        type: "TYPE_MESSAGE",
-        typeName: entryName,
-        label: "LABEL_REPEATED",
-        ...(description !== undefined ? { description } : {}),
-        ...(fieldOptions !== undefined ? { options: fieldOptions } : {}),
-      }
-      message.field.push(field)
-      continue
-    }
-
-    if ((match = codePart.match(normalFieldRe)) !== null) {
-      const message = top?.kind === "oneof" ? top.message : currentMessage()
-      if (message === undefined) continue
-      const [, qualifier, typeToken, fieldName, numberStr, bracket] = match
-      const resolved = resolveTokenType(typeToken!)
-      const isRepeated = qualifier?.trim() === "repeated"
-      const isOptional = qualifier?.trim() === "optional"
-      const fieldOptions = parseFieldOptions(bracket)
-      const field: ProtoFieldDescriptor = {
-        name: fieldName!,
-        number: Number(numberStr),
-        type: resolved.type,
-        ...(resolved.typeName !== undefined ? { typeName: resolved.typeName } : {}),
-        ...(isRepeated ? { label: "LABEL_REPEATED" as const } : {}),
-        ...(isOptional ? { proto3Optional: true } : {}),
-        ...(description !== undefined ? { description } : {}),
-        ...(fieldOptions !== undefined ? { options: fieldOptions } : {}),
-      }
-      if (top?.kind === "oneof") {
-        ;(field as { oneofIndex?: number }).oneofIndex = top.oneofIndex
-      }
-      message.field.push(field)
-      continue
-    }
-
-    // Unrecognized line (e.g. `rpc Foo(...) returns (...);`, standalone
-    // `option` inside a message, `reserved …;`) — ignored per the "minimal
-    // parser" brief rather than throwing, matching this package's other
-    // ingesters' honest-degrade-on-unrecognized-input convention.
   }
 
   return {
-    ...(pkg !== undefined ? { package: pkg } : {}),
-    messageType: topMessages as unknown as ProtoMessageDescriptor[],
-    enumType: topEnums as unknown as ProtoEnumDescriptor[],
+    name: node.name,
+    field,
+    nestedType,
+    enumType,
+    oneofDecl,
+    ...(typeof node.comment === "string" ? { description: node.comment } : {}),
+  }
+}
+
+/**
+ * Parse `.proto` text via `protobufjs`'s own grammar (`protobuf.parse`) and
+ * adapt the resulting reflection tree (`Type`/`Enum`/`Field`/`OneOf`) into
+ * the same descriptor shape `fromProtoDescriptor` consumes. Type references
+ * (`Field#type`/`MapField#keyType`) are read as written, unresolved —
+ * `resolveAll()` is deliberately never called, since that would require
+ * well-known types (`google.protobuf.Timestamp` etc.) and any `import`ed
+ * files to actually be loadable, which callers passing standalone `.proto`
+ * snippets can't generally provide. Resolution instead happens the same way
+ * it always has, in `fromProtoDescriptor`'s own registry (self/enclosing
+ * scope search, then a well-known-types table, then a dangling `ref` as a
+ * last resort — see `resolveTypeName`'s doc comment).
+ *
+ * `protobufjs` defaults to proto2 semantics when a file has no `syntax`
+ * declaration (relevant to how it treats the `optional` keyword: proto2's
+ * plain field-presence `optional` vs. proto3's explicit-presence `optional`,
+ * which synthesizes a single-member oneof under the hood — see
+ * `convertField`'s doc comment); since this ingester's domain is proto3
+ * (per this module's header comment), a missing `syntax` statement is
+ * treated as `proto3` rather than `protobufjs`'s own proto2 default.
+ *
+ * `service`/`rpc` blocks parse into `protobufjs` `Service` nodes, which
+ * `convertMessage`'s nested-node walk simply doesn't recognize (only `Type`
+ * and `Enum` are matched) — so they're structurally skipped without any
+ * special-casing, matching this ingester's message/enum-schema-only scope
+ * (RPCs are a projector-output-only concept in this package's protobuf.ts,
+ * via `toProtoService`).
+ */
+export function parseProtoText(source: string): ProtoFileDescriptor {
+  const withSyntax = /^\s*syntax\s*=/m.test(source) ? source : `syntax = "proto3";\n${source}`
+  const parsed = protobuf.parse(withSyntax, { keepCase: true, alternateCommentMode: true })
+
+  const messageType: ProtoMessageDescriptor[] = []
+  const enumType: ProtoEnumDescriptor[] = []
+  for (const node of parsed.root.nestedArray) {
+    if (node instanceof protobuf.Type) messageType.push(convertMessage(node))
+    else if (node instanceof protobuf.Enum) enumType.push(convertEnum(node))
+  }
+
+  return {
+    ...(parsed.package !== undefined ? { package: parsed.package } : {}),
+    messageType,
+    enumType,
   }
 }
 
