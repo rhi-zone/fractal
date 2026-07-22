@@ -255,6 +255,10 @@
       "types": "./src/kotlin-kotlinx.ts",
       "import": "./src/kotlin-kotlinx.ts"
     },
+    "./kotlin-jackson": {
+      "types": "./src/kotlin-jackson.ts",
+      "import": "./src/kotlin-jackson.ts"
+    },
     "./java": {
       "types": "./src/java-jackson.ts",
       "import": "./src/java-jackson.ts"
