@@ -139,6 +139,10 @@
       "types": "./src/dart-json-serializable.ts",
       "import": "./src/dart-json-serializable.ts"
     },
+    "./dart-freezed": {
+      "types": "./src/dart-freezed.ts",
+      "import": "./src/dart-freezed.ts"
+    },
     "./objc": {
       "types": "./src/objc-foundation.ts",
       "import": "./src/objc-foundation.ts"
