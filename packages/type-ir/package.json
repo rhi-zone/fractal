@@ -163,6 +163,10 @@
       "types": "./src/csharp-systemtextjson.ts",
       "import": "./src/csharp-systemtextjson.ts"
     },
+    "./csharp-newtonsoft": {
+      "types": "./src/csharp-newtonsoft.ts",
+      "import": "./src/csharp-newtonsoft.ts"
+    },
     "./crystal": {
       "types": "./src/crystal-json-serializable.ts",
       "import": "./src/crystal-json-serializable.ts"
@@ -182,6 +186,10 @@
     "./python-pydantic": {
       "types": "./src/python-pydantic.ts",
       "import": "./src/python-pydantic.ts"
+    },
+    "./python-attrs": {
+      "types": "./src/python-attrs.ts",
+      "import": "./src/python-attrs.ts"
     },
     "./flow": {
       "types": "./src/flow-native.ts",
@@ -238,6 +246,10 @@
     "./java-jackson": {
       "types": "./src/java-jackson.ts",
       "import": "./src/java-jackson.ts"
+    },
+    "./java-gson": {
+      "types": "./src/java-gson.ts",
+      "import": "./src/java-gson.ts"
     },
     "./sql": {
       "types": "./src/sql.ts",
