@@ -103,6 +103,10 @@
       "types": "./src/typescript.ts",
       "import": "./src/typescript.ts"
     },
+    "./haskell": {
+      "types": "./src/haskell.ts",
+      "import": "./src/haskell.ts"
+    },
     "./dart": {
       "types": "./src/dart.ts",
       "import": "./src/dart.ts"
