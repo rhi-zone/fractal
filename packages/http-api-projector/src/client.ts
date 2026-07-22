@@ -196,6 +196,45 @@ function buildHandlerNames(n: Node): Map<Handler, string> {
 }
 
 // ============================================================================
+// Internal: handler → full codegen-name map, built from the raw Node tree
+//
+// A SEPARATE convention from `buildHandlerNames` above (own key only): this
+// one accumulates the full underscore-joined path from the root, exactly
+// matching `extractToolSchemas`'s own naming (see api-tree/src/tree.ts) and
+// codegen.ts's `buildCodegenNameMap` — the key a `SchemaMap` is indexed by.
+// Duplicated here rather than imported/shared, matching this package's
+// existing convention of each projector deriving these facts via its own
+// self-contained walk (openapi.ts's `buildNameMap`, codegen.ts's own
+// `buildCodegenNameMap`; see openapi.ts's module doc: "Two projectors, two
+// encodings of the same fact"). Threaded into `DecodeContext.codegenName` so
+// an extension (e.g. `extensions/validation.ts`) can look up this operation's
+// entry in a `SchemaMap` without re-deriving tree-position naming itself.
+// ============================================================================
+
+function collectCodegenNames(n: Node, prefix: string, out: Map<Handler, string>): void {
+  for (const [key, child] of Object.entries(n.children ?? {})) {
+    const seg = prefix.length > 0 ? `${prefix}_${key}` : key
+    if (isLeaf(child)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      out.set(child.handler!, seg)
+    } else {
+      collectCodegenNames(child, seg, out)
+    }
+  }
+  if (n.fallback !== undefined) {
+    const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
+    collectCodegenNames(n.fallback.subtree, seg, out)
+  }
+}
+
+/** Build the handler → full codegen-name map for a Node tree — see doc above. */
+function buildCodegenNames(n: Node): Map<Handler, string> {
+  const out = new Map<Handler, string>()
+  collectCodegenNames(n, "", out)
+  return out
+}
+
+// ============================================================================
 // Internal: leaf caller
 // ============================================================================
 
@@ -209,6 +248,7 @@ function makeCaller(
   baseSignal: AbortSignal | undefined,
   extensions: readonly ClientExtension[] | undefined,
   meta: Meta,
+  codegenName: string | undefined,
 ): (input?: unknown, callOpts?: CallOptions) => Promise<unknown> {
   return async (input?: unknown, callOpts?: CallOptions): Promise<unknown> => {
     const timeout = callOpts?.timeout ?? baseTimeout
@@ -251,7 +291,7 @@ function makeCaller(
       throw describeAbort(err, verb, path, timeout)
     }
 
-    const decoded = composeDecodeResponse(res, { request: req, refetch: fetchImpl, meta }, extensions)
+    const decoded = composeDecodeResponse(res, { request: req, refetch: fetchImpl, meta, codegenName }, extensions)
     if (decoded !== undefined) return decoded.value
 
     let body: unknown
@@ -300,20 +340,43 @@ function buildClientNode(
   baseTimeout: number | undefined,
   baseSignal: AbortSignal | undefined,
   extensions: readonly ClientExtension[] | undefined,
+  codegenNames: ReadonlyMap<Handler, string> | undefined,
 ): AnyClient | ((input?: unknown, callOpts?: CallOptions) => Promise<unknown>) {
   if (isSingleLeafMethod(route)) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const [verb] = Object.keys(route.methods!)
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const entry = route.methods![verb!]!
-    return makeCaller(verb!, path, slugValues, baseUrl, fetchImpl, baseTimeout, baseSignal, extensions, entry.meta)
+    return makeCaller(
+      verb!,
+      path,
+      slugValues,
+      baseUrl,
+      fetchImpl,
+      baseTimeout,
+      baseSignal,
+      extensions,
+      entry.meta,
+      codegenNames?.get(entry.handler),
+    )
   }
 
   const client: AnyClient = {}
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
     const name = handlerNames?.get(entry.handler) ?? verb.toLowerCase()
-    client[name] = makeCaller(verb, path, slugValues, baseUrl, fetchImpl, baseTimeout, baseSignal, extensions, entry.meta)
+    client[name] = makeCaller(
+      verb,
+      path,
+      slugValues,
+      baseUrl,
+      fetchImpl,
+      baseTimeout,
+      baseSignal,
+      extensions,
+      entry.meta,
+      codegenNames?.get(entry.handler),
+    )
   }
 
   for (const [seg, child] of Object.entries(route.children ?? {})) {
@@ -327,6 +390,7 @@ function buildClientNode(
       baseTimeout,
       baseSignal,
       extensions,
+      codegenNames,
     )
   }
 
@@ -343,6 +407,7 @@ function buildClientNode(
         baseTimeout,
         baseSignal,
         extensions,
+        codegenNames,
       ) as AnyClient
   }
 
@@ -382,6 +447,7 @@ export function createClientFromRoute(route: HttpRoute, opts: ClientOptions = {}
     opts.timeout,
     opts.signal,
     opts.extensions,
+    undefined,
   ) as AnyClient
 }
 
@@ -419,6 +485,7 @@ export function createClientFromRoute(route: HttpRoute, opts: ClientOptions = {}
 export function createClient<N extends Node>(n: N, opts: ClientOptions = {}): TypedClient<N, CallOptions> {
   const route = httpProjection(n)
   const handlerNames = buildHandlerNames(n)
+  const codegenNames = buildCodegenNames(n)
   const baseUrl = opts.baseUrl ?? ""
   const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions)
   return buildClientNode(
@@ -431,5 +498,6 @@ export function createClient<N extends Node>(n: N, opts: ClientOptions = {}): Ty
     opts.timeout,
     opts.signal,
     opts.extensions,
+    codegenNames,
   ) as TypedClient<N, CallOptions>
 }

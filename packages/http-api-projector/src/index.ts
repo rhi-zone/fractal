@@ -46,10 +46,18 @@ export type {
 export { createClient, createClientFromRoute } from "./client.ts"
 export type { AnyClient, ClientOptions } from "./client.ts"
 export { ClientError } from "./client-error.ts"
-export { composeCodegenFetch, composeDecodeResponse, composeFetch, findStreamingCall } from "./extension.ts"
+export {
+  collectResultHelpers,
+  composeCodegenFetch,
+  composeCodegenResult,
+  composeDecodeResponse,
+  composeFetch,
+  findStreamingCall,
+} from "./extension.ts"
 export type {
   ClientExtension,
   ClientExtensionCodegen,
+  CodegenOperationInfo,
   DecodeContext,
   DecodedResponse,
   FetchImpl,
@@ -77,6 +85,8 @@ export {
 export { pagination } from "./extensions/pagination.ts"
 export type { PageIterator, PaginationOptions } from "./extensions/pagination.ts"
 export { streaming } from "./extensions/streaming.ts"
+export { ValidationError, validation } from "./extensions/validation.ts"
+export type { ValidationMode, ValidationOptions } from "./extensions/validation.ts"
 export { createFetch, httpErrors } from "./preset.ts"
 export type {
   CorsOptions,

@@ -86,6 +86,10 @@
     "./extensions/streaming": {
       "types": "./src/extensions/streaming.ts",
       "import": "./src/extensions/streaming.ts"
+    },
+    "./extensions/validation": {
+      "types": "./src/extensions/validation.ts",
+      "import": "./src/extensions/validation.ts"
     }
   },
   "files": ["src"],

@@ -58,8 +58,8 @@ import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import { httpProjection } from "./dx.ts"
 import type { HttpRoute } from "./route.ts"
-import { composeCodegenFetch, findStreamingCall } from "./extension.ts"
-import type { ClientExtension, StreamingCallArgs } from "./extension.ts"
+import { collectResultHelpers, composeCodegenFetch, composeCodegenResult, findStreamingCall } from "./extension.ts"
+import type { ClientExtension, CodegenOperationInfo, StreamingCallArgs } from "./extension.ts"
 
 // ============================================================================
 // Public API
@@ -535,18 +535,19 @@ function nodeRuntimeLiteral(
   node: ClientTreeNode,
   indent: string,
   streamingCall: ((args: StreamingCallArgs) => string) | undefined,
+  extensions: readonly ClientExtension[] | undefined,
 ): string {
   const nextIndent = indent + "  "
   const lines: string[] = []
 
   for (const [key, child] of node.children) {
-    lines.push(`${nextIndent}${safeKey(key)}: ${nodeRuntimeLiteral(child, nextIndent, streamingCall)},`)
+    lines.push(`${nextIndent}${safeKey(key)}: ${nodeRuntimeLiteral(child, nextIndent, streamingCall, extensions)},`)
   }
 
   if (node.param !== undefined) {
     const { name, subtree } = node.param
     lines.push(
-      `${nextIndent}${safeKey(name)}: (${name}: string) => (${nodeRuntimeLiteral(subtree, nextIndent, streamingCall)}),`,
+      `${nextIndent}${safeKey(name)}: (${name}: string) => (${nodeRuntimeLiteral(subtree, nextIndent, streamingCall, extensions)}),`,
     )
   }
 
@@ -575,10 +576,13 @@ function nodeRuntimeLiteral(
           `${callExpr} as unknown as AsyncIterable<${outputType}>,`,
       )
     } else {
+      const requestExpr =
+        `__request(baseUrl, fetchImpl, headers, "${entry.verb}", \`${pathLit}\`, ${inputArg}, ` +
+        `baseTimeout, baseSignal, callOpts)`
+      const resultExpr = composeCodegenResult(requestExpr, entry.codegenName, extensions)
       lines.push(
         `${nextIndent}${safeKey(memberName)}: (${params}): Promise<${outputType}> => ` +
-          `__request(baseUrl, fetchImpl, headers, "${entry.verb}", \`${pathLit}\`, ${inputArg}, ` +
-          `baseTimeout, baseSignal, callOpts) as Promise<${outputType}>,`,
+          `(${resultExpr}) as Promise<${outputType}>,`,
       )
     }
   }
@@ -625,7 +629,20 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
 
   const clientTypeDecl = `export type ${clientName} = ${nodeTypeLiteral(root, "")}`
   const streamingCall = findStreamingCall(options.extensions)
-  const factoryBody = nodeRuntimeLiteral(root, "  ", streamingCall)
+
+  // Per-operation result helpers (e.g. `extensions/validation.ts`'s one
+  // schema constant per operation) need the FULL operation list up front, and
+  // MUST run before `nodeRuntimeLiteral` below: an extension's `resultHelpers`
+  // and `wrapResult` hooks share a closure (e.g. validation's "which
+  // operations actually have a schema" set), and `wrapResult` is only called
+  // correctly once `resultHelpers` has already populated it.
+  const operationInfos: CodegenOperationInfo[] = entries.map((entry) => ({
+    codegenName: entry.codegenName,
+    ...(entry.responseSchema !== undefined ? { responseSchema: entry.responseSchema } : {}),
+  }))
+  const resultHelpers = collectResultHelpers(operationInfos, options.extensions)
+
+  const factoryBody = nodeRuntimeLiteral(root, "  ", streamingCall, options.extensions)
 
   // Extensions are baked in at generation time: each contributes an
   // expression wrapping the base fetch impl (`expr`), plus any helper
@@ -643,6 +660,7 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
     clientTypeDecl,
     RUNTIME_HELPERS,
     ...extensionHelpers,
+    ...resultHelpers,
     [
       `export function createClient(baseUrl: string, options: CreateClientOptions = {}): ${clientName} {`,
       `  const fetchImpl = ${fetchExpr}`,

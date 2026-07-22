@@ -36,6 +36,7 @@
 //   packages/http-api-projector/src/layers.ts   — the server-side analogue this mirrors
 
 import type { Meta } from "@rhi-zone/fractal-api-tree/node"
+import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 
 /** A fetch-shaped function: takes a `Request`, returns a `Response`. */
 export type FetchImpl = (req: Request) => Promise<Response>
@@ -59,6 +60,19 @@ export type DecodeContext = {
   readonly request: Request
   readonly refetch: FetchImpl
   readonly meta: Meta
+  /**
+   * The `SchemaMap` key identifying this operation (e.g. `"books_bookId_read"`
+   * — see `@rhi-zone/fractal-api-tree/tree`'s `extractToolSchemas`), when the
+   * client was built with enough information to recover it. Only
+   * `createClient(node, ...)` can (it walks the raw `Node` tree once, same
+   * trick `buildHandlerNames` already uses for member names — see
+   * `client.ts`'s `buildCodegenNameMap`); `createClientFromRoute` has no
+   * `Node` to derive it from, so this is `undefined` there — same degradation
+   * already documented for co-located member names. Lets an extension (e.g.
+   * `extensions/validation.ts`) look up this operation's own entry in a
+   * `SchemaMap` without re-deriving tree-position naming itself.
+   */
+  readonly codegenName?: string | undefined
 }
 
 /**
@@ -85,6 +99,40 @@ export type ClientExtensionCodegen = {
   readonly wrap?: (innerExpr: string) => string
   readonly helpers?: string
   readonly streamingCall?: (args: StreamingCallArgs) => string
+  /**
+   * Wraps the expression for ONE operation's decoded result — the per-
+   * operation analogue of `wrap` (which wraps the fetch impl once for the
+   * whole client). `innerExpr` evaluates to `Promise<unknown>` (the
+   * operation's `__request(...)` call, or an earlier extension's own
+   * `wrapResult`); `codegenName` is the same `SchemaMap`-key naming
+   * `attachOperation` already resolved for this operation (see
+   * `OperationEntry.codegenName`), letting an extension look up its own
+   * per-operation constant (emitted via `resultHelpers` below) by name. E.g.
+   * `extensions/validation.ts` turns `__request(...)` into
+   * `__request(...).then((v) => __validate(v, __SCHEMA_books_bookId_read, "throw"))`.
+   * Optional: most extensions (retry, timeout, errors) only need `wrap`.
+   */
+  readonly wrapResult?: (innerExpr: string, codegenName: string) => string
+  /**
+   * Emits helper declarations that need the FULL list of operations up
+   * front — e.g. one schema constant per operation — computed once codegen
+   * has walked the whole tree, unlike `helpers` (emitted with no knowledge
+   * of operations at all) or `wrapResult` (one operation at a time).
+   * `undefined` when this extension has nothing to emit (e.g. no operation
+   * has an output schema to validate).
+   */
+  readonly resultHelpers?: (operations: readonly CodegenOperationInfo[]) => string | undefined
+}
+
+/**
+ * Per-operation facts codegen has already resolved by the time result-
+ * shaping runs (`render`'s `entries`, via `attachOperation`) — handed to
+ * `ClientExtensionCodegen.resultHelpers` so an extension can emit one
+ * constant per operation without re-deriving codegen names/schemas itself.
+ */
+export type CodegenOperationInfo = {
+  readonly codegenName: string
+  readonly responseSchema?: JsonSchema
 }
 
 /**
@@ -244,4 +292,37 @@ export function composeCodegenFetch(
     return ext.codegen.wrap?.(inner) ?? inner
   }, innerExpr)
   return { expr, helpers: [...helperSet] }
+}
+
+/**
+ * Compose a list of extensions' `codegen.wrapResult` hooks around ONE
+ * operation's result expression, outermost-first (same order as
+ * `composeCodegenFetch`). Extensions without `wrapResult` are skipped.
+ * Returns `innerExpr` unchanged when `extensions` is empty or undefined.
+ */
+export function composeCodegenResult(
+  innerExpr: string,
+  codegenName: string,
+  extensions: readonly ClientExtension[] | undefined,
+): string {
+  if (extensions === undefined || extensions.length === 0) return innerExpr
+  return extensions.reduceRight((inner, ext) => ext.codegen?.wrapResult?.(inner, codegenName) ?? inner, innerExpr)
+}
+
+/**
+ * Collect every extension's `codegen.resultHelpers` output (given the full
+ * operation list), deduplicated in encounter order. `[]` when no extension
+ * contributes any (including when `extensions` is empty/undefined).
+ */
+export function collectResultHelpers(
+  operations: readonly CodegenOperationInfo[],
+  extensions: readonly ClientExtension[] | undefined,
+): readonly string[] {
+  if (extensions === undefined) return []
+  const out: string[] = []
+  for (const ext of extensions) {
+    const helper = ext.codegen?.resultHelpers?.(operations)
+    if (helper !== undefined) out.push(helper)
+  }
+  return out
 }
