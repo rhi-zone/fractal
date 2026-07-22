@@ -245,6 +245,154 @@ export const types = {
 export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial, deepRequired } from "./derive.ts"
 
 // ============================================================================
+// TypeRefDocument — a self-contained TypeRef plus named definitions.
+//
+// `ref: { kind: "ref"; target: string }` has always existed as the recursive-
+// type marker, but until now `target` was a bare name with nothing to resolve
+// against — an external registry was implied but never modeled. `defs` closes
+// that gap: a `TypeRefDocument` carries its own `root` TypeRef plus every
+// named definition `ref`s in the tree point into, keyed by name. Recursive
+// types (and, per a caller's own `shouldShare` heuristic — see api-tree's
+// extractor — types reused enough to be worth sharing structurally) live in
+// `defs`; a recursive def's own body contains a `ref` back to its own name.
+//
+// Backwards compatibility: every function that historically took a bare
+// `TypeRef` keeps working unchanged — a `TypeRef` with no `defs` is simply a
+// document with no shared definitions (`{ target }` refs it contains, if any,
+// are just unresolvable, exactly as before this change). `typeRefDocument()`
+// below is the wrap-a-bare-TypeRef helper for callers that want to start
+// threading `defs` through.
+// ============================================================================
+
+export type TypeRefDocument = {
+  readonly root: TypeRef
+  readonly defs: Readonly<Record<string, TypeRef>>
+}
+
+/** Wrap a bare `TypeRef` (optionally with `defs`) into a `TypeRefDocument`. */
+export function typeRefDocument(root: TypeRef, defs?: Record<string, TypeRef>): TypeRefDocument {
+  return { root, defs: defs ?? {} }
+}
+
+/** Duck-types `v` as a `TypeRef` — every `TypeRef` carries `shape.kind` +
+ * `meta`, which no other value shape appearing inside a `TypeShape` does
+ * (plain strings, arrays of `{ name, type }` params, etc.). Used by
+ * `childTypeRefs` to walk an arbitrary (possibly extension-registered) kind's
+ * shape generically, without a per-kind switch. */
+function isTypeRef(v: unknown): v is TypeRef {
+  if (typeof v !== "object" || v === null) return false
+  const shape = (v as { shape?: unknown }).shape
+  return (
+    "meta" in v &&
+    typeof shape === "object" &&
+    shape !== null &&
+    typeof (shape as { kind?: unknown }).kind === "string"
+  )
+}
+
+/**
+ * The immediate TypeRef children of a shape — generic over kind, so a kind
+ * registered by an extension module (src/kinds/*, or a consumer's own
+ * declaration merge) is walked correctly without this file knowing its name.
+ * Every built-in kind's TypeRef-valued fields fall into one of three shapes:
+ * a bare TypeRef (`array.element`, `map.key`/`value`, …), an array of TypeRef
+ * or `{ name, type: TypeRef }` (`tuple.elements`, `union.variants`,
+ * `function.params`, …), or a `Record<string, TypeRef>` (`object.fields`,
+ * `interface.methods`). `ref.target` is a plain string, not a TypeRef, so refs
+ * contribute no children here — walking root+defs can never cycle structurally.
+ */
+function childTypeRefs(shape: TypeShape): TypeRef[] {
+  const out: TypeRef[] = []
+  for (const value of Object.values(shape)) {
+    if (isTypeRef(value)) {
+      out.push(value)
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isTypeRef(item)) {
+          out.push(item)
+        } else if (typeof item === "object" && item !== null && isTypeRef((item as { type?: unknown }).type)) {
+          out.push((item as { type: TypeRef }).type)
+        }
+      }
+    } else if (typeof value === "object" && value !== null) {
+      for (const nested of Object.values(value)) {
+        if (isTypeRef(nested)) out.push(nested)
+      }
+    }
+  }
+  return out
+}
+
+/** Count of TypeRef nodes in a subtree (the node itself + every descendant
+ * reachable without crossing a `ref` — refs don't expand structurally, see
+ * `childTypeRefs`). Used by the default `shouldShare` heuristic (see api-tree's
+ * extractor) to decide whether a reused type is big enough to be worth sharing
+ * via `defs` rather than inlining at every use site. */
+export function nodeCount(node: TypeRef): number {
+  let count = 1
+  for (const child of childTypeRefs(node.shape)) count += nodeCount(child)
+  return count
+}
+
+/** Resolve a `{ kind: "ref"; target }` TypeRef against a document's `defs`.
+ * Throws if the target is missing — an unresolvable ref is a malformed
+ * document, not a valid "no-op" state (unlike a bare `TypeRef` with no `defs`
+ * at all, which simply never contains a ref in the first place for callers
+ * that don't produce one). Non-ref input is returned unchanged. */
+export function resolveRef(doc: TypeRefDocument, ref: TypeRef): TypeRef {
+  if (ref.shape.kind !== "ref") return ref
+  const target = (ref.shape as TypeShape & { kind: "ref"; target: string }).target
+  const resolved = doc.defs[target]
+  if (resolved === undefined) {
+    throw new Error(`resolveRef: unresolved ref target "${target}" (no such entry in defs)`)
+  }
+  return resolved
+}
+
+/** Per-node context handed to a `walkTypeRef` visitor. */
+export interface WalkContext {
+  /** Nodes on the path from the walk's starting point (`root`, or a `defs`
+   * entry's own root when walking that entry) down to — but not including —
+   * the current node. Does NOT descend through unresolved `ref`s (see
+   * `childTypeRefs`); a visitor that manually resolves a ref via
+   * `resolveRef` and walks the result can use `isRecursionTarget` on that
+   * resolved node to detect having come full circle. */
+  ancestors: readonly TypeRef[]
+  /** `resolveRef(doc, ref)` bound to this walk's document. */
+  resolveRef(ref: TypeRef): TypeRef
+  /** True when `node` is reference-equal to one of `ancestors` — i.e.
+   * revisiting it (typically after a caller-driven `resolveRef`) would
+   * recurse infinitely. */
+  isRecursionTarget(node: TypeRef): boolean
+}
+
+/**
+ * Depth-first walk of a `TypeRefDocument`: every node reachable from `root`,
+ * followed by every node reachable from each `defs` entry (each starting its
+ * own `ancestors` chain from empty, since a def is an independent named root,
+ * not structurally nested under `root`). `visitor` is invoked once per node,
+ * pre-order; its return value is not collected (a caller after a fold should
+ * accumulate into a closed-over variable — the walk itself is for its side
+ * effects, e.g. the extractor's use-count tracking or compile.ts's per-def
+ * codegen).
+ */
+export function walkTypeRef(doc: TypeRefDocument, visitor: (node: TypeRef, ctx: WalkContext) => void): void {
+  const boundResolveRef = (ref: TypeRef) => resolveRef(doc, ref)
+  function visit(node: TypeRef, ancestors: readonly TypeRef[]): void {
+    const ctx: WalkContext = {
+      ancestors,
+      resolveRef: boundResolveRef,
+      isRecursionTarget: (n) => ancestors.includes(n),
+    }
+    visitor(node, ctx)
+    const nextAncestors = [...ancestors, node]
+    for (const child of childTypeRefs(node.shape)) visit(child, nextAncestors)
+  }
+  visit(doc.root, [])
+  for (const name of Object.keys(doc.defs)) visit(doc.defs[name]!, [])
+}
+
+// ============================================================================
 // AOT validator codegen projector
 //
 // compile.ts (TypeRef -> standalone check/errors/parse validator code, no

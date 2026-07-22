@@ -85,6 +85,13 @@ class GenCtx {
   private regexCache = new Map<string, string>()
   private varCounter = 0
 
+  /** Names of `defs` entries in scope for this compile — populated by
+   * `compileDefs` before `genCheckExpr`/`genValidate` walk any body that
+   * might reference them via `ref`. A `ref` whose target ISN'T in this set has
+   * no generated function to call (no `defs` passed in) and passes through,
+   * preserving pre-`defs` behavior for bare-`TypeRef` callers. */
+  readonly defNames = new Set<string>()
+
   addConst(prefix: string, expr: string): string {
     const cacheKey = `${prefix}\0${expr}`
     const cached = this.constCache.get(cacheKey)
@@ -110,6 +117,16 @@ class GenCtx {
   declarations(): string[] {
     return this.consts
   }
+}
+
+/** The generated function name for a `defs` entry's check/errors/parse
+ * facet — e.g. `defFnName("User", "check")` → `__def_User_check`. Shared by
+ * `compileDefs` (which emits the function declarations) and the `ref`
+ * handlers below (which call them). Sanitizes `name` to a valid JS
+ * identifier fragment so def names containing characters JS identifiers
+ * can't (e.g. `"Foo.Bar"`, generic instantiation names) still emit valid code. */
+function defFnName(name: string, facet: "check" | "errors" | "parse"): string {
+  return `__def_${name.replace(/[^a-zA-Z0-9_$]/g, "_")}_${facet}`
 }
 
 /** A JSON-serializable TypeRef literal, hoisted to a shared const (via `ctx`)
@@ -284,11 +301,20 @@ const checkHandlers: Record<string, CheckHandler> = {
   void: (_r, v) => `${v} === undefined`,
   unknown: () => "true",
   never: () => "false",
-  // Purely nominal (instance) / non-structural (ref has no schema registry to
-  // resolve against) shapes can't be validated structurally — pass through.
-  // See the `instance`/`ref` doc comments in index.ts.
+  // Purely nominal (instance) shapes can't be validated structurally — pass
+  // through. See the `instance` doc comment in index.ts.
   instance: () => "true",
-  ref: () => "true",
+  // `ref` now resolves against a document's `defs` (see index.ts's
+  // `TypeRefDocument`) — delegates to the named validator function
+  // `compileEntryBody`/`compileDefs` emit for the target def, so a recursive
+  // def type-checks by ordinary mutual JS-function recursion, no cycle
+  // detection needed here. A ref with no matching def in scope (bare TypeRef,
+  // no `defs` passed to `compileValidator`/`compileValidatorModule`) has
+  // nothing to call and passes through, same as before this change.
+  ref: (ref, v, ctx) => {
+    const s = ref.shape as TypeShape & { kind: "ref" }
+    return ctx.defNames.has(s.target) ? `${defFnName(s.target, "check")}(${v})` : "true"
+  },
   function: (_r, v) => `typeof ${v} === "function"`,
   object: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "object" }
@@ -710,18 +736,33 @@ const validateHandlers: Record<string, ValidateHandler> = {
   bytes: formatLeaf("bytes"),
   null: nonCoercingLeaf((v) => `${v} === null`),
   void: nonCoercingLeaf((v) => `${v} === undefined`),
-  // `unknown`/`instance`/`ref` have no structure to validate or reconstruct
-  // from (see the doc comments on their `checkHandlers` counterparts above,
-  // and index.ts's own `instance`/`ref` docs) — parse() returns the SAME
-  // reference it was given rather than a fresh copy. This is the one
-  // documented carve-out to parse()'s "fresh output, never mutates the
-  // input" contract (see this file's header comment): there's nothing to
-  // copy FROM, so aliasing is the only option, not a shortcut taken for
-  // convenience.
+  // `unknown`/`instance` have no structure to validate or reconstruct from
+  // (see the doc comments on their `checkHandlers` counterparts above, and
+  // index.ts's own `instance` docs) — parse() returns the SAME reference it
+  // was given rather than a fresh copy. This is one documented carve-out to
+  // parse()'s "fresh output, never mutates the input" contract (see this
+  // file's header comment): there's nothing to copy FROM, so aliasing is the
+  // only option, not a shortcut taken for convenience.
   unknown: (_ref, v) => ({ stmts: [], outExpr: v }),
   never: (ref, v, pathExpr, ctx) => ({ stmts: [typeErrorStmt(pathExpr, ref, v, ctx)], outExpr: v }),
   instance: (_ref, v) => ({ stmts: [], outExpr: v }),
-  ref: (_ref, v) => ({ stmts: [], outExpr: v }),
+  // `ref` delegates to the target def's generated `errors`/`parse` function
+  // (see the `checkHandlers.ref` doc comment above) when the target is in
+  // scope (`ctx.defNames`); with no matching def (bare `TypeRef`, no `defs`
+  // passed in) there's nothing to call, so — like `unknown`/`instance` above —
+  // it's a structural no-op that aliases the input.
+  ref: (ref, v, pathExpr, ctx, mode) => {
+    const s = ref.shape as TypeShape & { kind: "ref" }
+    if (!ctx.defNames.has(s.target)) return { stmts: [], outExpr: v }
+    if (mode === "errors") {
+      return { stmts: [`errs.push(...${defFnName(s.target, "errors")}(${v}, ${pathExpr}));`], outExpr: v }
+    }
+    const out = ctx.fresh("d")
+    return {
+      stmts: [`const ${out} = ${defFnName(s.target, "parse")}(${v}, ${pathExpr}); errs.push(...${out}.errors);`],
+      outExpr: `${out}.value`,
+    }
+  },
   function: nonCoercingLeaf((v) => `typeof ${v} === "function"`),
   literal: literalLeaf,
   enum: enumLeaf(),
@@ -809,6 +850,42 @@ function guardAnnotation(
   return { annotation: toTypeScript(ref) }
 }
 
+/**
+ * Emit one `function __def_NAME_check/errors/parse(...)` declaration triple
+ * per entry in `defs`, all sharing `ctx` (so a const/regex reused across
+ * multiple defs — or between a def and the entry that refs it — is hoisted
+ * once). Populates `ctx.defNames` FIRST (before generating any body), so a
+ * def whose body `ref`s another def — including itself — resolves to a call,
+ * not a no-op passthrough: recursion is ordinary JS function recursion, not
+ * anything special-cased here. Declared as `function` statements (hoisted),
+ * so declaration order among mutually-referential defs never matters.
+ */
+function compileDefs(defs: Record<string, TypeRef>, ctx: GenCtx): string[] {
+  for (const name of Object.keys(defs)) ctx.defNames.add(name)
+  const lines: string[] = []
+  for (const [name, ref] of Object.entries(defs)) {
+    const checkExpr = genCheckExpr(ref, "value", ctx)
+    const errorsBody = genValidate(ref, "value", "path", ctx, "errors")
+    const parseBody = genValidate(ref, "value", "path", ctx, "parse")
+    lines.push(`function ${defFnName(name, "check")}(value: any): boolean {`)
+    lines.push(`  return (${checkExpr});`)
+    lines.push(`}`)
+    lines.push(`function ${defFnName(name, "errors")}(value: any, path: string[]): ValidationError[] {`)
+    lines.push(`  const errs: ValidationError[] = [];`)
+    lines.push(...indentLines(errorsBody.stmts, 2))
+    lines.push(`  return errs;`)
+    lines.push(`}`)
+    lines.push(
+      `function ${defFnName(name, "parse")}(value: any, path: string[]): { errors: ValidationError[]; value: any } {`,
+    )
+    lines.push(`  const errs: ValidationError[] = [];`)
+    lines.push(...indentLines(parseBody.stmts, 2))
+    lines.push(`  return { errors: errs, value: ${parseBody.outExpr} };`)
+    lines.push(`}`)
+  }
+  return lines
+}
+
 /** Emit the `{ check, errors, parse }` triple's body lines (no wrapping
  * IIFE/braces — the caller supplies those) for a single TypeRef. `withHelper`
  * controls whether the `__inferTypeRef` runtime helper AND the
@@ -822,8 +899,26 @@ function guardAnnotation(
  * is a TYPE LOCAL to this function body, out of scope for a cast written
  * after the IIFE closes; casting from inside keeps it in scope in both
  * `withHelper` cases. */
-function compileEntryBody(ref: TypeRef, annotation: string, withHelper: boolean): string[] {
+function compileEntryBody(
+  ref: TypeRef,
+  annotation: string,
+  withHelper: boolean,
+  defs?: Record<string, TypeRef>,
+  // Module-scope case (`compileValidatorModule`): the def FUNCTIONS are
+  // declared once, shared across all entries, outside any single entry's
+  // IIFE — but each entry's OWN `ctx.defNames` still needs the names seeded
+  // so its `ref` handlers know to emit a call rather than a no-op. Mutually
+  // exclusive with `defs` in practice (a caller passing both would double-
+  // declare); `compileValidatorModule` only ever passes this one.
+  externalDefNames?: ReadonlySet<string>,
+): string[] {
   const ctx = new GenCtx()
+  // `defs`' function declarations are generated FIRST (populating
+  // `ctx.defNames` before the entry body itself is walked), so a `ref` at
+  // the entry's own top level — not just inside a def — also resolves to a
+  // call rather than a no-op passthrough.
+  const defLines = defs !== undefined ? compileDefs(defs, ctx) : []
+  if (externalDefNames !== undefined) for (const name of externalDefNames) ctx.defNames.add(name)
   const checkExpr = genCheckExpr(ref, "value", ctx)
   const errorsBody = genValidate(ref, "value", "path", ctx, "errors")
   const parseBody = genValidate(ref, "value", "path", ctx, "parse")
@@ -842,6 +937,7 @@ function compileEntryBody(ref: TypeRef, annotation: string, withHelper: boolean)
     lines.push(INFER_TYPE_REF_SOURCE)
   }
   lines.push(...ctx.declarations())
+  lines.push(...defLines)
   // `value: any` (not `unknown`) throughout the raw compiled body — bracket
   // access (`value["field"]`) only type-checks against `any`; the ANNOTATED,
   // narrower signature (`value is T`, the discriminated `parse` return type)
@@ -876,10 +972,18 @@ function compileEntryBody(ref: TypeRef, annotation: string, withHelper: boolean)
  * check, errors, parse }` — zero runtime dependency, `check`/`parse` narrow
  * via TypeScript (a type-guard cast on `check`, a discriminated-union return
  * type on `parse`).
+ *
+ * `defs` (optional, backwards compatible with the pre-`defs` single-arg
+ * call) is a `TypeRefDocument`'s named definitions (see index.ts) — a `ref`
+ * inside `ref` (or inside a def's own body) whose target has an entry here
+ * compiles to a real recursive check, not the previous always-`true`
+ * passthrough. Every def's `check`/`errors`/`parse` triple is generated as a
+ * standalone function INSIDE this same IIFE (there's no module scope to
+ * hoist to, unlike `compileValidatorModule`).
  */
-export function compileValidator(ref: TypeRef): string {
+export function compileValidator(ref: TypeRef, defs?: Record<string, TypeRef>): string {
   const { annotation } = guardAnnotation(ref, undefined)
-  const body = compileEntryBody(ref, annotation, true)
+  const body = compileEntryBody(ref, annotation, true, defs)
   return ["(function () {", ...indentLines(body, 2), "})()"].join("\n")
 }
 
@@ -921,13 +1025,23 @@ const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
  */
 export function compileValidatorModule(
   entries: readonly { name: string; ref: TypeRef }[],
-  options?: { resolveImport?: (declarationFile: string) => string },
+  options?: { resolveImport?: (declarationFile: string) => string; defs?: Record<string, TypeRef> },
 ): string {
   const imports = new Map<string, Set<string>>()
   imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
   const lines: string[] = []
   lines.push("// AUTO-GENERATED by @rhi-zone/fractal-type-ir. Do not edit by hand.")
   lines.push("")
+
+  // `defs`, unlike per-entry codegen, is declared ONCE at module scope (not
+  // per-entry) — every entry's IIFE closes over the same `__def_NAME_*`
+  // functions, so a def shared across multiple tool schemas (the whole point
+  // of structural sharing — see the extractor's `shouldShare`) is compiled
+  // once, not duplicated per entry that refs it.
+  const defs = options?.defs ?? {}
+  const defNames = new Set(Object.keys(defs))
+  const defCtx = new GenCtx()
+  const defLines = defNames.size > 0 ? compileDefs(defs, defCtx) : []
 
   const entryLines: string[] = []
   for (const { name, ref } of entries) {
@@ -937,7 +1051,7 @@ export function compileValidatorModule(
       names.add(typeImport.typeName)
       imports.set(typeImport.from, names)
     }
-    const body = compileEntryBody(ref, annotation, false)
+    const body = compileEntryBody(ref, annotation, false, undefined, defNames)
     entryLines.push(`  ${JSON.stringify(name)}: (function () {`)
     entryLines.push(...indentLines(body, 4))
     entryLines.push(`  })(),`)
@@ -950,6 +1064,9 @@ export function compileValidatorModule(
 
   lines.push(INFER_TYPE_REF_SOURCE)
   lines.push("")
+  lines.push(...defCtx.declarations())
+  lines.push(...defLines)
+  if (defLines.length > 0) lines.push("")
   lines.push("export const validators = {")
   lines.push(...entryLines)
   lines.push("}")
