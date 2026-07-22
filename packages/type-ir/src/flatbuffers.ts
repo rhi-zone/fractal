@@ -178,11 +178,47 @@ function fieldRequired(meta: Readonly<Record<string, unknown>>): boolean {
   return !(meta.optional === true || meta.nullable === true)
 }
 
+// § "Attributes" (https://flatbuffers.dev/schema/#attributes): `required`
+// only applies to *non-scalar* table fields (strings, tables, vectors,
+// unions) — flatc hard-errors ("only non-scalar fields in tables may be
+// 'required'") on a scalar field carrying it. Every FlatBuffers scalar
+// keyword (§ "Built-in Scalar Types", both the primary name and the
+// int8/uint32/float64/... aliases) plus enums (always int-backed, thus
+// scalar regardless of having their own declared name) must never get the
+// attribute even when the IR field itself is non-optional/non-nullable.
+const FB_SCALAR_TYPES = new Set([
+  "bool",
+  "byte",
+  "int8",
+  "ubyte",
+  "uint8",
+  "short",
+  "int16",
+  "ushort",
+  "uint16",
+  "int",
+  "int32",
+  "uint",
+  "uint32",
+  "float",
+  "float32",
+  "long",
+  "int64",
+  "ulong",
+  "uint64",
+  "double",
+  "float64",
+])
+
+function requiredFor(type: string, required: boolean): boolean {
+  return required && !FB_SCALAR_TYPES.has(type)
+}
+
 function buildTupleTable(name: string, ref: TypeRef): FbTable {
   const shape = ref.shape as TypeShape & { kind: "tuple" }
   const fields: FbTable["fields"] = shape.elements.map((element, i) => ({
     name: `e${i}`,
-    field: { type: toFlatBuffers(element), required: fieldRequired(element.meta) },
+    field: { type: toFlatBuffers(element), required: requiredFor(toFlatBuffers(element), fieldRequired(element.meta)) },
   }))
   const table: FbTable = { name, fields }
   if (typeof ref.meta.description === "string") table.description = ref.meta.description
@@ -221,7 +257,8 @@ function buildTable(name: string, ref: TypeRef, decls: FbDecl[]): FbTable {
       const enumName = capitalize(fieldName)
       const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
       decls.push({ kind: "enum", value: { name: enumName, base: "int", values: members } })
-      fields.push({ name: fieldName, field: { type: enumName, required, ...deprecated, ...description } })
+      // Enums are int-backed (§ "Enums"), thus scalar, regardless of their own declared name.
+      fields.push({ name: fieldName, field: { type: enumName, required: false, ...deprecated, ...description } })
     } else if (fieldRef.shape.kind === "union") {
       const unionName = capitalize(fieldName)
       const variants = (fieldRef.shape as TypeShape & { kind: "union" }).variants
@@ -235,8 +272,8 @@ function buildTable(name: string, ref: TypeRef, decls: FbDecl[]): FbTable {
         value: {
           name: entryName,
           fields: [
-            { name: "key", field: { type: toFlatBuffers(mapShape.key), required: true } },
-            { name: "value", field: { type: toFlatBuffers(mapShape.value), required: true } },
+            { name: "key", field: { type: toFlatBuffers(mapShape.key), required: requiredFor(toFlatBuffers(mapShape.key), true) } },
+            { name: "value", field: { type: toFlatBuffers(mapShape.value), required: requiredFor(toFlatBuffers(mapShape.value), true) } },
           ],
         },
       })
@@ -246,7 +283,10 @@ function buildTable(name: string, ref: TypeRef, decls: FbDecl[]): FbTable {
       decls.push({ kind: "table", value: buildTupleTable(nestedName, fieldRef) })
       fields.push({ name: fieldName, field: { type: nestedName, required, ...deprecated, ...description } })
     } else {
-      fields.push({ name: fieldName, field: { type: toFlatBuffers(fieldRef), required, ...deprecated, ...description } })
+      fields.push({
+        name: fieldName,
+        field: { type: toFlatBuffers(fieldRef), required: requiredFor(toFlatBuffers(fieldRef), required), ...deprecated, ...description },
+      })
     }
   }
 
@@ -271,14 +311,19 @@ function buildService(name: string, ref: TypeRef): FbService {
     const requestType = `${rpcName}Request`
     tables.push({
       name: requestType,
-      fields: m.params.map((p) => ({ name: p.name, field: { type: toFlatBuffers(p.type), required: true } })),
+      fields: m.params.map((p) => ({
+        name: p.name,
+        field: { type: toFlatBuffers(p.type), required: requiredFor(toFlatBuffers(p.type), true) },
+      })),
     })
 
     const responseType = `${rpcName}Response`
     const isVoid = m.returnType.shape.kind === "void"
     tables.push({
       name: responseType,
-      fields: isVoid ? [] : [{ name: "result", field: { type: toFlatBuffers(m.returnType), required: true } }],
+      fields: isVoid
+        ? []
+        : [{ name: "result", field: { type: toFlatBuffers(m.returnType), required: requiredFor(toFlatBuffers(m.returnType), true) } }],
     })
 
     rpcs.push({ name: rpcName, requestType, responseType })

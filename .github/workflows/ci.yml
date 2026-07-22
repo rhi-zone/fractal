@@ -24,6 +24,21 @@ jobs:
       - name: Test
         run: nix develop --command bun run test
 
+      # compile-check.test.ts (part of the type-ir package, already covered by
+      # `bun run test` above) shells out to each target language's real
+      # compiler/checker — tsc, go, cargo, swiftc, ghc, dotnet, g++, crystal,
+      # ruby, php, protoc, capnp, flatc, clang+GNUstep, flow — to verify the
+      # generated code actually compiles, not just that it string-matches.
+      # Broken out as its own named step (even though `bun run test` already
+      # runs it) so a real-compiler regression shows up distinctly in CI
+      # rather than buried in the general test step's output; it needs the
+      # full nix devShell for every one of those toolchains (see flake.nix)
+      # plus network access (cargo/rustc resolves serde+serde_json from
+      # crates.io; nix eval looks up nlohmann_json's store path).
+      - name: Compile-check generated code
+        run: nix develop --command bun test src/compile-check.test.ts
+        working-directory: packages/type-ir
+
       - name: Build playground
         run: nix develop --command bun run build
         working-directory: packages/playground

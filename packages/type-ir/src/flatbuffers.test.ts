@@ -237,7 +237,9 @@ describe("toFlatBuffersTable", () => {
     const rendered = toFlatBuffersTable("Account", ref)
     expect(rendered).toContain("enum Status : int {")
     expect(rendered).toContain("  ACTIVE, INACTIVE")
-    expect(rendered).toContain("  status:Status (required);")
+    // Enums are int-backed, thus scalar (§ "Attributes") — flatc rejects
+    // `required` on a scalar field, so this never carries the attribute.
+    expect(rendered).toContain("  status:Status;")
   })
 
   test("union field hoists a sibling union", () => {
@@ -259,18 +261,22 @@ describe("toFlatBuffersTable", () => {
   test("tuple field hoists a sibling positional table", () => {
     const ref = t(types.object({ point: t(types.tuple([int32(), int32()])) }))
     const rendered = toFlatBuffersTable("Widget", ref)
+    // int32 is scalar (§ "Attributes") — never carries `required`, even
+    // though the field itself is non-optional; the `Point` table is
+    // itself non-scalar so `point` on the parent still gets `required`.
     expect(rendered).toContain("table Point {")
-    expect(rendered).toContain("  e0:int32 (required);")
-    expect(rendered).toContain("  e1:int32 (required);")
+    expect(rendered).toContain("  e0:int32;")
+    expect(rendered).toContain("  e1:int32;")
     expect(rendered).toContain("  point:Point (required);")
   })
 
   test("top-level tuple lowers to a positional table", () => {
     const ref = t(types.tuple([t(types.string), int32()]))
     const rendered = toFlatBuffersTable("Pair", ref)
-    expect(rendered).toBe(
-      ["table Pair {", "  e0:string (required);", "  e1:int32 (required);", "}"].join("\n"),
-    )
+    // e0 (string) is non-scalar and keeps `required`; e1 (int32) is scalar
+    // and never carries it (§ "Attributes" — flatc rejects `required` on a
+    // scalar table field).
+    expect(rendered).toBe(["table Pair {", "  e0:string (required);", "  e1:int32;", "}"].join("\n"))
   })
 
   test("deprecated field renders the (deprecated) attribute", () => {
@@ -299,11 +305,12 @@ describe("toFlatBuffersService", () => {
     )
     const rendered = toFlatBuffersService("AccountService", ref)
     expect(rendered).toContain("table DepositRequest {")
-    expect(rendered).toContain("  amount:double (required);")
+    // double is scalar (§ "Attributes") — never carries `required`.
+    expect(rendered).toContain("  amount:double;")
     expect(rendered).toContain("table DepositResponse {\n}")
     expect(rendered).toContain("table GetBalanceRequest {\n}")
     expect(rendered).toContain("table GetBalanceResponse {")
-    expect(rendered).toContain("  result:double (required);")
+    expect(rendered).toContain("  result:double;")
     expect(rendered).toContain("rpc_service AccountService {")
     expect(rendered).toContain("  Deposit(DepositRequest):DepositResponse;")
     expect(rendered).toContain("  GetBalance(GetBalanceRequest):GetBalanceResponse;")
