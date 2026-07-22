@@ -6,6 +6,7 @@
   "workspaces": [
     "packages/api-tree",
     "packages/type-ir",
+    "packages/playground",
     "packages/http-api-projector",
     "packages/mcp-api-projector",
     "packages/cli-api-projector",

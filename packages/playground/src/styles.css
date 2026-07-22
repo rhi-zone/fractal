@@ -1,0 +1,148 @@
+:root {
+  color-scheme: dark;
+  --bg: #1e1f22;
+  --bg-alt: #26272b;
+  --border: #3a3b40;
+  --text: #e4e5e7;
+  --text-dim: #9a9ba1;
+  --accent: #5e9eff;
+  --error-bg: #3a1f22;
+  --error-border: #7a3038;
+  --error-text: #ff9aa2;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #f5f5f7;
+    --bg-alt: #ffffff;
+    --border: #d9d9de;
+    --text: #1c1c1f;
+    --text-dim: #6b6b70;
+    --accent: #2b6fe0;
+    --error-bg: #fdecec;
+    --error-border: #f0b6ba;
+    --error-text: #a3262e;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-header {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.app-header p {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1px;
+  background: var(--border);
+}
+
+.pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  position: relative;
+}
+
+.pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-alt);
+  flex-shrink: 0;
+}
+
+.pane-toolbar label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.pane-toolbar select {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-host {
+  height: 100%;
+}
+
+.editor-host .cm-editor {
+  height: 100%;
+}
+
+.error-banner {
+  flex-shrink: 0;
+  padding: 0.6rem 0.9rem;
+  background: var(--error-bg);
+  border-top: 1px solid var(--error-border);
+  color: var(--error-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  max-height: 30%;
+  overflow: auto;
+}
+
+@media (max-width: 800px) {
+  .panes {
+    flex-direction: column;
+  }
+}

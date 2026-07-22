@@ -275,6 +275,10 @@
       "types": "./src/capnp.ts",
       "import": "./src/capnp.ts"
     },
+    "./flatbuffers": {
+      "types": "./src/flatbuffers.ts",
+      "import": "./src/flatbuffers.ts"
+    },
     "./jtd": {
       "types": "./src/jtd.ts",
       "import": "./src/jtd.ts"

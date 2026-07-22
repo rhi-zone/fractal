@@ -1,0 +1,32 @@
+{
+  "name": "@rhi-zone/fractal-playground",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser playground for @rhi-zone/fractal-type-ir — convert between any supported ingestor/projector format live",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.9.1",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/lang-rust": "^6.0.2",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.38.6",
+    "@rhi-zone/fractal-type-ir": "workspace:*",
+    "codemirror": "^6.0.2",
+    "solid-js": "^1.9.14"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.1.5",
+    "vite-plugin-solid": "^2.11.13"
+  }
+}
