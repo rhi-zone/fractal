@@ -115,6 +115,10 @@ What's planned / open:
   is schema/IDL-first; source-language ingestion for the newer emit
   targets has not been started.
 - `from-json`/`from-json-corpus` are parked (see "JSON Inference" below).
+- No `from-json-rpc` yet — parsing JSON-RPC service/method definitions
+  (method name, params shape, result shape, error shape) into
+  `TypeRef`/`TypeRefDocument`. Not started; mirrors the emission-side gap
+  noted in "Output: Schema & IDL Formats" below.
 
 Acceptance criteria for green:
 - Every format fractal emits also has a matching ingester where that
@@ -142,10 +146,15 @@ What exists (`packages/type-ir/src/*.ts`):
 - SQL — `sql.ts`, plus a dialect variant `sql-mssql.ts`
 
 What's planned / open:
-- Additional SQL dialects beyond the generic + MSSQL projectors (no
-  explicit Postgres/MySQL/SQLite-specific projector at this time —
-  unclear whether the generic projector already serves this need or a
-  dedicated one is warranted; not yet decided).
+- Additional SQL dialects beyond the generic + MSSQL projectors —
+  Postgres/MySQL/SQLite-specific output if demand emerges once the
+  generic projector's coverage is evaluated against real dialect-specific
+  needs (no explicit Postgres/MySQL/SQLite-specific projector at this
+  time — unclear whether the generic projector already serves this need
+  or a dedicated one is warranted; not yet decided).
+- No JSON-RPC method signature emission yet — no `json-rpc.ts` projector
+  exists. Mirrors the `from-json-rpc` ingestion gap noted above; scope is
+  TypeRef → JSON-RPC method/params/result/error signatures.
 
 Acceptance criteria for green:
 - Each format's projector has round-trip tests against its matching
@@ -321,6 +330,15 @@ What's planned / open — additional variants per language, none started:
 - Ruby — RBS, dry-types
 - Dart — freezed, built_value
 - PHP — Symfony Serializer, JMS Serializer
+- Elixir — Ecto (note: Elixir is not currently a 1.0-scope
+  general-purpose language target at all — this would need a first
+  Elixir projector, not just an additional variant on an existing one;
+  scope call on whether Elixir enters the language list belongs to the
+  project owner)
+- Go — validator libraries beyond the `encoding/json`-adjacent baseline
+  (e.g. `go-playground/validator`, `ozzo-validation`) for constraint
+  validation on top of the existing `go-encoding-json.ts` serialization
+  projector
 
 Acceptance criteria for green:
 - At least one additional serialization-library variant implemented and
@@ -455,6 +473,74 @@ Acceptance criteria for green:
 
 ---
 
+### Documentation Generation
+
+**Status: NOT GREEN — planned**
+
+Not yet started. Auto-generated API documentation, distinct from the
+"Documentation Site" slice above (which covers fractal's *own* docs) —
+this slice is about projectors emitting documentation *for the types and
+operations fractal converts*, in each target language's native doc
+comment format, so that ecosystem-standard doc site generators can
+consume it.
+
+The approach: descriptions, examples, and other documentation-shaped
+metadata already live in TypeRef's open `meta` bag. Each projector would
+emit that metadata as the target language's native doc comment
+convention alongside the type/operation definitions it already
+generates (e.g. `/** ... */` JSDoc-style for TypeScript, `///` for Rust,
+docstrings for Python, XML doc comments for C#, etc.) — no new ingestion
+or IR work, just an additional emission concern per projector. The doc
+site generators themselves are downstream consumers of that output, not
+something fractal builds.
+
+Doc site generators to target, by language ecosystem:
+- JS/TS — TypeDoc, JSDoc, Docusaurus, VitePress, Starlight
+- Python — Sphinx (autodoc), MkDocs (mkdocstrings), pdoc
+- Rust — rustdoc
+- Java — Javadoc
+- Go — godoc / pkg.go.dev
+- C# — DocFX, XML doc comments
+- Ruby — YARD, RDoc
+- Swift — DocC (Apple's)
+- Kotlin — Dokka (KDoc)
+- Haskell — Haddock
+- C++ — Doxygen
+- PHP — phpDocumentor
+- Dart — dartdoc
+- Elm — elm-doc-preview
+- Cross-language — Material for MkDocs (squidfunk), Zensical
+  (squidfunk's newer Rust-based doc generator)
+
+What's planned / open:
+- Everything — no projector currently emits native doc comments from
+  `meta` bag content; this is a net-new emission concern across all
+  general-purpose-language projectors (see "Output: General-Purpose
+  Languages" above) plus the TypeScript validation-library and
+  schema/IDL projectors where doc comments are idiomatic.
+- A decision on scope: whether every projector needs doc-comment
+  emission for 1.0, or a representative subset (e.g. the languages with
+  the most-used doc site generators — TypeDoc, Sphinx, rustdoc, Javadoc)
+  ships first — open, belongs to the project owner.
+- No investigation yet into which `meta` bag fields map to which doc
+  comment conventions (e.g. `@param`/`@returns`-style tags vs. Rust's
+  freeform `///` prose vs. Python docstring conventions like
+  Google/NumPy/Sphinx style) — this needs a design pass before
+  implementation starts.
+
+Acceptance criteria for green:
+- Doc comment emission implemented for every general-purpose-language
+  projector in 1.0 scope (or an explicit, documented subset decision by
+  the project owner).
+- At least one representative doc site generator per major ecosystem
+  (TypeDoc for JS/TS, Sphinx or MkDocs for Python, rustdoc for Rust,
+  Javadoc for Java) verified to successfully build a docs site from
+  fractal-generated output.
+- `meta`-bag-to-doc-comment field mapping documented as a stable
+  convention other projector authors can follow.
+
+---
+
 ### Testing & Quality
 
 **Status: NOT GREEN**
@@ -564,15 +650,49 @@ What's planned / open (per `TODO.md`):
   core is unstarted (each still has its own implementation).
 - No dedicated declaration for an operation's possible error kinds in
   the tree/meta itself (error mapping is projector-level config today).
+- A JSON-RPC projector — no `packages/json-rpc-api-projector` (or
+  equivalent) exists yet. Would follow the same `api()`/`op()` tree
+  projection pattern as the HTTP/CLI/MCP/GraphQL projectors, surfacing
+  operations as JSON-RPC methods (request/response/error framing per the
+  JSON-RPC 2.0 spec). Not started.
+- Provider-specific auth packages (Clerk, Auth0, Supabase, Firebase,
+  Cognito) as thin wrappers over the existing `AuthAdapter`/
+  `AuthClientAdapter` contract — none built yet; the generic OIDC/JWT
+  package is the only implementation today.
+- WebSocket / additional transport kits beyond GraphQL's existing
+  WebSocket subscription support, following the same projection pattern
+  as HTTP/MCP/CLI/GraphQL — not started for HTTP/MCP/CLI.
+- A canonical reactive/streaming substrate — live queries and reactive
+  client bindings on top of the existing `stream`/`page` kinds and
+  GraphQL subscriptions. Not started.
+- Production-grade codegen extras as HTTP client extensions —
+  OpenTelemetry tracing, idempotency keys, webhook validation. Not
+  started; the client-extension system (retry, timeout, interceptors,
+  errors, logging, streaming, pagination) is the mechanism these would
+  extend.
+- Automatic strategy selection for compiled HTTP routers — the routing
+  benchmark work (`docs/design/routing-benchmarks.md`) identified
+  crossover points between `radixRouter`/`compiledCharRouter`/
+  `mapCharRouter` but never tuned them into automatic selection
+  constants; `createFetch` still requires an explicit opt-in today.
 
 Acceptance criteria for green:
-- HTTP, MCP, CLI, and GraphQL projectors demonstrated end-to-end against
-  a real example app (as `examples/library-api` already does for HTTP).
+- HTTP, MCP, CLI, GraphQL, and JSON-RPC projectors demonstrated
+  end-to-end against a real example app (as `examples/library-api`
+  already does for HTTP).
 - MCP Tier 2 complete; Tier 3 either complete or explicitly deferred
   with a documented reason (currently "speculative until concrete use
   case").
-- `stream`/`page` kind propagation consistent across all four
-  projectors, not just GraphQL.
+- `stream`/`page` kind propagation consistent across all projectors, not
+  just GraphQL.
+- JSON-RPC projector implemented and tested to the same bar as the
+  existing four (HTTP, CLI, MCP, GraphQL).
+- Scope call from the project owner on which of the auth
+  packages/transport kits/reactive substrate/codegen extras/router
+  auto-selection items above are genuinely 1.0-blocking versus
+  reasonable to ship incrementally after — all are now listed as open
+  1.0 items rather than deferred "beyond 1.0" stretch goals, but relative
+  priority among them is still open.
 
 ---
 
@@ -633,30 +753,3 @@ Acceptance criteria for green:
   archive.
 
 ---
-
-## Beyond 1.0
-
-Stretch goals and directions not required for 1.0, recorded here so they
-aren't lost and aren't mistaken for near-term commitments:
-
-- **Additional validation-library targets** beyond the six languages
-  named above (e.g. Elixir's Ecto, Go's validator libraries beyond
-  serde-adjacent patterns).
-- **Provider-specific auth packages** (Clerk, Auth0, Supabase, Firebase,
-  Cognito) as thin wrappers over the existing `AuthAdapter` contract —
-  explicitly noted in `TODO.md` as suitable for community or
-  fractal-maintained follow-on packages, not 1.0-blocking.
-- **WebSocket / additional transport kits** beyond GraphQL's existing
-  WebSocket subscription support, following the same projection
-  pattern as HTTP/MCP/CLI/GraphQL.
-- **A canonical reactive/streaming substrate** — live queries and
-  reactive client bindings, deferred per `TODO.md`'s "Deferred" section.
-- **Production-grade codegen extras** — OpenTelemetry tracing,
-  idempotency keys, webhook validation as HTTP client extensions
-  (currently listed as remaining nice-to-haves, not required for 1.0).
-- **Automatic strategy selection for compiled HTTP routers** — the
-  routing benchmark work identified crossover points between router
-  strategies but never tuned them into automatic selection constants;
-  `createFetch` still requires an explicit opt-in today.
-- **SQL dialect breadth** beyond the generic + MSSQL projectors, if
-  demand emerges for Postgres/MySQL/SQLite-specific output.
