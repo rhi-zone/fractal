@@ -572,16 +572,47 @@ function convertMessage(node: InstanceType<typeof protobuf.Type>): ProtoMessageD
  * (RPCs are a projector-output-only concept in this package's protobuf.ts,
  * via `toProtoService`).
  */
+/**
+ * File-level (as opposed to message-nested) `Type`/`Enum` declarations,
+ * found by descending through any wrapping `Namespace` nodes. A `package`
+ * statement (near-universal in real-world `.proto` files, e.g. every
+ * googleapis service definition) makes `protobufjs` wrap the file's
+ * top-level declarations in one `Namespace` per dot-separated package
+ * segment (`package shop.v1;` → `Namespace("shop") -> Namespace("v1") ->
+ * [[Type|Enum], ...]`) instead of placing them directly under
+ * `parsed.root` — so a package-less shallow scan of `root.nestedArray`
+ * silently finds nothing. `Type` is checked before the generic `Namespace`
+ * case since `protobufjs`'s `Type` itself extends `Namespace` (a message
+ * can nest further declarations) — descending into a `Type`'s own
+ * `nestedArray` here would double-count its nested messages, which
+ * `convertMessage`'s own recursion already handles.
+ */
+function collectTopLevelDeclarations(
+  ns: InstanceType<typeof protobuf.Namespace>,
+): { types: InstanceType<typeof protobuf.Type>[]; enums: InstanceType<typeof protobuf.Enum>[] } {
+  const types: InstanceType<typeof protobuf.Type>[] = []
+  const enums: InstanceType<typeof protobuf.Enum>[] = []
+  for (const node of ns.nestedArray) {
+    if (node instanceof protobuf.Type) types.push(node)
+    else if (node instanceof protobuf.Enum) enums.push(node)
+    else if (node instanceof protobuf.Namespace) {
+      const nested = collectTopLevelDeclarations(node)
+      types.push(...nested.types)
+      enums.push(...nested.enums)
+    }
+    // Other nested kinds (Service) aren't message/enum schema — same
+    // out-of-scope rationale as convertMessage's nested-node walk above.
+  }
+  return { types, enums }
+}
+
 export function parseProtoText(source: string): ProtoFileDescriptor {
   const withSyntax = /^\s*syntax\s*=/m.test(source) ? source : `syntax = "proto3";\n${source}`
   const parsed = protobuf.parse(withSyntax, { keepCase: true, alternateCommentMode: true })
 
-  const messageType: ProtoMessageDescriptor[] = []
-  const enumType: ProtoEnumDescriptor[] = []
-  for (const node of parsed.root.nestedArray) {
-    if (node instanceof protobuf.Type) messageType.push(convertMessage(node))
-    else if (node instanceof protobuf.Enum) enumType.push(convertEnum(node))
-  }
+  const { types, enums } = collectTopLevelDeclarations(parsed.root)
+  const messageType: ProtoMessageDescriptor[] = types.map(convertMessage)
+  const enumType: ProtoEnumDescriptor[] = enums.map(convertEnum)
 
   return {
     ...(parsed.package !== undefined ? { package: parsed.package } : {}),
