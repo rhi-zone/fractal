@@ -62,13 +62,17 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 //
 // Field order: like python-pydantic.ts (and unlike python-dataclass.ts),
 // fields are emitted in source order with no required-before-optional
-// reshuffle. attrs' generated `__init__` does take ordered positional-or-
-// keyword params like a dataclass's — but every field below that carries a
-// default is emitted via `attrs.field(default=...)`/`= <literal>`, and attrs
-// (like Pydantic, unlike stdlib dataclasses) does not enforce "all
-// defaulted params after all non-defaulted ones" at the `attrs.define`
-// level for keyword-assignable fields in this generator's usage, so source
-// order is kept as the more faithful rendering.
+// reshuffle — attrs' generated `__init__` positional params still need to
+// read the way the source schema does. But attrs (like stdlib dataclasses,
+// unlike Pydantic) DOES enforce "no mandatory attribute after one with a
+// default" for positional params, raising `ValueError: No mandatory
+// attributes allowed after an attribute with a default value` at class-
+// definition time otherwise. Rather than reshuffle (which would lose the
+// source-order fidelity above), any mandatory field that appears *after* a
+// defaulted one in source order is emitted with `attrs.field(kw_only=True)`
+// — it drops out of the positional `__init__` signature and becomes
+// keyword-only, which attrs allows to interleave with defaulted params
+// freely.
 // ============================================================================
 
 const KNOWN_FIELD_META = new Set([
@@ -107,6 +111,7 @@ type FieldDecl = {
   extraValidatorFn?: { name: string; lines: string[] }
   metadataKwargs: string[]
   onSetattrFrozen: boolean
+  kwOnly: boolean
   comment?: string
 }
 
@@ -242,6 +247,11 @@ const handlers: Record<string, Converter> = {
     ctx.needsAttrs = true
 
     const fields: FieldDecl[] = []
+    // attrs raises at class-definition time if a mandatory (no-default)
+    // field's positional `__init__` param follows a defaulted one — track
+    // whether a defaulted field has been seen yet so any mandatory field
+    // after it can be forced `kw_only=True` (see file-header comment).
+    let seenDefault = false
     for (const [fieldName, fieldRef] of Object.entries(s.fields)) {
       const rawType = toAttrsType(fieldRef, capitalize(fieldName), ctx)
       const isOptional = fieldRef.meta.optional === true
@@ -284,10 +294,12 @@ const handlers: Record<string, Converter> = {
         validatorExprs,
         metadataKwargs: fieldMetadataKwargs(fieldRef.meta),
         onSetattrFrozen: fieldRef.meta.readonly === true,
+        kwOnly: !hasDefault && seenDefault,
       }
       if (extraValidatorFn !== undefined) field = { ...field, extraValidatorFn }
       if (comment !== undefined) field = { ...field, comment }
       fields.push(field)
+      if (hasDefault) seenDefault = true
     }
 
     const objectExtra = unrecognizedMeta(ref.meta)
@@ -478,6 +490,7 @@ function renderDecl(decl: Decl): string[] {
     else if (field.validatorExprs.length > 1) kwargs.push(`validator=attrs.validators.and_(${field.validatorExprs.join(", ")})`)
     if (field.metadataKwargs.length > 0) kwargs.push(`metadata={${field.metadataKwargs.join(", ")}}`)
     if (field.onSetattrFrozen) kwargs.push("on_setattr=attrs.setters.frozen")
+    if (field.kwOnly) kwargs.push("kw_only=True")
 
     // A single non-mutable `default=...` kwarg is exactly what a plain
     // `= <literal>` class-body assignment already means — `attrs.field()`

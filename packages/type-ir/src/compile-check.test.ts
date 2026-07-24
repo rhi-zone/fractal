@@ -141,16 +141,16 @@ describe("typescript-native (tsc --noEmit)", () => {
 })
 
 describe("typescript-typebox (tsc --noEmit, real @sinclair/typebox import)", () => {
-  // Known bug in typescript-typebox.ts: unlike typescript-native.ts's `type
-  // X = {...}` (a static type alias — self-reference is fine, TS hoists
-  // type names), typebox builds a runtime `const TreeNode = Type.Object({
-  // ..., children: Type.Array(TreeNode) })` — a `const` referencing itself
-  // inside its own initializer, which TS rejects ("'TreeNode' implicitly
-  // has type 'any'... used before its declaration"). TypeBox's own answer
-  // to this is `Type.Recursive(This => Type.Object({...}))`; the projector
-  // needs to detect a self-referential object and emit that form instead of
-  // a bare `ref` substitution.
-  const todo = new Set(["Recursive Tree"])
+  // Fixed: unlike typescript-native.ts's `type X = {...}` (a static type
+  // alias — self-reference is fine, TS hoists type names), typebox builds a
+  // runtime `const`. A self-referential object used to render as `const
+  // TreeNode = Type.Object({ ..., children: Type.Array(TreeNode) })` — a
+  // `const` referencing itself inside its own initializer, which TS rejects
+  // ("'TreeNode' implicitly has type 'any'... used before its declaration").
+  // toTypeBoxDeclaration now detects a self-referential object and emits
+  // TypeBox's own answer, `Type.Recursive(This => Type.Object({...}))`,
+  // instead of a bare `ref` substitution.
+  const todo = new Set<string>([])
   for (const { name, ref } of fixtures) {
     const runner = todo.has(name) ? test.todo : test
     runner(name, () => {
@@ -544,18 +544,14 @@ describe("python-pydantic (python3, real pydantic import)", () => {
 })
 
 describe("python-attrs (python3, real attrs import)", () => {
-  // Known bug in python-attrs.ts: the Kitchen Sink fixture emits
-  // `optionalField: str | None = None` (has a default) immediately followed
-  // by `nullableField: str | None` (no default) — attrs (like plain
-  // dataclasses) requires every mandatory field to precede any field with a
-  // default, so `@attrs.define` raises at class-definition time
-  // ("ValueError: No mandatory attributes allowed after an attribute with a
-  // default value"). python-attrs.ts needs to either reorder fields
-  // (defaults last) or mark trailing mandatory fields `kw_only=True`.
-  const todo = new Set(["Kitchen Sink"])
+  // A mandatory field that appears after a defaulted one in source order
+  // (e.g. Kitchen Sink's `nullableField` following `optionalField`) would
+  // make attrs raise at class-definition time ("ValueError: No mandatory
+  // attributes allowed after an attribute with a default value") — avoided
+  // by python-attrs.ts forcing such trailing mandatory fields to
+  // `attrs.field(kw_only=True)`.
   for (const { name, ref } of fixtures) {
-    const runner = todo.has(name) ? test.todo : test
-    runner(name, () => assertCompiles(checkPython(toAttrs, name, ref)))
+    test(name, () => assertCompiles(checkPython(toAttrs, name, ref)))
   }
 })
 
