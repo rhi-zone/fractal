@@ -1,5 +1,5 @@
 {
-  "name": "fractal-docs",
+  "name": "@rhi-zone/fractal-docs",
   "type": "module",
   "private": true,
   "scripts": {

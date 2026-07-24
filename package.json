@@ -1,8 +1,7 @@
 {
-  "name": "fractal-monorepo",
+  "name": "@rhi-zone/fractal-monorepo",
   "private": true,
   "type": "module",
-  "comment": "packages/codegen (types+JSDoc → runtime schema extractor) was merged into packages/type-ir — extract/tree/compile/cli are type-ir concerns. packages/openapi-api-projector and packages/client-api-projector were both merged into packages/http-api-projector (2026-07-18) — OpenAPI and the runtime HTTP client both only ever describe/consume HTTP APIs, so they're HTTP concerns, not separate projections; see TODO.md.",
   "workspaces": [
     "packages/api-tree",
     "packages/type-ir",
