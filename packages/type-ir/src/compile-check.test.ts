@@ -610,18 +610,15 @@ const gnustepObjcFlags = run(["gnustep-config", "--objc-flags"], process.cwd())
   .filter(Boolean)
 
 describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
-  // Known bug in objc-foundation.ts: Objective-C generics require object
-  // pointer types as type arguments — `NSArray<NSInteger> *`/
-  // `NSDictionary<NSString *, double> *` (raw NSInteger/double, not boxed
-  // NSNumber *) are a hard clang error ("type argument 'NSInteger' ... is
-  // neither an Objective-C object nor a block type"). Kitchen Sink's
-  // `arrayOfArrays`/`aMap` fields hit this because their element/value type
-  // is a primitive; objc-foundation.ts needs to box primitive element/value
-  // types as `NSNumber *` inside a generic collection's angle brackets.
-  const todo = new Set(["Kitchen Sink"])
+  // Objective-C generics require object pointer types as type arguments —
+  // `NSArray<NSInteger> *`/`NSDictionary<NSString *, double> *` (raw
+  // NSInteger/double, not boxed NSNumber *) are a hard clang error ("type
+  // argument '...' is neither an Objective-C object nor a block type").
+  // objc-foundation.ts's `toObjCGenericArgType` boxes primitive
+  // element/key/value types as `NSNumber *` inside a generic collection's
+  // angle brackets to avoid this.
   for (const { name, ref } of fixtures) {
-    const runner = todo.has(name) ? test.todo : test
-    runner(name, () => {
+    test(name, () => {
       withTempDir((dir) => {
         const { header, implementation } = toObjC(ref, rootNameFor(name))
         const strippedImpl = implementation.replace(/^#import ".*"\n\n/, "")

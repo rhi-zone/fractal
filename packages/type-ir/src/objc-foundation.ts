@@ -92,24 +92,24 @@ const handlers: Record<string, Converter> = {
   instance: (shape) => `${(shape as TypeShape & { kind: "instance" }).className} *`,
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" }
-    return `NSArray<${toObjCType(s.element)}> *`
+    return `NSArray<${toObjCGenericArgType(s.element)}> *`
   },
   // No native async-sequence construct in Objective-C — degrades to the
   // materialized NSArray<T> equivalent, same honest-degrade convention
   // typescript.ts/capnp.ts use for `stream`.
   stream: (shape) => {
     const s = shape as TypeShape & { kind: "stream" }
-    return `NSArray<${toObjCType(s.element)}> *`
+    return `NSArray<${toObjCGenericArgType(s.element)}> *`
   },
   page: (shape) => {
     const s = shape as TypeShape & { kind: "page" }
-    return `NSArray<${toObjCType(s.element)}> *`
+    return `NSArray<${toObjCGenericArgType(s.element)}> *`
   },
   // No tuple construct — lossy, degrades to an opaque-element array.
   tuple: () => "NSArray<id> *",
   map: (shape) => {
     const s = shape as TypeShape & { kind: "map" }
-    return `NSDictionary<${toObjCType(s.key)}, ${toObjCType(s.value)}> *`
+    return `NSDictionary<${toObjCGenericArgType(s.key)}, ${toObjCGenericArgType(s.value)}> *`
   },
   // No tagged-union construct — lossy, degrades to `id`.
   union: () => "id",
@@ -150,6 +150,20 @@ export function toObjCType(ref: TypeRef): string {
 
 function isPointerObjCType(type: string): boolean {
   return type.endsWith("*") || type === "id"
+}
+
+/** Objective-C generics require the type argument to be an object pointer
+ * (or block) type — a raw C scalar (`NSInteger`, `double`, `BOOL`, ...) is
+ * neither, and clang rejects it: "type argument '...' is neither an
+ * Objective-C object nor a block type". Every generic collection position
+ * (`NSArray<T>`, `NSDictionary<K, V>`, ...) must therefore box a scalar
+ * element/key/value type to its `NSNumber *` wrapper — the same boxing
+ * `buildFieldDescriptor` already applies to optional scalar properties, just
+ * required unconditionally here since collection generics have no analog of
+ * `nullable` scalar. */
+function toObjCGenericArgType(ref: TypeRef): string {
+  const type = toObjCType(ref)
+  return isPointerObjCType(type) ? type : "NSNumber *"
 }
 
 // NSNumber unboxing accessor per raw scalar ObjC type — used to read a
