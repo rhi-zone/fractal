@@ -651,7 +651,7 @@ function unionValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, m
   const stmts: string[] = []
   if (out !== undefined) stmts.push(`let ${out} = ${v};`)
   stmts.push(`let ${matched} = false;`)
-  for (const variant of s.variants) {
+  for (const _variant of s.variants) {
     const scratch = ctx.fresh("ue")
     scratchNames.push(scratch)
     stmts.push(`const ${scratch}: ValidationError[] = [];`)
@@ -943,17 +943,26 @@ function compileEntryBody(
   // narrower signature (`value is T`, the discriminated `parse` return type)
   // is applied at the CALL site via the `as {...}` cast below, same
   // reasoning as the retired TypeBox-compiler wrapper this replaces.
+  // `void value;`/`void path;` — a trivial (e.g. `unknown`) shape's checkExpr/
+  // genValidate body never references its own `value`/`path` parameter, which
+  // would otherwise trip `noUnusedParameters`/`noUnusedLocals` on the emitted
+  // module. Unconditional no-op reads keep every entry compiling regardless
+  // of whether the shape-specific body ends up using them.
   lines.push(`function check(value: any) {`)
+  lines.push(`  void value;`)
   lines.push(`  return (${checkExpr});`)
   lines.push(`}`)
   lines.push(`function errors(value: any): ValidationError[] {`)
+  lines.push(`  void value;`)
   lines.push(`  const path: string[] = [];`)
+  lines.push(`  void path;`)
   lines.push(`  const errs: ValidationError[] = [];`)
   lines.push(...indentLines(errorsBody.stmts, 2))
   lines.push(`  return errs;`)
   lines.push(`}`)
   lines.push(`function parse(value: any) {`)
   lines.push(`  const path: string[] = [];`)
+  lines.push(`  void path;`)
   lines.push(`  const errs: ValidationError[] = [];`)
   lines.push(...indentLines(parseBody.stmts, 2))
   lines.push(`  if (errs.length === 0) return { kind: "ok" as const, value: ${parseBody.outExpr} };`)

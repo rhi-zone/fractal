@@ -20,15 +20,15 @@ interface Category {
   parent?: Category
 }
 
-function getUser(input: { id: string }): { name: string; billing: Address; shipping: Address } {
+function getUser(_input: { id: string }): { name: string; billing: Address; shipping: Address } {
   return { name: "x", billing: {} as Address, shipping: {} as Address }
 }
 
-function getOrder(input: { id: string }): { total: number; address: Address } {
+function getOrder(_input: { id: string }): { total: number; address: Address } {
   return { total: 1, address: {} as Address }
 }
 
-function getProduct(input: { id: string }): { name: string; category: Category } {
+function getProduct(_input: { id: string }): { name: string; category: Category } {
   return { name: "x", category: {} as Category }
 }
 

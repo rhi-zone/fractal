@@ -72,6 +72,7 @@ export class SampleClass {
   private secret: string = ""
   protected internal: number = 0
   greet(): string {
+    void this.secret
     return this.name
   }
 }
@@ -95,7 +96,9 @@ export type ArrowFnType = (x: number, label: string) => boolean
 /** A class whose method surfaces via a call-signature-only interface, so
  * `thisType` on the extracted function carries the class's own instance type. */
 export class MethodOwner {
-  deposit(amount: number): void {}
+  deposit(amount: number): void {
+    void amount
+  }
 }
 
 /** The method's call signature lifted to a standalone function type, `this`
@@ -257,12 +260,12 @@ export type BooleanParam = boolean
 // Standalone functions, one per fixture type above, so tests can drive them
 // through `typeRefFromFunctionNode` (the checker resolves the parameter type
 // as it would for a real op).
-export const statusFn = (status: Status): void => {}
-export const priorityFn = (priority: Priority): void => {}
-export const stringUnionFn = (u: StringUnion): void => {}
-export const mixedUnionFn = (u: MixedUnion): void => {}
-export const literalMixedUnionFn = (u: LiteralMixedUnion): void => {}
-export const booleanParamFn = (b: BooleanParam): void => {}
+export const statusFn = (_status: Status): void => {}
+export const priorityFn = (_priority: Priority): void => {}
+export const stringUnionFn = (_u: StringUnion): void => {}
+export const mixedUnionFn = (_u: MixedUnion): void => {}
+export const literalMixedUnionFn = (_u: LiteralMixedUnion): void => {}
+export const booleanParamFn = (_b: BooleanParam): void => {}
 
 // ── Discriminated union fixtures ────────────────────────────────────────────
 
@@ -278,8 +281,8 @@ export type ShapeUnion = Circle | Square
 /** A union of object types with NO shared literal field — no discriminator. */
 export type NonDiscriminated = { a: string } | { b: number }
 
-export const shapeUnionFn = (shape: ShapeUnion): void => {}
-export const nonDiscriminatedFn = (u: NonDiscriminated): void => {}
+export const shapeUnionFn = (_shape: ShapeUnion): void => {}
+export const nonDiscriminatedFn = (_u: NonDiscriminated): void => {}
 
 // ── Named top-level parameter type fixtures (import-provenance) ────────────
 
@@ -289,7 +292,7 @@ export const nonDiscriminatedFn = (u: NonDiscriminated): void => {}
  * carries neither). */
 export type BookQuery = { q?: string }
 
-export const namedParamFn = (input: BookQuery): void => {}
+export const namedParamFn = (_input: BookQuery): void => {}
 
 /** An interface (not a `type` alias) as a handler's parameter type — same
  * provenance capture, different declaration syntax. */
@@ -297,7 +300,7 @@ export interface BookIdParam {
   bookId: string
 }
 
-export const namedInterfaceParamFn = (input: BookIdParam): void => {}
+export const namedInterfaceParamFn = (_input: BookIdParam): void => {}
 
 // ── Symbol-branded type fixtures ────────────────────────────────────────────
 

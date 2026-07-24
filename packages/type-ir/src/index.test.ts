@@ -107,7 +107,7 @@ describe("TypeRef construction", () => {
     expect(ref.shape).toEqual({
       kind: "instance",
       className: "User",
-      source: "src/user.ts",
+      declarationFile: "src/user.ts",
     })
   })
 
@@ -146,7 +146,7 @@ describe("TypeRef construction", () => {
       kind: "function",
       params: [{ name: "amount", type: { shape: { kind: "number" }, meta: {} } }],
       returnType: { shape: { kind: "void" }, meta: {} },
-      thisType: { shape: { kind: "instance", className: "Account", source: "src/account.ts" }, meta: {} },
+      thisType: { shape: { kind: "instance", className: "Account", declarationFile: "src/account.ts" }, meta: {} },
     })
   })
 
@@ -166,7 +166,7 @@ describe("TypeRef construction", () => {
       kind: "method",
       params: [{ name: "amount", type: { shape: { kind: "number" }, meta: {} } }],
       returnType: { shape: { kind: "void" }, meta: {} },
-      thisType: { shape: { kind: "instance", className: "Account", source: "src/account.ts" }, meta: {} },
+      thisType: { shape: { kind: "instance", className: "Account", declarationFile: "src/account.ts" }, meta: {} },
     })
   })
 
@@ -349,7 +349,7 @@ describe("walkTypeRef", () => {
     const outer = t(types.object({ a: inner }))
     const doc = typeRefDocument(outer)
     const flags: boolean[] = []
-    walkTypeRef(doc, (node, ctx) => flags.push(ctx.isRecursionTarget(outer)))
+    walkTypeRef(doc, (_node, ctx) => flags.push(ctx.isRecursionTarget(outer)))
     // At the root (outer itself), outer is not yet an ancestor of itself; at
     // the child (inner), outer IS now an ancestor.
     expect(flags).toEqual([false, true])

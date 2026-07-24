@@ -149,7 +149,7 @@ describe("generateClient — HttpRoute + SchemaMap directly, no Node", () => {
 
   it("types operations from a manually-built SchemaMap keyed by the path-derived codegen name", () => {
     const tree = api_({
-      widgets: op((input: { q?: string }): { id: string }[] => [], http.get),
+      widgets: op((_input: { q?: string }): { id: string }[] => [], http.get),
     })
     const route = httpProjection(tree)
 

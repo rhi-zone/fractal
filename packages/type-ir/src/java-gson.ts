@@ -142,7 +142,7 @@ const handlers: Record<string, Converter> = {
   void: leaf("Void"),
   unknown: leaf("Object"),
   never: leaf("Void"),
-  object: (shape, meta, ctx) => {
+  object: (shape, meta, _ctx) => {
     const s = shape as TypeShape & { kind: "object" }
     const name = typeof meta.typeName === "string" ? meta.typeName : "Anonymous"
     // An inline (unnamed) object has no Java equivalent expressible as a type
@@ -157,12 +157,12 @@ const handlers: Record<string, Converter> = {
   // bare reference to that class name; the caller assembling the emitted
   // source is responsible for importing `className` from `source`.
   instance: (shape) => ({ boxed: (shape as TypeShape & { kind: "instance" }).className, imports: [] }),
-  array: (shape, meta, ctx) => {
+  array: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "array" }
     const element = javaType(s.element, ctx)
     return { boxed: `List<${element}>`, imports: ["java.util.List"] }
   },
-  tuple: (shape, meta, ctx) => {
+  tuple: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "tuple" }
     const elements = s.elements.map((e) => javaType(e, ctx))
     // Java has no structural tuple type. Rendered as a reference to a
@@ -177,7 +177,7 @@ const handlers: Record<string, Converter> = {
   // No native async-sequence type in Java's standard type system — degrades
   // to `List<T>` of the element type, the same honest-degrade convention
   // every other data-only projector (Zod, protobuf, ...) applies to `stream`.
-  stream: (shape, meta, ctx) => {
+  stream: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "stream" }
     const element = javaType(s.element, ctx)
     return { boxed: `List<${element}>`, imports: ["java.util.List"] }
@@ -185,19 +185,18 @@ const handlers: Record<string, Converter> = {
   // Same degrade as `stream` — a page is one window over a larger collection
   // (see TypeKinds.page's doc comment), and Java has no pagination-window
   // type of its own to target.
-  page: (shape, meta, ctx) => {
+  page: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "page" }
     const element = javaType(s.element, ctx)
     return { boxed: `List<${element}>`, imports: ["java.util.List"] }
   },
-  map: (shape, meta, ctx) => {
+  map: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "map" }
     const key = javaType(s.key, ctx)
     const value = javaType(s.value, ctx)
     return { boxed: `Map<${key}, ${value}>`, imports: ["java.util.Map"] }
   },
-  union: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "union" }
+  union: (_shape, meta) => {
     // A union's idiomatic Java rendering is a top-level sealed interface
     // (see `renderSealedInterface` below) — as a bare type EXPRESSION (this
     // path, used when a union appears nested inside a field/generic
@@ -230,7 +229,7 @@ const handlers: Record<string, Converter> = {
   // Java has no intersection/mixin type — lossy: falls back to the first
   // member's type, dropping the rest (same fallback protobuf.ts uses for the
   // same reason).
-  intersection: (shape, meta, ctx) => {
+  intersection: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "intersection" }
     const [first] = s.members
     return first === undefined ? { boxed: "Object", imports: [] } : { boxed: javaType(first, ctx), imports: [] }
@@ -240,7 +239,7 @@ const handlers: Record<string, Converter> = {
   // standard-library equivalent (Java, unlike some ecosystems, doesn't
   // define TriFunction+) and degrade to Object, the same honest-degrade
   // protobuf.ts applies to its own uncoverable cases.
-  function: (shape, meta, ctx) => {
+  function: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "function" }
     const returnType = javaType(s.returnType, ctx)
     const isVoid = s.returnType.shape.kind === "void"

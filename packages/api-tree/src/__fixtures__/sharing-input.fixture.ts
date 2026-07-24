@@ -16,11 +16,11 @@ interface Address {
   landmark: string
 }
 
-function setBilling(input: { userId: string; billing: Address }): { ok: boolean } {
+function setBilling(_input: { userId: string; billing: Address }): { ok: boolean } {
   return { ok: true }
 }
 
-function setShipping(input: { userId: string; shipping: Address }): { ok: boolean } {
+function setShipping(_input: { userId: string; shipping: Address }): { ok: boolean } {
   return { ok: true }
 }
 

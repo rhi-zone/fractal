@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import fc from "fast-check"
 import { t, types, type TypeRef } from "./index.ts"
-import {
-  int8, int16, int32, int64,
-  uint8, uint16, uint32, uint64,
-  date, datetime, uuid, uri,
-} from "./kinds/common.ts"
+import { uint8 } from "./kinds/common.ts"
 import { fromJsonCorpus, collectEvidence, resolveEvidence } from "./from-json-corpus.ts"
 
 // ---------------------------------------------------------------------------
@@ -264,7 +260,7 @@ describe("dict detection", () => {
     expect(Object.keys(fields).sort()).toEqual(["active", "id", "name"])
   })
 
-  test("mixed: stable keys + varying keys -> object with additionalProperties", () => {
+  test("mixed: stable keys + varying keys -> object with additionalPropertyType", () => {
     const values = []
     for (let i = 0; i < 10; i++) {
       const obj: Record<string, unknown> = { id: i, name: `user_${i}` }
@@ -276,7 +272,7 @@ describe("dict detection", () => {
     const result = fromJsonCorpus(values)
     // Should detect mixed: record fields (id, name) + dynamic keys
     expect(result.shape.kind).toBe("object")
-    expect(result.meta.additionalProperties).toBeDefined()
+    expect(result.meta.additionalPropertyType).toBeDefined()
     const fields = (result.shape as { fields: Record<string, TypeRef> }).fields
     expect("id" in fields).toBe(true)
     expect("name" in fields).toBe(true)
@@ -432,106 +428,6 @@ describe("two-phase API: collectEvidence / resolveEvidence", () => {
 function arbPlainString(): fc.Arbitrary<string> {
   return fc.stringMatching(/^[A-Z][a-zA-Z]{2,10}$/)
 }
-
-function arbDate(): fc.Arbitrary<string> {
-  return fc.tuple(
-    fc.integer({ min: 2000, max: 2030 }),
-    fc.integer({ min: 1, max: 12 }),
-    fc.integer({ min: 1, max: 28 }),
-  ).map(([y, m, d]) =>
-    `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-  )
-}
-
-function arbValueForTypeRef(ref: TypeRef): fc.Arbitrary<unknown> {
-  const { shape } = ref
-  switch (shape.kind) {
-    case "null": return fc.constant(null)
-    case "boolean": return fc.boolean()
-    case "number":
-      return fc.double({ min: -1000, max: 1000, noDefaultInfinity: true, noNaN: true })
-        .map((n) => Number.isInteger(n) ? n + 0.5 : n)
-    case "integer": return fc.integer({ min: -1000, max: 1000 })
-    case "string":
-      return arbPlainString()
-    case "email":
-      return fc.stringMatching(/^[a-z]{2,8}$/).map((u) => `${u}@test.com`)
-    case "uint8": return fc.integer({ min: 0, max: 255 })
-    case "int8": return fc.integer({ min: -128, max: 127 })
-    case "uint16": return fc.integer({ min: 0, max: 65535 })
-    case "int16": return fc.integer({ min: -32768, max: 32767 })
-    case "uint32": return fc.integer({ min: 0, max: 4294967295 })
-    case "int32": return fc.integer({ min: -2147483648, max: 2147483647 })
-    case "uint64": return fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER })
-    case "int64": return fc.integer({ min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER })
-    case "date": return arbDate()
-    case "datetime":
-      return fc.tuple(arbDate(), fc.integer({ min: 0, max: 23 }), fc.integer({ min: 0, max: 59 }), fc.integer({ min: 0, max: 59 }))
-        .map(([d, h, m, s]) => `${d}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}Z`)
-    case "uuid":
-      return fc.tuple(
-        fc.stringMatching(/^[0-9a-f]{8}$/), fc.stringMatching(/^[0-9a-f]{4}$/),
-        fc.stringMatching(/^[0-9a-f]{4}$/), fc.stringMatching(/^[0-9a-f]{4}$/),
-        fc.stringMatching(/^[0-9a-f]{12}$/),
-      ).map(([a, b, c, d, e]) => `${a}-${b}-${c}-${d}-${e}`)
-    case "uri":
-      return fc.stringMatching(/^[a-z]{3,8}$/).map((d) => `https://${d}.com/path`)
-    case "object": {
-      const fields = (shape as { fields: Record<string, TypeRef> }).fields
-      const entries = Object.entries(fields)
-      if (entries.length === 0) return fc.constant({})
-      const arbs: Record<string, fc.Arbitrary<unknown>> = {}
-      const optFlags: Record<string, boolean> = {}
-      for (const [name, fieldRef] of entries) {
-        arbs[name] = arbValueForTypeRef(fieldRef)
-        optFlags[name] = fieldRef.meta.optional === true
-      }
-      return fc.record(arbs).chain((rec) =>
-        fc.tuple(...Object.keys(rec).map((k) =>
-          optFlags[k] ? fc.boolean() : fc.constant(true)
-        )).map((includes) => {
-          const result: Record<string, unknown> = {}
-          const keys = Object.keys(rec)
-          for (let i = 0; i < keys.length; i++) {
-            if (includes[i]) result[keys[i]!] = rec[keys[i]!]
-          }
-          return result
-        })
-      )
-    }
-    case "array":
-      return fc.array(arbValueForTypeRef((shape as { element: TypeRef }).element), { minLength: 3, maxLength: 7 })
-    case "tuple": {
-      const els = (shape as { elements: readonly TypeRef[] }).elements
-      if (els.length === 0) return fc.constant([])
-      return fc.tuple(...els.map(arbValueForTypeRef)) as fc.Arbitrary<unknown>
-    }
-    case "map":
-      return fc.array(
-        fc.tuple(fc.stringMatching(/^[a-z]{2,6}$/), arbValueForTypeRef((shape as { value: TypeRef }).value)),
-        { minLength: 2, maxLength: 5 },
-      ).map((pairs) => {
-        const r: Record<string, unknown> = {}
-        for (const [k, v] of pairs) r[k] = v
-        return r
-      })
-    case "union": {
-      const variants = (shape as { variants: readonly TypeRef[] }).variants.filter((v) => v.shape.kind !== "never")
-      if (variants.length === 0) return fc.constant(null)
-      return fc.oneof(...variants.map(arbValueForTypeRef))
-    }
-    case "enum":
-      return fc.constantFrom(...(shape as { members: readonly string[] }).members)
-    case "literal":
-      return fc.constant((shape as { value: unknown }).value)
-    case "unknown":
-      return fc.oneof(fc.constant(null), fc.boolean(), fc.integer({ min: 0, max: 100 }), arbPlainString())
-    default:
-      return fc.constant(null)
-  }
-}
-
-const integerKinds = new Set(["uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64", "integer"])
 
 describe("property: no crashes on any JSON corpus", () => {
   test("arbitrary JSON values", () => {

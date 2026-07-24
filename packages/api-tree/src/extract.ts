@@ -140,7 +140,7 @@ export function schemaFromType(
  */
 function typeProvenanceOf(
   type: ts.Type,
-  checker: ts.TypeChecker,
+  _checker: ts.TypeChecker,
 ): { name: string; declarationFile: string } | undefined {
   const aliasSymbol = type.aliasSymbol
   const aliasDecl = aliasSymbol?.declarations?.[0]

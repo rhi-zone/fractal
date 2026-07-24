@@ -1,9 +1,8 @@
 // packages/http-api-projector/src/decode.test.ts — stores-based input extraction tests
 
 import { describe, expect, it } from "bun:test"
-import { api, op } from "@rhi-zone/fractal-api-tree/node"
-import { makeRouter, toHttpRoutes } from "./project.ts"
-import { applyMethods, applyMoveTo, composeTransforms, httpRoute } from "./route.ts"
+import { makeRouter } from "./project.ts"
+import { httpRoute } from "./route.ts"
 import { assemble, httpStores, parseRequestBody, primaryStoreForMethod } from "./decode.ts"
 
 // ============================================================================

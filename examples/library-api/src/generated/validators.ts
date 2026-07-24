@@ -15,15 +15,19 @@ function __inferTypeRef(v: any): any {
 export const validators = {
   "books/list": (function () {
     function check(value: any) {
+      void value;
       return ((true));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       return errs;
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (errs.length === 0) return { kind: "ok" as const, value: value };
       return { kind: "err" as const, errors: errs };
@@ -38,10 +42,13 @@ export const validators = {
     const __ref0 = {"shape":{"kind":"object","fields":{"title":{"shape":{"kind":"string"},"meta":{}},"author":{"shape":{"kind":"string"},"meta":{}},"genre":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
     const __ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
     function check(value: any) {
+      void value;
       return (((typeof value === "object" && value !== null && !Array.isArray(value)) && ((typeof value["title"] === "string")) && ((typeof value["author"] === "string")) && ((typeof value["genre"] === "string"))));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
         if (value["title"] === undefined) { errs.push({ kind: "missing", path: path.concat(["title"]) }); }
@@ -61,6 +68,7 @@ export const validators = {
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       let __o0: Record<string, any> = {};
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
@@ -93,10 +101,13 @@ export const validators = {
     const __ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
     const __ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
     function check(value: any) {
+      void value;
       return (((typeof value === "object" && value !== null && !Array.isArray(value)) && ((typeof value["bookId"] === "string"))));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
         if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
@@ -108,6 +119,7 @@ export const validators = {
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       let __o0: Record<string, any> = {};
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
@@ -131,10 +143,13 @@ export const validators = {
     const __ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
     const __ref2 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
     function check(value: any) {
+      void value;
       return (((typeof value === "object" && value !== null && !Array.isArray(value)) && ((typeof value["bookId"] === "string")) && (value["title"] === undefined || ((typeof value["title"] === "string"))) && (value["author"] === undefined || ((typeof value["author"] === "string"))) && (value["genre"] === undefined || ((typeof value["genre"] === "string")))));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
         if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
@@ -155,6 +170,7 @@ export const validators = {
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       let __o0: Record<string, any> = {};
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
@@ -189,10 +205,13 @@ export const validators = {
     const __ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
     const __ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
     function check(value: any) {
+      void value;
       return (((typeof value === "object" && value !== null && !Array.isArray(value)) && ((typeof value["bookId"] === "string"))));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
         if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
@@ -204,6 +223,7 @@ export const validators = {
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       let __o0: Record<string, any> = {};
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
@@ -226,10 +246,13 @@ export const validators = {
     const __ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
     const __ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
     function check(value: any) {
+      void value;
       return (((typeof value === "object" && value !== null && !Array.isArray(value)) && ((typeof value["bookId"] === "string"))));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
         if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
@@ -241,6 +264,7 @@ export const validators = {
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       let __o0: Record<string, any> = {};
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
@@ -263,10 +287,13 @@ export const validators = {
     const __ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}},"patronId":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
     const __ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
     function check(value: any) {
+      void value;
       return (((typeof value === "object" && value !== null && !Array.isArray(value)) && ((typeof value["bookId"] === "string")) && ((typeof value["patronId"] === "string"))));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
         if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
@@ -282,6 +309,7 @@ export const validators = {
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       let __o0: Record<string, any> = {};
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
@@ -309,10 +337,13 @@ export const validators = {
     const __ref0 = {"shape":{"kind":"object","fields":{"q":{"shape":{"kind":"string"},"meta":{"optional":true}}}},"meta":{}} as any;
     const __ref1 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
     function check(value: any) {
+      void value;
       return (((typeof value === "object" && value !== null && !Array.isArray(value)) && (value["q"] === undefined || ((typeof value["q"] === "string")))));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
         if (value["q"] !== undefined) {
@@ -323,6 +354,7 @@ export const validators = {
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       let __o0: Record<string, any> = {};
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
@@ -344,10 +376,13 @@ export const validators = {
     const __ref0 = {"shape":{"kind":"object","fields":{"prefix":{"shape":{"kind":"string"},"meta":{"optional":true}}}},"meta":{}} as any;
     const __ref1 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
     function check(value: any) {
+      void value;
       return (((typeof value === "object" && value !== null && !Array.isArray(value)) && (value["prefix"] === undefined || ((typeof value["prefix"] === "string")))));
     }
     function errors(value: any): ValidationError[] {
+      void value;
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {
         if (value["prefix"] !== undefined) {
@@ -358,6 +393,7 @@ export const validators = {
     }
     function parse(value: any) {
       const path: string[] = [];
+      void path;
       const errs: ValidationError[] = [];
       let __o0: Record<string, any> = {};
       if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __ref0, actual: __inferTypeRef(value) }); } else {

@@ -41,7 +41,7 @@ describe("HttpManifest type safety", () => {
     const tree = api({
       books: api({
         list: op((_: unknown): string[] => [], http.get),
-        add: op((input: { title: string }): { id: string } => ({ id: "1" }), http.post),
+        add: op((_input: { title: string }): { id: string } => ({ id: "1" }), http.post),
       }),
     })
     type Manifest = HttpManifest<typeof tree>
@@ -103,7 +103,7 @@ describe("HttpManifest type safety", () => {
   it("distinct leaves with moveTo converging on the same target become sibling methods at that path", () => {
     const bookItem = api({
       read: op((input: { bookId: string }) => ({ id: input.bookId }), http.get, http.moveTo("..")),
-      remove: op((input: { bookId: string }) => ({ ok: true }), http.delete, http.moveTo("..")),
+      remove: op((_input: { bookId: string }) => ({ ok: true }), http.delete, http.moveTo("..")),
     })
     const tree = api({
       books: api({}, { fallback: { name: "bookId", subtree: bookItem } }),

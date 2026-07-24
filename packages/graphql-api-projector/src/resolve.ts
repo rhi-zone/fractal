@@ -15,7 +15,7 @@
 
 import { GraphQLError } from "graphql"
 import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, Stores } from "@rhi-zone/fractal-api-tree"
 import type { Dispatch } from "./project.ts"
 
 // Augment the shared StoreRegistry with the "argument" store name — see

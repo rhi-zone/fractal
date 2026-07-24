@@ -137,7 +137,7 @@ const handlers: Record<string, Converter> = {
   // name context) to synthesize a `T::Enum` class name, falls back to the
   // serialized representation's own class (`String`, since every enum
   // member in this IR is a string) rather than fabricating one.
-  enum: (shape, meta) => (typeof meta.enumName === "string" ? meta.enumName : "String"),
+  enum: (_shape, meta) => (typeof meta.enumName === "string" ? meta.enumName : "String"),
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // Sorbet's `T.all` composes multiple types the same way TS's `&` does.
   intersection: (shape) => {

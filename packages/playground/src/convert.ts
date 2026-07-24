@@ -289,7 +289,7 @@ const projectors: Record<string, (doc: TypeRefDocument) => string> = {
   jtd: (doc) => jsonOut(toJtd(doc.root)),
   "json-schema": (doc) => jsonOut(toJsonSchemaDocument(doc)),
   "json-schema-07": (doc) => jsonOut(toJsonSchema07(doc.root)),
-  "json-schema-04": (doc) => jsonOut(toJsonSchema04Document(doc.root, { definitions: isMulti(doc) ? doc.defs : undefined })),
+  "json-schema-04": (doc) => jsonOut(toJsonSchema04Document(doc.root, isMulti(doc) ? { definitions: doc.defs } : {})),
   openapi30: (doc) => jsonOut(toOpenApi30Document(doc)),
   openapi20: (doc) => jsonOut(isMulti(doc) ? toOpenApi20Definitions(doc.defs) : toOpenApi20(doc.root)),
 }

@@ -42,11 +42,6 @@ function quote(value: string): string {
   return JSON.stringify(value)
 }
 
-function indent(text: string, spaces: number): string[] {
-  const pad = " ".repeat(spaces)
-  return text.split("\n").map((line) => (line.length === 0 ? line : `${pad}${line}`))
-}
-
 // Swift type + SwiftyJSON accessor pair for every leaf/primitive kind this
 // projector knows how to render directly (the pre-1.0 extension kinds —
 // int/float widths, semantic strings, bytes, temporal — bundled in
