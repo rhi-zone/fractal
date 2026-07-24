@@ -62,7 +62,15 @@ const leaf =
 // semantic strings (uuid/uri/email) degrade to Text (Haskell has no built-in
 // refined-string type); datetime/date/time/duration use Data.Time's domain
 // types (matching type-ir's own domain-not-wire-format convention — see
-// kinds/date-time.ts).
+// kinds/date-time.ts). `bytes` degrades to Text the same way: aeson ships no
+// `ToJSON`/`FromJSON` instance for `Data.ByteString.ByteString` (it isn't a
+// dependency of aeson itself), and the wire convention for `bytes` is
+// already a base64 STRING, not a binary frame (see json-schema.ts's
+// `bytes: leaf({ type: "string", contentEncoding: "base64" })`) — so the
+// Haskell field holding that same base64 text opaquely, undecoded, is the
+// direct analogue of how uuid/uri/email hold their own wire string opaquely.
+// A real `ByteString` domain value would need an extra base64 codec
+// dependency this projector doesn't assume the consumer has vendored.
 const handlers: Record<string, Converter> = {
   boolean: leaf("Bool"),
   number: leaf("Double"),
@@ -85,7 +93,7 @@ const handlers: Record<string, Converter> = {
   date: leaf("Day"),
   time: leaf("TimeOfDay"),
   duration: leaf("NominalDiffTime"),
-  bytes: leaf("ByteString"),
+  bytes: leaf("Text"),
   null: leaf("()"),
   void: leaf("()"),
   unknown: leaf("Value"),
@@ -449,7 +457,15 @@ function buildPlainUnionDecl(name: string, variants: readonly TypeRef[], outerDe
     let ctorName = `${name}${base}`
     if (used.has(ctorName)) ctorName = `${name}Variant${index + 1}`
     used.add(ctorName)
-    const hsType = fieldHaskellType(name, `${base}Payload`, variant, outerDecls)
+    // Prefix the hoisted payload name with the (now-deduplicated) ctorName,
+    // not the shared union `name` — two variants of the same structural kind
+    // (e.g. two `object` variants) previously both hoisted to
+    // `${name}${base}Payload` (identical for both, since `base` collapses to
+    // the shared kind name), a name collision GHC rejects ("Multiple
+    // declarations of ..."). Qualifying by ctorName instead guarantees a
+    // distinct hoisted name per variant, mirroring capnp.ts's/
+    // flatbuffers.ts's own per-variant-qualified nested-declaration naming.
+    const hsType = fieldHaskellType(ctorName, "Payload", variant, outerDecls)
     return { ctorName, hsType }
   })
 
@@ -543,7 +559,6 @@ export function toHaskellModule(moduleName: string, registry: Record<string, Typ
     ``,
     `import Control.Applicative ((<|>))`,
     `import Data.Aeson`,
-    `import Data.ByteString (ByteString)`,
     `import Data.Char (toLower)`,
     `import Data.HashMap.Strict (HashMap)`,
     `import Data.Int (Int8, Int16, Int32, Int64)`,

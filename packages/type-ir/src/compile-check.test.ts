@@ -365,22 +365,8 @@ import GHC.Generics (Generic)
 `
 
 describe("haskell-aeson (ghc -fno-code)", () => {
-  // Known bugs, both in haskell-aeson.ts:
-  //   - Discriminated Union: two variants' nested "data"/payload fields both
-  //     hoist to the SAME name (`ApiResponseObjectPayload`), so GHC rejects
-  //     the module ("Multiple declarations of `ApiResponseObjectPayload`").
-  //     Needs per-variant-qualified hoisted names, same root cause as the
-  //     cpp-nlohmann union bug above.
-  //   - Kitchen Sink: `bytesField :: ByteString` derives `ToJSON`/`FromJSON`
-  //     generically, but aeson ships no `ToJSON ByteString`/`FromJSON
-  //     ByteString` instance (GHC: "No instance for `ToJSON ByteString`") —
-  //     haskell-aeson.ts needs to either special-case bytes fields (e.g. a
-  //     base64-`Text` wrapper, the pattern most Haskell JSON code uses) or
-  //     require callers to supply their own orphan instance.
-  const todoFixtures = new Set(["Discriminated Union API Response", "Kitchen Sink"])
   for (const { name, ref } of fixtures) {
-    const runner = todoFixtures.has(name) ? test.todo : test
-    runner(name, () => {
+    test(name, () => {
       withTempDir((dir) => {
         const file = join(dir, "Main.hs")
         writeFileSync(file, `${haskellPreamble}\n${toHaskell(ref, rootNameFor(name))}\n\nmain :: IO ()\nmain = return ()\n`)
