@@ -211,7 +211,7 @@ tested projector. Current state, audited directly against
 | Python | `python-dataclass.ts` | yes | 28 | yes |
 | Go | `go-encoding-json.ts` | yes | 27 | yes |
 | Rust | `rust-serde.ts` | yes | 27 | yes |
-| Java | `java-jackson.ts` | yes | 35 | **no** |
+| Java | `java-jackson.ts` | yes | 35 | yes |
 | C# | `csharp-systemtextjson.ts` | yes | 19 | yes |
 | Swift | `swift-codable.ts` | yes | 24 | yes |
 | Kotlin | `kotlin-kotlinx.ts` | yes | 29 | yes |
@@ -228,10 +228,7 @@ tested projector. Current state, audited directly against
 Test counts are `it(`/`test(` occurrences in each module's `.test.ts`
 file, as a rough size signal, not a quality measure. Every module here
 has cleared the bar this project uses elsewhere (a test file, and a
-subpath entry in `package.json`'s `exports` map) with one exception:
-**Java has a full module and 35 tests but no `exports` subpath entry
-at all** — not even under an alias — so it isn't currently importable
-by consumers as `@rhi-zone/fractal-type-ir/java` or any equivalent path.
+subpath entry in `package.json`'s `exports` map).
 
 Note — projector naming convention: modules now follow a
 `{language}-{library}.ts` naming scheme (e.g. `typescript-zod.ts`,
@@ -247,10 +244,8 @@ exported (see above).
 
 Acceptance criteria for green:
 - Every language in the 1.0 scope list has a source module, a test
-  suite, and a published export subpath — sixteen of sixteen now have
-  the first two; Java is the one outstanding gap on the third.
-- Java's `exports` entry (bare `./java` and/or `./java-jackson`) needs
-  to be added.
+  suite, and a published export subpath — all sixteen of sixteen now
+  complete (Java's `exports` entry was added in a prior session).
 - The bare-language `exports` aliases audited for completeness once the
   serialization-library-variants slice lands, since a language with
   multiple libraries can no longer have its bare name mean only one of
@@ -617,6 +612,12 @@ What's planned / open:
   into an actual compile-check step in the test suite (as opposed to the
   toolchains merely being present in the devShell) is still open — see
   "Battle testing" below.
+- ~~All 9 `compile-check.test.ts` `test.todo` items~~ — **DONE (2026-07-25)**:
+  Rust-serde keyword escaping, C++ nlohmann/Haskell-aeson union name
+  collisions, TypeScript-typebox recursive types, Obj-C Foundation
+  primitive boxing, Cap'n Proto tuples, Python-attrs field ordering,
+  FlatBuffers nested vectors, and Java/Kotlin enum unions all fixed.
+  Compile-check step is significantly closer to complete.
 
 **Battle testing** — every projector and ingester currently has unit-test
 coverage, but none has been exercised against real-world corpora at

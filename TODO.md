@@ -1,5 +1,11 @@
 # fractal — TODO
 
+## Completed this session (2026-07-25)
+
+- **compile-check.test.ts: all 9 `test.todo` items resolved** — The real projector bugs surfaced by compilation have been fixed: Rust-serde keyword escaping (r#type), C++ nlohmann union name collisions, Haskell-aeson union name collisions + ByteString → Text, TypeScript-typebox recursive type (Type.Recursive), Obj-C Foundation primitive boxing (NSNumber *), Cap'n Proto tuple positional structs, Python-attrs field ordering (kw_only=True), FlatBuffers nested vectors (wrapper tables) + union scalar wrapping, and Java/Kotlin enum union handling. Compile-check step is now significantly closer to complete.
+
+- **Package names renamed** — `fractal-*` scoped packages now published as `@rhi-zone/fractal-*` for ecosystem consistency. Root `package.json` `comment` field removed.
+
 ## Completed this session (2026-07-24)
 
 - **MCP Tier 2 (logging)** — `packages/mcp-api-projector`: `CreateMcpServerOptions.logging` advertises the `logging` server capability and exposes `stores.caller.sendLog` (MCP's `notifications/message`) to tool/resource/prompt handlers, wired to the SDK's own `Server.sendLoggingMessage`. Log-level negotiation (`logging/setLevel`) needed no new code — the SDK's `Server` constructor already registers that handler once the capability is declared and `sendLoggingMessage` already filters against the negotiated per-session minimum. 6 new tests in `server.test.ts` (capability advertisement, field gating, ALS-bridged emission, and a `logging/setLevel` negotiation test proving a below-minimum message is dropped).
@@ -18,8 +24,6 @@
 *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
 
 - **Remaining library variants** — most of the previously-tracked matrix shipped this session (C++ RapidJSON/simdjson/Boost.JSON/glaze, Go jsoniter/sonic, Swift SwiftyJSON/ObjectMapper, Python msgspec/cattrs, Ruby RBS, Dart built_value, Java JSON-B, Kotlin Gson, C# ServiceStack, PHP Symfony/JMS). Python Pydantic variant might still be open.
-
-- **compile-check.test.ts has 9 `test.todo` items** citing real projector bugs surfaced by compilation: keyword escaping in rust-serde, union name collisions in cpp-nlohmann/haskell-aeson, missing `Type.Recursive` in typescript-typebox, python-attrs field ordering, objc-foundation unboxed primitives, capnp/flatbuffers tuple/nested-vector wrapping.
 
 - **Several serialization variant compile checks are skipped** (Java/Kotlin/C#/Dart/Elm) because they need package registries (Maven, NuGet, pub.dev) — might need a different CI approach or containerized builds.
 
