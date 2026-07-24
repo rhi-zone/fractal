@@ -337,6 +337,91 @@ export function tablePerVariantSqlLayout(opts?: { tableName?: (unionName: string
   }
 }
 
+/**
+ * Base-table-per-variant layout: one shared base CREATE TABLE — primary key,
+ * discriminator column, and any fields common to every variant — plus one
+ * child CREATE TABLE per variant holding a foreign key back to the base
+ * table and that variant's own (non-shared) fields. A field counts as
+ * "shared" only when every variant carries it (not "first variant wins" —
+ * unlike STI's per-field merge, promoting a field that only some variants
+ * have would make it look base-guaranteed when it isn't); a field present in
+ * some but not all variants stays on those variants' own child tables. Field
+ * type ties for genuinely shared fields resolve to the first variant's
+ * column definition, same documented tie-break as the other layouts.
+ *
+ * A constructor (not a bare layout value) so its configuration points — base
+ * table naming, child table naming, the foreign key column name/type, and
+ * the primary key column name/type — have somewhere to live without
+ * widening `SqlUnionLayout`'s own signature. The primary key/foreign key
+ * types default to Postgres's `SERIAL`/`INTEGER` since `SqlUnionLayout`
+ * doesn't carry the caller's dialect — override them for other dialects.
+ */
+export function baseTablePerVariantSqlLayout(opts?: {
+  baseTableName?: (unionName: string) => string
+  tableName?: (unionName: string, variantName: string) => string
+  foreignKeyColumn?: (unionName: string) => string
+  foreignKeyType?: string
+  primaryKeyColumn?: string
+  primaryKeyType?: string
+  discriminatorColumn?: string
+}): SqlUnionLayout {
+  const baseTableName = opts?.baseTableName ?? ((unionName: string) => unionName)
+  const tableName = opts?.tableName ?? ((unionName: string, variantName: string) => `${unionName}_${variantName}`)
+  const foreignKeyColumn = opts?.foreignKeyColumn ?? ((unionName: string) => `${unionName}_id`)
+  const foreignKeyType = opts?.foreignKeyType ?? "INTEGER"
+  const primaryKeyColumn = opts?.primaryKeyColumn ?? "id"
+  const primaryKeyType = opts?.primaryKeyType ?? "SERIAL PRIMARY KEY"
+  const fallbackDiscriminatorColumn = opts?.discriminatorColumn ?? "kind"
+
+  return ({ name, discriminator, variants, toColumn }) => {
+    const discriminatorName = discriminator ?? fallbackDiscriminatorColumn
+    const base = baseTableName(name)
+    const fk = foreignKeyColumn(name)
+
+    const objectVariants = variants.filter(({ ref }) => isA(ref.shape.kind, "object"))
+
+    // Fields present on EVERY object variant (excluding the discriminator
+    // itself) are "shared" and belong on the base table; a field only some
+    // variants carry stays on those variants' own child tables.
+    let commonFieldNames: string[] | undefined
+    for (const { ref } of objectVariants) {
+      const s = ref.shape as TypeShape & { kind: "object" }
+      const fieldNames = Object.keys(s.fields).filter((f) => f !== discriminatorName)
+      commonFieldNames = commonFieldNames === undefined ? fieldNames : commonFieldNames.filter((f) => fieldNames.includes(f))
+    }
+    const common = new Set(commonFieldNames ?? [])
+
+    const baseColumns: string[] = [`${primaryKeyColumn} ${primaryKeyType}`, columnDef(discriminatorName, stringColumn(toColumn))]
+    const seen = new Set<string>()
+    for (const { ref } of objectVariants) {
+      const s = ref.shape as TypeShape & { kind: "object" }
+      for (const [fieldName, fieldRef] of Object.entries(s.fields)) {
+        if (!common.has(fieldName) || seen.has(fieldName)) continue
+        seen.add(fieldName)
+        baseColumns.push(columnDef(fieldName, toColumn(fieldRef)))
+      }
+    }
+    const baseTable = `CREATE TABLE ${base} (\n  ${baseColumns.join(",\n  ")}\n);`
+
+    const childTables = variants.map(({ name: variantLabel, ref }) => {
+      const table = tableName(name, variantLabel)
+      const fkColumn = `${fk} ${foreignKeyType} NOT NULL REFERENCES ${base}(${primaryKeyColumn})`
+      if (isA(ref.shape.kind, "object")) {
+        const s = ref.shape as TypeShape & { kind: "object" }
+        const columns = Object.entries(s.fields)
+          .filter(([fieldName]) => fieldName !== discriminatorName && !common.has(fieldName))
+          .map(([fieldName, fieldRef]) => columnDef(fieldName, toColumn(fieldRef)))
+        return `CREATE TABLE ${table} (\n  ${[fkColumn, ...columns].join(",\n  ")}\n);`
+      }
+      // A non-object variant has no fields to spread beyond the FK — same
+      // single-`value`-column fallback as tablePerVariantSqlLayout.
+      return `CREATE TABLE ${table} (\n  ${[fkColumn, columnDef("value", toColumn(ref))].join(",\n  ")}\n);`
+    })
+
+    return [baseTable, ...childTables].join("\n\n")
+  }
+}
+
 // Resolves a union variant's name for both the discriminator-column merge
 // (STI) and per-variant table naming (TPV): the literal string value of its
 // discriminator field when present (the tagged-union convention, e.g.

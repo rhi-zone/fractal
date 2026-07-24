@@ -256,6 +256,77 @@ export function tablePerVariantMssqlLayout(opts?: { tableName?: (unionName: stri
   }
 }
 
+/**
+ * Base-table-per-variant layout — see `baseTablePerVariantSqlLayout` in
+ * sql.ts for the full rationale. The primary/foreign key types default to
+ * MSSQL's own `INT IDENTITY(1,1) PRIMARY KEY` / `INT` (rather than
+ * Postgres's `SERIAL`/`INTEGER`) since `MssqlUnionLayout` has no other
+ * dialect-appropriate default to reach for.
+ */
+export function baseTablePerVariantMssqlLayout(opts?: {
+  baseTableName?: (unionName: string) => string
+  tableName?: (unionName: string, variantName: string) => string
+  foreignKeyColumn?: (unionName: string) => string
+  foreignKeyType?: string
+  primaryKeyColumn?: string
+  primaryKeyType?: string
+  discriminatorColumn?: string
+}): MssqlUnionLayout {
+  const baseTableName = opts?.baseTableName ?? ((unionName: string) => unionName)
+  const tableName = opts?.tableName ?? ((unionName: string, variantName: string) => `${unionName}_${variantName}`)
+  const foreignKeyColumn = opts?.foreignKeyColumn ?? ((unionName: string) => `${unionName}_id`)
+  const foreignKeyType = opts?.foreignKeyType ?? "INT"
+  const primaryKeyColumn = opts?.primaryKeyColumn ?? "id"
+  const primaryKeyType = opts?.primaryKeyType ?? "INT IDENTITY(1,1) PRIMARY KEY"
+  const fallbackDiscriminatorColumn = opts?.discriminatorColumn ?? "kind"
+
+  return ({ name, discriminator, variants, toColumn }) => {
+    const discriminatorName = discriminator ?? fallbackDiscriminatorColumn
+    const base = baseTableName(name)
+    const fk = foreignKeyColumn(name)
+
+    const objectVariants = variants.filter(({ ref }) => isA(ref.shape.kind, "object"))
+
+    let commonFieldNames: string[] | undefined
+    for (const { ref } of objectVariants) {
+      const s = ref.shape as TypeShape & { kind: "object" }
+      const fieldNames = Object.keys(s.fields).filter((f) => f !== discriminatorName)
+      commonFieldNames = commonFieldNames === undefined ? fieldNames : commonFieldNames.filter((f) => fieldNames.includes(f))
+    }
+    const common = new Set(commonFieldNames ?? [])
+
+    const baseColumns: string[] = [
+      `${primaryKeyColumn} ${primaryKeyType}`,
+      renderMssqlColumnDef(discriminatorName, mssqlStringColumn(toColumn)),
+    ]
+    const seen = new Set<string>()
+    for (const { ref } of objectVariants) {
+      const s = ref.shape as TypeShape & { kind: "object" }
+      for (const [fieldName, fieldRef] of Object.entries(s.fields)) {
+        if (!common.has(fieldName) || seen.has(fieldName)) continue
+        seen.add(fieldName)
+        baseColumns.push(renderMssqlColumnDef(fieldName, toColumn(fieldRef)))
+      }
+    }
+    const baseTable = `CREATE TABLE ${base} (\n  ${baseColumns.join(",\n  ")}\n);`
+
+    const childTables = variants.map(({ name: variantLabel, ref }) => {
+      const table = tableName(name, variantLabel)
+      const fkColumn = `${fk} ${foreignKeyType} NOT NULL REFERENCES ${base}(${primaryKeyColumn})`
+      if (isA(ref.shape.kind, "object")) {
+        const s = ref.shape as TypeShape & { kind: "object" }
+        const columns = Object.entries(s.fields)
+          .filter(([fieldName]) => fieldName !== discriminatorName && !common.has(fieldName))
+          .map(([fieldName, fieldRef]) => renderMssqlColumnDef(fieldName, toColumn(fieldRef)))
+        return `CREATE TABLE ${table} (\n  ${[fkColumn, ...columns].join(",\n  ")}\n);`
+      }
+      return `CREATE TABLE ${table} (\n  ${[fkColumn, renderMssqlColumnDef("value", toColumn(ref))].join(",\n  ")}\n);`
+    })
+
+    return [baseTable, ...childTables].join("\n\n")
+  }
+}
+
 // Resolves a union variant's name — see `variantName` in sql.ts for the full
 // rationale (mirrors toProtoUnionMessage/toCapnpUnionStruct's tagged-union
 // naming convention).

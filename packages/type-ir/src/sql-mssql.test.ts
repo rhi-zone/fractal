@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { registerParent, t, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, float32, float64, int32, int64, time, uri, uuid } from "./kinds/common.ts"
 import {
+  baseTablePerVariantMssqlLayout,
   mssqlColumnDef,
   singleTableInheritanceMssqlLayout,
   tablePerVariantMssqlLayout,
@@ -392,6 +393,98 @@ describe("union roots (toMssqlCreateTableFromRef)", () => {
           unionLayout: tablePerVariantMssqlLayout({ tableName: (root, variant) => `${root}__${variant}` }),
         }),
       ).toBe("CREATE TABLE Plain__variant1 (\n  value NVARCHAR(255) NOT NULL\n);")
+    })
+  })
+
+  describe("baseTablePerVariantMssqlLayout", () => {
+    test("base table (pk + discriminator) plus one child table per variant with its own fields", () => {
+      expect(
+        toMssqlCreateTableFromRef("ApiResponse", discriminatedUnion, { unionLayout: baseTablePerVariantMssqlLayout() }),
+      ).toBe(
+        "CREATE TABLE ApiResponse (\n" +
+          "  id INT IDENTITY(1,1) PRIMARY KEY,\n" +
+          "  type NVARCHAR(255) NOT NULL\n" +
+          ");\n\n" +
+          "CREATE TABLE ApiResponse_success (\n" +
+          "  ApiResponse_id INT NOT NULL REFERENCES ApiResponse(id),\n" +
+          "  data NVARCHAR(MAX) NOT NULL\n" +
+          ");\n\n" +
+          "CREATE TABLE ApiResponse_error (\n" +
+          "  ApiResponse_id INT NOT NULL REFERENCES ApiResponse(id),\n" +
+          "  code INT NOT NULL,\n" +
+          "  message NVARCHAR(255) NOT NULL\n" +
+          ");",
+      )
+    })
+
+    test("a field shared by every variant is promoted onto the base table, not duplicated per child", () => {
+      const successWithRequestId = t(
+        types.object({
+          type: t(types.literal("success")),
+          requestId: t(types.string),
+          data: t(types.object({ result: t(types.string) })),
+        }),
+      )
+      const errorWithRequestId = t(
+        types.object({
+          type: t(types.literal("error")),
+          requestId: t(types.string),
+          code: t(types.integer),
+        }),
+      )
+      const union = t(types.union([successWithRequestId, errorWithRequestId]), { discriminator: "type" })
+      expect(toMssqlCreateTableFromRef("ApiResponse", union, { unionLayout: baseTablePerVariantMssqlLayout() })).toBe(
+        "CREATE TABLE ApiResponse (\n" +
+          "  id INT IDENTITY(1,1) PRIMARY KEY,\n" +
+          "  type NVARCHAR(255) NOT NULL,\n" +
+          "  requestId NVARCHAR(255) NOT NULL\n" +
+          ");\n\n" +
+          "CREATE TABLE ApiResponse_success (\n" +
+          "  ApiResponse_id INT NOT NULL REFERENCES ApiResponse(id),\n" +
+          "  data NVARCHAR(MAX) NOT NULL\n" +
+          ");\n\n" +
+          "CREATE TABLE ApiResponse_error (\n" +
+          "  ApiResponse_id INT NOT NULL REFERENCES ApiResponse(id),\n" +
+          "  code INT NOT NULL\n" +
+          ");",
+      )
+    })
+
+    test("plain union falls back to positional variant names and a single 'value' column per child", () => {
+      const plainUnion = t(types.union([t(types.string), t(types.integer)]))
+      expect(toMssqlCreateTableFromRef("Plain", plainUnion, { unionLayout: baseTablePerVariantMssqlLayout() })).toBe(
+        "CREATE TABLE Plain (\n  id INT IDENTITY(1,1) PRIMARY KEY,\n  kind NVARCHAR(255) NOT NULL\n);\n\n" +
+          "CREATE TABLE Plain_variant1 (\n  Plain_id INT NOT NULL REFERENCES Plain(id),\n  value NVARCHAR(255) NOT NULL\n);\n\n" +
+          "CREATE TABLE Plain_variant2 (\n  Plain_id INT NOT NULL REFERENCES Plain(id),\n  value INT NOT NULL\n);",
+      )
+    })
+
+    test("naming/type overrides: baseTableName, tableName, foreignKeyColumn, primaryKeyType, foreignKeyType", () => {
+      expect(
+        toMssqlCreateTableFromRef("ApiResponse", discriminatedUnion, {
+          unionLayout: baseTablePerVariantMssqlLayout({
+            baseTableName: (root) => `${root.toLowerCase()}_base`,
+            tableName: (root, variant) => `${root.toLowerCase()}__${variant}`,
+            foreignKeyColumn: (root) => `${root.toLowerCase()}_ref`,
+            primaryKeyType: "BIGINT IDENTITY(1,1) PRIMARY KEY",
+            foreignKeyType: "BIGINT",
+          }),
+        }),
+      ).toBe(
+        "CREATE TABLE apiresponse_base (\n" +
+          "  id BIGINT IDENTITY(1,1) PRIMARY KEY,\n" +
+          "  type NVARCHAR(255) NOT NULL\n" +
+          ");\n\n" +
+          "CREATE TABLE apiresponse__success (\n" +
+          "  apiresponse_ref BIGINT NOT NULL REFERENCES apiresponse_base(id),\n" +
+          "  data NVARCHAR(MAX) NOT NULL\n" +
+          ");\n\n" +
+          "CREATE TABLE apiresponse__error (\n" +
+          "  apiresponse_ref BIGINT NOT NULL REFERENCES apiresponse_base(id),\n" +
+          "  code INT NOT NULL,\n" +
+          "  message NVARCHAR(255) NOT NULL\n" +
+          ");",
+      )
     })
   })
 
