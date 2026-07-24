@@ -241,10 +241,32 @@ const handlers: Record<string, Converter> = {
     ctx.headers.add(unordered ? "<unordered_map>" : "<map>")
     return `${unordered ? "std::unordered_map" : "std::map"}<${key}, ${value}>`
   },
-  union: (shape, _meta, ctx, hint) => {
+  // Each variant gets its own hoisted name — reusing the union's own `hint`
+  // for every variant (as this used to do) makes every anonymous member
+  // struct collapse onto the same name as the union alias itself, producing
+  // a self-referential `using Foo = std::variant<Foo, Foo, Foo>` that g++
+  // rejects. Per protobuf.ts's toProtoUnionMessage precedent: when
+  // `meta.discriminator` names a field and a variant's shape carries a
+  // string `literal` at that field (the tagged-union convention shared by
+  // from-jtd.ts/json-schema.ts), the tag value names that variant — more
+  // legible than a positional name. Untagged variants (no discriminator, or
+  // no matching string literal) fall back to a positional `Variant1`,
+  // `Variant2`, ... suffix.
+  union: (shape, meta, ctx, hint) => {
     const s = shape as TypeShape & { kind: "union" }
     ctx.headers.add("<variant>")
-    return `std::variant<${s.variants.map((v) => cppType(v, ctx, hint)).join(", ")}>`
+    const discriminator = typeof meta.discriminator === "string" ? meta.discriminator : undefined
+    const variantHint = (variant: TypeRef, index: number): string => {
+      if (discriminator !== undefined && variant.shape.kind === "object") {
+        const vShape = variant.shape as TypeShape & { kind: "object" }
+        const tagShape = vShape.fields[discriminator]?.shape
+        if (tagShape?.kind === "literal" && typeof (tagShape as TypeShape & { kind: "literal" }).value === "string") {
+          return `${hint}${pascalCase((tagShape as TypeShape & { kind: "literal" }).value as string)}`
+        }
+      }
+      return `${hint}Variant${index + 1}`
+    }
+    return `std::variant<${s.variants.map((v, i) => cppType(v, ctx, variantHint(v, i))).join(", ")}>`
   },
   literal: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "literal" }

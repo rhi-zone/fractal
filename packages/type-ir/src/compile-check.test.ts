@@ -311,17 +311,7 @@ const nlohmannIncludeDir = nlohmannOutPath.ok ? `${nlohmannOutPath.output.trim()
 
 describe("cpp-nlohmann (g++ -c -std=c++17)", () => {
   for (const { name, ref } of fixtures) {
-    // Known bug: the Discriminated Union fixture's variant alias and its
-    // three anonymous member structs all collapse to the SAME name
-    // ("ApiResponse") — g++ rejects the self-referential
-    // `using ApiResponse = std::variant<ApiResponse, ApiResponse, ApiResponse>`
-    // this produces ("conflicting declaration"). cpp-nlohmann.ts's union
-    // lowering needs to give each variant struct (and the variant alias) a
-    // distinct hoisted name instead of reusing the union's own name for
-    // every member.
-    const todo = name === "Discriminated Union API Response"
-    const runner = todo ? test.todo : test
-    runner(name, () => {
+    test(name, () => {
       withTempDir((dir) => {
         const file = join(dir, "root.cpp")
         writeFileSync(file, toCpp(ref, rootNameFor(name)))
@@ -506,15 +496,7 @@ describe("protobuf (protoc)", () => {
 
 describe("capnp (capnp compile)", () => {
   for (const { name, ref } of structCompatibleFixtures) {
-    // Known bug in capnp.ts: a tuple field lowers to `List(AnyPointer)`
-    // (heterogeneous positional elements have no direct Cap'n Proto
-    // encoding today), which capnp explicitly refuses to compile ("error:
-    // 'List(AnyPointer)' is not supported."). Fix needs a synthesized
-    // positional struct for tuples, the same pattern flatbuffers.ts's
-    // buildTupleTable already uses for FlatBuffers.
-    const todo = name === "Kitchen Sink"
-    const runner = todo ? test.todo : test
-    runner(name, () => {
+    test(name, () => {
       withTempDir((dir) => {
         const file = join(dir, "root.capnp")
         writeFileSync(file, renderCapnp([toCapnpStruct(rootNameFor(name), ref)], "0xdbb9ad1f14bf0b36"))
