@@ -245,7 +245,13 @@ describe("toFlatBuffersTable", () => {
   test("union field hoists a sibling union", () => {
     const ref = t(types.object({ shape: t(types.union([t(types.string), int32()])) }))
     const rendered = toFlatBuffersTable("Widget", ref)
-    expect(rendered).toContain("union Shape { string, int32 }")
+    // FlatBuffers unions may only contain table types (§ "Unions") — flatc
+    // rejects bare scalar/string variants ("type referenced but not
+    // defined"), so each non-table variant gets hoisted into a synthesized
+    // single-field wrapper table and the union references the wrapper names.
+    expect(rendered).toContain("table StringWrapper {\n  value:string (required);\n}")
+    expect(rendered).toContain("table Int32Wrapper {\n  value:int32;\n}")
+    expect(rendered).toContain("union Shape { StringWrapper, Int32Wrapper }")
     expect(rendered).toContain("  shape:Shape;")
   })
 
@@ -327,7 +333,13 @@ describe("toFlatBuffersDeclarations", () => {
     }
     const rendered = toFlatBuffersDeclarations(registry)
     expect(rendered).toContain("enum Status : int {")
-    expect(rendered).toContain("union Shape { string, int32 }")
+    // Same wrapper-table hoisting as the union-field case above, but at
+    // top-level declaration scope (toFlatBuffersDeclarations has no
+    // enclosing table to hoist a sibling decl into, so the wrapper tables
+    // are emitted as their own top-level blocks ahead of the union).
+    expect(rendered).toContain("table StringWrapper {\n  value:string (required);\n}")
+    expect(rendered).toContain("table Int32Wrapper {\n  value:int32;\n}")
+    expect(rendered).toContain("union Shape { StringWrapper, Int32Wrapper }")
     expect(rendered).toContain("table Person {")
     expect(rendered).toContain("rpc_service AccountService {")
   })

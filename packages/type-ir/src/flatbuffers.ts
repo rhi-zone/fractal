@@ -214,6 +214,38 @@ function requiredFor(type: string, required: boolean): boolean {
   return required && !FB_SCALAR_TYPES.has(type)
 }
 
+// § "Unions" (https://flatbuffers.dev/schema/#unions): a union may only
+// contain table types (struct/string support varies by flatc version, but
+// bare scalars and strings used as a union member are rejected outright —
+// "type referenced but not defined" is flatc's own error for e.g. `union U {
+// string, int }`). `object`/`instance`/`ref`/`tuple` variants already lower
+// to a name that either is, or is assumed (by the same className/tableName
+// convention used elsewhere in this file) to be, a declared table — used
+// as-is. Everything else (scalars, strings, enums, literals, maps, nested
+// arrays, ...) needs a synthesized single-field wrapper table, the same
+// hoisting pattern used for nested objects/tuples/maps/arrays-of-arrays above.
+function unionVariantIsTableLike(kind: string): boolean {
+  return isA(kind, "object") || kind === "tuple" || kind === "ref" || kind === "instance"
+}
+
+function wrapperNameFor(fbType: string): string {
+  const alnum = fbType.replace(/[^A-Za-z0-9]/g, "")
+  return `${capitalize(alnum.length > 0 ? alnum : "Value")}Wrapper`
+}
+
+// Resolve a union variant to the type name usable inside a `union { ... }`
+// declaration, hoisting a wrapper table via `pushWrapper` when the variant
+// isn't already table-like. `pushWrapper` is expected to dedupe by name
+// itself (e.g. two different unions both containing a `string` variant
+// should share one `StringWrapper` rather than redeclaring it).
+function wrapUnionVariant(variant: TypeRef, pushWrapper: (table: FbTable) => void): string {
+  const fbType = toFlatBuffers(variant)
+  if (unionVariantIsTableLike(variant.shape.kind)) return fbType
+  const name = wrapperNameFor(fbType)
+  pushWrapper({ name, fields: [{ name: "value", field: { type: fbType, required: requiredFor(fbType, true) } }] })
+  return name
+}
+
 function buildTupleTable(name: string, ref: TypeRef): FbTable {
   const shape = ref.shape as TypeShape & { kind: "tuple" }
   const fields: FbTable["fields"] = shape.elements.map((element, i) => ({
@@ -253,6 +285,27 @@ function buildTable(name: string, ref: TypeRef, decls: FbDecl[]): FbTable {
       const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
       decls.push({ kind: "table", value: buildTable(nestedName, element, decls) })
       fields.push({ name: fieldName, field: { type: `[${nestedName}]`, required: false, ...deprecated, ...description } })
+    } else if (
+      fieldRef.shape.kind === "array" &&
+      (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "array"
+    ) {
+      // FlatBuffers has no nested-vector construct (§ "Vectors" —
+      // "nested vector types not supported, wrap in table first" is flatc's
+      // own hard error) — a `T[][]` field is lowered by synthesizing a
+      // one-field wrapper table around the inner vector (mirroring how
+      // nested objects/tuples/maps above get hoisted sibling tables) and
+      // making the outer field a vector of that wrapper.
+      const nestedName = `${capitalize(fieldName)}Item`
+      const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
+      const innerType = toFlatBuffers(element)
+      decls.push({
+        kind: "table",
+        value: {
+          name: nestedName,
+          fields: [{ name: "items", field: { type: innerType, required: requiredFor(innerType, true) } }],
+        },
+      })
+      fields.push({ name: fieldName, field: { type: `[${nestedName}]`, required: false, ...deprecated, ...description } })
     } else if (fieldRef.shape.kind === "enum") {
       const enumName = capitalize(fieldName)
       const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
@@ -262,7 +315,10 @@ function buildTable(name: string, ref: TypeRef, decls: FbDecl[]): FbTable {
     } else if (fieldRef.shape.kind === "union") {
       const unionName = capitalize(fieldName)
       const variants = (fieldRef.shape as TypeShape & { kind: "union" }).variants
-      decls.push({ kind: "union", value: { name: unionName, types: variants.map((v) => toFlatBuffers(v)) } })
+      const pushWrapper = (wrapper: FbTable) => {
+        if (!decls.some((d) => d.kind === "table" && d.value.name === wrapper.name)) decls.push({ kind: "table", value: wrapper })
+      }
+      decls.push({ kind: "union", value: { name: unionName, types: variants.map((v) => wrapUnionVariant(v, pushWrapper)) } })
       fields.push({ name: fieldName, field: { type: unionName, required: false, ...deprecated, ...description } })
     } else if (fieldRef.shape.kind === "map") {
       const mapShape = fieldRef.shape as TypeShape & { kind: "map" }
@@ -444,7 +500,13 @@ export function toFlatBuffersDeclarations(registry: Record<string, TypeRef>): st
     }
     if (ref.shape.kind === "union") {
       const variants = (ref.shape as TypeShape & { kind: "union" }).variants
-      const u: FbUnion = { name, types: variants.map((v) => toFlatBuffers(v)) }
+      const wrapperTables: FbTable[] = []
+      const pushWrapper = (wrapper: FbTable) => {
+        if (!wrapperTables.some((t) => t.name === wrapper.name)) wrapperTables.push(wrapper)
+      }
+      const types = variants.map((v) => wrapUnionVariant(v, pushWrapper))
+      for (const wrapper of wrapperTables) blocks.push(renderTable(wrapper))
+      const u: FbUnion = { name, types }
       if (typeof ref.meta.description === "string") u.description = ref.meta.description
       blocks.push(renderUnion(u))
       continue

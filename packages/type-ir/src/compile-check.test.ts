@@ -501,16 +501,7 @@ describe("capnp (capnp compile)", () => {
 
 describe("flatbuffers (flatc --cpp)", () => {
   for (const { name, ref } of objectFixtures) {
-    // Known bug in flatbuffers.ts: `arrayOfArrays: number[][]` lowers to
-    // `[[int64]]` (a vector of vectors), which FlatBuffers doesn't support
-    // directly ("error: nested vector types not supported (wrap in table
-    // first)") — flatc's own suggested fix names the shape flatbuffers.ts
-    // needs to adopt: synthesize a one-field wrapper table around the inner
-    // vector, the same hoisting buildTable already does for nested
-    // objects/tuples/maps.
-    const todo = name === "Kitchen Sink"
-    const runner = todo ? test.todo : test
-    runner(name, () => {
+    test(name, () => {
       withTempDir((dir) => {
         const file = join(dir, "root.fbs")
         writeFileSync(file, toFlatBuffersTable(rootNameFor(name), ref))
