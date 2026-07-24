@@ -35,6 +35,10 @@
       "types": "./src/context.ts",
       "import": "./src/context.ts"
     },
+    "./otel": {
+      "types": "./src/otel.ts",
+      "import": "./src/otel.ts"
+    },
     "./auth": {
       "types": "./src/auth.ts",
       "import": "./src/auth.ts"
