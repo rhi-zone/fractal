@@ -19,12 +19,14 @@ describe("basic merging", () => {
     expect(fromJsonCorpus([])).toEqual(t(types.unknown))
   })
 
-  test("identical values -> literal (K=1 saturation is a constant signal)", () => {
-    // Every sample carries the exact same value — K=1 across N=3 samples is
-    // maximal saturation, strong evidence the field is a constant/literal
-    // rather than merely narrow-width. See looksLikeEnum in
-    // from-json-corpus.ts.
-    expect(fromJsonCorpus([42, 42, 42])).toEqual(t(types.literal(42)))
+  test("identical values -> literal (K=1 saturation is a constant signal, once N clears literalMinSamples)", () => {
+    // Every sample carries the exact same value — K=1 is maximal saturation,
+    // strong evidence the field is a constant/literal rather than merely
+    // narrow-width. But a handful of samples isn't enough to trust that
+    // signal (see looksLikeEnum's `literalMinSamples`, default 5) — N=3
+    // is too small to commit.
+    expect(fromJsonCorpus([42, 42, 42]).shape.kind).toBe("uint8")
+    expect(fromJsonCorpus([42, 42, 42, 42, 42])).toEqual(t(types.literal(42)))
   })
 
   test("boolean values merge to boolean", () => {

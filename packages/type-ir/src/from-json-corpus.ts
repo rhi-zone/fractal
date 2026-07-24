@@ -107,6 +107,16 @@ export interface ResolveStrategy extends InferConfig {
   detectDirtyData?: boolean
   /** Minimum samples before enum detection fires. Default: 3. */
   enumMinSamples?: number
+  /**
+   * Minimum samples before K=1 evidence (every sample shares one value)
+   * collapses to `literal`/a one-member `enum`. Deliberately higher than
+   * `enumMinSamples`: committing to the single exact value a field has ever
+   * been observed to take is a stronger claim than committing to a small
+   * bounded set of values, and a corpus that's barely cleared
+   * `enumMinSamples` hasn't yet had much chance to show a second value.
+   * Default: 5.
+   */
+  literalMinSamples?: number
   /** Minimum samples before dict detection fires. Default: 3. */
   dictMinSamples?: number
   /** Custom resolvers for specific evidence patterns, tried at every node after the built-in passes. First non-`undefined` result wins. */
@@ -459,13 +469,23 @@ function mergeAll(refs: readonly TypeRef[]): TypeRef {
  *    relative to the value range. This alone is not sufficient (timestamps
  *    cluster too) — it only corroborates a borderline saturation signal.
  *
- * K == 1 (every sample has the same value) is treated as maximal saturation
- * — always a positive signal, independent of N.
+ * K == 1 (every sample has the same value) is maximal saturation, but it
+ * still needs enough samples before it's trusted: a single-value corpus at
+ * very low N can't distinguish "this field is a constant" from "we simply
+ * haven't seen a second value yet". `literalMinSamples` (default 5, higher
+ * than the general `enumMinSamples`) gates that commitment — below it, K=1
+ * evidence is left alone rather than collapsed to `literal`/a one-member
+ * `enum`.
  *
  * When signals disagree or are ambiguous, be conservative and say no.
  */
-function looksLikeEnum(K: number, N: number, sortedValues?: readonly number[]): boolean {
-  if (K === 1) return true
+function looksLikeEnum(
+  K: number,
+  N: number,
+  sortedValues?: readonly number[],
+  literalMinSamples = 5,
+): boolean {
+  if (K === 1) return N >= literalMinSamples
   if (K >= N) return false // every value unique — definitely not an enum
   if (K > 50) return false // too many distinct values to be enum-like
 
@@ -486,17 +506,27 @@ function looksLikeEnum(K: number, N: number, sortedValues?: readonly number[]): 
   return false
 }
 
-function walkAndDetectEnums(ref: TypeRef, node: EvidenceNode, minSamples: number): TypeRef {
+function walkAndDetectEnums(
+  ref: TypeRef,
+  node: EvidenceNode,
+  minSamples: number,
+  literalMinSamples: number,
+): TypeRef {
   const { shape } = ref
 
   if (shape.kind === "string" || isSubkind(shape.kind, "string")) {
     if (node.leafCount >= minSamples) {
       const K = node.distinctValues.size
       const N = node.leafCount
-      if (looksLikeEnum(K, N)) {
+      if (looksLikeEnum(K, N, undefined, literalMinSamples)) {
         const members = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
         // Only if all values are strings
         if (members.every((m) => typeof m === "string")) {
+          // K === 1 → single constant value, represent as a literal, same
+          // as the integer branch below (see the asymmetry this replaced,
+          // documented in from-json.adversarial.test.ts §13).
+          // K > 1 → enum.
+          if (members.length === 1) return t(types.literal(members[0] as string), ref.meta)
           return t(types.enum(members as string[]), ref.meta)
         }
       }
@@ -511,7 +541,7 @@ function walkAndDetectEnums(ref: TypeRef, node: EvidenceNode, minSamples: number
       const values = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
       if (values.every((v) => typeof v === "number" && Number.isInteger(v))) {
         const numericValues = values as number[]
-        if (looksLikeEnum(K, N, node.sortedNumeric)) {
+        if (looksLikeEnum(K, N, node.sortedNumeric, literalMinSamples)) {
           // K === 1 → single constant value, represent as a literal.
           // K > 1 → union of literals.
           if (numericValues.length === 1) return t(types.literal(numericValues[0]!), ref.meta)
@@ -528,7 +558,9 @@ function walkAndDetectEnums(ref: TypeRef, node: EvidenceNode, minSamples: number
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
       const childNode = node.object?.fields[name]
-      newFields[name] = childNode !== undefined ? walkAndDetectEnums(fieldRef, childNode, minSamples) : fieldRef
+      newFields[name] = childNode !== undefined
+        ? walkAndDetectEnums(fieldRef, childNode, minSamples, literalMinSamples)
+        : fieldRef
     }
     return t(types.object(newFields), ref.meta)
   }
@@ -536,7 +568,9 @@ function walkAndDetectEnums(ref: TypeRef, node: EvidenceNode, minSamples: number
   if (shape.kind === "array") {
     const el = (shape as { element: TypeRef }).element
     const childNode = node.array?.element
-    const newEl = childNode !== undefined ? walkAndDetectEnums(el, childNode, minSamples) : el
+    const newEl = childNode !== undefined
+      ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples)
+      : el
     return t(types.array(newEl), ref.meta)
   }
 
@@ -545,13 +579,15 @@ function walkAndDetectEnums(ref: TypeRef, node: EvidenceNode, minSamples: number
     const perIndex = node.array?.perIndex
     return t(types.tuple(els.map((el, i) => {
       const childNode = perIndex?.[i]
-      return childNode !== undefined ? walkAndDetectEnums(el, childNode, minSamples) : el
+      return childNode !== undefined
+        ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples)
+        : el
     })), ref.meta)
   }
 
   if (shape.kind === "union") {
     const variants = (shape as { variants: readonly TypeRef[] }).variants
-    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, minSamples))), ref.meta)
+    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, minSamples, literalMinSamples))), ref.meta)
   }
 
   return ref
@@ -909,6 +945,7 @@ interface ResolvedStrategy {
   readonly detectDicts: boolean
   readonly detectDirtyData: boolean
   readonly enumMinSamples: number
+  readonly literalMinSamples: number
   readonly dictMinSamples: number
   readonly customResolvers: readonly EvidenceResolver[]
 }
@@ -933,6 +970,7 @@ function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): Resolv
     detectDicts: strategy?.detectDicts ?? cfg?.detectDicts ?? true,
     detectDirtyData: strategy?.detectDirtyData ?? cfg?.detectDirtyData ?? false,
     enumMinSamples: strategy?.enumMinSamples ?? cfg?.enumMinSamples ?? 3,
+    literalMinSamples: strategy?.literalMinSamples ?? cfg?.literalMinSamples ?? 5,
     dictMinSamples: strategy?.dictMinSamples ?? cfg?.dictMinSamples ?? 3,
     customResolvers: strategy?.customResolvers ?? cfg?.customResolvers ?? [],
   }
@@ -956,7 +994,7 @@ export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy):
 
   // 2. Enum detection
   if (resolved.detectEnums) {
-    merged = walkAndDetectEnums(merged, tree.root, resolved.enumMinSamples)
+    merged = walkAndDetectEnums(merged, tree.root, resolved.enumMinSamples, resolved.literalMinSamples)
   }
 
   // 3. Discriminated union detection

@@ -1018,55 +1018,57 @@ describe("adversarial: large corpus", () => {
 })
 
 // ---------------------------------------------------------------------------
-// 13. K=1 literal detection — is it too aggressive?
+// 13. K=1 literal detection — asymmetry and confidence scaling
 //
 // `looksLikeEnum` treats K===1 (every sample shares one value) as maximal
-// saturation, unconditionally, regardless of N (from-json-corpus.ts:320).
-// The integer leaf path turns K=1 into `literal(v)`
-// (walkAndDetectEnums, integer branch, from-json-corpus.ts:376). The string
-// leaf path instead turns K=1 into a *one-member enum*
-// (walkAndDetectEnums, string branch, from-json-corpus.ts:355-360) — it
-// never special-cases K=1 to produce `literal`, unlike the integer branch.
-// Verified empirically against the current implementation below; this is an
-// asymmetry in the heuristic, not a crash, so it's recorded as a passing
-// characterization test rather than a `.todo`.
+// saturation, but now gates it on `literalMinSamples` (default 5, higher
+// than the general `enumMinSamples`) before committing — a K=1 corpus
+// below that size hasn't had much chance to show a second value.
+// Both the integer and string leaf paths turn a saturated K=1 into
+// `literal(v)` (walkAndDetectEnums, from-json-corpus.ts) — the string path
+// no longer special-cases K=1 into a one-member `enum` the way it used to;
+// that asymmetry has been fixed.
 // ---------------------------------------------------------------------------
 
 describe("adversarial: K=1 literal/enum aggressiveness", () => {
-  test("five identical zeros collapse to literal(0), not integer/uint8", () => {
+  test("five identical zeros (N clears literalMinSamples) collapse to literal(0), not integer/uint8", () => {
     const inferred = fromJsonCorpus([0, 0, 0, 0, 0])
     expect(inferred.shape).toEqual({ kind: "literal", value: 0 })
   })
 
-  test("three identical empty strings collapse to a one-member enum, NOT literal('') — asymmetric with the integer K=1 path", () => {
+  test("three identical empty strings do NOT collapse (N=3 < literalMinSamples=5) — stays plain string", () => {
     const inferred = fromJsonCorpus(["", "", ""])
-    // Documents the actual (asymmetric) behavior: string K=1 saturation goes
-    // through the enum branch (from-json-corpus.ts:349-363), which has no
-    // K===1 -> literal special case the way the integer branch does.
-    expect(inferred.shape).toEqual({ kind: "enum", members: [""] })
+    expect(inferred.shape.kind).toBe("string")
+  })
+
+  test("five identical empty strings collapse to literal(''), matching the integer K=1 path — symmetry fix", () => {
+    const inferred = fromJsonCorpus(["", "", "", "", ""])
+    expect(inferred.shape).toEqual({ kind: "literal", value: "" })
   })
 
   test("null repeated does NOT collapse to literal(null) — 'null' kind is unhandled by walkAndDetectEnums, so it passes through unchanged", () => {
-    const inferred = fromJsonCorpus([null, null, null])
+    const inferred = fromJsonCorpus([null, null, null, null, null])
     expect(inferred.shape.kind).toBe("null")
   })
 
   test("boolean repeated does NOT collapse to literal(true) — 'boolean' kind is unhandled by walkAndDetectEnums, so it passes through unchanged", () => {
-    const inferred = fromJsonCorpus([true, true, true])
+    const inferred = fromJsonCorpus([true, true, true, true, true])
     expect(inferred.shape.kind).toBe("boolean")
   })
 
-  test("object with one constant field and one fully-varying field: only the constant field is flattened, the varying field is untouched", () => {
+  test("object with one constant field and one fully-varying field, at N=5: only the constant field is flattened, the varying field is untouched", () => {
     const samples = [
       { status: "active", id: 1 },
       { status: "active", id: 2 },
       { status: "active", id: 3 },
+      { status: "active", id: 4 },
+      { status: "active", id: 5 },
     ]
     const inferred = fromJsonCorpus(samples)
     const fields = objectFields(inferred)
-    // status: K=1 -> string K=1 path -> one-member enum (see asymmetry test above)
-    expect(fields.status!.shape).toEqual({ kind: "enum", members: ["active"] })
-    // id: K=3, N=3 -> K>=N -> "every value unique", conclusive evidence AGAINST enum
+    // status: K=1, N=5 clears literalMinSamples -> literal (symmetric with integers now)
+    expect(fields.status!.shape).toEqual({ kind: "literal", value: "active" })
+    // id: K=5, N=5 -> K>=N -> "every value unique", conclusive evidence AGAINST enum
     expect(fields.id!.shape.kind).not.toBe("enum")
     expect(fields.id!.shape.kind).not.toBe("union")
     expect(fields.id!.shape.kind).not.toBe("literal")
@@ -1076,29 +1078,41 @@ describe("adversarial: K=1 literal/enum aggressiveness", () => {
     }
   })
 
-  test("K=1 fires identically at N=3 and N=50 — the heuristic does not scale confidence with more evidence, it is already unconditional at K=1", () => {
+  test("K=1 does NOT fire identically at N=3 and N=50 anymore — confidence now scales with sample size", () => {
     const small = fromJsonCorpus(Array(3).fill(42))
     const large = fromJsonCorpus(Array(50).fill(42))
-    // Both collapse to the exact same literal — no additional confidence
-    // signal from the larger sample size changes the outcome here, because
-    // `looksLikeEnum` returns `true` on the very first line for K===1,
-    // before N is consulted at all.
-    expect(small.shape).toEqual({ kind: "literal", value: 42 })
+    // N=3 is below literalMinSamples (5) — not enough evidence to commit.
+    expect(small.shape.kind).toBe("uint8")
+    // N=50 clears the threshold comfortably — commits to literal.
     expect(large.shape).toEqual({ kind: "literal", value: 42 })
-    expect(small.shape).toEqual(large.shape)
+    expect(small.shape).not.toEqual(large.shape)
   })
 
-  test("property: K=1 integer field always collapses to literal regardless of corpus size", () => {
+  test("property: K=1 integer field collapses to literal once N clears literalMinSamples (5), regardless of corpus size beyond that", () => {
     fc.assert(
       fc.property(
         fc.integer({ min: -1000, max: 1000 }),
-        fc.integer({ min: 3, max: 200 }),
+        fc.integer({ min: 5, max: 200 }),
         (value, n) => {
           const inferred = fromJsonCorpus(Array(n).fill(value))
           expect(inferred.shape).toEqual({ kind: "literal", value })
         },
       ),
       { numRuns: 200 },
+    )
+  })
+
+  test("property: K=1 integer field below literalMinSamples never collapses to literal", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: -1000, max: 1000 }),
+        fc.integer({ min: 1, max: 4 }),
+        (value, n) => {
+          const inferred = fromJsonCorpus(Array(n).fill(value))
+          expect(inferred.shape.kind).not.toBe("literal")
+        },
+      ),
+      { numRuns: 100 },
     )
   })
 })
@@ -1108,11 +1122,13 @@ describe("adversarial: K=1 literal/enum aggressiveness", () => {
 // ---------------------------------------------------------------------------
 
 describe("adversarial: K=1 in arrays of objects", () => {
-  test("array of objects with one constant string field and one all-unique integer field", () => {
+  test("array of objects with one constant string field and one all-unique integer field, at N=5 (clears literalMinSamples)", () => {
     const samples = [
       { status: "active", id: 1 },
       { status: "active", id: 2 },
       { status: "active", id: 3 },
+      { status: "active", id: 4 },
+      { status: "active", id: 5 },
     ]
     const inferred = fromJson(samples)
     expect(inferred.shape.kind).toBe("array")
@@ -1125,7 +1141,7 @@ describe("adversarial: K=1 in arrays of objects", () => {
 
     const corpusInferred = fromJsonCorpus(samples)
     const corpusFields = objectFields(corpusInferred)
-    expect(corpusFields.status!.shape).toEqual({ kind: "enum", members: ["active"] })
+    expect(corpusFields.status!.shape).toEqual({ kind: "literal", value: "active" })
     expect(corpusFields.id!.shape.kind).not.toBe("enum")
     expect(corpusFields.id!.shape.kind).not.toBe("union")
     expect(corpusFields.id!.shape.kind).not.toBe("literal")
@@ -1134,17 +1150,17 @@ describe("adversarial: K=1 in arrays of objects", () => {
     }
   })
 
-  test("property: constant field in array-of-objects always saturates, all-unique field never does", () => {
+  test("property: constant field in array-of-objects always saturates once N clears literalMinSamples, all-unique field never does", () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 3, max: 40 }),
+        fc.integer({ min: 5, max: 40 }),
         fc.stringMatching(/^[a-z]{2,8}$/),
         (n, constValue) => {
           const samples = Array.from({ length: n }, (_, i) => ({ tag: constValue, idx: i }))
           const inferred = fromJsonCorpus(samples)
           const fields = objectFields(inferred)
-          // tag: K=1 -> saturates (enum or literal depending on leaf kind)
-          expect(["enum", "literal"]).toContain(fields.tag!.shape.kind)
+          // tag: K=1, N clears literalMinSamples -> saturates to literal
+          expect(fields.tag!.shape.kind).toBe("literal")
           // idx: every value 0..n-1 is unique -> K===N -> conclusive non-enum
           expect(fields.idx!.shape.kind).not.toBe("enum")
           expect(fields.idx!.shape.kind).not.toBe("union")
@@ -1166,7 +1182,7 @@ describe("adversarial: K=1 in arrays of objects", () => {
 // 15. Boundary between enum and not-enum
 //
 // `looksLikeEnum` (from-json-corpus.ts:319-339):
-//   K===1                          -> enum (always)
+//   K===1                          -> literal, but only once N >= literalMinSamples (5)
 //   K>=N                           -> not enum (always)
 //   K>50                           -> not enum (always)
 //   ratio = K/N; ratio >= 0.5      -> not saturated -> not enum
@@ -1369,7 +1385,7 @@ describe("adversarial: enum detection with optional fields", () => {
 
   test("integer field is K=1 constant AND optional (missing from one sample) — optional survives the literal collapse", () => {
     const samples: { v?: number; other?: number }[] = [
-      { v: 5 }, { v: 5 }, { v: 5 }, { other: 1 },
+      { v: 5 }, { v: 5 }, { v: 5 }, { v: 5 }, { v: 5 }, { other: 1 },
     ]
     const inferred = fromJsonCorpus(samples)
     const fields = objectFields(inferred)
