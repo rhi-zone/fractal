@@ -87,6 +87,10 @@ const doc = await toOpenApi(app, { title: 'My API', version: '1.0.0' })
 
 ## Guides
 
+- [Getting Started](./getting-started.md) — install, author a tree, project it to HTTP, MCP, CLI, and type-ir
 - [Concepts](./concepts.md) — core model: nodes, dispatch, tags, projections, metadata
 - [Authoring](./authoring.md) — how to build trees with `op`, `node`, `service`, `param`, verb-helper bundles, and `mergeMeta`
+- [Decoding requests](./decode.md) — the stores-based decode system for turning a `Request` into handler input
+- [The codegen CLI](./codegen-cli.md) — AOT validator generation from extracted leaf input types
 - [Versioning](./versioning.md) — versioning model: layered strategies from zero-machinery to composed transforms _(design, not yet built)_
+- [Design Philosophy](./design-philosophy.md) — the biases behind the shape of the library
