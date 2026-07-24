@@ -295,6 +295,10 @@
       "types": "./src/protobuf.ts",
       "import": "./src/protobuf.ts"
     },
+    "./json-rpc": {
+      "types": "./src/json-rpc.ts",
+      "import": "./src/json-rpc.ts"
+    },
     "./capnp": {
       "types": "./src/capnp.ts",
       "import": "./src/capnp.ts"

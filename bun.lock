@@ -74,6 +74,14 @@
         "@standard-schema/spec": "^1.1.0",
       },
     },
+    "packages/json-rpc-api-projector": {
+      "name": "@rhi-zone/fractal-json-rpc-api-projector",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-api-tree": "workspace:*",
+        "@rhi-zone/fractal-type-ir": "workspace:*",
+      },
+    },
     "packages/mcp-api-projector": {
       "name": "@rhi-zone/fractal-mcp-api-projector",
       "version": "0.1.0-alpha.0",
@@ -245,6 +253,8 @@
     "@rhi-zone/fractal-graphql-api-projector": ["@rhi-zone/fractal-graphql-api-projector@workspace:packages/graphql-api-projector"],
 
     "@rhi-zone/fractal-http-api-projector": ["@rhi-zone/fractal-http-api-projector@workspace:packages/http-api-projector"],
+
+    "@rhi-zone/fractal-json-rpc-api-projector": ["@rhi-zone/fractal-json-rpc-api-projector@workspace:packages/json-rpc-api-projector"],
 
     "@rhi-zone/fractal-mcp-api-projector": ["@rhi-zone/fractal-mcp-api-projector@workspace:packages/mcp-api-projector"],
 

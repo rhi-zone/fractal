@@ -9,6 +9,7 @@
     "packages/playground",
     "packages/http-api-projector",
     "packages/mcp-api-projector",
+    "packages/json-rpc-api-projector",
     "packages/cli-api-projector",
     "packages/graphql-api-projector",
     "packages/auth-oidc",
