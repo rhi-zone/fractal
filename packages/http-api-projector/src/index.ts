@@ -90,6 +90,14 @@ export type { PageIterator, PaginationOptions } from "./extensions/pagination.ts
 export { streaming } from "./extensions/streaming.ts"
 export { ValidationError, validation } from "./extensions/validation.ts"
 export type { ValidationMode, ValidationOptions } from "./extensions/validation.ts"
+export { idempotencyKey } from "./extensions/idempotency.ts"
+export type { IdempotencyKeyOptions } from "./extensions/idempotency.ts"
+export { idempotencyMiddleware, InMemoryIdempotencyStore } from "./idempotency.ts"
+export type { IdempotencyMiddlewareOptions, IdempotencyStore } from "./idempotency.ts"
+export { tracing } from "./extensions/tracing.ts"
+export type { TracingOptions } from "./extensions/tracing.ts"
+export { tracingLayer } from "./tracing.ts"
+export type { HttpTracingOptions } from "./tracing.ts"
 export { createFetch, httpErrors } from "./preset.ts"
 export type {
   CorsOptions,

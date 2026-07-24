@@ -758,10 +758,18 @@ What's planned / open (per `TODO.md`):
   client bindings on top of the existing `stream`/`page` kinds and
   GraphQL subscriptions. Not started.
 - Production-grade codegen extras as HTTP client extensions —
-  OpenTelemetry tracing, idempotency keys, webhook validation. Not
-  started; the client-extension system (retry, timeout, interceptors,
-  errors, logging, streaming, pagination) is the mechanism these would
-  extend.
+  OpenTelemetry tracing. Not started; the client-extension system (retry,
+  timeout, interceptors, errors, logging, streaming, pagination,
+  idempotency) is the mechanism it would extend.
+  Webhook validation shipped (`packages/http-api-projector/src/webhook.ts`,
+  `webhookSignatureLayer`/`replayPreventionLayer`) as server-side HTTP
+  layers instead — inbound webhook verification isn't a client concern,
+  so it followed `layers.ts`'s composable-`Fetch`-wrapper pattern rather
+  than the client-extension system.
+  Idempotency keys shipped (`packages/http-api-projector/src/extensions/idempotency.ts`'s
+  `idempotencyKey()` client extension + `packages/http-api-projector/src/idempotency.ts`'s
+  `idempotencyMiddleware()`/`IdempotencyStore` server middleware) — HTTP only;
+  CLI/MCP/GraphQL have no header-equivalent channel to key off of.
 - Automatic strategy selection for compiled HTTP routers — the routing
   benchmark work (`docs/design/routing-benchmarks.md`) identified
   crossover points between `radixRouter`/`compiledCharRouter`/

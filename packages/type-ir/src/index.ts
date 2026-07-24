@@ -16,30 +16,26 @@ export interface TypeKinds {
   never: { readonly kind: "never" }
   object: { readonly kind: "object"; readonly fields: Readonly<Record<string, TypeRef>> }
   // A class instance — purely nominal, carrying only class identity
-  // (`className`/`source`), never structure. Deliberately NOT a subtype of
-  // `object` (see `parents` below): a class's fields are only half its
-  // surface (methods are the other half, and often the point), so exposing
-  // `fields` here would misrepresent the type as plain data. Projectors
-  // that can express nominal identity read `className` (Zod's
+  // (`className`/`declarationFile`), never structure. Deliberately NOT a
+  // subtype of `object` (see `parents` below): a class's fields are only
+  // half its surface (methods are the other half, and often the point), so
+  // exposing `fields` here would misrepresent the type as plain data.
+  // Projectors that can express nominal identity read `className` (Zod's
   // `z.instanceof`, JSON Schema's `x-class-name`); projectors that can't
   // (protobuf, Cap'n Proto, SQL — anything that needs a structural shape to
   // emit) have no ancestor to fall back on and must degrade explicitly
   // (opaque/`Any`-like placeholder) rather than silently rendering an
   // object with no fields.
   //
-  // NAMING NOTE (flagged, not fixed — renaming a shape field is a breaking
-  // change): `className`/`source` here name the same two concepts —
-  // declared-type name and declaring file path — that the unrelated
-  // `meta.typeName`/`meta.declarationFile` provenance convention documented
-  // below names differently. The two mechanisms serve different purposes
-  // (nominal class-instance identity vs. a named-type reference for codegen
-  // imports) and aren't interchangeable, but the field-name drift
-  // (`source` vs `declarationFile`, `className` vs `typeName`) is worth
-  // aligning if `instance`'s shape is ever revisited pre-1.0.
+  // `className` is kept distinct from `meta.typeName` (see below) —
+  // nominal class-instance identity and a named-type reference for codegen
+  // imports are different mechanisms that happen to both carry a name — but
+  // `declarationFile` (the declaring file's path) is the SAME concept
+  // `meta.declarationFile` names, so the two are aligned on that one field.
   instance: {
     readonly kind: "instance"
     readonly className: string
-    readonly source: string
+    readonly declarationFile: string
   }
   array: { readonly kind: "array"; readonly element: TypeRef }
   // An asynchronously-produced sequence of values — TypeScript's
@@ -89,7 +85,7 @@ export interface TypeKinds {
   intersection: { readonly kind: "intersection"; readonly members: readonly TypeRef[] }
   // A callable type: ordered parameters, a return type, and an optional
   // `this` binding (present for class methods and other functions with an
-  // explicit/implicit `this` — e.g. `types.instance("ClassName", source)`;
+  // explicit/implicit `this` — e.g. `types.instance("ClassName", declarationFile)`;
   // absent for free functions with no `this`). Deliberately NOT a subtype of
   // anything — see `parents` below. Not used to inline class methods onto
   // `instance` (which stays purely nominal); this kind is for callable types
@@ -160,20 +156,20 @@ export type TypeRef = {
 //     which alone knows the emitted module's own location) when both are
 //     present, and inline the structural TypeScript rendering otherwise.
 //
-// KNOWN INCONSISTENCY (flagged, not fixed — see TODO.md's "Type-ir semantic
-// types cleanup" entry): `meta.additionalProperties` is used with two
-// type-incompatible meanings by different producers/consumers, both on
-// `object`-kind refs. `compile.ts` and `standard-schema.ts` read it as a
-// boolean closedness flag (`=== false` means "no extra keys allowed", the
-// JSON-Schema-04/07/OpenAPI `additionalProperties: false` convention).
-// `from-json-corpus.ts` instead writes it as a `TypeRef` — the inferred
-// value type for a record's dynamic/varying keys, alongside its stable
-// fields — but no projector currently reads that `TypeRef` form back out
-// (json-schema*.ts/openapi*.ts instead convert an object-with-schema
-// `additionalProperties` straight to `types.map` on ingest, bypassing this
-// meta key entirely). Until this is resolved, treat
-// `meta.additionalProperties` as boolean-only when reading it; the
-// `TypeRef`-valued form `from-json-corpus.ts` produces is inert today.
+//   - `meta.additionalProperties: boolean` — JSON-Schema-04/07/OpenAPI-style
+//     closedness flag on an `object`-kind ref (`=== false` means "no extra
+//     keys allowed"). Read by `compile.ts` and `standard-schema.ts`.
+//   - `meta.additionalPropertyType: TypeRef` — the inferred value type for a
+//     record's dynamic/varying keys, alongside its stable fields, set by
+//     `from-json-corpus.ts` when it detects a mixed record+dict shape. Kept
+//     as a distinct key from `meta.additionalProperties` above (they used to
+//     collide under the same name with type-incompatible meanings — a
+//     boolean flag vs. a TypeRef — see TODO.md's "Type-ir semantic types
+//     cleanup" entry for history). No projector currently reads this
+//     `TypeRef` back out (json-schema*.ts/openapi*.ts instead convert an
+//     object-with-schema `additionalProperties` straight to `types.map` on
+//     ingest, bypassing this meta key entirely); it's inert beyond
+//     `from-json-corpus.ts`'s own tests today.
 
 const parents: Record<string, string | null> = {
   boolean: null,
@@ -246,7 +242,7 @@ export const types = {
   unknown: { kind: "unknown" } as const,
   never: { kind: "never" } as const,
   object: (fields: Record<string, TypeRef>) => ({ kind: "object", fields }) as const,
-  instance: (className: string, source: string) => ({ kind: "instance", className, source }) as const,
+  instance: (className: string, declarationFile: string) => ({ kind: "instance", className, declarationFile }) as const,
   array: (element: TypeRef) => ({ kind: "array", element }) as const,
   stream: (element: TypeRef) => ({ kind: "stream", element }) as const,
   page: (element: TypeRef, style: "cursor" | "offset") => ({ kind: "page", element, style }) as const,

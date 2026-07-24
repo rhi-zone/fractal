@@ -773,15 +773,14 @@ function walkAndDetectDicts(
         if (k in newFields) recordFields[k] = newFields[k]!
       }
 
-      // NOTE: this is the `TypeRef`-valued sense of `meta.additionalProperties`
-      // (the dict-entry value type), distinct from the boolean closedness flag
-      // `compile.ts`/`standard-schema.ts` read from the same key — see the
-      // "KNOWN INCONSISTENCY" note on `TypeRef` in index.ts. No projector
-      // currently reads this `TypeRef` back out; it's inert beyond this
-      // module's own tests today.
+      // `meta.additionalPropertyType` — the dict-entry value type, distinct
+      // from the boolean closedness flag `meta.additionalProperties` that
+      // `compile.ts`/`standard-schema.ts` read (see the `meta` conventions
+      // doc on `TypeRef` in index.ts). No projector currently reads this
+      // `TypeRef` back out; it's inert beyond this module's own tests today.
       return withMeta(t(types.object(recordFields)), {
         ...ref.meta,
-        additionalProperties: dictValueType,
+        additionalPropertyType: dictValueType,
       })
     }
 

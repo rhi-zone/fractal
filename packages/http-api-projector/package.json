@@ -35,6 +35,14 @@
       "types": "./src/layers.ts",
       "import": "./src/layers.ts"
     },
+    "./webhook": {
+      "types": "./src/webhook.ts",
+      "import": "./src/webhook.ts"
+    },
+    "./idempotency": {
+      "types": "./src/idempotency.ts",
+      "import": "./src/idempotency.ts"
+    },
     "./verbs": {
       "types": "./src/verbs.ts",
       "import": "./src/verbs.ts"
@@ -90,6 +98,10 @@
     "./extensions/validation": {
       "types": "./src/extensions/validation.ts",
       "import": "./src/extensions/validation.ts"
+    },
+    "./extensions/idempotency": {
+      "types": "./src/extensions/idempotency.ts",
+      "import": "./src/extensions/idempotency.ts"
     }
   },
   "files": ["src"],

@@ -582,10 +582,10 @@ describe("typeRefFromType gap fixes", () => {
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
     const owner = fields.owner!
     expect(owner.shape.kind).toBe("instance")
-    const ownerShape = owner.shape as { kind: "instance"; className: string; source: string }
+    const ownerShape = owner.shape as { kind: "instance"; className: string; declarationFile: string }
     expect(ownerShape.className).toBe("SampleClass")
-    expect(ownerShape.source).toContain("typeref.fixture.ts")
-    expect(Object.keys(ownerShape)).toEqual(["kind", "className", "source"])
+    expect(ownerShape.declarationFile).toContain("typeref.fixture.ts")
+    expect(Object.keys(ownerShape)).toEqual(["kind", "className", "declarationFile"])
   })
 
   it("carries the class's method surface as an interface TypeRef in meta.interface, alongside the nominal instance", () => {

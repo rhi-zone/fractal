@@ -385,7 +385,7 @@ function renderPage(name: string, ref: TypeRef, doc: TypeRefDocument): string {
   } else if (kind === "instance") {
     const s = ref.shape as TypeShape & { kind: "instance" }
     sections.push(
-      `## Fields\n\nThis is a nominal instance of \`${s.className}\` (from \`${s.source}\`) — no structural fields are exposed.`,
+      `## Fields\n\nThis is a nominal instance of \`${s.className}\` (from \`${s.declarationFile}\`) — no structural fields are exposed.`,
     )
   } else if (isKind(kind, "interface")) {
     const s = ref.shape as TypeShape & { kind: "interface" }

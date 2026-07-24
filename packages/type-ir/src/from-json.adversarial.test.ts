@@ -100,16 +100,16 @@ function inhabits(value: unknown, ref: TypeRef): string | null {
   if (typeof value === "object") {
     if (kind === "object") {
       const fields = objectFields(ref)
-      const additionalProperties = ref.meta.additionalProperties as TypeRef | undefined
+      const additionalPropertyType = ref.meta.additionalPropertyType as TypeRef | undefined
       for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
         if (key in fields) {
           const err = inhabits(v, fields[key]!)
           if (err !== null) return `field "${key}" mismatch: ${err}`
-        } else if (additionalProperties !== undefined) {
-          const err = inhabits(v, additionalProperties)
+        } else if (additionalPropertyType !== undefined) {
+          const err = inhabits(v, additionalPropertyType)
           if (err !== null) return `dict entry "${key}" mismatch: ${err}`
         } else {
-          return `key "${key}" not in inferred object fields and no additionalProperties`
+          return `key "${key}" not in inferred object fields and no additionalPropertyType`
         }
       }
       for (const [key, fieldRef] of Object.entries(fields)) {

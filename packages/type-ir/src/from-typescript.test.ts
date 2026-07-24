@@ -266,7 +266,7 @@ describe("classes", () => {
       "X",
     )
     expect(ref.shape.kind).toBe("instance")
-    const shape = ref.shape as { className: string; source: string }
+    const shape = ref.shape as { className: string; declarationFile: string }
     expect(shape.className).toBe("Widget")
     expect(ref.meta.interface).toBeDefined()
     const iface = (ref.meta.interface as { shape: { methods: Record<string, unknown> } }).shape
