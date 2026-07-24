@@ -235,6 +235,154 @@ describe("discriminated union detection", () => {
   })
 })
 
+describe("structural union splitting (no discriminant field)", () => {
+  test("root-level objects with dissimilar field sets and no discriminant split into variants", () => {
+    const values = [
+      { userId: 1, userName: "a", userEmail: "a@x.com" },
+      { userId: 2, userName: "b", userEmail: "b@x.com" },
+      { userId: 3, userName: "c", userEmail: "c@x.com" },
+      { orderId: 100, total: 9.99, items: 3 },
+      { orderId: 101, total: 4.5, items: 1 },
+      { orderId: 102, total: 12.25, items: 2 },
+    ]
+    const result = fromJsonCorpus(values)
+    expect(result.shape.kind).toBe("union")
+    const variants = (result.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants.length).toBe(2)
+    for (const v of variants) {
+      const fields = (v.shape as { fields: Record<string, TypeRef> }).fields
+      const keys = Object.keys(fields).sort()
+      expect(keys).toSatisfy((k: string[]) => k.join(",") === "userEmail,userId,userName" || k.join(",") === "items,orderId,total")
+    }
+  })
+
+  test("array elements with dissimilar shapes and no discriminant split into variants", () => {
+    const values = [
+      [
+        { a: 1, b: "x" },
+        { a: 2, b: "y" },
+        { a: 3, b: "z" },
+        { c: true, d: [1, 2], e: "q" },
+        { c: false, d: [3], e: "r" },
+        { c: true, d: [], e: "s" },
+      ],
+    ]
+    const result = fromJsonCorpus(values)
+    const el = (result.shape as { element: TypeRef }).element
+    expect(el.shape.kind).toBe("union")
+    const variants = (el.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants.length).toBe(2)
+  })
+
+  test("objects that differ only by a single optional field do NOT split", () => {
+    const result = fromJsonCorpus([
+      { id: 1, name: "a" },
+      { id: 2, name: "b" },
+      { id: 3 },
+      { id: 4, name: "d" },
+      { id: 5 },
+    ])
+    expect(result.shape.kind).toBe("object")
+    const fields = (result.shape as { fields: Record<string, TypeRef> }).fields
+    expect(fields.name!.meta.optional).toBe(true)
+  })
+
+  test("sparse records (some samples with zero fields) do NOT split", () => {
+    const result = fromJsonCorpus([
+      {},
+      {},
+      { tag: "a" },
+      { tag: "b" },
+      { tag: "c" },
+      { tag: "d" },
+    ])
+    expect(result.shape.kind).toBe("object")
+    const fields = (result.shape as { fields: Record<string, TypeRef> }).fields
+    expect(fields.tag!.meta.optional).toBe(true)
+  })
+
+  test("below objectSplitMinSamples, dissimilar objects still merge (small-N guard)", () => {
+    const result = fromJsonCorpus([
+      { userId: 1, userName: "a" },
+      { orderId: 100, total: 9.99 },
+    ])
+    expect(result.shape.kind).toBe("object")
+    const fields = (result.shape as { fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(fields).sort()).toEqual(["orderId", "total", "userId", "userName"])
+  })
+
+  test("a single outlier sample does not fork off its own variant (min-2-members-per-cluster guard)", () => {
+    // Keeps dict-detection's key-growth heuristic from firing first (which
+    // would reclassify this as a `map` before splitting ever gets a look):
+    // growth ratio here is (4-2)/5 = 0.4, under its 0.5 trigger.
+    const result = fromJsonCorpus([
+      { userId: 1, userName: "a" },
+      { userId: 2, userName: "b" },
+      { userId: 3, userName: "c" },
+      { userId: 4, userName: "d" },
+      { totallyDifferent: true, nested: { x: 1 } },
+    ])
+    expect(result.shape.kind).toBe("object")
+  })
+
+  test("splitDissimilarObjects: false disables the split, restoring the old merge-everything behavior", () => {
+    const values = [
+      { userId: 1, userName: "a", userEmail: "a@x.com" },
+      { userId: 2, userName: "b", userEmail: "b@x.com" },
+      { userId: 3, userName: "c", userEmail: "c@x.com" },
+      { orderId: 100, total: 9.99, items: 3 },
+      { orderId: 101, total: 4.5, items: 1 },
+      { orderId: 102, total: 12.25, items: 2 },
+    ]
+    const result = fromJsonCorpus(values, { splitDissimilarObjects: false })
+    expect(result.shape.kind).toBe("object")
+    const fields = (result.shape as { fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(fields).sort()).toEqual(["items", "orderId", "total", "userEmail", "userId", "userName"])
+  })
+
+  test("objectSplitThreshold: raising it suppresses a split that fires at the default", () => {
+    // Two clusters sharing 2 of 6 total fields -> Jaccard distance 4/6 =
+    // 0.667: above the default 0.5 threshold (splits), below a raised 0.7
+    // threshold (merges, same as the pre-existing optional-field behavior).
+    const values = [
+      { id: 1, name: "a", x1: 1, x2: 2 },
+      { id: 2, name: "b", x1: 3, x2: 4 },
+      { id: 3, name: "c", x1: 5, x2: 6 },
+      { id: 4, name: "d", y1: 1, y2: 2 },
+      { id: 5, name: "e", y1: 3, y2: 4 },
+      { id: 6, name: "f", y1: 5, y2: 6 },
+    ]
+    const split = fromJsonCorpus(values)
+    expect(split.shape.kind).toBe("union")
+    const merged = fromJsonCorpus(values, { objectSplitThreshold: 0.7 })
+    expect(merged.shape.kind).toBe("object")
+  })
+
+  test("discriminated union detection (with a discriminant field) takes priority over general splitting", () => {
+    const values = [
+      [
+        { type: "circle", radius: 5 },
+        { type: "rect", width: 3, height: 4 },
+        { type: "circle", radius: 10 },
+        { type: "rect", width: 6, height: 8 },
+        { type: "circle", radius: 2 },
+        { type: "rect", width: 1, height: 1 },
+      ],
+    ]
+    const result = fromJsonCorpus(values)
+    const el = (result.shape as { element: TypeRef }).element
+    expect(el.shape.kind).toBe("union")
+    expect(el.meta.discriminator).toBe("type")
+    const variants = (el.shape as { variants: readonly TypeRef[] }).variants
+    // Discriminant-based splitting still wins; general splitting must not
+    // re-process (and corrupt) the variants it already produced.
+    for (const v of variants) {
+      const fields = (v.shape as { fields: Record<string, TypeRef> }).fields
+      expect(fields.type!.shape.kind).toBe("literal")
+    }
+  })
+})
+
 describe("dict detection", () => {
   test("objects with varying keys -> map", () => {
     const values: Record<string, number>[] = []

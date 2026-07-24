@@ -17,9 +17,9 @@
 //   Phase 2 — resolveEvidence(tree, strategy) -> TypeRef
 //     Reads the evidence tree and makes every heuristic decision:
 //     structural merge (incl. integer width widening), enum detection,
-//     discriminated-union detection, dict-vs-record detection, dirty-data
-//     detection. All the tunable heuristics live here, behind
-//     `ResolveStrategy`.
+//     discriminated-union detection, dict-vs-record detection,
+//     discriminant-free structural union splitting, dirty-data detection.
+//     All the tunable heuristics live here, behind `ResolveStrategy`.
 //
 //   fromJsonCorpus(values, config) is a convenience wrapper that runs both
 //   phases back to back, so existing callers see identical behavior.
@@ -119,6 +119,39 @@ export interface ResolveStrategy extends InferConfig {
   literalMinSamples?: number
   /** Minimum samples before dict detection fires. Default: 3. */
   dictMinSamples?: number
+  /**
+   * Structural union splitting on plain object merges: when a position in
+   * the corpus mixes objects whose field sets are dissimilar enough (see
+   * `objectSplitThreshold`), keep them as distinct union variants instead
+   * of collapsing everything into one optional-everything record. This is
+   * `tryDetectDU`'s Jaccard-distance test generalized to positions with no
+   * discriminant field — it fires at every object-typed position (root,
+   * object fields, array elements), not just inside array-of-object DU
+   * detection. Default: true.
+   */
+  splitDissimilarObjects?: boolean
+  /**
+   * Jaccard symmetric-difference threshold (fraction of the union of field
+   * names) above which two clustered samples are considered structurally
+   * distinct enough to split into separate union variants. `tryDetectDU`
+   * uses 0.1 for this same distance, but that threshold applies to groups
+   * already confirmed distinct by a discriminant field — strong prior
+   * evidence. General splitting has no such prior: real records routinely
+   * have several optional fields, and comparing two samples that each
+   * happen to be missing a different subset of them can read as `>10%`
+   * dissimilar without the shapes actually being different populations.
+   * The default is set high enough that a single missing optional field
+   * out of as few as 2 total fields (worst case: 1/2 = 0.5 symmetric
+   * difference) never triggers a split on its own. Default: 0.5.
+   */
+  objectSplitThreshold?: number
+  /**
+   * Minimum object samples at a position before structural splitting is
+   * considered. Higher than `dictMinSamples`/`enumMinSamples` because,
+   * unlike those, splitting has no discriminant field corroborating that
+   * the dissimilarity is real signal rather than sampling noise. Default: 5.
+   */
+  objectSplitMinSamples?: number
   /** Custom resolvers for specific evidence patterns, tried at every node after the built-in passes. First non-`undefined` result wins. */
   customResolvers?: EvidenceResolver[]
 }
@@ -594,6 +627,35 @@ function walkAndDetectEnums(
 }
 
 // ---------------------------------------------------------------------------
+// Shared Jaccard-distance machinery — field-set (dis)similarity, used by
+// both discriminant-grouped splitting (tryDetectDU) and the general,
+// discriminant-free splitting below (trySplitDissimilarObjects).
+// ---------------------------------------------------------------------------
+
+/**
+ * Symmetric-difference-over-union distance between two field-name sets: 0
+ * when the sets are identical, 1 when they're disjoint. This is the same
+ * measure `tryDetectDU` has always used to decide whether discriminant
+ * groups are "meaningfully different shapes" — factored out so the general
+ * splitting pass can reuse it verbatim instead of re-deriving its own
+ * notion of structural distance.
+ */
+function fieldSetJaccardDistance(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  let diffCount = 0
+  const union = new Set<string>()
+  for (const x of a) {
+    union.add(x)
+    if (!b.has(x)) diffCount++
+  }
+  for (const x of b) {
+    union.add(x)
+    if (!a.has(x)) diffCount++
+  }
+  if (union.size === 0) return 0
+  return diffCount / union.size
+}
+
+// ---------------------------------------------------------------------------
 // Discriminated union detection
 // ---------------------------------------------------------------------------
 
@@ -681,13 +743,13 @@ function tryDetectDU(
     let hasDifference = false
     for (let i = 0; i < fieldSets.length && !hasDifference; i++) {
       for (let j = i + 1; j < fieldSets.length && !hasDifference; j++) {
-        const a = fieldSets[i]!
-        const b = fieldSets[j]!
-        // Symmetric difference: fields in one but not the other
-        const diff = new Set([...a].filter((x) => !b.has(x)).concat([...b].filter((x) => !a.has(x))))
-        const union = new Set([...a, ...b])
-        // If symmetric difference is > 10% of the union, shapes are distinct enough
-        if (diff.size > 0 && diff.size / union.size > 0.1) {
+        // If symmetric difference is > 10% of the union, shapes are distinct
+        // enough. This threshold is deliberately much lower than the general
+        // splitting pass's `objectSplitThreshold` (see ResolveStrategy) —
+        // here the discriminant field has already established these are
+        // separate populations, so far less field-set disagreement is
+        // needed to corroborate that they're structurally distinct too.
+        if (fieldSetJaccardDistance(fieldSets[i]!, fieldSets[j]!) > 0.1) {
           hasDifference = true
         }
       }
@@ -720,6 +782,148 @@ function tryDetectDU(
   }
 
   return null
+}
+
+// ---------------------------------------------------------------------------
+// General structural union splitting (no discriminant field)
+//
+// tryDetectDU only fires when a candidate discriminant (an already
+// enum/literal-typed field) exists. Most structurally-dissimilar object
+// corpora have no such field — they just merge into one big
+// optional-everything record via mergeObjectTypes, silently losing the
+// "these are actually different shapes" signal. This pass generalizes the
+// same Jaccard-distance test to plain object merges: cluster the raw
+// per-sample field sets by similarity, and if that clustering yields more
+// than one group with real (>=2-sample) support, keep the groups as
+// distinct union variants instead of merging them all into one record.
+//
+// Runs after dict detection (not before): a dict's ever-growing key set
+// looks exactly as "dissimilar" under Jaccard distance as a genuine
+// structural split would, so dict detection needs first refusal — objects
+// it reclassifies as `map` are no longer `object`-kind by the time this
+// pass sees them, and won't be considered for splitting.
+// ---------------------------------------------------------------------------
+
+/**
+ * `fieldSetJaccardDistance`, except an empty field set is always treated as
+ * distance 0 from anything. A sample with zero keys (`{}`) is compatible
+ * with every shape — it's the "all fields absent" case of an
+ * all-optional-fields record, not positive evidence of a second,
+ * differently-shaped population. Without this, `{}` vs. `{tag: "a"}` scores
+ * a Jaccard distance of 1.0 (maximal) purely because there's only one field
+ * to disagree about, which would split what is really just "tag is
+ * optional" into two spurious single-field-vs-empty variants.
+ */
+function objectSplitDistance(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  if (a.size === 0 || b.size === 0) return 0
+  return fieldSetJaccardDistance(a, b)
+}
+
+/**
+ * Greedily cluster the raw object samples observed at `node` by field-set
+ * similarity (single-linkage: each sample joins the nearest existing
+ * cluster if within `threshold`, else starts a new one), then re-infer and
+ * merge within each cluster. Returns `null` when there isn't enough
+ * evidence to split (too few samples, or the split would produce a
+ * variant backed by only one sample — indistinguishable from a lone
+ * outlier rather than a real second population).
+ */
+function trySplitDissimilarObjects(
+  node: EvidenceNode,
+  threshold: number,
+  minSamples: number,
+): TypeRef | null {
+  const objEv = node.object
+  if (objEv === undefined) return null
+  if (objEv.sampleCount < minSamples) return null
+
+  const objectSamples = node.values.filter(
+    (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
+  )
+  // buildEvidenceNode pushes onto `keySets` in the same order it pushes
+  // onto `objectSamples` (both driven by the same filter pass), and
+  // `node.values` preserves corpus order — so index i here lines up with
+  // `objEv.keySets[i]`.
+  if (objectSamples.length !== objEv.keySets.length) return null
+
+  const clusters: { fieldSet: Set<string>; members: Record<string, unknown>[] }[] = []
+  for (let i = 0; i < objectSamples.length; i++) {
+    const fs = objEv.keySets[i]!
+    let best: { cluster: (typeof clusters)[number]; dist: number } | undefined
+    for (const cluster of clusters) {
+      const dist = objectSplitDistance(fs, cluster.fieldSet)
+      if (best === undefined || dist < best.dist) best = { cluster, dist }
+    }
+    if (best !== undefined && best.dist <= threshold) {
+      best.cluster.members.push(objectSamples[i]!)
+      for (const k of fs) best.cluster.fieldSet.add(k)
+    } else {
+      clusters.push({ fieldSet: new Set(fs), members: [objectSamples[i]!] })
+    }
+  }
+
+  if (clusters.length < 2) return null
+  // Every resulting variant needs corroborating evidence from at least two
+  // samples — a cluster of one is indistinguishable from a single outlier,
+  // and splitting on that alone would fork off a spurious variant.
+  if (clusters.some((c) => c.members.length < 2)) return null
+
+  const variants = clusters.map((cluster) => mergeAll(cluster.members.map((el) => fromJson(el))))
+  return t(types.union(variants))
+}
+
+function walkAndSplitDissimilarObjects(
+  ref: TypeRef,
+  node: EvidenceNode,
+  threshold: number,
+  minSamples: number,
+): TypeRef {
+  const { shape } = ref
+
+  if (shape.kind === "object") {
+    const split = trySplitDissimilarObjects(node, threshold, minSamples)
+    if (split !== null) return withMeta(split, ref.meta)
+
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields
+    const newFields: Record<string, TypeRef> = {}
+    for (const [name, fieldRef] of Object.entries(fields)) {
+      const childNode = node.object?.fields[name]
+      newFields[name] = childNode !== undefined
+        ? walkAndSplitDissimilarObjects(fieldRef, childNode, threshold, minSamples)
+        : fieldRef
+    }
+    return t(types.object(newFields), ref.meta)
+  }
+
+  if (shape.kind === "array") {
+    const el = (shape as { element: TypeRef }).element
+    const childNode = node.array?.element
+    const newEl = childNode !== undefined
+      ? walkAndSplitDissimilarObjects(el, childNode, threshold, minSamples)
+      : el
+    return t(types.array(newEl), ref.meta)
+  }
+
+  if (shape.kind === "tuple") {
+    const els = (shape as { elements: readonly TypeRef[] }).elements
+    const perIndex = node.array?.perIndex
+    return t(types.tuple(els.map((el, i) => {
+      const childNode = perIndex?.[i]
+      return childNode !== undefined
+        ? walkAndSplitDissimilarObjects(el, childNode, threshold, minSamples)
+        : el
+    })), ref.meta)
+  }
+
+  // Deliberately no `union` case: a union at this position was already
+  // produced by an earlier pass (DU detection) from evidence scoped to its
+  // own discriminant groups. `node` here is the raw, unscoped evidence for
+  // the *whole* position — reusing it to re-walk each variant would ignore
+  // which raw samples actually belong to which variant and could re-split
+  // (or corrupt) an already-correct discriminated union. General splitting
+  // only ever acts on positions still in plain `object` form.
+
+  return ref
 }
 
 // ---------------------------------------------------------------------------
@@ -947,6 +1151,9 @@ interface ResolvedStrategy {
   readonly enumMinSamples: number
   readonly literalMinSamples: number
   readonly dictMinSamples: number
+  readonly splitDissimilarObjects: boolean
+  readonly objectSplitThreshold: number
+  readonly objectSplitMinSamples: number
   readonly customResolvers: readonly EvidenceResolver[]
 }
 
@@ -972,6 +1179,9 @@ function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): Resolv
     enumMinSamples: strategy?.enumMinSamples ?? cfg?.enumMinSamples ?? 3,
     literalMinSamples: strategy?.literalMinSamples ?? cfg?.literalMinSamples ?? 5,
     dictMinSamples: strategy?.dictMinSamples ?? cfg?.dictMinSamples ?? 3,
+    splitDissimilarObjects: strategy?.splitDissimilarObjects ?? cfg?.splitDissimilarObjects ?? true,
+    objectSplitThreshold: strategy?.objectSplitThreshold ?? cfg?.objectSplitThreshold ?? 0.5,
+    objectSplitMinSamples: strategy?.objectSplitMinSamples ?? cfg?.objectSplitMinSamples ?? 5,
     customResolvers: strategy?.customResolvers ?? cfg?.customResolvers ?? [],
   }
 }
@@ -1007,12 +1217,18 @@ export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy):
     merged = walkAndDetectDicts(merged, tree.root, tree.values.length, resolved.dictMinSamples)
   }
 
-  // 5. Dirty data detection (opt-in)
+  // 5. General structural union splitting (no discriminant field) — runs
+  //    after dict detection so growing-key-set dicts get first refusal.
+  if (resolved.splitDissimilarObjects) {
+    merged = walkAndSplitDissimilarObjects(merged, tree.root, resolved.objectSplitThreshold, resolved.objectSplitMinSamples)
+  }
+
+  // 6. Dirty data detection (opt-in)
   if (resolved.detectDirtyData) {
     merged = walkAndDetectDirty(merged, tree.root)
   }
 
-  // 6. Custom resolvers
+  // 7. Custom resolvers
   if (resolved.customResolvers.length > 0) {
     merged = applyCustomResolvers(merged, tree.root, resolved.customResolvers)
   }

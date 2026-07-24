@@ -407,6 +407,95 @@ describe("adversarial: union stress", () => {
 })
 
 // ---------------------------------------------------------------------------
+// 4b. Discriminant-free structural union splitting (generalized Jaccard
+// splitting — see from-json-corpus.ts's walkAndSplitDissimilarObjects)
+// ---------------------------------------------------------------------------
+
+describe("adversarial: structural union splitting (no discriminant)", () => {
+  test("property: root-level corpus of two disjoint object shapes always covers every sample, split or not", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.record({ a: fc.integer({ min: 0, max: 100 }), b: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 10 }),
+        fc.array(fc.record({ c: fc.boolean(), d: fc.integer({ min: 0, max: 10 }), e: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 10 }),
+        (groupA, groupB) => {
+          const samples = [...groupA, ...groupB]
+          const inferred = fromJsonCorpus(samples)
+          for (const s of samples) {
+            const err = inhabits(s, inferred)
+            if (err !== null) {
+              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            }
+          }
+        },
+      ),
+      { numRuns: 500 },
+    )
+  })
+
+  test("property: sparse records (some samples with zero fields) never spuriously split and always cover every sample", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.boolean(), { minLength: 5, maxLength: 20 }).filter((mask) => mask.some((b) => b) && mask.some((b) => !b)),
+        (mask) => {
+          const samples = mask.map((present) => (present ? { tag: "x" } : {}))
+          const inferred = fromJsonCorpus(samples)
+          expect(inferred.shape.kind).toBe("object")
+          for (const s of samples) {
+            const err = inhabits(s, inferred)
+            if (err !== null) {
+              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            }
+          }
+        },
+      ),
+      { numRuns: 500 },
+    )
+  })
+
+  test("property: array-of-objects with two disjoint shapes and no discriminant field always covers every element", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.record({ x: fc.integer({ min: 0, max: 100 }), y: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 8 }),
+        fc.array(fc.record({ p: fc.boolean(), q: fc.integer({ min: 0, max: 10 }), r: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 8 }),
+        (groupX, groupY) => {
+          const arr = [...groupX, ...groupY]
+          // Splitting is a corpus-level (resolveEvidence) pass — wrap the
+          // single array as a one-sample corpus, same as the DU-detection
+          // tests above, rather than calling single-value `fromJson`.
+          const inferred = fromJsonCorpus([arr])
+          const err = inhabits(arr, inferred)
+          if (err !== null) {
+            throw new Error(`${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+          }
+        },
+      ),
+      { numRuns: 500 },
+    )
+  })
+
+  test("splitDissimilarObjects: false always yields a single merged object, never a union, for a mixed-shape corpus", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.record({ a: fc.integer({ min: 0, max: 100 }), b: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 8 }),
+        fc.array(fc.record({ c: fc.boolean(), d: fc.integer({ min: 0, max: 10 }), e: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 8 }),
+        (groupA, groupB) => {
+          const samples = [...groupA, ...groupB]
+          const inferred = fromJsonCorpus(samples, { splitDissimilarObjects: false })
+          expect(inferred.shape.kind).toBe("object")
+          for (const s of samples) {
+            const err = inhabits(s, inferred)
+            if (err !== null) {
+              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            }
+          }
+        },
+      ),
+      { numRuns: 500 },
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 5. Enum edge cases
 // ---------------------------------------------------------------------------
 
