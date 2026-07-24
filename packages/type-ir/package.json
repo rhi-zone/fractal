@@ -139,6 +139,14 @@
       "types": "./src/go-easyjson.ts",
       "import": "./src/go-easyjson.ts"
     },
+    "./go-jsoniter": {
+      "types": "./src/go-jsoniter.ts",
+      "import": "./src/go-jsoniter.ts"
+    },
+    "./go-sonic": {
+      "types": "./src/go-sonic.ts",
+      "import": "./src/go-sonic.ts"
+    },
     "./haskell": {
       "types": "./src/haskell-aeson.ts",
       "import": "./src/haskell-aeson.ts"
@@ -159,6 +167,10 @@
       "types": "./src/dart-freezed.ts",
       "import": "./src/dart-freezed.ts"
     },
+    "./dart-built-value": {
+      "types": "./src/dart-built-value.ts",
+      "import": "./src/dart-built-value.ts"
+    },
     "./objc": {
       "types": "./src/objc-foundation.ts",
       "import": "./src/objc-foundation.ts"
@@ -175,6 +187,22 @@
       "types": "./src/cpp-nlohmann.ts",
       "import": "./src/cpp-nlohmann.ts"
     },
+    "./cpp-rapidjson": {
+      "types": "./src/cpp-rapidjson.ts",
+      "import": "./src/cpp-rapidjson.ts"
+    },
+    "./cpp-simdjson": {
+      "types": "./src/cpp-simdjson.ts",
+      "import": "./src/cpp-simdjson.ts"
+    },
+    "./cpp-boost-json": {
+      "types": "./src/cpp-boost-json.ts",
+      "import": "./src/cpp-boost-json.ts"
+    },
+    "./cpp-glaze": {
+      "types": "./src/cpp-glaze.ts",
+      "import": "./src/cpp-glaze.ts"
+    },
     "./csharp": {
       "types": "./src/csharp-systemtextjson.ts",
       "import": "./src/csharp-systemtextjson.ts"
@@ -186,6 +214,10 @@
     "./csharp-newtonsoft": {
       "types": "./src/csharp-newtonsoft.ts",
       "import": "./src/csharp-newtonsoft.ts"
+    },
+    "./csharp-servicestack": {
+      "types": "./src/csharp-servicestack.ts",
+      "import": "./src/csharp-servicestack.ts"
     },
     "./crystal": {
       "types": "./src/crystal-json-serializable.ts",
@@ -211,6 +243,14 @@
       "types": "./src/python-attrs.ts",
       "import": "./src/python-attrs.ts"
     },
+    "./python-msgspec": {
+      "types": "./src/python-msgspec.ts",
+      "import": "./src/python-msgspec.ts"
+    },
+    "./python-cattrs": {
+      "types": "./src/python-cattrs.ts",
+      "import": "./src/python-cattrs.ts"
+    },
     "./flow": {
       "types": "./src/flow-native.ts",
       "import": "./src/flow-native.ts"
@@ -226,6 +266,14 @@
     "./swift-codable": {
       "types": "./src/swift-codable.ts",
       "import": "./src/swift-codable.ts"
+    },
+    "./swift-swiftyjson": {
+      "types": "./src/swift-swiftyjson.ts",
+      "import": "./src/swift-swiftyjson.ts"
+    },
+    "./swift-objectmapper": {
+      "types": "./src/swift-objectmapper.ts",
+      "import": "./src/swift-objectmapper.ts"
     },
     "./rust": {
       "types": "./src/rust-serde.ts",
@@ -247,6 +295,10 @@
       "types": "./src/ruby-dry-types.ts",
       "import": "./src/ruby-dry-types.ts"
     },
+    "./ruby-rbs": {
+      "types": "./src/ruby-rbs.ts",
+      "import": "./src/ruby-rbs.ts"
+    },
     "./php": {
       "types": "./src/php-native.ts",
       "import": "./src/php-native.ts"
@@ -254,6 +306,14 @@
     "./php-native": {
       "types": "./src/php-native.ts",
       "import": "./src/php-native.ts"
+    },
+    "./php-symfony": {
+      "types": "./src/php-symfony.ts",
+      "import": "./src/php-symfony.ts"
+    },
+    "./php-jms": {
+      "types": "./src/php-jms.ts",
+      "import": "./src/php-jms.ts"
     },
     "./kotlin": {
       "types": "./src/kotlin-kotlinx.ts",
@@ -266,6 +326,10 @@
     "./kotlin-jackson": {
       "types": "./src/kotlin-jackson.ts",
       "import": "./src/kotlin-jackson.ts"
+    },
+    "./kotlin-gson": {
+      "types": "./src/kotlin-gson.ts",
+      "import": "./src/kotlin-gson.ts"
     },
     "./java": {
       "types": "./src/java-jackson.ts",
@@ -282,6 +346,10 @@
     "./java-moshi": {
       "types": "./src/java-moshi.ts",
       "import": "./src/java-moshi.ts"
+    },
+    "./java-jsonb": {
+      "types": "./src/java-jsonb.ts",
+      "import": "./src/java-jsonb.ts"
     },
     "./sql": {
       "types": "./src/sql.ts",
