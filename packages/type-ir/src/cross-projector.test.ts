@@ -182,6 +182,11 @@ describe("cross-projector smoke tests", () => {
           test.todo(
             `${fixtureName} -> ${name} (root kind "${ref.shape.kind}" isn't struct-shaped; ` +
               `needs union/oneof synthesis support before this can go through ${name})`,
+            () => {
+              const result = fn(ref, "Root")
+              expect(typeof result).toBe("string")
+              expect(result.length).toBeGreaterThan(0)
+            },
           )
           continue
         }
