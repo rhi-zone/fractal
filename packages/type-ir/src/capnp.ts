@@ -96,8 +96,13 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "stream" }
     return `List(${toCapnpType(s.element)})`
   },
-  // No tuple construct (§ "Structs"); lossy — degrades to a list of opaque pointers.
-  tuple: leaf("List(AnyPointer)"),
+  // No tuple construct (§ "Structs") — heterogeneous positional elements have
+  // no direct encoding; toCapnpStruct special-cases tuple fields to hoist a
+  // synthesized positional struct (field0/field1/...) instead of falling
+  // through here. Standalone reference (no field-name context to name the
+  // synthesized struct) falls back to meta.structName, same convention
+  // `object` above uses.
+  tuple: (_shape, meta) => (typeof meta.structName === "string" ? meta.structName : "AnyPointer"),
   // No map built-in (§ "Language Reference" has no map primitive); toCapnpStruct
   // special-cases map fields to emit a helper Entry struct instead of falling through here.
   map: leaf("List(Entry)"),
@@ -210,8 +215,30 @@ function toCapnpUnionStruct(name: string, ref: TypeRef): CapnpStruct {
   return result
 }
 
+/**
+ * Lower a tuple-rooted TypeRef to a struct with positional fields
+ * (field0, field1, ...) — Cap'n Proto has no tuple construct (§ "Structs":
+ * https://capnproto.org/language.html#structs), same synthesized-positional-
+ * struct pattern flatbuffers.ts's `buildTupleTable` uses for its e0/e1/...
+ * fields.
+ */
+function buildTupleStruct(name: string, ref: TypeRef): CapnpStruct {
+  const shape = ref.shape as TypeShape & { kind: "tuple" }
+  const fields: CapnpStruct["fields"] = shape.elements.map((element, i) => ({
+    name: `field${i}`,
+    type: toCapnpType(element),
+    ordinal: i,
+  }))
+  const result: CapnpStruct = { name, fields }
+  if (typeof ref.meta.description === "string") result.description = ref.meta.description
+  const structDeprecated = readDeprecated(ref.meta)
+  if (structDeprecated !== undefined) result.deprecated = structDeprecated
+  return result
+}
+
 export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
   if (ref.shape.kind === "union") return toCapnpUnionStruct(name, ref)
+  if (ref.shape.kind === "tuple") return buildTupleStruct(name, ref)
 
   const shape = ref.shape as TypeShape & { kind: "object" }
   const fields: CapnpStruct["fields"] = []
@@ -255,6 +282,10 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
       }
       nestedStructs.push(entryStruct)
       fields.push({ name: fieldName, type: `List(${entryName})`, ordinal, ...description, ...deprecatedField })
+    } else if (fieldRef.shape.kind === "tuple") {
+      const nestedName = capitalize(fieldName)
+      nestedStructs.push(buildTupleStruct(nestedName, fieldRef))
+      fields.push({ name: fieldName, type: nestedName, ordinal, ...description, ...deprecatedField })
     } else {
       fields.push({ name: fieldName, type: toCapnpType(fieldRef), ordinal, ...description, ...deprecatedField })
     }
