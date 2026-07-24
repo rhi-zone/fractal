@@ -50,8 +50,18 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import {
+  assemble,
+  composeErrorEncoders,
+  isCursorPage,
+  isOffsetPage,
+  isPageShape,
+  isResultShape,
+  isStreamChunk,
+  isStreamProgress,
+  matchKind,
+} from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, Page, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
 // Augment the shared StoreRegistry with CLI's store names — see
 // http-api-projector/src/decode.ts for the matching augmentation and its doc.
@@ -326,6 +336,22 @@ export type CliMeta = {
    * resolve via the normal flag/slug convention.
    */
   readonly sourceMap?: SourceMap
+  /**
+   * Overrides the input field names `--all-pages` merges the next cursor/
+   * offset into, when this leaf's result is page-shaped (`CursorPage<T>`/
+   * `OffsetPage<T>`, see `@rhi-zone/fractal-api-tree/page`) — mirrors HTTP's
+   * `paginated()` directive (`http-api-projector/src/verbs.ts`). Detection of
+   * "is this command paginated at all" is a RUNTIME shape check on the
+   * actual result (`isPageShape`), same "conventions over contracts"
+   * split every other stream/page convention in this codebase uses — this
+   * only overrides which flag name carries the cursor/offset on the NEXT
+   * call, when the leaf's own input field doesn't already default to
+   * `"cursor"`/`"offset"`.
+   */
+  readonly paginated?: {
+    readonly inputCursorParam?: string
+    readonly inputOffsetParam?: string
+  }
   readonly [key: string]: unknown
 }
 
@@ -596,13 +622,14 @@ type ParsedArgv = {
   yes: boolean
   json: boolean
   jsonl: boolean
+  allPages: boolean
 }
 
 /**
  * Parse named --flags from argv into a flat object.
  * Boolean flags (no following value, or next arg starts with --) → true.
  * Repeated flags → array.
- * Extracts: --help, --version/-V, --yes/--force, --json, --jsonl.
+ * Extracts: --help, --version/-V, --yes/--force, --json, --jsonl, --all-pages.
  */
 function parseFlags(argv: string[]): ParsedArgv {
   const flags: Record<string, string | string[] | true> = {}
@@ -611,6 +638,7 @@ function parseFlags(argv: string[]): ParsedArgv {
   let yes = false
   let json = false
   let jsonl = false
+  let allPages = false
 
   let i = 0
   while (i < argv.length) {
@@ -631,6 +659,9 @@ function parseFlags(argv: string[]): ParsedArgv {
     }
     if (arg === "--jsonl") {
       jsonl = true; i++; continue
+    }
+    if (arg === "--all-pages") {
+      allPages = true; i++; continue
     }
     if (arg.startsWith("--")) {
       const key = arg.slice(2)
@@ -658,7 +689,7 @@ function parseFlags(argv: string[]): ParsedArgv {
     i++
   }
 
-  return { flags, help, version, yes, json: json || !jsonl, jsonl }
+  return { flags, help, version, yes, json: json || !jsonl, jsonl, allPages }
 }
 
 // ============================================================================
@@ -990,7 +1021,7 @@ export async function runCli<T = unknown>(
     return
   }
 
-  const { flags, help, version, yes, json: _json, jsonl } = parseFlags(flagArgv)
+  const { flags, help, version, yes, json: _json, jsonl, allPages } = parseFlags(flagArgv)
 
   // --version — print the configured program version and return. Takes
   // priority over subcommand resolution (mirrors --help), since it's a
@@ -1177,11 +1208,48 @@ export async function runCli<T = unknown>(
     result = result.value
   }
 
+  // Pagination: a page-shaped result (`CursorPage<T>`/`OffsetPage<T>`, see
+  // `@rhi-zone/fractal-api-tree/page`) — runtime shape check on the actual
+  // result, same "conventions over contracts" split `isAsyncIterable`/
+  // streaming uses above. `--all-pages` walks every following page by
+  // re-invoking the handler in-process with the next cursor/offset merged
+  // into `input` (CLI's own counterpart to HTTP's client-side `pagination()`
+  // extension, which does the same walk over `fetch` instead of a direct
+  // call), streaming every item as a JSONL line as it's fetched. Without
+  // `--all-pages`, the current page still prints through the normal Output
+  // path below unchanged; a `# more results available` hint goes to stderr
+  // when there IS a next page, so a human knows how to continue (a machine
+  // consumer already has `cursor`/`offset`+`hasMore` in the JSON body).
+  if (isPageShape(result)) {
+    const paginatedMeta = getCliMeta(target.leafMeta).paginated
+    if (allPages) {
+      await streamAllPages(
+        result,
+        input,
+        callHandler,
+        stores,
+        detectResult,
+        opts.errorEncoder,
+        paginatedMeta,
+        ioResolved,
+      )
+      return
+    }
+    writePaginationHint(result, paginatedMeta, ioResolved)
+  }
+
   // Output
   if (tags.streaming === true || jsonl) {
     // Streaming: one JSON line per item. `result` is never an async iterable
-    // here (handled above), so only the plain-array case remains.
-    if (Array.isArray(result)) {
+    // here (handled above); a page-shaped result streams its `items`, same
+    // as an ordinary array — the pagination metadata (`cursor`/`hasMore`)
+    // isn't itself a "result item" and is dropped from this output mode
+    // (the hint above already surfaced it to stderr).
+    if (isPageShape(result)) {
+      for (const item of result.items) {
+        ioResolved.stdout.write(jsonLine(item))
+      }
+    } else if (Array.isArray(result)) {
       for (const item of result) {
         ioResolved.stdout.write(JSON.stringify(item) + "\n")
       }
@@ -1249,6 +1317,120 @@ async function streamAsyncIterable(
     } else {
       io.stdout.write(jsonLine(value))
     }
+  }
+}
+
+// ============================================================================
+// Pagination — `--all-pages` auto-walk + the stderr continuation hint
+//
+// A page-shaped result (`CursorPage<T>`/`OffsetPage<T>`, api-tree/src/page.ts)
+// is detected the same way streaming is: a runtime shape check on the
+// handler's actual return value (`isPageShape`), not a static declaration.
+// Mirrors `http-api-projector/src/extensions/pagination.ts`'s client-side
+// auto-pagination — same cursor/offset advancement algebra, applied to a
+// direct in-process handler call instead of a re-issued `fetch`.
+// ============================================================================
+
+/** Resolved `{ inputCursorParam, inputOffsetParam }`, defaults matching HTTP's `pagination()` extension. */
+function resolvedPaginationParams(meta: CliMeta["paginated"]): { cursorParam: string; offsetParam: string } {
+  return {
+    cursorParam: meta?.inputCursorParam ?? "cursor",
+    offsetParam: meta?.inputOffsetParam ?? "offset",
+  }
+}
+
+/** The next call's input: `page`'s cursor/offset merged onto `input` under the resolved param names. `undefined` (no next page) returns `input` unchanged — caller only calls this when `page.hasMore` is already known true. */
+function nextPageInput(
+  input: Record<string, unknown>,
+  page: Page<unknown>,
+  cursorParam: string,
+  offsetParam: string,
+): Record<string, unknown> {
+  if (isOffsetPage(page)) {
+    return { ...input, [offsetParam]: page.offset + page.items.length }
+  }
+  if (isCursorPage(page) && page.cursor !== undefined) {
+    return { ...input, [cursorParam]: page.cursor }
+  }
+  return input
+}
+
+/**
+ * Write a `# more results available ...` hint to stderr when `page.hasMore`
+ * — the non-`--all-pages` path's discoverability nudge (the JSON body itself
+ * already carries `cursor`/`offset`+`hasMore`, this is purely for a human at
+ * a terminal who might not think to look).
+ */
+function writePaginationHint(
+  page: Page<unknown>,
+  meta: CliMeta["paginated"],
+  io: CliIO,
+): void {
+  if (!page.hasMore) return
+  const { cursorParam, offsetParam } = resolvedPaginationParams(meta)
+  if (isOffsetPage(page)) {
+    io.stderr.write(
+      `# more results available — pass --${offsetParam} ${page.offset + page.items.length} (or --all-pages) to continue\n`,
+    )
+  } else if (isCursorPage(page) && page.cursor !== undefined) {
+    io.stderr.write(
+      `# more results available — pass --${cursorParam} ${page.cursor} (or --all-pages) to continue\n`,
+    )
+  }
+}
+
+/** One page fetch + the same Result-unwrapping `runCli`'s first call already applies — a subsequent page can be an `err` Result exactly like the first. */
+async function fetchNextPage(
+  callHandler: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+  input: Record<string, unknown>,
+  stores: Stores,
+  detectResult: boolean,
+  errorEncoder: CliErrorEncoder | undefined,
+  io: CliIO,
+): Promise<Page<unknown>> {
+  let out: unknown = await Promise.resolve(callHandler(input, stores))
+  if (detectResult && isResultShape(out)) {
+    if (out.kind === "err") {
+      const encoded = errorEncoder?.(out.error)
+      const msg = encoded?.message ?? `Error: ${JSON.stringify(out.error)}`
+      const exitCode = encoded?.exitCode ?? 1
+      io.stderr.write(`${msg}\n`)
+      throw new CliError(msg, exitCode)
+    }
+    out = out.value
+  }
+  if (!isPageShape(out)) {
+    throw new CliError("--all-pages: a subsequent page fetch did not return a page-shaped result", 1)
+  }
+  return out
+}
+
+/**
+ * `--all-pages`: walk every page from `first` onward, writing each item as a
+ * JSONL line to stdout as soon as its page is fetched (push-as-you-go, same
+ * convention `streamAsyncIterable` uses for a genuine `AsyncIterable`) —
+ * distinct from that function's async-generator draining since this walks a
+ * REQUEST/RESPONSE sequence (one handler call per page), not a single
+ * already-open stream.
+ */
+async function streamAllPages(
+  first: Page<unknown>,
+  input: Record<string, unknown>,
+  callHandler: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+  stores: Stores,
+  detectResult: boolean,
+  errorEncoder: CliErrorEncoder | undefined,
+  paginatedMeta: CliMeta["paginated"],
+  io: CliIO,
+): Promise<void> {
+  const { cursorParam, offsetParam } = resolvedPaginationParams(paginatedMeta)
+  let page = first
+  let currentInput = input
+  for (;;) {
+    for (const item of page.items) io.stdout.write(jsonLine(item))
+    if (!page.hasMore) return
+    currentInput = nextPageInput(currentInput, page, cursorParam, offsetParam)
+    page = await fetchNextPage(callHandler, currentInput, stores, detectResult, errorEncoder, io)
   }
 }
 

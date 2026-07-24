@@ -40,8 +40,17 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, Stores } from "@rhi-zone/fractal-api-tree"
+import {
+  composeErrorEncoders,
+  isCursorPage,
+  isOffsetPage,
+  isPageShape,
+  isResultShape,
+  isStreamChunk,
+  isStreamProgress,
+  matchKind,
+} from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, Page, Stores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective } from "./project.ts"
 import { httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
 import type { ParamSource, SourceMap, StandardSchemaV1 } from "./decode.ts"
@@ -164,6 +173,24 @@ function validateOf(meta: Meta): StandardSchemaV1 | undefined {
     if (d.kind === "validate") schema = d.schema
   }
   return schema
+}
+
+/**
+ * Resolves `meta.http`'s `{ kind: "paginated" }` directive (`paginated()`,
+ * verbs.ts) back out of a node/entry's meta — the LAST such directive wins,
+ * same "later wins" convention `validateOf` above applies. Route.ts's OWN
+ * copy of this resolution, not a call to `getHttpMeta` (project.ts) — same
+ * reason `sourceMapOf`/`validateOf` above are self-contained: project.ts
+ * imports FROM route.ts, so a reverse import would cycle.
+ */
+function paginatedDirectiveOf(
+  meta: Meta,
+): Extract<HttpDirective, { readonly kind: "paginated" }> | undefined {
+  let directive: Extract<HttpDirective, { readonly kind: "paginated" }> | undefined
+  for (const d of directivesOf(meta)) {
+    if (d.kind === "paginated") directive = d
+  }
+  return directive
 }
 
 function withoutDirective(meta: Meta, directive: HttpDirective): Meta {
@@ -918,8 +945,52 @@ async function defaultDecode(
   return { input: bag, stores }
 }
 
-/** Default `encode`: a 200 JSON response. */
-function defaultEncode(output: unknown): Response {
+/**
+ * Build the `Link: <url>; rel="next"` header for a page-shaped response
+ * (`CursorPage<T>`/`OffsetPage<T>`, see `@rhi-zone/fractal-api-tree/page`) —
+ * the server-side counterpart to `extensions/pagination.ts`'s client-side
+ * `nextRequestFor`: same URL algebra (clone the request URL, overwrite just
+ * the cursor/offset query param, preserve every other one — `limit`,
+ * filters, etc.), just emitted as a response header instead of consumed to
+ * build the next `Request`. RFC 8288 (`Link` header, §3) is the honest wire
+ * signal for "there is a next page and here's its URL" — a client that
+ * doesn't use this package's own `pagination()` extension (a bare `fetch`
+ * caller, curl, a different SDK) can still discover it.
+ *
+ * Only meaningful for GET/HEAD/DELETE-style (query-param) requests — the
+ * conventional shape for a read/list endpoint (`http.get`, verbs.ts) and the
+ * only shape whose input the client encodes into the URL rather than a JSON
+ * body, so a next-page URL can be derived without knowing the body schema.
+ * Any other method (or `hasMore: false`) contributes no `Link` header —
+ * silently, not an error: the pagination data itself is still in the JSON
+ * body regardless, this header is a convenience on top, not the only way to
+ * discover the next page.
+ */
+function pageLinkHeader(req: Request, output: Page<unknown>, meta: Meta): string | undefined {
+  if (!output.hasMore) return undefined
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "DELETE") return undefined
+
+  const directive = paginatedDirectiveOf(meta)
+  const cursorParam = directive?.inputCursorParam ?? "cursor"
+  const offsetParam = directive?.inputOffsetParam ?? "offset"
+
+  const url = new URL(req.url)
+  if (isOffsetPage(output)) {
+    url.searchParams.set(offsetParam, String(output.offset + output.items.length))
+  } else if (isCursorPage(output) && output.cursor !== undefined) {
+    url.searchParams.set(cursorParam, output.cursor)
+  } else {
+    return undefined
+  }
+  return `<${url.toString()}>; rel="next"`
+}
+
+/** Default `encode`: a 200 JSON response, with a `Link: ...; rel="next"` header attached when `output` is page-shaped and has a next page (see `pageLinkHeader`). */
+function defaultEncode(output: unknown, req?: Request, meta?: Meta): Response {
+  if (req !== undefined && meta !== undefined && isPageShape(output)) {
+    const link = pageLinkHeader(req, output, meta)
+    if (link !== undefined) return jsonRouteResponse(output, { status: 200, headers: { Link: link } })
+  }
   return jsonRouteResponse(output, { status: 200 })
 }
 
@@ -1140,7 +1211,7 @@ export async function runRoute(
 
     return isResponseOverride(output)
       ? encodeOverride(output)
-      : defaultEncode(output)
+      : defaultEncode(output, req, meta)
   } catch (error) {
     const encoded = thrownErrorEncoder?.(error)
     return encoded !== undefined

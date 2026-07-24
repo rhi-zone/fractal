@@ -19,7 +19,8 @@ import {
 } from "./route.ts"
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
-import { http } from "./verbs.ts"
+import { http, paginated } from "./verbs.ts"
+import type { CursorPage, OffsetPage } from "@rhi-zone/fractal-api-tree"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 
 // ============================================================================
@@ -1226,3 +1227,101 @@ describe("http.validate() — Standard Schema at the decode boundary", () => {
     })
   })
 })
+
+// ============================================================================
+// Pagination — Link header (server-side `page` kind propagation)
+// ============================================================================
+//
+// The client-side counterpart (extensions/pagination.ts) recognizes a
+// page-shaped response by `isPageShape` and auto-paginates; this covers the
+// server-side `Link: <url>; rel="next"` header `runRoute`'s `defaultEncode`
+// attaches to the same response, per RFC 8288, so a caller that isn't using
+// this package's own client can still discover the next page.
+
+const ITEMS = Array.from({ length: 5 }, (_, i) => ({ id: i }))
+
+function cursorList(input: { readonly cursor?: string }): CursorPage<{ id: number }> {
+  const start = input.cursor !== undefined ? Number(input.cursor) : 0
+  const page = ITEMS.slice(start, start + 2)
+  const nextStart = start + page.length
+  const hasMore = nextStart < ITEMS.length
+  return { items: page, hasMore, ...(hasMore ? { cursor: String(nextStart) } : {}) }
+}
+
+function offsetList(input: { readonly offset?: number }): OffsetPage<{ id: number }> {
+  const offset = input.offset !== undefined ? Number(input.offset) : 0
+  const page = ITEMS.slice(offset, offset + 2)
+  return { items: page, offset, total: ITEMS.length, hasMore: offset + page.length < ITEMS.length }
+}
+
+describe("defaultEncode — pagination Link header", () => {
+  it("attaches a Link: rel=\"next\" header for a cursor page with hasMore: true", async () => {
+    const tree = api_({ list: op(cursorList, http.get) })
+    const router = makeRouter(applyMethodsPipeline(tree))
+
+    const res = await router(new Request("http://localhost/list"))
+    expect(res.status).toBe(200)
+    expect(res.headers.get("Link")).toBe('<http://localhost/list?cursor=2>; rel="next"')
+    expect(await res.json()).toEqual({ items: [{ id: 0 }, { id: 1 }], hasMore: true, cursor: "2" })
+  })
+
+  it("preserves other query params on the next-page URL", async () => {
+    const tree = api_({ list: op(cursorList, http.get) })
+    const router = makeRouter(applyMethodsPipeline(tree))
+
+    const res = await router(new Request("http://localhost/list?limit=2&sort=asc"))
+    const link = res.headers.get("Link")
+    expect(link).toContain("limit=2")
+    expect(link).toContain("sort=asc")
+    expect(link).toContain("cursor=2")
+  })
+
+  it("uses offset+total for an OffsetPage", async () => {
+    const tree = api_({ list: op(offsetList, http.get) })
+    const router = makeRouter(applyMethodsPipeline(tree))
+
+    const res = await router(new Request("http://localhost/list"))
+    expect(res.headers.get("Link")).toBe('<http://localhost/list?offset=2>; rel="next"')
+  })
+
+  it("respects a paginated() directive's inputCursorParam override", async () => {
+    const tree = api_({
+      list: op(cursorList, http.get, paginated({ inputCursorParam: "after" })),
+    })
+    const router = makeRouter(applyMethodsPipeline(tree))
+
+    const res = await router(new Request("http://localhost/list"))
+    expect(res.headers.get("Link")).toBe('<http://localhost/list?after=2>; rel="next"')
+  })
+
+  it("omits the Link header once hasMore is false (last page)", async () => {
+    const tree = api_({ list: op(cursorList, http.get) })
+    const router = makeRouter(applyMethodsPipeline(tree))
+
+    const res = await router(new Request("http://localhost/list?cursor=4"))
+    expect(res.headers.get("Link")).toBeNull()
+    expect(await res.json()).toEqual({ items: [{ id: 4 }], hasMore: false })
+  })
+
+  it("omits the Link header for a non-page-shaped response", async () => {
+    const tree = api_({ get: op((_: unknown) => ({ id: 1 }), http.get) })
+    const router = makeRouter(applyMethodsPipeline(tree))
+
+    const res = await router(new Request("http://localhost/get"))
+    expect(res.headers.get("Link")).toBeNull()
+  })
+
+  it("omits the Link header for a POST endpoint (no query-param URL to derive)", async () => {
+    const tree = api_({ list: op(cursorList) })
+    const router = makeRouter(toHttpRoutes(tree))
+
+    const res = await router(
+      new Request("http://localhost/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),
+    )
+    expect(res.headers.get("Link")).toBeNull()
+  })
+})
+
+function applyMethodsPipeline(tree: Parameters<typeof toHttpRoutes>[0]) {
+  return composeTransforms(applyMethods, applyMoveTo, applyResponse)(toHttpRoutes(tree))
+}

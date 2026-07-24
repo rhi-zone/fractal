@@ -710,18 +710,42 @@ What exists:
 What's planned / open (per `TODO.md`):
 - MCP Tier 1 and Tier 2 (logging, streaming/progress notifications)
   complete; sampling also done. MCP roots/subscriptions still open.
-- `stream` TypeRef kind doesn't propagate through HTTP/CLI/MCP
-  projectors (they work from JSON Schema, which loses the distinction) —
-  GraphQL alone has it wired.
+- `stream`/`page` kind propagation (2026-07-24 session): corrected a
+  stale claim below — `stream` (an `AsyncIterable<T>` return) was
+  already propagated at RUNTIME across every projector, not just
+  GraphQL: HTTP (`route.ts`'s `isAsyncIterable` → SSE), CLI (`cli.ts`'s
+  same check → push JSONL), MCP (`server.ts`'s
+  `collectStreamedToolContent`/`collectStreamedResourceContents`/
+  `collectStreamedMessages`), and JSON-RPC (`server.ts`'s
+  `streamViaNotifications`/`drainToArray`) all detect a handler's
+  `AsyncIterable` return structurally, same "conventions over
+  contracts" split GraphQL's tag-derived subscription inference uses.
+  `page` (a `CursorPage<T>`/`OffsetPage<T>` return, `api-tree/src/page.ts`)
+  had a real gap, now closed: HTTP already had client-side
+  auto-pagination (`extensions/pagination.ts`) but no server-side
+  discoverability signal — `route.ts`'s `defaultEncode` now attaches a
+  `Link: <url>; rel="next"` header (RFC 8288) to a page-shaped response
+  when `hasMore` is true. CLI had no page-aware output at all — `cli.ts`
+  now detects a page-shaped result (`isPageShape`) and adds `--all-pages`
+  (walks every following page in-process, streaming every item as JSONL)
+  plus a stderr `# more results available --cursor/--offset ...` hint on
+  the un-flagged path. MCP and JSON-RPC's own task scope was streaming
+  only (already done, above) — pagination wasn't asked of them and
+  neither has a protocol-level "next page" construct beyond the JSON
+  body itself, so no changes were needed there. GraphQL still degrades
+  `page` to a plain list in SDL (`type-ir/src/graphql.ts`) with no
+  framework-level auto-pagination of its own — unchanged, out of this
+  session's scope.
 - CLI and MCP still walk the raw `Node` tree directly rather than
   through the `Node ⇒ ProtocolType` projection pattern HTTP/type-ir use.
 - No dedicated declaration for an operation's possible error kinds in
   the tree/meta itself (error mapping is projector-level config today).
-- A JSON-RPC projector — no `packages/json-rpc-api-projector` (or
-  equivalent) exists yet. Would follow the same `api()`/`op()` tree
-  projection pattern as the HTTP/CLI/MCP/GraphQL projectors, surfacing
-  operations as JSON-RPC methods (request/response/error framing per the
-  JSON-RPC 2.0 spec). Not started.
+- A JSON-RPC projector (2026-07-24 session): corrected a stale claim
+  below — `packages/json-rpc-api-projector` already exists (commit
+  `eea69a2`, predating this roadmap edit), implemented to the same bar
+  as HTTP/CLI/MCP/GraphQL (project.ts/server.ts/client.ts/wire.ts, plus
+  `type-ir/src/json-rpc.ts`'s schema layer), including the streaming
+  notification pattern described in the Acceptance Criteria below.
 - Provider-specific auth packages (Clerk, Auth0, Supabase, Firebase,
   Cognito) as thin wrappers over the existing `AuthAdapter`/
   `AuthClientAdapter` contract — none built yet; the generic OIDC/JWT
@@ -750,10 +774,14 @@ Acceptance criteria for green:
 - MCP Tier 2 complete (done); MCP roots/subscriptions either complete
   or explicitly deferred with a documented reason (currently
   "speculative until concrete use case").
-- `stream`/`page` kind propagation consistent across all projectors, not
-  just GraphQL.
+- `stream`/`page` kind propagation consistent across all projectors —
+  done (2026-07-24 session), see the "Fractal Framework" section above
+  for what was already in place (runtime `stream` detection everywhere)
+  versus what was closed this session (HTTP `Link` header, CLI
+  `--all-pages`).
 - JSON-RPC projector implemented and tested to the same bar as the
-  existing four (HTTP, CLI, MCP, GraphQL).
+  existing four (HTTP, CLI, MCP, GraphQL) — done, see above (was already
+  present; this bullet was stale).
 - Scope call from the project owner on which of the auth
   packages/transport kits/reactive substrate/codegen extras/router
   auto-selection items above are genuinely 1.0-blocking versus
