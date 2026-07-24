@@ -64,6 +64,7 @@ import type {
   CreateMessageResultWithTools,
   GetPromptResult,
   Implementation,
+  LoggingLevel,
   ReadResourceResult,
   ServerCapabilities,
   ServerNotification,
@@ -522,6 +523,60 @@ export interface CreateMessageFn {
 }
 
 // ============================================================================
+// Logging — MCP Tier 2: `notifications/message` (server → client log
+// messages) + `logging/setLevel` (client → server minimum-level negotiation),
+// exposed to handlers via `stores.caller.sendLog` (see `assembleInput`
+// below), the same opt-in-field pattern sampling's `createMessage` uses.
+//
+// Unlike `sampling`, `logging` IS a server capability
+// (`ServerCapabilitiesSchema.logging`, @modelcontextprotocol/sdk/types.js) —
+// so `CreateMcpServerOptions.logging` both adds `logging: {}` to the
+// capabilities object passed to `new Server(...)` below AND gates
+// `stores.caller.sendLog`.
+//
+// Log-level negotiation itself needs no code here: the SDK's own `Server`
+// constructor (@modelcontextprotocol/sdk/server/index.js) already registers
+// a `logging/setLevel` request handler whenever `capabilities.logging` is
+// set — it records the requesting session's minimum level in a private
+// `_loggingLevels` map and `Server.sendLoggingMessage` already consults that
+// map (`isMessageIgnored`) before emitting a notification. Declaring the
+// capability is therefore the entire integration; this module only adds the
+// handler-facing `sendLog` function on top.
+// ============================================================================
+
+/**
+ * Opt-in configuration for `CreateMcpServerOptions.logging` — currently no
+ * fields; reserved so a later per-server default (e.g. a default `logger`
+ * name applied when a handler's `sendLog` call omits one) can be added
+ * without a breaking change to the option's shape. Pass `true` instead for
+ * the common "just turn it on" case. Mirrors `SamplingConfig`.
+ */
+export type LoggingConfig = Record<string, never>
+
+/** A single `notifications/message` payload — see `SendLogFn`. */
+export type SendLogParams = {
+  readonly level: LoggingLevel
+  readonly data: unknown
+  readonly logger?: string
+}
+
+/**
+ * `stores.caller.sendLog`, exposed to tool/resource/prompt handlers when
+ * `CreateMcpServerOptions.logging` is enabled — emits a `notifications/message`
+ * to the connected client at the given `level`, wired to this server's own
+ * `Server.sendLoggingMessage` (@modelcontextprotocol/sdk/server/index.js) and
+ * pre-bound to the requesting session (so a handler never needs to thread
+ * `extra.sessionId` through itself). The SDK drops the notification
+ * server-side when `level` is below whatever minimum the connected client
+ * negotiated via `logging/setLevel` (or sends it unconditionally if the
+ * client never negotiated a level) — see this module's "Logging" doc
+ * section above.
+ */
+export interface SendLogFn {
+  (params: SendLogParams): Promise<void>
+}
+
+// ============================================================================
 // Input assembly — shared pipeline (packages/api-tree/src/input.ts)
 // ============================================================================
 
@@ -553,7 +608,10 @@ export interface CreateMessageFn {
  * `createMessage`, when passed (only when `CreateMcpServerOptions.sampling`
  * is enabled — see call sites in `createMcpServer`), is threaded onto
  * `caller` alongside `authInfo`/`sessionId` — see this module's "Sampling"
- * doc section and `CreateMessageFn`.
+ * doc section and `CreateMessageFn`. `sendLog`, when passed (only when
+ * `CreateMcpServerOptions.logging` is enabled), is threaded the same way,
+ * pre-bound to this request's `extra.sessionId` — see this module's
+ * "Logging" doc section and `SendLogFn`.
  */
 function assembleInput(
   storeName: string,
@@ -561,6 +619,7 @@ function assembleInput(
   sourceMap: SourceMap,
   extra: McpRequestExtra,
   createMessage?: CreateMessageFn,
+  sendLoggingMessage?: (params: SendLogParams, sessionId?: string) => Promise<void>,
 ): { readonly input: Record<string, unknown>; readonly stores: Stores } {
   // storeName is always one of MCP's declared store names ("argument" or
   // "uri-variable") at call sites below, but it's threaded through as a
@@ -571,6 +630,9 @@ function assembleInput(
       authInfo: extra.authInfo,
       sessionId: extra.sessionId,
       ...(createMessage !== undefined ? { createMessage } : {}),
+      ...(sendLoggingMessage !== undefined
+        ? { sendLog: (params: SendLogParams) => sendLoggingMessage(params, extra.sessionId) }
+        : {}),
     },
   } as Stores
   const paramNames = [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
@@ -761,6 +823,25 @@ export type CreateMcpServerOptions<T = unknown> = {
    * `CreateMessageFn` for the full explanation.
    */
   readonly sampling?: boolean | SamplingConfig
+  /**
+   * Opt-in: MCP Tier 2 logging — advertises the `logging` server capability
+   * (`{ logging: {} }`, merged with any `opts.capabilities.logging` passed
+   * separately) and exposes `stores.caller.sendLog` so tool/resource/prompt
+   * handlers can emit `notifications/message` to the connected client (see
+   * `SendLogFn`). Pass `true` to enable with defaults, or a `LoggingConfig`
+   * object (currently no fields, reserved for future config) for the same
+   * effect today.
+   *
+   * Log-level negotiation (`logging/setLevel`) needs no separate wiring —
+   * declaring the capability is enough for the SDK's own `Server` to
+   * register that handler and honor it inside `sendLoggingMessage`; see this
+   * module's "Logging" doc section above `SendLogFn` for the full
+   * explanation.
+   *
+   * Absent by default — `stores.caller` has no `sendLog` field, and no
+   * `logging` capability is advertised, unless this is set.
+   */
+  readonly logging?: boolean | LoggingConfig
 }
 
 /**
@@ -851,6 +932,16 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       // and this module's "Sampling" section above `CreateMessageFn`:
       // `sampling` is a CLIENT capability in the MCP spec, not something a
       // server advertises (`ServerCapabilitiesSchema` has no such field).
+      //
+      // `logging`, unlike `sampling`, IS a server capability — see
+      // CreateMcpServerOptions.logging's doc and this module's "Logging"
+      // section above `SendLogFn`. Declaring it here is also what makes the
+      // SDK's own `Server` constructor register the `logging/setLevel`
+      // handler (see server/index.js) — so this is the entire log-level
+      // negotiation wiring, not just capability advertisement.
+      ...(opts.logging === true || (typeof opts.logging === "object" && opts.logging !== null)
+        ? { logging: { ...opts.capabilities?.logging } }
+        : {}),
     },
   })
 
@@ -862,6 +953,16 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   const samplingEnabled = opts.sampling === true || (typeof opts.sampling === "object" && opts.sampling !== null)
   const createMessage: CreateMessageFn | undefined = samplingEnabled
     ? ((params: CreateMessageRequestParams, options?: RequestOptions) => server.createMessage(params, options)) as CreateMessageFn
+    : undefined
+
+  // Opt-in logging (see CreateMcpServerOptions.logging and this module's
+  // "Logging" doc section) — gates whether `stores.caller.sendLog` exists at
+  // all. Bound to `server.sendLoggingMessage` so a handler never needs a
+  // reference to the `Server` instance itself; per-request session binding
+  // happens in `assembleInput`, not here.
+  const loggingEnabled = opts.logging === true || (typeof opts.logging === "object" && opts.logging !== null)
+  const sendLoggingMessage: ((params: SendLogParams, sessionId?: string) => Promise<void>) | undefined = loggingEnabled
+    ? (params, sessionId) => server.sendLoggingMessage(params, sessionId)
     : undefined
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }))
@@ -899,7 +1000,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
     }
 
     try {
-      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra, createMessage)
+      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra, createMessage, sendLoggingMessage)
       const toolContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "tool" }
       const base = toBase(withAls(dispatch.handler, toolContext))
       const callHandler = middleware.length === 0
@@ -983,7 +1084,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
           : composeMiddleware(middleware, base)
         // No URI-variables for a fixed resource — assembleInput still builds
         // the `caller` store from `extra` so middleware sees it here too.
-        const { input, stores } = assembleInput("uri-variable", {}, {}, extra, createMessage)
+        const { input, stores } = assembleInput("uri-variable", {}, {}, extra, createMessage, sendLoggingMessage)
         const result = await callHandler(input, stores)
         if (detectStreaming && isAsyncIterable(result)) {
           return { contents: await collectStreamedResourceContents(result, extra, uri, mimeType) }
@@ -998,7 +1099,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         template.paramNames.forEach((name, i) => {
           captured[name] = match[i + 1] as string
         })
-        const { input, stores } = assembleInput("uri-variable", captured, template.sourceMap, extra, createMessage)
+        const { input, stores } = assembleInput("uri-variable", captured, template.sourceMap, extra, createMessage, sendLoggingMessage)
         const templateContext: McpAlsContext = { meta: template.meta, name: uri, requestType: "resource" }
         const base = toBase(withAls(template.handler, templateContext))
         const callHandler = middleware.length === 0
@@ -1026,7 +1127,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
       }
 
-      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra, createMessage)
+      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra, createMessage, sendLoggingMessage)
       const promptContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "prompt" }
       const base = toBase(withAls(dispatch.handler, promptContext))
       const callHandler = middleware.length === 0

@@ -692,8 +692,9 @@ What exists:
   client-extension system (retry, timeout, interceptors, errors,
   logging, streaming, pagination).
 - MCP projector (`packages/mcp-api-projector`) — tools, resources,
-  prompts (MCP Tier 1 complete; Tier 2 logging/progress and Tier 3
-  sampling/roots/subscriptions open, see `TODO.md`).
+  prompts (MCP Tier 1 and Tier 2 — logging, progress notifications —
+  complete; Tier 3 sampling is also done (`stores.caller.createMessage`);
+  roots/subscriptions open, see `TODO.md`).
 - CLI projector (`packages/cli-api-projector`).
 - GraphQL projector (`packages/graphql-api-projector`) — server
   (schema/resolve/server), WebSocket subscriptions, and a client with
@@ -703,8 +704,8 @@ What exists:
   (Clerk, Auth0, Supabase, Firebase, Cognito) not yet built.
 
 What's planned / open (per `TODO.md`):
-- MCP Tier 2 (logging, streaming/progress notifications) and Tier 3
-  (sampling, roots, subscriptions) still open.
+- MCP Tier 1 and Tier 2 (logging, streaming/progress notifications)
+  complete; sampling also done. MCP roots/subscriptions still open.
 - `stream` TypeRef kind doesn't propagate through HTTP/CLI/MCP
   projectors (they work from JSON Schema, which loses the distinction) —
   GraphQL alone has it wired.
@@ -744,9 +745,9 @@ Acceptance criteria for green:
 - HTTP, MCP, CLI, GraphQL, and JSON-RPC projectors demonstrated
   end-to-end against a real example app (as `examples/library-api`
   already does for HTTP).
-- MCP Tier 2 complete; Tier 3 either complete or explicitly deferred
-  with a documented reason (currently "speculative until concrete use
-  case").
+- MCP Tier 2 complete (done); MCP roots/subscriptions either complete
+  or explicitly deferred with a documented reason (currently
+  "speculative until concrete use case").
 - `stream`/`page` kind propagation consistent across all projectors, not
   just GraphQL.
 - JSON-RPC projector implemented and tested to the same bar as the

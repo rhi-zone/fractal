@@ -10,18 +10,22 @@ tool annotation hints like `readOnlyHint`/`idempotentHint`/`destructiveHint`
 for free; a `meta.mcp.resource`/`meta.mcp.prompt` marker routes a leaf into
 `projectResources`/`projectPrompts` instead of `projectTools`). `createMcpServer`
 wires all three projections plus sampling (`stores.caller.createMessage`,
-so a handler can call back into the connected client's model) onto the SDK's
-`Server`; `createStdioMcpServer`/`createHttpMcpServer` are one-call presets
-for the two common transports. A generated `createMcpClient` gives a typed
-caller over the same tree for testing or cross-service use.
+so a handler can call back into the connected client's model) and logging
+(`stores.caller.sendLog`, MCP Tier 2 — `notifications/message` with
+`logging/setLevel` negotiation handled by the SDK once the capability is
+declared) onto the SDK's `Server`; `createStdioMcpServer`/`createHttpMcpServer`
+are one-call presets for the two common transports. A generated
+`createMcpClient` gives a typed caller over the same tree for testing or
+cross-service use.
 
 ## Key exports
 
 - `toTools(tree, opts?)` / `projectTools`, `projectResources`, `projectPrompts` — walk a `Node` tree into `McpTool[]` / `McpResource[]` / `McpPrompt[]`
-- `createMcpServer(tree, opts?)` — wire tools/resources/prompts + sampling onto an SDK `Server`
+- `createMcpServer(tree, opts?)` — wire tools/resources/prompts + sampling + logging onto an SDK `Server`
 - `createStdioMcpServer`, `createHttpMcpServer` — transport-owning one-call presets
 - `createMcpClient` — typed client over the projected tree
 - `SamplingConfig`, `CreateMessageFn` and re-exported SDK sampling types (`CreateMessageRequestParams`, `CreateMessageResult`, ...)
+- `LoggingConfig`, `SendLogFn`, `SendLogParams` and re-exported SDK `LoggingLevel` — MCP Tier 2 logging (`stores.caller.sendLog`)
 - `mcpErrors`, `McpErrorEncoder` — structured error → MCP error-response mapping
 
 ## Usage

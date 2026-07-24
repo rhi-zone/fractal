@@ -23,11 +23,14 @@ export { getMcpMeta, projectPrompts, projectResources, projectTools, toTools } f
 export type {
   CreateMcpServerOptions,
   CreateMessageFn,
+  LoggingConfig,
   McpAlsContext,
   McpErrorEncoder,
   McpErrorResponse,
   McpMiddleware,
   SamplingConfig,
+  SendLogFn,
+  SendLogParams,
   ValidationResult,
 } from "./server.ts"
 export { createMcpServer, mcpErrors, validateAgainstSchema } from "./server.ts"
@@ -42,6 +45,10 @@ export type {
   CreateMessageResultWithTools,
   SamplingMessage,
 } from "@modelcontextprotocol/sdk/types.js"
+// SDK logging types re-exported so consumers of `stores.caller.sendLog`
+// (see `SendLogFn`, server.ts) don't need to reach into
+// `@modelcontextprotocol/sdk/types.js` directly for the level enum.
+export type { LoggingLevel } from "@modelcontextprotocol/sdk/types.js"
 export type { CreateHttpMcpServerOptions, CreateStdioMcpServerOptions } from "./presets.ts"
 export { createHttpMcpServer, createStdioMcpServer } from "./presets.ts"
 export type { AnyMcpClient, McpClientOptions } from "./client.ts"

@@ -9,10 +9,10 @@ import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
-import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import { CreateMessageRequestSchema, LoggingMessageNotificationSchema } from "@modelcontextprotocol/sdk/types.js"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { createMcpServer } from "./server.ts"
-import type { CreateMessageFn, McpMiddleware } from "./server.ts"
+import type { CreateMessageFn, McpMiddleware, SendLogFn } from "./server.ts"
 
 // ============================================================================
 // Fixture: a small Node tree with a happy-path leaf and a throwing leaf
@@ -960,5 +960,157 @@ describe("createMcpServer — sampling", () => {
 
     const result = await client.callTool({ name: "askLlm", arguments: {} })
     expect(result.isError).toBe(true)
+  })
+})
+
+// ============================================================================
+// 12. Logging — MCP Tier 2. `CreateMcpServerOptions.logging` opts a handler
+// into `stores.caller.sendLog` (MCP's `notifications/message`, wired to the
+// SDK's own `Server.sendLoggingMessage`) and advertises the `logging`
+// server capability. Log-level negotiation (`logging/setLevel`) is the
+// SDK's own doing once the capability is declared (see server.ts's
+// "Logging" doc section) — covered here by proving a level below the
+// client's negotiated minimum is actually dropped.
+// ============================================================================
+
+describe("createMcpServer — logging", () => {
+  it("advertises the logging capability only when opts.logging is set", async () => {
+    const tree = api_({ check: op((_: unknown) => ({ ok: true }), {}) })
+
+    const offServer = createMcpServer(tree, { name: "logging-off-server", version: "1.0.0" })
+    const [offClientTransport, offServerTransport] = InMemoryTransport.createLinkedPair()
+    const offClient = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([offServer.connect(offServerTransport), offClient.connect(offClientTransport)])
+    expect(offClient.getServerCapabilities()?.logging).toBeUndefined()
+
+    const onServer = createMcpServer(tree, { name: "logging-on-server", version: "1.0.0", logging: true })
+    const [onClientTransport, onServerTransport] = InMemoryTransport.createLinkedPair()
+    const onClient = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([onServer.connect(onServerTransport), onClient.connect(onClientTransport)])
+    expect(onClient.getServerCapabilities()?.logging).toEqual({})
+  })
+
+  it("stores.caller.sendLog is unavailable to a handler when logging is not enabled", async () => {
+    let sawSendLog: unknown = "not-checked"
+    const tree = api_({ check: op((_: unknown) => ({ ok: true }), {}) })
+    const server = createMcpServer(tree, {
+      name: "logging-off-server",
+      version: "1.0.0",
+      middleware: [
+        (next) => (input, stores) => {
+          sawSendLog = stores.caller?.sendLog
+          return next(input, stores)
+        },
+      ],
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    await client.callTool({ name: "check", arguments: {} })
+    expect(sawSendLog).toBeUndefined()
+  })
+
+  it("stores.caller.sendLog is available to a handler when logging: true is passed", async () => {
+    let sawSendLog: unknown = "not-checked"
+    const tree = api_({ check: op((_: unknown) => ({ ok: true }), {}) })
+    const server = createMcpServer(tree, {
+      name: "logging-on-server",
+      version: "1.0.0",
+      logging: true,
+      middleware: [
+        (next) => (input, stores) => {
+          sawSendLog = stores.caller?.sendLog
+          return next(input, stores)
+        },
+      ],
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    await client.callTool({ name: "check", arguments: {} })
+    expect(typeof sawSendLog).toBe("function")
+  })
+
+  // A leaf handler is always `(input) => output` (never receives `stores`
+  // directly, see the sampling section's matching comment above) — bridge
+  // `sendLog` through ALS the same way `bridgeCreateMessage` does for
+  // `createMessage`.
+  const sendLogAls = new AsyncLocalStorage<SendLogFn>()
+  const bridgeSendLog: McpMiddleware = (next) => (input, stores) => {
+    const sendLog = stores.caller?.sendLog as SendLogFn | undefined
+    if (sendLog === undefined) return next(input, stores)
+    return sendLogAls.run(sendLog, () => next(input, stores))
+  }
+
+  it("a tool handler can call stores.caller.sendLog (bridged via ALS) and the client receives a notifications/message", async () => {
+    const logTree = api_({
+      doWork: op(async (input: { note: string }) => {
+        const sendLog = sendLogAls.getStore()!
+        await sendLog({ level: "info", data: { note: input.note }, logger: "doWork" })
+        return { done: true }
+      }, {}),
+    })
+
+    const server = createMcpServer(logTree, {
+      name: "logging-emit-server",
+      version: "1.0.0",
+      logging: true,
+      middleware: [bridgeSendLog],
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+
+    const received: Array<{ level: string; logger?: string | undefined; data: unknown }> = []
+    client.setNotificationHandler(LoggingMessageNotificationSchema, async (notification) => {
+      received.push(notification.params)
+    })
+
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    const result = await client.callTool({ name: "doWork", arguments: { note: "hello" } })
+    expect(result.isError).toBeFalsy()
+
+    expect(received).toHaveLength(1)
+    expect(received[0]).toEqual({ level: "info", logger: "doWork", data: { note: "hello" } })
+  })
+
+  it("logging/setLevel negotiation: a message below the client's minimum level is dropped", async () => {
+    const logTree = api_({
+      doWork: op(async (_input: unknown) => {
+        const sendLog = sendLogAls.getStore()!
+        await sendLog({ level: "debug", data: "should be dropped" })
+        await sendLog({ level: "error", data: "should arrive" })
+        return { done: true }
+      }, {}),
+    })
+
+    const server = createMcpServer(logTree, {
+      name: "logging-negotiated-server",
+      version: "1.0.0",
+      logging: true,
+      middleware: [bridgeSendLog],
+    })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+
+    const received: Array<{ level: string; data: unknown }> = []
+    client.setNotificationHandler(LoggingMessageNotificationSchema, async (notification) => {
+      received.push(notification.params)
+    })
+
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    // Client negotiates a minimum level of "error" via logging/setLevel — the
+    // SDK's own Server registers this handler once `logging: true` declares
+    // the capability (see server.ts's "Logging" doc section); no code in
+    // this package handles the request itself.
+    await client.setLoggingLevel("error")
+
+    await client.callTool({ name: "doWork", arguments: {} })
+
+    expect(received).toHaveLength(1)
+    expect(received[0]).toEqual({ level: "error", data: "should arrive" })
   })
 })
