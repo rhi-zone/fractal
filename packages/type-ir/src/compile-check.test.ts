@@ -250,15 +250,7 @@ describe("rust-serde (cargo build)", () => {
   afterAll(() => rmSync(projectDir, { recursive: true, force: true }))
 
   for (const { name, ref } of fixtures) {
-    // Known bug: the Discriminated Union fixture's `type` discriminator
-    // field is emitted as a bare `pub type: String,` — `type` is a Rust
-    // keyword, so rustc rejects it ("expected identifier, found keyword
-    // `type`"); rust-serde.ts needs to escape reserved-word field names as
-    // `r#type` (rustc's raw-identifier syntax) the way it already escapes
-    // nothing today. Fix belongs in rust-serde.ts's field-name rendering.
-    const todo = name === "Discriminated Union API Response"
-    const runner = todo ? test.todo : test
-    runner(
+    test(
       name,
       () => {
         writeFileSync(

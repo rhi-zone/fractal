@@ -23,6 +23,26 @@ function toSnakeCase(name: string): string {
     .toLowerCase()
 }
 
+// Rust 2018+ reserved/strict keywords (https://doc.rust-lang.org/reference/keywords.html)
+// that cannot appear as a plain identifier. A field whose snake_case name
+// collides with one of these must be written as a raw identifier (`r#type`)
+// to compile; `#[serde(rename = "...")]` keeps the wire-format field name
+// (the pre-escape, pre-snake_case source name) unchanged.
+const RUST_KEYWORDS = new Set([
+  "type", "struct", "enum", "fn", "let", "mut", "ref", "self", "super", "crate",
+  "mod", "pub", "use", "impl", "trait", "where", "loop", "while", "for", "if",
+  "else", "match", "return", "break", "continue", "as", "in", "move", "box",
+  "dyn", "abstract", "async", "await", "become", "const", "do", "extern",
+  "final", "macro", "override", "priv", "static", "try", "typeof", "unsafe",
+  "unsized", "virtual", "yield", "union",
+])
+
+/** Escapes a snake_case Rust identifier that collides with a reserved keyword
+ * using raw-identifier syntax (`r#type`); passes non-keyword identifiers through. */
+function escapeRustIdent(rustName: string): string {
+  return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName
+}
+
 function toPascalCase(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9]+(.)?/g, (_m, c: string | undefined) => (c ? c.toUpperCase() : ""))
   return cleaned.length === 0 ? cleaned : cleaned[0]!.toUpperCase() + cleaned.slice(1)
@@ -210,12 +230,13 @@ function buildStruct(name: string, ref: TypeRef, decls: string[]): string {
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
     const rustName = toSnakeCase(fieldName)
+    const ident = escapeRustIdent(rustName)
     const { type, skip } = fieldType(fieldName, fieldRef, decls)
     lines.push(...docComment("    ", fieldRef.meta))
-    if (rustName !== fieldName) lines.push(`    #[serde(rename = ${quote(fieldName)})]`)
+    if (rustName !== fieldName || ident !== rustName) lines.push(`    #[serde(rename = ${quote(fieldName)})]`)
     if (skip) lines.push('    #[serde(skip_serializing_if = "Option::is_none")]')
     if (fieldRef.meta.deprecated === true) lines.push("    #[deprecated]")
-    lines.push(`    pub ${rustName}: ${type},`)
+    lines.push(`    pub ${ident}: ${type},`)
   }
 
   lines.push("}")
@@ -272,10 +293,11 @@ function buildTaggedEnum(name: string, ref: TypeRef, decls: string[]): string {
     lines.push(`    ${variantName} {`)
     for (const [fieldName, fieldRef] of otherFields) {
       const rustName = toSnakeCase(fieldName)
+      const ident = escapeRustIdent(rustName)
       const { type, skip } = fieldType(fieldName, fieldRef, decls)
-      if (rustName !== fieldName) lines.push(`        #[serde(rename = ${quote(fieldName)})]`)
+      if (rustName !== fieldName || ident !== rustName) lines.push(`        #[serde(rename = ${quote(fieldName)})]`)
       if (skip) lines.push('        #[serde(skip_serializing_if = "Option::is_none")]')
-      lines.push(`        ${rustName}: ${type},`)
+      lines.push(`        ${ident}: ${type},`)
     }
     lines.push("    },")
   })
