@@ -26,6 +26,16 @@ export interface TypeKinds {
   // emit) have no ancestor to fall back on and must degrade explicitly
   // (opaque/`Any`-like placeholder) rather than silently rendering an
   // object with no fields.
+  //
+  // NAMING NOTE (flagged, not fixed — renaming a shape field is a breaking
+  // change): `className`/`source` here name the same two concepts —
+  // declared-type name and declaring file path — that the unrelated
+  // `meta.typeName`/`meta.declarationFile` provenance convention documented
+  // below names differently. The two mechanisms serve different purposes
+  // (nominal class-instance identity vs. a named-type reference for codegen
+  // imports) and aren't interchangeable, but the field-name drift
+  // (`source` vs `declarationFile`, `className` vs `typeName`) is worth
+  // aligning if `instance`'s shape is ever revisited pre-1.0.
   instance: {
     readonly kind: "instance"
     readonly className: string
@@ -65,6 +75,15 @@ export interface TypeKinds {
   map: { readonly kind: "map"; readonly key: TypeRef; readonly value: TypeRef }
   union: { readonly kind: "union"; readonly variants: readonly TypeRef[] }
   literal: { readonly kind: "literal"; readonly value: string | number | boolean | null }
+  // A closed set of string members with no associated payload — the same
+  // information a `union` of same-valued `literal` strings would carry, kept
+  // as a distinct kind because most target languages have a native construct
+  // for it (TS/Kotlin/Swift/Rust string enums, protobuf/Cap'n Proto `enum`)
+  // that a projector would rather emit directly than reconstruct by pattern-
+  // matching a literal union. `members` is `readonly string[]` only — numeric
+  // and mixed-type enums (e.g. a TS numeric enum) don't fit this kind and
+  // lower to `union` of `literal` instead (see
+  // `from-typescript.ts`'s union-lowering: search "numeric TS enums").
   enum: { readonly kind: "enum"; readonly members: readonly string[] }
   ref: { readonly kind: "ref"; readonly target: string }
   intersection: { readonly kind: "intersection"; readonly members: readonly TypeRef[] }
@@ -140,6 +159,21 @@ export type TypeRef = {
 //     `import type { typeName } from "…"` (path resolved by the caller,
 //     which alone knows the emitted module's own location) when both are
 //     present, and inline the structural TypeScript rendering otherwise.
+//
+// KNOWN INCONSISTENCY (flagged, not fixed — see TODO.md's "Type-ir semantic
+// types cleanup" entry): `meta.additionalProperties` is used with two
+// type-incompatible meanings by different producers/consumers, both on
+// `object`-kind refs. `compile.ts` and `standard-schema.ts` read it as a
+// boolean closedness flag (`=== false` means "no extra keys allowed", the
+// JSON-Schema-04/07/OpenAPI `additionalProperties: false` convention).
+// `from-json-corpus.ts` instead writes it as a `TypeRef` — the inferred
+// value type for a record's dynamic/varying keys, alongside its stable
+// fields — but no projector currently reads that `TypeRef` form back out
+// (json-schema*.ts/openapi*.ts instead convert an object-with-schema
+// `additionalProperties` straight to `types.map` on ingest, bypassing this
+// meta key entirely). Until this is resolved, treat
+// `meta.additionalProperties` as boolean-only when reading it; the
+// `TypeRef`-valued form `from-json-corpus.ts` produces is inert today.
 
 const parents: Record<string, string | null> = {
   boolean: null,
