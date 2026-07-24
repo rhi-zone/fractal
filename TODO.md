@@ -6,6 +6,16 @@
 
 - **Package names renamed** — `fractal-*` scoped packages now published as `@rhi-zone/fractal-*` for ecosystem consistency. Root `package.json` `comment` field removed.
 
+## Decisions (2026-07-25)
+
+- **npm publishing**: alpha, all packages together. HARD BLOCKER: do not publish until user manually approves everything.
+- **Version strategy**: targeting 0.1.0 (not 1.0) after comprehensive QC + ecosystem comparisons.
+- **Documentation site**: GitHub Pages (matching other rhi-zone projects). Content not ready — needs best-in-class docs before going public. Library being public is a prerequisite for docs being public.
+- **SQL union layout**: `baseTable` option for table-per-variant — proceed with implementation (no downside identified).
+- **JSON inference**: clustering/union splitting design is a blocker for release but no explicit ordering in roadmap. Remains open.
+- **Auth providers**: not discussed — remains parked.
+- **Production codegen extras** (OTel tracing, idempotency keys, webhook validation): investigate feasibility; if tractable, pull into release scope. Aim for comprehensive coverage.
+
 ## Completed this session (2026-07-24)
 
 - **MCP Tier 2 (logging)** — `packages/mcp-api-projector`: `CreateMcpServerOptions.logging` advertises the `logging` server capability and exposes `stores.caller.sendLog` (MCP's `notifications/message`) to tool/resource/prompt handlers, wired to the SDK's own `Server.sendLoggingMessage`. Log-level negotiation (`logging/setLevel`) needed no new code — the SDK's `Server` constructor already registers that handler once the capability is declared and `sendLoggingMessage` already filters against the negotiated per-session minimum. 6 new tests in `server.test.ts` (capability advertisement, field gating, ALS-bridged emission, and a `logging/setLevel` negotiation test proving a below-minimum message is dropped).
@@ -31,7 +41,7 @@
 
 - **Roadmap completion estimate might need verification** — a subagent-run roadmap audit (saved to scratchpad) estimated ~87% overall completion; that number may be generous and hasn't been independently checked. All 15 roadmap slices are still marked NOT GREEN by the user, who noted the project is "NOT remotely close to 1.0-ready."
 
-- **SQL union layout design** — `stiLayout` and `tpvLayout` shipped as composable functions. The `baseTable` option for TPV (shared base table with discriminator + FKs) was discussed but not implemented — might be worth adding as a third built-in layout.
+- **SQL union layout design** — `stiLayout` and `tpvLayout` shipped as composable functions. The `baseTable` option for TPV (shared base table with discriminator + FKs) has been approved for implementation (2026-07-25). Decision: proceed with no downside identified.
 
 - **JSON inference** — parked, not blocked. Design decisions around clustering/union splitting still open.
 
@@ -47,7 +57,7 @@
 
 - **6 unpushed commits on master** — local branch is ahead of `origin/master`; might be worth pushing before further work builds on top.
 
-- **Production-grade codegen: remaining nice-to-have features** — OpenTelemetry tracing, idempotency keys, webhook validation not yet implemented as extensions.
+- **Production-grade codegen: remaining nice-to-have features** — OpenTelemetry tracing, idempotency keys, webhook validation not yet implemented as extensions. Decision (2026-07-25): investigate feasibility; if tractable, pull into release scope with aim for comprehensive coverage.
 
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 
