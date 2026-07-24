@@ -301,7 +301,7 @@ function isTypeRef(v: unknown): v is TypeRef {
  * `interface.methods`). `ref.target` is a plain string, not a TypeRef, so refs
  * contribute no children here — walking root+defs can never cycle structurally.
  */
-function childTypeRefs(shape: TypeShape): TypeRef[] {
+export function childTypeRefs(shape: TypeShape): TypeRef[] {
   const out: TypeRef[] = []
   for (const value of Object.values(shape)) {
     if (isTypeRef(value)) {
