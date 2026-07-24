@@ -17,19 +17,31 @@
 
 *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
 
-- **More library variants** — the matrix is still wide. Kotlin/Jackson, Go/easyjson, and Ruby/dry-types shipped this session (commits `f38bc68`, `cb9f8fa`, `6937e37`); still open: C++ (RapidJSON, simdjson, Boost.JSON, glaze), Java (Jakarta JSON-B), Python (Pydantic, msgspec), Kotlin (Gson), Swift (SwiftyJSON, ObjectMapper), Go (jsoniter, sonic), Ruby (RBS), Dart (built_value), PHP (Symfony Serializer, JMS Serializer). Mechanical expansion, well-understood pattern.
+- **Remaining library variants** — most of the previously-tracked matrix shipped this session (C++ RapidJSON/simdjson/Boost.JSON/glaze, Go jsoniter/sonic, Swift SwiftyJSON/ObjectMapper, Python msgspec/cattrs, Ruby RBS, Dart built_value, Java JSON-B, Kotlin Gson, C# ServiceStack, PHP Symfony/JMS). Python Pydantic variant might still be open.
+
+- **compile-check.test.ts has 9 `test.todo` items** citing real projector bugs surfaced by compilation: keyword escaping in rust-serde, union name collisions in cpp-nlohmann/haskell-aeson, missing `Type.Recursive` in typescript-typebox, python-attrs field ordering, objc-foundation unboxed primitives, capnp/flatbuffers tuple/nested-vector wrapping.
+
+- **Several serialization variant compile checks are skipped** (Java/Kotlin/C#/Dart/Elm) because they need package registries (Maven, NuGet, pub.dev) — might need a different CI approach or containerized builds.
+
+- **cross-projector.test.ts typecheck** — pre-existing `test.todo` line has an arg-count mismatch (bun-types expects 2-3 args, code passes 1). Looks like a minor fixable issue, not blocking.
+
+- **Roadmap completion estimate might need verification** — a subagent-run roadmap audit (saved to scratchpad) estimated ~87% overall completion; that number may be generous and hasn't been independently checked. All 15 roadmap slices are still marked NOT GREEN by the user, who noted the project is "NOT remotely close to 1.0-ready."
 
 - **SQL union layout design** — `stiLayout` and `tpvLayout` shipped as composable functions. The `baseTable` option for TPV (shared base table with discriminator + FKs) was discussed but not implemented — might be worth adding as a third built-in layout.
 
-- **cross-projector.test.ts typecheck** — pre-existing `test.todo` signature mismatch (bun-types expects 2-3 args, code passes 1). Minor, not blocking.
-
 - **JSON inference** — parked, not blocked. Design decisions around clustering/union splitting still open.
+
+- **Ecosystem-native doc generators** — TypeDoc, Sphinx, rustdoc, Javadoc, etc. Scope still open.
+
+- **Language source ingestion** — TypeScript source → TypeRef, Python source → TypeRef, and similar for other languages. Still open, not started.
 
 - **`moveTo` resolution in `HttpManifest`** — wildcard `"*"` token's synthesized `:param` name can diverge from another leaf's authored `fallback.name` at the same converged position. Per-leaf type information can't see whole-tree facts, creating a potential naming mismatch in the manifest.
 
-- **TAG_STREAMING wiring for HTTP/CLI/MCP projectors** — they work from JSON Schema (not TypeRef), so `stream` kind info is lost. Need separate plumbing or carry `stream` through JSON Schema degrade.
+- **TAG_STREAMING wiring for MCP projector** — HTTP and CLI got stream/page kind propagation this session; MCP still works from JSON Schema (not TypeRef), so `stream` kind info may still be lost there. Might need the same plumbing, or a way to carry `stream` through the JSON Schema degrade.
 
-- **Auth provider-specific packages** — adapter contract shipped, OIDC generic package shipped. Provider-specific packages (Clerk, Auth0, Supabase, Firebase, Cognito) are thin wrappers on top — community or fractal-maintained.
+- **Auth provider-specific packages** — adapter contract shipped, OIDC generic package shipped. Provider-specific packages (Clerk, Auth0, Supabase, Firebase, Cognito) not started — thin wrappers on top, could be community or fractal-maintained.
+
+- **6 unpushed commits on master** — local branch is ahead of `origin/master`; might be worth pushing before further work builds on top.
 
 - **Production-grade codegen: remaining nice-to-have features** — OpenTelemetry tracing, idempotency keys, webhook validation not yet implemented as extensions.
 
