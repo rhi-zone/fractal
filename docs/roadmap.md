@@ -674,7 +674,11 @@ What exists:
 - Core tree model (`packages/api-tree`) — `api`, `op`, `Node`, `Meta`,
   `mergeMeta`, tags lattice, extraction from TypeScript source
   (`extract.ts`), build orchestration (`build.ts`), and a
-  `fractal-api-tree` CLI (`build`/`watch`/`stub`/`check`).
+  `fractal-api-tree` CLI (`build`/`watch`/`stub`/`check`). Also the
+  shared input-assembly core (`assemble()`/`Stores`/`SourceMap` in
+  `input.ts`) — HTTP, CLI, and MCP projectors all build their own named
+  stores and primary-store convention, then resolve params through this
+  one function rather than each re-implementing the merge.
 - HTTP projector (`packages/http-api-projector`) — verb-helper bundles
   (`http.get/post/put/patch/delete/head/options`), `http.moveTo`,
   `http.source()` (per-param store overrides — a type-safe `sourceMap`
@@ -711,8 +715,6 @@ What's planned / open (per `TODO.md`):
   GraphQL alone has it wired.
 - CLI and MCP still walk the raw `Node` tree directly rather than
   through the `Node ⇒ ProtocolType` projection pattern HTTP/type-ir use.
-- CLI/MCP input-pipeline consolidation onto the shared `assemble()`
-  core is unstarted (each still has its own implementation).
 - No dedicated declaration for an operation's possible error kinds in
   the tree/meta itself (error mapping is projector-level config today).
 - A JSON-RPC projector — no `packages/json-rpc-api-projector` (or
