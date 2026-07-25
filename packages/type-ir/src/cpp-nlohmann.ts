@@ -1,6 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 
-// packages/type-ir/src/cpp.ts — @rhi-zone/fractal-type-ir/cpp
+// packages/type-ir/src/cpp-nlohmann.ts — @rhi-zone/fractal-type-ir/cpp-nlohmann
 //
 // TypeRef -> C++17 struct/enum-class declarations with nlohmann/json
 // (https://github.com/nlohmann/json) serialization support. Unlike

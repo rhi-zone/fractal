@@ -8,8 +8,7 @@ format bundled with Ruby 3+).
 ## Sorbet
 
 ```ts
-import { toRuby } from "@rhi-zone/fractal-type-ir/ruby"
-// or: import { toRuby } from "@rhi-zone/fractal-type-ir/ruby-sorbet"
+import { toRuby } from "@rhi-zone/fractal-type-ir/ruby-sorbet"
 
 toRuby(t(types.object({
   id: t(types.string),

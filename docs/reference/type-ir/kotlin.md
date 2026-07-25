@@ -10,8 +10,7 @@ inclusion semantics differ.
 ## kotlinx.serialization
 
 ```ts
-import { toKotlin } from "@rhi-zone/fractal-type-ir/kotlin"
-// or: import { toKotlin } from "@rhi-zone/fractal-type-ir/kotlin-kotlinx"
+import { toKotlin } from "@rhi-zone/fractal-type-ir/kotlin-kotlinx"
 
 toKotlin(t(types.object({
   id: t(types.integer),

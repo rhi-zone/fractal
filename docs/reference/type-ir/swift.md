@@ -11,8 +11,7 @@ struct/enum literal syntax), same convention across all three.
 ## Codable
 
 ```ts
-import { toSwift } from "@rhi-zone/fractal-type-ir/swift"
-// or: import { toSwift } from "@rhi-zone/fractal-type-ir/swift-codable"
+import { toSwift } from "@rhi-zone/fractal-type-ir/swift-codable"
 
 toSwift(t(types.object({
   id: t(types.integer),

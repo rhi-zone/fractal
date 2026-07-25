@@ -11,8 +11,7 @@ vocabulary differs between variants.
 ## Jackson
 
 ```ts
-import { toJava } from "@rhi-zone/fractal-type-ir/java"
-// or: import { toJava } from "@rhi-zone/fractal-type-ir/java-jackson"
+import { toJava } from "@rhi-zone/fractal-type-ir/java-jackson"
 
 toJava(t(types.object({
   id: t(types.integer),

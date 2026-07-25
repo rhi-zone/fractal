@@ -1,6 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 
-// packages/type-ir/src/go.ts — @rhi-zone/fractal-type-ir/go
+// packages/type-ir/src/go-encoding-json.ts — @rhi-zone/fractal-type-ir/go-encoding-json
 //
 // TypeRef -> idiomatic Go type declarations (structs with `json` tags, slices,
 // maps, string-backed const enums, pointer-for-optional fields, and a

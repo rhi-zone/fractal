@@ -14,8 +14,7 @@ unions render differently.
 ## encoding/json
 
 ```ts
-import { toGo } from "@rhi-zone/fractal-type-ir/go"
-// or: import { toGo } from "@rhi-zone/fractal-type-ir/go-encoding-json"
+import { toGo } from "@rhi-zone/fractal-type-ir/go-encoding-json"
 
 toGo(t(types.object({
   id: t(types.integer),

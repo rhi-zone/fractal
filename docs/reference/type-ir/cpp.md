@@ -10,8 +10,7 @@ forward-declaration ordering.
 ## nlohmann/json
 
 ```ts
-import { toCpp } from "@rhi-zone/fractal-type-ir/cpp"
-// or: import { toCpp } from "@rhi-zone/fractal-type-ir/cpp-nlohmann"
+import { toCpp } from "@rhi-zone/fractal-type-ir/cpp-nlohmann"
 
 toCpp(t(types.object({
   id: t(types.string),

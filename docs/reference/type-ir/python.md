@@ -12,7 +12,7 @@ string.
 
 ```ts
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toPython } from "@rhi-zone/fractal-type-ir/python"
+import { toPython } from "@rhi-zone/fractal-type-ir/python-dataclass"
 
 const user = t(types.object({ id: t(types.string), age: t(types.integer) }))
 toPython(user, "User")

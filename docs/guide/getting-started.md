@@ -79,7 +79,7 @@ Independent of the API tree, `@rhi-zone/fractal-type-ir` projects a `TypeRef` â€
 ```ts
 import { t, types } from "@rhi-zone/fractal-type-ir"
 import { toZod } from "@rhi-zone/fractal-type-ir/zod"
-import { toPython } from "@rhi-zone/fractal-type-ir/python"
+import { toPython } from "@rhi-zone/fractal-type-ir/python-dataclass"
 
 const book = t(types.object({
   id: t(types.string),

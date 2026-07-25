@@ -7,8 +7,7 @@ and (de)serialization mechanism differ.
 ## Native (JsonSerializable)
 
 ```ts
-import { toPhp } from "@rhi-zone/fractal-type-ir/php"
-// or: import { toPhp } from "@rhi-zone/fractal-type-ir/php-native"
+import { toPhp } from "@rhi-zone/fractal-type-ir/php-native"
 
 toPhp(t(types.object({
   id: t(types.string),

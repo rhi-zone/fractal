@@ -7,8 +7,7 @@ Dart has no nested-class construct, so in every variant a nested
 ## json_serializable
 
 ```ts
-import { toDart } from "@rhi-zone/fractal-type-ir/dart"
-// or: import { toDart } from "@rhi-zone/fractal-type-ir/dart-json-serializable"
+import { toDart } from "@rhi-zone/fractal-type-ir/dart-json-serializable"
 
 toDart(t(types.object({
   id: t(types.string),

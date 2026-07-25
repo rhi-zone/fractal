@@ -1,6 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 
-// packages/type-ir/src/swift.ts — @rhi-zone/fractal-type-ir/swift
+// packages/type-ir/src/swift-codable.ts — @rhi-zone/fractal-type-ir/swift-codable
 //
 // TypeRef -> idiomatic Swift type declarations (Codable structs/enums).
 // Mirrors typescript.ts's/protobuf.ts's projector shape: a `kind`-keyed

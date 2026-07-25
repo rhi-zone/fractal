@@ -12,8 +12,7 @@ polymorphism strategy — differs.
 ## System.Text.Json
 
 ```ts
-import { toCSharp } from "@rhi-zone/fractal-type-ir/csharp"
-// or: import { toCSharp } from "@rhi-zone/fractal-type-ir/csharp-systemtextjson"
+import { toCSharp } from "@rhi-zone/fractal-type-ir/csharp-systemtextjson"
 
 toCSharp(t(types.object({
   id: t(types.integer),

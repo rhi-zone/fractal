@@ -92,6 +92,10 @@
       "types": "./src/from-typescript.ts",
       "import": "./src/from-typescript.ts"
     },
+    "./from-flow": {
+      "types": "./src/from-flow.ts",
+      "import": "./src/from-flow.ts"
+    },
     "./jsdoc": {
       "types": "./src/jsdoc.ts",
       "import": "./src/jsdoc.ts"
@@ -144,10 +148,6 @@
       "types": "./src/elm-json.ts",
       "import": "./src/elm-json.ts"
     },
-    "./go": {
-      "types": "./src/go-encoding-json.ts",
-      "import": "./src/go-encoding-json.ts"
-    },
     "./go-encoding-json": {
       "types": "./src/go-encoding-json.ts",
       "import": "./src/go-encoding-json.ts"
@@ -172,10 +172,6 @@
       "types": "./src/haskell-aeson.ts",
       "import": "./src/haskell-aeson.ts"
     },
-    "./dart": {
-      "types": "./src/dart-json-serializable.ts",
-      "import": "./src/dart-json-serializable.ts"
-    },
     "./dart-json-serializable": {
       "types": "./src/dart-json-serializable.ts",
       "import": "./src/dart-json-serializable.ts"
@@ -195,10 +191,6 @@
     "./objc-foundation": {
       "types": "./src/objc-foundation.ts",
       "import": "./src/objc-foundation.ts"
-    },
-    "./cpp": {
-      "types": "./src/cpp-nlohmann.ts",
-      "import": "./src/cpp-nlohmann.ts"
     },
     "./cpp-nlohmann": {
       "types": "./src/cpp-nlohmann.ts",
@@ -220,10 +212,6 @@
       "types": "./src/cpp-glaze.ts",
       "import": "./src/cpp-glaze.ts"
     },
-    "./csharp": {
-      "types": "./src/csharp-systemtextjson.ts",
-      "import": "./src/csharp-systemtextjson.ts"
-    },
     "./csharp-systemtextjson": {
       "types": "./src/csharp-systemtextjson.ts",
       "import": "./src/csharp-systemtextjson.ts"
@@ -243,10 +231,6 @@
     "./crystal-json-serializable": {
       "types": "./src/crystal-json-serializable.ts",
       "import": "./src/crystal-json-serializable.ts"
-    },
-    "./python": {
-      "types": "./src/python-dataclass.ts",
-      "import": "./src/python-dataclass.ts"
     },
     "./python-dataclass": {
       "types": "./src/python-dataclass.ts",
@@ -276,10 +260,6 @@
       "types": "./src/flow-native.ts",
       "import": "./src/flow-native.ts"
     },
-    "./swift": {
-      "types": "./src/swift-codable.ts",
-      "import": "./src/swift-codable.ts"
-    },
     "./swift-codable": {
       "types": "./src/swift-codable.ts",
       "import": "./src/swift-codable.ts"
@@ -300,10 +280,6 @@
       "types": "./src/rust-serde.ts",
       "import": "./src/rust-serde.ts"
     },
-    "./ruby": {
-      "types": "./src/ruby-sorbet.ts",
-      "import": "./src/ruby-sorbet.ts"
-    },
     "./ruby-sorbet": {
       "types": "./src/ruby-sorbet.ts",
       "import": "./src/ruby-sorbet.ts"
@@ -315,10 +291,6 @@
     "./ruby-rbs": {
       "types": "./src/ruby-rbs.ts",
       "import": "./src/ruby-rbs.ts"
-    },
-    "./php": {
-      "types": "./src/php-native.ts",
-      "import": "./src/php-native.ts"
     },
     "./php-native": {
       "types": "./src/php-native.ts",
@@ -332,10 +304,6 @@
       "types": "./src/php-jms.ts",
       "import": "./src/php-jms.ts"
     },
-    "./kotlin": {
-      "types": "./src/kotlin-kotlinx.ts",
-      "import": "./src/kotlin-kotlinx.ts"
-    },
     "./kotlin-kotlinx": {
       "types": "./src/kotlin-kotlinx.ts",
       "import": "./src/kotlin-kotlinx.ts"
@@ -347,10 +315,6 @@
     "./kotlin-gson": {
       "types": "./src/kotlin-gson.ts",
       "import": "./src/kotlin-gson.ts"
-    },
-    "./java": {
-      "types": "./src/java-jackson.ts",
-      "import": "./src/java-jackson.ts"
     },
     "./java-jackson": {
       "types": "./src/java-jackson.ts",
@@ -523,6 +487,7 @@
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
+    "flow-parser": "^0.324.0",
     "graphql": "^16.9.0"
   },
   "peerDependencies": {

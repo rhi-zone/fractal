@@ -255,25 +255,26 @@ subpath entry in `package.json`'s `exports` map).
 
 Note — projector naming convention: modules now follow a
 `{language}-{library}.ts` naming scheme (e.g. `typescript-zod.ts`,
-`rust-serde.ts`, `python-dataclass.ts`) instead of a bare language name,
-anticipating the "Per-Language Serialization Library Variants" slice
-below where a single language will have more than one projector. Each
-renamed module keeps a backward-compatible `exports` alias at the old
-bare-language path (e.g. `./python` and `./python-dataclass` both
-resolve to `python-dataclass.ts`) — confirmed for Python, Go, Rust,
-Swift, Kotlin, Dart, Elm, Haskell, Ruby, C++, PHP, Crystal, Objective-C,
-and Flow. Java has neither the bare alias nor the qualified path
-exported (see above).
+`rust-serde.ts`, `python-dataclass.ts`) instead of a bare language name.
+Decided (2026-07-25): a bare `./{language}` `exports` alias is kept
+**only** for languages with exactly one serialization-library
+projector, where it is unambiguous — Rust (`serde`), Haskell (`aeson`),
+Elm (`elm-json`), Crystal (`json_serializable`), Objective-C
+(`Foundation`), Flow (native), and TypeScript (source-ingestion
+native). For every language with more than one variant — C++, C#,
+Dart, Go, Java, Kotlin, PHP, Python, Ruby, Swift — the bare alias has
+been removed; consumers must import the explicit
+`./{language}-{library}` path (e.g. `./java-jackson`, `./python-dataclass`).
+No unqualified path silently "wins" for a multi-variant language.
 
 Acceptance criteria for green:
 - Every language in the 1.0 scope list has a source module, a test
   suite, and a published export subpath — all sixteen of sixteen now
   complete (Java's `exports` entry was added in a prior session).
-- The bare-language `exports` aliases audited for completeness once the
-  serialization-library-variants slice lands, since a language with
-  multiple libraries can no longer have its bare name mean only one of
-  them by default without an explicit decision on which library "wins"
-  the unqualified path.
+- Bare-language `exports` aliases removed for every language with more
+  than one serialization-library variant — done (2026-07-25); see the
+  "Per-Language Serialization Library Variants" slice below for the
+  bare-alias decision itself.
 - A decision on whether all sixteen are truly 1.0-blocking, or whether
   a subset ships in 1.0 with the rest following after, is open and
   belongs to the project owner.
@@ -382,11 +383,12 @@ Acceptance criteria for green:
 - Each new variant follows the same "verify against the real runtime"
   bar as the TypeScript validation library slice, not just structural
   assertions on generated code.
-- A decision on whether the bare `{language}` `exports` alias should
-  keep pointing at the original/default library once a second variant
-  exists, or whether the bare alias should be deprecated in favor of
-  always requiring the qualified `{language}-{library}` path — currently
-  open, belongs to the project owner (see the note on this in the
+- Decided (2026-07-25): the bare `{language}` `exports` alias is
+  removed once a language has more than one serialization-library
+  variant — no default library "wins" the unqualified path. Consumers
+  of a multi-variant language always import the qualified
+  `{language}-{library}` path. Closed for C++, C#, Dart, Go, Java,
+  Kotlin, PHP, Python, Ruby, Swift (see the note on this in the
   General-Purpose Languages slice above).
 - Scope call on which languages' single existing library (Rust/serde,
   Swift/Codable) are exempted as "already the de facto standard" versus
