@@ -674,6 +674,22 @@ function walkAndDetectDU(ref: TypeRef, node: EvidenceNode): TypeRef {
   }
 
   if (shape.kind === "object") {
+    // `tryDetectDU` needs the raw object samples that produced this
+    // position's merged type, not just the merged type itself — the same
+    // thing `node.array.elementObjects` supplies for array elements. There's
+    // no equivalent pre-filtered bucket for object-typed positions (root,
+    // an object field, a map value, …), because `EvidenceNode.object` only
+    // carries per-field sub-evidence, not the raw per-sample objects. Derive
+    // it here from `node.values` — mirrors the same filter
+    // `trySplitDissimilarObjects` uses to recover raw samples from a node.
+    // This is what makes DU detection fire for a corpus whose union members
+    // sit directly at a position instead of nested inside an array field.
+    const objectSamples = node.values.filter(
+      (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
+    )
+    const du = tryDetectDU(ref, objectSamples)
+    if (du !== null) return withMeta(du, ref.meta)
+
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {

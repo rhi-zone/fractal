@@ -233,6 +233,55 @@ describe("discriminated union detection", () => {
       expect(fields.type!.shape.kind).toBe("literal")
     }
   })
+
+  test("top-level corpus values (not nested in an array field) with discriminant field", () => {
+    // Same shapes as the array-of-objects case above, but the union members
+    // ARE the corpus this time — no wrapping array field. `tryDetectDU` used
+    // to only ever get called from the `array` branch of `walkAndDetectDU`
+    // (fed by `node.array.elementObjects`), so this shape of corpus never
+    // reached DU detection at all and fell through to a single merged
+    // optional-everything object.
+    const values = [
+      { type: "circle", radius: 5 },
+      { type: "rect", width: 3, height: 4 },
+      { type: "circle", radius: 10 },
+      { type: "rect", width: 6, height: 8 },
+      { type: "circle", radius: 2 },
+      { type: "rect", width: 1, height: 1 },
+      { type: "circle", radius: 7 },
+      { type: "rect", width: 9, height: 12 },
+    ]
+    const result = fromJsonCorpus(values)
+    expect(result.shape.kind).toBe("union")
+    expect(result.meta.discriminator).toBe("type")
+    const variants = (result.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants.length).toBe(2)
+    for (const v of variants) {
+      const fields = (v.shape as { fields: Record<string, TypeRef> }).fields
+      expect(fields.type!.shape.kind).toBe("literal")
+    }
+  })
+
+  test("DU detection fires for an object field position, not just array elements or the root", () => {
+    // Generalizes the previous case one level further: the mixed-shape
+    // union members sit at an object-field position (`payload`), neither
+    // the corpus root nor inside an array.
+    const values = [
+      { payload: { type: "circle", radius: 5 } },
+      { payload: { type: "rect", width: 3, height: 4 } },
+      { payload: { type: "circle", radius: 10 } },
+      { payload: { type: "rect", width: 6, height: 8 } },
+      { payload: { type: "circle", radius: 2 } },
+      { payload: { type: "rect", width: 1, height: 1 } },
+    ]
+    const result = fromJsonCorpus(values)
+    expect(result.shape.kind).toBe("object")
+    const fields = (result.shape as { fields: Record<string, TypeRef> }).fields
+    expect(fields.payload!.shape.kind).toBe("union")
+    expect(fields.payload!.meta.discriminator).toBe("type")
+    const variants = (fields.payload!.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants.length).toBe(2)
+  })
 })
 
 describe("structural union splitting (no discriminant field)", () => {
