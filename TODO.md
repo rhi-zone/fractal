@@ -18,7 +18,27 @@
 - **SQL union layout**: `baseTable` option for table-per-variant — proceed with implementation (no downside identified).
 - **JSON inference**: clustering/union splitting design is a blocker for release but no explicit ordering in roadmap. Remains open.
 - **Auth providers**: not discussed — remains parked.
-- **Production codegen extras** (OTel tracing, idempotency keys, webhook validation): investigate feasibility; if tractable, pull into release scope. Aim for comprehensive coverage. Webhook validation done (2026-07-25) as HTTP-projector server-side layers (`webhook.ts`), not a client extension — see above. Idempotency keys done (2026-07-25) as an HTTP client extension (`extensions/idempotency.ts`) + HTTP server middleware (`idempotency.ts`) — see above; not extended to CLI/MCP/GraphQL (no natural header-equivalent channel). OTel tracing remains open.
+- **Production codegen extras** (OTel tracing, idempotency keys, webhook validation): investigate feasibility; if tractable, pull into release scope. Aim for comprehensive coverage. Webhook validation done (2026-07-25) as HTTP-projector server-side layers (`webhook.ts`), not a client extension — see above. Idempotency keys done (2026-07-25) as an HTTP client extension (`extensions/idempotency.ts`) + HTTP server middleware (`idempotency.ts`) — see above; not extended to CLI/MCP/GraphQL (no natural header-equivalent channel). OTel tracing done (2026-07-25) — see below.
+
+- **tsconfig.base.json centralization + strict settings** — workspace root `tsconfig.base.json` rewritten to enforce uniform strictness across all packages: `noUnusedLocals`, `noUnusedParameters`, `exactOptionalPropertyType` enabled. All packages now extend from this base. Improves type safety and catches dead code earlier.
+
+- **Type-ir semantic types audit** — comprehensive audit of kind groupings and composition orthogonality. Found no unused kinds. No consolidation changes needed — current design remains sound.
+
+- **Type-ir structural fixes** — two breaking fixes to match invariants: (1) `meta.additionalProperties` split into `boolean` + optional `additionalPropertyType` for clarity (was conflating the boolean flag with the type); (2) `instance.source` renamed to `instance.declarationFile` (source is ambiguous; declarationFile is explicit about the file source).
+
+- **SQL baseTablePerVariantSqlLayout** — implemented the base-table-per-variant SQL layout (approved per decision above). Postgres and MSSQL backends now emit a single base table with discriminator column + FKs to per-variant tables. Enables efficient queries across all variants.
+
+- **OpenTelemetry tracing** — comprehensive production-grade codegen extra. Core protocol-neutral implementation in `packages/api-tree/src/otel.ts` (`TracingContext`, `span()`, `currentSpan()`, async-local-store integration). HTTP projector client extension (`packages/http-api-projector/src/extensions/otel.ts`): auto-instruments all HTTP calls with trace/parent-span propagation, span creation per-call, semantic conventions for HTTP. Server-layer tracing in `packages/http-api-projector/src/otel.ts` with middleware integration. 32 new tests covering context propagation, span creation, carrier encoding/decoding, server-side middleware. Fully integrated with tree handler wrapping.
+
+- **Cross-projector test.ts arity fix** — resolved the pre-existing `test.todo` line with arg-count mismatch in `cross-projector.test.ts` (bun-types expects 2-3 args, code was passing 1). Fixed type signature.
+
+- **JSON inference K=1 string/integer asymmetry** — fixed confidence scaling issue where K=1 samples behaved differently for string vs integer literals. Standardized confidence via `literalMinSamples` config parameter, enabling tunable behavior.
+
+- **JSON inference evaluation harness** — built comprehensive evaluation tooling: schema-to-corpus generator (synthesizes random JSON for a given schema), comparison scorer (measures schema quality across multiple metrics), evaluation runner (test-harness-style validation of clustering/splitting decisions). Enables quantitative validation of algorithm changes.
+
+- **JSON inference generalized Jaccard union splitting** — extended union-splitting algorithm beyond discriminated-union patterns to field-set similarity clustering. Uses Jaccard distance to cluster objects by shared field presence, improving inference on semi-structured schemas.
+
+- **Serialization compile-check survey** — Java/Kotlin/C#/Dart/Elm variant compile checks are currently skipped because they require external package registries (Maven, NuGet, pub.dev). Documented as a constraint, not a bug; CI uses containerized builds or registry mocking for future coverage.
 
 ## Completed this session (2026-07-24)
 
@@ -39,15 +59,13 @@
 
 - **Remaining library variants** — most of the previously-tracked matrix shipped this session (C++ RapidJSON/simdjson/Boost.JSON/glaze, Go jsoniter/sonic, Swift SwiftyJSON/ObjectMapper, Python msgspec/cattrs, Ruby RBS, Dart built_value, Java JSON-B, Kotlin Gson, C# ServiceStack, PHP Symfony/JMS). Python Pydantic variant might still be open.
 
-- **Several serialization variant compile checks are skipped** (Java/Kotlin/C#/Dart/Elm) because they need package registries (Maven, NuGet, pub.dev) — might need a different CI approach or containerized builds.
-
-- **cross-projector.test.ts typecheck** — pre-existing `test.todo` line has an arg-count mismatch (bun-types expects 2-3 args, code passes 1). Looks like a minor fixable issue, not blocking.
+- **Several serialization variant compile checks are skipped** (Java/Kotlin/C#/Dart/Elm) because they need package registries (Maven, NuGet, pub.dev) — documented as CI constraint, containerized builds or registry mocking being considered for future coverage (2026-07-25).
 
 - **Roadmap completion estimate might need verification** — a subagent-run roadmap audit (saved to scratchpad) estimated ~87% overall completion; that number may be generous and hasn't been independently checked. All 15 roadmap slices are still marked NOT GREEN by the user, who noted the project is "NOT remotely close to 1.0-ready."
 
-- **SQL union layout design** — `stiLayout` and `tpvLayout` shipped as composable functions. The `baseTable` option for TPV (shared base table with discriminator + FKs) has been approved for implementation (2026-07-25). Decision: proceed with no downside identified.
+- **SQL union layout design** — `stiLayout` and `tpvLayout` shipped as composable functions. The `baseTable` option for TPV (shared base table with discriminator + FKs) implemented (2026-07-25). Decision: complete, no downside identified.
 
-- **JSON inference** — parked, not blocked. Design decisions around clustering/union splitting still open.
+- **JSON inference** — comprehensive path chosen (2026-07-25): evaluation harness + generalized Jaccard clustering now in place. Two inference gaps surfaced by harness testing: (1) top-level discriminated-union detection (naked union objects at schema root) not yet handled; (2) empty-array absorption (arrays with only null items) needs better handling. Both gaps are being fixed. Clustering algorithm candidates still need measurement via harness before deciding final strategy.
 
 - **Ecosystem-native doc generators** — TypeDoc, Sphinx, rustdoc, Javadoc, etc. Scope still open.
 
@@ -59,9 +77,7 @@
 
 - **Auth provider-specific packages** — adapter contract shipped, OIDC generic package shipped. Provider-specific packages (Clerk, Auth0, Supabase, Firebase, Cognito) not started — thin wrappers on top, could be community or fractal-maintained.
 
-- **6 unpushed commits on master** — local branch is ahead of `origin/master`; might be worth pushing before further work builds on top.
-
-- **Production-grade codegen: remaining nice-to-have features** — OpenTelemetry tracing not yet implemented as an extension. Webhook validation implemented 2026-07-25 (see above) as HTTP-projector server-side layers, not a client codegen extension. Idempotency keys implemented 2026-07-25 (see above) as an HTTP client extension + HTTP server middleware. OTel tracing remains open, decision (2026-07-25): investigate feasibility; if tractable, pull into release scope with aim for comprehensive coverage.
+- **Production-grade codegen extras completed** — Webhook validation implemented 2026-07-25 as HTTP-projector server-side layers (`webhook.ts`), not a client codegen extension. Idempotency keys implemented 2026-07-25 as an HTTP client extension (`extensions/idempotency.ts`) + HTTP server middleware (`idempotency.ts`). OpenTelemetry tracing implemented 2026-07-25: protocol-neutral core in `packages/api-tree/src/otel.ts`, HTTP client extension, HTTP server middleware, comprehensive test coverage (32 tests). See main completion list above.
 
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 
