@@ -94,6 +94,21 @@
             gnustep-base
             gnustep-make
 
+            # Elixir (Jason projector) — staged for a future real compile
+            # check, not wired up yet: unlike Ruby's `ruby -c` (a true
+            # parse-only check that never expands macros), Elixir has no
+            # syntax-only mode — `@derive Jason.Encoder` is a compile-time
+            # macro that dispatches into the real `Jason.Encoder` protocol
+            # during compilation, so `elixirc` can't even parse-check the
+            # generated struct module without the `jason` Hex package
+            # resolvable on the code path. nixpkgs ships plain `elixir` here
+            # (no curated Hex package set the way `haskellPackages.ghcWithPackages`
+            # curates Haskell's), so `jason` would need `mix`-based dependency
+            # fetching (network access + a `mix.exs` project) that isn't
+            # vendored/wired up here yet — see compile-check.test.ts's
+            # elixir-jason skip comment for the exact follow-up.
+            beamPackages.elixir
+
             # Schema/IDL compilers used to validate generated wire-format code
             protobuf # protoc
             capnproto # capnp

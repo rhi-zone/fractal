@@ -34,6 +34,7 @@ import { toElm } from "./elm-json.ts"
 import { toFlow } from "./flow-native.ts"
 import { toPhp } from "./php-native.ts"
 import { toRuby } from "./ruby-sorbet.ts"
+import { toElixir } from "./elixir-jason.ts"
 import { toTypeDeclaration } from "./typescript-native.ts"
 import { toArkTypeDeclaration } from "./typescript-arktype.ts"
 import { toEffectSchemaDeclaration } from "./typescript-effect-schema.ts"
@@ -104,6 +105,7 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
   { name: "elm-json", fn: (ref, name) => toElm(ref, name) },
   { name: "php-native", fn: (ref, name) => toPhp(ref, name) },
   { name: "ruby-sorbet", fn: (ref, name) => toRuby(ref, name) },
+  { name: "elixir-jason", fn: (ref, name) => toElixir(ref, name) },
   { name: "json-schema", fn: (ref) => JSON.stringify(toJsonSchema(ref)) },
   { name: "json-schema-04", fn: (ref) => JSON.stringify(toJsonSchema04(ref)) },
   { name: "json-schema-07", fn: (ref) => JSON.stringify(toJsonSchema07(ref)) },

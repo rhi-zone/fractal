@@ -224,8 +224,13 @@ Acceptance criteria for green:
 
 **Status: NOT GREEN**
 
-All sixteen general-purpose target languages now have an implemented,
-tested projector. Current state, audited directly against
+All seventeen general-purpose target languages now have an implemented,
+tested projector — Elixir (`elixir-jason.ts`) joined the list on
+2026-07-25, the first Elixir projector in this package (previously
+scoped as "not currently a 1.0-scope language" pending an owner
+decision — see "Per-Language Serialization Library Variants" below for
+that decision's history; the owner has now approved Elixir entering the
+list). Current state, audited directly against
 `packages/type-ir/src/` and each package's `package.json` `exports` map:
 
 | Language | Source module | Tests | Test count | Published export |
@@ -247,6 +252,7 @@ tested projector. Current state, audited directly against
 | Crystal | `crystal-json-serializable.ts` | yes | 43 | yes |
 | Objective-C | `objc-foundation.ts` | yes | 26 | yes |
 | Flow | `flow-native.ts` | yes | 36 | yes |
+| Elixir | `elixir-jason.ts` | yes | 42 | yes |
 
 Test counts are `it(`/`test(` occurrences in each module's `.test.ts`
 file, as a rough size signal, not a quality measure. Every module here
@@ -260,8 +266,9 @@ Decided (2026-07-25): a bare `./{language}` `exports` alias is kept
 **only** for languages with exactly one serialization-library
 projector, where it is unambiguous — Rust (`serde`), Haskell (`aeson`),
 Elm (`elm-json`), Crystal (`json_serializable`), Objective-C
-(`Foundation`), Flow (native), and TypeScript (source-ingestion
-native). For every language with more than one variant — C++, C#,
+(`Foundation`), Flow (native), Elixir (`jason`), and TypeScript
+(source-ingestion native). For every language with more than one
+variant — C++, C#,
 Dart, Go, Java, Kotlin, PHP, Python, Ruby, Swift — the bare alias has
 been removed; consumers must import the explicit
 `./{language}-{library}` path (e.g. `./java-jackson`, `./python-dataclass`).
@@ -269,15 +276,16 @@ No unqualified path silently "wins" for a multi-variant language.
 
 Acceptance criteria for green:
 - Every language in the 1.0 scope list has a source module, a test
-  suite, and a published export subpath — all sixteen of sixteen now
-  complete (Java's `exports` entry was added in a prior session).
+  suite, and a published export subpath — all seventeen of seventeen
+  now complete (Java's `exports` entry was added in a prior session;
+  Elixir added 2026-07-25).
 - Bare-language `exports` aliases removed for every language with more
   than one serialization-library variant — done (2026-07-25); see the
   "Per-Language Serialization Library Variants" slice below for the
   bare-alias decision itself.
-- A decision on whether all sixteen are truly 1.0-blocking, or whether
-  a subset ships in 1.0 with the rest following after, is open and
-  belongs to the project owner.
+- A decision on whether all seventeen are truly 1.0-blocking, or
+  whether a subset ships in 1.0 with the rest following after, is open
+  and belongs to the project owner.
 
 ---
 
@@ -333,10 +341,11 @@ under the `{language}-{library}` convention):
 - Dart — `json_serializable` (`dart-json-serializable.ts`)
 - PHP — native (`php-native.ts`)
 - C++ — nlohmann/json (`cpp-nlohmann.ts`)
-- Crystal, Objective-C, Haskell, Elm, Flow — each has exactly one
-  projector today (`crystal-json-serializable.ts`, `objc-foundation.ts`,
-  `haskell-aeson.ts`, `elm-json.ts`, `flow-native.ts`); no additional
-  variants scoped yet for these five
+- Crystal, Objective-C, Haskell, Elm, Flow, Elixir — each has exactly
+  one projector today (`crystal-json-serializable.ts`,
+  `objc-foundation.ts`, `haskell-aeson.ts`, `elm-json.ts`,
+  `flow-native.ts`, `elixir-jason.ts`); no additional variants scoped
+  yet for these six
 
 What's planned / open — additional variants per language:
 
@@ -367,11 +376,13 @@ Remaining variants still planned:
 - Ruby — RBS
 - Dart — built_value
 - PHP — Symfony Serializer, JMS Serializer
-- Elixir — Ecto (note: Elixir is not currently a 1.0-scope
-  general-purpose language target at all — this would need a first
-  Elixir projector, not just an additional variant on an existing one;
-  scope call on whether Elixir enters the language list belongs to the
-  project owner)
+- Elixir — Ecto (note: as of 2026-07-25 Elixir now has its first
+  projector, `elixir-jason.ts`, plain `defstruct`/typespec structs with
+  Jason for JSON, matching every other language's default-library
+  convention — see the General-Purpose Languages slice above. An
+  `Ecto.Schema`-backed variant, analogous to a hypothetical Django-models
+  Python variant, is a genuinely separate additional-variant scope item,
+  not a blocker for Elixir's default projector)
 - Go — validator libraries beyond the `encoding/json`-adjacent baseline
   (e.g. `go-playground/validator`, `ozzo-validation`) for constraint
   validation on top of the existing `go-encoding-json.ts` serialization

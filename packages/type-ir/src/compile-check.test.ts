@@ -594,12 +594,33 @@ describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
 //   dart-json-serializable / dart-freezed   — need build_runner-generated
 //                                             `*.g.dart`/`*.freezed.dart` companions
 //   elm-json                                — needs Elm's own package registry
+//   elixir-jason                            — needs the Jason hex package
 // None of these are single, plain, offline nixpkgs derivations the way
 // pydantic/attrs/aeson/nlohmann_json/System.Text.Json are, so wiring them up
 // is a real follow-up, not something to fake with a stub.
+//
+// elixir-jason specifically: unlike Ruby's `ruby -c` (a true parse-only
+// check that never expands macros, so `ruby-sorbet.ts`'s output needs no
+// gems installed), Elixir has no such syntax-only mode — `@derive
+// Jason.Encoder` is a compile-time macro that dispatches into the real
+// `Jason.Encoder` protocol during compilation itself, so `elixirc` cannot
+// even parse-check the generated struct module without the actual `Jason`
+// hex package resolvable on the code path. nixpkgs ships a plain `elixir`
+// derivation (unlike a curated Hex package set the way
+// `haskellPackages.ghcWithPackages` curates Haskell's), so `Jason` would
+// need `mix`-based dependency fetching (network access + a `mix.exs`
+// project, similar in kind to Rust's `cargo build` step above, but Hex
+// packages aren't currently vendored/wired up here) — a real follow-up, not
+// something to fake with a stub. Future work: add `elixir` to flake.nix and
+// either (a) vendor the `jason` Hex package via a `mix`-based temp project
+// (mirroring the `rust-serde` Cargo project above), or (b) split the
+// projector's output so the struct/typespec portion (no `@derive`) can be
+// checked with plain `elixirc` while the Jason-dependent line is checked
+// separately.
 // ============================================================================
 describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {})
 describe.skip("kotlin-kotlinx — needs the kotlinx-serialization jar, not vendored", () => {})
 describe.skip("csharp-newtonsoft — needs the Newtonsoft.Json NuGet package, not vendored", () => {})
 describe.skip("dart-json-serializable / dart-freezed — need build_runner-generated companions, not vendored", () => {})
 describe.skip("elm-json — needs Elm's own package registry, not vendored", () => {})
+describe.skip("elixir-jason — needs the Jason hex package, not vendored (elixirc has no syntax-only mode)", () => {})

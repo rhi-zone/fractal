@@ -304,6 +304,14 @@
       "types": "./src/php-jms.ts",
       "import": "./src/php-jms.ts"
     },
+    "./elixir": {
+      "types": "./src/elixir-jason.ts",
+      "import": "./src/elixir-jason.ts"
+    },
+    "./elixir-jason": {
+      "types": "./src/elixir-jason.ts",
+      "import": "./src/elixir-jason.ts"
+    },
     "./kotlin-kotlinx": {
       "types": "./src/kotlin-kotlinx.ts",
       "import": "./src/kotlin-kotlinx.ts"
