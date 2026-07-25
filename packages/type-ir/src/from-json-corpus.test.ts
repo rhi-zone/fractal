@@ -319,6 +319,144 @@ describe("discriminated union detection", () => {
   })
 })
 
+describe("CFD-style discriminant search (non-enum-typed fields)", () => {
+  // `tag` has K=4 distinct string values over N=10 samples (ratio 0.4),
+  // squarely in `looksLikeEnum`'s ambiguous 1/3-1/2 band — which for a
+  // STRING field (no integer-clustering escape hatch) is rejected, so `tag`
+  // never becomes `enum`/literal-union and `tryDetectDU` never considers it
+  // a candidate. Each distinct `tag` value maps to a completely disjoint
+  // set of sibling fields, so the CFD search's cohesion (all same-tag
+  // samples share the exact same sibling shape) and separation (every pair
+  // of tag values' sibling shapes is fully disjoint) signals are both
+  // maximal.
+  const values = [
+    { tag: "a", x: 1, y: 2 },
+    { tag: "a", x: 3, y: 4 },
+    { tag: "a", x: 5, y: 6 },
+    { tag: "b", p: 7, q: 8 },
+    { tag: "b", p: 9, q: 10 },
+    { tag: "b", p: 11, q: 12 },
+    { tag: "c", m: 13, n: 14 },
+    { tag: "c", m: 15, n: 16 },
+    { tag: "d", r: 17, s: 18 },
+    { tag: "d", r: 19, s: 20 },
+  ]
+
+  test("tag never gets typed enum on its own (ambiguous K/N band for a string field)", () => {
+    const plain = fromJsonCorpus(values, { detectDiscriminatedUnions: false, detectCfdDiscriminants: false, splitDissimilarObjects: false })
+    expect(plain.shape.kind).toBe("object")
+    const fields = (plain.shape as { fields: Record<string, TypeRef> }).fields
+    expect(fields.tag!.shape.kind).toBe("string")
+  })
+
+  test("a non-enum-typed field that functionally determines structure is found as a CFD discriminant", () => {
+    const result = fromJsonCorpus(values)
+    expect(result.shape.kind).toBe("union")
+    expect(result.meta.discriminator).toBe("tag")
+    const variants = (result.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants).toHaveLength(4)
+    for (const v of variants) {
+      const fields = (v.shape as { fields: Record<string, TypeRef> }).fields
+      expect(fields.tag!.shape.kind).toBe("literal")
+    }
+  })
+
+  test("detectCfdDiscriminants: false disables the pass (general splitting may still recover a union, without a discriminator)", () => {
+    const result = fromJsonCorpus(values, { detectCfdDiscriminants: false })
+    // General structural splitting (Jaccard clustering on raw field sets)
+    // can still separate these four disjoint shapes, but it never attaches
+    // a `discriminator` — that's how we know the CFD pass, not general
+    // splitting, produced the tagged result above.
+    if (result.shape.kind === "union") {
+      expect(result.meta.discriminator).toBeUndefined()
+    }
+  })
+
+  test("everything disabled: merges into one optional-everything record", () => {
+    // Also disables dict detection: `tag`'s siblings (x/y, p/q, m/n, r/s)
+    // grow the corpus's distinct-key count fast enough to independently
+    // trip the growing-key-set dict heuristic — real signal on its own
+    // terms, but orthogonal to what this test isolates (the union-shaping
+    // passes), so it's turned off here to see the plain merge underneath.
+    const result = fromJsonCorpus(values, {
+      detectDiscriminatedUnions: false, detectCfdDiscriminants: false, splitDissimilarObjects: false,
+      detectDicts: false,
+    })
+    expect(result.shape.kind).toBe("object")
+    const fields = (result.shape as { fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(fields).sort()).toEqual(["m", "n", "p", "q", "r", "s", "tag", "x", "y"])
+    for (const name of ["m", "n", "p", "q", "r", "s", "x", "y"]) {
+      expect(fields[name]!.meta.optional).toBe(true)
+    }
+  })
+
+  test("a high-cardinality unique-ID-like field is never picked as a discriminant", () => {
+    // `id` is unique per sample (K === N) — the cardinality gate must
+    // reject it outright regardless of how consistent/distinct any
+    // structure split on it might look.
+    const idValues = Array.from({ length: 10 }, (_, i) => ({
+      id: `row-${i}`,
+      value: i % 2 === 0 ? { even: true } : { odd: true },
+    }))
+    const result = fromJsonCorpus(idValues, { detectCfdDiscriminants: true })
+    if (result.shape.kind === "union") {
+      expect(result.meta.discriminator).not.toBe("id")
+    }
+  })
+
+  test("cfdMinSamples gates the pass off below the sample threshold", () => {
+    // Same 10-sample corpus that scores well by default (K=4/N=10 stays
+    // non-enum-eligible, so DU never fires either) — raising cfdMinSamples
+    // above N=10 disables the CFD pass, and no other pass attaches a
+    // `discriminator`.
+    const result = fromJsonCorpus(values, { cfdMinSamples: 20 })
+    expect(result.meta.discriminator).toBeUndefined()
+  })
+
+  test("discriminant search does not re-litigate a position tryDetectDU already resolved", () => {
+    // `type` is enum-shaped (K=2, well within enum territory) and forms a
+    // DU via `tryDetectDU`. The CFD pass must not run at all at this
+    // (already-union) position and must not disturb the result.
+    const shapeValues = [
+      { type: "circle", radius: 5 },
+      { type: "rect", width: 3, height: 4 },
+      { type: "circle", radius: 10 },
+      { type: "rect", width: 6, height: 8 },
+      { type: "circle", radius: 2 },
+      { type: "rect", width: 1, height: 1 },
+    ]
+    const result = fromJsonCorpus(shapeValues)
+    expect(result.shape.kind).toBe("union")
+    expect(result.meta.discriminator).toBe("type")
+    const variants = (result.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants).toHaveLength(2)
+  })
+
+  test("no false split when only the COMBINATION of two fields determines structure (unary restriction holds)", () => {
+    // Structure (whether the sample carries `p` or `q`) follows XOR(a, b):
+    // (x,1)->p, (x,2)->q, (y,1)->q, (y,2)->p. Grouping by `a` alone mixes
+    // p-carrying and q-carrying samples together (2 of each), and likewise
+    // for `b` alone — neither single field's value-groups are internally
+    // cohesive, nor distinct from each other (both groups end up spanning
+    // the same {p, q} field-set union). Only the *joint* (a, b) pair
+    // predicts the shape, which is exactly the composite-discriminant case
+    // Tagger's own unary restriction (and this pass, mirroring it) declines
+    // to search for. Must not hallucinate a split from either field alone.
+    const composite = [
+      { a: "x", b: 1, p: 1 },
+      { a: "x", b: 1, p: 2 },
+      { a: "x", b: 2, q: 1 },
+      { a: "x", b: 2, q: 2 },
+      { a: "y", b: 1, q: 1 },
+      { a: "y", b: 1, q: 2 },
+      { a: "y", b: 2, p: 1 },
+      { a: "y", b: 2, p: 2 },
+    ]
+    const result = fromJsonCorpus(composite, { detectCfdDiscriminants: true, splitDissimilarObjects: false })
+    expect(result.meta.discriminator).toBeUndefined()
+  })
+})
+
 describe("structural union splitting (no discriminant field)", () => {
   test("root-level objects with dissimilar field sets and no discriminant split into variants", () => {
     const values = [

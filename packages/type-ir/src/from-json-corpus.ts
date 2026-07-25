@@ -184,6 +184,58 @@ export interface ResolveStrategy extends InferConfig {
    * Default: `"single-linkage"`.
    */
   clusteringMethod?: ClusteringMethod
+  /**
+   * CFD-style discriminant search (see the "CFD discriminant search"
+   * section of `from-json-corpus.ts` and
+   * `docs/design/prior-art/json-shape-inference.md` §1): generalizes
+   * `tryDetectDU` beyond fields already typed `enum`/literal-union by
+   * searching every scalar sibling field directly against raw evidence and
+   * scoring it as a candidate discriminant. Runs only where `tryDetectDU`
+   * found nothing, and only against positions still in plain `object` form
+   * (so it never re-litigates a discriminant `tryDetectDU` already
+   * committed to, and never fights `trySplitDissimilarObjects`, which runs
+   * after it and skips anything already resolved to a union). Default:
+   * true.
+   */
+  detectCfdDiscriminants?: boolean
+  /**
+   * Minimum object samples at a position before CFD discriminant search
+   * runs. Higher than `tryDetectDU`'s implicit `elements.length < 3` gate:
+   * unlike `tryDetectDU`, this pass has no enum-typed field to lean on as
+   * prior evidence — every scalar sibling field is a candidate, so more
+   * samples are needed before a cardinality/cohesion/separation score can
+   * be trusted over sampling noise. Default: 8.
+   */
+  cfdMinSamples?: number
+  /**
+   * Maximum K/N ratio (distinct discriminant values over sample count) a
+   * candidate field may have. This is the direct analogue of
+   * `looksLikeEnum`'s saturation check, but applied without its
+   * integer-clustering escape hatch or absolute `K > 50` cap — a CFD
+   * discriminant can legitimately have more distinct values than a typical
+   * enum (Tagger's own GeoJSON `type` tag is a small closed set, but the
+   * paper doesn't bound candidate cardinality beyond "low enough to have
+   * repeated support"). A field with `K === N` (every value unique) is
+   * always rejected regardless of this threshold — that's a unique-ID
+   * field, not a discriminant. Default: 0.5.
+   */
+  cfdMaxCardinalityRatio?: number
+  /**
+   * Minimum samples required in every value-group of a candidate
+   * discriminant field. Mirrors `trySplitDissimilarObjects`'s "a cluster of
+   * one is indistinguishable from a lone outlier" guard: a discriminant
+   * value seen only once has no corroborating evidence that its shape is a
+   * real, repeatable population rather than sampling noise. Default: 2.
+   */
+  cfdMinGroupSize?: number
+  /**
+   * Minimum `cohesion * separation` score (see `scoreCfdCandidate`) a
+   * candidate discriminant must clear to be accepted. Both signals range
+   * over `[0, 1]`; the product is high only when a field's value-groups are
+   * both internally consistent AND structurally distinct from each other.
+   * Default: 0.5.
+   */
+  cfdMinScore?: number
   /** Custom resolvers for specific evidence patterns, tried at every node after the built-in passes. First non-`undefined` result wins. */
   customResolvers?: EvidenceResolver[]
 }
@@ -812,31 +864,270 @@ function tryDetectDU(
 
     if (!hasDifference) continue
 
-    // Build per-variant TypeRefs by re-inferring each group
-    const variants: TypeRef[] = []
-    for (const [key, group] of groups) {
-      // Merge objects within this group
-      const groupRefs = group.map((el) => {
-        const fields: Record<string, TypeRef> = {}
-        for (const [k, v] of Object.entries(el)) {
-          fields[k] = fromJson(v)
-        }
-        return t(types.object(fields))
-      })
-      let merged = groupRefs[0]!
-      for (let i = 1; i < groupRefs.length; i++) {
-        merged = mergeObjectTypes(merged, groupRefs[i]!)
-      }
-      // Set the discriminant field to a literal
-      const mergedFields = { ...(merged.shape as { fields: Record<string, TypeRef> }).fields }
-      mergedFields[discField] = t(types.literal(JSON.parse(key)))
-      variants.push(t(types.object(mergedFields)))
-    }
-
-    return t(types.union(variants), { discriminator: discField })
+    return buildDiscriminatedUnion(discField, groups)
   }
 
   return null
+}
+
+/**
+ * Build a discriminated-union `TypeRef` from a discriminant field name and
+ * its value-grouped raw samples: re-infer and merge each group, pin the
+ * discriminant field to a `literal` of that group's value, and wrap the
+ * result in a `union` tagged with `meta.discriminator`. Shared by
+ * `tryDetectDU` (candidate = an already enum/literal-union-typed field) and
+ * `tryDetectCfdDiscriminant` (candidate = any scalar sibling field, scored
+ * directly from raw evidence — see the CFD discriminant search section
+ * below) since both arrive at the same grouped-samples shape and need
+ * identical variant construction.
+ */
+function buildDiscriminatedUnion(
+  discField: string,
+  groups: ReadonlyMap<string, readonly Record<string, unknown>[]>,
+): TypeRef {
+  const variants: TypeRef[] = []
+  for (const [key, group] of groups) {
+    // Merge objects within this group
+    const groupRefs = group.map((el) => {
+      const fields: Record<string, TypeRef> = {}
+      for (const [k, v] of Object.entries(el)) {
+        fields[k] = fromJson(v)
+      }
+      return t(types.object(fields))
+    })
+    let merged = groupRefs[0]!
+    for (let i = 1; i < groupRefs.length; i++) {
+      merged = mergeObjectTypes(merged, groupRefs[i]!)
+    }
+    // Set the discriminant field to a literal
+    const mergedFields = { ...(merged.shape as { fields: Record<string, TypeRef> }).fields }
+    mergedFields[discField] = t(types.literal(JSON.parse(key)))
+    variants.push(t(types.object(mergedFields)))
+  }
+
+  return t(types.union(variants), { discriminator: discField })
+}
+
+// ---------------------------------------------------------------------------
+// CFD-style discriminant search — Tagger's unary constant conditional
+// functional dependency (ucCFD) discovery, generalized beyond `tryDetectDU`'s
+// enum-only candidate set (see docs/design/prior-art/json-shape-inference.md
+// §1). `tryDetectDU` only ever considers a field that's *already* been typed
+// `enum`/all-literal-union by the earlier enum-detection pass — a field with
+// borderline cardinality that `looksLikeEnum` rejected (e.g. a string field
+// whose K/N ratio lands in the ambiguous 1/3–1/2 band, where only integer
+// values get a clustering-evidence escape hatch) can never become a DU
+// discriminant, even when its value provably determines sibling structure.
+//
+// This pass searches every scalar-valued sibling field directly against the
+// raw evidence — not the inferred field type — and scores each candidate on
+// three signals matching Tagger's own filtering heuristics (its "overfitting
+// prevention" section): low cardinality relative to N (not a unique-ID
+// field), internally consistent structure within each value-group
+// (cohesion), and distinct structure across groups (separation). Unlike
+// Tagger's general CFD-discovery algorithm (which is "computationally
+// expensive, scaling exponentially in the number of attributes"), this stays
+// unary — one candidate field at a time, exactly the restriction the Tagger
+// paper itself imposes for tractability — so the search is linear in the
+// number of sibling fields, not exponential.
+// ---------------------------------------------------------------------------
+
+/** A scalar sibling field candidate, grouped by its raw JSON-serialized value, with its combined cohesion*separation score. */
+interface CfdCandidate {
+  readonly field: string
+  readonly groups: ReadonlyMap<string, readonly Record<string, unknown>[]>
+  readonly score: number
+}
+
+/**
+ * Field names whose value was a basic (non-container) type in every element
+ * that had it — Tagger's own restriction ("discriminant candidates are
+ * restricted to basic values — the relational encoding doesn't capture
+ * nested-object tag values at all"). A field that's ever an object or array
+ * in any sample is disqualified outright, everywhere else is a candidate.
+ */
+function collectScalarFieldNames(elements: readonly Record<string, unknown>[]): string[] {
+  const allKeys = new Set<string>()
+  const disqualified = new Set<string>()
+  for (const el of elements) {
+    for (const [k, v] of Object.entries(el)) {
+      allKeys.add(k)
+      if (v !== null && typeof v === "object") disqualified.add(k)
+    }
+  }
+  return [...allKeys].filter((k) => !disqualified.has(k))
+}
+
+/**
+ * Score one candidate discriminant field against the raw elements. Returns
+ * `null` when the field fails a hard gate (missing from some element, not
+ * scalar everywhere, too few/too many groups, or a group without
+ * `minGroupSize` corroborating samples — the same "a cluster of one is
+ * indistinguishable from a lone outlier" guard `trySplitDissimilarObjects`
+ * uses) — otherwise the field's grouping plus a `[0, 1]` score:
+ *
+ *  - **Cardinality gate** (`maxCardinalityRatio`): K/N must stay below the
+ *    threshold, and K must be strictly less than N (K == N means every
+ *    value is unique — a unique ID, not a discriminant, same disqualifying
+ *    check `looksLikeEnum` uses).
+ *  - **Cohesion**: `1 - ` the average pairwise Jaccard distance between
+ *    sibling field-sets *within* each group (excluding the discriminant
+ *    field itself) — high when every sample sharing a discriminant value
+ *    has the same sibling shape. Groups of size 1 contribute no pairs and
+ *    are treated as perfectly cohesive (no internal disagreement possible).
+ *  - **Separation**: the average pairwise Jaccard distance between groups'
+ *    (unioned) sibling field-sets — high when different discriminant values
+ *    imply genuinely different sibling shapes.
+ *
+ * `score = cohesion * separation`: both signals must hold for the score to
+ * be high — a field that's cohesive but produces near-identical groups (low
+ * separation), or one that produces wildly different groups that are each
+ * internally inconsistent (low cohesion), is not a good discriminant either
+ * way.
+ */
+function scoreCfdCandidate(
+  field: string,
+  elements: readonly Record<string, unknown>[],
+  maxCardinalityRatio: number,
+  minGroupSize: number,
+): CfdCandidate | null {
+  const N = elements.length
+  const groups = new Map<string, Record<string, unknown>[]>()
+  for (const el of elements) {
+    const val = el[field]
+    if (val === undefined || (val !== null && typeof val === "object")) return null
+    const key = JSON.stringify(val)
+    let group = groups.get(key)
+    if (group === undefined) {
+      group = []
+      groups.set(key, group)
+    }
+    group.push(el)
+  }
+
+  const K = groups.size
+  if (K < 2 || K >= N) return null
+  if (K / N > maxCardinalityRatio) return null
+  for (const group of groups.values()) {
+    if (group.length < minGroupSize) return null
+  }
+
+  const groupFieldSetLists = new Map<string, Set<string>[]>()
+  const groupUnionFieldSets = new Map<string, Set<string>>()
+  for (const [key, group] of groups) {
+    const perElementSets: Set<string>[] = []
+    const unionSet = new Set<string>()
+    for (const el of group) {
+      const fs = new Set(Object.keys(el).filter((k) => k !== field))
+      perElementSets.push(fs)
+      for (const k of fs) unionSet.add(k)
+    }
+    groupFieldSetLists.set(key, perElementSets)
+    groupUnionFieldSets.set(key, unionSet)
+  }
+
+  let cohesionDistSum = 0
+  let cohesionPairCount = 0
+  for (const sets of groupFieldSetLists.values()) {
+    for (let i = 0; i < sets.length; i++) {
+      for (let j = i + 1; j < sets.length; j++) {
+        cohesionDistSum += fieldSetJaccardDistance(sets[i]!, sets[j]!)
+        cohesionPairCount++
+      }
+    }
+  }
+  const cohesion = cohesionPairCount > 0 ? 1 - cohesionDistSum / cohesionPairCount : 1
+
+  const unionSets = [...groupUnionFieldSets.values()]
+  let sepDistSum = 0
+  let sepPairCount = 0
+  for (let i = 0; i < unionSets.length; i++) {
+    for (let j = i + 1; j < unionSets.length; j++) {
+      sepDistSum += fieldSetJaccardDistance(unionSets[i]!, unionSets[j]!)
+      sepPairCount++
+    }
+  }
+  const separation = sepPairCount > 0 ? sepDistSum / sepPairCount : 0
+
+  return { field, groups, score: cohesion * separation }
+}
+
+/**
+ * Search every scalar sibling field at an object-typed position for the
+ * best-scoring CFD discriminant (see `scoreCfdCandidate`), and build a
+ * discriminated union from it if one clears `minScore`. Called only when
+ * `tryDetectDU` (the enum-only path) has already had first refusal and
+ * found nothing — see `walkAndDetectCfdDiscriminant`'s call site in
+ * `resolveEvidence`'s pass ordering.
+ */
+function tryDetectCfdDiscriminant(
+  elements: readonly Record<string, unknown>[],
+  minSamples: number,
+  maxCardinalityRatio: number,
+  minGroupSize: number,
+  minScore: number,
+): TypeRef | null {
+  if (elements.length < minSamples) return null
+
+  const candidateFields = collectScalarFieldNames(elements)
+  let best: CfdCandidate | null = null
+  for (const field of candidateFields) {
+    const candidate = scoreCfdCandidate(field, elements, maxCardinalityRatio, minGroupSize)
+    if (candidate === null) continue
+    if (candidate.score < minScore) continue
+    if (best === null || candidate.score > best.score) best = candidate
+  }
+  if (best === null) return null
+
+  return buildDiscriminatedUnion(best.field, best.groups)
+}
+
+function walkAndDetectCfdDiscriminant(
+  ref: TypeRef,
+  node: EvidenceNode,
+  minSamples: number,
+  maxCardinalityRatio: number,
+  minGroupSize: number,
+  minScore: number,
+): TypeRef {
+  const { shape } = ref
+
+  if (shape.kind === "array") {
+    const el = (shape as { element: TypeRef }).element
+    if (el.shape.kind === "object" && node.array !== undefined) {
+      const cfd = tryDetectCfdDiscriminant(
+        node.array.elementObjects, minSamples, maxCardinalityRatio, minGroupSize, minScore,
+      )
+      if (cfd !== null) return t(types.array(cfd), ref.meta)
+    }
+    const childNode = node.array?.element
+    const newEl = childNode !== undefined
+      ? walkAndDetectCfdDiscriminant(el, childNode, minSamples, maxCardinalityRatio, minGroupSize, minScore)
+      : el
+    return t(types.array(newEl), ref.meta)
+  }
+
+  if (shape.kind === "object") {
+    // Same raw-sample recovery `walkAndDetectDU`'s object branch uses — see
+    // its comment for why `node.values` (not `node.object`) is the source.
+    const objectSamples = node.values.filter(
+      (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
+    )
+    const cfd = tryDetectCfdDiscriminant(objectSamples, minSamples, maxCardinalityRatio, minGroupSize, minScore)
+    if (cfd !== null) return withMeta(cfd, ref.meta)
+
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields
+    const newFields: Record<string, TypeRef> = {}
+    for (const [name, fieldRef] of Object.entries(fields)) {
+      const childNode = node.object?.fields[name]
+      newFields[name] = childNode !== undefined
+        ? walkAndDetectCfdDiscriminant(fieldRef, childNode, minSamples, maxCardinalityRatio, minGroupSize, minScore)
+        : fieldRef
+    }
+    return t(types.object(newFields), ref.meta)
+  }
+
+  return ref
 }
 
 // ---------------------------------------------------------------------------
@@ -1358,6 +1649,11 @@ interface ResolvedStrategy {
   readonly objectSplitThreshold: number
   readonly objectSplitMinSamples: number
   readonly clusteringMethod: ClusteringMethod
+  readonly detectCfdDiscriminants: boolean
+  readonly cfdMinSamples: number
+  readonly cfdMaxCardinalityRatio: number
+  readonly cfdMinGroupSize: number
+  readonly cfdMinScore: number
   readonly customResolvers: readonly EvidenceResolver[]
 }
 
@@ -1387,6 +1683,11 @@ function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): Resolv
     objectSplitThreshold: strategy?.objectSplitThreshold ?? cfg?.objectSplitThreshold ?? 0.5,
     objectSplitMinSamples: strategy?.objectSplitMinSamples ?? cfg?.objectSplitMinSamples ?? 5,
     clusteringMethod: strategy?.clusteringMethod ?? cfg?.clusteringMethod ?? "single-linkage",
+    detectCfdDiscriminants: strategy?.detectCfdDiscriminants ?? cfg?.detectCfdDiscriminants ?? true,
+    cfdMinSamples: strategy?.cfdMinSamples ?? cfg?.cfdMinSamples ?? 8,
+    cfdMaxCardinalityRatio: strategy?.cfdMaxCardinalityRatio ?? cfg?.cfdMaxCardinalityRatio ?? 0.5,
+    cfdMinGroupSize: strategy?.cfdMinGroupSize ?? cfg?.cfdMinGroupSize ?? 2,
+    cfdMinScore: strategy?.cfdMinScore ?? cfg?.cfdMinScore ?? 0.5,
     customResolvers: strategy?.customResolvers ?? cfg?.customResolvers ?? [],
   }
 }
@@ -1422,20 +1723,34 @@ export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy):
     merged = walkAndDetectDicts(merged, tree.root, tree.values.length, resolved.dictMinSamples)
   }
 
-  // 5. General structural union splitting (no discriminant field) — runs
-  //    after dict detection so growing-key-set dicts get first refusal.
+  // 5. CFD-style discriminant search (no pre-typed enum required) — runs
+  //    after dict detection (same "growing key set looks dissimilar too"
+  //    reasoning as general splitting below) and only ever acts on
+  //    positions `walkAndDetectDU` left in plain `object` form, so it never
+  //    re-litigates a discriminant DU detection already committed to.
+  if (resolved.detectCfdDiscriminants) {
+    merged = walkAndDetectCfdDiscriminant(
+      merged, tree.root,
+      resolved.cfdMinSamples, resolved.cfdMaxCardinalityRatio, resolved.cfdMinGroupSize, resolved.cfdMinScore,
+    )
+  }
+
+  // 6. General structural union splitting (no discriminant field) — runs
+  //    last of the union-shaping passes so it only ever sees positions
+  //    neither `tryDetectDU` nor the CFD discriminant search above could
+  //    resolve to a discriminated union.
   if (resolved.splitDissimilarObjects) {
     merged = walkAndSplitDissimilarObjects(
       merged, tree.root, resolved.objectSplitThreshold, resolved.objectSplitMinSamples, resolved.clusteringMethod,
     )
   }
 
-  // 6. Dirty data detection (opt-in)
+  // 7. Dirty data detection (opt-in)
   if (resolved.detectDirtyData) {
     merged = walkAndDetectDirty(merged, tree.root)
   }
 
-  // 7. Custom resolvers
+  // 8. Custom resolvers
   if (resolved.customResolvers.length > 0) {
     merged = applyCustomResolvers(merged, tree.root, resolved.customResolvers)
   }

@@ -225,6 +225,105 @@ describe("runEvaluation", () => {
 })
 
 // ---------------------------------------------------------------------------
+// CFD-style discriminant search — measures whether `detectCfdDiscriminants`
+// (from-json-corpus.ts's `tryDetectCfdDiscriminant`) improves union-fidelity
+// on corpora whose discriminant field either (a) never gets typed
+// `enum`/literal-union in the first place (so `tryDetectDU` never has a
+// candidate to try), or (b) does get typed correctly but general structural
+// splitting's single-linkage clustering (`trySplitDissimilarObjects`) chains
+// its groups together via a shared-field intermediary. Hand-built corpora
+// (not `generateCorpus`) so the exact K/N ratio and per-group sample counts
+// that the gates in `scoreCfdCandidate` check are controlled directly,
+// rather than left to a schema-driven PRNG.
+// ---------------------------------------------------------------------------
+
+describe("CFD-style discriminant search — union-fidelity comparison", () => {
+  test("recovers full union fidelity via chaining-immune exact-value grouping, where single-linkage's chaining failure leaves general splitting at zero", () => {
+    // `stage` "p"/"q"/"r" groups chain under single-linkage: p={stage,shared1},
+    // q={stage,shared1,shared2}, r={stage,shared2} — q is close enough to
+    // both p and r that single-linkage's growing-cluster-union comparison
+    // pulls all three into one merged cluster (see "clustering method
+    // comparison" above for the same failure mode on plain structural
+    // splitting). The CFD search groups by `stage`'s literal VALUE instead
+    // of by incrementally-clustered field-set distance, so it never chains.
+    const values = [
+      { stage: "p", shared1: "x1" },
+      { stage: "p", shared1: "x2" },
+      { stage: "p", shared1: "x3" },
+      { stage: "q", shared1: "y1", shared2: "z1" },
+      { stage: "q", shared1: "y2", shared2: "z2" },
+      { stage: "q", shared1: "y3", shared2: "z3" },
+      { stage: "r", shared2: "w1" },
+      { stage: "r", shared2: "w2" },
+    ]
+    const original = t(
+      types.union([
+        t(types.object({ stage: t(types.literal("p")), shared1: t(types.string) })),
+        t(types.object({ stage: t(types.literal("q")), shared1: t(types.string), shared2: t(types.string) })),
+        t(types.object({ stage: t(types.literal("r")), shared2: t(types.string) })),
+      ]),
+    )
+
+    const withCfd = fromJsonCorpus(values)
+    const withoutCfd = fromJsonCorpus(values, { detectCfdDiscriminants: false })
+
+    const withScore = scoreInference(original, withCfd)
+    const withoutScore = scoreInference(original, withoutCfd)
+
+    expect(withCfd.meta.discriminator).toBe("stage")
+    expect(withoutCfd.shape.kind).toBe("object") // chained into one merged record
+    expect(withScore.unionFidelity.f1).toBe(1)
+    expect(withoutScore.unionFidelity.f1).toBe(0)
+    expect(withScore.overallF1).toBeGreaterThan(withoutScore.overallF1)
+  })
+
+  test("improves type accuracy (exact literal tag, not plain string) on a non-enum-typed discriminant that general splitting can still structurally separate", () => {
+    // `tag` has K=4/N=10 (ratio 0.4), in `looksLikeEnum`'s ambiguous
+    // 1/3-1/2 band for a string field — never typed `enum`, so
+    // `tryDetectDU` has no candidate. General structural splitting still
+    // recovers the union shape here (the four groups are fully disjoint, no
+    // chaining risk), so `unionFidelity` alone doesn't distinguish the two
+    // configs — but only the CFD path pins `tag` to a `literal` per
+    // variant; general splitting leaves it as plain `string` in every
+    // variant, which shows up as a lower `overallF1` via `typeAccuracy`.
+    const values = [
+      { tag: "a", x: 1, y: 2 },
+      { tag: "a", x: 3, y: 4 },
+      { tag: "a", x: 5, y: 6 },
+      { tag: "b", p: 7, q: 8 },
+      { tag: "b", p: 9, q: 10 },
+      { tag: "b", p: 11, q: 12 },
+      { tag: "c", m: 13, n: 14 },
+      { tag: "c", m: 15, n: 16 },
+      { tag: "d", r: 17, s: 18 },
+      { tag: "d", r: 19, s: 20 },
+    ]
+    const original = t(
+      types.union([
+        t(types.object({ tag: t(types.literal("a")), x: t(types.integer), y: t(types.integer) })),
+        t(types.object({ tag: t(types.literal("b")), p: t(types.integer), q: t(types.integer) })),
+        t(types.object({ tag: t(types.literal("c")), m: t(types.integer), n: t(types.integer) })),
+        t(types.object({ tag: t(types.literal("d")), r: t(types.integer), s: t(types.integer) })),
+      ]),
+    )
+
+    const withCfd = fromJsonCorpus(values)
+    const withoutCfd = fromJsonCorpus(values, { detectCfdDiscriminants: false })
+
+    const withScore = scoreInference(original, withCfd)
+    const withoutScore = scoreInference(original, withoutCfd)
+
+    // Both recover the union shape (unionFidelity ties)...
+    expect(withScore.unionFidelity.f1).toBe(1)
+    expect(withoutScore.unionFidelity.f1).toBe(1)
+    // ...but only the CFD path gets the discriminant field's exact type
+    // right, which overallF1 (folding in typeAccuracy) picks up.
+    expect(withScore.overallF1).toBe(1)
+    expect(withoutScore.overallF1).toBeLessThan(withScore.overallF1)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Clustering method comparison — measures the three `clusteringMethod`
 // options (`from-json-corpus.ts`'s `trySplitDissimilarObjects`) against each
 // other on schemas chosen to isolate the specific failure mode each

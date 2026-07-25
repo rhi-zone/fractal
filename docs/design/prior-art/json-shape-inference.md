@@ -129,12 +129,32 @@ This is the closest prior art to our DU-detection pass
 The key structural difference: Tagger discovers the discriminant among
 *arbitrary* sibling properties via CFD mining (general relational dependency
 discovery, unrestricted candidate set, exponential worst case, hence the
-unary restriction), whereas our `tryDetectDU` restricts the candidate set
+unary restriction), whereas `tryDetectDU` restricts its own candidate set
 up front to fields already typed `enum` or literal-union (`fieldRef.shape.kind
 === "enum"` or an all-literal union) — this sidesteps CFD discovery's
 combinatorics entirely by only ever considering fields we've already
 determined are low-cardinality, at the cost of being unable to discover a
 tag from a field we haven't already flagged as enum-shaped.
+
+**Update — a second, more general pass now exists.**
+`tryDetectCfdDiscriminant` (added alongside this doc, in the same file)
+closes that specific gap: it runs only after `tryDetectDU` has had first
+refusal and found nothing, and searches every scalar sibling field directly
+against the raw evidence (not the inferred field type), scoring each
+candidate on cardinality (K/N ratio, generalizing `looksLikeEnum`'s
+saturation check but without its integer-clustering escape hatch or `K > 50`
+cap), cohesion (`1 -` average intra-group Jaccard distance on sibling
+field-sets), and separation (average inter-group Jaccard distance),
+accepting the best-scoring candidate above a threshold. This is still the
+*unary* restriction Tagger itself imposes for tractability — one candidate
+field scored at a time, not the general relational-encoding + CFD-mining
+search over arbitrary attribute combinations — so the "at the cost of being
+unable to discover a tag from a field we haven't already flagged as
+enum-shaped" limitation above is narrowed (a field the enum pass rejected as
+ambiguous, e.g. a string field whose K/N ratio lands in the 1/3-1/2 band with
+no clustering corroboration available, can now be found directly), not
+eliminated (a composite/multi-field discriminant is still out of scope, by
+design, matching Tagger's own restriction).
 
 ### What we could adopt
 
@@ -143,23 +163,28 @@ tag from a field we haven't already flagged as enum-shaped.
   functionally determine the sibling field-set" gives us a principled
   language for what "meaningfully different shapes" means, and a citation
   path if we ever need to defend the design against "why not just always
-  union everything."
+  union everything." (Now the literal framing `tryDetectCfdDiscriminant`'s
+  own doc comments use.)
 - **`allOf`-style composability.** Rather than baking DU detection
   irreversibly into the merged type, structuring it as an independent pass
   whose output *augments* a plain merged schema (as Tagger augments
   third-party schemas) would let DU detection be disabled/inspected
   independently — useful for the "before/after heuristics" transparency the
-  Tagger demo explicitly showcases to build user trust.
+  Tagger demo explicitly showcases to build user trust. (`detectCfdDiscriminants`
+  is independently toggleable in `ResolveStrategy`, same as `detectDiscriminatedUnions`.)
 - **Interactive threshold exploration as a design goal**, even if not a UI:
   the Tagger authors found that no single threshold setting worked across
   datasets. This is evidence for keeping our thresholds configurable
   (which we already do via `TryDetectDU`'s implicit `elements.length < 3`
-  gate and the Jaccard 10% cutover) rather than hard-coding one "correct"
-  value.
+  gate, the Jaccard 10% cutover, and now `cfdMinSamples`/
+  `cfdMaxCardinalityRatio`/`cfdMinGroupSize`/`cfdMinScore` for the CFD pass)
+  rather than hard-coding one "correct" value.
 
 ### Limitations
 
 - Unary-only: cannot detect a tag formed from a *combination* of two fields.
+  (`tryDetectCfdDiscriminant` inherits this restriction deliberately, for the
+  same tractability reason.)
 - CFD discovery is exponential in attribute count in the general case; Tagger
   sidesteps this only by restricting to unary dependencies, not by a cheaper
   algorithm.
@@ -846,7 +871,16 @@ value partition the corpus into structurally distinct groups," verified via
 Jaccard distance on the groups' field sets rather than Tagger's
 functional-dependency formalism. This buys us tractability (no exponential
 CFD search) at the cost of discovery power (a discriminant we haven't
-already flagged as enum-shaped for other reasons can never be found).
+already flagged as enum-shaped for other reasons can never be found) —
+`tryDetectCfdDiscriminant` now runs as a second pass specifically to recover
+that lost case, searching every scalar sibling field directly (unary-only,
+same tractability restriction Tagger itself imposes) rather than relying on
+the enum pass's prior. It stays a cheaper approximation of Tagger's CFD
+formalism throughout — cardinality-ratio + cohesion + separation scoring on
+raw evidence, not relational-encoding + CFD-mining — so the "discovery
+power" gap narrows (an enum-ambiguous field is now findable) without closing
+entirely (composite/multi-field discriminants remain out of scope by
+design).
 
 **Dict-vs-record.** `detectDicts`'s corpus-growth-behavior signal (stable
 key set → record, linearly-growing key set → dict) is architecturally
