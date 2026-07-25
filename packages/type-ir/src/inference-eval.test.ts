@@ -223,3 +223,111 @@ describe("runEvaluation", () => {
     expect(() => runEvaluation(defaultLabeledCases)).not.toThrow()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Clustering method comparison — measures the three `clusteringMethod`
+// options (`from-json-corpus.ts`'s `trySplitDissimilarObjects`) against each
+// other on schemas chosen to isolate the specific failure mode each
+// alternative was built to fix. None of these use a discriminant field, so
+// `tryDetectDU` never fires — recovery depends entirely on general
+// structural splitting.
+// ---------------------------------------------------------------------------
+
+describe("clustering method comparison", () => {
+  // Two fully disjoint object shapes, no shared fields at all. The easy
+  // case: every method should split this correctly regardless of threshold.
+  const disjointPolymorphic = t(
+    types.union([
+      t(types.object({ userId: t(types.integer), userName: t(types.string), userEmail: t(types.string) })),
+      t(types.object({ orderId: t(types.integer), total: t(types.number), items: t(types.integer) })),
+    ]),
+  )
+
+  // Three shapes in a chain: A-B and B-C each overlap on one field, but A-C
+  // share nothing (Jaccard distance 1.0). single-linkage compares each new
+  // sample against the growing cluster union rather than its individual
+  // members, so B's presence pulls A and C into the same cluster even
+  // though they're maximally dissimilar on their own — the "chaining"
+  // failure mode complete-linkage exists to avoid.
+  const chainingRisk = t(
+    types.union([
+      t(types.object({ p: t(types.integer), shared1: t(types.string) })),
+      t(types.object({ shared1: t(types.string), shared2: t(types.string) })),
+      t(types.object({ shared2: t(types.string), q: t(types.integer) })),
+    ]),
+  )
+
+  // Two exact, recurring shapes differing by one field (Jaccard distance
+  // 1/3, under the default 0.5 threshold) — the "polymorphic API response"
+  // pattern key-signature clustering targets. Modeled as a real union (both
+  // fields required per variant, not optional) so `generateCorpus` always
+  // emits the exact signature for whichever variant it picked, with no
+  // partial-field noise.
+  const apiResponseVariants = t(
+    types.union([
+      t(types.object({ id: t(types.integer), name: t(types.string) })),
+      t(types.object({ id: t(types.integer), name: t(types.string), extra: t(types.boolean) })),
+    ]),
+  )
+
+  function runWith(method: "single-linkage" | "complete-linkage" | "key-signature", threshold?: number) {
+    const cases: EvalCase[] = [
+      { name: "disjoint", schema: disjointPolymorphic, config: { clusteringMethod: method } },
+      {
+        name: "chaining-risk",
+        schema: chainingRisk,
+        config: { clusteringMethod: method, objectSplitThreshold: threshold ?? 0.5 },
+      },
+      { name: "api-variants", schema: apiResponseVariants, config: { clusteringMethod: method } },
+    ]
+    const summary = runEvaluation(cases, [50])
+    const byName = new Map(summary.results.map((r) => [r.name, r.score]))
+    return {
+      disjoint: byName.get("disjoint")!,
+      chainingRisk: byName.get("chaining-risk")!,
+      apiVariants: byName.get("api-variants")!,
+    }
+  }
+
+  test("all three methods correctly split fully disjoint shapes", () => {
+    for (const method of ["single-linkage", "complete-linkage", "key-signature"] as const) {
+      const { disjoint } = runWith(method)
+      expect(disjoint.unionFidelity.f1).toBe(1)
+      expect(disjoint.overallF1).toBe(1)
+    }
+  })
+
+  test("single-linkage chains the A-B-C shapes into one merged object, losing the union entirely", () => {
+    const { chainingRisk: score } = runWith("single-linkage", 0.8)
+    expect(score.unionFidelity.f1).toBe(0)
+  })
+
+  test("complete-linkage avoids the chaining failure single-linkage falls into on the same corpus/threshold", () => {
+    const { chainingRisk: score } = runWith("complete-linkage", 0.8)
+    expect(score.unionFidelity.f1).toBe(1)
+    // Recovers the union shape (unlike single-linkage, which loses it
+    // entirely), but still only as 2 clusters (A+B merged, C separate) —
+    // complete-linkage's conservatism stops the chained A-C merge but
+    // doesn't fully separate A from B either, since A-B's own distance is
+    // within threshold on its own merits.
+    expect(score.unionFidelity.avgVariantCountDiff).toBe(1)
+  })
+
+  test("key-signature also avoids chaining, since it never compares field-set distance at all", () => {
+    const { chainingRisk: score } = runWith("key-signature", 0.8)
+    expect(score.unionFidelity.f1).toBe(1)
+  })
+
+  test("single-linkage and complete-linkage both merge near-identical API-variant shapes under default threshold", () => {
+    for (const method of ["single-linkage", "complete-linkage"] as const) {
+      const { apiVariants } = runWith(method)
+      expect(apiVariants.unionFidelity.f1).toBe(0)
+    }
+  })
+
+  test("key-signature recovers the polymorphic-API-response pattern that distance-threshold methods miss", () => {
+    const { apiVariants } = runWith("key-signature")
+    expect(apiVariants.unionFidelity.f1).toBe(1)
+    expect(apiVariants.overallF1).toBe(1)
+  })
+})

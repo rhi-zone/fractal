@@ -152,9 +152,44 @@ export interface ResolveStrategy extends InferConfig {
    * the dissimilarity is real signal rather than sampling noise. Default: 5.
    */
   objectSplitMinSamples?: number
+  /**
+   * How `trySplitDissimilarObjects` groups the raw per-sample field sets
+   * before deciding whether a position's objects are one population or
+   * several. All three read `objectSplitThreshold`/`objectSplitMinSamples`
+   * the same way; they differ only in how "close enough to merge" is
+   * decided:
+   *
+   *  - `"single-linkage"` (default): greedy nearest-cluster assignment —
+   *    each sample joins the *nearest* existing cluster if within
+   *    threshold, else starts a new one. Cheap (single pass), but prone to
+   *    "chaining": A merges with B, B merges with C, so A and C end up in
+   *    the same cluster even though A and C alone would exceed the
+   *    threshold — a distant pair pulled together via an intermediary.
+   *  - `"complete-linkage"`: agglomerative clustering where two clusters
+   *    may only merge when *every* cross-pair of underlying samples is
+   *    within threshold (the merge distance is the *max*, not the nearest,
+   *    pairwise distance). More conservative — avoids chaining — at the
+   *    cost of being more willing to leave a sample in its own cluster
+   *    (which the `>=2 members` guard below then discards as a lone
+   *    outlier rather than a real second population). Costs more to
+   *    compute (repeated all-pairs distance scans) than single-linkage.
+   *  - `"key-signature"`: skip distance entirely — group samples by their
+   *    *exact* key-set signature (same set of keys -> same cluster).
+   *    Ignores `objectSplitThreshold` altogether. Simpler and more
+   *    aggressive: two samples differing by even one optional field become
+   *    separate clusters, which fits the "polymorphic API response" case
+   *    (a handful of exact, recurring shapes) but over-splits ordinary
+   *    records with a few sparsely-present optional fields.
+   *
+   * Default: `"single-linkage"`.
+   */
+  clusteringMethod?: ClusteringMethod
   /** Custom resolvers for specific evidence patterns, tried at every node after the built-in passes. First non-`undefined` result wins. */
   customResolvers?: EvidenceResolver[]
 }
+
+/** See `ResolveStrategy.clusteringMethod`. */
+export type ClusteringMethod = "single-linkage" | "complete-linkage" | "key-signature"
 
 /** Back-compat alias — the config accepted by `fromJsonCorpus`/`collectEvidence` is exactly a `ResolveStrategy`. */
 export type CorpusInferConfig = ResolveStrategy
@@ -678,6 +713,22 @@ function walkAndDetectDU(ref: TypeRef, node: EvidenceNode): TypeRef {
   }
 
   if (shape.kind === "object") {
+    // `tryDetectDU` needs the raw object samples that produced this
+    // position's merged type, not just the merged type itself — the same
+    // thing `node.array.elementObjects` supplies for array elements. There's
+    // no equivalent pre-filtered bucket for object-typed positions (root,
+    // an object field, a map value, …), because `EvidenceNode.object` only
+    // carries per-field sub-evidence, not the raw per-sample objects. Derive
+    // it here from `node.values` — mirrors the same filter
+    // `trySplitDissimilarObjects` uses to recover raw samples from a node.
+    // This is what makes DU detection fire for a corpus whose union members
+    // sit directly at a position instead of nested inside an array field.
+    const objectSamples = node.values.filter(
+      (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
+    )
+    const du = tryDetectDU(ref, objectSamples)
+    if (du !== null) return withMeta(du, ref.meta)
+
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
@@ -823,12 +874,172 @@ function objectSplitDistance(a: ReadonlySet<string>, b: ReadonlySet<string>): nu
   return fieldSetJaccardDistance(a, b)
 }
 
+/** One resolved cluster: the union of its members' field names, and the raw member samples. */
+interface ObjectCluster {
+  readonly fieldSet: Set<string>
+  readonly members: Record<string, unknown>[]
+}
+
 /**
- * Greedily cluster the raw object samples observed at `node` by field-set
- * similarity (single-linkage: each sample joins the nearest existing
- * cluster if within `threshold`, else starts a new one), then re-infer and
- * merge within each cluster. Returns `null` when there isn't enough
- * evidence to split (too few samples, or the split would produce a
+ * Single-linkage clustering: each sample joins the nearest existing cluster
+ * if within `threshold` (comparing against the cluster's running field-set
+ * union), else starts a new cluster. O(n * clusters) — cheap, but prone to
+ * chaining (see `ResolveStrategy.clusteringMethod`).
+ */
+function clusterSingleLinkage(
+  samples: readonly Record<string, unknown>[],
+  keySets: readonly ReadonlySet<string>[],
+  threshold: number,
+): ObjectCluster[] {
+  const clusters: ObjectCluster[] = []
+  for (let i = 0; i < samples.length; i++) {
+    const fs = keySets[i]!
+    let best: { cluster: ObjectCluster; dist: number } | undefined
+    for (const cluster of clusters) {
+      const dist = objectSplitDistance(fs, cluster.fieldSet)
+      if (best === undefined || dist < best.dist) best = { cluster, dist }
+    }
+    if (best !== undefined && best.dist <= threshold) {
+      best.cluster.members.push(samples[i]!)
+      for (const k of fs) best.cluster.fieldSet.add(k)
+    } else {
+      clusters.push({ fieldSet: new Set(fs), members: [samples[i]!] })
+    }
+  }
+  return clusters
+}
+
+/**
+ * Complete-linkage agglomerative clustering: starts with every sample as
+ * its own cluster and repeatedly merges the two clusters whose *farthest*
+ * cross-pair of underlying samples is closest, stopping once the best
+ * available merge would exceed `threshold`. Unlike single-linkage, a merge
+ * requires ALL cross-pairs between the two clusters to be within
+ * threshold, not just one — this is what avoids chaining (see
+ * `ResolveStrategy.clusteringMethod`).
+ *
+ * Implementation: precompute the base n*n pairwise Jaccard-distance matrix
+ * once (O(n^2) `Set` operations), then agglomerate using only array
+ * lookups — a cluster pair's distance is `max` over its members' base
+ * distances, and the standard complete-linkage merge update
+ * (`dist(A∪B, k) = max(dist(A,k), dist(B,k))`) keeps that number-only
+ * comparison as cheap on every later round. Still O(n^3) *comparisons* in
+ * the worst case (n samples, up to n merge rounds, each scanning O(n^2)
+ * cluster pairs), but each comparison is a plain float compare instead of
+ * a `Set`-based distance recomputation — the dominant cost at the sample
+ * counts `objectSplitMinSamples` gates this pass to.
+ */
+function clusterCompleteLinkage(
+  samples: readonly Record<string, unknown>[],
+  keySets: readonly ReadonlySet<string>[],
+  threshold: number,
+): ObjectCluster[] {
+  const n = samples.length
+
+  // Base pairwise distance matrix over original sample indices.
+  const base: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0))
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const d = objectSplitDistance(keySets[i]!, keySets[j]!)
+      base[i]![j] = d
+      base[j]![i] = d
+    }
+  }
+
+  // Each active cluster is identified by a slot index and tracks its member
+  // sample indices plus its current distance to every other active slot
+  // (maintained incrementally via the complete-linkage merge-update rule,
+  // rather than recomputed from scratch after every merge).
+  const members: number[][] = Array.from({ length: n }, (_, i) => [i])
+  const active = new Array<boolean>(n).fill(true)
+  const dist: number[][] = Array.from({ length: n }, (_, i) => {
+    const row = new Array<number>(n).fill(Infinity)
+    for (let j = 0; j < n; j++) if (j !== i) row[j] = base[i]![j]!
+    return row
+  })
+
+  let remaining = n
+  while (remaining > 1) {
+    let bi = -1
+    let bj = -1
+    let bestDist = Infinity
+    for (let i = 0; i < n; i++) {
+      if (!active[i]) continue
+      const row = dist[i]!
+      for (let j = i + 1; j < n; j++) {
+        if (!active[j]) continue
+        const d = row[j]!
+        if (d < bestDist) { bestDist = d; bi = i; bj = j }
+      }
+    }
+    if (bi === -1 || bestDist > threshold) break
+
+    // Merge cluster bj into bi; complete-linkage update: the merged
+    // cluster's distance to any other active cluster k is the max of the
+    // two pre-merge distances.
+    for (let k = 0; k < n; k++) {
+      if (!active[k] || k === bi || k === bj) continue
+      const merged = Math.max(dist[bi]![k]!, dist[bj]![k]!)
+      dist[bi]![k] = merged
+      dist[k]![bi] = merged
+    }
+    members[bi]!.push(...members[bj]!)
+    active[bj] = false
+    remaining--
+  }
+
+  const clusters: ObjectCluster[] = []
+  for (let i = 0; i < n; i++) {
+    if (!active[i]) continue
+    const fieldSet = new Set<string>()
+    for (const idx of members[i]!) for (const k of keySets[idx]!) fieldSet.add(k)
+    clusters.push({ fieldSet, members: members[i]!.map((idx) => samples[idx]!) })
+  }
+  return clusters
+}
+
+/**
+ * Key-signature clustering: group samples by their exact key-set signature
+ * (same set of keys -> same cluster), ignoring `threshold` entirely. No
+ * distance computation, so it's the cheapest of the three, and the most
+ * aggressive splitter — see `ResolveStrategy.clusteringMethod`.
+ */
+function clusterByKeySignature(
+  samples: readonly Record<string, unknown>[],
+  keySets: readonly ReadonlySet<string>[],
+): ObjectCluster[] {
+  const bySignature = new Map<string, ObjectCluster>()
+  for (let i = 0; i < samples.length; i++) {
+    const fs = keySets[i]!
+    const signature = [...fs].sort().join(" ")
+    let cluster = bySignature.get(signature)
+    if (cluster === undefined) {
+      cluster = { fieldSet: new Set(fs), members: [] }
+      bySignature.set(signature, cluster)
+    }
+    cluster.members.push(samples[i]!)
+  }
+  return [...bySignature.values()]
+}
+
+function clusterObjectSamples(
+  samples: readonly Record<string, unknown>[],
+  keySets: readonly ReadonlySet<string>[],
+  threshold: number,
+  method: ClusteringMethod,
+): ObjectCluster[] {
+  switch (method) {
+    case "complete-linkage": return clusterCompleteLinkage(samples, keySets, threshold)
+    case "key-signature": return clusterByKeySignature(samples, keySets)
+    case "single-linkage": return clusterSingleLinkage(samples, keySets, threshold)
+  }
+}
+
+/**
+ * Cluster the raw object samples observed at `node` by field-set similarity
+ * (per `clusteringMethod` — see `ResolveStrategy.clusteringMethod`), then
+ * re-infer and merge within each cluster. Returns `null` when there isn't
+ * enough evidence to split (too few samples, or the split would produce a
  * variant backed by only one sample — indistinguishable from a lone
  * outlier rather than a real second population).
  */
@@ -836,6 +1047,7 @@ function trySplitDissimilarObjects(
   node: EvidenceNode,
   threshold: number,
   minSamples: number,
+  clusteringMethod: ClusteringMethod,
 ): TypeRef | null {
   const objEv = node.object
   if (objEv === undefined) return null
@@ -850,21 +1062,7 @@ function trySplitDissimilarObjects(
   // `objEv.keySets[i]`.
   if (objectSamples.length !== objEv.keySets.length) return null
 
-  const clusters: { fieldSet: Set<string>; members: Record<string, unknown>[] }[] = []
-  for (let i = 0; i < objectSamples.length; i++) {
-    const fs = objEv.keySets[i]!
-    let best: { cluster: (typeof clusters)[number]; dist: number } | undefined
-    for (const cluster of clusters) {
-      const dist = objectSplitDistance(fs, cluster.fieldSet)
-      if (best === undefined || dist < best.dist) best = { cluster, dist }
-    }
-    if (best !== undefined && best.dist <= threshold) {
-      best.cluster.members.push(objectSamples[i]!)
-      for (const k of fs) best.cluster.fieldSet.add(k)
-    } else {
-      clusters.push({ fieldSet: new Set(fs), members: [objectSamples[i]!] })
-    }
-  }
+  const clusters = clusterObjectSamples(objectSamples, objEv.keySets, threshold, clusteringMethod)
 
   if (clusters.length < 2) return null
   // Every resulting variant needs corroborating evidence from at least two
@@ -881,11 +1079,12 @@ function walkAndSplitDissimilarObjects(
   node: EvidenceNode,
   threshold: number,
   minSamples: number,
+  clusteringMethod: ClusteringMethod,
 ): TypeRef {
   const { shape } = ref
 
   if (shape.kind === "object") {
-    const split = trySplitDissimilarObjects(node, threshold, minSamples)
+    const split = trySplitDissimilarObjects(node, threshold, minSamples, clusteringMethod)
     if (split !== null) return withMeta(split, ref.meta)
 
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
@@ -893,7 +1092,7 @@ function walkAndSplitDissimilarObjects(
     for (const [name, fieldRef] of Object.entries(fields)) {
       const childNode = node.object?.fields[name]
       newFields[name] = childNode !== undefined
-        ? walkAndSplitDissimilarObjects(fieldRef, childNode, threshold, minSamples)
+        ? walkAndSplitDissimilarObjects(fieldRef, childNode, threshold, minSamples, clusteringMethod)
         : fieldRef
     }
     return t(types.object(newFields), ref.meta)
@@ -903,7 +1102,7 @@ function walkAndSplitDissimilarObjects(
     const el = (shape as { element: TypeRef }).element
     const childNode = node.array?.element
     const newEl = childNode !== undefined
-      ? walkAndSplitDissimilarObjects(el, childNode, threshold, minSamples)
+      ? walkAndSplitDissimilarObjects(el, childNode, threshold, minSamples, clusteringMethod)
       : el
     return t(types.array(newEl), ref.meta)
   }
@@ -914,7 +1113,7 @@ function walkAndSplitDissimilarObjects(
     return t(types.tuple(els.map((el, i) => {
       const childNode = perIndex?.[i]
       return childNode !== undefined
-        ? walkAndSplitDissimilarObjects(el, childNode, threshold, minSamples)
+        ? walkAndSplitDissimilarObjects(el, childNode, threshold, minSamples, clusteringMethod)
         : el
     })), ref.meta)
   }
@@ -1158,6 +1357,7 @@ interface ResolvedStrategy {
   readonly splitDissimilarObjects: boolean
   readonly objectSplitThreshold: number
   readonly objectSplitMinSamples: number
+  readonly clusteringMethod: ClusteringMethod
   readonly customResolvers: readonly EvidenceResolver[]
 }
 
@@ -1186,6 +1386,7 @@ function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): Resolv
     splitDissimilarObjects: strategy?.splitDissimilarObjects ?? cfg?.splitDissimilarObjects ?? true,
     objectSplitThreshold: strategy?.objectSplitThreshold ?? cfg?.objectSplitThreshold ?? 0.5,
     objectSplitMinSamples: strategy?.objectSplitMinSamples ?? cfg?.objectSplitMinSamples ?? 5,
+    clusteringMethod: strategy?.clusteringMethod ?? cfg?.clusteringMethod ?? "single-linkage",
     customResolvers: strategy?.customResolvers ?? cfg?.customResolvers ?? [],
   }
 }
@@ -1224,7 +1425,9 @@ export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy):
   // 5. General structural union splitting (no discriminant field) — runs
   //    after dict detection so growing-key-set dicts get first refusal.
   if (resolved.splitDissimilarObjects) {
-    merged = walkAndSplitDissimilarObjects(merged, tree.root, resolved.objectSplitThreshold, resolved.objectSplitMinSamples)
+    merged = walkAndSplitDissimilarObjects(
+      merged, tree.root, resolved.objectSplitThreshold, resolved.objectSplitMinSamples, resolved.clusteringMethod,
+    )
   }
 
   // 6. Dirty data detection (opt-in)

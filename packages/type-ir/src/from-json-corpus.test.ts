@@ -467,6 +467,86 @@ describe("structural union splitting (no discriminant field)", () => {
   })
 })
 
+describe("clustering methods", () => {
+  // A/B/C each contribute a 2-sample cluster candidate. A and B share one
+  // field (`shared1`), B and C share a different field (`shared2`), but A
+  // and C are entirely disjoint (Jaccard distance 1.0). At threshold 0.8:
+  //  - single-linkage compares each new sample against the *cluster's
+  //    running field-set union*, which grows to include both `shared1` and
+  //    `shared2` once B joins — so by the time C arrives, its distance to
+  //    the (A+B)-unioned cluster reads as 0.75, under threshold, and C
+  //    chains in even though A and C alone are maximally dissimilar.
+  //  - complete-linkage requires every cross-pair to clear the threshold;
+  //    A-C's 1.0 distance blocks the merge, so it stops at two clusters.
+  const chainingValues = [
+    { p: 1, shared1: "x" },
+    { p: 2, shared1: "y" },
+    { shared1: "x", shared2: "y" },
+    { shared1: "y", shared2: "x" },
+    { shared2: "y", q: 1 },
+    { shared2: "x", q: 2 },
+  ]
+
+  test("single-linkage chains A-B-C into one cluster (no split) despite A and C being fully disjoint", () => {
+    const result = fromJsonCorpus(chainingValues, {
+      objectSplitThreshold: 0.8, objectSplitMinSamples: 5, clusteringMethod: "single-linkage",
+    })
+    expect(result.shape.kind).toBe("object")
+  })
+
+  test("complete-linkage refuses the chained merge, splitting into two clusters", () => {
+    const result = fromJsonCorpus(chainingValues, {
+      objectSplitThreshold: 0.8, objectSplitMinSamples: 5, clusteringMethod: "complete-linkage",
+    })
+    expect(result.shape.kind).toBe("union")
+    const variants = (result.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants).toHaveLength(2)
+  })
+
+  test("key-signature splits on exact key-set signature, ignoring objectSplitThreshold entirely", () => {
+    // A and B share `shared1`; under any Jaccard-distance method a high
+    // enough threshold would merge them. Key-signature clustering never
+    // looks at distance — same signature groups together, anything else is
+    // its own cluster, however close.
+    const result = fromJsonCorpus(chainingValues, {
+      objectSplitThreshold: 0.99, objectSplitMinSamples: 5, clusteringMethod: "key-signature",
+    })
+    expect(result.shape.kind).toBe("union")
+    const variants = (result.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants).toHaveLength(3)
+  })
+
+  test("key-signature is more aggressive than single-linkage on a polymorphic-API-response-style corpus", () => {
+    // Two exact, recurring shapes differing by one field. Jaccard distance
+    // between them is 1/3 (below the default 0.5 threshold), so
+    // single-linkage's default merges them into one optional-field record.
+    // Key-signature clustering only cares that the signatures differ.
+    const values = [
+      { id: 1, name: "a" },
+      { id: 2, name: "b" },
+      { id: 3, name: "c" },
+      { id: 4, name: "d", extra: true },
+      { id: 5, name: "e", extra: false },
+      { id: 6, name: "f", extra: true },
+    ]
+    const singleLinkage = fromJsonCorpus(values, { clusteringMethod: "single-linkage" })
+    expect(singleLinkage.shape.kind).toBe("object")
+
+    const keySignature = fromJsonCorpus(values, { clusteringMethod: "key-signature" })
+    expect(keySignature.shape.kind).toBe("union")
+    const variants = (keySignature.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants).toHaveLength(2)
+  })
+
+  test("default clusteringMethod is single-linkage (back-compat: unspecified behaves as before)", () => {
+    const withDefault = fromJsonCorpus(chainingValues, { objectSplitThreshold: 0.8, objectSplitMinSamples: 5 })
+    const explicit = fromJsonCorpus(chainingValues, {
+      objectSplitThreshold: 0.8, objectSplitMinSamples: 5, clusteringMethod: "single-linkage",
+    })
+    expect(withDefault).toEqual(explicit)
+  })
+})
+
 describe("dict detection", () => {
   test("objects with varying keys -> map", () => {
     const values: Record<string, number>[] = []
