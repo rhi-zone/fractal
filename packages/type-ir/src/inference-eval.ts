@@ -26,6 +26,7 @@
 
 import { ancestors, t, types, type TypeRef } from "./index.ts"
 import { fromJsonCorpus, type CorpusInferConfig, type ClusteringMethod } from "./from-json-corpus.ts"
+import { uint8 } from "./kinds/common.ts"
 import { ecommerceOrder, apiResponse, kitchenSink, treeNode, opt } from "./test-fixtures.ts"
 import { mean, stddev, bootstrapCI, mulberry32, pairedBootstrapTest, type Rng, type ConfidenceInterval } from "./stats.ts"
 
@@ -195,12 +196,40 @@ export interface HighCardinalityIdProfile {
   readonly style?: "uuid" | "sequential"
 }
 
+export interface DirtyOutlierProfile {
+  readonly kind: "dirty-outlier"
+  /**
+   * Fraction of samples steered to the first-declared variant of a
+   * 2-variant `union` position (the "clean"/dominant variant); the
+   * remainder go to the second variant (the minority/"dirty" one). Default
+   * 0.95 — comfortably past `walkAndDetectDirty`'s `max / total > 0.9`
+   * cutover (`from-json-corpus.ts`), so a corpus generated under the
+   * default lands squarely in the shape that detection targets. Pass
+   * something below 0.9 (e.g. 0.85) to build the NEGATIVE-CONTROL boundary
+   * case instead — skewed, but not past the cutover, so dirty-data
+   * collapsing must NOT fire.
+   *
+   * This is the profile that makes `detectDirtyData`
+   * (`ResolveStrategy`/`AblationSignalKey`) measurable at all: before this
+   * hook existed, `generateValue`'s union branch always picked a variant
+   * uniformly, so `generateCorpus` essentially never produced the skewed
+   * 2-variant union `walkAndDetectDirty` looks for (see the historical note
+   * on `AblationSignalKey`).
+   *
+   * Only affects `union` positions with EXACTLY 2 variants, matching
+   * `walkAndDetectDirty`'s own restriction — unions of any other arity fall
+   * through to uniform picking, same as `uniformSampler`.
+   */
+  readonly dominantRatio?: number
+}
+
 /** See the individual profile interfaces for what each varies and why. `{ kind: "uniform" }` (or omitting `profile` entirely) keeps Phase 1's original flat/uniform behavior. */
 export type GeneratorProfile =
   | { readonly kind: "uniform" }
   | ZipfianPresenceProfile
   | AdversarialBoundaryProfile
   | HighCardinalityIdProfile
+  | DirtyOutlierProfile
 
 /** Distribution hooks `generateValue` consults instead of sampling flat/uniform directly. Every method has a pass-through default (`uniformSampler`) so a profile only needs to override what it actually varies. */
 interface ProfileSampler {
@@ -227,6 +256,8 @@ interface ProfileSampler {
   ): { readonly value: unknown } | undefined
   /** Choose a map entry's key, given the default-generated candidate key. */
   mapKey(ref: TypeRef, defaultKey: string, rng: Rng, sampleIndex: number, totalSamples: number): string
+  /** Choose one variant of a `union`-shaped position's declared variants. */
+  pickUnionVariant<T extends TypeRef>(ref: TypeRef, variants: readonly T[], rng: Rng, sampleIndex: number, totalSamples: number): T
 }
 
 const uniformSampler: ProfileSampler = {
@@ -234,6 +265,7 @@ const uniformSampler: ProfileSampler = {
   pickEnumMember: (_ref, members, rng) => pick(rng, members),
   overrideLeaf: () => undefined,
   mapKey: (_ref, defaultKey) => defaultKey,
+  pickUnionVariant: (_ref, variants, rng) => pick(rng, variants),
 }
 
 function zipfWeights(count: number, exponent: number): number[] {
@@ -256,6 +288,7 @@ function makeZipfianSampler(exponent: number): ProfileSampler {
     pickEnumMember: (_ref, members, rng) => weightedPick(rng, members, zipfWeights(members.length, exponent)),
     overrideLeaf: () => undefined,
     mapKey: (_ref, defaultKey) => defaultKey,
+    pickUnionVariant: (_ref, variants, rng) => pick(rng, variants),
   }
 }
 
@@ -301,6 +334,7 @@ function makeAdversarialSampler(epsilon: number): ProfileSampler {
       }
       return pick(rng, st.seenKeys)
     },
+    pickUnionVariant: (_ref, variants, rng) => pick(rng, variants),
   }
 }
 
@@ -327,6 +361,17 @@ function makeHighCardinalitySampler(cardinalityRatio: number, style: "uuid" | "s
       return { value: pick(rng, st.seen) }
     },
     mapKey: (_ref, defaultKey) => defaultKey,
+    pickUnionVariant: (_ref, variants, rng) => pick(rng, variants),
+  }
+}
+
+function makeDirtyOutlierSampler(dominantRatio: number): ProfileSampler {
+  return {
+    ...uniformSampler,
+    pickUnionVariant: (_ref, variants, rng) => {
+      if (variants.length !== 2) return pick(rng, variants) // only the 2-variant case is what `walkAndDetectDirty` looks for
+      return rng() < dominantRatio ? variants[0]! : variants[1]!
+    },
   }
 }
 
@@ -336,6 +381,7 @@ function resolveProfile(profile: GeneratorProfile | undefined): ProfileSampler {
     case "zipfian-presence": return makeZipfianSampler(profile.exponent ?? 1.2)
     case "adversarial-boundary": return makeAdversarialSampler(profile.epsilon ?? 0)
     case "high-cardinality-id": return makeHighCardinalitySampler(profile.cardinalityRatio ?? 0.98, profile.style ?? "uuid")
+    case "dirty-outlier": return makeDirtyOutlierSampler(profile.dominantRatio ?? 0.95)
   }
 }
 
@@ -497,7 +543,8 @@ function generateValue(
     case "union": {
       const variants = (shape as { variants: readonly TypeRef[] }).variants
       if (variants.length === 0) return null
-      return generateValue(pick(opts.rng, variants), opts, depth + 1, sampleIndex, totalSamples)
+      const chosen = opts.profile.pickUnionVariant(ref, variants, opts.rng, sampleIndex, totalSamples)
+      return generateValue(chosen, opts, depth + 1, sampleIndex, totalSamples)
     }
     case "literal": {
       return (shape as { value: string | number | boolean | null }).value
@@ -1049,6 +1096,40 @@ const dictSchema = t(
   }),
 )
 
+// A 2-variant scalar union, paired with the `dirty-outlier` profile (see
+// its doc) to land the skewed corpus shape `walkAndDetectDirty`
+// (from-json-corpus.ts) targets: one variant holding >90% of the raw
+// values, the other treated as dirty-data noise. Declaring the union
+// directly in the schema (rather than injecting noise at a plain scalar
+// leaf) is what lets `hasShapeForSignal`'s existing `idx.unionPaths.size >
+// 0` classification pick this case up as a `detectDirtyData` positive
+// control automatically, the same way every other union-recovery signal's
+// positive control is classified.
+//
+// The dominant variant is `uint8` (fixed [0,255] range), NOT the generic
+// `types.integer` -- deliberately. `walkAndDetectDirty` re-infers each raw
+// value's type from scratch via a config-less `fromJson(val)` call and
+// compares it against the corpus-MERGED variant type via strict
+// `shapeEqual`. A generic `integer` variant generated over a wide range
+// (e.g. [-1000, 1000]) spans MULTIPLE narrow integer widths (`uint8`,
+// `int8`, `int16`, ...); `fromJson`'s per-value width narrowing picks a
+// different tight kind for different individual values even though the
+// corpus-wide merge widens them all to one common kind, so most individual
+// values silently fail the `shapeEqual` comparison against that widened
+// merged kind -- undercounting the true majority and making collapsing
+// fail to fire even at extreme skew. This was found empirically while
+// building this eval case (probing `types.integer` at 95%+ skew never
+// collapsed): pinning the dominant variant to a single fixed-width kind
+// like `uint8` keeps every individual re-inferred value's kind identical
+// to the merged kind, exercising `walkAndDetectDirty` as designed instead
+// of tripping over this width-narrowing mismatch.
+const dirtyOutlierSchema = t(
+  types.object({
+    id: t(types.integer),
+    count: t(types.union([uint8(), t(types.string)])),
+  }),
+)
+
 /** The default labeled test set `inference-eval.test.ts` runs against. */
 export const defaultLabeledCases: readonly EvalCase[] = [
   { name: "E-commerce Order", schema: ecommerceOrder },
@@ -1073,6 +1154,13 @@ export const defaultLabeledCases: readonly EvalCase[] = [
     generateOptions: { arrayLengthRange: [3, 6] },
   },
   { name: "Growing Dict", schema: dictSchema, generateOptions: { mapSizeRange: [1, 5] } },
+  {
+    name: "Dirty Outlier Field",
+    schema: dirtyOutlierSchema,
+    // Comfortably past `walkAndDetectDirty`'s 0.9 cutover (default
+    // `dominantRatio` 0.95) — see `dirtyOutlierSchema`'s doc.
+    generateOptions: { profile: { kind: "dirty-outlier" } },
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -1104,7 +1192,18 @@ export const defaultLabeledCases: readonly EvalCase[] = [
 // profile per signal.
 // ---------------------------------------------------------------------------
 
-/** The `ResolveStrategy` boolean toggles this ablation runner evaluates. `detectDirtyData` is included for completeness but see its dedicated note in `ablationRunner`'s doc — `generateCorpus`'s union-variant sampling is uniform (see `AdversarialBoundaryProfile`'s doc: no profile hook varies union-variant selection), so it essentially never lands the >90%-skewed corpus `walkAndDetectDirty` looks for, and the ablation report says so explicitly rather than presenting a near-zero effect as a real finding. */
+/**
+ * The `ResolveStrategy` boolean toggles this ablation runner evaluates.
+ * `detectDirtyData`'s effect is measurable via the "Dirty Outlier Field"
+ * case in `defaultLabeledCases`, which pairs a 2-variant scalar union with
+ * the `dirty-outlier` `GeneratorProfile` to land the skewed corpus shape
+ * `walkAndDetectDirty` (from-json-corpus.ts) looks for. Before that profile
+ * existed, `generateValue`'s union branch always picked a variant
+ * uniformly — no profile hook varied union-variant selection — so
+ * `generateCorpus` essentially never produced the >90%-skewed 2-variant
+ * union this signal needs, and the ablation could only report a null tie
+ * (see the git history on this module for that finding).
+ */
 export type AblationSignalKey =
   | "detectEnums"
   | "detectDiscriminatedUnions"

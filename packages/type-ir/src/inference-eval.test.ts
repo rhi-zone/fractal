@@ -19,6 +19,7 @@ import {
 } from "./inference-eval.ts"
 import { pairedBootstrapTest, mulberry32 } from "./stats.ts"
 import { ecommerceOrder, apiResponse, treeNode } from "./test-fixtures.ts"
+import { uint8 } from "./kinds/common.ts"
 
 // ---------------------------------------------------------------------------
 // generateCorpus
@@ -789,6 +790,107 @@ describe("generator profiles — distributional shape", () => {
     // The real enum field is untouched by this profile — only string/integer leaves are affected.
     for (const v of corpus) expect(["active", "archived"]).toContain(v.status as string)
   })
+
+  const dirtyOutlierProfileSchema = t(
+    types.object({ v: t(types.union([t(types.integer), t(types.string)])) }),
+  )
+
+  function unionVariantRates(profile: GeneratorProfile, n = 3000): { integer: number; string: number } {
+    const corpus = generateCorpus(dirtyOutlierProfileSchema, n, { seed: "dirty-outlier-shape", profile }) as Record<string, unknown>[]
+    let integer = 0
+    let string = 0
+    for (const v of corpus) {
+      if (typeof v.v === "number") integer++
+      else if (typeof v.v === "string") string++
+    }
+    return { integer: integer / n, string: string / n }
+  }
+
+  test("uniform union-variant sampling stays flat -- pickUnionVariant is only overridden by dirty-outlier", () => {
+    const rates = unionVariantRates({ kind: "uniform" })
+    expect(rates.integer).toBeCloseTo(0.5, 1)
+    expect(rates.string).toBeCloseTo(0.5, 1)
+  })
+
+  test("dirty-outlier skews a 2-variant union's sampling toward the first-declared variant at the default ratio (0.95, past walkAndDetectDirty's 0.9 cutover)", () => {
+    const rates = unionVariantRates({ kind: "dirty-outlier" })
+    expect(rates.integer).toBeGreaterThan(0.9)
+    expect(rates.string).toBeLessThan(0.1)
+  })
+
+  test("dirty-outlier's dominantRatio controls the skew directly, including below the cutover (negative-control boundary)", () => {
+    const skewed = unionVariantRates({ kind: "dirty-outlier", dominantRatio: 0.7 })
+    expect(skewed.integer).toBeCloseTo(0.7, 1)
+    expect(skewed.string).toBeCloseTo(0.3, 1)
+
+    const belowCutover = unionVariantRates({ kind: "dirty-outlier", dominantRatio: 0.85 })
+    expect(belowCutover.integer).toBeCloseTo(0.85, 1)
+    expect(belowCutover.integer).toBeLessThan(0.9)
+  })
+
+  test("dirty-outlier falls through to uniform picking for unions of arity other than 2", () => {
+    const threeWaySchema = t(
+      types.object({ v: t(types.union([t(types.integer), t(types.string), t(types.boolean)])) }),
+    )
+    const n = 3000
+    const corpus = generateCorpus(threeWaySchema, n, {
+      seed: "dirty-outlier-3way", profile: { kind: "dirty-outlier" },
+    }) as Record<string, unknown>[]
+    const counts = { number: 0, string: 0, boolean: 0 }
+    for (const v of corpus) counts[typeof v.v as "number" | "string" | "boolean"]++
+    for (const c of Object.values(counts)) expect(c / n).toBeCloseTo(1 / 3, 1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// dirty-outlier profile — threshold behavior against the REAL
+// `walkAndDetectDirty` heuristic (from-json-corpus.ts), not just the
+// generator's own claimed distribution. Mirrors the adversarial-boundary
+// threshold-behavior tests above: land a corpus just past the 0.9 cutover
+// (positive control — collapsing should fire) and just below it (negative
+// control — collapsing must NOT fire).
+// ---------------------------------------------------------------------------
+
+describe("dirty-outlier profile — walkAndDetectDirty threshold behavior", () => {
+  // The dominant variant is `uint8` (fixed [0,255] range), not the generic
+  // `types.integer` -- a wide-range integer variant spans multiple narrow
+  // integer widths, and `walkAndDetectDirty` re-infers each raw value's
+  // type from scratch (config-less `fromJson`) and strictly `shapeEqual`s
+  // it against the corpus-MERGED (possibly wider) variant type, so most
+  // individual values silently fail to match and collapsing never fires
+  // even at extreme skew. See `dirtyOutlierSchema`'s doc in inference-eval.ts.
+  const dirtySchema = t(
+    types.object({ v: t(types.union([uint8(), t(types.string)])) }),
+  )
+
+  test("above the 0.9 cutover (dominantRatio 0.95): detectDirtyData collapses the minority variant and reports a warning", () => {
+    const corpus = generateCorpus(dirtySchema, 300, {
+      seed: "dirty-above", profile: { kind: "dirty-outlier", dominantRatio: 0.95 },
+    })
+    const inferred = fromJsonCorpus(corpus, { detectDirtyData: true })
+    const fields = (inferred.shape as { fields: Record<string, { shape: { kind: string }; meta: Record<string, unknown> }> }).fields
+    expect(fields.v!.shape.kind).not.toBe("union")
+    expect(typeof fields.v!.meta.dirtyDataWarning).toBe("string")
+  })
+
+  test("below the 0.9 cutover (dominantRatio 0.85): detectDirtyData must NOT collapse -- both variants stay, negative control", () => {
+    const corpus = generateCorpus(dirtySchema, 300, {
+      seed: "dirty-below", profile: { kind: "dirty-outlier", dominantRatio: 0.85 },
+    })
+    const inferred = fromJsonCorpus(corpus, { detectDirtyData: true })
+    const fields = (inferred.shape as { fields: Record<string, { shape: { kind: string }; meta: Record<string, unknown> }> }).fields
+    expect(fields.v!.shape.kind).toBe("union")
+    expect(fields.v!.meta.dirtyDataWarning).toBeUndefined()
+  })
+
+  test("with detectDirtyData off, the skewed corpus still infers as a union regardless of skew", () => {
+    const corpus = generateCorpus(dirtySchema, 300, {
+      seed: "dirty-off", profile: { kind: "dirty-outlier", dominantRatio: 0.95 },
+    })
+    const inferred = fromJsonCorpus(corpus, { detectDirtyData: false })
+    const fields = (inferred.shape as { fields: Record<string, { shape: { kind: string } }> }).fields
+    expect(fields.v!.shape.kind).toBe("union")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -974,30 +1076,66 @@ describe("ablationRunner", () => {
     // the full power set (JSONoid-style, `O(2^signals)`) would be needed to
     // decompose the redundancy, which is exactly why this runner is
     // documented as leave-one-out, not power-set.
+    //
+    // onMean/offMean are no longer a clean exact 1 now that "Dirty Outlier
+    // Field" (added for the `detectDirtyData` ablation -- see the
+    // dedicated FINDING test below) is in the positive-control set: its
+    // 0.95-dominant-ratio corpus has a small (~0.95^50 ≈ 8%) per-trial
+    // chance of never sampling the minority variant at all, which drops
+    // that one case's recall regardless of any of these three toggles.
+    // That's sampling luck shared identically by both the ON and OFF runs
+    // (same seeds), not a real effect of the signals -- meanDiff staying
+    // exactly 0 is the property this test actually cares about.
     const reports = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT)
     for (const signal of ["detectDiscriminatedUnions", "splitDissimilarObjects", "detectCfdDiscriminants"] as const) {
       const power = reports.find((r) => r.signal === signal)!.discriminativePower as AblationDelta
-      expect(power.onMean).toBe(1)
-      expect(power.offMean).toBe(1)
+      expect(power.onMean).toBeGreaterThan(0.95)
+      expect(power.onMean).toBe(power.offMean)
       expect(power.meanDiff).toBe(0)
       expect(power.significant).toBe(false)
     }
   })
 
-  test("FINDING: detectDirtyData's measured effect is a null result caused by the generator, not evidence about the heuristic -- documented as such, not reported as a real zero", () => {
-    // `walkAndDetectDirty` only fires on a 2-variant union where one variant
-    // has >90% of the raw values. `generateValue`'s union branch always
-    // picks a variant uniformly (no `GeneratorProfile` hook varies
-    // union-variant selection -- see `AdversarialBoundaryProfile`'s doc),
-    // so `generateCorpus` essentially never produces the skew this signal
-    // looks for. The tie below is real (both sides literally never trigger
-    // the heuristic), but it must NOT be read as "detectDirtyData has no
-    // effect in practice" -- it's a coverage gap in the harness, and the
-    // module doc on `AblationSignalKey` says so explicitly.
+  test("FINDING: detectDirtyData is now measurable (via the dirty-outlier profile), and it HURTS union recall on this case set -- collapsing a skewed-but-genuine minority variant costs more than it's shown to gain", () => {
+    // Before the `dirty-outlier` `GeneratorProfile` existed, `generateValue`'s
+    // union branch always picked a variant uniformly, so `generateCorpus`
+    // essentially never produced the >90%-skewed 2-variant union
+    // `walkAndDetectDirty` (from-json-corpus.ts) looks for -- the ablation
+    // could only report a tied null result, not a real measurement. The
+    // "Dirty Outlier Field" case in `defaultLabeledCases` closes that gap:
+    // its `count` field is declared as a genuine 2-variant union
+    // (`uint8 | string`) whose ground truth says BOTH variants are real,
+    // generated under `dirty-outlier`'s default 0.95 dominant ratio so the
+    // corpus lands past `walkAndDetectDirty`'s 0.9 cutover.
+    //
+    // The measured result: `detectDirtyData` ON collapses that union and
+    // discards the (real, if rare) minority variant, which is a genuine
+    // RECALL cost against this ground truth -- not a wash, not noise.
+    // `walkAndDetectDirty` has no way to distinguish "a rare but legitimate
+    // variant" from "sampling contamination that isn't really part of the
+    // schema" -- it only looks at the raw skew, so it always pays this cost
+    // whenever a real schema happens to be skewed. This ablation set has no
+    // case where a corpus is contaminated with values that are genuinely
+    // NOT part of the schema (as opposed to a rare real variant), so it
+    // cannot show the heuristic's intended upside (recovering a clean type
+    // from a corpus polluted with real garbage) -- only its downside on the
+    // cases available. That upside scenario is exercised directly, at the
+    // `from-json-corpus.ts` level, by the "walkAndDetectDirty threshold
+    // behavior" tests above/below.
     const report = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT).find((r) => r.signal === "detectDirtyData")!
+
     const power = report.discriminativePower as AblationDelta
-    expect(power.meanDiff).toBe(0)
-    expect(power.significant).toBe(false)
+    expect(power.onMean).toBeLessThan(power.offMean)
+    expect(power.meanDiff).toBeLessThan(-0.1)
+    expect(power.significant).toBe(true)
+    expect(power.pValue).toBeLessThan(0.05)
+
+    // No case in this set has ground truth WITHOUT a union that also gets
+    // contaminated with non-schema noise, so `detectDirtyData` never even
+    // gets a chance to fire on the negative-control cases -- overfit rate
+    // is unaffected (measured, not just assumed).
+    const overfit = report.overfitRate as AblationDelta
+    expect(overfit.meanDiff).toBe(0)
   })
 
   test("reports AblationNotMeasurable rather than a fabricated number when a case set has no positive (or negative) control for a signal", () => {
