@@ -26,6 +26,24 @@
 // supplied for a tool, inputSchema degrades to the MCP spec minimum
 // `{ type: "object" }`.
 //
+// stream/page kind preservation: `extractToolSchemas` (api-tree/tree.ts)
+// already produces an `outputSchema` per tool, but until now this module
+// never consumed it — a handler's `stream`/`page` TypeRef kind, lowered by
+// type-ir's `toJsonSchema` to an array schema carrying the vendor-extension
+// marker `x-stream: true` / `x-page-style: "cursor"|"offset"` (the ONLY way
+// either kind survives JSON Schema, which has no native vocabulary for
+// either — see type-ir/src/json-schema.ts), was silently dropped. Mirrors
+// `http-api-projector/src/codegen.ts`'s `unwrapStreamSchema` (the one place
+// in this codebase that already reads `x-stream` off a derived schema) and
+// `json-rpc-api-projector/src/project.ts`'s tag-derived `streaming` field —
+// see `unwrapKindSchema` below, which generalizes both markers. The MCP spec
+// requires `outputSchema` to be `{ type: "object", ... }`
+// (`@modelcontextprotocol/sdk`'s `ToolSchema`), so a stream/page's array-of-
+// element schema is never assigned there directly (it wouldn't validate) —
+// instead the unwrapped fact surfaces as `McpTool.streaming`/`.paginated`/
+// `.pageStyle`, and `outputSchema` is populated only from the unwrapped
+// element schema when THAT is itself object-shaped.
+//
 // See:
 //   docs/artifacts/fc-op-kinds/projection-mcp.md — MCP concept list + classification
 //   packages/api-tree/src/tags.ts                    — tag lattice (resolveTags)
@@ -74,7 +92,43 @@ export type McpTool = {
   readonly name: string
   readonly description: string
   readonly inputSchema: Record<string, unknown>
+  /**
+   * Derived-from-type output schema (from the same `SchemaMap` `inputSchema`
+   * comes from), present only when it's `{ type: "object", ... }` — the
+   * shape the MCP spec's `outputSchema` field requires
+   * (`@modelcontextprotocol/sdk`'s `ToolSchema`). A `stream`/`page`-kinded
+   * output degrades (type-ir's `toJsonSchema`) to an ARRAY schema, which
+   * would fail spec validation here — see `streaming`/`paginated`/
+   * `pageStyle` below for how that kind info is preserved instead. Absent
+   * entirely when no schema was derived, or the derived schema isn't
+   * object-shaped.
+   */
+  readonly outputSchema?: Record<string, unknown>
   readonly annotations?: McpAnnotations
+  /**
+   * True when the handler's output is a `stream` TypeRef kind
+   * (`AsyncIterable<T>` — see `@rhi-zone/fractal-api-tree`'s `StreamEffect`
+   * doc) — a client can use this to decide whether to expect incremental
+   * `notifications/progress` + collected content rather than a single
+   * result (see server.ts's `collectStreamedToolContent`). Three-valued: an
+   * explicit `meta.tags.streaming` (true OR false) always wins over the
+   * schema's own `x-stream` marker (authored fact over inferred one, same
+   * precedence `resolveTags` documents for its `outputType` parameter);
+   * absent this tool's output schema hints at neither, in which case the key
+   * is omitted (unknown is not `false`).
+   */
+  readonly streaming?: boolean
+  /**
+   * True when the handler's output is a `page` TypeRef kind (`CursorPage<T>`
+   * / `OffsetPage<T>` — see `@rhi-zone/fractal-api-tree`'s `Page<T>` doc),
+   * derived purely from the schema's `x-page-style` marker — there is no
+   * `meta.tags` equivalent to prioritize over it (the tag lattice doesn't
+   * model pagination; only `page.ts`'s TypeRef-kind convention does). Omitted
+   * when the derived output schema carries no such marker.
+   */
+  readonly paginated?: boolean
+  /** Which pagination convention (`Page<T>`'s two variants) `paginated: true` uses. Present only alongside `paginated: true`. */
+  readonly pageStyle?: "cursor" | "offset"
   /**
    * Lifecycle flag: the operation is slated for removal. Derived from the
    * tree-level `meta.tags.deprecated` tag (see api-tree/src/tags.ts) — the
@@ -95,6 +149,17 @@ export type McpTool = {
  */
 export type ToolSchema = {
   readonly inputSchema?: Record<string, unknown>
+  /**
+   * Derived-from-type output schema. Already produced by
+   * `@rhi-zone/fractal-api-tree`'s `extractToolSchemas` (same shape
+   * `http-api-projector`/`json-rpc-api-projector`'s own `ToolSchema`/
+   * `MethodSchema` consume as `outputSchema`/`resultSchema`) — see
+   * `unwrapKindSchema` below for how a `stream`/`page`-kinded schema here is
+   * turned into `McpTool.streaming`/`.paginated`/`.pageStyle` instead of
+   * being assigned verbatim (which would violate the MCP spec's
+   * object-shaped `outputSchema` constraint).
+   */
+  readonly outputSchema?: Record<string, unknown>
   readonly description?: string
 }
 
@@ -141,6 +206,69 @@ function hintsFromTags(tags: Tags): Record<string, boolean> {
   if (r.idempotent !== undefined) hints.idempotentHint = r.idempotent
   if (r.openWorld !== undefined) hints.openWorldHint = r.openWorld
   return hints
+}
+
+// ============================================================================
+// stream/page kind recovery from a derived output schema
+// ============================================================================
+
+/** A vendor-extended JSON Schema carrying type-ir's `x-stream`/`x-page-style` markers (json-schema.ts's `stream`/`page` projections). */
+type KindTaggedSchema = Record<string, unknown> & {
+  readonly ["x-stream"]?: boolean
+  readonly ["x-page-style"]?: "cursor" | "offset"
+  readonly items?: Record<string, unknown> | false
+}
+
+/** `unwrapKindSchema`'s result: the recovered kind facts, plus the schema to use for `McpTool.outputSchema` (only when that's itself object-shaped — see module doc). */
+type KindInfo = {
+  readonly outputSchema?: Record<string, unknown>
+  readonly streaming: boolean
+  readonly paginated: boolean
+  readonly pageStyle?: "cursor" | "offset"
+}
+
+/**
+ * Recover `stream`/`page` TypeRef-kind facts from a derived output schema —
+ * the MCP-side counterpart to `http-api-projector/src/codegen.ts`'s
+ * `unwrapStreamSchema`, generalized to also read `x-page-style` (which no
+ * projector has consumed until now — see module doc). `x-stream`/
+ * `x-page-style` are mutually exclusive on any one schema (type-ir's
+ * `toJsonSchema` never emits both), so only one branch below ever fires.
+ *
+ * A schema with neither marker (or no schema at all) passes through as a
+ * candidate `outputSchema` unchanged, still subject to the `type: "object"`
+ * gate applied by callers.
+ */
+function unwrapKindSchema(schema: Record<string, unknown> | undefined): KindInfo {
+  const tagged = schema as KindTaggedSchema | undefined
+  if (tagged?.["x-stream"] === true) {
+    const item = tagged.items
+    return {
+      ...(item !== undefined && item !== false ? { outputSchema: item } : {}),
+      streaming: true,
+      paginated: false,
+    }
+  }
+  const pageStyle = tagged?.["x-page-style"]
+  if (pageStyle !== undefined) {
+    const item = tagged?.items
+    return {
+      ...(item !== undefined && item !== false ? { outputSchema: item } : {}),
+      streaming: false,
+      paginated: true,
+      pageStyle,
+    }
+  }
+  return {
+    ...(schema !== undefined ? { outputSchema: schema } : {}),
+    streaming: false,
+    paginated: false,
+  }
+}
+
+/** True when `schema` is object-shaped — the only shape MCP's `outputSchema` field accepts (`@modelcontextprotocol/sdk`'s `ToolSchema`). */
+function isObjectSchema(schema: Record<string, unknown> | undefined): schema is Record<string, unknown> {
+  return schema !== undefined && schema.type === "object"
 }
 
 // ============================================================================
@@ -294,14 +422,28 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
           Object.keys(annotationsMerged).length > 0 ? annotationsMerged : undefined
 
         // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
-        const deprecated = resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true
+        const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
+        const deprecated = resolved.deprecated === true
+
+        // stream/page kind recovery from the derived output schema (see
+        // `unwrapKindSchema`'s doc) — an explicit `meta.tags.streaming`
+        // (true OR false) wins over the schema's own `x-stream` marker,
+        // matching `resolveTags`'s own authored-over-inferred precedence for
+        // its `outputType` parameter. `paginated` has no tag-lattice
+        // equivalent to prioritize over, so it's schema-derived only.
+        const kind = unwrapKindSchema(derived?.outputSchema)
+        const streaming = resolved.streaming ?? (kind.streaming ? true : undefined)
+        const outputSchema = isObjectSchema(kind.outputSchema) ? kind.outputSchema : undefined
 
         out.push({
           name,
           description,
           // Derived-from-type schema when available; else the MCP spec minimum.
           inputSchema: derived?.inputSchema ?? { type: "object" },
+          ...(outputSchema !== undefined ? { outputSchema } : {}),
           ...(annotations !== undefined ? { annotations } : {}),
+          ...(streaming !== undefined ? { streaming } : {}),
+          ...(kind.paginated ? { paginated: true, ...(kind.pageStyle !== undefined ? { pageStyle: kind.pageStyle } : {}) } : {}),
           ...(deprecated ? { deprecated: true } : {}),
         })
         handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
@@ -362,6 +504,16 @@ export type McpResource = {
   readonly name: string
   readonly description: string
   readonly mimeType: string
+  /**
+   * See `McpTool.streaming` — derived the same way (tag-only here: resource
+   * reads have no derived output `SchemaMap` entry to recover an `x-stream`
+   * marker from, unlike tools, so this reflects only an authored
+   * `meta.tags.streaming`). A resource read returning an `AsyncIterable` is
+   * drained into multiple `contents` entries at runtime regardless of
+   * whether this hint is set (server.ts's `collectStreamedResourceContents`)
+   * — this field only affects what `resources/list` advertises up front.
+   */
+  readonly streaming?: boolean
   /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
   readonly deprecated?: boolean
 }
@@ -372,6 +524,8 @@ export type McpResourceTemplate = {
   readonly name: string
   readonly description: string
   readonly mimeType: string
+  /** See `McpResource.streaming`. */
+  readonly streaming?: boolean
   /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
   readonly deprecated?: boolean
 }
@@ -496,12 +650,21 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
 
         const mimeType = typeof mcp.mimeType === "string" ? mcp.mimeType : "application/json"
 
-        // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
-        const deprecated = resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true
+        // deprecated/streaming: tree-level meta.tags, three-valued (omit unless asserted)
+        const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
+        const deprecated = resolved.deprecated === true
+        const streaming = resolved.streaming
 
         if (hasFallback) {
           const { pattern, paramNames } = compileUriTemplate(uri)
-          resourceTemplates.push({ uriTemplate: uri, name, description, mimeType, ...(deprecated ? { deprecated: true } : {}) })
+          resourceTemplates.push({
+            uriTemplate: uri,
+            name,
+            description,
+            mimeType,
+            ...(streaming !== undefined ? { streaming } : {}),
+            ...(deprecated ? { deprecated: true } : {}),
+          })
           templateHandlers.push({
             uriTemplate: uri,
             paramNames,
@@ -512,7 +675,14 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
             meta: child.meta,
           })
         } else {
-          resources.push({ uri, name, description, mimeType, ...(deprecated ? { deprecated: true } : {}) })
+          resources.push({
+            uri,
+            name,
+            description,
+            mimeType,
+            ...(streaming !== undefined ? { streaming } : {}),
+            ...(deprecated ? { deprecated: true } : {}),
+          })
           handlers.set(uri, { handler: child.handler as Handler, meta: child.meta })
         }
       } else {
@@ -564,6 +734,8 @@ export type McpPrompt = {
   readonly name: string
   readonly description: string
   readonly arguments?: McpPromptArgument[]
+  /** See `McpResource.streaming` — tag-only here too: prompts have no `outputSchema` equivalent to unwrap `x-stream` from (a prompt's derived schema, `ToolSchema.outputSchema`, describes the underlying handler's domain output, not the `GetPromptResult.messages` shape `collectStreamedMessages` produces). */
+  readonly streaming?: boolean
   /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
   readonly deprecated?: boolean
 }
@@ -655,13 +827,15 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
 
         const args = argumentsFromSchema(derived?.inputSchema)
 
-        // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
-        const deprecated = resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true
+        // deprecated/streaming: tree-level meta.tags, three-valued (omit unless asserted)
+        const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
+        const deprecated = resolved.deprecated === true
 
         out.push({
           name,
           description,
           ...(args !== undefined ? { arguments: args } : {}),
+          ...(resolved.streaming !== undefined ? { streaming: resolved.streaming } : {}),
           ...(deprecated ? { deprecated: true } : {}),
         })
         handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })

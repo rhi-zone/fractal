@@ -3,7 +3,7 @@
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { verbFromTags } from "@rhi-zone/fractal-http-api-projector/project"
-import { projectPrompts, projectResources, toTools } from "./project.ts"
+import { projectPrompts, projectResources, projectTools, toTools } from "./project.ts"
 
 // ============================================================================
 // 1. Cross-surface payoff: one meta.tags → MCP annotations + HTTP verb
@@ -570,5 +570,124 @@ describe("meta.tags.deprecated surfaces on every leaf-derived surface", () => {
     const n = api_({ old: op((_: unknown) => ({}), { mcp: { as: "prompt" }, tags: { deprecated: true } }) })
     const { prompts } = projectPrompts(n)
     expect(prompts[0]!.deprecated).toBe(true)
+  })
+})
+
+// ============================================================================
+// stream/page kind preservation — a handler's `stream`/`page` TypeRef kind,
+// lowered by type-ir's `toJsonSchema` to an `x-stream`/`x-page-style`-tagged
+// array schema (the only way either kind survives JSON Schema), used to be
+// silently dropped: `McpTool` had no `outputSchema` field at all, so nothing
+// consumed the derived `SchemaMap` entry's `outputSchema`. Mirrors
+// http-api-projector's `unwrapStreamSchema` (codegen.ts) and
+// json-rpc-api-projector's tag-derived `streaming` field (project.ts).
+// ============================================================================
+
+describe("stream/page kind preservation from a derived output schema", () => {
+  it("an x-stream-tagged output schema sets tools[0].streaming = true", () => {
+    const n = api_({ gen: op((_: unknown) => ({}), {}) })
+    const { tools } = projectTools(n, {
+      schemas: { gen: { outputSchema: { type: "array", items: { type: "string" }, "x-stream": true } } },
+    })
+    expect(tools[0]!.streaming).toBe(true)
+  })
+
+  it("an x-stream-tagged output schema is NOT assigned verbatim to outputSchema (array fails the MCP spec's object-only constraint)", () => {
+    const n = api_({ gen: op((_: unknown) => ({}), {}) })
+    const { tools } = projectTools(n, {
+      schemas: { gen: { outputSchema: { type: "array", items: { type: "string" }, "x-stream": true } } },
+    })
+    expect(tools[0]!.outputSchema).toBeUndefined()
+  })
+
+  it("an x-stream-tagged schema whose item schema IS object-shaped surfaces that item schema as outputSchema", () => {
+    const n = api_({ gen: op((_: unknown) => ({}), {}) })
+    const itemSchema = { type: "object", properties: { chunk: { type: "string" } } }
+    const { tools } = projectTools(n, {
+      schemas: { gen: { outputSchema: { type: "array", items: itemSchema, "x-stream": true } } },
+    })
+    expect(tools[0]!.outputSchema).toEqual(itemSchema)
+    expect(tools[0]!.streaming).toBe(true)
+  })
+
+  it("an x-page-style-tagged output schema sets tools[0].paginated = true and pageStyle", () => {
+    const n = api_({ list: op((_: unknown) => ({}), {}) })
+    const { tools } = projectTools(n, {
+      schemas: { list: { outputSchema: { type: "array", items: { type: "string" }, "x-page-style": "cursor" } } },
+    })
+    expect(tools[0]!.paginated).toBe(true)
+    expect(tools[0]!.pageStyle).toBe("cursor")
+    expect(tools[0]!.streaming).toBeUndefined()
+  })
+
+  it("offset-style pagination surfaces pageStyle: 'offset'", () => {
+    const n = api_({ list: op((_: unknown) => ({}), {}) })
+    const { tools } = projectTools(n, {
+      schemas: { list: { outputSchema: { type: "array", items: { type: "string" }, "x-page-style": "offset" } } },
+    })
+    expect(tools[0]!.pageStyle).toBe("offset")
+  })
+
+  it("a plain object output schema (no x-stream/x-page-style) is assigned to outputSchema unchanged, streaming/paginated omitted", () => {
+    const n = api_({ get: op((_: unknown) => ({}), {}) })
+    const outputSchema = { type: "object", properties: { id: { type: "string" } } }
+    const { tools } = projectTools(n, { schemas: { get: { outputSchema } } })
+    expect(tools[0]!.outputSchema).toEqual(outputSchema)
+    expect(tools[0]!.streaming).toBeUndefined()
+    expect(tools[0]!.paginated).toBeUndefined()
+  })
+
+  it("no derived schema at all → outputSchema/streaming/paginated all omitted", () => {
+    const n = api_({ get: op((_: unknown) => ({}), {}) })
+    const tools = toTools(n)
+    expect(tools[0]!.outputSchema).toBeUndefined()
+    expect(tools[0]!.streaming).toBeUndefined()
+    expect(tools[0]!.paginated).toBeUndefined()
+  })
+
+  it("an explicit meta.tags.streaming: true wins even with no x-stream marker on the schema", () => {
+    const n = api_({ gen: op((_: unknown) => ({}), { tags: { streaming: true } }) })
+    const tools = toTools(n)
+    expect(tools[0]!.streaming).toBe(true)
+  })
+
+  it("an explicit meta.tags.streaming: false wins over an x-stream-tagged schema (authored fact over inferred one)", () => {
+    const n = api_({ gen: op((_: unknown) => ({}), { tags: { streaming: false } }) })
+    const { tools } = projectTools(n, {
+      schemas: { gen: { outputSchema: { type: "array", items: { type: "string" }, "x-stream": true } } },
+    })
+    expect(tools[0]!.streaming).toBe(false)
+  })
+
+  it("resource: an authored meta.tags.streaming: true surfaces on resources[0].streaming (no schema to unwrap for resources)", () => {
+    const n = api_({ log: op((_: unknown) => ({}), { mcp: { as: "resource" }, tags: { streaming: true } }) })
+    const { resources } = projectResources(n)
+    expect(resources[0]!.streaming).toBe(true)
+  })
+
+  it("resource template (fallback subtree): streaming surfaces the same way", () => {
+    const n = api_({
+      users: api_({}, {
+        fallback: {
+          name: "userId",
+          subtree: api_({ log: op((_: unknown) => ({}), { mcp: { as: "resource" }, tags: { streaming: true } }) }),
+        },
+      }),
+    })
+    const { resourceTemplates } = projectResources(n)
+    expect(resourceTemplates[0]!.streaming).toBe(true)
+  })
+
+  it("prompt: an authored meta.tags.streaming: true surfaces on prompts[0].streaming", () => {
+    const n = api_({ narrate: op((_: unknown) => ({}), { mcp: { as: "prompt" }, tags: { streaming: true } }) })
+    const { prompts } = projectPrompts(n)
+    expect(prompts[0]!.streaming).toBe(true)
+  })
+
+  it("an explicit meta.tags.streaming: false is emitted as streaming: false (a genuine negation, not the unknown/omitted case)", () => {
+    const n = api_({ get: op((_: unknown) => ({}), { tags: { streaming: false } }) })
+    const tools = toTools(n)
+    expect(tools[0]!.streaming).toBe(false)
+    expect("streaming" in tools[0]!).toBe(true)
   })
 })
