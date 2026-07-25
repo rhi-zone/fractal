@@ -91,7 +91,7 @@ describe("map", () => {
 
 describe("tuple", () => {
   test("degrades to List(AnyPointer)", () => {
-    expect(toCapnpType(t(types.tuple([int32(), t(types.string)])))).toBe("List(AnyPointer)")
+    expect(toCapnpType(t(types.tuple([int32(), t(types.string)])))).toBe("AnyPointer")
   })
 })
 

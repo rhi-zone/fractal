@@ -48,11 +48,11 @@ describe("collections", () => {
   })
 
   test("map with string key -> NSDictionary<NSString *, V> *", () => {
-    expect(toObjCType(t(types.map(t(types.string), t(types.number))))).toBe("NSDictionary<NSString *, double> *")
+    expect(toObjCType(t(types.map(t(types.string), t(types.number))))).toBe("NSDictionary<NSString *, NSNumber *> *")
   })
 
   test("nested array of array", () => {
-    expect(toObjCType(t(types.array(t(types.array(t(types.integer))))))).toBe("NSArray<NSArray<NSInteger> *> *")
+    expect(toObjCType(t(types.array(t(types.array(t(types.integer))))))).toBe("NSArray<NSArray<NSNumber *> *> *")
   })
 })
 
@@ -139,7 +139,7 @@ describe("@interface / @property generation", () => {
       }),
     )
     const { header } = toObjCInterface("Game", ref)
-    expect(header).toContain("@property (nonatomic, copy) NSDictionary<NSString *, double> *scores;")
+    expect(header).toContain("@property (nonatomic, copy) NSDictionary<NSString *, NSNumber *> *scores;")
   })
 
   test("nested object field hoists a named nested class", () => {

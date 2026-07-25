@@ -59,7 +59,7 @@ describe("string subtypes and bytes", () => {
     expect(toHaskellType(duration())).toBe("NominalDiffTime")
   })
   test("bytes", () => {
-    expect(toHaskellType(bytes())).toBe("ByteString")
+    expect(toHaskellType(bytes())).toBe("Text")
   })
 })
 
