@@ -310,13 +310,24 @@ schema --(generateCorpus)--> synthetic values --(fromJsonCorpus)-->
 
 - **`scoreInference(original, inferred)`** — flattens both schemas into path
   indexes (object fields append `.name`, arrays `[]`, tuples `[i]`, maps
-  `{}`) and compares them across five precision/recall/F1 axes:
+  `{}`) and compares them across six precision/recall/F1 axes:
   `fieldCoverage` (found every path), `typeAccuracy` (`exactRate` — identical
   kind; `familyRate` — same root kind, e.g. `uint8` and `int32` both root to
-  a numeric family via `ancestors`), `enumDetection`, `dictDetection`, and
-  `unionFidelity` (plus `avgVariantCountDiff`). `overallF1` averages only the
-  axes with something to find in the original — no free credit for an axis
-  with nothing there.
+  a numeric family via `ancestors`), `enumDetection`, `enumMemberFidelity`,
+  `dictDetection`, and `unionFidelity` (plus `avgVariantCountDiff`).
+  `enumDetection` is shape-only — did we recognize a position as enum-typed
+  at all — while `enumMemberFidelity` compares the actual member sets at
+  positions both schemas agree are enum-shaped, catching a gap shape
+  detection can't see: a rare member that never appears in a small sample,
+  producing an inferred enum with fewer members than the true schema (a
+  `zipfian-presence`-profiled corpus at small N is the case that surfaced
+  this: shape detection improves under skewed sampling — concentrated
+  observations saturate K/N sooner — while member-set fidelity gets worse,
+  see `inference-eval.test.ts`'s generator-profile FINDING tests). Both are
+  micro-averaged (`comparedPositions === 0` reports the vacuous perfect
+  score, same convention as `typeAccuracy`'s `compared === 0`). `overallF1`
+  averages only the axes with something to find in the original — no free
+  credit for an axis with nothing there.
 
 - **`runEvaluation(cases, sizes?)`** — drives labeled `EvalCase`s through
   generate → infer → score at each size in `sizes` (default `[5, 10, 50,

@@ -552,6 +552,8 @@ interface SchemaIndex {
   readonly mapPaths: ReadonlySet<string>
   /** union path -> number of variants (for union-fidelity variant-count comparison). */
   readonly variantCounts: ReadonlyMap<string, number>
+  /** enum path -> the declared member set (for member-set-fidelity comparison). */
+  readonly enumMembersAt: ReadonlyMap<string, ReadonlySet<string>>
 }
 
 function indexSchema(root: TypeRef): SchemaIndex {
@@ -561,6 +563,7 @@ function indexSchema(root: TypeRef): SchemaIndex {
   const unionPaths = new Set<string>()
   const mapPaths = new Set<string>()
   const variantCounts = new Map<string, number>()
+  const enumMembersAt = new Map<string, ReadonlySet<string>>()
 
   function visit(ref: TypeRef, path: string, seen: ReadonlySet<TypeRef>): void {
     if (seen.has(ref)) return // guard against `ref`-free structural cycles (shouldn't occur, but stay safe)
@@ -572,7 +575,11 @@ function indexSchema(root: TypeRef): SchemaIndex {
       paths.add(path)
       kindAt.set(path, shape.kind)
     }
-    if (shape.kind === "enum") enumPaths.add(path)
+    if (shape.kind === "enum") {
+      enumPaths.add(path)
+      const members = (shape as { members: readonly string[] }).members
+      enumMembersAt.set(path, new Set(members))
+    }
     if (shape.kind === "map") mapPaths.add(path)
 
     if (shape.kind === "object") {
@@ -607,7 +614,7 @@ function indexSchema(root: TypeRef): SchemaIndex {
   }
 
   visit(root, "", new Set())
-  return { paths, kindAt, enumPaths, unionPaths, mapPaths, variantCounts }
+  return { paths, kindAt, enumPaths, unionPaths, mapPaths, variantCounts, enumMembersAt }
 }
 
 /** The nearest ancestor kind with no parent of its own — groups width/format
@@ -654,8 +661,25 @@ export interface ScoreReport {
   readonly fieldCoverage: PrecisionRecallF1
   /** Among positions found in both, how often did the inferred kind match. */
   readonly typeAccuracy: { readonly exactRate: number; readonly familyRate: number; readonly comparedCount: number }
-  /** Did we find the enum-shaped positions (vs. leaving them as plain string/integer). */
+  /** Did we find the enum-shaped positions (vs. leaving them as plain string/integer). Shape only — says nothing about whether the recovered member set is right; see `enumMemberFidelity`. */
   readonly enumDetection: PrecisionRecallF1
+  /**
+   * Among positions BOTH schemas agree are enum-shaped, how well did the
+   * inferred member set match the true one. Precision: inferred members
+   * that are real. Recall: real members that were found (the axis that
+   * catches a rare member simply never appearing in a small sample — see
+   * module doc / the zipfian-presence finding in inference-eval.test.ts).
+   * Micro-averaged across compared positions (sums matched/actual/predicted
+   * member counts, then computes one precision/recall/f1) rather than
+   * averaging per-position rates, matching `fieldCoverage`/`enumDetection`'s
+   * existing set-based convention. `comparedPositions === 0` (no position
+   * where both schemas agree it's an enum) reports the vacuous perfect
+   * score, same convention as `typeAccuracy`'s `compared === 0` case — this
+   * axis is about member-set quality GIVEN shape was found, so it's excluded
+   * from `overallF1` whenever there's nothing to compare, exactly like the
+   * other conditionally-included axes below.
+   */
+  readonly enumMemberFidelity: PrecisionRecallF1 & { readonly comparedPositions: number }
   /** Did we find the dict-shaped positions (vs. leaving them as fixed-field record). */
   readonly dictDetection: PrecisionRecallF1
   /** Did we find the union-shaped positions (incl. discriminated unions), and how close were variant counts. */
@@ -711,6 +735,22 @@ export function scoreInference(original: TypeRef, inferred: TypeRef): ScoreRepor
   }
 
   const enumDetection = setPrf1(origIdx.enumPaths, infIdx.enumPaths)
+
+  let memberMatched = 0
+  let memberActual = 0
+  let memberPredicted = 0
+  let comparedPositions = 0
+  for (const path of origIdx.enumPaths) {
+    if (!infIdx.enumPaths.has(path)) continue // shape not recovered here — enumDetection already penalizes this
+    const origMembers = origIdx.enumMembersAt.get(path)!
+    const infMembers = infIdx.enumMembersAt.get(path)!
+    comparedPositions++
+    memberActual += origMembers.size
+    memberPredicted += infMembers.size
+    for (const m of origMembers) if (infMembers.has(m)) memberMatched++
+  }
+  const enumMemberFidelity = { ...prf1(memberMatched, memberActual, memberPredicted), comparedPositions }
+
   const dictDetection = setPrf1(origIdx.mapPaths, infIdx.mapPaths)
   const unionPrf1 = setPrf1(origIdx.unionPaths, infIdx.unionPaths)
 
@@ -728,6 +768,7 @@ export function scoreInference(original: TypeRef, inferred: TypeRef): ScoreRepor
   // an empty axis (e.g. no enums in this schema) doesn't get free credit.
   const axisScores: number[] = [fieldCoverage.f1, typeAccuracy.familyRate]
   if (origIdx.enumPaths.size > 0) axisScores.push(enumDetection.f1)
+  if (comparedPositions > 0) axisScores.push(enumMemberFidelity.f1)
   if (origIdx.mapPaths.size > 0) axisScores.push(dictDetection.f1)
   if (origIdx.unionPaths.size > 0) axisScores.push(unionFidelity.f1)
 
@@ -735,6 +776,7 @@ export function scoreInference(original: TypeRef, inferred: TypeRef): ScoreRepor
     fieldCoverage,
     typeAccuracy,
     enumDetection,
+    enumMemberFidelity,
     dictDetection,
     unionFidelity,
     overallF1: mean(axisScores),
@@ -767,6 +809,7 @@ export interface SizeAverage {
   readonly avgFieldCoverageF1: number
   readonly avgTypeAccuracyFamilyRate: number
   readonly avgEnumDetectionF1: number
+  readonly avgEnumMemberFidelityF1: number
   readonly avgDictDetectionF1: number
   readonly avgUnionFidelityF1: number
 }
@@ -805,6 +848,7 @@ export function runEvaluation(cases: readonly EvalCase[], sizes: readonly number
       avgFieldCoverageF1: mean(atSize.map((r) => r.score.fieldCoverage.f1)),
       avgTypeAccuracyFamilyRate: mean(atSize.map((r) => r.score.typeAccuracy.familyRate)),
       avgEnumDetectionF1: mean(atSize.map((r) => r.score.enumDetection.f1)),
+      avgEnumMemberFidelityF1: mean(atSize.map((r) => r.score.enumMemberFidelity.f1)),
       avgDictDetectionF1: mean(atSize.map((r) => r.score.dictDetection.f1)),
       avgUnionFidelityF1: mean(atSize.map((r) => r.score.unionFidelity.f1)),
     }
@@ -829,6 +873,7 @@ export type EvalAxis =
   | "fieldCoverageF1"
   | "typeAccuracyFamilyRate"
   | "enumDetectionF1"
+  | "enumMemberFidelityF1"
   | "dictDetectionF1"
   | "unionFidelityF1"
 
@@ -837,6 +882,7 @@ const evalAxes: readonly EvalAxis[] = [
   "fieldCoverageF1",
   "typeAccuracyFamilyRate",
   "enumDetectionF1",
+  "enumMemberFidelityF1",
   "dictDetectionF1",
   "unionFidelityF1",
 ]
@@ -847,6 +893,7 @@ function axisValue(score: ScoreReport, axis: EvalAxis): number {
     case "fieldCoverageF1": return score.fieldCoverage.f1
     case "typeAccuracyFamilyRate": return score.typeAccuracy.familyRate
     case "enumDetectionF1": return score.enumDetection.f1
+    case "enumMemberFidelityF1": return score.enumMemberFidelity.f1
     case "dictDetectionF1": return score.dictDetection.f1
     case "unionFidelityF1": return score.unionFidelity.f1
   }

@@ -178,6 +178,74 @@ describe("scoreInference", () => {
     const score = scoreInference(original, inferred)
     expect(score.unionFidelity.recall).toBe(0) // original union path never matched
   })
+
+  describe("enumMemberFidelity", () => {
+    test("a schema with 5 enum members but only 3 observed scores member-set recall ~0.6, not full credit", () => {
+      const original = t(
+        types.object({ status: t(types.enum(["a", "b", "c", "d", "e"])) }),
+      )
+      // What inference would produce from a small/skewed corpus that only
+      // ever saw 3 of the 5 true members: shape is correctly detected as
+      // enum (the gap this axis exists to catch is invisible to shape-only
+      // scoring), but the member set is short two rare members.
+      const inferred = t(
+        types.object({ status: t(types.enum(["a", "b", "c"])) }),
+      )
+      const score = scoreInference(original, inferred)
+      // Shape detection alone still reports a perfect match.
+      expect(score.enumDetection.f1).toBe(1)
+      // Member-set fidelity catches what shape detection can't: recall is
+      // matched/actual = 3/5, not 1.
+      expect(score.enumMemberFidelity.recall).toBeCloseTo(3 / 5, 5)
+      expect(score.enumMemberFidelity.precision).toBe(1) // every inferred member is real
+      expect(score.enumMemberFidelity.comparedPositions).toBe(1)
+    })
+
+    test("an inferred member set with a spurious member (not in the original) lowers precision, not recall", () => {
+      const original = t(types.object({ status: t(types.enum(["a", "b", "c"])) }))
+      const inferred = t(types.object({ status: t(types.enum(["a", "b", "c", "z"])) }))
+      const score = scoreInference(original, inferred)
+      expect(score.enumMemberFidelity.recall).toBe(1)
+      expect(score.enumMemberFidelity.precision).toBeCloseTo(3 / 4, 5)
+    })
+
+    test("positions where shape detection failed (not enum in inferred) are excluded, not scored as zero", () => {
+      const original = t(types.object({ status: t(types.enum(["a", "b", "c"])) }))
+      const inferred = t(types.object({ status: t(types.string) })) // shape not recovered at all
+      const score = scoreInference(original, inferred)
+      expect(score.enumDetection.recall).toBe(0) // shape axis catches this
+      expect(score.enumMemberFidelity.comparedPositions).toBe(0) // nothing to compare — not double-penalized
+      expect(score.enumMemberFidelity.f1).toBe(1) // vacuous perfect score, same convention as typeAccuracy's `compared === 0`
+    })
+
+    test("multiple enum positions are micro-averaged (aggregate member counts, not per-position mean)", () => {
+      const original = t(
+        types.object({
+          a: t(types.enum(["1", "2", "3", "4"])), // 2/4 found
+          b: t(types.enum(["x", "y"])), // 2/2 found
+        }),
+      )
+      const inferred = t(
+        types.object({
+          a: t(types.enum(["1", "2"])),
+          b: t(types.enum(["x", "y"])),
+        }),
+      )
+      const score = scoreInference(original, inferred)
+      // Micro-average: (2 + 2) matched / (4 + 2) actual = 4/6, not the
+      // per-position mean of 0.5 and 1.0 (= 0.75).
+      expect(score.enumMemberFidelity.recall).toBeCloseTo(4 / 6, 5)
+      expect(score.enumMemberFidelity.comparedPositions).toBe(2)
+    })
+
+    test("a perfect member-set match scores 1 and is included in overallF1's rollup", () => {
+      const original = t(types.object({ status: t(types.enum(["a", "b"])) }))
+      const inferred = t(types.object({ status: t(types.enum(["a", "b"])) }))
+      const score = scoreInference(original, inferred)
+      expect(score.enumMemberFidelity.f1).toBe(1)
+      expect(score.overallF1).toBe(1)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -756,6 +824,49 @@ describe("generator profiles — threshold-behavior findings", () => {
     expect(result.meanDiff).toBeGreaterThan(0)
     expect(result.significant).toBe(true)
     expect(result.pValue).toBeLessThan(0.05)
+  })
+
+  test("FINDING (member-set fidelity, corrected metric): zipfian-presence's small-N enum-detection F1 gain is a shape-only illusion -- member-set fidelity is significantly WORSE under zipfian, not better", () => {
+    // Same setup as the enum-detection-F1 finding above (Status Enum, N=10,
+    // zipfian-presence vs uniform), scored with the member-set-fidelity
+    // axis this task added specifically to see past shape detection. The
+    // mechanism the module doc warned about: zipfian skew concentrates
+    // samples onto the 1-2 highest-weight members, so K/N saturates fast
+    // and `looksLikeEnum` fires sooner (shape detection improves) -- but
+    // that's exactly the sampling pattern that makes the tail members
+    // (archived, and often done) NEVER appear at N=10, so the recovered
+    // enum is missing real members far more often than under uniform
+    // sampling. The shape-only enumDetection axis is blind to this; the
+    // member-set-fidelity axis is not.
+    const statusEnumCase = defaultLabeledCases.find((c) => c.name === "Status Enum")!
+    const n = 10
+    const uniform = runEvaluationTrials([statusEnumCase], [n], TRIAL_COUNT).results[0]!
+    const zipfianCase: EvalCase = {
+      ...statusEnumCase,
+      generateOptions: { ...statusEnumCase.generateOptions, profile: { kind: "zipfian-presence" } },
+    }
+    const zipfian = runEvaluationTrials([zipfianCase], [n], TRIAL_COUNT).results[0]!
+
+    // Shape detection still shows the Phase 2 finding: zipfian is BETTER.
+    const shapeResult = pairedBootstrapTest(
+      axisValues(zipfian, "enumDetectionF1"),
+      axisValues(uniform, "enumDetectionF1"),
+      mulberry32(0xa11e),
+    )
+    expect(shapeResult.meanDiff).toBeGreaterThan(0)
+    expect(shapeResult.significant).toBe(true)
+
+    // Member-set fidelity tells the opposite story: zipfian is WORSE. This
+    // is the gap the shape-only metric couldn't see -- a real risk (rare
+    // members silently dropped), not a sample-size artifact.
+    const memberResult = pairedBootstrapTest(
+      axisValues(zipfian, "enumMemberFidelityF1"),
+      axisValues(uniform, "enumMemberFidelityF1"),
+      mulberry32(0xa11e),
+    )
+    expect(memberResult.meanDiff).toBeLessThan(0)
+    expect(memberResult.significant).toBe(true)
+    expect(memberResult.pValue).toBeLessThan(0.05)
   })
 
   test("FINDING: high-cardinality-id fields are NOT flagged as false-positive enums under current thresholds -- enum-detection precision stays 1 across sizes", () => {
