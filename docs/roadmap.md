@@ -489,9 +489,25 @@ roadmap does not attempt to enumerate those decisions here; see
 `TODO.md`'s "Low Priority" section and the module's own tests for the
 specifics.
 
+**The dedicated design pass now exists**: `docs/design/json-inference-model.md`
+(2026-07-25) proposes replacing the pass-ordering cascade with a single
+model-comparison primitive (Bayesian/MDL, argued to be the same procedure
+in two notations) scored consistently across all hypotheses at a tree
+position, checks it against the four concrete failure modes the eval
+harness surfaced this session, and resolves the P0 decisions blocking
+further work: current heuristic behavior is not treated as a contract
+(correctness over behavior preservation), a confidence surface (chosen
+hypothesis/runner-up/margin) ships additively on `meta`, `clusteringMethod`'s
+fate is deferred to the P4 phase that would subsume it, small-N corpora
+resolve to the coarser hypothesis rather than abstaining, and Bayesian
+vocabulary is preferred for user-facing surfaces (MDL internally). A
+phased plan (P1 cost calculus through P6 flipping the default) is ready
+to start whenever picked up — see the design doc for phase-by-phase
+acceptance gates against the realistic-corpora harness baselines.
+
 Acceptance criteria for green:
-- The parked design decisions revisited and settled (or explicitly
-  scoped out of 1.0) by the project owner.
+- The phased plan in `docs/design/json-inference-model.md` (P1–P6)
+  executed and landed, or explicitly re-scoped by the project owner.
 - A decision on whether multi-format inference (YAML, KDL, etc.) is
   1.0-scope, a post-1.0 direction, or a separate package entirely —
   currently open, belongs to the project owner.

@@ -922,3 +922,22 @@ cited papers' reported numbers, we do not yet have a discriminative-power
 evaluation (à la JSONoid §4's ablation, or ptype's Jaccard/AUC comparison
 table) backing our own threshold choices, which is the most concrete gap
 this survey surfaces.
+
+**Update (2026-07-25): the model-comparison foundation this synthesis
+gestures toward now has a concrete design document.** The "tiered heuristic
+model with explicit deopts" and "Zipf-aware weighting" directions named
+above turn out to be two symptoms of a single missing piece: no criterion
+puts the cascade's per-pass decisions on one comparable scale, so passes
+are arbitrated by *ordering* rather than by score. `docs/design/json-inference-model.md`
+works through five candidate formalisms (heuristic cascade, frequentist
+testing, Bayesian model comparison, MDL, Good–Turing vocabulary estimation),
+argues that Bayesian model comparison and MDL are the same procedure in two
+notations with Good–Turing as an estimator living inside their likelihood
+terms, and checks that formalism against four concrete failure modes found
+by this session's eval harness — three (dict-vs-record, enum-under-Zipf,
+dirty-data) are subsumed cleanly; the fourth (envelope-pattern discriminated
+unions) needs a hypothesis-space/search-scope change on top of the
+formalism, not just a better scoring rule. P0 decisions (behavioral
+contract, confidence-surface shape, small-N policy, Bayesian-leaning
+vocabulary) are resolved there; a phased implementation plan (P1–P6) is
+ready to pick up.
