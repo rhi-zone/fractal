@@ -25,9 +25,9 @@
 // thresholds in from-json-corpus.ts: change a threshold, rerun, compare.
 
 import { ancestors, t, types, type TypeRef } from "./index.ts"
-import { fromJsonCorpus, type CorpusInferConfig } from "./from-json-corpus.ts"
-import { ecommerceOrder, apiResponse, kitchenSink, treeNode } from "./test-fixtures.ts"
-import { mean, stddev, bootstrapCI, mulberry32, type Rng, type ConfidenceInterval } from "./stats.ts"
+import { fromJsonCorpus, type CorpusInferConfig, type ClusteringMethod } from "./from-json-corpus.ts"
+import { ecommerceOrder, apiResponse, kitchenSink, treeNode, opt } from "./test-fixtures.ts"
+import { mean, stddev, bootstrapCI, mulberry32, pairedBootstrapTest, type Rng, type ConfidenceInterval } from "./stats.ts"
 
 export type { Rng }
 
@@ -1074,3 +1074,363 @@ export const defaultLabeledCases: readonly EvalCase[] = [
   },
   { name: "Growing Dict", schema: dictSchema, generateOptions: { mapSizeRange: [1, 5] } },
 ]
+
+// ---------------------------------------------------------------------------
+// Ablation runner (Phase 3 of the JSON-inference evaluation rigor plan) —
+// leave-one-out ablation over `ResolveStrategy`'s boolean detection toggles
+// (`from-json-corpus.ts`), following JSONoid's design: for each signal, run
+// the full evaluation once with the signal ON and once OFF (all other
+// signals at their default), across `trialCount` trials, and report on TWO
+// axes rather than one:
+//
+//  - `discriminativePower` — does the signal ON improve RECALL on cases
+//    whose ground-truth schema actually HAS the shape the signal detects
+//    (e.g. `detectEnums` on the "Status Enum" case).
+//  - `overfitRate` — does the signal ON hurt PRECISION on cases whose
+//    ground truth does NOT have that shape (e.g. does `detectEnums` fire
+//    spuriously on cases with no enum fields at all). This is the axis
+//    `defaultLabeledCases` alone never probed before the `high-cardinality-id`
+//    profile (Phase 2) — JSONoid's finding was that these two axes trade off
+//    very differently per signal, so a signal that wins on recall can still
+//    be a net loss if it also tanks precision elsewhere.
+//
+// Positive/negative case classification is automatic, not hand-curated: a
+// case is a positive control for a signal if its ORIGINAL schema contains
+// the shape that signal targets (checked via `indexSchema`, the same index
+// `scoreInference` builds), and a negative control if it doesn't. This is
+// the same principle the `high-cardinality-id` profile embodies (ground
+// truth = "must not be detected") generalized to run automatically over
+// whatever `cases` the caller supplies, rather than requiring a dedicated
+// profile per signal.
+// ---------------------------------------------------------------------------
+
+/** The `ResolveStrategy` boolean toggles this ablation runner evaluates. `detectDirtyData` is included for completeness but see its dedicated note in `ablationRunner`'s doc — `generateCorpus`'s union-variant sampling is uniform (see `AdversarialBoundaryProfile`'s doc: no profile hook varies union-variant selection), so it essentially never lands the >90%-skewed corpus `walkAndDetectDirty` looks for, and the ablation report says so explicitly rather than presenting a near-zero effect as a real finding. */
+export type AblationSignalKey =
+  | "detectEnums"
+  | "detectDiscriminatedUnions"
+  | "detectDicts"
+  | "detectCfdDiscriminants"
+  | "splitDissimilarObjects"
+  | "detectDirtyData"
+
+const ablationSignals: readonly AblationSignalKey[] = [
+  "detectEnums",
+  "detectDiscriminatedUnions",
+  "detectDicts",
+  "detectCfdDiscriminants",
+  "splitDissimilarObjects",
+  "detectDirtyData",
+]
+
+/**
+ * Which `ScoreReport` precision/recall axis a signal's effect shows up on.
+ * `detectDiscriminatedUnions`/`splitDissimilarObjects`/`detectCfdDiscriminants`/
+ * `detectDirtyData` all act on union recovery (via different mechanisms —
+ * discriminant-field detection, general structural splitting, CFD-style
+ * discriminant search, and dirty-minority-variant collapsing respectively)
+ * so they share `unionFidelity` as their target axis; each still gets its
+ * own independent ON/OFF run (only that one toggle changes, the rest stay
+ * at default), so the numbers legitimately differ per signal even though
+ * the axis and case classification are the same.
+ */
+function signalAxis(score: ScoreReport, signal: AblationSignalKey): PrecisionRecallF1 {
+  switch (signal) {
+    case "detectEnums": return score.enumDetection
+    case "detectDicts": return score.dictDetection
+    case "detectDiscriminatedUnions":
+    case "splitDissimilarObjects":
+    case "detectCfdDiscriminants":
+    case "detectDirtyData":
+      return score.unionFidelity
+  }
+}
+
+/** Does `schema`'s ground truth contain the shape `signal` is meant to detect — the automatic positive/negative-control classifier described above. */
+function hasShapeForSignal(schema: TypeRef, signal: AblationSignalKey): boolean {
+  const idx = indexSchema(schema)
+  switch (signal) {
+    case "detectEnums": return idx.enumPaths.size > 0
+    case "detectDicts": return idx.mapPaths.size > 0
+    case "detectDiscriminatedUnions":
+    case "splitDissimilarObjects":
+    case "detectCfdDiscriminants":
+    case "detectDirtyData":
+      return idx.unionPaths.size > 0
+  }
+}
+
+/** One ON-vs-OFF comparison, paired-bootstrap tested (same seeds on both sides — only the signal's toggle differs). */
+export interface AblationDelta {
+  readonly onMean: number
+  readonly offMean: number
+  /** onMean - offMean. Positive means turning the signal ON helped (recall axis) or hurt (precision axis, where "helped" would be a smaller drop). */
+  readonly meanDiff: number
+  readonly pValue: number
+  readonly significant: boolean
+  readonly sampleCount: number
+}
+
+/** Reported when no case in the supplied set can serve as a control for a signal (positive: none has the shape; negative: every case has the shape). */
+export interface AblationNotMeasurable {
+  readonly measurable: false
+  readonly reason: string
+}
+
+export interface SignalAblationReport {
+  readonly signal: AblationSignalKey
+  /** `ScoreReport` axis this signal's effect was measured on (see `signalAxis`). */
+  readonly axis: "enumDetection" | "dictDetection" | "unionFidelity"
+  /** Recall-based: does the signal ON find more of what's really there, on cases whose ground truth has the shape. */
+  readonly discriminativePower: AblationDelta | AblationNotMeasurable
+  /** Precision-based: does the signal ON introduce false positives, on cases whose ground truth does NOT have the shape. */
+  readonly overfitRate: AblationDelta | AblationNotMeasurable
+  readonly positiveCaseNames: readonly string[]
+  readonly negativeCaseNames: readonly string[]
+}
+
+export interface AblationRunnerOptions {
+  readonly ciLevel?: number
+  readonly resamples?: number
+  readonly bootstrapSeed?: number | string
+}
+
+function withSignalToggle(cases: readonly EvalCase[], signal: AblationSignalKey, on: boolean): EvalCase[] {
+  return cases.map((c) => ({ ...c, config: { ...c.config, [signal]: on } }))
+}
+
+/** Pools every trial's `part` (precision/recall) value for `signal`'s axis across every (case, n) in `summary`, in a stable order — the shape `pairedBootstrapTest` needs when the ON and OFF summaries were run over the same cases/sizes/trialCount (so index i on each side shares a seed). */
+function pooledPart(summary: EvalTrialsSummary, signal: AblationSignalKey, part: "precision" | "recall"): number[] {
+  const out: number[] = []
+  for (const r of summary.results) for (const score of r.trials) out.push(signalAxis(score, signal)[part])
+  return out
+}
+
+/**
+ * Leave-one-out ablation over every `AblationSignalKey`: for each signal,
+ * run `cases` x `sizes` x `trialCount` twice (signal ON, signal OFF — all
+ * other `ResolveStrategy` toggles left at their defaults) via
+ * `runEvaluationTrials`, and report `discriminativePower` (recall delta on
+ * positive-control cases) and `overfitRate` (precision delta on
+ * negative-control cases), each paired-bootstrap tested. `O(signals)` runs,
+ * not the full `O(2^signals)` power set.
+ */
+export function ablationRunner(
+  cases: readonly EvalCase[],
+  sizes: readonly number[],
+  trialCount: number,
+  opts?: AblationRunnerOptions,
+): readonly SignalAblationReport[] {
+  const bootstrapRng = rngFromSeed(opts?.bootstrapSeed ?? "ablation")
+  const trialOpts: RunEvaluationTrialsOptions = {
+    ...(opts?.ciLevel !== undefined ? { ciLevel: opts.ciLevel } : {}),
+    ...(opts?.resamples !== undefined ? { resamples: opts.resamples } : {}),
+  }
+  const pairedOpts = {
+    ...(opts?.ciLevel !== undefined ? { level: opts.ciLevel } : {}),
+    ...(opts?.resamples !== undefined ? { resamples: opts.resamples } : {}),
+  }
+
+  function delta(onVals: readonly number[], offVals: readonly number[]): AblationDelta {
+    const test = pairedBootstrapTest(onVals, offVals, bootstrapRng, pairedOpts)
+    return {
+      onMean: mean(onVals),
+      offMean: mean(offVals),
+      meanDiff: test.meanDiff,
+      pValue: test.pValue,
+      significant: test.significant,
+      sampleCount: onVals.length,
+    }
+  }
+
+  return ablationSignals.map((signal) => {
+    const axisName = signal === "detectEnums" ? "enumDetection" : signal === "detectDicts" ? "dictDetection" : "unionFidelity"
+    const positiveCases = cases.filter((c) => hasShapeForSignal(c.schema, signal))
+    const negativeCases = cases.filter((c) => !hasShapeForSignal(c.schema, signal))
+
+    let discriminativePower: AblationDelta | AblationNotMeasurable
+    if (positiveCases.length === 0) {
+      discriminativePower = {
+        measurable: false,
+        reason: `no case in the supplied set has ground truth containing the shape ${signal} detects — discriminative power (recall) is not measurable without a positive-control case`,
+      }
+    } else {
+      const on = runEvaluationTrials(withSignalToggle(positiveCases, signal, true), sizes, trialCount, trialOpts)
+      const off = runEvaluationTrials(withSignalToggle(positiveCases, signal, false), sizes, trialCount, trialOpts)
+      discriminativePower = delta(pooledPart(on, signal, "recall"), pooledPart(off, signal, "recall"))
+    }
+
+    let overfitRate: AblationDelta | AblationNotMeasurable
+    if (negativeCases.length === 0) {
+      overfitRate = {
+        measurable: false,
+        reason: `every case in the supplied set has ground truth containing the shape ${signal} detects — overfit rate (precision on true negatives) is not measurable without a negative-control case`,
+      }
+    } else {
+      const on = runEvaluationTrials(withSignalToggle(negativeCases, signal, true), sizes, trialCount, trialOpts)
+      const off = runEvaluationTrials(withSignalToggle(negativeCases, signal, false), sizes, trialCount, trialOpts)
+      overfitRate = delta(pooledPart(on, signal, "precision"), pooledPart(off, signal, "precision"))
+    }
+
+    return {
+      signal,
+      axis: axisName,
+      discriminativePower,
+      overfitRate,
+      positiveCaseNames: positiveCases.map((c) => c.name),
+      negativeCaseNames: negativeCases.map((c) => c.name),
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Clustering-method sweep — the JSONoid-derived comparison the design calls
+// for: run each `clusteringMethod` across each `GeneratorProfile` and check
+// whether one method's confidence interval sits strictly above the other
+// two's on EVERY profile (crown it the default) or the intervals overlap
+// somewhere in the sweep (no universal default — expose as configuration).
+// Cases are chosen to isolate the specific clustering failure modes
+// `ResolveStrategy.clusteringMethod`'s doc names (chaining risk,
+// near-identical polymorphic-API-response shapes, and — critically —
+// `"key-signature"`'s own documented weakness: "over-splits ordinary
+// records with a few sparsely-present optional fields"). Leaving that last
+// case out would silently bias the sweep toward whichever method the OTHER
+// three cases were built to favor (key-signature, on this set); it's the
+// negative control that makes "crowned default" a claim earned across the
+// method's known failure mode, not just its known strength. Same schemas
+// the single-trial/multi-trial comparisons in inference-eval.test.ts use,
+// kept here so `clusteringMethodSweep` has a sensible default without
+// requiring every caller to redefine them.
+// ---------------------------------------------------------------------------
+
+const clusteringDisjointSchema = t(
+  types.union([
+    t(types.object({ userId: t(types.integer), userName: t(types.string), userEmail: t(types.string) })),
+    t(types.object({ orderId: t(types.integer), total: t(types.number), items: t(types.integer) })),
+  ]),
+)
+
+const clusteringChainingRiskSchema = t(
+  types.union([
+    t(types.object({ p: t(types.integer), shared1: t(types.string) })),
+    t(types.object({ shared1: t(types.string), shared2: t(types.string) })),
+    t(types.object({ shared2: t(types.string), q: t(types.integer) })),
+  ]),
+)
+
+const clusteringApiVariantsSchema = t(
+  types.union([
+    t(types.object({ id: t(types.integer), name: t(types.string) })),
+    t(types.object({ id: t(types.integer), name: t(types.string), extra: t(types.boolean) })),
+  ]),
+)
+
+// A single population (NOT a union — no unionPaths in ground truth at all)
+// with six sparsely-present optional fields. Real records routinely look
+// like this (a handful of near-always-present fields plus a long tail of
+// rare ones), and every sample's key set differs from every other's purely
+// from independent presence noise — exactly the shape `key-signature`'s
+// doc warns it over-splits, since it groups by *exact* key-set signature
+// with no distance tolerance. `splitDissimilarObjects`'s ablation
+// (`ablationRunner`) already covers this schema as a generic
+// negative-control case; it's included here too so the clustering-method
+// sweep specifically stress-tests key-signature's weakness alongside its
+// strength, not just the latter.
+const clusteringSparseSingleTypeSchema = t(
+  types.object({
+    required: t(types.string),
+    o1: opt(t(types.string)),
+    o2: opt(t(types.string)),
+    o3: opt(t(types.string)),
+    o4: opt(t(types.string)),
+    o5: opt(t(types.string)),
+    o6: opt(t(types.string)),
+  }),
+)
+
+/** Default cases for `clusteringMethodSweep` — see module comment above. */
+export const clusteringSensitiveCases: readonly EvalCase[] = [
+  { name: "disjoint", schema: clusteringDisjointSchema },
+  { name: "chaining-risk", schema: clusteringChainingRiskSchema, config: { objectSplitThreshold: 0.8 } },
+  { name: "api-variants", schema: clusteringApiVariantsSchema },
+  { name: "sparse-single-type", schema: clusteringSparseSingleTypeSchema, generateOptions: { optionalPresenceRate: 0.3 } },
+]
+
+const clusteringMethods: readonly ClusteringMethod[] = ["single-linkage", "complete-linkage", "key-signature"]
+
+export interface ClusteringMethodSweepResult {
+  readonly profile: string
+  readonly method: ClusteringMethod
+  readonly mean: number
+  readonly ci: ConfidenceInterval
+  readonly sampleCount: number
+}
+
+export interface ClusteringMethodSweepSummary {
+  readonly results: readonly ClusteringMethodSweepResult[]
+  /** Which conclusion the data supports — computed, not presupposed. See module comment. */
+  readonly conclusion: string
+  /** method that strictly dominated (CI low > every other method's CI high) on every profile, if any. */
+  readonly crownedDefault: ClusteringMethod | undefined
+}
+
+/**
+ * Run every `ClusteringMethod` x `profile` combination in `profiles` over
+ * `cases` (default `clusteringSensitiveCases`) x `sizes` x `trialCount`,
+ * pooling `unionFidelity.f1` (the axis these schemas are built to isolate)
+ * across cases/sizes/trials into one bootstrap CI per method/profile cell.
+ * `crownedDefault` is set only when one method's CI sits strictly above
+ * both others' on every profile in the sweep; otherwise the honest
+ * conclusion is "no universal default, expose as configuration" per the
+ * design.
+ */
+export function clusteringMethodSweep(
+  profiles: readonly GeneratorProfile[],
+  sizes: readonly number[],
+  trialCount: number,
+  cases: readonly EvalCase[] = clusteringSensitiveCases,
+  opts?: RunEvaluationTrialsOptions,
+): ClusteringMethodSweepSummary {
+  const bootstrapRng = rngFromSeed("clustering-sweep")
+  const results: ClusteringMethodSweepResult[] = []
+
+  for (const profile of profiles) {
+    for (const method of clusteringMethods) {
+      const configured: EvalCase[] = cases.map((c) => ({
+        ...c,
+        config: { ...c.config, clusteringMethod: method },
+        generateOptions: { ...c.generateOptions, profile },
+      }))
+      const summary = runEvaluationTrials(configured, sizes, trialCount, opts)
+      const pooled: number[] = []
+      for (const r of summary.results) for (const score of r.trials) pooled.push(score.unionFidelity.f1)
+      const ci = bootstrapCI(pooled, bootstrapRng, {
+        ...(opts?.ciLevel !== undefined ? { level: opts.ciLevel } : {}),
+        ...(opts?.resamples !== undefined ? { resamples: opts.resamples } : {}),
+      })
+      results.push({ profile: profile.kind, method, mean: mean(pooled), ci, sampleCount: pooled.length })
+    }
+  }
+
+  const profileNames = [...new Set(results.map((r) => r.profile))]
+  const dominantPerProfile = new Map<string, ClusteringMethod | undefined>()
+  for (const p of profileNames) {
+    const rows = results.filter((r) => r.profile === p)
+    const dominant = rows.find((row) => rows.every((o) => o.method === row.method || row.ci.low > o.ci.high))
+    dominantPerProfile.set(p, dominant?.method)
+  }
+
+  const perProfileDominants = profileNames.map((p) => dominantPerProfile.get(p))
+  const crownedDefault =
+    perProfileDominants.length > 0 && perProfileDominants.every((d) => d !== undefined && d === perProfileDominants[0])
+      ? perProfileDominants[0]
+      : undefined
+
+  const conclusion =
+    crownedDefault !== undefined
+      ? `crowned default: ${crownedDefault} — its confidence interval sits strictly above both other methods' on every profile in the sweep (${profileNames.join(", ")})`
+      : `no universal default, expose as configuration — no single method's confidence interval sits strictly above the other two on every profile (per-profile: ${
+          profileNames.map((p) => `${p}=${dominantPerProfile.get(p) ?? "none dominant"}`).join(", ")
+        })`
+
+  return { results, conclusion, crownedDefault }
+}

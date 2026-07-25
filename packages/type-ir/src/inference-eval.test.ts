@@ -10,8 +10,12 @@ import {
   runEvaluationTrials,
   axisValues,
   defaultLabeledCases,
+  ablationRunner,
+  clusteringMethodSweep,
+  clusteringSensitiveCases,
   type EvalCase,
   type GeneratorProfile,
+  type AblationDelta,
 } from "./inference-eval.ts"
 import { pairedBootstrapTest, mulberry32 } from "./stats.ts"
 import { ecommerceOrder, apiResponse, treeNode } from "./test-fixtures.ts"
@@ -889,5 +893,166 @@ describe("generator profiles — threshold-behavior findings", () => {
       const summary = runEvaluation([hcCase], [n])
       expect(summary.results[0]!.score.enumDetection.precision).toBe(1)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Ablation runner (Phase 3) — leave-one-out over ResolveStrategy's boolean
+// detection toggles, reported on two axes (discriminative power / overfit
+// rate) per the JSONoid-derived design. TRIAL_COUNT is kept low (15) for the
+// same reason Phase 1/2 picked their own low ends (25/40): `ablationRunner`
+// runs O(signals) x 4 (on/off x positive/negative) `runEvaluationTrials`
+// calls per invocation, so trial count multiplies total runtime directly.
+// The signals measured here have large, consistent effects (detectEnums,
+// detectDicts) or a genuine tie (the three union-recovery mechanisms, which
+// back each other up under leave-one-out — see the FINDING test below), so
+// 15 trials is enough to be stable without materially slowing `bun test`.
+// ---------------------------------------------------------------------------
+
+describe("ablationRunner", () => {
+  const TRIAL_COUNT = 15
+
+  test("every ResolveStrategy boolean toggle gets a report, with automatic positive/negative case classification", () => {
+    const reports = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT)
+    const bySignal = new Map(reports.map((r) => [r.signal, r]))
+    expect(bySignal.size).toBe(6)
+    for (const signal of [
+      "detectEnums", "detectDiscriminatedUnions", "detectDicts",
+      "detectCfdDiscriminants", "splitDissimilarObjects", "detectDirtyData",
+    ] as const) {
+      expect(bySignal.has(signal)).toBe(true)
+    }
+
+    // Positive-control classification: a case only counts as positive for a
+    // signal if its OWN schema actually contains that shape.
+    const enums = bySignal.get("detectEnums")!
+    expect(enums.positiveCaseNames).toContain("Status Enum")
+    expect(enums.positiveCaseNames).toContain("E-commerce Order") // has a `status` enum field
+    expect(enums.negativeCaseNames).toContain("Recursive Tree") // no enum anywhere in the schema
+    expect(enums.negativeCaseNames).not.toContain("Status Enum")
+
+    const dicts = bySignal.get("detectDicts")!
+    expect(dicts.positiveCaseNames).toContain("Growing Dict")
+    expect(dicts.negativeCaseNames).toContain("Status Enum") // no map in this schema
+  })
+
+  test("FINDING: detectEnums has strong, significant discriminative power and zero measured overfit under current thresholds", () => {
+    const report = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT).find((r) => r.signal === "detectEnums")!
+    const power = report.discriminativePower as AblationDelta
+    expect(power.onMean).toBe(1) // enum shape always recovered when the signal is on
+    expect(power.offMean).toBe(0) // never recovered when off -- there is no other mechanism that produces `enum`
+    expect(power.significant).toBe(true)
+    expect(power.pValue).toBeLessThan(0.05)
+
+    const overfit = report.overfitRate as AblationDelta
+    expect(overfit.onMean).toBe(1) // precision on the negative-control cases stays perfect...
+    expect(overfit.meanDiff).toBe(0) // ...identically whether the signal is on or off
+    expect(overfit.significant).toBe(false)
+  })
+
+  test("FINDING: detectDicts has strong, significant discriminative power and zero measured overfit under current thresholds", () => {
+    const report = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT).find((r) => r.signal === "detectDicts")!
+    const power = report.discriminativePower as AblationDelta
+    expect(power.onMean).toBe(1)
+    expect(power.offMean).toBe(0)
+    expect(power.significant).toBe(true)
+
+    const overfit = report.overfitRate as AblationDelta
+    expect(overfit.meanDiff).toBe(0)
+    expect(overfit.significant).toBe(false)
+  })
+
+  test("FINDING: the three union-recovery signals (detectDiscriminatedUnions, splitDissimilarObjects, detectCfdDiscriminants) show ZERO leave-one-out discriminative power on this case set, because each backs up the others", () => {
+    // This is a real leave-one-out property, not a bug in the ablation: on
+    // `defaultLabeledCases`, every union-shaped case that ONE of these three
+    // mechanisms would miss is still recovered by at least one of the other
+    // two (e.g. `trySplitDissimilarObjects`'s general structural splitting
+    // covers ground a discriminant-based `tryDetectDU` would also cover).
+    // Leave-one-out ablation can only show a signal's OWN discriminative
+    // power net of redundancy with its siblings -- it is not, and does not
+    // claim to be, evidence that any of the three is individually useless;
+    // the full power set (JSONoid-style, `O(2^signals)`) would be needed to
+    // decompose the redundancy, which is exactly why this runner is
+    // documented as leave-one-out, not power-set.
+    const reports = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT)
+    for (const signal of ["detectDiscriminatedUnions", "splitDissimilarObjects", "detectCfdDiscriminants"] as const) {
+      const power = reports.find((r) => r.signal === signal)!.discriminativePower as AblationDelta
+      expect(power.onMean).toBe(1)
+      expect(power.offMean).toBe(1)
+      expect(power.meanDiff).toBe(0)
+      expect(power.significant).toBe(false)
+    }
+  })
+
+  test("FINDING: detectDirtyData's measured effect is a null result caused by the generator, not evidence about the heuristic -- documented as such, not reported as a real zero", () => {
+    // `walkAndDetectDirty` only fires on a 2-variant union where one variant
+    // has >90% of the raw values. `generateValue`'s union branch always
+    // picks a variant uniformly (no `GeneratorProfile` hook varies
+    // union-variant selection -- see `AdversarialBoundaryProfile`'s doc),
+    // so `generateCorpus` essentially never produces the skew this signal
+    // looks for. The tie below is real (both sides literally never trigger
+    // the heuristic), but it must NOT be read as "detectDirtyData has no
+    // effect in practice" -- it's a coverage gap in the harness, and the
+    // module doc on `AblationSignalKey` says so explicitly.
+    const report = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT).find((r) => r.signal === "detectDirtyData")!
+    const power = report.discriminativePower as AblationDelta
+    expect(power.meanDiff).toBe(0)
+    expect(power.significant).toBe(false)
+  })
+
+  test("reports AblationNotMeasurable rather than a fabricated number when a case set has no positive (or negative) control for a signal", () => {
+    const onlyEnumCases: EvalCase[] = [defaultLabeledCases.find((c) => c.name === "Status Enum")!]
+    const reports = ablationRunner(onlyEnumCases, [50], TRIAL_COUNT)
+    const dicts = reports.find((r) => r.signal === "detectDicts")!
+    // "Status Enum" has no map anywhere -- there's no positive control for detectDicts in this set.
+    expect(dicts.discriminativePower).toMatchObject({ measurable: false })
+    expect((dicts.discriminativePower as { reason: string }).reason).toContain("positive-control")
+    // But it IS a negative control (no map at all), so overfit rate is measurable.
+    expect(dicts.overfitRate).not.toMatchObject({ measurable: false })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Clustering-method sweep (Phase 3) — the JSONoid-derived comparison: does
+// one `ClusteringMethod`'s confidence interval sit strictly above the other
+// two's across EVERY generator profile (crown a default), or do the
+// intervals overlap somewhere in the sweep (no universal default, expose as
+// configuration)? `clusteringSensitiveCases`'s default set includes both
+// key-signature's known strength (near-identical polymorphic-API-response
+// shapes) and its documented weakness (a single population with several
+// sparsely-present optional fields, which it over-splits since it groups by
+// exact key-set signature with no distance tolerance) -- a sweep that only
+// included the former would crown key-signature by construction, not by
+// evidence.
+// ---------------------------------------------------------------------------
+
+describe("clustering method sweep", () => {
+  const TRIAL_COUNT = 15
+  const profiles: readonly GeneratorProfile[] = [
+    { kind: "uniform" }, { kind: "zipfian-presence" }, { kind: "adversarial-boundary" },
+  ]
+
+  test("FINDING: across the full case set (including key-signature's documented over-splitting weakness), no clustering method's CI sits strictly above the others on every profile -- 'no universal default, expose as configuration' is the conclusion the data supports", () => {
+    const sweep = clusteringMethodSweep(profiles, [50], TRIAL_COUNT)
+    expect(sweep.results).toHaveLength(profiles.length * 3) // 3 methods x 3 profiles
+    expect(sweep.conclusion).toContain("no universal default")
+    expect(sweep.crownedDefault).toBeUndefined()
+
+    // The mechanism behind the finding: key-signature is undefeated on
+    // "uniform"/"zipfian-presence" (its home-turf cases dominate) but ties
+    // complete-linkage on "adversarial-boundary", where the sparse-optional
+    // negative control's over-split cost catches up with it.
+    const adversarial = sweep.results.filter((r) => r.profile === "adversarial-boundary")
+    const keySig = adversarial.find((r) => r.method === "key-signature")!
+    const complete = adversarial.find((r) => r.method === "complete-linkage")!
+    expect(keySig.ci.low).toBeLessThanOrEqual(complete.ci.high)
+    expect(complete.ci.low).toBeLessThanOrEqual(keySig.ci.high)
+  })
+
+  test("the same sweep DOES crown key-signature as default when the sparse-optional negative control is excluded from the case set -- confirms the 'no universal default' finding above is driven by that specific case, not an artifact of the sweep mechanics", () => {
+    const withoutSparseControl = clusteringSensitiveCases.filter((c) => c.name !== "sparse-single-type")
+    const sweep = clusteringMethodSweep(profiles, [50], TRIAL_COUNT, withoutSparseControl)
+    expect(sweep.crownedDefault).toBe("key-signature")
+    expect(sweep.conclusion).toContain("crowned default: key-signature")
   })
 })
