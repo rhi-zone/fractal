@@ -117,6 +117,43 @@ describe("HttpManifest type safety", () => {
     }>()
   })
 
+  it(
+    "moveTo's `*` wildcard reconciles against a co-located fallback's authored name, not the synthesized default",
+    () => {
+      // `read` sits directly under the fallback (name "bookId"), landing at
+      // "/books/:bookId" via `moveTo("..")`. `create` is a SEPARATE sibling
+      // leaf, outside the fallback subtree, that converges on the exact same
+      // position via a wildcard `moveTo("../*")` — synthesizing ":param" in
+      // isolation, but that target position already has an authored fallback
+      // name ("bookId") in the whole tree. The two must merge into ONE path
+      // entry ("/books/:bookId") with sibling methods, matching what
+      // `applyMoveTo`/`insertAt` (route.ts) actually do at runtime — not
+      // split into "/books/:bookId" (GET) and "/books/:param" (POST).
+      const bookItem = api({
+        read: op((input: { bookId: string }) => ({ id: input.bookId }), http.get, http.moveTo("..")),
+      })
+      const tree = api({
+        books: api(
+          {
+            create: op(
+              (input: { title: string }): { id: string } => ({ id: input.title }),
+              http.post,
+              http.moveTo("../*"),
+            ),
+          },
+          { fallback: { name: "bookId", subtree: bookItem } },
+        ),
+      })
+      type Manifest = HttpManifest<typeof tree>
+      expectTypeOf<Manifest>().toEqualTypeOf<{
+        readonly "/books/:bookId": {
+          readonly GET: { readonly input: { bookId: string }; readonly output: { id: string } }
+          readonly POST: { readonly input: { title: string }; readonly output: { id: string } }
+        }
+      }>()
+    },
+  )
+
   it("an async handler's output is Awaited, not Promise-wrapped", () => {
     const tree = api({
       fetchThing: op(async (input: { id: string }): Promise<{ id: string }> => {

@@ -85,7 +85,7 @@
 
 - **Language source ingestion** — TypeScript source → TypeRef, Python source → TypeRef, and similar for other languages. Still open, not started.
 
-- **`moveTo` resolution in `HttpManifest`** — wildcard `"*"` token's synthesized `:param` name can diverge from another leaf's authored `fallback.name` at the same converged position. Per-leaf type information can't see whole-tree facts, creating a potential naming mismatch in the manifest.
+- **`moveTo` resolution in `HttpManifest`** — fixed (2026-07-25): `CollectEntries` now threads the whole-tree `Root` through its recursion, and a new `ResolveWildcardSegments` (`packages/http-api-projector/src/http-manifest.ts`) re-walks a `moveTo`-resolved path's segments against `Root` after `ApplyTokens`, substituting a synthesized `:param` wildcard for whatever `fallback.name` is actually authored at that position when one exists — mirroring `insertAt`'s (route.ts) runtime preference for a pre-existing fallback name. Covers the documented common case (a `"*"` target landing on a position `Root` already has real `children`/`fallback` structure for); does not reproduce `insertAt`'s full picture of two `moveTo`s converging with each other via the runtime's progressively-mutated tree, which is inherently outside a per-leaf, non-sequential type computation. New test: "moveTo's `*` wildcard reconciles against a co-located fallback's authored name, not the synthesized default" (`http-manifest.test.ts`).
 
 - **TAG_STREAMING wiring for MCP projector** — HTTP and CLI got stream/page kind propagation this session; MCP still works from JSON Schema (not TypeRef), so `stream` kind info may still be lost there. Might need the same plumbing, or a way to carry `stream` through the JSON Schema degrade.
 

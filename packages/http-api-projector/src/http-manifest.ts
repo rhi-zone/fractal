@@ -25,25 +25,27 @@
 //
 // This type-level resolution only reproduces the PER-LEAF half of
 // `applyMoveTo` (route.ts): each leaf's OWN target path, computed from its
-// OWN raw position and its OWN `moveTo` directive. What it does not (and, as
-// a pure recursive-over-`N` type, cannot) reproduce is `applyMoveTo`'s
-// whole-tree bookkeeping: an existing `fallback.name` already sitting at a
-// moved-to position wins over the `"param"` default (route.ts's `insertAt`),
-// but discovering that requires knowing every OTHER node's tree position too,
-// not just the moving leaf's own — a cross-entry, whole-tree fact. This type
-// picks the same default `insertAt` picks when the target position has no
-// competing pre-existing fallback name to defer to: a `moveTo` token of `"*"`
-// resolves to a synthesized `:param` segment. When some other leaf's OWN
-// authored `fallback.name` differs from `"param"` at the exact spot a `moveTo`
-// converges on, this type's `:param` and that other path's `:realName` are
-// two different keys in the output where `applyMoveTo` would have merged them
-// under one — a narrower, named gap, not the whole-computation gap this
-// module used to report. `applyMoveTo`'s runtime conflict-on-clash behavior
-// (two leaves' resolved path+method colliding) is approximated the way
-// `TreeManifest`/`HttpManifestRaw` always have: TypeScript's own structural
-// intersection of the two entries' `{input, output}` shapes, which resolves
-// to `never` when they're incompatible rather than throwing — see `BuildManifest`
-// below.
+// OWN raw position and its OWN `moveTo` directive. `applyMoveTo`'s whole-tree
+// bookkeeping — an existing `fallback.name` already sitting at a moved-to
+// position wins over the `"param"` default (route.ts's `insertAt`) — needs
+// knowing every OTHER node's tree position too, not just the moving leaf's
+// own; this module resolves that by re-walking the FULL root tree (threaded
+// through `CollectEntries` as `Root`, see `ResolveWildcardSegments` below)
+// once a leaf's moveTo path has been applied, substituting any synthesized
+// `:param` segment for whatever `fallback.name` is ACTUALLY authored at that
+// position in `Root`, when one exists — the same preference `insertAt` gives
+// a pre-existing fallback over the `"param"` default. This covers the
+// documented common case: a `moveTo` target that lands on a position `Root`
+// already has a real `children`/`fallback` chain for. It does NOT reproduce
+// `insertAt`'s full runtime picture, which walks the PROGRESSIVELY-mutated
+// tree across a whole `moves` sequence (so two `moveTo`s can converge with
+// each other, not just with an already-authored fallback) — that ordering
+// fact is inherently outside a per-leaf, non-sequential type computation.
+// `applyMoveTo`'s runtime conflict-on-clash behavior (two leaves' resolved
+// path+method colliding) is approximated the way `TreeManifest`/
+// `HttpManifestRaw` always have: TypeScript's own structural intersection of
+// the two entries' `{input, output}` shapes, which resolves to `never` when
+// they're incompatible rather than throwing — see `BuildManifest` below.
 //
 // See:
 //   packages/api-tree/src/tree-manifest.ts        — the protocol-agnostic analogue
@@ -170,13 +172,14 @@ type PopLast<Segs extends readonly string[]> =
  * loop exactly: `.` is a no-op, `..` pops the last segment, any other token
  * is pushed as a new segment.
  *
- * `"*"` is special-cased to push a synthesized `:param` segment — matching
- * `insertAt`'s (route.ts) own default fallback-parameter name when no
- * existing `fallback` already occupies the target position. See this file's
- * module doc for the one case this default can diverge from `applyMoveTo`'s
- * actual runtime result: when some OTHER leaf's own authored `fallback.name`
- * at that exact position isn't `"param"`, a fact this per-leaf type has no
- * way to see.
+ * `"*"` is special-cased to push a synthesized `:param` segment — the same
+ * default `insertAt` (route.ts) falls back to when no existing `fallback`
+ * already occupies the target position. `:param` here is provisional: since
+ * `ApplyTokens` only ever sees ONE leaf's own path in isolation, it cannot
+ * know whether some OTHER leaf's authored `fallback.name` already sits at
+ * this exact converged-on position. `ResolveWildcardSegments` (below)
+ * reconciles that afterward, walking the FULL tree to substitute the real
+ * name when one exists — see this file's module doc.
  */
 type ApplyTokens<Segs extends readonly string[], Tokens extends readonly string[]> =
   Tokens extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
@@ -189,6 +192,39 @@ type ApplyTokens<Segs extends readonly string[], Tokens extends readonly string[
           : ApplyTokens<[...Segs, Head], Rest>
     : Segs
 
+/**
+ * Re-walk a `moveTo`-resolved segment tuple against the FULL, original
+ * `Root` tree, substituting each synthesized `:param` marker (the literal
+ * `ApplyTokens` always emits for a `"*"` token — `CollectEntries`'s own
+ * fallback branch never independently produces that literal name unless a
+ * fallback is genuinely authored as `"param"`, in which case substituting it
+ * for itself is a no-op) with whatever `fallback.name` is ACTUALLY authored
+ * at that position in `Root`, mirroring `insertAt`'s (route.ts)
+ * `root.fallback?.name ?? "param"` preference for a pre-existing fallback
+ * name over the synthesized default.
+ *
+ * Segments are matched structurally against `Root`'s own `children`/
+ * `fallback` shape, descending one level per segment. Once a segment has no
+ * matching branch in `Root` (a `moveTo` target that doesn't correspond to
+ * any REAL tree position — e.g. `moveTo: "brand/new/path/*"`), the rest of
+ * the tuple is returned untouched: with no known position left to check,
+ * any later `:param` marker keeps `insertAt`'s own synthesized default.
+ */
+type ResolveWildcardSegments<Root extends Node, Segs extends readonly string[]> =
+  Segs extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
+    ? Head extends `:${string}`
+      ? Root extends { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
+        ? Head extends ":param"
+          ? [`:${Name}`, ...ResolveWildcardSegments<S, Rest>]
+          : [Head, ...ResolveWildcardSegments<S, Rest>]
+        : [Head, ...Rest]
+      : Root extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+        ? Head extends keyof C
+          ? [Head, ...ResolveWildcardSegments<C[Head], Rest>]
+          : [Head, ...Rest]
+        : [Head, ...Rest]
+    : []
+
 /** Join segments back into `route.ts`'s own path-string convention: `""` for zero segments, `/a/b` otherwise. */
 type JoinSegments<Segs extends readonly string[]> =
   Segs extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
@@ -200,11 +236,13 @@ type JoinPath<Segs extends readonly string[]> = Segs extends readonly [] ? "" : 
 /**
  * Resolve a leaf's final path: unchanged when it carries no `moveTo`
  * directive, otherwise `Prefix`'s own segments with `MoveToPath`'s tokens
- * applied — the type-level `resolveMoveTo(itemPath, path)`.
+ * applied — the type-level `resolveMoveTo(itemPath, path)` — and any
+ * synthesized `:param` wildcard reconciled against `Root`'s own tree via
+ * `ResolveWildcardSegments`.
  */
-type ResolvedPath<Prefix extends string, MoveToPath extends string | undefined> =
+type ResolvedPath<Prefix extends string, MoveToPath extends string | undefined, Root extends Node> =
   MoveToPath extends string
-    ? JoinPath<ApplyTokens<SplitSegments<Prefix>, SplitSegments<MoveToPath>>>
+    ? JoinPath<ResolveWildcardSegments<Root, ApplyTokens<SplitSegments<Prefix>, SplitSegments<MoveToPath>>>>
     : Prefix
 
 // ============================================================================
@@ -223,12 +261,12 @@ type ManifestEntry = {
   readonly output: unknown
 }
 
-type CollectEntries<N extends Node, Prefix extends string> =
+type CollectEntries<N extends Node, Prefix extends string, Root extends Node> =
   // Leaf part — this node's own entry, at its moveTo-resolved path.
   | (N extends { readonly handler: infer H extends Handler; readonly meta: infer M extends Meta }
       ? H extends (input: infer I) => infer R
         ? {
-            readonly path: ResolvedPath<Prefix, ResolveMoveTo<M>>
+            readonly path: ResolvedPath<Prefix, ResolveMoveTo<M>, Root>
             readonly method: ResolveMethod<M>
             readonly input: I
             readonly output: Awaited<R>
@@ -236,14 +274,17 @@ type CollectEntries<N extends Node, Prefix extends string> =
         : never
       : never)
   // Children part — recurse per child under `${Prefix}/${key}`, union of entries.
+  // `Root` is threaded through unchanged (always the whole-tree top, not the
+  // recursed-into `N`) so `ResolveWildcardSegments` can look up ANY leaf's
+  // authored fallback name, not just ones under the current subtree.
   | (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-      ? { [K in keyof C & string]: CollectEntries<C[K], `${Prefix}/${K}`> }[keyof C & string]
+      ? { [K in keyof C & string]: CollectEntries<C[K], `${Prefix}/${K}`, Root> }[keyof C & string]
       : never)
   // Fallback part — same recursion, keyed by `:name`, matching the
   // wildcard-segment convention `naiveTransform`/`applyMoveTo` both use.
   | (N extends
       { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
-      ? CollectEntries<S, `${Prefix}/:${Name}`>
+      ? CollectEntries<S, `${Prefix}/:${Name}`, Root>
       : never)
 
 // ============================================================================
@@ -293,11 +334,12 @@ type BuildManifest<E extends ManifestEntry> = Simplify<
  * each leaf's final placement + method. `Prefix` accumulates the raw
  * (pre-`moveTo`) path on the way down; callers instantiate
  * `HttpManifest<typeof tree>` (`Prefix` defaults to `""`) and never supply
- * the second argument themselves. See this file's module doc for the one
- * named gap in `moveTo` resolution (a `"*"` token's synthesized `:param`
- * name can diverge from another leaf's own authored `fallback.name` at the
- * same converged-on position).
+ * the second argument themselves. `N` doubles as `CollectEntries`'s `Root` —
+ * the whole, un-recursed-into tree that `ResolveWildcardSegments` walks to
+ * reconcile a `"*"` token's synthesized `:param` name against any other
+ * leaf's own authored `fallback.name` at the same converged-on position (see
+ * this file's module doc).
  */
 export type HttpManifest<N extends Node, Prefix extends string = ""> = BuildManifest<
-  CollectEntries<N, Prefix>
+  CollectEntries<N, Prefix, N>
 >
