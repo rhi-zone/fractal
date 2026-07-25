@@ -11,6 +11,7 @@ import {
   axisValues,
   defaultLabeledCases,
   type EvalCase,
+  type GeneratorProfile,
 } from "./inference-eval.ts"
 import { pairedBootstrapTest, mulberry32 } from "./stats.ts"
 import { ecommerceOrder, apiResponse, treeNode } from "./test-fixtures.ts"
@@ -556,5 +557,226 @@ describe("clustering method comparison (multi-trial, statistically backed)", () 
     }
     expect(keySig.stats.unionFidelityF1.mean).toBe(1)
     expect(keySig.stats.overallF1.mean).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Generator profiles (Phase 2 of the JSON-inference evaluation rigor plan)
+// — every eval result up to this point was implicitly generated under one
+// unstated policy: uniform random picks, flat presence/null rates. These
+// tests verify each new `GeneratorProfile` actually produces the
+// distributional shape it claims, then use that shape to probe
+// from-json-corpus.ts's thresholds for behavior uniform sampling can't
+// exercise: skewed real-world field/enum distributions, exact threshold
+// boundaries, and enum false positives on high-cardinality fields.
+// ---------------------------------------------------------------------------
+
+describe("generator profiles — distributional shape", () => {
+  const presenceSchema = t(
+    types.object({
+      required: t(types.string),
+      f1: { shape: types.string, meta: { optional: true } },
+      f2: { shape: types.string, meta: { optional: true } },
+      f3: { shape: types.string, meta: { optional: true } },
+      f4: { shape: types.string, meta: { optional: true } },
+    }),
+  )
+
+  function presenceRates(profile: GeneratorProfile | undefined, n = 3000): Record<string, number> {
+    const corpus = generateCorpus(presenceSchema, n, profile === undefined ? { seed: "presence" } : { seed: "presence", profile }) as Record<string, unknown>[]
+    const rates: Record<string, number> = {}
+    for (const f of ["f1", "f2", "f3", "f4"]) rates[f] = corpus.filter((v) => f in v).length / n
+    return rates
+  }
+
+  test("uniform keeps optional-field presence flat across fields", () => {
+    const rates = presenceRates(undefined)
+    for (const f of ["f1", "f2", "f3", "f4"]) expect(rates[f]!).toBeCloseTo(0.75, 1)
+  })
+
+  test("zipfian-presence skews field presence by declaration rank: near-always-present head, long rare tail", () => {
+    const rates = presenceRates({ kind: "zipfian-presence" })
+    // rank 1 -> weight 1/1^1.2 = 1.0 exactly -> always present.
+    expect(rates.f1!).toBeGreaterThan(0.95)
+    // Strictly decreasing by rank, and a wide spread vs. uniform's ~flat rates.
+    expect(rates.f1!).toBeGreaterThan(rates.f2!)
+    expect(rates.f2!).toBeGreaterThan(rates.f3!)
+    expect(rates.f3!).toBeGreaterThan(rates.f4!)
+    expect(rates.f1! - rates.f4!).toBeGreaterThan(0.5)
+  })
+
+  const enumSchema = t(types.object({ status: t(types.enum(["active", "pending", "done", "archived"])) }))
+
+  function enumFrequencies(profile: GeneratorProfile | undefined, n = 4000): Record<string, number> {
+    const corpus = generateCorpus(enumSchema, n, profile === undefined ? { seed: "enum-freq" } : { seed: "enum-freq", profile }) as Record<string, unknown>[]
+    const counts: Record<string, number> = {}
+    for (const v of corpus) counts[v.status as string] = (counts[v.status as string] ?? 0) + 1
+    return Object.fromEntries(Object.entries(counts).map(([k, c]) => [k, c / n]))
+  }
+
+  test("uniform keeps enum-member frequency roughly flat", () => {
+    const freq = enumFrequencies(undefined)
+    for (const member of ["active", "pending", "done", "archived"]) expect(freq[member]!).toBeCloseTo(0.25, 1)
+  })
+
+  test("zipfian-presence skews enum-member frequency by declaration order: first member dominates", () => {
+    const freq = enumFrequencies({ kind: "zipfian-presence" })
+    // Declared order is active, pending, done, archived -> weights 1, 0.435, 0.268, 0.189 (normalized).
+    expect(freq.active!).toBeGreaterThan(0.4) // rank-1 weight normalizes to ~0.53
+    expect(freq.archived!).toBeLessThan(0.2) // rank-4 weight normalizes to ~0.10
+    expect(freq.active!).toBeGreaterThan(freq.pending!)
+    expect(freq.pending!).toBeGreaterThan(freq.done!)
+    expect(freq.done!).toBeGreaterThan(freq.archived!)
+  })
+
+  test("adversarial-boundary lands enum K/N exactly at 1/3 (looksLikeEnum's stronglyRepetitive cutover)", () => {
+    // 60 declared members (comfortably more than any target K) so the
+    // achieved K isn't clamped by the schema's own member count.
+    const manyMembersSchema = t(types.object({ tag: t(types.enum(Array.from({ length: 60 }, (_, i) => `v${i}`))) }))
+    const n = 90 // 90 / 3 = 30 exactly, so K/N lands on the cutover with no rounding.
+    const corpus = generateCorpus(manyMembersSchema, n, { seed: "adv-enum", profile: { kind: "adversarial-boundary" } }) as Record<string, unknown>[]
+    const K = new Set(corpus.map((v) => v.tag)).size
+    expect(K).toBe(30)
+    expect(K / n).toBeCloseTo(1 / 3, 5)
+  })
+
+  test("adversarial-boundary's epsilon shifts the targeted K/N away from the exact cutover", () => {
+    const manyMembersSchema = t(types.object({ tag: t(types.enum(Array.from({ length: 60 }, (_, i) => `v${i}`))) }))
+    const n = 90
+    const corpus = generateCorpus(manyMembersSchema, n, { seed: "adv-enum-eps", profile: { kind: "adversarial-boundary", epsilon: 0.1 } }) as Record<string, unknown>[]
+    const K = new Set(corpus.map((v) => v.tag)).size
+    expect(K).toBe(Math.round(n * (1 / 3 + 0.1))) // 39
+    expect(K / n).toBeGreaterThan(1 / 3)
+  })
+
+  test("adversarial-boundary lands field-set Jaccard distance exactly at 0.1 (tryDetectDU's group-distinctness cutover)", () => {
+    // 1 required + 9 optional fields: omitCount = round(0.1 * 10) = 1, so
+    // exactly one optional field differs between the two sample-index
+    // clusters, and every other field is forced always-present — giving a
+    // clean symmetric difference of 1 over a union of 10.
+    const jaccardSchema = t(
+      types.object({
+        req: t(types.string),
+        o1: { shape: types.string, meta: { optional: true } },
+        o2: { shape: types.string, meta: { optional: true } },
+        o3: { shape: types.string, meta: { optional: true } },
+        o4: { shape: types.string, meta: { optional: true } },
+        o5: { shape: types.string, meta: { optional: true } },
+        o6: { shape: types.string, meta: { optional: true } },
+        o7: { shape: types.string, meta: { optional: true } },
+        o8: { shape: types.string, meta: { optional: true } },
+        o9: { shape: types.string, meta: { optional: true } },
+      }),
+    )
+    const n = 100
+    const corpus = generateCorpus(jaccardSchema, n, { seed: "adv-jaccard", profile: { kind: "adversarial-boundary" } }) as Record<string, unknown>[]
+    const keysA = new Set(Object.keys(corpus[0]!)) // cluster A: sampleIndex < n/2
+    const keysB = new Set(Object.keys(corpus[n - 1]!)) // cluster B: sampleIndex >= n/2
+    const union = new Set([...keysA, ...keysB])
+    let symDiff = 0
+    for (const k of union) if (keysA.has(k) !== keysB.has(k)) symDiff++
+    expect(symDiff / union.size).toBeCloseTo(0.1, 5)
+  })
+
+  test("adversarial-boundary lands dict key-growth ratio near 0.5 (walkAndDetectDicts's growthRatio cutover) when map size is pinned to 1 entry/sample", () => {
+    // growthRatio = (distinct keys added) / (sample count), unnormalized by
+    // per-sample map size — pinning mapSizeRange to [1, 1] is what makes the
+    // per-entry "fresh with probability 0.5+epsilon" targeting land on the
+    // actual metric from-json-corpus.ts computes (see AdversarialBoundaryProfile doc).
+    const dictSchema = t(types.object({ scores: t(types.map(t(types.string), t(types.integer))) }))
+    const n = 200
+    const corpus = generateCorpus(dictSchema, n, {
+      seed: "adv-dict", mapSizeRange: [1, 1], profile: { kind: "adversarial-boundary" },
+    }) as Record<string, unknown>[]
+    const allKeys = new Set<string>()
+    const growthPoints: number[] = []
+    for (const v of corpus) {
+      for (const k of Object.keys(v.scores as object)) allKeys.add(k)
+      growthPoints.push(allKeys.size)
+    }
+    const growthRatio = (growthPoints[growthPoints.length - 1]! - growthPoints[0]!) / corpus.length
+    expect(growthRatio).toBeGreaterThan(0.35)
+    expect(growthRatio).toBeLessThan(0.65)
+  })
+
+  const hcSchema = t(
+    types.object({
+      id: t(types.string),
+      count: t(types.integer),
+      status: t(types.enum(["active", "archived"])),
+    }),
+  )
+
+  test("high-cardinality-id makes plain string/integer leaves near-unique per sample", () => {
+    const n = 300
+    const corpus = generateCorpus(hcSchema, n, { seed: "hc-shape", profile: { kind: "high-cardinality-id" } }) as Record<string, unknown>[]
+    const idDistinct = new Set(corpus.map((v) => v.id)).size
+    const countDistinct = new Set(corpus.map((v) => v.count)).size
+    expect(idDistinct / n).toBeGreaterThan(0.9)
+    expect(countDistinct / n).toBeGreaterThan(0.9)
+    // The real enum field is untouched by this profile — only string/integer leaves are affected.
+    for (const v of corpus) expect(["active", "archived"]).toContain(v.status as string)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Generator profiles — threshold-behavior findings. Each test runs the
+// labeled cases through the full generate -> infer -> score pipeline under
+// a profile and reports/asserts what actually changes vs. the uniform
+// baseline, per the Phase 2 plan ("treat any genuinely revealed threshold
+// weakness as a finding to report, not something to silently patch").
+// ---------------------------------------------------------------------------
+
+describe("generator profiles — threshold-behavior findings", () => {
+  const TRIAL_COUNT = 40
+
+  test("FINDING: zipfian-presence's skewed enum-member frequency significantly IMPROVES enum-detection F1 over uniform at small N (8-10) on the Status Enum case", () => {
+    // Status Enum has 4 members. Under uniform, all 4 are roughly equally
+    // likely, so a small corpus needs to sample widely before K/N settles
+    // below looksLikeEnum's saturation threshold. Under zipfian skew, most
+    // samples concentrate on the 1-2 highest-weight members, so the
+    // OBSERVED K stays low even at small N -- the corpus looks MORE
+    // enum-like sooner, not less. This is the opposite of the naive
+    // expectation that skew makes detection harder; the harness surfaces
+    // it precisely because it varies a previously-fixed distribution.
+    const statusEnumCase = defaultLabeledCases.find((c) => c.name === "Status Enum")!
+    const n = 10
+    const uniform = runEvaluationTrials([statusEnumCase], [n], TRIAL_COUNT).results[0]!
+    const zipfianCase: EvalCase = {
+      ...statusEnumCase,
+      generateOptions: { ...statusEnumCase.generateOptions, profile: { kind: "zipfian-presence" } },
+    }
+    const zipfian = runEvaluationTrials([zipfianCase], [n], TRIAL_COUNT).results[0]!
+
+    const result = pairedBootstrapTest(
+      axisValues(zipfian, "enumDetectionF1"),
+      axisValues(uniform, "enumDetectionF1"),
+      mulberry32(0xa11e),
+    )
+    expect(result.meanDiff).toBeGreaterThan(0)
+    expect(result.significant).toBe(true)
+    expect(result.pValue).toBeLessThan(0.05)
+  })
+
+  test("FINDING: high-cardinality-id fields are NOT flagged as false-positive enums under current thresholds -- enum-detection precision stays 1 across sizes", () => {
+    // Negative control: `id` (string) and `count` (integer) are near-unique
+    // per sample; ground truth is "must not be detected as enum". This
+    // exercises the PRECISION axis of enumDetection, which none of
+    // defaultLabeledCases specifically probes (they all test recall).
+    const hcCase: EvalCase = {
+      name: "HC probe",
+      schema: t(
+        types.object({
+          id: t(types.string),
+          count: t(types.integer),
+          status: t(types.enum(["active", "archived"])),
+        }),
+      ),
+      generateOptions: { profile: { kind: "high-cardinality-id" } },
+    }
+    for (const n of [10, 20, 50, 100]) {
+      const summary = runEvaluation([hcCase], [n])
+      expect(summary.results[0]!.score.enumDetection.precision).toBe(1)
+    }
   })
 })

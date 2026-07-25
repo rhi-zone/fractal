@@ -92,6 +92,253 @@ function randomDateTime(rng: Rng): string {
   return `${randomDate(rng)}T${h}:${m}:${s}Z`
 }
 
+function clamp(x: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, x))
+}
+
+// ---------------------------------------------------------------------------
+// Generator profiles — pluggable presence/value distributions layered on
+// top of generateValue's structural walk.
+//
+// Every eval result from Phase 1 was implicitly conditioned on exactly one
+// generation policy: uniform random picks, a flat optional-presence rate, a
+// flat null rate, uniform array/map sizing. That's a confound — a
+// clustering method that wins under uniform field presence could lose under
+// realistic skew, and none of the labeled cases probed enum false-positives
+// at all. `GeneratorProfile` swaps the DISTRIBUTIONS `generateValue` samples
+// from without touching the walk itself: each profile is one small
+// `ProfileSampler` implementation, looked up once per corpus (via
+// `resolveGenOptions`) and consulted at the handful of call sites below
+// (optional-field presence, enum-member choice, scalar-leaf generation, map
+// key choice).
+// ---------------------------------------------------------------------------
+
+export interface ZipfianPresenceProfile {
+  readonly kind: "zipfian-presence"
+  /**
+   * Zipf exponent `s` in `weight(rank) = 1 / rank^s`, where `rank` is a
+   * field's 1-based position among its object's optional fields (in
+   * declaration order) or an enum member's 1-based position in its declared
+   * member list. Higher = more skew. Default 1.2, in the "moderately
+   * skewed" 1.0-1.5 range typical of real APIs: a few near-always-present
+   * optional fields and a long tail of rare ones; enum values are almost
+   * never uniformly distributed (`status: "active"` dominates
+   * `status: "archived"`). This is expected to make `enumMinSamples`/
+   * `looksLikeEnum`'s K/N threshold behave differently than under uniform
+   * sampling — a rare enum value may not reach saturation (be observed at
+   * all) until N is much larger than under uniform picks.
+   */
+  readonly exponent?: number
+}
+
+export interface AdversarialBoundaryProfile {
+  readonly kind: "adversarial-boundary"
+  /**
+   * Signed offset applied to each targeted threshold's exact cutover before
+   * constructing the corpus (e.g. `-0.02` lands just BELOW the cutover,
+   * `+0.02` just ABOVE). Default 0 (land as close to exact as integer
+   * sample/field counts allow). This profile directly evaluates threshold
+   * PLACEMENT, not typical-case behavior — it deliberately constructs
+   * corpora that land within one sample of a threshold's cutover, for every
+   * threshold-bearing structural position it can act on:
+   *
+   *  - enum K/N ratio vs. 1/3 — `looksLikeEnum`'s `stronglyRepetitive`
+   *    cutover (`from-json-corpus.ts`). Applied at every `enum`-shaped leaf:
+   *    the corpus is built by cycling a fixed-size subset of the declared
+   *    members (`K = round(N * (1/3 + epsilon))`) across the N samples, so
+   *    the OBSERVED K/N ratio lands exactly at the target (subject to
+   *    integer rounding).
+   *  - field-set Jaccard distance vs. 0.1 — `tryDetectDU`'s
+   *    group-distinctness cutover (`from-json-corpus.ts`). Applied at every
+   *    object position with optional fields: the corpus is split into two
+   *    halves by sample index, and a deterministically-chosen subset of
+   *    optional fields (sized to hit `0.1 + epsilon` of the object's total
+   *    field count) is present in the first half and absent in the second,
+   *    with every other optional field always present so no incidental
+   *    presence noise blurs the target distance. Approximate: field-count
+   *    rounding means the achieved distance can differ slightly from the
+   *    target on small objects.
+   *  - dict key-growth ratio vs. 0.5 — `walkAndDetectDicts`'s
+   *    `growthRatio` cutover (`from-json-corpus.ts`). Applied at every `map`
+   *    position: each generated key is fresh with probability
+   *    `0.5 + epsilon`, else reused from previously-seen keys at that
+   *    position — probabilistic, not exact. `growthRatio` itself is
+   *    `(distinct keys added) / (sample count)`, UNNORMALIZED by
+   *    per-sample map size, so this only lands near the target ratio when
+   *    `GenerateOptions.mapSizeRange` puts (close to) one entry per sample
+   *    (e.g. `[1, 1]`) — at larger map sizes the achieved ratio scales up
+   *    roughly proportionally to entries-per-sample instead.
+   */
+  readonly epsilon?: number
+}
+
+export interface HighCardinalityIdProfile {
+  readonly kind: "high-cardinality-id"
+  /**
+   * Fraction of samples that get a freshly-minted (never-before-seen) value
+   * at each plain `string`/`integer`-kind leaf position — near 1 means
+   * near-unique per sample (UUID-like or sequential-ID-like). Default 0.98,
+   * not exactly 1.0: real ID fields occasionally repeat (retries,
+   * re-fetches, pagination overlap), and a hard 1.0 is an easier case than
+   * this profile exists to probe. This is a NEGATIVE CONTROL: ground truth
+   * for every field this touches is "must NOT be detected as enum" — it
+   * exercises `scoreInference`'s enum-detection PRECISION axis (false
+   * positives), which none of `defaultLabeledCases` specifically probes
+   * (they all test recall — "did we find the real enum"). Only plain
+   * `string`/`integer`-kind leaves are affected; already-enum/literal-typed
+   * positions in the original schema are untouched, so a corpus generated
+   * under this profile still has real enums to (correctly) detect alongside
+   * the high-cardinality fields that must (correctly) be rejected.
+   */
+  readonly cardinalityRatio?: number
+  /** ID value style: "uuid" (random hex UUID) or "sequential" (zero-padded counter / incrementing integer). Default "uuid". */
+  readonly style?: "uuid" | "sequential"
+}
+
+/** See the individual profile interfaces for what each varies and why. `{ kind: "uniform" }` (or omitting `profile` entirely) keeps Phase 1's original flat/uniform behavior. */
+export type GeneratorProfile =
+  | { readonly kind: "uniform" }
+  | ZipfianPresenceProfile
+  | AdversarialBoundaryProfile
+  | HighCardinalityIdProfile
+
+/** Distribution hooks `generateValue` consults instead of sampling flat/uniform directly. Every method has a pass-through default (`uniformSampler`) so a profile only needs to override what it actually varies. */
+interface ProfileSampler {
+  /** Probability an optional field at `fieldName` (1-based `rank` among `objRef`'s optional fields, out of `optionalFieldNames`/`totalFieldCount`) is present in this sample. `base` is `GenerateOptions.optionalPresenceRate`, the uniform default. */
+  presenceProbability(
+    objRef: TypeRef,
+    fieldName: string,
+    rank: number,
+    optionalFieldNames: readonly string[],
+    totalFieldCount: number,
+    base: number,
+    sampleIndex: number,
+    totalSamples: number,
+  ): number
+  /** Choose one member of an `enum`-shaped leaf's declared members. */
+  pickEnumMember<T>(ref: TypeRef, members: readonly T[], rng: Rng, sampleIndex: number, totalSamples: number): T
+  /** Override plain scalar-leaf generation for a given shape `kind`. Return `undefined` to fall through to the default `generateLeaf` behavior. */
+  overrideLeaf(
+    ref: TypeRef,
+    kind: string,
+    rng: Rng,
+    sampleIndex: number,
+    totalSamples: number,
+  ): { readonly value: unknown } | undefined
+  /** Choose a map entry's key, given the default-generated candidate key. */
+  mapKey(ref: TypeRef, defaultKey: string, rng: Rng, sampleIndex: number, totalSamples: number): string
+}
+
+const uniformSampler: ProfileSampler = {
+  presenceProbability: (_objRef, _fieldName, _rank, _names, _totalFieldCount, base) => base,
+  pickEnumMember: (_ref, members, rng) => pick(rng, members),
+  overrideLeaf: () => undefined,
+  mapKey: (_ref, defaultKey) => defaultKey,
+}
+
+function zipfWeights(count: number, exponent: number): number[] {
+  return Array.from({ length: count }, (_, i) => 1 / Math.pow(i + 1, exponent))
+}
+
+function weightedPick<T>(rng: Rng, items: readonly T[], weights: readonly number[]): T {
+  const total = weights.reduce((a, b) => a + b, 0)
+  let r = rng() * total
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i]!
+    if (r <= 0) return items[i]!
+  }
+  return items[items.length - 1]!
+}
+
+function makeZipfianSampler(exponent: number): ProfileSampler {
+  return {
+    presenceProbability: (_objRef, _fieldName, rank) => clamp(1 / Math.pow(rank, exponent), 0, 1),
+    pickEnumMember: (_ref, members, rng) => weightedPick(rng, members, zipfWeights(members.length, exponent)),
+    overrideLeaf: () => undefined,
+    mapKey: (_ref, defaultKey) => defaultKey,
+  }
+}
+
+function makeAdversarialSampler(epsilon: number): ProfileSampler {
+  const enumCycles = new WeakMap<TypeRef, readonly unknown[]>()
+  const objectOmitSets = new WeakMap<TypeRef, ReadonlySet<string>>()
+  const mapGrowthState = new WeakMap<TypeRef, { seenKeys: string[] }>()
+
+  return {
+    presenceProbability: (objRef, fieldName, _rank, optionalFieldNames, totalFieldCount, _base, sampleIndex, totalSamples) => {
+      let omit = objectOmitSets.get(objRef)
+      if (omit === undefined) {
+        const target = clamp(0.1 + epsilon, 0, 1)
+        const omitCount = clamp(Math.round(target * totalFieldCount), 0, optionalFieldNames.length)
+        omit = new Set(optionalFieldNames.slice(0, omitCount))
+        objectOmitSets.set(objRef, omit)
+      }
+      if (!omit.has(fieldName)) return 1 // only the boundary-defining fields carry presence variation
+      const inClusterB = sampleIndex >= Math.floor(totalSamples / 2)
+      return inClusterB ? 0 : 1
+    },
+    pickEnumMember: (ref, members, _rng, sampleIndex, totalSamples) => {
+      let cycle = enumCycles.get(ref) as readonly (typeof members)[number][] | undefined
+      if (cycle === undefined) {
+        const target = clamp(1 / 3 + epsilon, 0, 1)
+        const k = clamp(Math.round(totalSamples * target), 1, members.length)
+        cycle = members.slice(0, k)
+        enumCycles.set(ref, cycle)
+      }
+      return cycle[sampleIndex % cycle.length]!
+    },
+    overrideLeaf: () => undefined,
+    mapKey: (ref, defaultKey, rng, _sampleIndex, _totalSamples) => {
+      let st = mapGrowthState.get(ref)
+      if (st === undefined) {
+        st = { seenKeys: [] }
+        mapGrowthState.set(ref, st)
+      }
+      const target = clamp(0.5 + epsilon, 0, 1)
+      if (st.seenKeys.length === 0 || rng() < target) {
+        st.seenKeys.push(defaultKey)
+        return defaultKey
+      }
+      return pick(rng, st.seenKeys)
+    },
+  }
+}
+
+function makeHighCardinalitySampler(cardinalityRatio: number, style: "uuid" | "sequential"): ProfileSampler {
+  const state = new WeakMap<TypeRef, { seen: unknown[]; counter: number }>()
+
+  return {
+    presenceProbability: (_objRef, _fieldName, _rank, _names, _totalFieldCount, base) => base,
+    pickEnumMember: (_ref, members, rng) => pick(rng, members),
+    overrideLeaf: (ref, kind, rng) => {
+      if (kind !== "string" && kind !== "integer") return undefined
+      let st = state.get(ref)
+      if (st === undefined) {
+        st = { seen: [], counter: 0 }
+        state.set(ref, st)
+      }
+      if (st.seen.length === 0 || rng() < cardinalityRatio) {
+        const value = kind === "integer"
+          ? (style === "sequential" ? st.counter++ : randInt(rng, 0, 10_000_000))
+          : (style === "sequential" ? `id-${String(st.counter++).padStart(6, "0")}` : randomUuid(rng))
+        st.seen.push(value)
+        return { value }
+      }
+      return { value: pick(rng, st.seen) }
+    },
+    mapKey: (_ref, defaultKey) => defaultKey,
+  }
+}
+
+function resolveProfile(profile: GeneratorProfile | undefined): ProfileSampler {
+  if (profile === undefined || profile.kind === "uniform") return uniformSampler
+  switch (profile.kind) {
+    case "zipfian-presence": return makeZipfianSampler(profile.exponent ?? 1.2)
+    case "adversarial-boundary": return makeAdversarialSampler(profile.epsilon ?? 0)
+    case "high-cardinality-id": return makeHighCardinalitySampler(profile.cardinalityRatio ?? 0.98, profile.style ?? "uuid")
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Corpus generation — the inverse of inference
 // ---------------------------------------------------------------------------
@@ -122,6 +369,13 @@ export interface GenerateOptions {
    * referent's shape ahead of time). Default 6.
    */
   readonly maxDepth?: number
+  /**
+   * The presence/value-frequency distribution `generateValue` samples from,
+   * in place of the flat/uniform defaults above. See `GeneratorProfile`.
+   * Default: `{ kind: "uniform" }` (Phase 1's original behavior — every eval
+   * result before this option existed was implicitly generated under it).
+   */
+  readonly profile?: GeneratorProfile
 }
 
 interface ResolvedGenOptions {
@@ -132,6 +386,7 @@ interface ResolvedGenOptions {
   readonly mapSizeRange: readonly [number, number]
   readonly defs: Readonly<Record<string, TypeRef>>
   readonly maxDepth: number
+  readonly profile: ProfileSampler
 }
 
 function resolveGenOptions(options: GenerateOptions | undefined): ResolvedGenOptions {
@@ -143,6 +398,7 @@ function resolveGenOptions(options: GenerateOptions | undefined): ResolvedGenOpt
     mapSizeRange: options?.mapSizeRange ?? [0, 4],
     defs: options?.defs ?? {},
     maxDepth: options?.maxDepth ?? 6,
+    profile: resolveProfile(options?.profile),
   }
 }
 
@@ -184,7 +440,13 @@ function generateLeaf(kind: string, opts: ResolvedGenOptions): unknown {
   }
 }
 
-function generateValue(ref: TypeRef, opts: ResolvedGenOptions, depth: number): unknown {
+function generateValue(
+  ref: TypeRef,
+  opts: ResolvedGenOptions,
+  depth: number,
+  sampleIndex: number,
+  totalSamples: number,
+): unknown {
   if (ref.meta.nullable === true && opts.rng() < opts.nullableNullRate) return null
 
   const { shape } = ref
@@ -193,10 +455,20 @@ function generateValue(ref: TypeRef, opts: ResolvedGenOptions, depth: number): u
   switch (shape.kind) {
     case "object": {
       const fields = (shape as { fields: Readonly<Record<string, TypeRef>> }).fields
+      const entries = Object.entries(fields)
+      const optionalFieldNames = entries.filter(([, r]) => r.meta.optional === true).map(([name]) => name)
+      const totalFieldCount = entries.length
       const out: Record<string, unknown> = {}
-      for (const [name, fieldRef] of Object.entries(fields)) {
-        if (fieldRef.meta.optional === true && opts.rng() >= opts.optionalPresenceRate) continue
-        out[name] = generateValue(fieldRef, opts, depth + 1)
+      let rank = 0
+      for (const [name, fieldRef] of entries) {
+        if (fieldRef.meta.optional === true) {
+          rank++
+          const p = opts.profile.presenceProbability(
+            ref, name, rank, optionalFieldNames, totalFieldCount, opts.optionalPresenceRate, sampleIndex, totalSamples,
+          )
+          if (opts.rng() >= p) continue
+        }
+        out[name] = generateValue(fieldRef, opts, depth + 1, sampleIndex, totalSamples)
       }
       return out
     }
@@ -204,24 +476,28 @@ function generateValue(ref: TypeRef, opts: ResolvedGenOptions, depth: number): u
       const element = (shape as { element: TypeRef }).element
       const [lo, hi] = opts.arrayLengthRange
       const len = forceEmptyContainers ? 0 : randInt(opts.rng, lo, hi)
-      return Array.from({ length: len }, () => generateValue(element, opts, depth + 1))
+      return Array.from({ length: len }, () => generateValue(element, opts, depth + 1, sampleIndex, totalSamples))
     }
     case "tuple": {
       const elements = (shape as { elements: readonly TypeRef[] }).elements
-      return elements.map((el) => generateValue(el, opts, depth + 1))
+      return elements.map((el) => generateValue(el, opts, depth + 1, sampleIndex, totalSamples))
     }
     case "map": {
       const value = (shape as { value: TypeRef }).value
       const [lo, hi] = opts.mapSizeRange
       const size = forceEmptyContainers ? 0 : randInt(opts.rng, lo, hi)
       const out: Record<string, unknown> = {}
-      for (let i = 0; i < size; i++) out[`${randomWord(opts.rng)}_${i}`] = generateValue(value, opts, depth + 1)
+      for (let i = 0; i < size; i++) {
+        const defaultKey = `${randomWord(opts.rng)}_${i}`
+        const key = opts.profile.mapKey(ref, defaultKey, opts.rng, sampleIndex, totalSamples)
+        out[key] = generateValue(value, opts, depth + 1, sampleIndex, totalSamples)
+      }
       return out
     }
     case "union": {
       const variants = (shape as { variants: readonly TypeRef[] }).variants
       if (variants.length === 0) return null
-      return generateValue(pick(opts.rng, variants), opts, depth + 1)
+      return generateValue(pick(opts.rng, variants), opts, depth + 1, sampleIndex, totalSamples)
     }
     case "literal": {
       return (shape as { value: string | number | boolean | null }).value
@@ -229,16 +505,19 @@ function generateValue(ref: TypeRef, opts: ResolvedGenOptions, depth: number): u
     case "enum": {
       const members = (shape as { members: readonly string[] }).members
       if (members.length === 0) return ""
-      return pick(opts.rng, members)
+      return opts.profile.pickEnumMember(ref, members, opts.rng, sampleIndex, totalSamples)
     }
     case "ref": {
       const target = (shape as { target: string }).target
       const resolved = opts.defs[target]
       if (resolved === undefined) return null // unresolvable ref — no defs given, degrade to null
-      return generateValue(resolved, opts, depth + 1)
+      return generateValue(resolved, opts, depth + 1, sampleIndex, totalSamples)
     }
-    default:
+    default: {
+      const override = opts.profile.overrideLeaf(ref, shape.kind, opts.rng, sampleIndex, totalSamples)
+      if (override !== undefined) return override.value
       return generateLeaf(shape.kind, opts)
+    }
   }
 }
 
@@ -248,7 +527,7 @@ function generateValue(ref: TypeRef, opts: ResolvedGenOptions, depth: number): u
  */
 export function generateCorpus(schema: TypeRef, n: number, options?: GenerateOptions): unknown[] {
   const opts = resolveGenOptions(options)
-  return Array.from({ length: n }, () => generateValue(schema, opts, 0))
+  return Array.from({ length: n }, (_, i) => generateValue(schema, opts, 0, i, n))
 }
 
 // ---------------------------------------------------------------------------
