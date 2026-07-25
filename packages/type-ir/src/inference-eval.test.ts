@@ -7,9 +7,12 @@ import {
   generateCorpus,
   scoreInference,
   runEvaluation,
+  runEvaluationTrials,
+  axisValues,
   defaultLabeledCases,
   type EvalCase,
 } from "./inference-eval.ts"
+import { pairedBootstrapTest, mulberry32 } from "./stats.ts"
 import { ecommerceOrder, apiResponse, treeNode } from "./test-fixtures.ts"
 
 // ---------------------------------------------------------------------------
@@ -428,5 +431,130 @@ describe("clustering method comparison", () => {
     const { apiVariants } = runWith("key-signature")
     expect(apiVariants.unionFidelity.f1).toBe(1)
     expect(apiVariants.overallF1).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Clustering method comparison — statistically backed re-run of the block
+// above. Every claim there ran at exactly one seed (`runEvaluation`'s
+// `${name}:${n}` derivation), so "single-linkage got unionFidelity.f1 === 0"
+// is an N=1 sample of a random variable (corpus generation is randomized),
+// not a demonstrated property of the method. This block re-runs the same
+// scenarios through `runEvaluationTrials` at many independent seeds and
+// tests the distributional claim instead: "single-linkage's F1 is
+// significantly lower than complete-linkage's, p < 0.05 via paired
+// bootstrap" — using `pairedBootstrapTest` on same-index trial pairs, which
+// share a generated corpus (differing only in `clusteringMethod`), so
+// corpus-generation noise cancels out of the comparison.
+//
+// TRIAL_COUNT: the design suggests 20-50 trials for production-quality
+// runs; this suite uses the low end (25) to keep `bun test` fast — the
+// scenarios here have large, consistent effect sizes (a real algorithmic
+// difference, not a marginal threshold tweak), so 25 trials is already
+// more than enough to clear p < 0.05 without flakiness. A tuning
+// investigation with a smaller expected effect size should use more.
+// ---------------------------------------------------------------------------
+
+describe("clustering method comparison (multi-trial, statistically backed)", () => {
+  const TRIAL_COUNT = 25
+
+  const disjointPolymorphic = t(
+    types.union([
+      t(types.object({ userId: t(types.integer), userName: t(types.string), userEmail: t(types.string) })),
+      t(types.object({ orderId: t(types.integer), total: t(types.number), items: t(types.integer) })),
+    ]),
+  )
+
+  const chainingRisk = t(
+    types.union([
+      t(types.object({ p: t(types.integer), shared1: t(types.string) })),
+      t(types.object({ shared1: t(types.string), shared2: t(types.string) })),
+      t(types.object({ shared2: t(types.string), q: t(types.integer) })),
+    ]),
+  )
+
+  const apiResponseVariants = t(
+    types.union([
+      t(types.object({ id: t(types.integer), name: t(types.string) })),
+      t(types.object({ id: t(types.integer), name: t(types.string), extra: t(types.boolean) })),
+    ]),
+  )
+
+  function trialsWith(
+    name: string,
+    schema: EvalCase["schema"],
+    method: "single-linkage" | "complete-linkage" | "key-signature",
+    threshold?: number,
+  ) {
+    const cases: EvalCase[] = [
+      {
+        name,
+        schema,
+        config: threshold === undefined
+          ? { clusteringMethod: method }
+          : { clusteringMethod: method, objectSplitThreshold: threshold },
+      },
+    ]
+    return runEvaluationTrials(cases, [50], TRIAL_COUNT).results[0]!
+  }
+
+  test("all three methods correctly split fully disjoint shapes across every trial (mean overallF1 == 1)", () => {
+    for (const method of ["single-linkage", "complete-linkage", "key-signature"] as const) {
+      const result = trialsWith("disjoint", disjointPolymorphic, method)
+      expect(result.stats.overallF1.mean).toBe(1)
+      expect(result.stats.overallF1.stddev).toBe(0)
+    }
+  })
+
+  test("single-linkage's unionFidelity F1 is significantly lower than complete-linkage's on the chaining scenario", () => {
+    const single = trialsWith("chaining-risk", chainingRisk, "single-linkage", 0.8)
+    const complete = trialsWith("chaining-risk", chainingRisk, "complete-linkage", 0.8)
+
+    // Sanity check the paired precondition: same case name/n/trialCount on
+    // both sides means each trial index drew from the same generated
+    // corpus, so the two series are legitimately paired.
+    expect(single.trials.length).toBe(TRIAL_COUNT)
+    expect(complete.trials.length).toBe(TRIAL_COUNT)
+
+    const result = pairedBootstrapTest(
+      axisValues(complete, "unionFidelityF1"),
+      axisValues(single, "unionFidelityF1"),
+      mulberry32(0xbeef),
+    )
+    expect(result.meanDiff).toBeGreaterThan(0)
+    expect(result.significant).toBe(true)
+    expect(result.pValue).toBeLessThan(0.05)
+    // complete-linkage recovers the union on every trial; single-linkage
+    // sometimes chains and sometimes doesn't depending on which corpus
+    // values happened to land close together under its greedy-union
+    // distance — exactly the single-seed-anecdote problem this multi-trial
+    // block exists to replace ("always 0" doesn't hold across seeds, but
+    // "significantly lower than complete-linkage" does).
+    expect(complete.stats.unionFidelityF1.mean).toBe(1)
+    expect(single.stats.unionFidelityF1.mean).toBeLessThan(complete.stats.unionFidelityF1.mean)
+  })
+
+  test("key-signature also avoids chaining across every trial, since it never compares field-set distance at all", () => {
+    const result = trialsWith("chaining-risk", chainingRisk, "key-signature", 0.8)
+    expect(result.stats.unionFidelityF1.mean).toBe(1)
+    expect(result.stats.unionFidelityF1.stddev).toBe(0)
+  })
+
+  test("key-signature's unionFidelity F1 is significantly higher than single-linkage's and complete-linkage's on near-identical API-variant shapes", () => {
+    const keySig = trialsWith("api-variants", apiResponseVariants, "key-signature")
+    for (const method of ["single-linkage", "complete-linkage"] as const) {
+      const other = trialsWith("api-variants", apiResponseVariants, method)
+      const result = pairedBootstrapTest(
+        axisValues(keySig, "unionFidelityF1"),
+        axisValues(other, "unionFidelityF1"),
+        mulberry32(0xf00d),
+      )
+      expect(result.meanDiff).toBeGreaterThan(0)
+      expect(result.significant).toBe(true)
+      expect(result.pValue).toBeLessThan(0.05)
+      expect(other.stats.unionFidelityF1.mean).toBe(0)
+    }
+    expect(keySig.stats.unionFidelityF1.mean).toBe(1)
+    expect(keySig.stats.overallF1.mean).toBe(1)
   })
 })

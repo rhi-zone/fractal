@@ -27,6 +27,9 @@
 import { ancestors, t, types, type TypeRef } from "./index.ts"
 import { fromJsonCorpus, type CorpusInferConfig } from "./from-json-corpus.ts"
 import { ecommerceOrder, apiResponse, kitchenSink, treeNode } from "./test-fixtures.ts"
+import { mean, stddev, bootstrapCI, mulberry32, type Rng, type ConfidenceInterval } from "./stats.ts"
+
+export type { Rng }
 
 // ---------------------------------------------------------------------------
 // Seeded RNG — deterministic so eval runs (and their test assertions) are
@@ -41,19 +44,6 @@ function hashSeed(seed: string): number {
   }
   return h >>> 0
 }
-
-/** mulberry32 — small, fast, seedable PRNG. Returns a `() => number in [0,1)` generator. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0
-  return () => {
-    a = (a + 0x6d2b79f5) | 0
-    let x = Math.imul(a ^ (a >>> 15), 1 | a)
-    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
-    return ((x ^ (x >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-export type Rng = () => number
 
 function rngFromSeed(seed: number | string | undefined): Rng {
   if (seed === undefined) return mulberry32(0xc0ffee)
@@ -396,10 +386,6 @@ export interface ScoreReport {
   readonly fields: readonly FieldComparison[]
 }
 
-function mean(values: readonly number[]): number {
-  return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length
-}
-
 /**
  * Compare an inferred TypeRef against the original schema it was (via a
  * generated corpus) supposed to recover. See module doc for the axes.
@@ -546,6 +532,143 @@ export function runEvaluation(cases: readonly EvalCase[], sizes: readonly number
   })
 
   return { sizes, results, bySize }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-trial evaluation — `runEvaluation` runs each (case, n) pair at
+// exactly one seed, so a single run is one sample of a random variable, not
+// a distribution. `runEvaluationTrials` runs `trialCount` independent seeds
+// per (case, n) — `${evalCase.name}:${n}:${trial}`, preserving per-trial
+// determinism/reproducibility the same way `runEvaluation` does for a
+// single trial — and reports the resulting distribution (mean, stddev, 95%
+// bootstrap CI) for `overallF1` and each sub-axis, rather than one number.
+// ---------------------------------------------------------------------------
+
+/** The sub-axis F1s (plus `overallF1`) that `runEvaluationTrials` tracks a distribution for. */
+export type EvalAxis =
+  | "overallF1"
+  | "fieldCoverageF1"
+  | "typeAccuracyFamilyRate"
+  | "enumDetectionF1"
+  | "dictDetectionF1"
+  | "unionFidelityF1"
+
+const evalAxes: readonly EvalAxis[] = [
+  "overallF1",
+  "fieldCoverageF1",
+  "typeAccuracyFamilyRate",
+  "enumDetectionF1",
+  "dictDetectionF1",
+  "unionFidelityF1",
+]
+
+function axisValue(score: ScoreReport, axis: EvalAxis): number {
+  switch (axis) {
+    case "overallF1": return score.overallF1
+    case "fieldCoverageF1": return score.fieldCoverage.f1
+    case "typeAccuracyFamilyRate": return score.typeAccuracy.familyRate
+    case "enumDetectionF1": return score.enumDetection.f1
+    case "dictDetectionF1": return score.dictDetection.f1
+    case "unionFidelityF1": return score.unionFidelity.f1
+  }
+}
+
+/**
+ * Pull the raw per-trial values for one axis out of a `CaseSizeTrialResult`
+ * — the shape `pairedBootstrapTest` (see stats.ts) wants for comparing two
+ * configurations run on the same (case, n) at the same trial count: e.g.
+ * `pairedBootstrapTest(axisValues(a, "overallF1"), axisValues(b, "overallF1"), rng)`
+ * where `a`/`b` came from separately-configured `runEvaluationTrials` calls
+ * over the same `cases`/`sizes`/`trialCount` (so trial `i` in each used the
+ * same generated corpus).
+ */
+export function axisValues(result: CaseSizeTrialResult, axis: EvalAxis): number[] {
+  return result.trials.map((score) => axisValue(score, axis))
+}
+
+export interface AxisStats {
+  readonly mean: number
+  readonly stddev: number
+  /** 95% (or `options.ciLevel`) percentile bootstrap confidence interval on the mean. */
+  readonly ci: ConfidenceInterval
+}
+
+export interface CaseSizeTrialResult {
+  readonly name: string
+  readonly n: number
+  readonly trialCount: number
+  /** Per-axis distribution summary — mean/stddev/CI. Keyed by `EvalAxis`. */
+  readonly stats: Readonly<Record<EvalAxis, AxisStats>>
+  /** The raw per-trial score reports, in trial order — use with `axisValues` for paired comparisons. */
+  readonly trials: readonly ScoreReport[]
+}
+
+export interface EvalTrialsSummary {
+  readonly sizes: readonly number[]
+  readonly trialCount: number
+  readonly results: readonly CaseSizeTrialResult[]
+}
+
+export interface RunEvaluationTrialsOptions {
+  /** Bootstrap confidence level. Default 0.95. */
+  readonly ciLevel?: number
+  /** Bootstrap resample count per CI. Default 2000. */
+  readonly resamples?: number
+}
+
+/**
+ * Run each `(case, n)` pair in `cases` x `sizes` across `trialCount`
+ * independent seeds and summarize the resulting distribution of
+ * `overallF1` and each sub-axis F1, instead of `runEvaluation`'s single
+ * point sample per pair. Seeds are derived as
+ * `${evalCase.name}:${n}:${trial}`, so trial `i` is reproducible on its own
+ * and — for two `runEvaluationTrials` calls made with the same `cases`
+ * (same names/schemas), `sizes`, and `trialCount` but different
+ * `EvalCase.config` — trial `i` in one call and trial `i` in the other were
+ * generated from the SAME corpus, making per-index differences meaningful
+ * for `pairedBootstrapTest`.
+ */
+export function runEvaluationTrials(
+  cases: readonly EvalCase[],
+  sizes: readonly number[] = defaultSizes,
+  trialCount: number,
+  options?: RunEvaluationTrialsOptions,
+): EvalTrialsSummary {
+  const ciLevel = options?.ciLevel ?? 0.95
+  const resamples = options?.resamples ?? 2000
+
+  const results: CaseSizeTrialResult[] = []
+  for (const evalCase of cases) {
+    for (const n of sizes) {
+      const trials: ScoreReport[] = []
+      for (let trial = 0; trial < trialCount; trial++) {
+        const corpus = generateCorpus(evalCase.schema, n, {
+          ...evalCase.generateOptions,
+          seed: `${evalCase.name}:${n}:${trial}`,
+        })
+        const inferred = fromJsonCorpus(corpus, evalCase.config)
+        trials.push(scoreInference(evalCase.schema, inferred))
+      }
+
+      // A dedicated bootstrap-resampling RNG stream, seeded off the case/n
+      // pair (not off any individual trial's seed) so resampling is
+      // reproducible without colluding with corpus-generation randomness.
+      const bootstrapRng = rngFromSeed(`${evalCase.name}:${n}:bootstrap`)
+      const stats = Object.fromEntries(
+        evalAxes.map((axis) => {
+          const values = trials.map((score) => axisValue(score, axis))
+          return [
+            axis,
+            { mean: mean(values), stddev: stddev(values), ci: bootstrapCI(values, bootstrapRng, { level: ciLevel, resamples }) },
+          ]
+        }),
+      ) as Record<EvalAxis, AxisStats>
+
+      results.push({ name: evalCase.name, n, trialCount, stats, trials })
+    }
+  }
+
+  return { sizes, trialCount, results }
 }
 
 // ---------------------------------------------------------------------------
