@@ -425,6 +425,24 @@ narrowing, property-based (fast-check) fuzz tests, and adversarial tests
 targeting enum-detection heuristics. This is JSON-only; no YAML, KDL, or
 other format has an inference path yet.
 
+Since the "parked" call above, an evaluation harness (`inference-eval.ts`)
+was built and used to drive further work on the hardest open design
+question — union splitting: a CFD-style discriminant-discovery pass
+(`tryDetectCfdDiscriminant`, Tagger-paper-style unary constant conditional
+functional dependency search over all scalar sibling fields, not just
+already-enum-typed ones) and three clustering strategies for the
+discriminant-free case (`clusteringMethod`: `single-linkage` (default,
+back-compat), `complete-linkage`, `key-signature`) now exist in
+`from-json-corpus.ts`. Measured against the harness on targeted synthetic
+corpora, no single clustering strategy dominates across corpus shapes
+(each wins on a different constructed scenario — chaining vs.
+near-identical polymorphic shapes), so all three ship as a caller-facing
+option rather than a fixed default; picking one default (or keeping the
+choice) needs further generated-distribution analytics, not yet done.
+This is incremental progress within JSON, not a resolution of the parked
+status below — clustering-default selection and confidence scaling at low
+sample counts remain open design questions.
+
 This work is intentionally parked rather than actively driven toward
 1.0 — it surfaces a set of difficult design decisions (around clustering,
 union splitting, and confidence scaling at low sample counts) that need
