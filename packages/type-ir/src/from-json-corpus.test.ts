@@ -162,6 +162,41 @@ describe("array element unification", () => {
     const el = (result.shape as { element: TypeRef }).element
     expect(el.shape.kind).toBe("uint16")
   })
+
+  test("mostly-populated arrays + one empty array -> element type stays concrete, not unknown", () => {
+    // A lone `[]` sample infers as `array<unknown>` in isolation (from-json.ts's
+    // `inferArray`). Unifying that against the other 99 samples' `array<object>`
+    // must not let `unknown` "win" and erase the concrete element type — unknown
+    // carries no information, so the concrete type should be what survives.
+    const values: unknown[][] = []
+    for (let i = 0; i < 99; i++) values.push([{ a: i }])
+    values.push([])
+    const result = fromJsonCorpus(values)
+    expect(result.shape.kind).toBe("array")
+    const el = (result.shape as { element: TypeRef }).element
+    expect(el.shape.kind).toBe("object")
+  })
+
+  test("all-empty arrays -> element type stays unknown", () => {
+    // When every sample is `[]`, there's genuinely no element evidence at
+    // all — the result should stay `unknown`, not spuriously commit to some
+    // other type.
+    const result = fromJsonCorpus([[], [], []])
+    expect(result.shape.kind).toBe("array")
+    const el = (result.shape as { element: TypeRef }).element
+    expect(el.shape.kind).toBe("unknown")
+  })
+
+  test("empty array field alongside populated array field -> field keeps concrete element type", () => {
+    const values: Record<string, unknown>[] = []
+    for (let i = 0; i < 20; i++) values.push({ id: i, tags: [`tag_${i}`, `tag_${i}_alt`] })
+    values.push({ id: 20, tags: [] })
+    const result = fromJsonCorpus(values)
+    const fields = (result.shape as { fields: Record<string, TypeRef> }).fields
+    expect(fields.tags!.shape.kind).toBe("array")
+    const el = (fields.tags!.shape as { element: TypeRef }).element
+    expect(el.shape.kind).toBe("string")
+  })
 })
 
 describe("enum detection", () => {

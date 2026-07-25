@@ -419,9 +419,13 @@ function unifyTypes(a: TypeRef, b: TypeRef): TypeRef {
     return withMeta(t(types.map(t(types.string), unifyTypes(aVal, bVal))), meta)
   }
 
-  // unknown absorbs everything
-  if (ak === "unknown") return withMeta(a, meta)
-  if (bk === "unknown") return withMeta(b, meta)
+  // `unknown` means "no information" (e.g. an empty array's element type),
+  // not "matches everything" — it's the bottom of unification, not the top.
+  // A concrete type merged with `unknown` should just be that concrete
+  // type; only unknown-with-unknown stays unknown. (If every sample really
+  // is `unknown`, both branches below still return `unknown`.)
+  if (ak === "unknown") return withMeta(b, meta)
+  if (bk === "unknown") return withMeta(a, meta)
 
   // null + T → T with nullable meta (common pattern)
   if (ak === "null" && bk !== "null") return withMeta(b, { ...meta, nullable: true })
@@ -674,22 +678,6 @@ function walkAndDetectDU(ref: TypeRef, node: EvidenceNode): TypeRef {
   }
 
   if (shape.kind === "object") {
-    // `tryDetectDU` needs the raw object samples that produced this
-    // position's merged type, not just the merged type itself — the same
-    // thing `node.array.elementObjects` supplies for array elements. There's
-    // no equivalent pre-filtered bucket for object-typed positions (root,
-    // an object field, a map value, …), because `EvidenceNode.object` only
-    // carries per-field sub-evidence, not the raw per-sample objects. Derive
-    // it here from `node.values` — mirrors the same filter
-    // `trySplitDissimilarObjects` uses to recover raw samples from a node.
-    // This is what makes DU detection fire for a corpus whose union members
-    // sit directly at a position instead of nested inside an array field.
-    const objectSamples = node.values.filter(
-      (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
-    )
-    const du = tryDetectDU(ref, objectSamples)
-    if (du !== null) return withMeta(du, ref.meta)
-
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
