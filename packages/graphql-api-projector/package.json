@@ -2,6 +2,20 @@
   "name": "@rhi-zone/fractal-graphql-api-projector",
   "version": "0.1.0-alpha.0",
   "description": "GraphQL projection for the function-core tree — nested Query / flat Mutation+Subscription SDL assembly (via @rhi-zone/fractal-type-ir) + graphql-js resolver dispatch",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhi-zone/fractal.git",
+    "directory": "packages/graphql-api-projector"
+  },
+  "keywords": [
+    "graphql",
+    "api",
+    "projector",
+    "sdl",
+    "resolvers",
+    "subscriptions"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -36,7 +50,14 @@
       "import": "./src/ws.ts"
     }
   },
-  "files": ["src"],
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.fuzz.test.ts"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
     "@rhi-zone/fractal-type-ir": "workspace:*",

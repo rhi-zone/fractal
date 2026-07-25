@@ -2,6 +2,21 @@
   "name": "@rhi-zone/fractal-api-tree",
   "version": "0.1.0-alpha.0",
   "description": "Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in ./node; Tags lattice in ./tags",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhi-zone/fractal.git",
+    "directory": "packages/api-tree"
+  },
+  "keywords": [
+    "api",
+    "function-core",
+    "combinators",
+    "codegen",
+    "cli",
+    "otel",
+    "auth"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -44,7 +59,14 @@
       "import": "./src/auth.ts"
     }
   },
-  "files": ["src"],
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.fuzz.test.ts"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "fractal-api-tree": "./src/cli.ts"
   },

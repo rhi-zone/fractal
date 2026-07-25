@@ -2,6 +2,21 @@
   "name": "@rhi-zone/fractal-http-api-projector",
   "version": "0.1.0-alpha.0",
   "description": "WHATWG renderer for the function-core tree — direct tree-walk makeRouter, autoMethodLayer, corsLayer, createFetch, serveBun/serveNode, toOpenApi, createClient",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhi-zone/fractal.git",
+    "directory": "packages/http-api-projector"
+  },
+  "keywords": [
+    "http",
+    "api",
+    "projector",
+    "router",
+    "openapi",
+    "fetch",
+    "whatwg"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -104,7 +119,14 @@
       "import": "./src/extensions/idempotency.ts"
     }
   },
-  "files": ["src"],
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.fuzz.test.ts"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
     "@standard-schema/spec": "^1.1.0"

@@ -2,6 +2,23 @@
   "name": "@rhi-zone/fractal-type-ir",
   "version": "0.1.0-alpha.0",
   "description": "Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhi-zone/fractal.git",
+    "directory": "packages/type-ir"
+  },
+  "keywords": [
+    "type-ir",
+    "schema",
+    "codegen",
+    "json-schema",
+    "openapi",
+    "graphql",
+    "sql",
+    "protobuf",
+    "type-generation"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -496,7 +513,14 @@
       "import": "./src/kinds/refinements.ts"
     }
   },
-  "files": ["src"],
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.fuzz.test.ts"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
     "graphql": "^16.9.0"
