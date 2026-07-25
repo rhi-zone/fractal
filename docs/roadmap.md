@@ -110,10 +110,31 @@ Schema, OpenAPI, Protobuf, FlatBuffers, Cap'n Proto, SQL, JTD, GraphQL),
 plus TypeScript source and any Standard Schema library.
 
 What's planned / open:
-- No ingester yet for the general-purpose target languages beyond
-  TypeScript (no `from-python`, `from-rust`, `from-go`, etc.) — ingestion
-  is schema/IDL-first; source-language ingestion for the newer emit
-  targets has not been started.
+- **General-purpose source-language ingestion beyond TypeScript
+  (no `from-python`, `from-rust`, `from-go`, etc.) — decided out of
+  scope for fractal itself, deferred indefinitely (2026-07-25).** Not a
+  gap awaiting work; a scope decision. A session-long investigation
+  found no viable general path fractal should own directly: native
+  per-language parsers (WASM or prebuilt binaries) exist for some
+  languages (Rust via `syn`, Python via `ruff_python_parser`) but many
+  have no lightweight option (JVM/CLR-hosted Java/C#/Kotlin, PHP's
+  self-hosted parser, immature/absent wasm story for Haskell/Elm/
+  Crystal, no parser lighter than clang for C++/Objective-C); SCIP was
+  ruled out against its actual proto spec (symbol occurrences/hover
+  text only, no structured field/enum/generic data, and requires the
+  target project to fully build); LSP was inferred to share SCIP's
+  structural-fidelity ceiling with heavier operational cost. This
+  problem — turning a tree-sitter CST into structured type data across
+  many languages — is being left to sibling project
+  **rhi-zone/normalize** (https://github.com/rhi-zone/normalize), which
+  already builds AST-based structural analysis across 98+ languages via
+  tree-sitter. Fractal will consume normalize's semantic layer as an
+  ingestion source once/if it matures there, rather than duplicating
+  the effort. **Exception**: parsers already published on npm as
+  ready-to-use WASM/JS packages (e.g. `flow-parser` for Flow) remain
+  fair game to adopt opportunistically — near-zero integration effort,
+  no need to wait for normalize. Full rationale and effort-tier notes:
+  `TODO.md`, "Decisions (2026-07-25)".
 - `from-json`/`from-json-corpus` are parked (see "JSON Inference" below).
 - No `from-json-rpc` yet — parsing JSON-RPC service/method definitions
   (method name, params shape, result shape, error shape) into
@@ -123,7 +144,9 @@ What's planned / open:
 Acceptance criteria for green:
 - Every format fractal emits also has a matching ingester where that
   makes conceptual sense (round-trip coverage), or an explicit
-  documented reason it doesn't.
+  documented reason it doesn't — general-purpose source-language
+  ingestion satisfies this via the deferral decision above, not by
+  being built.
 - Ingesters have adversarial/edge-case test coverage comparable to the
   JSON-inference fuzz/adversarial suites already in place for that
   module.
