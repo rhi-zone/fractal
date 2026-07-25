@@ -1,5 +1,25 @@
 # Prior art: JSON shape/schema inference
 
+> **Warning for future cleanroom derivations:** despite its framing as a survey of
+> external prior art, this document contains substantial description of this
+> project's own implementation mixed in with the external material — specific
+> function names (`tryDetectDU`, `tryDetectCfdDiscriminant`, `detectDicts`,
+> `looksLikeEnum`, `unifyTypes`, `mergeAll`, `mergeObjectTypes`, `collectFieldStats`),
+> threshold constants (`K/N < 1/3`, `K > 50`, Jaccard `0.1`, `cfdMinSamples`,
+> `cfdMaxCardinalityRatio`, `cfdMinGroupSize`, `cfdMinScore`, `dictMinSamples`,
+> `enumMinSamples`), and pass structure (`fromJson` per value → `unifyTypes`
+> pairwise merge → post-merge passes) — throughout each "Relevance to our work,"
+> "What we could adopt," and "Limitations" subsection, and in the closing
+> "Synthesis" section. The closing section also points directly at this
+> project's own design documents (`docs/design/json-inference-model.md`) and
+> named, unresolved failure modes in this project's own design work (the
+> "tiered heuristic model with explicit deopts" and "Zipf-aware weighting"
+> directions). A cleanroom derivation that reads this file for "external prior
+> art only" will be contaminated. If deriving from first principles without
+> reference to this codebase, do not read this file until the derivation is
+> complete — treat it as internal documentation, not pure external prior art,
+> despite its location under `prior-art/`.
+
 This document surveys five lines of prior work relevant to `packages/type-ir`'s
 JSON shape inference (`from-json.ts`, `from-json-corpus.ts`): tagged-union
 discovery, probabilistic type inference for messy tabular data, quicktype's
