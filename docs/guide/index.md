@@ -89,7 +89,12 @@ const doc = await toOpenApi(app, { title: 'My API', version: '1.0.0' })
 
 - [Getting Started](./getting-started.md) — install, author a tree, project it to HTTP, MCP, CLI, and type-ir
 - [Concepts](./concepts.md) — core model: nodes, dispatch, tags, projections, metadata
+- [Core Concepts (Type IR)](./core-concepts.md) — `TypeRef`, the kind DU, subtyping fallback, and how both domains share the three-layer architecture
 - [Authoring](./authoring.md) — how to build trees with `op`, `node`, `service`, `param`, verb-helper bundles, and `mergeMeta`
+- [Ingestion](./ingestion.md) — bridging existing schemas (SQL, Protobuf, JSON Schema, example JSON, …) into the type IR
+- [Projection](./projection.md) — the 70-projector catalog across languages, schema/wire formats, and doc generators
+- [Inference](./inference.md) — guessing a `TypeRef` from raw JSON data, single-value and corpus-level
+- [Framework (HTTP/MCP/CLI/GraphQL)](./framework.md) — cross-protocol orientation: the shared tree, tags, middleware, and extensions
 - [Decoding requests](./decode.md) — the stores-based decode system for turning a `Request` into handler input
 - [The codegen CLI](./codegen-cli.md) — AOT validator generation from extracted leaf input types
 - [Versioning](./versioning.md) — versioning model: layered strategies from zero-machinery to composed transforms _(design, not yet built)_
