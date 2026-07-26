@@ -1,5 +1,18 @@
 # Inference of structure from a corpus, derived from first principles
 
+> **SUPERSEDED — historical record.** Current theory is in
+> [`inference-theory.md`](./inference-theory.md). This document is retained for its
+> cleanroom provenance record (below), its retraction table (§13), and its convergence check
+> against external prior art (§14), all of which remain accurate.
+>
+> Several load-bearing sections here are now **wrong**, not merely incomplete — in
+> particular §4's "a fact's credit is computed from the fact alone" and "no description
+> language anywhere", §5's "credit above zero is the only admission bar / nothing is
+> discarded" and its memorization argument, §6's "no other fact-to-fact relation is
+> required", and §9's account of what the core emits. See §13 of `inference-theory.md` for
+> the full retraction table with reasons. Do not treat any numbered section below as current
+> without checking it there first.
+
 **Provenance.** Derived in a cleanroom session with no access to this project's inference implementation or its earlier design document. External prior art was read only after the derivation closed, as a convergence check (§14). Nothing below is JSON-specific; §2 states the only properties of the data actually used.
 
 ## 1. The problem
