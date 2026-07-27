@@ -9,7 +9,7 @@
 > particular §4's "a fact's credit is computed from the fact alone" and "no description
 > language anywhere", §5's "credit above zero is the only admission bar / nothing is
 > discarded" and its memorization argument, §6's "no other fact-to-fact relation is
-> required", and §9's account of what the core emits. See §13 of `inference-theory.md` for
+> required", and §9's account of what the core emits. See §14 of `inference-theory.md` for
 > the full retraction table with reasons. Do not treat any numbered section below as current
 > without checking it there first.
 
