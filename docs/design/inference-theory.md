@@ -104,14 +104,17 @@ from — not JSON kind. Four classes:
   multiplicative-process theory apply. Verified, but narrower than it first appears: most
   JSON numeric fields are machine-assigned, not world-measured.
 - **(d) Application / business-logic-shaped** — status enums, sequential and relational IDs,
-  boolean flags, computed aggregates. See §4.2; this class is real but its treatment is the
-  least settled material in this document.
+  boolean flags, computed aggregates. See §4.2: the class is real and its multi-model
+  treatment is confirmed for the enum-shaped half, while IDs and computed aggregates remain
+  unsimulated. Lowest-confidence material in this document, though no longer unverified.
 
-### 4.2 The fourth class, and why it does not fit the other three — exploratory
+### 4.2 The fourth class, and why it does not fit the other three
 
-**Status: identified in design dialogue, not verified. More "a promising direction" than a
-result.** Recorded here because the gap it names is real and the three-class scheme above
-silently failed to cover it.
+**Status: identified in design dialogue, then confirmed by a toy simulation.** All three
+claims below — multi-model over blended, routing viability, per-subtree selection — were
+measured and held. The limitations at the end are specific and load-bearing, not boilerplate:
+one of them is a measured failure mode of the routing approach itself, and two of the four
+value shapes in this class were never simulated at all.
 
 Classes (a), (b) and (c) all work by appealing to a **universal, cross-domain regularity**:
 Zipf holds broadly across natural languages and extends to code; Benford holds across
@@ -133,20 +136,71 @@ distributions are domain-specific: an e-commerce status distribution shares noth
 CI/CD build-status distribution. The structure indicated is therefore **multi-model** — many
 kept-separate, domain-specific empirical references, with a nearest-precedent lookup — and
 **not single-model**, meaning one shared global compressed representation blending across
-domains. Forcing genuinely disjoint domains into one representation would produce something
-either meaningless or dominated by whichever domain is overrepresented in the sample.
+domains.
 
-Two further points, both consequences rather than additions:
+Measured, on five hand-built discrete distributions over a shared 10-symbol alphabet
+standing in for order-status, build-status, ticket-priority, payment-status and user-role
+fields (pairwise Jensen-Shannon divergence 0.32–0.76, after an initial accidental
+near-duplicate pair was caught and fixed):
 
-- **Routing is architecturally separable from representation.** How a new field is matched to
-  the right domain-specific baseline — nearest-neighbour lookup, a trained classifier,
-  something else — is a separate choice from whether the baselines are kept separate. But
-  the options have genuinely different prerequisites (unsupervised clustering needs no
-  labels; a trained classifier typically needs labelled or pseudo-labelled data), which is a
-  real practical constraint rather than an implementation detail. Open (§15.3).
-- **Baseline selection is per-subtree, not per-document.** Different fields in the same
-  document can belong to entirely different domain clusters. This is consistent with — and
-  was arrived at independently of — the tree-of-lattices structure in §7.
+```
+matched multi-model, held-out    1.80 bits/symbol
+single pooled model              2.92 bits/symbol      penalty 1.11 bits/symbol (~62% worse)
+per-domain penalty range         0.77 - 1.54 bits      consistent across all 5
+```
+
+The heterogeneity trend confirms the mechanism rather than just the outcome. Pooling
+1→2→3→4→5 domains, the single model's cost climbs monotonically — 2.07, 2.25, 2.69, 2.75,
+2.92 — while matched multi-model cost stays flat at ~1.8–2.1 regardless of domain count.
+Blending does not merely fail to help; it degrades in proportion to how much genuine
+heterogeneity it is asked to absorb.
+
+**Routing is architecturally separable from representation, and it works given enough
+observations.** How a field is matched to its domain-specific baseline — nearest-neighbour
+lookup, a trained classifier, something else — is a separate choice from whether the
+baselines are kept separate, and the options have genuinely different prerequisites
+(unsupervised clustering needs no labels; a trained classifier typically needs labelled or
+pseudo-labelled data). A KNN-style router (empirical distribution over n observations, pick
+the reference cluster with lowest JS divergence) on well-separated domains:
+
+```
+n=1   40%      n=5   92%      n=20+  100%
+n=2   72%      n=10  99%
+```
+
+**Named risk: close-cluster confusability does not resolve with more data.** This is a
+measured failure of the routing approach, not a sampling artifact, and it is called out
+separately because it behaves qualitatively differently from ordinary small-sample error. A
+deliberately-close pair of domains (JS = 0.007, against ≥ 0.32 between the genuine domains)
+stayed stuck at **93% / 85% accuracy even at n=200**, while dissimilar domains reached 100%
+by n=20. Dissimilar domains converge; near-duplicate domains plateau. Any deployment will
+therefore have a population of field pairs that routing simply cannot separate, no matter
+how much data accrues, and the design needs an answer for what happens to those — not more
+samples. Open (§15.3).
+
+**Baseline selection is per-subtree, not per-document** — consistent with, and arrived at
+independently of, the tree-of-lattices structure in §7. Measured on a 300-record synthetic
+corpus with `status` drawn from the e-commerce cluster and `priority` from the
+ticket-priority cluster in the same records: per-field routing identified both correctly and
+cost **2.05 bits/symbol**, against **3.17** for the best available single whole-record
+baseline and 3.38–5.84 for every other single candidate. Per-subtree selection beats *any*
+single whole-document choice, including the best one available in hindsight.
+
+**Limitations, all specific to what was and was not simulated:**
+
+- **Clusters were cleanly separated by construction.** Real domain distributions are unlikely
+  to be this separable, and the close-pair failure above is probably representative of some
+  real fraction of actual domains rather than a contrived edge case.
+- **Accuracy was scored against ground-truth domain labels**, which a real deployment does
+  not have. This measures routing quality under an oracle, not routing quality in situ.
+- **Real per-field sample sizes are often below the n=10–20 threshold** these numbers show is
+  needed for reliable routing.
+- **Only categorical/enum-shaped fields were modelled.** This class also contains sequential
+  and relational IDs and computed aggregates, and *neither was simulated at all* — the
+  confirmation does not extend to them.
+- **Only JS divergence and cross-entropy were tried.** No comparison against raw KL,
+  chi-squared, or Wasserstein (which is the natural choice for ordinal fields like
+  `priority`, and was not tested).
 
 ## 5. The gross valuation: a set function
 
@@ -850,18 +904,30 @@ negative-net facts are dropped before allocation runs or emitted with a signed n
 and whether the pointer-cost and specification-cost cases of the charge (§6.3) are two
 ledgers or one ledger with a case split.
 
-### 15.3 Open within the fourth baseline class — exploratory
+### 15.3 Open within the fourth baseline class
 
-Both of these are inside the §4.2 material, which is the least settled part of this document.
+§4.2's three structural claims are confirmed; these are what remains after that.
 
 - **Is a corpus-empirical baseline actually circular, or does the charge already price it?**
   The fully-naive form — fit the baseline to the same data it scores — is circular. But the
   charge exists precisely to correct in-sample optimism elsewhere, and it may already do so
-  here without a bespoke mechanism. Not resolved.
-- **Routing mechanism.** Nearest-neighbour lookup, a trained classifier, or something else,
-  for matching a field to its domain-specific baseline. Separable from the multi-model
-  decision itself, but the options have different prerequisites (labels or no labels), which
-  constrains the choice practically.
+  here without a bespoke mechanism. Untouched by the §4.2 simulation, which tested external
+  references only. Not resolved.
+- **What happens to fields whose domains are not separable.** Close-cluster confusability
+  (§4.2) plateaus rather than converging — 93%/85% at n=200 for a JS=0.007 pair, against 100%
+  by n=20 for well-separated ones. More data is not the answer, so the design owes an answer:
+  merge indistinguishable clusters, fall back to a coarser baseline, or surface the ambiguity
+  to the caller as a first-class outcome. Unaddressed.
+- **Routing mechanism choice.** Nearest-neighbour lookup, a trained classifier, or something
+  else. The KNN form is now shown viable at n≥10–20 under an oracle, but the prerequisites
+  still differ (labels or no labels) and no alternative was compared.
+- **Similarity metric.** Only JS divergence was tried. Ordinal-valued fields such as
+  `priority` have a natural metric structure that JS discards, and Wasserstein was not
+  tested.
+- **The unsimulated half of the class.** Sequential and relational IDs, and computed
+  aggregates, were not modelled. Whether the multi-model result extends to them is unknown,
+  and there is reason to doubt it transfers unchanged: an ID's regularity is sequential
+  rather than distributional.
 
 ### 15.4 Empirical
 
@@ -900,8 +966,8 @@ revision and has not been attempted; where they conflict, this document is curre
 ## 17. Provenance of the quantitative claims
 
 Every number in this document comes from one of the simulations run during derivation, or
-from the prototyping pass behind §7. All are on synthetic structure. **None is measured on a
-real corpus.**
+from the two prototyping passes behind §7 and §4.2. All are on synthetic structure. **None
+is measured on a real corpus.**
 
 The confidence is not uniform and should not be read as such:
 
@@ -910,7 +976,14 @@ The confidence is not uniform and should not be read as such:
 - §7 numbers come from a prototyping pass — bottom-up versus brute-force agreement, the DU
   locality break, the three-policy composition check, and the refactor equivalence check.
   Same synthetic-data caveat applies.
-- §4.2 has **no numbers and no verification.** It is a direction identified in dialogue.
+- §4.2 numbers come from a toy simulation over five hand-built distributions. The three
+  structural claims held, but the confidence here is **weaker than §7's**, for reasons
+  internal to the setup rather than generic: the clusters were separable by construction,
+  accuracy was scored against oracle labels a deployment will not have, and two of the four
+  value shapes in the class (IDs, computed aggregates) were not simulated at all. The one
+  result that should be read as strong is the *negative* one — close-cluster confusability
+  plateauing at n=200 — because a failure found in a setup built to be favourable is more
+  likely to survive contact with reality than a success found there.
 
 The literature claims — Krimp's Standard Candidate Order (support-descending, then
 cardinality-descending, then lexicographic) and Standard Cover Order (cardinality-descending,
