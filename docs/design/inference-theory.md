@@ -122,12 +122,19 @@ measurement domains; a format registry is externally specified and shared. Busin
 values have no such law. Nothing predicts what fraction of orders in an arbitrary e-commerce
 system are `completed` versus `pending`. The regularity is idiosyncratic to one application.
 
-**The naive fix is circular and is rejected in its fully-naive form.** Using the scored
-corpus's own empirical frequencies as the baseline means fitting the reference to the exact
-data being scored against it — the same in-sample optimism the charge machinery exists to
-correct everywhere else. Note, though, that this may not need a bespoke fix: the existing
-charge term might already price this the way it prices everything else. That was not
-resolved; it is recorded as open (§15.3).
+**The naive fix is circular, and the resolution is that this category never needed a
+corpus-derived prior in the first place.** Using the scored corpus's own empirical
+frequencies as the baseline means fitting the reference to the exact data being scored
+against it — the same in-sample optimism the charge machinery exists to correct everywhere
+else. But the legitimate credit for these fields comes from **domain restriction scored
+against `top`** (§6.6), whose reference is external and given, and whose charge already
+prevents a claim that merely reads off the observed sample from earning anything. That is
+non-circular and needs no external corpus.
+
+What it does *not* reach is the finer distributional shape within the restricted domain, and
+no estimator computed from the same corpus can reach it either (§6.6). **That** is what the
+multi-model approach below is for: it is not an optimisation over the single-corpus method,
+it is the only way past a ceiling the single-corpus method provably has.
 
 **The real alternative is an external empirical baseline, but not a single one.** Building
 the reference from a large real-world sample outside the scored corpus avoids the
@@ -430,6 +437,74 @@ create this problem — it removed the only thing managing it, and relocated the
 charge. Under the schedule-form charge, memorization dies arithmetically (§6.2), and it
 stays dead under the per-version Kraft bound (§9.3).
 
+### 6.6 Worked case: domain restriction, and the ceiling one corpus can reach
+
+The most common fact family in practice — "this field is restricted to exactly these K
+observed values, out of D possible" — is worth working through explicitly, because it
+instantiates almost every abstract claim above and settles an open question (§15.3).
+
+Scored against `top`, which is external and given and therefore untouched by the corpus
+being scored:
+
+```
+credit  =  N · log₂(D/K)
+charge  ≈  K · log₂(D/K)            leading term of log₂ C(D,K), i.e. §9.2's schedule
+                                     applied to the class "K-subsets of D"
+net     =  (N − K) · log₂(D/K)      exact, given the leading-term charge
+```
+
+The charge is not a separate device bolted on here; it is the §9.2 price schedule evaluated
+for this family, since the number of candidates in the class is exactly `C(D,K)`.
+
+**Both degenerate ends land precisely on §6.4's pair, which is the point of §6.4 made
+concrete.** With D = 10⁶ and N = 1000:
+
+```
+K = D    no restriction        credit      0.0   charge     0.0   -> (0, 0)   = top
+K = N    every value distinct  credit   9965.8   charge  9965.8   -> (X, X)   = literal
+K = 50   genuine restriction   credit  14287.7   charge   714.4   -> net 13573.3
+K = 3    tight enum            credit  18346.6   charge    55.0   -> net 18291.6
+```
+
+`top` and pure memorization both net zero for structurally unrelated reasons — an absence
+against an exact cancellation — exactly as §6.4 argued in the abstract. Anything that
+collapsed to net first would be unable to tell the first and second rows apart.
+
+**Under the exact charge the cancellation is better than break-even.** Using `log₂ C(D,K)`
+rather than its leading term, memorization at K = N nets **strictly negative**, converging to
+−log₂e ≈ **−1.443 bits per occurrence** (measured: −1.143 at N=10, −1.396 at N=100, −1.436 at
+N=1000, −1.435 at N=10000). The leading-term approximation understates the case against
+memorization; the exact schedule rejects it outright rather than merely declining to reward
+it.
+
+**`K ≪ N` is a static property of one snapshot, not a trajectory.** It is tempting to
+describe the discriminating signal as "K stays flat as N grows," and that phrasing is wrong
+in a way that matters. A trajectory would require either watching K accumulate over an
+ordered sequence within one corpus — reintroducing order-dependence, in conflict with tests 1
+and 2 (§11) — or comparing corpora of different sizes, which requires external data. Neither
+is needed. `net = (N − K)·log₂(D/K)` is evaluated **once**, at the single observed (N, K)
+pair: count total occurrences, count distinct values, done. Memorization (K ≈ N) and genuine
+restriction (K ≪ N) are both static facts about one snapshot, and the formula separates them
+without anything sequential.
+
+**This is the ceiling reachable from one corpus alone**, which resolves the circularity
+question of §15.3. The credit above is non-circular because its reference is `top` — external
+and given, not fitted to the data being scored. Circularity re-enters only if one tries to
+claim *additional* credit beyond domain restriction, by also fitting the distributional shape
+*within* the K values ("and moreover they are 80/15/5, not uniform among the three") using an
+estimator built from the same corpus. **Empirical frequency, Bayes-mixture, prequential and
+KT estimators were all considered for this and all rejected** — not because they are wrong in
+general (§6.1 uses prequential correctly for a different purpose) but because every one of
+them derives its predictive component from the exact data being scored, which is the thing
+that needed fixing. Changing which estimator does the fitting does not change that it is
+fitting.
+
+So: **domain-restriction credit against `top` is the legitimate ceiling achievable within a
+single corpus.** Credit for the finer distributional shape requires genuinely external
+data — which is precisely what the multi-model routing of §4.2 supplies, by pulling in *other*
+corpora. That is not a cleverer trick performed within one dataset; it is the recognition
+that no such trick exists.
+
 ## 7. The abstraction space is a tree of lattices
 
 **Status: argued in design dialogue, then confirmed by a prototyping pass. Numbers below
@@ -526,6 +601,21 @@ It **does not** hold for candidate *construction*, which stays irreducibly kind-
 This is real structural content — the kinds genuinely differ in how candidates are built —
 and it is recorded here specifically so that "one uniform recursive procedure" is not claimed
 for more than it covers. The unification is real for application and false for construction.
+
+**Rejected for array flattening: prequential scoring.** Because an array contributes many
+occurrences of the same field, sequential per-occurrence scoring is an obvious-looking
+candidate for composing them. It is rejected here specifically. Prequential requires
+committing to an order, which conflicts with tests 1 and 2 (§11) and would make the inferred
+type depend on array element ordering — which is exactly the thing that should not matter.
+The correct composition is an **aggregate over sufficient statistics of the whole set**
+(counts), computed once and order-invariantly, as in §6.6's static (N, K) pair.
+
+This is not a rival to prequential so much as its order-free summary. Per §12.2's de Finetti
+result, an order-free predictor *is* the average of the prequential score over every possible
+ordering — so the aggregate computation is the same underlying quantity, obtained properly
+instead of by committing to one arbitrary sequence and inheriting its bias. Prequential
+remains correct elsewhere in this document for a different purpose (§6.1, where the question
+is within-model complexity rather than composition).
 
 ## 8. Synthesis, allocation, and cohort-relativity
 
@@ -906,13 +996,14 @@ ledgers or one ledger with a case split.
 
 ### 15.3 Open within the fourth baseline class
 
-§4.2's three structural claims are confirmed; these are what remains after that.
+§4.2's three structural claims are confirmed, and the circularity question that stood here is
+now **resolved** (§6.6): domain-restriction credit against `top` is non-circular and is the
+ceiling reachable from one corpus; anything finer requires external data, which is what the
+multi-model approach supplies. Empirical-frequency, Bayes-mixture, prequential and KT
+estimators were considered for closing that gap within a single corpus and rejected, since
+each still derives its predictive component from the data being scored. These are what
+remain.
 
-- **Is a corpus-empirical baseline actually circular, or does the charge already price it?**
-  The fully-naive form — fit the baseline to the same data it scores — is circular. But the
-  charge exists precisely to correct in-sample optimism elsewhere, and it may already do so
-  here without a bespoke mechanism. Untouched by the §4.2 simulation, which tested external
-  references only. Not resolved.
 - **What happens to fields whose domains are not separable.** Close-cluster confusability
   (§4.2) plateaus rather than converging — 93%/85% at n=200 for a JS=0.007 pair, against 100%
   by n=20 for well-separated ones. More data is not the answer, so the design owes an answer:
@@ -973,6 +1064,11 @@ The confidence is not uniform and should not be read as such:
 
 - §5, §6, §8, §9 numbers come from targeted simulations built to test specific claims,
   several of which refuted the claim they were built to check.
+- §6.6 is the one place where the result is **analytic rather than simulated**, and is
+  correspondingly firmer: `net = (N − K)·log₂(D/K)` is an identity, verified numerically
+  against the exact `log₂ C(D,K)` charge rather than assumed. The −log₂e per-occurrence
+  penalty at K = N was measured across four orders of magnitude in N. It still rests on a
+  declared `top` (the value of D), which is a modelling choice, not a measurement.
 - §7 numbers come from a prototyping pass — bottom-up versus brute-force agreement, the DU
   locality break, the three-policy composition check, and the refactor equivalence check.
   Same synthetic-data caveat applies.
