@@ -574,10 +574,47 @@ costume — a threshold on one variable is the enum-shaped analogue of a flat ch
 fails for the same reason: the quantity it needs to separate is not a function of the
 variable it looks at.
 
-The reason their rule reads K alone may be structural rather than an oversight: their
-counting extension collects per-path occurrence counts (N) and their enum extension collects
-distinct values (K), but they are separate papers and the two statistics are never available
-together (§16.3). A rule can only cut on what its inputs contain.
+The reason their rule reads K alone may be structural rather than an oversight: within their
+line of work, per-path occurrence counts (N) and distinct values (K) live in separate papers
+and are never available together (§16.3). A rule can only cut on what its inputs contain.
+
+#### The ratio form is better, and still not right
+
+Most practice does not cut on K alone. It cuts on the **ratio** `K/N` against a constant —
+standard in data profiling and query optimisation, and what this repository already does
+(`looksLikeEnum`: `K/N ≤ 1/3 → enum`, `≥ 0.5 → not enum`). That uses both N and K. It does
+not use D, and §6.6 says the required ratio is a function of D:
+
+```
+D/K              required N/K
+2                       1.959
+16                      1.338
+256                     1.174
+10,000                  1.105
+1,000,000               1.070
+2^40                    1.035
+```
+
+The threshold that a fixed ratio needs to be is not fixed — it spans 1.03 to 1.96 across
+realistic domain sizes. Concretely, three fields with **identical N, identical K, identical
+ratio** and different domains:
+
+```
+field                        N     K    K/N            D   req. N/K    §6.6 net    §6.6
+uuid-ish, huge domain      150   100  0.667         2^64      1.000     8,603.4    keep
+byte-valued field          150   100  0.667          256      1.790       -39.4  reject
+small enum domain          150   100  0.667          128      2.624       -40.0  reject
+```
+
+Any ratio rule returns one verdict for all three. §6.6 splits them.
+
+**Two honest notes about this repository's own rule.** First, its 1/3 cutoff is
+*conservative but safe*: `N/K ≥ 3` sits above the maximum required ratio (≈1.96 at D/K = 2),
+so it produces **no false positives** at any domain size — swept over D from 128 to 2⁶⁴ at
+K = 100, the rule and §6.6 agree everywhere it fires. Its errors are all false negatives, in
+the band `1.0 < N/K < 3`, which is wide precisely for the high-cardinality domains where
+restriction is most valuable. Second, the separate `K > 50 → not enum` cutoff **is** the
+K-only form, and the criticism above of Baazizi et al.'s threshold applies to it unchanged.
 
 The boundary the net actually draws is `N > log₂C(D,K) / log₂(D/K) ≈ K·(1 + log₂e/log₂(D/K))`:
 
@@ -908,6 +945,49 @@ Two qualifications, both load-bearing:
   players. But two *derived* scopes that coincide on this corpus while differing in
   derivation rule induce the same corpus-level code and different universe-level codes.
   Stated over the corpus, P2′ re-merges them and reintroduces the §9.4 ill-definedness.
+
+### 10.3 P2′ worked: computing the loss on a published merge
+
+Baazizi et al. (§16.3) observe that merging counting types is sometimes lossless and
+sometimes not, and that "the loss is more severe when the merged types are farther one from
+the other" — naming a distance without measuring it. P2′ says the measure is the credit
+difference, since two types denoting the same set of multisets induce the same code. Computed
+on their own worked example, declaring `top` as an arbitrary 64-bit JSON number per field
+slot and `Int` as 32 bits:
+
+```
+union   {a:Int¹,b:Int¹}¹ ⊕ {a:Int²,b:Int²}²
+merged  {a:Int³,b:Int³}³
+
+L(corpus | top)     = 384.000 bits
+L(corpus | union)   = 192.000 bits    credit 192.000
+L(corpus | merged)  = 192.000 bits    credit 192.000
+CREDIT DIFFERENCE   =   0.000000 bits
+```
+
+Zero, exactly, matching their "no loss of information" — and not zero by construction, since
+the same measure returns a non-zero answer on a lossy merge. Constructed control, disjoint
+shapes:
+
+```
+union   {a:Int¹}¹ ⊕ {b:Int²}²          merged  {a:Int¹, b:Int²}³
+
+L(corpus | union)   =  96.000 bits    credit 288.000
+L(corpus | merged)  =  99.170 bits    credit 284.830
+CREDIT DIFFERENCE   =   3.169925 bits
+    = log₂C(3,1) + log₂C(3,2) = 1.585 + 1.585
+```
+
+The loss is exactly the cost of re-identifying which records carry which field — information
+the union's branch structure holds and the merged type's counts do not. That is the quantity
+their prose names and declines to compute.
+
+One thing the pair shows that a "lossless" verdict alone hides (§6.4): in the first example
+the union additionally names a branch structure the data cannot distinguish, since both
+branches have identical content types and so `Î(branch; value) = 0`. Equal credit, strictly
+more structure named — so under any schedule that charges for naming, the merged type wins on
+net rather than merely tying. The exact charge is schedule-dependent (§6.3, §9.2) and no
+number is quoted for it; the credit result above is not schedule-dependent.
 
 ## 11. The metamorphic test suite
 
@@ -1249,27 +1329,41 @@ Their quantitative-types extension, and the closest existing thing to the statis
 needs. Contains no MDL, entropy, description length, probability or threshold — zero hits for
 all of them. It is a type system, not a scoring criterion.
 
-**It supplies N but not K, and that is the finding.** Every type constructor is annotated
-with an absolute occurrence count: `{title: Str²⁰ᴷ, author: {…}²ᴷ}²⁰ᴷ`, where the count is
-how many items the corresponding path yields. That is exactly §6.6's N, collected per path,
-map-reduce-able, with a formal semantics. But nothing counts *distinct values* — `Num³` means
-three numbers, not three different ones. K lives in the *other* paper's enum extension
-(`StrEnum{s₁…s_j}`, §16.2), and the two extensions are never combined. **So the two inputs
-§6.6 needs exist, in halves, in two separate papers, and neither half can make the decision
-alone.** §6.6's whole content is that the decision is a joint function of (N, K, D); their
-counting paper holds N, their enum proposal holds K and cuts on it alone, which is the rule
-§6.6 shows fails in both directions.
+**It supplies N but not K.** Every type constructor is annotated with an absolute occurrence
+count: `{title: Str²⁰ᴷ, author: {…}²ᴷ}²⁰ᴷ`, where the count is how many items the
+corresponding path yields. That is exactly §6.6's N, collected per path, map-reduce-able,
+with a formal semantics. But nothing counts *distinct values* — `Num³` means three numbers,
+not three different ones. K lives in the *other* paper's enum extension (`StrEnum{s₁…s_j}`,
+§16.2), and within this line of work the two are never combined.
+
+**Correction to an earlier revision of this document.** A previous version generalised that
+into a claim that the (N, K) pair has no prior art. **That was wrong**, and a broader search
+found it wrong quickly. Tracking row count and distinct count together is routine:
+
+- **Data profiling.** Abedjan, Golab & Naumann's survey (*Profiling relational data*, VLDB J.
+  2015) treats distinct-value count as a core single-column task alongside row counts, and
+  the distinct-to-total **cardinality ratio** is the standard device for separating
+  low-cardinality categorical columns from identifier-like ones.
+- **Query optimisation.** Number-of-distinct-values against row count is the basis of
+  selectivity estimation, and has been since the earliest cost-based optimisers.
+- **Storage engines.** ClickHouse's `LowCardinality` is this decision made in production.
+- **This repository.** `from-json-corpus.ts`'s `looksLikeEnum` already cuts on
+  `ratio = K/N` — `≤ 1/3 → enum`, `≥ 0.5 → not enum` — with a separate hard
+  `K > 50 → not enum`.
+
+So the honest claim is narrow: N and K are combined all the time, **as a ratio compared
+against a constant**, and that form is what §6.6 improves on, not a vacuum. See §6.6 for what
+the ratio form gets right and where it breaks.
 
 **Their PER parameter sits exactly where a credit difference would go.** They observe that
 merging is sometimes free — `{a:Int¹,b:Int¹}¹ ⊕ {a:Int²,b:Int²}² = {a:Int³,b:Int³}³` loses
 nothing — and sometimes lossy, and that "the loss is more severe when the merged types are
 farther one from the other." Having named a distance governing the size of the loss, they
 parameterise by an equivalence relation rather than measure it. This framework predicts the
-loss is exactly the credit difference, and therefore **exactly zero for their lossless
-example**, since both types denote the same set of multisets and so induce the same code
-(P2′, §10.2). That is a concrete, checkable prediction on their own worked example, and the
-clearest available statement of what this framework adds to theirs: they locate the decision,
-we score it.
+loss is the credit difference, hence exactly zero on their lossless example. **Computed in
+§10.3: 0.000000 bits on theirs, 3.170 bits on a lossy control**, the latter equal to
+`log₂C(3,1) + log₂C(3,2)`. That is the clearest available statement of what this framework
+adds to theirs: they locate the decision, we score it.
 
 Three convergences worth recording, all independently derived:
 

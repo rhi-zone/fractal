@@ -666,8 +666,11 @@ choosing the succinctness/precision tradeoff.
 
 Two things worth knowing when reading it alongside the enum proposal in the
 VLDB-journal paper's §8. First, the counts are *structural*: they count
-occurrences per path, never distinct values, so this paper supplies N and the
-enum proposal supplies K, and the two are never available together. Second,
+occurrences per path, never distinct values, so within this line of work the
+occurrence count N and the distinct count K are never available together —
+though combining them is entirely routine elsewhere (data profiling's
+distinct-to-total cardinality ratio, optimiser selectivity estimation, and
+`looksLikeEnum`'s own `K/N` cutoffs in this repo). Second,
 their evaluation contains the only external real-data measurement bearing on
 our own array-shape claims — fixed-size arrays ranging 0–4 in length against
 0–35 for variable-size, with fixed-size contents "a tuple of numeric values"
