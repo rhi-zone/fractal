@@ -910,6 +910,56 @@ depends on how repetitive the field already was — and a field that is already 
 repeated breaks immediately. Any criterion that uses `N` and is monotone increasing in `N`
 inherits this, `K/N` included. It changes the constant, not the failure.
 
+**Clarification: the "K/N rule" above already *was* a fixed, D-free threshold.** Substituting
+`p = K/N` reduces `N(1−p) > K` to `N > 2K`, i.e. **`K/N < 0.5`** — a constant that fell out of
+the algebra rather than being chosen. At `r = 2` on the unique construction `K/N = 0.500`
+exactly, so `2M > 2M` is false and it **rejects**. "Breaks at `r = 3`" meant correct through
+`r = 2`, wrong from `r = 3`; it never accepted at `r = 2`.
+
+**A stricter constant buys a duplication budget, not immunity.** On that construction
+`K/N = 1/r` exactly, so any threshold `c` is defeated at `r > 1/c`:
+
+```
+r        K/N     c=0.05    c=0.1    c=0.2    c=0.5
+2      0.500     reject   reject   reject   reject
+3      0.333     reject   reject   reject   ACCEPT
+10     0.100     reject   reject   ACCEPT   ACCEPT
+20     0.050     reject   ACCEPT   ACCEPT   ACCEPT
+25     0.040     ACCEPT   ACCEPT   ACCEPT   ACCEPT
+```
+
+So `c = 0.1` tolerates ten copies and fails at eleven. That is a real, quantified robustness
+margin and it is worth having, but it is not a fix — it rescales the failure.
+
+**Every reasonable constant handles the four established cases** (`c` ∈ {0.05, 0.1, 0.2, 0.3}
+all correct), though `license` sits at `K/N = 0.035`, so anything below ≈0.036 would wrongly
+reject a genuine vocabulary. The usable band has a floor.
+
+**But on real data, strict thresholds are worse, and `c ≈ 0.5` is near-optimal** — which is
+the finding that matters here:
+
+```
+accuracy vs held-out coverage    c=0.05   c=0.1   c=0.2   c=0.3   c=0.5   |  net@2^64
+npm (clean, n=61)                 63.9%   63.9%   65.6%   73.8%   98.4%   |     65.6%
+all (n=107)                       72.9%   74.8%   79.4%   85.0%   99.1%   |     72.9%
+
+best fixed threshold on clean npm: c = 0.53 → 98.4%
+```
+
+The intuition that a tight ratio bound is obviously right holds for four hand-picked cases
+and fails across 107 real fields: many genuinely-restricted fields sit between `K/N` of 0.2
+and 0.5, and a strict cutoff rejects them. The value the escape algebra derived, 0.5, is
+within 0.03 of the empirical optimum.
+
+**This does change what the machinery is for.** A one-line, D-free `K/N < 0.5` check scores
+98.4% on clean real data where the full D-dependent `net` scores 65.6%. For *this* decision
+the credit/charge apparatus is not merely unnecessary, it is worse, and §17.3's finding that
+`D` dominates the verdict is the reason. Two things the constant genuinely cannot do, both
+already load-bearing elsewhere: it yields a boolean rather than bits, so it supports no
+ranking (§17.5's ρ = 0.803 comes from the magnitude), and it is blind to sample size —
+`K/N = 0.1` at `N = 30` and at `N = 30,000` are the same ratio and very different evidence
+(`net` = 1,683 versus 1,411,809). A threshold treats them identically.
+
 **Relation to §17.2 — same cause, strictly worse effect.** Both follow from the corpus not
 being an i.i.d. sample of the source. §17.2 showed `N` is inflated, which distorts credit
 *magnitudes* smoothly. This shows the sign of the criterion flips on a single duplicate. So
