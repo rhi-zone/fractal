@@ -3,10 +3,10 @@
   "compilerOptions": {
     "types": ["bun-types"],
     "paths": {
-      "@rhi-zone/fractal-api-tree/auth": ["../api-tree/src/auth.ts"],
-      "@rhi-zone/fractal-api-tree/node": ["../api-tree/src/node.ts"],
-      "@rhi-zone/fractal-http-api-projector/preset": ["../http-api-projector/src/preset.ts"],
-      "@rhi-zone/fractal-http-api-projector/extension": ["../http-api-projector/src/extension.ts"]
+      "@rhi-zone/fractal-api-tree": ["../api-tree/src/index.ts"],
+      "@rhi-zone/fractal-api-tree/*": ["../api-tree/src/*.ts"],
+      "@rhi-zone/fractal-http-api-projector": ["../http-api-projector/src/index.ts"],
+      "@rhi-zone/fractal-http-api-projector/*": ["../http-api-projector/src/*.ts"]
     }
   },
   "include": ["src"]
