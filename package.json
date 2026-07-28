@@ -16,7 +16,8 @@
   ],
   "scripts": {
     "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun run --filter '*' test"
+    "test": "bun run --filter '*' test",
+    "build:packages": "tsc -b tsconfig.build.json"
   },
   "devDependencies": {
     "@typescript/native-preview": "latest",

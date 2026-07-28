@@ -20,475 +20,473 @@
     "type-generation"
   ],
   "type": "module",
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./json-schema": {
-      "types": "./src/json-schema.ts",
-      "import": "./src/json-schema.ts"
+      "types": "./dist/json-schema.d.ts",
+      "import": "./dist/json-schema.js"
     },
     "./docusaurus-reference": {
-      "types": "./src/docusaurus-reference.ts",
-      "import": "./src/docusaurus-reference.ts"
+      "types": "./dist/docusaurus-reference.d.ts",
+      "import": "./dist/docusaurus-reference.js"
     },
     "./from-json-schema": {
-      "types": "./src/from-json-schema.ts",
-      "import": "./src/from-json-schema.ts"
+      "types": "./dist/from-json-schema.d.ts",
+      "import": "./dist/from-json-schema.js"
     },
     "./from-standard-schema": {
-      "types": "./src/from-standard-schema.ts",
-      "import": "./src/from-standard-schema.ts"
+      "types": "./dist/from-standard-schema.d.ts",
+      "import": "./dist/from-standard-schema.js"
     },
     "./standard-schema": {
-      "types": "./src/standard-schema.ts",
-      "import": "./src/standard-schema.ts"
+      "types": "./dist/standard-schema.d.ts",
+      "import": "./dist/standard-schema.js"
     },
     "./from-openapi": {
-      "types": "./src/from-openapi.ts",
-      "import": "./src/from-openapi.ts"
+      "types": "./dist/from-openapi.d.ts",
+      "import": "./dist/from-openapi.js"
     },
     "./from-protobuf": {
-      "types": "./src/from-protobuf.ts",
-      "import": "./src/from-protobuf.ts"
+      "types": "./dist/from-protobuf.d.ts",
+      "import": "./dist/from-protobuf.js"
     },
     "./from-flatbuffers": {
-      "types": "./src/from-flatbuffers.ts",
-      "import": "./src/from-flatbuffers.ts"
+      "types": "./dist/from-flatbuffers.d.ts",
+      "import": "./dist/from-flatbuffers.js"
     },
     "./from-sql": {
-      "types": "./src/from-sql.ts",
-      "import": "./src/from-sql.ts"
+      "types": "./dist/from-sql.d.ts",
+      "import": "./dist/from-sql.js"
     },
     "./from-cql": {
-      "types": "./src/from-cql.ts",
-      "import": "./src/from-cql.ts"
+      "types": "./dist/from-cql.d.ts",
+      "import": "./dist/from-cql.js"
     },
     "./from-capnp": {
-      "types": "./src/from-capnp.ts",
-      "import": "./src/from-capnp.ts"
+      "types": "./dist/from-capnp.d.ts",
+      "import": "./dist/from-capnp.js"
     },
     "./from-elasticsearch": {
-      "types": "./src/from-elasticsearch.ts",
-      "import": "./src/from-elasticsearch.ts"
+      "types": "./dist/from-elasticsearch.d.ts",
+      "import": "./dist/from-elasticsearch.js"
     },
     "./from-json": {
-      "types": "./src/from-json.ts",
-      "import": "./src/from-json.ts"
+      "types": "./dist/from-json.d.ts",
+      "import": "./dist/from-json.js"
     },
     "./from-json-corpus": {
-      "types": "./src/from-json-corpus.ts",
-      "import": "./src/from-json-corpus.ts"
+      "types": "./dist/from-json-corpus.d.ts",
+      "import": "./dist/from-json-corpus.js"
     },
     "./from-jtd": {
-      "types": "./src/from-jtd.ts",
-      "import": "./src/from-jtd.ts"
+      "types": "./dist/from-jtd.d.ts",
+      "import": "./dist/from-jtd.js"
     },
     "./from-typescript": {
-      "types": "./src/from-typescript.ts",
-      "import": "./src/from-typescript.ts"
+      "types": "./dist/from-typescript.d.ts",
+      "import": "./dist/from-typescript.js"
     },
     "./from-flow": {
-      "types": "./src/from-flow.ts",
-      "import": "./src/from-flow.ts"
+      "types": "./dist/from-flow.d.ts",
+      "import": "./dist/from-flow.js"
     },
     "./jsdoc": {
-      "types": "./src/jsdoc.ts",
-      "import": "./src/jsdoc.ts"
+      "types": "./dist/jsdoc.d.ts",
+      "import": "./dist/jsdoc.js"
     },
     "./starlight-reference": {
-      "types": "./src/starlight-reference.ts",
-      "import": "./src/starlight-reference.ts"
+      "types": "./dist/starlight-reference.d.ts",
+      "import": "./dist/starlight-reference.js"
     },
     "./mkdocs-reference": {
-      "types": "./src/mkdocs-reference.ts",
-      "import": "./src/mkdocs-reference.ts"
+      "types": "./dist/mkdocs-reference.d.ts",
+      "import": "./dist/mkdocs-reference.js"
     },
     "./json-schema-07": {
-      "types": "./src/json-schema-07.ts",
-      "import": "./src/json-schema-07.ts"
+      "types": "./dist/json-schema-07.d.ts",
+      "import": "./dist/json-schema-07.js"
     },
     "./json-schema-04": {
-      "types": "./src/json-schema-04.ts",
-      "import": "./src/json-schema-04.ts"
+      "types": "./dist/json-schema-04.d.ts",
+      "import": "./dist/json-schema-04.js"
     },
     "./openapi30": {
-      "types": "./src/openapi30.ts",
-      "import": "./src/openapi30.ts"
+      "types": "./dist/openapi30.d.ts",
+      "import": "./dist/openapi30.js"
     },
     "./openapi20": {
-      "types": "./src/openapi20.ts",
-      "import": "./src/openapi20.ts"
+      "types": "./dist/openapi20.d.ts",
+      "import": "./dist/openapi20.js"
     },
     "./graphql": {
-      "types": "./src/graphql.ts",
-      "import": "./src/graphql.ts"
+      "types": "./dist/graphql.d.ts",
+      "import": "./dist/graphql.js"
     },
     "./from-graphql": {
-      "types": "./src/from-graphql.ts",
-      "import": "./src/from-graphql.ts"
+      "types": "./dist/from-graphql.d.ts",
+      "import": "./dist/from-graphql.js"
     },
     "./typescript": {
-      "types": "./src/typescript-native.ts",
-      "import": "./src/typescript-native.ts"
+      "types": "./dist/typescript-native.d.ts",
+      "import": "./dist/typescript-native.js"
     },
     "./typescript-native": {
-      "types": "./src/typescript-native.ts",
-      "import": "./src/typescript-native.ts"
+      "types": "./dist/typescript-native.d.ts",
+      "import": "./dist/typescript-native.js"
     },
     "./elm": {
-      "types": "./src/elm-json.ts",
-      "import": "./src/elm-json.ts"
+      "types": "./dist/elm-json.d.ts",
+      "import": "./dist/elm-json.js"
     },
     "./elm-json": {
-      "types": "./src/elm-json.ts",
-      "import": "./src/elm-json.ts"
+      "types": "./dist/elm-json.d.ts",
+      "import": "./dist/elm-json.js"
     },
     "./go-encoding-json": {
-      "types": "./src/go-encoding-json.ts",
-      "import": "./src/go-encoding-json.ts"
+      "types": "./dist/go-encoding-json.d.ts",
+      "import": "./dist/go-encoding-json.js"
     },
     "./go-easyjson": {
-      "types": "./src/go-easyjson.ts",
-      "import": "./src/go-easyjson.ts"
+      "types": "./dist/go-easyjson.d.ts",
+      "import": "./dist/go-easyjson.js"
     },
     "./go-jsoniter": {
-      "types": "./src/go-jsoniter.ts",
-      "import": "./src/go-jsoniter.ts"
+      "types": "./dist/go-jsoniter.d.ts",
+      "import": "./dist/go-jsoniter.js"
     },
     "./go-sonic": {
-      "types": "./src/go-sonic.ts",
-      "import": "./src/go-sonic.ts"
+      "types": "./dist/go-sonic.d.ts",
+      "import": "./dist/go-sonic.js"
     },
     "./haskell": {
-      "types": "./src/haskell-aeson.ts",
-      "import": "./src/haskell-aeson.ts"
+      "types": "./dist/haskell-aeson.d.ts",
+      "import": "./dist/haskell-aeson.js"
     },
     "./haskell-aeson": {
-      "types": "./src/haskell-aeson.ts",
-      "import": "./src/haskell-aeson.ts"
+      "types": "./dist/haskell-aeson.d.ts",
+      "import": "./dist/haskell-aeson.js"
     },
     "./dart-json-serializable": {
-      "types": "./src/dart-json-serializable.ts",
-      "import": "./src/dart-json-serializable.ts"
+      "types": "./dist/dart-json-serializable.d.ts",
+      "import": "./dist/dart-json-serializable.js"
     },
     "./dart-freezed": {
-      "types": "./src/dart-freezed.ts",
-      "import": "./src/dart-freezed.ts"
+      "types": "./dist/dart-freezed.d.ts",
+      "import": "./dist/dart-freezed.js"
     },
     "./dart-built-value": {
-      "types": "./src/dart-built-value.ts",
-      "import": "./src/dart-built-value.ts"
+      "types": "./dist/dart-built-value.d.ts",
+      "import": "./dist/dart-built-value.js"
     },
     "./objc": {
-      "types": "./src/objc-foundation.ts",
-      "import": "./src/objc-foundation.ts"
+      "types": "./dist/objc-foundation.d.ts",
+      "import": "./dist/objc-foundation.js"
     },
     "./objc-foundation": {
-      "types": "./src/objc-foundation.ts",
-      "import": "./src/objc-foundation.ts"
+      "types": "./dist/objc-foundation.d.ts",
+      "import": "./dist/objc-foundation.js"
     },
     "./cpp-nlohmann": {
-      "types": "./src/cpp-nlohmann.ts",
-      "import": "./src/cpp-nlohmann.ts"
+      "types": "./dist/cpp-nlohmann.d.ts",
+      "import": "./dist/cpp-nlohmann.js"
     },
     "./cpp-rapidjson": {
-      "types": "./src/cpp-rapidjson.ts",
-      "import": "./src/cpp-rapidjson.ts"
+      "types": "./dist/cpp-rapidjson.d.ts",
+      "import": "./dist/cpp-rapidjson.js"
     },
     "./cpp-simdjson": {
-      "types": "./src/cpp-simdjson.ts",
-      "import": "./src/cpp-simdjson.ts"
+      "types": "./dist/cpp-simdjson.d.ts",
+      "import": "./dist/cpp-simdjson.js"
     },
     "./cpp-boost-json": {
-      "types": "./src/cpp-boost-json.ts",
-      "import": "./src/cpp-boost-json.ts"
+      "types": "./dist/cpp-boost-json.d.ts",
+      "import": "./dist/cpp-boost-json.js"
     },
     "./cpp-glaze": {
-      "types": "./src/cpp-glaze.ts",
-      "import": "./src/cpp-glaze.ts"
+      "types": "./dist/cpp-glaze.d.ts",
+      "import": "./dist/cpp-glaze.js"
     },
     "./csharp-systemtextjson": {
-      "types": "./src/csharp-systemtextjson.ts",
-      "import": "./src/csharp-systemtextjson.ts"
+      "types": "./dist/csharp-systemtextjson.d.ts",
+      "import": "./dist/csharp-systemtextjson.js"
     },
     "./csharp-newtonsoft": {
-      "types": "./src/csharp-newtonsoft.ts",
-      "import": "./src/csharp-newtonsoft.ts"
+      "types": "./dist/csharp-newtonsoft.d.ts",
+      "import": "./dist/csharp-newtonsoft.js"
     },
     "./csharp-servicestack": {
-      "types": "./src/csharp-servicestack.ts",
-      "import": "./src/csharp-servicestack.ts"
+      "types": "./dist/csharp-servicestack.d.ts",
+      "import": "./dist/csharp-servicestack.js"
     },
     "./crystal": {
-      "types": "./src/crystal-json-serializable.ts",
-      "import": "./src/crystal-json-serializable.ts"
+      "types": "./dist/crystal-json-serializable.d.ts",
+      "import": "./dist/crystal-json-serializable.js"
     },
     "./crystal-json-serializable": {
-      "types": "./src/crystal-json-serializable.ts",
-      "import": "./src/crystal-json-serializable.ts"
+      "types": "./dist/crystal-json-serializable.d.ts",
+      "import": "./dist/crystal-json-serializable.js"
     },
     "./python-dataclass": {
-      "types": "./src/python-dataclass.ts",
-      "import": "./src/python-dataclass.ts"
+      "types": "./dist/python-dataclass.d.ts",
+      "import": "./dist/python-dataclass.js"
     },
     "./python-pydantic": {
-      "types": "./src/python-pydantic.ts",
-      "import": "./src/python-pydantic.ts"
+      "types": "./dist/python-pydantic.d.ts",
+      "import": "./dist/python-pydantic.js"
     },
     "./python-attrs": {
-      "types": "./src/python-attrs.ts",
-      "import": "./src/python-attrs.ts"
+      "types": "./dist/python-attrs.d.ts",
+      "import": "./dist/python-attrs.js"
     },
     "./python-msgspec": {
-      "types": "./src/python-msgspec.ts",
-      "import": "./src/python-msgspec.ts"
+      "types": "./dist/python-msgspec.d.ts",
+      "import": "./dist/python-msgspec.js"
     },
     "./python-cattrs": {
-      "types": "./src/python-cattrs.ts",
-      "import": "./src/python-cattrs.ts"
+      "types": "./dist/python-cattrs.d.ts",
+      "import": "./dist/python-cattrs.js"
     },
     "./flow": {
-      "types": "./src/flow-native.ts",
-      "import": "./src/flow-native.ts"
+      "types": "./dist/flow-native.d.ts",
+      "import": "./dist/flow-native.js"
     },
     "./flow-native": {
-      "types": "./src/flow-native.ts",
-      "import": "./src/flow-native.ts"
+      "types": "./dist/flow-native.d.ts",
+      "import": "./dist/flow-native.js"
     },
     "./swift-codable": {
-      "types": "./src/swift-codable.ts",
-      "import": "./src/swift-codable.ts"
+      "types": "./dist/swift-codable.d.ts",
+      "import": "./dist/swift-codable.js"
     },
     "./swift-swiftyjson": {
-      "types": "./src/swift-swiftyjson.ts",
-      "import": "./src/swift-swiftyjson.ts"
+      "types": "./dist/swift-swiftyjson.d.ts",
+      "import": "./dist/swift-swiftyjson.js"
     },
     "./swift-objectmapper": {
-      "types": "./src/swift-objectmapper.ts",
-      "import": "./src/swift-objectmapper.ts"
+      "types": "./dist/swift-objectmapper.d.ts",
+      "import": "./dist/swift-objectmapper.js"
     },
     "./rust": {
-      "types": "./src/rust-serde.ts",
-      "import": "./src/rust-serde.ts"
+      "types": "./dist/rust-serde.d.ts",
+      "import": "./dist/rust-serde.js"
     },
     "./rust-serde": {
-      "types": "./src/rust-serde.ts",
-      "import": "./src/rust-serde.ts"
+      "types": "./dist/rust-serde.d.ts",
+      "import": "./dist/rust-serde.js"
     },
     "./ruby-sorbet": {
-      "types": "./src/ruby-sorbet.ts",
-      "import": "./src/ruby-sorbet.ts"
+      "types": "./dist/ruby-sorbet.d.ts",
+      "import": "./dist/ruby-sorbet.js"
     },
     "./ruby-dry-types": {
-      "types": "./src/ruby-dry-types.ts",
-      "import": "./src/ruby-dry-types.ts"
+      "types": "./dist/ruby-dry-types.d.ts",
+      "import": "./dist/ruby-dry-types.js"
     },
     "./ruby-rbs": {
-      "types": "./src/ruby-rbs.ts",
-      "import": "./src/ruby-rbs.ts"
+      "types": "./dist/ruby-rbs.d.ts",
+      "import": "./dist/ruby-rbs.js"
     },
     "./php-native": {
-      "types": "./src/php-native.ts",
-      "import": "./src/php-native.ts"
+      "types": "./dist/php-native.d.ts",
+      "import": "./dist/php-native.js"
     },
     "./php-symfony": {
-      "types": "./src/php-symfony.ts",
-      "import": "./src/php-symfony.ts"
+      "types": "./dist/php-symfony.d.ts",
+      "import": "./dist/php-symfony.js"
     },
     "./php-jms": {
-      "types": "./src/php-jms.ts",
-      "import": "./src/php-jms.ts"
+      "types": "./dist/php-jms.d.ts",
+      "import": "./dist/php-jms.js"
     },
     "./elixir": {
-      "types": "./src/elixir-jason.ts",
-      "import": "./src/elixir-jason.ts"
+      "types": "./dist/elixir-jason.d.ts",
+      "import": "./dist/elixir-jason.js"
     },
     "./elixir-jason": {
-      "types": "./src/elixir-jason.ts",
-      "import": "./src/elixir-jason.ts"
+      "types": "./dist/elixir-jason.d.ts",
+      "import": "./dist/elixir-jason.js"
     },
     "./kotlin-kotlinx": {
-      "types": "./src/kotlin-kotlinx.ts",
-      "import": "./src/kotlin-kotlinx.ts"
+      "types": "./dist/kotlin-kotlinx.d.ts",
+      "import": "./dist/kotlin-kotlinx.js"
     },
     "./kotlin-jackson": {
-      "types": "./src/kotlin-jackson.ts",
-      "import": "./src/kotlin-jackson.ts"
+      "types": "./dist/kotlin-jackson.d.ts",
+      "import": "./dist/kotlin-jackson.js"
     },
     "./kotlin-gson": {
-      "types": "./src/kotlin-gson.ts",
-      "import": "./src/kotlin-gson.ts"
+      "types": "./dist/kotlin-gson.d.ts",
+      "import": "./dist/kotlin-gson.js"
     },
     "./java-jackson": {
-      "types": "./src/java-jackson.ts",
-      "import": "./src/java-jackson.ts"
+      "types": "./dist/java-jackson.d.ts",
+      "import": "./dist/java-jackson.js"
     },
     "./java-gson": {
-      "types": "./src/java-gson.ts",
-      "import": "./src/java-gson.ts"
+      "types": "./dist/java-gson.d.ts",
+      "import": "./dist/java-gson.js"
     },
     "./java-moshi": {
-      "types": "./src/java-moshi.ts",
-      "import": "./src/java-moshi.ts"
+      "types": "./dist/java-moshi.d.ts",
+      "import": "./dist/java-moshi.js"
     },
     "./java-jsonb": {
-      "types": "./src/java-jsonb.ts",
-      "import": "./src/java-jsonb.ts"
+      "types": "./dist/java-jsonb.d.ts",
+      "import": "./dist/java-jsonb.js"
     },
     "./sql": {
-      "types": "./src/sql.ts",
-      "import": "./src/sql.ts"
+      "types": "./dist/sql.d.ts",
+      "import": "./dist/sql.js"
     },
     "./sql-mssql": {
-      "types": "./src/sql-mssql.ts",
-      "import": "./src/sql-mssql.ts"
+      "types": "./dist/sql-mssql.d.ts",
+      "import": "./dist/sql-mssql.js"
     },
     "./protobuf": {
-      "types": "./src/protobuf.ts",
-      "import": "./src/protobuf.ts"
+      "types": "./dist/protobuf.d.ts",
+      "import": "./dist/protobuf.js"
     },
     "./json-rpc": {
-      "types": "./src/json-rpc.ts",
-      "import": "./src/json-rpc.ts"
+      "types": "./dist/json-rpc.d.ts",
+      "import": "./dist/json-rpc.js"
     },
     "./capnp": {
-      "types": "./src/capnp.ts",
-      "import": "./src/capnp.ts"
+      "types": "./dist/capnp.d.ts",
+      "import": "./dist/capnp.js"
     },
     "./flatbuffers": {
-      "types": "./src/flatbuffers.ts",
-      "import": "./src/flatbuffers.ts"
+      "types": "./dist/flatbuffers.d.ts",
+      "import": "./dist/flatbuffers.js"
     },
     "./jtd": {
-      "types": "./src/jtd.ts",
-      "import": "./src/jtd.ts"
+      "types": "./dist/jtd.d.ts",
+      "import": "./dist/jtd.js"
     },
     "./zod": {
-      "types": "./src/typescript-zod.ts",
-      "import": "./src/typescript-zod.ts"
+      "types": "./dist/typescript-zod.d.ts",
+      "import": "./dist/typescript-zod.js"
     },
     "./typescript-zod": {
-      "types": "./src/typescript-zod.ts",
-      "import": "./src/typescript-zod.ts"
+      "types": "./dist/typescript-zod.d.ts",
+      "import": "./dist/typescript-zod.js"
     },
     "./runtypes": {
-      "types": "./src/typescript-runtypes.ts",
-      "import": "./src/typescript-runtypes.ts"
+      "types": "./dist/typescript-runtypes.d.ts",
+      "import": "./dist/typescript-runtypes.js"
     },
     "./typescript-runtypes": {
-      "types": "./src/typescript-runtypes.ts",
-      "import": "./src/typescript-runtypes.ts"
+      "types": "./dist/typescript-runtypes.d.ts",
+      "import": "./dist/typescript-runtypes.js"
     },
     "./superstruct": {
-      "types": "./src/typescript-superstruct.ts",
-      "import": "./src/typescript-superstruct.ts"
+      "types": "./dist/typescript-superstruct.d.ts",
+      "import": "./dist/typescript-superstruct.js"
     },
     "./typescript-superstruct": {
-      "types": "./src/typescript-superstruct.ts",
-      "import": "./src/typescript-superstruct.ts"
+      "types": "./dist/typescript-superstruct.d.ts",
+      "import": "./dist/typescript-superstruct.js"
     },
     "./arktype": {
-      "types": "./src/typescript-arktype.ts",
-      "import": "./src/typescript-arktype.ts"
+      "types": "./dist/typescript-arktype.d.ts",
+      "import": "./dist/typescript-arktype.js"
     },
     "./typescript-arktype": {
-      "types": "./src/typescript-arktype.ts",
-      "import": "./src/typescript-arktype.ts"
+      "types": "./dist/typescript-arktype.d.ts",
+      "import": "./dist/typescript-arktype.js"
     },
     "./typebox": {
-      "types": "./src/typescript-typebox.ts",
-      "import": "./src/typescript-typebox.ts"
+      "types": "./dist/typescript-typebox.d.ts",
+      "import": "./dist/typescript-typebox.js"
     },
     "./typescript-typebox": {
-      "types": "./src/typescript-typebox.ts",
-      "import": "./src/typescript-typebox.ts"
+      "types": "./dist/typescript-typebox.d.ts",
+      "import": "./dist/typescript-typebox.js"
     },
     "./valibot": {
-      "types": "./src/typescript-valibot.ts",
-      "import": "./src/typescript-valibot.ts"
+      "types": "./dist/typescript-valibot.d.ts",
+      "import": "./dist/typescript-valibot.js"
     },
     "./typescript-valibot": {
-      "types": "./src/typescript-valibot.ts",
-      "import": "./src/typescript-valibot.ts"
+      "types": "./dist/typescript-valibot.d.ts",
+      "import": "./dist/typescript-valibot.js"
     },
     "./io-ts": {
-      "types": "./src/typescript-io-ts.ts",
-      "import": "./src/typescript-io-ts.ts"
+      "types": "./dist/typescript-io-ts.d.ts",
+      "import": "./dist/typescript-io-ts.js"
     },
     "./typescript-io-ts": {
-      "types": "./src/typescript-io-ts.ts",
-      "import": "./src/typescript-io-ts.ts"
+      "types": "./dist/typescript-io-ts.d.ts",
+      "import": "./dist/typescript-io-ts.js"
     },
     "./yup": {
-      "types": "./src/typescript-yup.ts",
-      "import": "./src/typescript-yup.ts"
+      "types": "./dist/typescript-yup.d.ts",
+      "import": "./dist/typescript-yup.js"
     },
     "./typescript-yup": {
-      "types": "./src/typescript-yup.ts",
-      "import": "./src/typescript-yup.ts"
+      "types": "./dist/typescript-yup.d.ts",
+      "import": "./dist/typescript-yup.js"
     },
     "./effect-schema": {
-      "types": "./src/typescript-effect-schema.ts",
-      "import": "./src/typescript-effect-schema.ts"
+      "types": "./dist/typescript-effect-schema.d.ts",
+      "import": "./dist/typescript-effect-schema.js"
     },
     "./typescript-effect-schema": {
-      "types": "./src/typescript-effect-schema.ts",
-      "import": "./src/typescript-effect-schema.ts"
+      "types": "./dist/typescript-effect-schema.d.ts",
+      "import": "./dist/typescript-effect-schema.js"
     },
     "./derive": {
-      "types": "./src/derive.ts",
-      "import": "./src/derive.ts"
+      "types": "./dist/derive.d.ts",
+      "import": "./dist/derive.js"
     },
     "./kinds/int-widths": {
-      "types": "./src/kinds/int-widths.ts",
-      "import": "./src/kinds/int-widths.ts"
+      "types": "./dist/kinds/int-widths.d.ts",
+      "import": "./dist/kinds/int-widths.js"
     },
     "./kinds/float-widths": {
-      "types": "./src/kinds/float-widths.ts",
-      "import": "./src/kinds/float-widths.ts"
+      "types": "./dist/kinds/float-widths.d.ts",
+      "import": "./dist/kinds/float-widths.js"
     },
     "./kinds/wire-numerics": {
-      "types": "./src/kinds/wire-numerics.ts",
-      "import": "./src/kinds/wire-numerics.ts"
+      "types": "./dist/kinds/wire-numerics.d.ts",
+      "import": "./dist/kinds/wire-numerics.js"
     },
     "./kinds/date-time": {
-      "types": "./src/kinds/date-time.ts",
-      "import": "./src/kinds/date-time.ts"
+      "types": "./dist/kinds/date-time.d.ts",
+      "import": "./dist/kinds/date-time.js"
     },
     "./kinds/duration": {
-      "types": "./src/kinds/duration.ts",
-      "import": "./src/kinds/duration.ts"
+      "types": "./dist/kinds/duration.d.ts",
+      "import": "./dist/kinds/duration.js"
     },
     "./kinds/temporal": {
-      "types": "./src/kinds/temporal.ts",
-      "import": "./src/kinds/temporal.ts"
+      "types": "./dist/kinds/temporal.d.ts",
+      "import": "./dist/kinds/temporal.js"
     },
     "./kinds/semantic-strings": {
-      "types": "./src/kinds/semantic-strings.ts",
-      "import": "./src/kinds/semantic-strings.ts"
+      "types": "./dist/kinds/semantic-strings.d.ts",
+      "import": "./dist/kinds/semantic-strings.js"
     },
     "./kinds/bytes": {
-      "types": "./src/kinds/bytes.ts",
-      "import": "./src/kinds/bytes.ts"
+      "types": "./dist/kinds/bytes.d.ts",
+      "import": "./dist/kinds/bytes.js"
     },
     "./kinds/common": {
-      "types": "./src/kinds/common.ts",
-      "import": "./src/kinds/common.ts"
+      "types": "./dist/kinds/common.d.ts",
+      "import": "./dist/kinds/common.js"
     },
     "./kinds/refinements": {
-      "types": "./src/kinds/refinements.ts",
-      "import": "./src/kinds/refinements.ts"
+      "types": "./dist/kinds/refinements.d.ts",
+      "import": "./dist/kinds/refinements.js"
     }
   },
   "files": [
-    "src",
-    "!src/**/*.test.ts",
-    "!src/**/*.fuzz.test.ts"
+    "dist"
   ],
   "engines": {
     "node": ">=20"
@@ -520,5 +518,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -18,57 +18,55 @@
     "auth"
   ],
   "type": "module",
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./node": {
-      "types": "./src/node.ts",
-      "import": "./src/node.ts"
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
     },
     "./tags": {
-      "types": "./src/tags.ts",
-      "import": "./src/tags.ts"
+      "types": "./dist/tags.d.ts",
+      "import": "./dist/tags.js"
     },
     "./tree": {
-      "types": "./src/tree.ts",
-      "import": "./src/tree.ts"
+      "types": "./dist/tree.d.ts",
+      "import": "./dist/tree.js"
     },
     "./extract": {
-      "types": "./src/extract.ts",
-      "import": "./src/extract.ts"
+      "types": "./dist/extract.d.ts",
+      "import": "./dist/extract.js"
     },
     "./build": {
-      "types": "./src/build.ts",
-      "import": "./src/build.ts"
+      "types": "./dist/build.d.ts",
+      "import": "./dist/build.js"
     },
     "./context": {
-      "types": "./src/context.ts",
-      "import": "./src/context.ts"
+      "types": "./dist/context.d.ts",
+      "import": "./dist/context.js"
     },
     "./otel": {
-      "types": "./src/otel.ts",
-      "import": "./src/otel.ts"
+      "types": "./dist/otel.d.ts",
+      "import": "./dist/otel.js"
     },
     "./auth": {
-      "types": "./src/auth.ts",
-      "import": "./src/auth.ts"
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
     }
   },
   "files": [
-    "src",
-    "!src/**/*.test.ts",
-    "!src/**/*.fuzz.test.ts"
+    "dist"
   ],
   "engines": {
     "node": ">=20"
   },
   "bin": {
-    "fractal-api-tree": "./src/cli.ts"
+    "fractal-api-tree": "./dist/cli.js"
   },
   "dependencies": {
     "@rhi-zone/fractal-type-ir": "workspace:*"
@@ -85,5 +83,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

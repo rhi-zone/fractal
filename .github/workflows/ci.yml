@@ -42,3 +42,28 @@ jobs:
       - name: Build playground
         run: nix develop --command bun run build
         working-directory: packages/playground
+
+  build-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Install dependencies
+        run: nix develop --command bun install
+
+      # Builds the 8 publishable packages (api-tree, type-ir, and the five
+      # projectors + auth-oidc) via `tsc -b tsconfig.build.json`'s project
+      # references, producing real dist/ (.js + .d.ts) output mirroring each
+      # package's src/ 1:1 — the artifacts an eventual `npm publish` would
+      # ship. Verify-only: this never calls `npm publish` (that's still
+      # hard-blocked pending manual owner approval, see TODO.md). Runs
+      # against each package's *committed* package.json (still pointing at
+      # ./src/*.ts for the source-to-source bun-workspace dev path used
+      # elsewhere in this workflow) — build:packages only needs the
+      # tsconfig.build.json project-reference graph, not a package.json
+      # exports rewrite, to prove the dist output itself compiles cleanly.
+      - name: Build packages (dist)
+        run: nix develop --command bun run build:packages
