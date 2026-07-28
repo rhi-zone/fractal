@@ -2,7 +2,7 @@
   "name": "@rhi-zone/fractal-graphql-api-projector",
   "version": "0.1.0-alpha.0",
   "description": "GraphQL projection for the function-core tree — nested Query / flat Mutation+Subscription SDL assembly (via @rhi-zone/fractal-type-ir) + graphql-js resolver dispatch",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",

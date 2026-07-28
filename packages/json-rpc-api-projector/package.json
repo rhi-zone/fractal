@@ -2,7 +2,7 @@
   "name": "@rhi-zone/fractal-json-rpc-api-projector",
   "version": "0.1.0-alpha.0",
   "description": "JSON-RPC 2.0 method projection for the function-core tree — dot-joined method names, HTTP POST + WebSocket transports, batch requests, streaming via Notifications, typed client",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",

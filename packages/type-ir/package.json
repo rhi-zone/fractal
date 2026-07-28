@@ -2,7 +2,7 @@
   "name": "@rhi-zone/fractal-type-ir",
   "version": "0.1.0-alpha.0",
   "description": "Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.)",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",

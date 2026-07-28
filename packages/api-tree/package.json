@@ -2,7 +2,7 @@
   "name": "@rhi-zone/fractal-api-tree",
   "version": "0.1.0-alpha.0",
   "description": "Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in ./node; Tags lattice in ./tags",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",

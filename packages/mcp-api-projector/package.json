@@ -2,7 +2,7 @@
   "name": "@rhi-zone/fractal-mcp-api-projector",
   "version": "0.1.0-alpha.0",
   "description": "MCP tool projection for the function-core tree — toTools, annotation hints derived from meta.tags",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",

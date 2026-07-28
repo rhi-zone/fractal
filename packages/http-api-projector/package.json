@@ -2,7 +2,7 @@
   "name": "@rhi-zone/fractal-http-api-projector",
   "version": "0.1.0-alpha.0",
   "description": "WHATWG renderer for the function-core tree — direct tree-walk makeRouter, autoMethodLayer, corsLayer, createFetch, serveBun/serveNode, toOpenApi, createClient",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",

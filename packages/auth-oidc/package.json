@@ -2,7 +2,7 @@
   "name": "@rhi-zone/fractal-auth-oidc",
   "version": "0.1.0-alpha.0",
   "description": "Generic OIDC/JWT auth adapter for fractal — server-side JWKS-backed JWT validation (AuthAdapter) and client-side OAuth token lifecycle management (AuthClientAdapter), both via Web Crypto (no JWT library dependency)",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",
