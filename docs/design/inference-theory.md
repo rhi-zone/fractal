@@ -637,6 +637,123 @@ pay for itself. (The closed form is accurate for K ≪ D and degrades as K appro
 D/K = 2 it predicts 2.44 against an exact 2.00.) A rule that reads K alone cannot express
 any of this.
 
+### 6.7 The ratio criterion, derived — and what the closed-domain fact was overclaiming
+
+§6.6 glossed its criterion as `K ≪ N`. That gloss is **not implied by the formula**, and the
+mismatch is exact rather than occasional. Derived directly rather than sampled.
+
+**The boundary in closed form.** With `L = log₂(D/K)`, `c = log₂e`, `ρ = K/N`, and the
+standard expansion `log₂C(D,K) = K·L + K·c − ½log₂(2πK) + O(K²/D)`:
+
+```
+net = (N−K)·L − K·c + ½log₂(2πK)
+net > 0  ⟺  (1−ρ)L > ρc          (dropping the O(log K) term)
+         ⟺  ρ < L/(L + log₂e)         equivalently   L > log₂e · ρ/(1−ρ)
+```
+
+So the admissible ratio is **not a constant**; it is `L/(L+c)`, a function of the declared
+headroom:
+
+```
+L = log₂(D/K)      max K/N
+0.5                 0.257
+1.44                0.500
+10                  0.874
+23.22               0.941   <- npm description sits exactly here
+100                 0.986
+→ ∞                 → 1
+```
+
+**`net > 0` does not imply `K/N` is small.** As `D` grows the bound tends to 1, and in the
+limit the criterion degenerates to `K < N` — "at least one value repeats." Confirmed against
+the exact formula: for npm `description` (N=1094, K=1030, ρ=0.9415) the required headroom is
+`c·ρ/(1−ρ) = 23.22` bits, giving `log₂D > 33.23`; the exact net is −8.2 at `log₂D = 33.0`
+and +55.8 at 34.0. In `D/N` terms the condition is `log₂(D/N) > c·ρ/(1−ρ) + log₂ρ`.
+
+**Why — and this is structural, not a missing term.** The dictionary costs `≈ K·L` and each
+occurrence saves `L`, for `N·L` total. *Both sides scale with `L`*, so `L` cancels to first
+order and `net ≈ (N−K)·L − K·c`. The leading question is only whether occurrences outnumber
+dictionary entries. `D` survives solely in `K·log₂e`, a **fixed ~1.443 bits per entry that
+does not grow with `D`**. Compression is therefore bought by *any* repetition; it never
+required *concentrated* repetition. `K ≪ N` was always an informal reading of a formula that
+never encoded it.
+
+The formula is also blind to the shape of the counts, which the same reading assumed. Two
+corpora, identical `(N, K, D)`:
+
+```
+A: one value ×65, 1029 singletons     N=1094 K=1030   net = 1975.8
+B: 64 values ×2,   966 singletons     N=1094 K=1030   net = 1975.8
+```
+
+Identical credit, though only A has a genuinely repeated member.
+
+**What is actually missing is a claim, not a term.** "The domain is exactly S" asserts
+`P(novel) = 0` — the strongest claim available, since a code assigning probability zero to an
+event that occurs costs unbounded bits. Nothing in `net` tests it, yet **the corpus carries
+direct evidence about it**: Good–Turing's missing-mass estimate `p̂ = n₁/N`, where `n₁` is the
+number of values seen exactly once. **The quantity that matters is `n₁/N` — singleton
+*mass*, the share of occurrences — not `n₁/K`, the share of members.** For `description`,
+those 997 singletons are 91.1% of *occurrences*. The fact being scored asserts 0; the corpus
+says 0.911.
+
+Keeping those two apart is not pedantry, it is the whole content of the criterion, and
+conflating them yields a rule that is wrong on both sides. Real vocabularies are skewed —
+§4.1(a)'s own Zipf material says so — so a genuine closed vocabulary routinely has *most of
+its members* appear once:
+
+```
+field                                     N        K     n₁    n₁/K     n₁/N   verdict
+npm .license (real SPDX vocabulary)    1084       38     21     55%    1.94%     KEEP
+counts: [856,110,26,18,10,5,5,5,5,4,4,3,3,3,2,2,2, 1×21]
+near-constant field w/ rare noise  1,000,000      51     50     98%   0.005%     KEEP
+npm .description                       1094     1030    997     97%    91.1%   reject
+```
+
+By `n₁/K` the first two look like free text and are not. A field that is 999,950 copies of
+one value plus 50 one-off oddities has 98% of its *members* appearing exactly once and is
+obviously not free text; by mass it is 0.005% novel. `n₁/N` separates all three correctly.
+The enum-vs-free-text framing is itself the wrong dichotomy — none of these fields is
+"an enum" or "free text" as a kind. What the criterion measures is escape rate: how much
+occurrence mass sits outside any finite domain you could name.
+
+**Replacing the fact fixes the criterion.** Score a *domain-with-escape* fact instead: each
+occurrence pays `H(p)` for an escape flag, then `log₂K` if in `S` or `log₂D` if novel.
+
+```
+net_esc = N(1−p)·L − N·H(p) − log₂C(D,K)
+        = L·( N(1−p) − K ) − N·H(p) − K·c + ½log₂(2πK)
+```
+
+The sign is governed by `N(1−p) − K`, which is **D-free**. With `p = n₁/N`:
+
+```
+net_esc > 0   ⟺   N(1−p) > K   ⟺   K/N < 1 − n₁/N   ⟺   N − n₁ > K
+```
+
+**Non-singleton occurrences must outnumber distinct values.** That is a genuine ratio
+criterion, it is independent of the declared universe, and it is what `K ≪ N` was reaching
+for. Required cases, at `log₂D` = 34 through 8000 (verdict identical throughout):
+
+```
+case                                  N     K     n₁    n₁/N      net       net_esc   verdict
+exact memorization K=N             1000  1000   1000  100.0%   −1,436       −55,471    reject
+npm .license (real counts)         1084    38     21    1.9%   61,404        60,021      KEEP
+near-constant + rare noise      1000000    51     50   0.005%  huge      58,320,828      KEEP
+uniform 3-value enum               1000     3      0    0.0%   62,226        62,226      KEEP
+npm description (real shape)       1089  1030    997   91.6%   +1,706       −52,579    reject
+mixture: 50 specials + text        1085   950    900   82.9%   +5,940       −43,472    reject
+```
+
+Empirical verification against real corpora, including the calibration of `p̂` itself, is in
+§17.7. Two caveats travel with this. First, it is a **change of fact vocabulary, not a repair
+of the arithmetic** — `net` was always a correct statement about compression, and the
+closed-domain *fact* was the thing overclaiming. Second, `n₁/N` is a same-corpus estimator,
+so it grazes §15.3's circularity bar; the defence is that it estimates a scalar from the
+frequency-of-frequencies rather than a predictive distribution over values, and that the
+closed-domain claim already asserted `p = 0` about the same data. That defence is arguable
+and the boundary is now softer than §15.3 states.
+
 ## 7. The abstraction space is a tree of lattices
 
 **Status: argued in design dialogue, then confirmed by a prototyping pass. Numbers below
