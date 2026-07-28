@@ -331,12 +331,36 @@ export function mergeMeta(...metas: Array<Meta | undefined>): Meta {
  * `[Meta, ...Meta[]]` it always had — literal-preservation is not attempted
  * for that (rare, opt-in) shape, so `meta` falls back to `Meta` too.
  */
+/**
+ * Structurally extracts the `E` in a handler's `Result<T, E>` return type —
+ * PROBE: matches the DU's raw `{ kind: "err"; error: E }` shape rather than
+ * the `Result<T, E>` alias itself. Matching the alias name (`R extends
+ * Result<any, infer E>`) does not work here: with `skipLibCheck: true`,
+ * alias instantiations are left unresolved by the checker (see the
+ * ARCHITECTURE NOTE in extract.ts), so a pattern keyed to the alias's own
+ * identity always misses and falls through. The raw shape pattern sidesteps
+ * that because it matches the union's structure, not the alias reference.
+ *
+ * The non-matching branch must be `never`, not `unknown` — a distributive
+ * conditional applied to a union return type (e.g. an unannotated arrow
+ * inferring `Result<Book,ApiError> | Result<never,never>`) evaluates the
+ * non-matching branch once per union member, and `unknown` absorbs the
+ * whole union (`unknown | ApiError` collapses to `unknown`) where `never`
+ * disappears (`never | ApiError` stays `ApiError`).
+ */
+type ExtractErrorKind<H> = H extends (...args: any[]) => infer R
+  ? R extends Promise<infer R2>
+    ? R2 extends { kind: "err"; error: infer E } ? E : never
+    : R extends { kind: "err"; error: infer E } ? E : never
+  : never
+
 export function op<H extends Handler, const C extends readonly Meta[] = []>(
   fn: H,
   ...contributions: HasRequiredKeys<Meta> extends true ? [Meta, ...Meta[]] : C
 ): Omit<Node, "handler" | "meta"> & {
   readonly handler: H
   readonly meta: HasRequiredKeys<Meta> extends true ? Meta : Simplify<FoldMeta<C>>
+  readonly __errorKind?: ExtractErrorKind<H>
 } {
   const meta = contributions.length === 0
     ? {}
