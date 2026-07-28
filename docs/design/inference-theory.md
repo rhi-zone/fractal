@@ -1060,6 +1060,81 @@ precisely a fact about the collection procedure — and `N`, `n₁` and `K/N` al
 it. The framework's own principle says duplication should not count, and none of its
 statistics can avoid counting it.
 
+### 6.9 Goodness-of-fit against generative nulls: built, tested, does not help
+
+A classical alternative to the credit/charge framing: propose candidate generative
+distributions, test the observed value-frequency distribution against each, and take the one
+not rejected. Motivated specifically by the "unbounded but head-skewed" category (§6.8) that
+every ratio statistic mishandles. **Built and tested; it is worse than what it would replace
+on all three axes.** Recorded so the direction is closed rather than re-proposed.
+
+**Construction.** One nested family, `Zipf(s, V)`: `V` types with `p_i ∝ i^-s`. `s = 0` is
+uniform, so uniform is nested at `s = 0` and the skew test is a proper likelihood-ratio with
+one degree of freedom. Fitted to the **frequency spectrum** `(n₁, n₂, …)` rather than to the
+observed counts, because conditioning on which values were seen discards the
+coupon-collector information that distinguishes open from closed — under `N` draws,
+`E[n_j] = Σ_i C(N,j) p_i^j (1−p_i)^(N−j)`. Fitted `V/K` is then the direct answer to
+open-versus-closed: `V/K ≈ 1` means the vocabulary is fully observed, `V/K ≫ 1` means most
+of it is unseen.
+
+**The skew parameter works. The vocabulary size does not.** `s` is well identified and the
+`s = 0` test is overwhelming where it should be (`p ≈ 10⁻²⁵` to `10⁻⁸⁸`). But:
+
+```
+field                  K/N     coverage   ŝ      V̂/K       G
+npm .license         0.035        96.5%   2.2   1000.00    10.7
+npm .description     0.941         6.8%   0.6     30.00    18.0
+npm .name            1.000         0.0%   0.0   1000.00     1.1
+npm .types           0.231        79.4%   1.2      5.00    14.4
+```
+
+`license` is the canonical **closed** vocabulary — SPDX identifiers, 96.5% held-out
+coverage — and the fit calls it maximally **open**, in the same bucket as `name`, which has
+0% coverage. Worse, `description` (6.8% coverage, genuinely open) fits as *more closed* than
+`license`. The two discriminations that matter are inverted.
+
+**The cause is identifiability, not tuning.** For `s > 1` the series `Σ i^-s` converges, so
+ranks beyond the observed range carry negligible probability mass and `V` has almost no
+effect on the predicted spectrum. `license` fits `s = 2.2`, at which point `V` is simply not
+estimable from the data, and the optimiser returns an arbitrary point. **A closed vocabulary
+with Zipfian usage and an open Zipfian vocabulary produce the same frequency spectrum** —
+which is precisely the distinction this approach was proposed to draw.
+
+**Under duplication it is the most fragile method tested.** Duplication makes every count
+exactly `r`, which is the *canonical signature* of uniform-over-`K` sampled deeply — so it
+does not merely fool the test, it manufactures the evidence for the closed-enum hypothesis:
+
+```
+r        V̂/K      verdict              partial duplication of description:
+1     10000.00    OPEN (correct)         frac dup   V̂/K     verdict
+2         1.30    CLOSED (wrong)         0.0     1000.00   OPEN (correct)
+4         1.00    CLOSED (wrong)         0.3        2.00   CLOSED (wrong)
+8         1.00    CLOSED (wrong)         0.5        1.60   CLOSED (wrong)
+```
+
+**30% partial duplication already flips it**, against 50% for both `K/N` and `n₁`. One
+partial mitigation: absolute fit degrades sharply under exact duplication (`G` = 0.1 at
+`r = 1`, 2256 at `r = 2`, 3466 at `r = 5`), because multinomial sampling never produces
+identical counts. "No model in the family fits" is therefore a usable anomaly signal — but it
+decays by `r = 10` (`G` = 139) and would also fire on any genuinely non-Zipf field.
+
+**Head-to-head on the same 107 fields and the same held-out validation, it never wins:**
+
+```
+cov cutoff   GOF V̂/K<2   GOF V̂/K<5   K/N@best   K/N@0.5   1−n₁/N   net@2^64
+30%              45.9%       59.0%     100.0%     80.3%    100.0%      83.6%
+50%              63.9%       77.0%      98.4%     98.4%     88.5%      65.6%
+70%              83.6%       83.6%      93.4%     82.0%     88.5%      45.9%
+90%              86.9%       77.0%     100.0%     65.6%     96.7%      29.5%
+```
+
+**Verdict: a genuine negative.** It fails the category it was designed for, it is the most
+duplication-fragile option available, and it loses at every operating point. The one durable
+takeaway is that `s` is real and identifiable while `V` is not — so the frequency spectrum
+can characterise *how skewed* a vocabulary is, and cannot say *how much of it remains
+unseen*, which is the question. That is the same wall as §6.8, reached from classical
+statistics instead of from coding theory.
+
 ## 7. The abstraction space is a tree of lattices
 
 **Status: argued in design dialogue, then confirmed by a prototyping pass. Numbers below
