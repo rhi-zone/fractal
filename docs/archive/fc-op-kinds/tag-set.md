@@ -41,7 +41,7 @@ Tags are listed in dependency order (safer/weaker before stronger/narrower).
 
 ---
 
-### `safe`  (alias: `readOnly`)
+### `readOnly`
 
 **Agnostic definition:** The operation produces no observable side-effects on persistent
 state; calling it any number of times is equivalent to calling it once.
@@ -55,12 +55,12 @@ documents this failure mode across all five projections that encode the concept.
 
 | Projection | Specialization |
 |---|---|
-| HTTP | Selects GET/HEAD verb class; safe methods are cacheable and bookmarkable (RFC 9110 §9.2.1) |
+| HTTP | Selects GET/HEAD verb class; readOnly methods are cacheable and bookmarkable (RFC 9110 §9.2.1) |
 | CLI | Governs whether a `--dry-run` / preview mode would suppress the call; no confirm-prompt |
 | MCP | Emitted as `annotations.readOnlyHint: true` in `ToolAnnotations` |
 | gRPC | Emitted as `option idempotency_level = NO_SIDE_EFFECTS` in the RPC definition |
 | GraphQL | Determines `query` op type; queries may execute in parallel (spec §6.2.1) |
-| WS | No direct hint; safe ops are candidates for request/response (not push) patterns |
+| WS | No direct hint; readOnly ops are candidates for request/response (not push) patterns |
 
 **Inferable or authored:** **Must-be-authored.** Partially inferable from name prefix
 (the server-less heuristic), but explicitly lossy — fractal treats inference as an
@@ -215,24 +215,24 @@ Tags are not independent. The following implications hold from their agnostic
 definitions and propagate to projections automatically:
 
 ```
-safe ⇒ idempotent
+readOnly ⇒ idempotent
 ```
 Rationale: an operation with no observable side-effects trivially satisfies
-idempotency. HTTP GET is both safe and idempotent. A projection that needs to select
-between `IDEMPOTENT` and `NO_SIDE_EFFECTS` can use safe-ness to imply idempotency
+idempotency. HTTP GET is both readOnly and idempotent. A projection that needs to select
+between `IDEMPOTENT` and `NO_SIDE_EFFECTS` can use readOnly-ness to imply idempotency
 rather than requiring both assertions.
 
 ```
-safe ⇒ ¬destructive
+readOnly ⇒ ¬destructive
 ```
 Rationale: an operation that destroys state produces an observable side-effect, so it
-cannot be safe. The two tags are mutually exclusive by definition.
+cannot be readOnly. The two tags are mutually exclusive by definition.
 
 ```
-destructive ⇒ ¬safe
+destructive ⇒ ¬readOnly
 ```
-Directly follows from the above (contrapositive of `safe ⇒ ¬destructive`). Stated
-separately to make the HTTP dispatch rule readable: safe→GET, destructive→DELETE.
+Directly follows from the above (contrapositive of `readOnly ⇒ ¬destructive`). Stated
+separately to make the HTTP dispatch rule readable: readOnly→GET, destructive→DELETE.
 
 ```
 destructive ∧ idempotent  is valid
@@ -245,14 +245,14 @@ is the canonical example. Authors may assert both; neither tag implies the other
 streaming is orthogonal to all above
 ```
 Streaming is a cardinality property of the output channel, not a side-effect property.
-`streaming ∧ safe` (a streaming read) and `streaming ∧ ¬safe` (streaming a mutation's
+`streaming ∧ readOnly` (a streaming read) and `streaming ∧ ¬readOnly` (streaming a mutation's
 progress) are both valid combinations.
 
 ```
 openWorld is orthogonal to all above
 ```
-External reach is an architectural fact independent of idempotency, safety, or
-destructiveness. A safe read can be openWorld (fetching from an external API); a
+External reach is an architectural fact independent of idempotency, readOnly-ness, or
+destructiveness. A readOnly read can be openWorld (fetching from an external API); a
 destructive write can be intra-service.
 
 ### Projection dispatch rules (derived from lattice)
@@ -262,25 +262,25 @@ branching:
 
 **HTTP verb selection:**
 ```
-safe            → GET / HEAD
-idempotent ∧ ¬safe ∧ destructive  → DELETE
-idempotent ∧ ¬safe ∧ ¬destructive → PUT
+readOnly            → GET / HEAD
+idempotent ∧ ¬readOnly ∧ destructive  → DELETE
+idempotent ∧ ¬readOnly ∧ ¬destructive → PUT
 ¬idempotent                        → POST
 (no tag asserted)                  → POST (conservative default)
 ```
 
 **gRPC idempotency_level:**
 ```
-safe       → NO_SIDE_EFFECTS
+readOnly   → NO_SIDE_EFFECTS
 idempotent → IDEMPOTENT
 (neither)  → (omitted, default UNKNOWN)
 ```
 
 **GraphQL op type:**
 ```
-safe  → query
-¬safe → mutation
-streaming → subscription (orthogonal; can combine with safe/¬safe)
+readOnly  → query
+¬readOnly → mutation
+streaming → subscription (orthogonal; can combine with readOnly/¬readOnly)
 ```
 
 ---
@@ -291,7 +291,7 @@ The open metadata bag on every op contains:
 
 | Category | What it holds | Source | Examples |
 |---|---|---|---|
-| **Tags** (this document) | Agnostic behavioral/semantic properties; ≥2 projections specialize them | Must-be-authored (except `streaming`) | `safe`, `idempotent`, `destructive`, `openWorld`, `streaming` |
+| **Tags** (this document) | Agnostic behavioral/semantic properties; ≥2 projections specialize them | Must-be-authored (except `streaming`) | `readOnly`, `idempotent`, `destructive`, `openWorld`, `streaming` |
 | **Descriptive** | Human-readable identification | Type-inferable from method ident + doc comments | `name` (from method name), `description` (from `///` / JSDoc) |
 | **Structural** | Input/output shape, cardinality, presence, tree topology | Type-inferable from parameter and return types | `param.optional` (`Option<T>`), `param.multiple` (`Vec<T>`), `mount` (`&T` return), `notFound` (`Option<T>` return), `inputSchema`, `outputSchema` |
 | **Per-projection namespaced** | One projection reads, others ignore; not lifted to agnostic core | Must-be-authored; override via projection namespace | `http.verb`, `http.path`, `http.statusCode`, `grpc.fieldNumbers`, `cli.shortFlag`, `mcp.title`, `ws.path` |
@@ -329,8 +329,8 @@ const cacheable = Symbol("cacheable");  // or a plain string key
 const getUser = defineOp(
   async (id: string): Promise<User> => { /* ... */ },
   {
-    safe: true,
-    idempotent: true,       // implied by safe, but explicit is fine
+    readOnly: true,
+    idempotent: true,       // implied by readOnly, but explicit is fine
     [cacheable]: {
       ttl: 60,              // seconds; tag carries structured metadata
       varyOn: ["id"],
@@ -357,7 +357,7 @@ function httpCacheProjection(op: Op): CacheDirective | null {
 
 // compose with the standard HTTP projection — core projection is unmodified
 function myHttpProjection(op: Op): RouteConfig {
-  const base = standardHttpProjection(op);       // core, reads safe/idempotent/etc.
+  const base = standardHttpProjection(op);       // core, reads readOnly/idempotent/etc.
   const cacheHeader = httpCacheProjection(op);   // consumer extension, reads cacheable
   return { ...base, extraHeaders: cacheHeader ?? {} };
 }
@@ -371,7 +371,7 @@ the projections its author wires it into, with zero impact on the rest.
 ### Symbol vs string keys
 
 String keys risk collision across consumers. Symbol keys (or namespaced strings like
-`"acme:cacheable"`) guarantee isolation. The canonical tags (`safe`, `idempotent`,
+`"acme:cacheable"`) guarantee isolation. The canonical tags (`readOnly`, `idempotent`,
 `destructive`, `openWorld`, `streaming`) use plain strings because they are the shared
 standard library; consumer-defined tags should prefer namespaced strings or symbols.
 
@@ -383,7 +383,7 @@ standard library; consumer-defined tags should prefer namespaced strings or symb
 
 | Tag | Agnostic definition | Inferable? | Projections | Confidence |
 |---|---|---|---|---|
-| `safe` | No observable side-effects | Must-be-authored (name prefix is lossy heuristic) | HTTP (GET), CLI (no confirm), MCP (`readOnlyHint`), gRPC (`NO_SIDE_EFFECTS`), GraphQL (`query`) | HIGH (5/6) |
+| `readOnly` | No observable side-effects | Must-be-authored (name prefix is lossy heuristic) | HTTP (GET), CLI (no confirm), MCP (`readOnlyHint`), gRPC (`NO_SIDE_EFFECTS`), GraphQL (`query`) | HIGH (5/6) |
 | `idempotent` | Repeat calls leave identical state | Must-be-authored | HTTP (PUT/DELETE), MCP (`idempotentHint`), gRPC (`IDEMPOTENT`) | HIGH (3 explicit) |
 | `destructive` | Irrevocably removes state | Must-be-authored | HTTP (DELETE), CLI (confirm-prompt), MCP (`destructiveHint`) | HIGH (3 explicit) |
 | `openWorld` | May reach external systems | Must-be-authored | MCP (`openWorldHint`), HTTP (caching/gating, latent) | WEAK (1 explicit + 1 latent) |
@@ -392,7 +392,7 @@ standard library; consumer-defined tags should prefer namespaced strings or symb
 **Rejected from tag set:** `replace`/`partial` (HTTP-verb taxonomy, [CERTIFIED]
 rejected); `notFound` (structural, type-inferable from `Option<T>` return).
 
-**Implication lattice:** `safe ⇒ idempotent`; `safe ⇒ ¬destructive`; `destructive ⇒ ¬safe`; `destructive ∧ idempotent` is valid; `streaming` and `openWorld` are orthogonal to all.
+**Implication lattice:** `readOnly ⇒ idempotent`; `readOnly ⇒ ¬destructive`; `destructive ⇒ ¬readOnly`; `destructive ∧ idempotent` is valid; `streaming` and `openWorld` are orthogonal to all.
 
 **Openness:** new tags are plain keys in the open metadata bag; projections are pure
 functions that read known keys and skip unknown ones; no core edits required.
