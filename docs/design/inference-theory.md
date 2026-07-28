@@ -518,7 +518,9 @@ N=1000, −1.435 at N=10000). The leading-term approximation understates the cas
 memorization; the exact schedule rejects it outright rather than merely declining to reward
 it.
 
-**`K ≪ N` is a static property of one snapshot, not a trajectory.** It is tempting to
+**`K ≪ N` is a static property of one snapshot, not a trajectory** — but it is not a
+property of `(N, K)` alone. `D` is the dominant term and a 33-bit universe is enough to flip
+`description` from reject to keep; see §17.5 before relying on the framing below. It is tempting to
 describe the discriminating signal as "K stays flat as N grows," and that phrasing is wrong
 in a way that matters. A trajectory would require either watching K accumulate over an
 ordered sequence within one corpus — reintroducing order-dependence, in conflict with tests 1
@@ -526,7 +528,10 @@ and 2 (§11) — or comparing corpora of different sizes, which requires externa
 is needed. `net = (N − K)·log₂(D/K)` is evaluated **once**, at the single observed (N, K)
 pair: count total occurrences, count distinct values, done. Memorization (K ≈ N) and genuine
 restriction (K ≪ N) are both static facts about one snapshot, and the formula separates them
-without anything sequential.
+without anything sequential. What that single evaluation *cannot* do without a declared `D`
+is say where the boundary sits, and §17.5 measures how much work that declaration is doing:
+the resulting ordering is robust to it (ρ = 0.989 across a 235-fold change in log₂D) and the
+`net > 0` verdict is not.
 
 **This is the ceiling reachable from one corpus alone**, which resolves the circularity
 question of §15.3. The credit above is non-circular because its reference is `top` — external
@@ -1511,7 +1516,100 @@ locality breaking; on real data the common case is a derived-identifier pair, fo
 DU mechanism (a scope decision over a low-cardinality tag) does not apply and MI returns
 zero. This is a gap in what §7 can represent, not only in how it is estimated.
 
-### 17.5 What this does and does not establish
+### 17.5 Following §17.3 down: the mechanism, a refuted fix, and what actually works
+
+**The mechanism, confirmed and sharper than expected.** `net = (N−K)·log₂(D/K) − K·log₂e +
+½log₂(2πK)`. The margin `(N−K)` is fixed by the data; `log₂(D/K)` is a free declaration;
+their product is unbounded. For npm `description` (N=1094, K=1030, margin **64**):
+
+```
+declared universe                log₂ D          net    verdict
+K itself (no headroom)             10.0            0    reject
+2^16                               16.0       -1,084    reject
+2^32                               32.0          -72    reject
+2^33.2  (break-even)               33.2            0    --
+2^34                               34.0          +56      KEEP
+2^64                               64.0       +1,976      KEEP
+2^1000                           1000.0      +61,880      KEEP
+```
+
+Break-even is `log₂(D/K) > K·log₂e/(N−K)`, here 23.2 bits, so `log₂D > 33.2`. **It does not
+take an astronomical D — a 33-bit universe already flips it**, and every string field
+trivially exceeds that. The failure is not an artefact of extreme declarations; it is the
+normal case for strings.
+
+This does not contradict anything §6.6 states — its boundary table already shows the required
+ratio → 1.0 as D/K → ∞ — but §6.6's "count total occurrences, count distinct values, done"
+framing invites reading `(N, K)` as sufficient. They are not. **`D` is the dominant term**,
+and the criterion is only as trustworthy as a declaration the corpus cannot check.
+
+**A mixture fact was proposed as the fix. It scores better and does not resolve the
+problem.** Hypothesis: `description` is not a closed domain but a mixture — mostly open text,
+with a few boilerplate values recurring. (The data supports the description: **96.8% of
+distinct values occur exactly once**, covering 997 of 1094 occurrences; the top repeat is a
+package blurb appearing 10×.) Modelled as a DU between "one of M special values" and "open
+text", charged `log₂C(D,M) + ½log₂N`:
+
+```
+log₂D = 64      pure restriction (M=K=1030):  net = 1,976
+      M=10   net = 2,005      M=25   net = 2,870      M=50   net = 3,134      M=300  net = 2,133
+```
+
+**The mixture wins**, peaking around M=50. An earlier argument in this session that it *could
+not* win — because its repetition margin `Σ_{v∈S}(count−1)` is a subset of `N−K` — was
+wrong: the margin identity holds, but the mixture's charge scales with M rather than K, and
+that dominates. Recorded because the wrong version was asserted before it was run.
+
+But it does not resolve the dilemma. Pure restriction still nets **+1,976**, so the
+mischaracterisation is still admitted; the mixture merely outranks it. And held out, the
+mixture's special set covers only **2.0–3.3%** of unseen occurrences at M=5…50 — the
+boilerplate is package-specific, not a stable vocabulary. The mixture is a better
+*compression* of this corpus and not a better *prediction* of the next one.
+
+**What does discriminate: held-out coverage.** Fit the domain on half the corpus, measure how
+much of the other half it covers. Across **107 string-valued paths** with N ≥ 120 from npm +
+api-examples:
+
+```
+                                net@2^64   held-out coverage
+npm .dist.signatures[*].keyid     71,756              100.0%
+npm .license                      61,404               96.5%
+npm .main                         35,386               69.8%
+npm .description                   1,976                6.2%
+npm .name / .dist.shasum / ._id   -1,578                0.0%
+```
+
+- **Spearman ρ(net, held-out coverage) = 0.803** (n=107). Net is a *good ordering*.
+- **As an admission bar it is not**: 81 of 107 paths clear `net > 0`, their coverage ranging
+  2.0%–100%, and **12.3% of admitted paths have under 20% held-out coverage**.
+- The `K = N` boundary is exact: every one of those paths (`name`, `tarball`, `shasum`,
+  `integrity`, `_id`, `sig`) nets negative and covers 0.0%.
+
+**And the ranking is D-robust where the sign is not**, which is what makes this actionable:
+
+```
+log₂ D      ρ(net, coverage)   %KEEP   % of KEEP with coverage <20%
+34                     0.862   73.8%                          10.1%
+64                     0.829   75.7%                          12.3%
+1000                   0.813   77.6%                          14.5%
+8000                   0.813   77.6%                          14.5%
+
+Spearman between the net ORDERINGS at log₂D = 34 and log₂D = 8000:  0.9885
+```
+
+A 235-fold change in the declared exponent barely moves the order (ρ = 0.989) while moving
+the admission count and the error rate. **So the D-dependence is concentrated almost entirely
+in where the threshold falls, not in the ranking.**
+
+That relocates the problem rather than solving it, but it relocates it somewhere the
+architecture already wanted it: §5.1 has the core emit an ordering and §8 has synthesis
+commit, and §6.6's `net > 0` bar is one of the few places the document departs from that.
+The empirical result says the departure is the part that fails. Two things remain genuinely
+unresolved: a cutoff still has to come from somewhere, and the only calibrator found — held-out
+coverage — requires stepping outside the corpus-relative frame that §4 makes definitional.
+That is the same wall as §15.3's circularity, reached from a different direction.
+
+### 17.6 What this does and does not establish
 
 It does not refute the framework. Every failure above is a failure of a *specific* claim
 against a *specific* corpus, and three of the four point at things the document already flags
