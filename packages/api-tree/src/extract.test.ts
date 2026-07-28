@@ -172,6 +172,57 @@ describe("MCP tool carries the derived inputSchema + description", () => {
 })
 
 // ============================================================================
+// 3b. meta.mcp.name / meta.mcp.segment overrides reflected in the
+// reconstructed name (tree.ts) — must agree with mcp-api-projector's actual
+// runtime `projectTools` walk, since they're supposed to be the same name.
+// ============================================================================
+
+describe("meta.mcp overrides reflected in the reconstructed name", () => {
+  const tools = toTools(tree, { schemas })
+  const byName = Object.fromEntries(tools.map((t) => [t.name, t]))
+
+  it("a leaf's meta.mcp.name fully overrides the tool name — schemas keys under the override, not the default join", () => {
+    // The default underscore-joined name would have been "mcpOverrides_renamed";
+    // meta.mcp.name replaces it outright, prefix and all.
+    expect(schemas["mcpOverrides_renamed"]).toBeUndefined()
+    expect(schemas["custom_search"]?.inputSchema).toEqual({
+      type: "object",
+      properties: { q: { type: "string" } },
+      required: ["q"],
+    })
+    // And the real runtime projection resolves the SAME derived schema under
+    // the SAME name — this is the divergence the two code paths must not have.
+    expect(byName["custom_search"]?.inputSchema).toEqual(schemas["custom_search"]!.inputSchema)
+  })
+
+  // `api()`'s `opts.meta` parameter is now a `const` type parameter (`M`,
+  // node.ts), matching how `children` (`C`) and `fallback` (`const F`)
+  // already preserve literal types. `{ mcp: { segment: "products" } }`
+  // therefore survives as a literal into api()'s own return type, so
+  // tree.ts's checker-driven walk (`mcpMetaOverride("segment", …)`) reads it
+  // directly off the resolved TYPE — the same mechanism that already reads a
+  // leaf's `meta.mcp.name`. The default underscore-joined name
+  // ("mcpOverrides_catalog_list") is NOT used; the override
+  // ("mcpOverrides_products_list") replaces this branch's own contribution to
+  // the prefix. This matches mcp-api-projector's `project.ts`, which already
+  // honored `meta.mcp.segment` at runtime — the two code paths no longer
+  // diverge.
+  it("a branch's meta.mcp.segment overrides this child's contribution to the reconstructed name — schemas keys under the override, not the default join", () => {
+    expect(schemas["mcpOverrides_catalog_list"]).toBeUndefined()
+    expect(schemas["mcpOverrides_products_list"]?.inputSchema).toEqual({
+      type: "object",
+      properties: { limit: { type: "number" } },
+    })
+    // And the real runtime projection resolves the SAME derived schema under
+    // the SAME name — this is the divergence the two code paths must not have.
+    expect(byName["mcpOverrides_products_list"]?.inputSchema).toEqual(
+      schemas["mcpOverrides_products_list"]!.inputSchema,
+    )
+    expect(byName["mcpOverrides_catalog_list"]).toBeUndefined()
+  })
+})
+
+// ============================================================================
 // 4. Fallback fires for an unhandled (union) type — TODO-tagged
 // ============================================================================
 

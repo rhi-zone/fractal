@@ -38,9 +38,26 @@
 // matching `op(...)`/`api(...)` call shapes or following identifier chains
 // through the AST.
 //
-// meta.mcp.name / meta.mcp.segment overrides are NOT yet mirrored here.
-//   TODO(api-tree): honor meta.mcp.name / meta.mcp.segment when reconstructing
-//   tool names, matching packages/mcp-api-projector/src/project.ts.
+// meta.mcp.name (leaf) is now mirrored here (see `mcpMetaOverride` below) — a
+// leaf's `meta.mcp.name` replaces the underscore-joined default entirely,
+// matching packages/mcp-api-projector/src/project.ts's `projectTools` walk.
+// Read off the resolved TYPE the same way `fallbackNameLiteral` reads a
+// fallback's `name`: `op()`'s meta contributions are a `const`-inferred tuple
+// (node.ts's `FoldMeta<C>`), so the literal survives into `op()`'s own return
+// type — no AST needed. `meta.mcp` itself is only PRESENT on the type when
+// something in the entry file's import graph has declaration-merged it onto
+// `Meta` (mcp-api-projector's `project.ts` does this); absent that,
+// `mcpMetaOverride` returns `undefined` and this walker falls back to its
+// prior tree-position-derived naming, same as it always has.
+//
+// meta.mcp.segment (branch) is now mirrored too: `api()`'s `opts.meta`
+// parameter (node.ts) is a `const` type parameter (`M`), matching how
+// `children`/`fallback` already preserve literal types — so the literal
+// `"products"` in `api(children, { meta: { mcp: { segment: "products" } }
+// })` survives into the resolved TYPE, and `mcpMetaOverride` below reads it
+// the same way it already reads a leaf's `meta.mcp.name`. See
+// extract.test.ts's "meta.mcp overrides reflected in the reconstructed name"
+// describe block for the executable record.
 
 import ts from "typescript"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
@@ -121,6 +138,36 @@ function fallbackNameLiteral(
 }
 
 /**
+ * Read a string-literal override at `meta.mcp.<key>` off a resolved node
+ * TYPE — the type-level mirror of mcp-api-projector's own runtime read
+ * (`getMcpMeta(child.meta).name` / `.segment`, project.ts), used here because
+ * this walker only ever has a TYPE for a node, never a value. Returns
+ * `undefined` when `meta.mcp` isn't present on the type at all (nothing in
+ * the entry file's import graph has declaration-merged it onto `Meta`), the
+ * requested key isn't set, or it resolves to a non-literal `string` (e.g. a
+ * caller built the override from a runtime expression) — the caller then
+ * falls back to tree-position-derived naming, mirroring mcp-api-projector's
+ * own `typeof mcp.name === "string" ? mcp.name : ...` ternary.
+ */
+function mcpMetaOverride(
+  nodeType: ts.Type,
+  key: "name" | "segment",
+  loc: ts.Node,
+  checker: ts.TypeChecker,
+): string | undefined {
+  const metaProp = checker.getPropertyOfType(nodeType, "meta")
+  if (!metaProp) return undefined
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
+  const mcpProp = checker.getPropertyOfType(metaType, "mcp")
+  if (!mcpProp) return undefined
+  const mcpType = checker.getTypeOfSymbolAtLocation(mcpProp, loc)
+  const keyProp = checker.getPropertyOfType(mcpType, key)
+  if (!keyProp) return undefined
+  const keyType = checker.getTypeOfSymbolAtLocation(keyProp, loc)
+  return keyType.isStringLiteral() ? keyType.value : undefined
+}
+
+/**
  * `onLeaf` receives both the underscore-joined MCP tool name (`name`, mirrors
  * `toTools`) and the raw path-segment array (`path`) it was built from — a
  * fallback segment appears in `path` as `:name` (e.g. `":bookId"`), matching
@@ -168,14 +215,22 @@ function walkNodeType(
         const fn = functionNodeOfHandler(handlerType, checker)
         if (!fn) continue
         const descriptionSource = childDecl ?? fn
-        onLeaf(join(prefix, childKey), [...path, childKey], fn, descriptionSource, checker)
+        // meta.mcp.name wins outright (no prefix applied) — else the usual
+        // underscore-joined default, matching project.ts's own leaf-name ternary.
+        const nameOverride = mcpMetaOverride(childType, "name", loc, checker)
+        const name = nameOverride ?? join(prefix, childKey)
+        onLeaf(name, [...path, childKey], fn, descriptionSource, checker)
         continue
       }
 
       // Branch: api(...) — children is required on api()'s return type.
+      // meta.mcp.segment overrides this child's own contribution to the
+      // prefix (the route `path` array is unaffected either way — mcp.segment
+      // is an MCP-tool-naming concern only, matching project.ts's `rawSeg`).
+      const segmentOverride = mcpMetaOverride(childType, "segment", loc, checker)
       walkNodeType(
         childType,
-        join(prefix, childKey),
+        join(prefix, segmentOverride ?? childKey),
         [...path, childKey],
         loc,
         checker,

@@ -15,6 +15,13 @@ import type { Result } from "../index.ts"
 // unchanged. TypeScript sees the same identifier "Result" — the syntax path
 // matches it by name and extracts the first type argument.
 import type { Result as ResultFromBarrel } from "./result-reexport.fixture.ts"
+// Side-effect import: brings mcp-api-projector's `declare module "../node.ts"
+// { interface Meta { mcp?: McpMeta } }` augmentation into this file's
+// compilation, so `op(fn, { mcp: { name: … } })` below type-checks the same
+// way it would in a real tree that uses MCP overrides — see the
+// `mcpOverrides` branch below and extract.test.ts's "meta.mcp overrides
+// reflected in the reconstructed name" describe block.
+import "@rhi-zone/fractal-mcp-api-projector"
 
 // (c) Further-generic alias: a local type alias that wraps Result<T, string>.
 // The syntax path recognizes this by walking the local TypeAliasDeclaration —
@@ -114,6 +121,24 @@ export const tree = api({
     // comment for what this exercises.
     namedType: api({
         search: op((input: BookQuery) => ({ hits: input.q === undefined ? 0 : 1 })),
+      }),
+    // meta.mcp.name / meta.mcp.segment overrides — exercises tree.ts's
+    // override-aware name reconstruction (walkNodeType's `mcpMetaOverride`)
+    // against mcp-api-projector's actual runtime `projectTools` walk. See
+    // extract.test.ts's "meta.mcp overrides reflected in the reconstructed
+    // name" describe block.
+    mcpOverrides: api({
+        // Leaf-level meta.mcp.name: full override — the usual
+        // underscore-joined prefix ("mcpOverrides_renamed") is NOT used.
+        renamed: op((_input: { q: string }) => ({ hits: 0 }), {
+          mcp: { name: "custom_search" },
+        }),
+        // Branch-level meta.mcp.segment: overrides only THIS child's own
+        // contribution to the prefix — the outer "mcpOverrides" prefix still
+        // applies, so the leaf below reconstructs as "mcpOverrides_products_list".
+        catalog: api({
+            list: op((_input: { limit?: number }) => ({ items: [] as string[] })),
+          }, { meta: { mcp: { segment: "products" } } }),
       }),
     // Genuinely-different union that must NOT be false-positived.
     // This is a 2-member union but does NOT have the Result name or DU shape.

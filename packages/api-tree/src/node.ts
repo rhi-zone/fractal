@@ -412,6 +412,22 @@ export function op<H extends Handler, const C extends readonly Meta[] = []>(
  * `fallback.name` survives as a literal all the way through `checker
  * .getTypeOfSymbolAtLocation` in tree.ts's walker, no AST fallback needed.
  *
+ * Generic in `M` (the exact meta type) the same way as `F`: a `const` type
+ * parameter so `api(children, { meta: { mcp: { segment: "products" } } })`
+ * infers `M` as the literal `{ readonly mcp: { readonly segment: "products"
+ * } } }`, not the widened `{ mcp?: { segment?: string } }` a plain `Meta`
+ * parameter would force. Unlike `op()`'s `C` (a tuple of contributions folded
+ * via `FoldMeta`), `api()` only ever takes a single `opts.meta` value, so no
+ * fold is needed — `M` flows straight through to the result's `meta` field.
+ * Defaults to `undefined` (mirroring `F`'s default), in which case the result
+ * falls back to the erased `Meta` — `api()`'s own `meta` field is always
+ * PRESENT on `Node` (unlike `fallback`, which is optional), so the
+ * `undefined` case widens to `Meta` rather than omitting the field. This is
+ * what lets a branch's `meta.mcp.segment` survive as a literal into
+ * tree.ts's `mcpMetaOverride` walk, matching how `op()`'s meta contributions
+ * already do for a leaf's `meta.mcp.name` — see tree.ts's module doc comment
+ * for the walker side of this fix.
+ *
  * See docs/design/routing-and-transforms.md § DX — constructor sugar.
  */
 export function api<
@@ -419,16 +435,23 @@ export function api<
   C extends Readonly<Record<string, Node<any>>>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const F extends { readonly name: string; readonly subtree: Node<any> } | undefined = undefined,
+  const M extends Meta | undefined = undefined,
 >(
   children: C,
   ...rest: HasRequiredKeys<Meta> extends true
-    ? [opts: { meta: Meta; fallback?: F }]
-    : [opts?: { meta?: Meta; fallback?: F }]
-): Omit<Node, "children" | "fallback"> & { readonly children: C } & (F extends undefined ? object : { readonly fallback: F }) {
+    ? [opts: { meta: M; fallback?: F }]
+    : [opts?: { meta?: M; fallback?: F }]
+): Omit<Node, "children" | "fallback" | "meta">
+  & { readonly children: C }
+  & { readonly meta: M extends undefined ? Meta : Simplify<M> }
+  & (F extends undefined ? object : { readonly fallback: F }) {
   const opts = rest[0]
   return {
     ...(children !== undefined ? { children } : {}),
     ...(opts?.fallback !== undefined ? { fallback: opts.fallback } : {}),
     meta: opts?.meta ?? {},
-  } as Omit<Node, "children" | "fallback"> & { readonly children: C } & (F extends undefined ? object : { readonly fallback: F })
+  } as Omit<Node, "children" | "fallback" | "meta">
+    & { readonly children: C }
+    & { readonly meta: M extends undefined ? Meta : Simplify<M> }
+    & (F extends undefined ? object : { readonly fallback: F })
 }
