@@ -754,6 +754,199 @@ frequency-of-frequencies rather than a predictive distribution over values, and 
 closed-domain claim already asserted `p = 0` about the same data. That defence is arguable
 and the boundary is now softer than §15.3 states.
 
+### 6.8 The escape fix breaks under corpus duplication, and cannot be repaired from counts
+
+§6.7's criterion is **conditional on the corpus being an independent sample**, and that
+condition is violated in exactly the way §17.2 already documented. This is not a caveat; it
+is a break.
+
+**The sharpest case: a maximally open source, duplicated once.** Take `M` records with every
+value distinct — the most open-ended field constructible, true novelty as high as it gets.
+Append an exact copy. Now `N = 2M`, `K = M`, every count is 2, `n₁ = 0`:
+
+```
+M          ORIGINAL (N=M, K=M, n₁=M)              DUPLICATED (N=2M, K=M, n₁=0)
+        p̂      verdict       net_esc            p̂      verdict        net_esc
+100     1.000  reject         −5,875            0.000  ACCEPT          +5,596
+1000    1.000  reject        −55,471            0.000  ACCEPT         +52,598
+10000   1.000  reject       −521,542            0.000  ACCEPT        +492,704
+100000  1.000  reject     −4,883,296            0.000  ACCEPT      +4,594,776
+```
+
+`p̂` goes from 1.000 — correct, every value seen once — to **0.000**, the maximally wrong
+answer, and the verdict inverts at every scale. The source did not change; a mechanical copy
+of the data did.
+
+**Why it is invalidation and not bias.** Good–Turing's `n₁/N ≈ P(novel)` rests on a
+leave-one-out argument: hold out each observation and ask whether it is novel against the
+rest. Under exact duplication every held-out point still has its twin in the sample, so it is
+never novel and leave-one-out returns 0 *by construction*. Duplicate pairs are perfectly
+dependent, which violates the exchangeability the argument requires. Note also that raw `net`
+inverts identically here — **the `n₁` term buys nothing on this construction**; it is no
+worse than §6.6 and no better.
+
+**The collapse is exact and discontinuous.** Duplicating a corpus `r` times maps counts
+`{c_v} → {r·c_v}`, so `N → rN`, `K` unchanged, and `n₁ = #{v : r·c_v = 1} = 0` for every
+`r ≥ 2`. The condition `N − n₁ > K` becomes `rN > K`, trivially true. On the real npm
+`description` shape:
+
+```
+r    N      K     n₁      N−n₁>K      net_esc
+1    1089   1030  997     False       −52,579     <- correct
+2    2178   1030    0     True        +60,503     <- one duplicate flips it
+3    3267   1030    0     True       +119,299
+```
+
+`N` inflates smoothly; `n₁` goes 997 → 0 at `r = 2` and stays there. The statistic does not
+degrade under duplication, it falls off a cliff.
+
+**Partial duplication is undetectable and still breaks it.** Perfect duplication leaves a
+signature — every count divisible by `r`, so `gcd` recovers `r` exactly. Realistic
+duplication (pagination overlap, join fan-out) does not:
+
+```
+fraction duplicated   N      n₁    gcd   verdict
+0.0                   1089   997   1     reject   <- correct
+0.3                   1416   701   1     reject
+0.5                   1654   477   1     KEEP     <- already wrong, gcd=1
+1.0                   2178     0   2     KEEP     <- wrong but detectable
+```
+
+At `f = 0.5` the verdict has already flipped while `gcd = 1`. The detectable case is the one
+that does not occur in practice.
+
+**Impossibility, not an implementation gap.** Duplication leaves the normalised counts
+`{c_v/N}` and `K` unchanged, so the duplication-invariant statistics are exactly the
+functions of `({c_v/N}, K)` — they cannot use `N`. But the criterion *must* use `N`:
+`K = 1030` at `N = 1094` is one-off free text, and `K = 1030` at `N = 10⁹` is a genuine
+closed 1030-value domain, and those need opposite verdicts. Therefore:
+
+> **No statistic of the value counts is both a valid missing-mass estimate and
+> duplication-invariant.** Missing mass is inherently a claim about how many *independent*
+> draws were observed, and duplication corrupts exactly that.
+
+Stated at the level of the data: a corpus `B` = corpus `A` duplicated `r` times, and a
+genuine i.i.d. corpus `C` of size `rN` realising the same counts, are **the same multiset of
+values**. Nothing computed from the values can distinguish them, because there is no
+difference in the values. What separates them is provenance — which fetch, page, or join row
+each record came from — which is not in the data and has to be supplied.
+
+**Part of §6.7's verification was circular, and the headline number is inflated.** Of the 107
+paths, 20 have `n₁ = 0`; 18 of those are in api-examples, the corpus §17.2 found duplicated.
+Worse, **the validation metric fails in the same direction as the criterion**: where a corpus
+is duplicated, the held-out half contains copies of the training half, so held-out coverage
+is trivially high.
+
+```
+group                              paths   median n₁/N   median held-out coverage
+api, n₁ = 0 (duplication-suspect)     18          0.000                     100.0%
+api, n₁ > 0                           28          0.974                       2.0%
+npm, n₁ = 0                            2          0.000                     100.0%
+npm, n₁ > 0                           59          0.438                      48.0%
+```
+
+Every `n₁ = 0` path scores exactly 100% coverage *by construction*. Criterion and ground
+truth are fooled by the same artefact, so their agreement on those paths is not evidence.
+Splitting by corpus:
+
+```
+subset               paths   net acc   net_esc acc
+npm (clean)             61     65.6%         96.7%
+api (duplicated)        46     82.6%        100.0%
+all                    107     72.9%         98.1%
+```
+
+**The defensible figure is npm's 96.7%, not the 98.1% headline** — the api subset's 100%
+measures nothing. §6.7's improvement over `net` is real (65.6% → 96.7% on clean data) but
+smaller than reported.
+
+**The full frequency-of-frequencies spectrum does not help with this**, though it is a real
+improvement on a different axis. Under duplication the spectrum simply stretches
+(`n'_{rj} = n_j`), which is detectable for uniform `r` and not otherwise — the same
+`gcd` result in another notation. The separate concern that `n₁` alone is a crude cutoff is
+**correct but orthogonal**: values seen 2–3 times are also weak evidence when `K` is large,
+and a Simple-Good–Turing fit over the whole spectrum would grade them rather than treating
+`n₂` as fully reliable. That improves the estimator's accuracy; it does nothing for
+duplication-sensitivity, because every `n_j` shifts together.
+
+**`K/N` in place of `n₁/N`: a better criterion, but not a duplication fix.** `K/N` was
+proposed on the grounds that it degrades proportionally under duplication (`K` fixed, `N`
+scaled, so `K/N → (K/N)/r`) where `n₁/N` collapses to a hard 0. That is true **of the
+estimator's value** and mostly false **of the decision it drives**. With `p = K/N` the
+leading-order condition `N(1−p) > K` becomes simply **`N > 2K`**. Tested against everything
+already established:
+
+```
+case                        N        K    n₁/N     K/N    n₁ rule   K/N rule    want
+npm license (real)       1084       38  0.0194  0.0351     accept     accept   accept
+npm description (real)   1089     1030  0.9155  0.9458     reject     reject   reject
+near-constant + noise 1,000,000     51  0.0001  0.0001     accept     accept   accept
+exact memorization       1000     1000  1.0000  1.0000     reject     reject   reject
+```
+
+**No regression on any of the four** — that much holds. And on the 107 real paths it is
+strictly better than the `n₁` rule:
+
+```
+subset              n₁ rule                    K/N rule
+npm (clean)         93.4%  FA=4  FR=0          98.4%  FA=0  FR=1
+all                 96.3%  FA=4  FR=0          99.1%  FA=0  FR=1
+```
+
+Zero false admissions against four. On its own merits `K/N` is the better criterion and worth
+adopting for that reason.
+
+But it does not survive duplication either:
+
+```
+duplication sweep                  n₁ rule breaks at   K/N rule breaks at
+1000-unique construction                       r = 2               r = 3
+real npm description                           r = 2               r = 2
+```
+
+One extra level of tolerance on the extremal construction, **none on real data**. The reason
+is structural: `N > 2K` inverts once `rN > 2K`, i.e. at `r > 2K/N₀`, so the break point
+depends on how repetitive the field already was — and a field that is already somewhat
+repeated breaks immediately. Any criterion that uses `N` and is monotone increasing in `N`
+inherits this, `K/N` included. It changes the constant, not the failure.
+
+**Relation to §17.2 — same cause, strictly worse effect.** Both follow from the corpus not
+being an i.i.d. sample of the source. §17.2 showed `N` is inflated, which distorts credit
+*magnitudes* smoothly. This shows the sign of the criterion flips on a single duplicate. So
+§17.2 is promoted: it is not an accepted limitation about precision, it is a **precondition**
+for §6.7 meaning anything. And it cannot be discharged from the values — deduplication
+requires either identical-record collapsing (which destroys genuine evidence when two
+distinct records legitimately share a value) or provenance metadata the corpus does not
+carry. **This is unresolved**, and §6.7 should be read as correct only for corpora certified
+to be duplicate-free by means outside this framework.
+
+**Conclusion, stated plainly: deduplication is a hard precondition, not a robustness
+property the formula could acquire.** The charge `log₂C(D,K)` sees only `(D, K)`, both fixed
+under duplication, so it is constant; credit scales with `N`. Any rule of the form
+`credit(N,K,D) − charge(K,D)` therefore increases monotonically and without bound as a corpus
+is duplicated:
+
+```
+r      N       net          net_esc
+1    1000     −1,436        −55,471
+2    2000    +52,598        +52,598
+4    4000   +160,666       +160,666
+8    8000   +376,803       +376,803
+16  16000   +809,077       +809,077
+```
+
+No choice of charge repairs this, because the charge cannot see `N`; and a charge that *did*
+grow with `N` would penalise genuine evidence identically, since more real observations are
+indistinguishable from more duplication by construction (§6.8's impossibility above). So the
+corpus must be an independent sample **before** any of this machinery runs, and establishing
+that requires provenance the values do not carry.
+
+There is an irony worth recording: §13 already holds that the corpus is not a value and that
+facts about the collection procedure are not evidence about the source. Duplication is
+precisely a fact about the collection procedure — and `N`, `n₁` and `K/N` all silently encode
+it. The framework's own principle says duplication should not count, and none of its
+statistics can avoid counting it.
+
 ## 7. The abstraction space is a tree of lattices
 
 **Status: argued in design dialogue, then confirmed by a prototyping pass. Numbers below
