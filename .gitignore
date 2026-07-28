@@ -21,6 +21,9 @@ docs/.vitepress/dist/
 # Agent worktrees (temporary, never tracked)
 .claude/worktrees/
 
+# Local-only data (e.g. test corpora), never tracked
+.local-data/
+
 # Spike logs
 spike/*/logs/commit.log
 
