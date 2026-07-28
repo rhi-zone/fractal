@@ -951,7 +951,70 @@ and fails across 107 real fields: many genuinely-restricted fields sit between `
 and 0.5, and a strict cutoff rejects them. The value the escape algebra derived, 0.5, is
 within 0.03 of the empirical optimum.
 
-**This does change what the machinery is for.** A one-line, D-free `K/N < 0.5` check scores
+**Reconciliation with the discovery-rate model: no contradiction — an undeclared free
+parameter.** The model says a closed domain should show discovery tapering off, so `K/N = 0.5`
+(half of all occurrences still new) ought to be a decisive reject, not a boundary. The
+empirical sweep said `c = 0.5` is optimal. Both are right, because "genuine restriction" was
+defined here as *held-out coverage ≥ 50%* — a bar chosen arbitrarily and never justified.
+Move it and the optimal constant moves with it, near-linearly:
+
+```
+coverage cutoff   best c   acc at best c   acc at c=0.1
+30%                0.765          100.0%          45.9%
+50%                0.535           98.4%          63.9%
+70%                0.380           93.4%          83.6%
+80%                0.230          100.0%          96.7%
+90%                0.190          100.0%         100.0%
+```
+
+At a strict reading of "closed domain" — 90% of future values already seen — the optimal
+threshold is **0.19** and `c = 0.1` scores **100%**, exactly matching the discovery-rate
+intuition. At the weak reading used earlier (coverage ≥ 50%, i.e. merely "more likely than
+not already seen") a loose constant is correct. The two claims answer different questions and
+the constant `c` is silently encoding which one is being asked.
+
+**It is not a small-N effect.** The 0.2–0.5 band holds 21 real paths, *all* with coverage
+≥ 50%, spanning `N` from 124 to 10,354 (median 303) — including `keywords[*]` at
+N = 10,354, K = 3,374. They are semver ranges (`devDependencies.*`), file paths
+(`main`, `types`, `module`, `exports.*`), version strings and npm usernames: vocabularies
+that are genuinely **unbounded but heavily head-skewed**, so future values are often
+previously-seen ones without the domain being closed. High coverage without closure is a real
+category, and it is what occupies the band.
+
+**Adding `N` as a second factor does nothing.** A two-factor sweep over `(c, N_min)` returns
+`c = 0.50, N ≥ 0` → 98.4%, identical to the ratio alone. On clean npm the single
+misclassification at `c = 0.5` is `.scripts.clean` (K/N = 0.529, coverage 50.8%), a boundary
+case. `N`'s absolute scale is not the missing factor.
+
+**The rule that survives the whole range has no constant at all.** Re-scoring every rule at
+each definition of "genuine":
+
+```
+cov cutoff   K/N@best   K/N@0.5   K/N@0.1   net@2^64   n₁ rule   1−n₁/N ≥ cutoff
+30%            100.0%     80.3%     45.9%      83.6%     88.5%            100.0%
+50%             98.4%     98.4%     63.9%      65.6%     93.4%             88.5%
+70%             93.4%     82.0%     83.6%      45.9%     73.8%             88.5%
+80%            100.0%     68.9%     96.7%      32.8%     60.7%             86.9%
+90%            100.0%     65.6%    100.0%      29.5%     57.4%             96.7%
+95%            100.0%     65.6%    100.0%      29.5%     57.4%             98.4%
+```
+
+`1 − n₁/N ≥ cutoff` is not a threshold rule — it uses Good–Turing's reliable-mass estimate
+*directly as a prediction of coverage* and compares it against whatever coverage the caller
+requires. It carries **no free constant**, needs no retuning, and is the only rule stable
+across the range. `net@2^64` degrades monotonically as the bar rises (83.6% → 29.5%): the
+D-dependent formula is worst exactly when a strong claim is wanted.
+
+**So the previous round's conclusion needs qualifying.** "`K/N < 0.5` is basically sufficient,
+drop the machinery" is right only for one undeclared choice of required coverage, and the
+constant must move with that choice — 0.19 at 90%, 0.765 at 30%. What is genuinely sufficient
+is the Good–Turing estimate, which predicts the quantity rather than thresholding a proxy for
+it. That leaves a clean tension worth stating: **the principled, constant-free rule (`n₁`) is
+the one that dies under duplication (§6.8), and the duplication-tolerant rule (`K/N`) is the
+one that needs a constant tied to an undeclared requirement.** Neither is unconditionally
+better, and the choice between them is a choice about which failure is cheaper.
+
+**On what the machinery is for.** A one-line, D-free `K/N < 0.5` check scores
 98.4% on clean real data where the full D-dependent `net` scores 65.6%. For *this* decision
 the credit/charge apparatus is not merely unnecessary, it is worse, and §17.3's finding that
 `D` dominates the verdict is the reason. Two things the constant genuinely cannot do, both
