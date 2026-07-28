@@ -209,6 +209,47 @@ single whole-document choice, including the best one available in hindsight.
   chi-squared, or Wasserstein (which is the natural choice for ordinal fields like
   `priority`, and was not tested).
 
+### 4.3 The same diagnosis, reached independently, used to justify the opposite conclusion
+
+Baazizi, Colazzo, Ghelli & Sartiani (*Parametric Schema Inference for Massive JSON
+Datasets*, VLDB J. 28:497–521, 2019) construct an information measure for their own
+precision-versus-conciseness question and then decline to use it. Their footnote 10: with n
+keys, the space of shape-sets has size 2^(2ⁿ); a label-reduced type identifies exactly one
+point and so carries 2ⁿ bits; a kind-reduced type is compatible with many points and carries
+fewer, computable per type. That is credit-against-`top`, built from scratch. Their reason
+for abandoning it:
+
+> "We do not pursue this avenue because this model embeds the unrealistic idea that every
+> distribution of shapes has the same probability, and because we do not believe that this
+> model, although mathematically coherent, is a useful model of the information needs of the
+> data analyst."
+
+The first clause is **§4's result, derived independently**: a uniform reference over the
+hypothesis space is the wrong baseline. Two groups reaching it from unrelated directions is
+mild evidence it is right.
+
+The clauses need separating, because this framework answers them in different places and
+with different confidence:
+
+- **On the uniform-prior clause — answered, with a scope limit.** §4.2 is exactly the
+  non-uniform alternative they did not pursue: baselines derived empirically from external
+  real-world corpora and routed per domain, rather than any uniform or *a priori*
+  mathematical prior. The measured penalty for blending domains (1.11 bits/symbol, §4.2) is
+  direct evidence that the uniform-ish single model they rejected really is the wrong
+  reference. **But the scope does not match theirs.** §4.2 was tested on *value*
+  distributions over a small alphabet; their footnote is about *shape* distributions over
+  2ⁿ key-subsets. Applying the multi-model answer to their exact question is an untested
+  extension, not a result. It is the right shape of answer; it is not yet an answer to their
+  instance.
+- **On the usefulness clause — not answered by §4.2 at all**, and it would be a mistake to
+  claim otherwise. That clause says a *correct* information measure still may not model what
+  an analyst needs, which is a claim about the objective's relevance, not its calibration.
+  This framework's response is structural rather than statistical: bits measure evidence, and
+  what an analyst needs is policy applied at synthesis (§8), with the `(credit, charge)` pair
+  kept un-collapsed precisely so the caller can pick their own tradeoff point (§6.4). The
+  framework does not claim bits are the analyst's utility function. It claims the two should
+  not be conflated, which is a version of their own point rather than a rebuttal to it.
+
 ## 5. The gross valuation: a set function
 
 Credit is defined over **sets** of facts, not over facts individually.
@@ -505,6 +546,50 @@ data — which is precisely what the multi-model routing of §4.2 supplies, by p
 corpora. That is not a cleverer trick performed within one dataset; it is the recognition
 that no such trick exists.
 
+#### Against published practice: a cardinality threshold cannot express this
+
+Baazizi et al. (§16) propose the same decision, cut on a threshold over K alone: "the fusion
+of two enumeration types would produce their union if the size of the result is less than k,
+while it would produce the generic type `Str`... when the size is above k." Since the rule
+never inspects N or D, §6.6 predicts it must fail in both directions. Tested (D = 10⁶,
+their k = 100):
+
+```
+case                                 N          K     N/K   theirs    §6.6 net    §6.6
+memorization, K just under k        50         50     1.0   keep           -68   reject
+same K, mild repetition            150         50     3.0   keep         1,361   keep
+same K, heavy repetition       100,000         50  2000.0   keep     1,427,989   keep
+real restriction, K just over k 10,000,000    500 20000.0   DISCARD 109,651,645   keep
+```
+
+Rows 1–3 hold K fixed at 50 and vary only N: the threshold rule returns `keep` for all
+three, including the row where every occurrence is distinct and the "enum" is the sample
+read back. Row 4 is the opposite error — a restriction worth **110 million bits** discarded
+because K exceeds an arbitrary cutoff.
+
+**No fixed k avoids this**, which is a construction rather than an empirical observation:
+for any k, take K = N = k−1 for a false positive, and K = k+1 with large N for a false
+negative. Verified at k = 10, 100, 1000, 10000. This is the §6.2 result again in a different
+costume — a threshold on one variable is the enum-shaped analogue of a flat charge, and
+fails for the same reason: the quantity it needs to separate is not a function of the
+variable it looks at.
+
+The boundary the net actually draws is `N > log₂C(D,K) / log₂(D/K) ≈ K·(1 + log₂e/log₂(D/K))`:
+
+```
+K            D/K        exact N*     N*/K
+10       100,000.0          10.7     1.069
+1,000      1,000.0       1,144.1     1.144
+10,000       100.0      12,159.4     1.216
+100,000       10.0     141,178.9     1.412
+```
+
+So the criterion is "N must exceed K by a margin that grows as the restriction weakens" — a
+strong restriction is nearly free once N > K, a weak one demands substantial repetition to
+pay for itself. (The closed form is accurate for K ≪ D and degrades as K approaches D: at
+D/K = 2 it predicts 2.44 against an exact 2.00.) A rule that reads K alone cannot express
+any of this.
+
 ## 7. The abstraction space is a tree of lattices
 
 **Status: argued in design dialogue, then confirmed by a prototyping pass. Numbers below
@@ -629,6 +714,23 @@ description length of the *output*, not of the corpus. This resolves a real gap:
 can be strictly *less* credited than each of its constituents individually and still be the
 preferred presentation, because it only earns credit for agreement among parts. Credit
 ranking alone does not determine presentation.
+
+**On "too many options": the split answers it architecturally, but the document does not yet
+answer it concretely.** Baazizi et al. (§16) argue against exposing a choice at all — "the
+analyst should not be presented with too many options, since this risks to be more confusing
+than helpful" — from experience running their system on seven real datasets. The core/
+synthesis split is a genuine answer in principle: the core holds all the evidence, synthesis
+commits to one answer, and nobody is handed a menu unless they ask for one. An analyst sees
+a single schema by default and reaches for the knob only when the default disappoints.
+
+That answer is only as good as the default, and **this document does not specify one.** §7.3
+makes the knob a caller-supplied predicate, which is *more* freedom than the K/L choice they
+consider already excessive, and §15.2 still lists the default allocation scheme as an open
+decision. As written, a faithful implementation would require every caller to supply a
+policy — precisely the failure they name. Their objection is therefore best read not as a
+refutation but as an argument that the open item in §15.2 is more urgent than its placement
+suggests: the architecture reserves a place for a sane default, and until one is chosen the
+architecture's answer is unbanked.
 
 Note that the core's admitted set is now structurally missing composites: in the diamond,
 the conjunction receives **0.0 marginal in both legal orders**, so a marginal-gain bar
@@ -989,10 +1091,16 @@ difference — or is the cohort identifier extended to cover the interaction str
 permitted to compare across corpora, and so must be settled before the audit is designed,
 not after it produces numbers.
 
-Three smaller ones in the same bucket: which allocation scheme is the default (§9.4); whether
-negative-net facts are dropped before allocation runs or emitted with a signed number (§6.4);
-and whether the pointer-cost and specification-cost cases of the charge (§6.3) are two
-ledgers or one ledger with a case split.
+**Default synthesis policy.** Promoted from a footnote to a named item on the strength of
+Baazizi et al.'s objection (§8, §16): without a default, every caller must supply an
+abstraction predicate, which is the "too many options" failure they observed on real
+datasets. The architecture reserves the slot; nothing fills it. This covers both the default
+abstraction policy and the default allocation scheme (§9.4).
+
+Two smaller ones in the same bucket: whether negative-net facts are dropped before allocation
+runs or emitted with a signed number (§6.4); and whether the pointer-cost and
+specification-cost cases of the charge (§6.3) are two ledgers or one ledger with a case
+split.
 
 ### 15.3 Open within the fourth baseline class
 
@@ -1040,7 +1148,81 @@ remain.
   distribution of that break across real corpora is unknown and directly determines how much
   the bottom-up decomposition is actually leaving on the table.
 
-## 16. Relationship to other documents in this repo
+## 16. External prior art bearing directly on this framework
+
+`docs/design/prior-art/json-shape-inference.md` surveys five lines of work at
+implementation level. Two bear on the *theory* specifically and are recorded here.
+
+### 16.1 XTRACT (Garofalakis, Gionis, Rastogi, Seshadri & Shim, SIGMOD 2000)
+
+MDL-based DTD inference for XML, and the closest published relative of this framework's core
+move. It is not in the survey and should be.
+
+The structure is the same one derived here, twenty-six years earlier and for a different data
+model. XTRACT ranks candidate DTDs by two-part MDL cost — "(A) the length of the theory, in
+bits, and (B) the length of the data, in bits, when encoded with the help of the theory" —
+which is `charge + data cost`, i.e. §6.3's `L(model)` plus the coded corpus. Specific
+correspondences:
+
+- **Their DTD-encoding cost is n·⌈log(|Σ|+|M|)⌉** — symbols in the DTD times bits per symbol
+  over a declared alphabet plus metacharacters. That is §6.3's *pointer cost over a shared
+  registry*, with the registry being the alphabet, and §9.2's price schedule for a
+  fixed-length code. Notably they declare this encoding without remarking that it is a
+  choice — which is exactly what §14's retraction of "no description language anywhere" says
+  is unavoidable: the cost does not disappear, it becomes a declared convention.
+- **Union encoding costs ⌈log m⌉ bits** to say which of m disjuncts matched. That is §6.6's
+  domain-restriction credit in miniature.
+- **Repetition counts use a self-delimiting code** (unary length prefix, then the index),
+  i.e. a prefix-free code — so their scheme satisfies Kraft by construction, which is P1
+  (§10.1) honoured in an implementation that predates the statement of it here.
+- **Candidate selection reduces to the Facility Location Problem**: minimise
+  `Σ_{j∈F} c(j) + Σ_{i∈C} min_{j∈F} d(j,i)` over subsets F — cost of chosen models plus cost
+  of coding each datum under its best chosen model. This is structurally the net set function
+  of §6.4/§6.5. **They get an approximation guarantee where we do not**: FLP is NP-hard but
+  reduces to set cover and is approximable within a logarithmic factor, and they use a
+  constant-factor randomised algorithm (noting their distance function is not a metric, so
+  the constant-factor guarantee does not strictly apply). §5 records that the general
+  set-function here is neither sub- nor supermodular and carries no guarantee. Whether the
+  domain-restriction family specifically has FLP structure — and therefore inherits an
+  approximation bound — is **an open question worth pursuing**, and would be a real
+  strengthening.
+
+Two divergences worth keeping. XTRACT commits to a single minimum-cost DTD, where the core
+here commits to nothing and leaves that to synthesis (§8). And XTRACT has no charge for
+*search* multiplicity: candidates are generated per-sequence and then selected, with no
+payment for how many were examined, which is the §6.1 vacuity gap. Their generalisation
+module is explicitly noted to over-generalise, with MDL relied on to filter — the exact
+configuration §6.1 shows is insufficient once candidates are cheap and numerous.
+
+### 16.2 Baazizi, Colazzo, Ghelli & Sartiani (VLDB J. 28:497–521, 2019)
+
+Already surveyed at implementation level. Its theoretical relevance is that it is **the
+strongest published argument against this framework's premise**, made from evidence this
+document does not have:
+
+> "We are aware of the existence of mathematical approaches to establish an 'optimum' balance
+> between size and precision for an inferred schema, such as the one based on the Minimum
+> Description Length used in [XTRACT] for the DTD inference of an XML document, but our
+> inspection of these real-world datasets seems to indicate that such a mathematical
+> 'optimum' does not make sense here: the optimal choice is typically not objective but
+> depends on the current needs of the analyst."
+
+Seven real datasets against this document's zero. How much it lands:
+
+- **Against XTRACT-style commitment: it lands.** XTRACT picks one minimum-cost DTD, and that
+  is the thing they inspected and found does not match analyst need.
+- **Against the core here: it does not, because the core does not commit.** "The optimal
+  choice depends on the analyst" is §8 restated — the core emits an order-free total and a
+  graph, and every act of committing is caller policy.
+- **Against §7.3's interface: it lands, and is not yet answered.** See §8 and §15.2.
+
+Their footnote 10 independently derives §4's uniform-baseline diagnosis (§4.3). Their
+commutativity and associativity theorems for `Fuse` are order-invariance *proven* where
+§11's tests 1 and 2 only assert it as an obligation, and their `collapse` of array positions
+into one body type matches §7.5's array flattening including the acknowledged loss. These are
+genuine convergences, not gaps.
+
+## 17. Relationship to other documents in this repo
 
 `inference-from-first-principles.md` — superseded by this document; retained for its
 cleanroom provenance record, its own retraction table, and its convergence check against
@@ -1054,7 +1236,7 @@ admission discards and that the corpus is allowed to be silent. Its fact/synthes
 is broadly compatible with §3 here. Fully reconciling the two is not load-bearing for this
 revision and has not been attempted; where they conflict, this document is current.
 
-## 17. Provenance of the quantitative claims
+## 18. Provenance of the quantitative claims
 
 Every number in this document comes from one of the simulations run during derivation, or
 from the two prototyping passes behind §7 and §4.2. All are on synthetic structure. **None
@@ -1067,8 +1249,19 @@ The confidence is not uniform and should not be read as such:
 - §6.6 is the one place where the result is **analytic rather than simulated**, and is
   correspondingly firmer: `net = (N − K)·log₂(D/K)` is an identity, verified numerically
   against the exact `log₂ C(D,K)` charge rather than assumed. The −log₂e per-occurrence
-  penalty at K = N was measured across four orders of magnitude in N. It still rests on a
+  penalty at K = N was measured across four orders of magnitude in N. The comparison against
+  the K-only threshold rule is likewise a construction, not a sample: the both-directions
+  failure is exhibited for arbitrary k rather than found by search. It all still rests on a
   declared `top` (the value of D), which is a modelling choice, not a measurement.
+
+**The strongest external check remains unmet.** Baazizi et al. inspected seven real datasets
+and concluded a mathematical optimum "does not make sense here" (§16.2). Part of that lands
+on committing-to-one-answer rather than on this core, and part of it lands squarely on §7.3's
+interface and is unanswered. Either way it is an empirical finding from real data set against
+a document that has none. Nothing below has changed that: the numbers here are still all
+synthetic, and this framework's central bet — that quantified evidence plus caller-side
+policy beats a declared parameter — has not been tested against a corpus, let alone against
+an analyst.
 - §7 numbers come from a prototyping pass — bottom-up versus brute-force agreement, the DU
   locality break, the three-policy composition check, and the refactor equivalence check.
   Same synthetic-data caveat applies.
