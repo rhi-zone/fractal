@@ -202,10 +202,15 @@ base kept.
   unresolved. Input is currently assembled flat and provenance-blind — the handler
   cannot distinguish a path slug from a query param from a body field.
 
-- **[OPEN]** `openWorld` tag is provisional / weakly defined.
+- **[CERTIFIED]** `openWorld` tag scope resolved: it is MCP-only, not a
+  general tree-level tag. Its only defined effect is being forwarded to
+  MCP's `openWorldHint` by `mcp-api-projector`; no other projector reads it,
+  and it has no HTTP (or other) projection.
 
-- **[OPEN]** `readOnly` tag name is provisional. The canonical tag-set document
-  uses `safe`; the code uses `readOnly` pending final naming resolution.
+- **[CERTIFIED]** `readOnly` is the canonical, final tag name. `safe` (an
+  earlier candidate in the canonical tag-set document) was rejected as too
+  ambiguous — it conflates "no side effects" with other senses of safety
+  (type safety, memory safety, safe-to-retry).
 
 - **[OPEN]** Whether shared structural metadata (`server-less`'s param/route/
   response equivalents) should also live in the open bag, or be a typed

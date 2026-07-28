@@ -29,9 +29,11 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir"
  * `readOnly`: The operation produces no observable side-effects on persistent
  * state; calling it any number of times is equivalent to calling it once.
  *
- * NOTE: The canonical tag-set document names this tag `safe`; `readOnly` is a
- * provisional alias used here pending final naming resolution. When the name
- * is settled, this constant (and any authored meta keys) will be migrated.
+ * NOTE: `readOnly` is the canonical, final name for this tag. `safe` (used by
+ * an earlier draft of the canonical tag-set document) was rejected as too
+ * ambiguous — "safe" conflates "no side effects" with other unrelated senses
+ * of safety (type safety, memory safety, safe-to-retry). This is not
+ * provisional; no further rename is planned.
  *
  * Implies `idempotent`. Mutually exclusive with `destructive`.
  */
@@ -55,6 +57,11 @@ export const TAG_DESTRUCTIVE = "destructive" as const
  * `openWorld`: The operation may reach external systems, networks, or resources
  * outside the local service boundary.
  * Orthogonal to all other standard tags.
+ *
+ * SCOPE: this tag's only defined effect is being forwarded to MCP's
+ * `openWorldHint` by `mcp-api-projector` (`packages/mcp-api-projector/src/project.ts`).
+ * It is MCP-specific, not a general tree-level tag — no other projector reads
+ * (or should read) it. In particular, it has no HTTP projection.
  */
 export const TAG_OPEN_WORLD = "openWorld" as const
 

@@ -61,7 +61,7 @@ export type Method = keyof HttpMethods
 /**
  * A verb-helper bundle: a Meta value carrying both a verb directive and
  * implied tags. Attach to a handler via `op(fn, http.put)` or compose with
- * extra contributions via `op(fn, http.put, { tags: { openWorld: true } })`.
+ * extra contributions via `op(fn, http.put, { tags: { deprecated: true } })`.
  *
  * Generic in `V` (the verb's own literal, e.g. `"GET"`) so `http.get`'s type
  * is `VerbBundle<"GET">` — the `method` directive's `value` carries the
@@ -376,8 +376,8 @@ export function validate(
  *
  * Compose with additional meta contributions (deep-merged, later-wins):
  * ```ts
- * op(fn, http.put, { tags: { openWorld: true } })
- * // → verb PUT, idempotent:true (from bundle), openWorld:true (from extra)
+ * op(fn, http.put, { tags: { deprecated: true } })
+ * // → verb PUT, idempotent:true (from bundle), deprecated:true (from extra)
  * ```
  *
  * `http.moveTo(path)` composes the same way for repositioning a leaf:

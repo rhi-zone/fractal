@@ -26,7 +26,7 @@ directives drive.
 | `readOnly` | Marks the operation as producing no observable side effects | HTTP (`verbFromTags` → `GET`), CLI (help annotation), MCP (`readOnlyHint`), GraphQL (`Query` vs `Mutation` inference) | Unknown — no verb/type inferred from this tag alone |
 | `idempotent` | Calling N times ≡ calling once | HTTP (`verbFromTags` → `PUT`/`DELETE`), MCP (`idempotentHint`) | Unknown; implied `true` when `readOnly: true` |
 | `destructive` | Irrevocably destroys state | HTTP (`verbFromTags` → `DELETE` when combined with `idempotent: true`), CLI (confirmation gate: requires `--yes`/`--force`), MCP (`destructiveHint`) | Unknown; conflicts with `readOnly: true` |
-| `openWorld` | May reach external systems/networks | MCP (`openWorldHint`) | Unknown; not surfaced |
+| `openWorld` | May reach external systems/networks | MCP (`openWorldHint`) only — MCP-specific, not a general tree-level tag; no other projector reads it | Unknown; explicitly out of scope for HTTP (not just unsurfaced — this tag has no HTTP projection by design) |
 | `streaming` | Yields a sequence of items over time (vs. a single value) | CLI (`--jsonl` streaming output, help annotation), GraphQL (`Subscription` inference) | Unknown; treated as non-streaming |
 | `deprecated` | Operation slated for removal | CLI (`[DEPRECATED]` prefix in listings/help), MCP (`deprecated: true` on tool/resource/prompt descriptors), GraphQL (`@deprecated` SDL directive, unless `meta.graphql.deprecated` overrides), HTTP/OpenAPI (`OpenApiOperation.deprecated`, unless `meta.openapi.deprecated` overrides) | Not deprecated |
 

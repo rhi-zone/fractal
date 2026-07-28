@@ -98,8 +98,6 @@
 
 - **MCP Tier 3** — Subscriptions, roots (speculative until concrete use case).
 
-- **Type-ir semantic types cleanup** — current kind groupings work but designed quickly; revisit for composition/orthogonality once extension API gets broader consumers.
-
 - **Coercion placement specifics** — currently handled in `parse()` (transform+validate single pass). Broader story for store-level coercion and pre-input coercion TBD.
 
 - **GraphQL resolver wrapper overhead** — measured ~0.28µs/call vs ~0.055µs for a raw graphql-js resolver (~5x, ~0.22µs absolute), dominated by `assemble()` and Result-shape detection. <1% of query latency for single-field queries; worth profiling if deep queries with hundreds of resolved fields become a real workload.
@@ -116,10 +114,19 @@
 
 ## Design backlog
 
-- **`readOnly` vs `safe`** — tag naming question
-- **`openWorld` tag** — meta field or tag? What does it control?
-- **Versioning patterns** — composition with dispatch model
-- **Decorator / metadata layer** — cross-cutting metadata pattern needed?
+- **RESOLVED: `readOnly` vs `safe`** — `readOnly` is the canonical, final tag
+  name. `safe` was rejected as too ambiguous (conflates "no side effects"
+  with type safety, memory safety, safe-to-retry). See `tags.ts`'s
+  `TAG_READ_ONLY` doc comment and `docs/design/converged-model.md`.
+- **RESOLVED: `openWorld` tag** — MCP-only, not a general tree-level tag. Its
+  only defined effect is being forwarded to MCP's `openWorldHint` by
+  `mcp-api-projector`; no other projector reads it, and it has no HTTP
+  projection. See `tags.ts`'s `TAG_OPEN_WORLD` doc comment,
+  `docs/design/converged-model.md`, and `docs/design/directive-contract.md`.
+- **RESOLVED: Versioning patterns / composition with dispatch model** — out
+  of scope for the tree/dispatch model itself, which is finalized and does
+  not include versioning. Versioning is handled via helper functions at the
+  handler layer, not the core model.
 
 ---
 
