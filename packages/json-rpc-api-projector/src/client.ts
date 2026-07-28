@@ -128,7 +128,7 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 export type JsonRpcHttpClientOptions = {
   /** Fetch implementation to use (defaults to the global `fetch`) — mainly for tests. */
   readonly fetch?: FetchLike
-  /** Extra headers merged into every request (`Content-Type: application/json` is always set and cannot be overridden this way). */
+  /** Extra headers merged into every request, on top of the default `Content-Type: application/json` — a `Content-Type` here overrides the default (e.g. to send `application/json; charset=utf-8` or a vendor-specific JSON media type). */
   readonly headers?: Record<string, string>
   /** Request id generator, called once per call. Defaults to an incrementing counter (starting at 1), which is sufficient correlation for a single client instance issuing sequential or concurrent calls against one connection. */
   readonly id?: () => JsonRpcId

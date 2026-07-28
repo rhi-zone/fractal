@@ -81,6 +81,18 @@ describe("tags -> flat method metadata (no ancestor inheritance)", () => {
     expect(toMethods(tree)[0]!.deprecated).toBe(true)
   })
 
+  it("meta.tags.streaming -> streaming: true, surfaced as a top-level field", () => {
+    const tree = api_({
+      watch: op(
+        async function* (_: unknown) {
+          yield "x"
+        },
+        { tags: { streaming: true } },
+      ),
+    })
+    expect(toMethods(tree)[0]!.streaming).toBe(true)
+  })
+
   it("no tags -> all metadata fields omitted", () => {
     const tree = api_({ plain: op((_: unknown) => null) })
     const method = toMethods(tree)[0]!

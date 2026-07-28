@@ -101,4 +101,82 @@ describe("createJsonRpcHttpClient: end-to-end against createJsonRpcHttpHandler",
 
     await expect(call("notAMethod", {})).rejects.toThrow(JsonRpcClientError)
   })
+
+  it("JsonRpcClientError carries the full error object, not just the message", async () => {
+    const tree = api_({ ping: op((_: unknown) => "pong") })
+    const httpHandler = createJsonRpcHttpHandler(tree)
+    const call = createJsonRpcHttpCall("http://localhost/rpc", {
+      fetch: (_url, init) => httpHandler(new Request("http://localhost/rpc", init)),
+    })
+
+    try {
+      await call("notAMethod", {})
+      throw new Error("expected call to reject")
+    } catch (e) {
+      expect(e).toBeInstanceOf(JsonRpcClientError)
+      expect((e as JsonRpcClientError).error.code).toBe(-32601)
+    }
+  })
+})
+
+describe("createJsonRpcHttpCall: request construction", () => {
+  it("defaults to an incrementing id counter starting at 1, one increment per call", async () => {
+    const seen: unknown[] = []
+    const call = createJsonRpcHttpCall("http://localhost/rpc", {
+      fetch: async (_url, init) => {
+        seen.push(JSON.parse(String(init?.body)).id)
+        return new Response(JSON.stringify({ jsonrpc: "2.0", result: null, id: 1 }))
+      },
+    })
+    await call("a", {})
+    await call("b", {})
+    expect(seen).toEqual([1, 2])
+  })
+
+  it("a custom id generator is used instead of the default counter", async () => {
+    let n = 100
+    const seen: unknown[] = []
+    const call = createJsonRpcHttpCall("http://localhost/rpc", {
+      id: () => `custom-${++n}`,
+      fetch: async (_url, init) => {
+        seen.push(JSON.parse(String(init?.body)).id)
+        return new Response(JSON.stringify({ jsonrpc: "2.0", result: null, id: "custom-101" }))
+      },
+    })
+    await call("a", {})
+    expect(seen).toEqual(["custom-101"])
+  })
+
+  it("extra headers are merged into the request alongside Content-Type", async () => {
+    let capturedHeaders: Record<string, string> = {}
+    const call = createJsonRpcHttpCall("http://localhost/rpc", {
+      headers: { Authorization: "Bearer xyz" },
+      fetch: async (_url, init) => {
+        capturedHeaders = init?.headers as Record<string, string>
+        return new Response(JSON.stringify({ jsonrpc: "2.0", result: null, id: 1 }))
+      },
+    })
+    await call("a", {})
+    expect(capturedHeaders["Content-Type"]).toBe("application/json")
+    expect(capturedHeaders.Authorization).toBe("Bearer xyz")
+  })
+
+  // `opts.headers` is spread AFTER the default in the object literal
+  // (`{ "Content-Type": "application/json", ...opts.headers }`, client.ts),
+  // so a caller-supplied Content-Type overrides the default. This is
+  // intended: it lets a caller opt into `application/json; charset=utf-8`
+  // or a vendor-specific JSON media type while keeping `application/json`
+  // as the sane default otherwise.
+  it("a caller-supplied Content-Type header overrides the default", async () => {
+    let capturedHeaders: Record<string, string> = {}
+    const call = createJsonRpcHttpCall("http://localhost/rpc", {
+      headers: { "Content-Type": "text/plain" },
+      fetch: async (_url, init) => {
+        capturedHeaders = init?.headers as Record<string, string>
+        return new Response(JSON.stringify({ jsonrpc: "2.0", result: null, id: 1 }))
+      },
+    })
+    await call("a", {})
+    expect(capturedHeaders["Content-Type"]).toBe("text/plain")
+  })
 })

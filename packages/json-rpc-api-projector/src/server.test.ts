@@ -77,6 +77,58 @@ describe("createJsonRpcHttpHandler: single requests", () => {
   })
 })
 
+describe("createJsonRpcHttpHandler: id correlation + malformed shapes", () => {
+  const tree = api_({
+    add: op((input: { a: number; b: number }) => input.a + input.b),
+  })
+
+  it("a malformed-shape body that still carries an id echoes that id back", async () => {
+    const handler = createJsonRpcHttpHandler(tree)
+    const res = await post(handler, { jsonrpc: "2.0", method: 123, id: "req-9" })
+    const body = (await res.json()) as JsonRpcResponse
+    expect("error" in body && body.error.code).toBe(-32600)
+    expect(body.id).toBe("req-9")
+  })
+
+  it("a malformed-shape body with no id -> null id", async () => {
+    const handler = createJsonRpcHttpHandler(tree)
+    const res = await post(handler, { foo: "bar" })
+    const body = (await res.json()) as JsonRpcResponse
+    expect(body.id).toBe(null)
+  })
+
+  it("a top-level non-object, non-array body -> INVALID_REQUEST", async () => {
+    const handler = createJsonRpcHttpHandler(tree)
+    const res = await post(handler, "just a string")
+    const body = (await res.json()) as JsonRpcResponse
+    expect("error" in body && body.error.code).toBe(-32600)
+  })
+
+  it("positional (array) params degrade to an empty object rather than positional mapping", async () => {
+    const handler = createJsonRpcHttpHandler(tree)
+    const res = await post(handler, { jsonrpc: "2.0", method: "add", params: [1, 2], id: 1 })
+    const body = (await res.json()) as JsonRpcResponse
+    // a, b both resolve to undefined -> NaN, which serializes over JSON as
+    // null (not a thrown error, and not positionally mapped to 3).
+    expect("result" in body && body.result).toBe(null)
+  })
+
+  it("an unknown method as a Notification (no id) yields no error response, silently", async () => {
+    const handler = createJsonRpcHttpHandler(tree)
+    const res = await post(handler, { jsonrpc: "2.0", method: "nope" })
+    expect(res.status).toBe(204)
+  })
+
+  it("a Notification whose handler returns err(...) is dropped silently, not surfaced as an error", async () => {
+    const boomTree = api_({
+      withdraw: op((_: unknown) => err({ kind: "insufficientFunds" })),
+    })
+    const handler = createJsonRpcHttpHandler(boomTree)
+    const res = await post(handler, { jsonrpc: "2.0", method: "withdraw", params: {} })
+    expect(res.status).toBe(204)
+  })
+})
+
 describe("createJsonRpcHttpHandler: batch requests (§6)", () => {
   const tree = api_({
     add: op((input: { a: number; b: number }) => input.a + input.b),
@@ -108,6 +160,26 @@ describe("createJsonRpcHttpHandler: batch requests (§6)", () => {
     const res = await post(handler, [])
     const body = (await res.json()) as JsonRpcResponse
     expect("error" in body && body.error.code).toBe(-32600)
+  })
+
+  it("a mixed batch — success, error, and Notification elements — each reported independently", async () => {
+    const handler = createJsonRpcHttpHandler(tree)
+    const res = await post(handler, [
+      { jsonrpc: "2.0", method: "add", params: { a: 1, b: 1 }, id: 1 },
+      { jsonrpc: "2.0", method: "nope", params: {}, id: 2 },
+      { jsonrpc: "2.0", method: "notifyOnly", params: {} },
+      42,
+    ])
+    const body = (await res.json()) as JsonRpcResponse[]
+    // notifyOnly (Notification) produces no response; the other 3 elements each do.
+    expect(body).toHaveLength(3)
+    const byId = new Map(body.map((r) => [r.id, r]))
+    const r1 = byId.get(1)!
+    const r2 = byId.get(2)!
+    const rNull = byId.get(null)!
+    expect("result" in r1 && r1.result).toBe(2)
+    expect("error" in r2 && r2.error.code).toBe(-32601)
+    expect("error" in rNull && rNull.error.code).toBe(-32600)
   })
 })
 
@@ -141,6 +213,64 @@ describe("createJsonRpcHttpHandler: Result unwrapping + error encoding", () => {
     const body = (await res.json()) as JsonRpcResponse
     expect("error" in body && body.error.code).toBe(-32001)
     expect("error" in body && body.error.message).toBe("not enough")
+  })
+
+  it("jsonRpcErrors composed mapping — a second configured kind maps to its own code, first-match-wins by key order", async () => {
+    const multiTree = api_({
+      act: op((input: { mode: string }) => {
+        if (input.mode === "a") return err({ kind: "kindA", message: "A failed" })
+        if (input.mode === "b") return err({ kind: "kindB" })
+        return ok("fine")
+      }),
+    })
+    const handler = createJsonRpcHttpHandler(multiTree, {
+      errorEncoder: jsonRpcErrors({ kindA: -32001, kindB: -32002 }),
+    })
+
+    const resA = await post(handler, { jsonrpc: "2.0", method: "act", params: { mode: "a" }, id: 1 })
+    const bodyA = (await resA.json()) as JsonRpcResponse
+    expect("error" in bodyA && bodyA.error.code).toBe(-32001)
+
+    const resB = await post(handler, { jsonrpc: "2.0", method: "act", params: { mode: "b" }, id: 2 })
+    const bodyB = (await resB.json()) as JsonRpcResponse
+    // kindB's error value has no `message` field -> falls back to JSON.stringify(error)
+    expect("error" in bodyB && bodyB.error.code).toBe(-32002)
+    expect("error" in bodyB && bodyB.error.message).toBe(JSON.stringify({ kind: "kindB" }))
+    expect("error" in bodyB && bodyB.error.data).toEqual({ kind: "kindB" })
+  })
+
+  it("jsonRpcErrors with no matching kind -> undefined -> falls back to INVALID_PARAMS", async () => {
+    const handler = createJsonRpcHttpHandler(tree, {
+      errorEncoder: jsonRpcErrors({ someOtherKind: -32005 }),
+    })
+    const res = await post(handler, { jsonrpc: "2.0", method: "withdraw", params: { amount: 200 }, id: 1 })
+    const body = (await res.json()) as JsonRpcResponse
+    expect("error" in body && body.error.code).toBe(-32602)
+  })
+})
+
+describe("createJsonRpcHttpHandler: detection option", () => {
+  it("detection.result: false — a Result-shaped return value passes through untouched as the result", async () => {
+    const tree = api_({
+      withdraw: op((input: { amount: number }) => (input.amount > 100 ? err({ kind: "insufficientFunds" }) : ok(input.amount))),
+    })
+    const handler = createJsonRpcHttpHandler(tree, { detection: { result: false } })
+    const res = await post(handler, { jsonrpc: "2.0", method: "withdraw", params: { amount: 10 }, id: 1 })
+    const body = (await res.json()) as JsonRpcResponse
+    expect("result" in body && body.result).toEqual({ kind: "ok", value: 10 })
+  })
+
+  it("detection.streaming: false — an AsyncIterable return value is NOT drained, treated as a plain (empty-looking) result", async () => {
+    const tree = api_({
+      watch: op(async function* (_: unknown) {
+        yield "a"
+      }),
+    })
+    const handler = createJsonRpcHttpHandler(tree, { detection: { streaming: false } })
+    const res = await post(handler, { jsonrpc: "2.0", method: "watch", params: {}, id: 1 })
+    const body = (await res.json()) as JsonRpcResponse
+    // Not collected into ["a"] — the raw async generator object serializes to {}.
+    expect("result" in body && body.result).not.toEqual(["a"])
   })
 })
 
@@ -177,6 +307,15 @@ describe("createJsonRpcWebSocketHandlers: single calls", () => {
     const ws = new FakeSocket()
     await message(ws, JSON.stringify({ jsonrpc: "2.0", method: "add", params: { a: 2, b: 2 }, id: 1 }))
     expect(ws.sent).toEqual([{ jsonrpc: "2.0", result: 4, id: 1 }])
+  })
+
+  it("accepts a binary (Uint8Array) message, decoding it as UTF-8 JSON", async () => {
+    const tree = api_({ add: op((input: { a: number; b: number }) => input.a + input.b) })
+    const { message } = createJsonRpcWebSocketHandlers(tree)
+    const ws = new FakeSocket()
+    const bytes = new TextEncoder().encode(JSON.stringify({ jsonrpc: "2.0", method: "add", params: { a: 5, b: 5 }, id: 1 }))
+    await message(ws, bytes)
+    expect(ws.sent).toEqual([{ jsonrpc: "2.0", result: 10, id: 1 }])
   })
 })
 
@@ -234,5 +373,32 @@ describe("createJsonRpcWebSocketHandlers: streaming via Notifications", () => {
     const ws = new FakeSocket()
     await message(ws, JSON.stringify({ jsonrpc: "2.0", method: "ping", params: {} }))
     expect(ws.sent).toEqual([])
+  })
+
+  it("a batch over the WebSocket transport sends one array message back", async () => {
+    const tree = api_({ add: op((input: { a: number; b: number }) => input.a + input.b) })
+    const { message } = createJsonRpcWebSocketHandlers(tree)
+    const ws = new FakeSocket()
+    await message(
+      ws,
+      JSON.stringify([
+        { jsonrpc: "2.0", method: "add", params: { a: 1, b: 1 }, id: 1 },
+        { jsonrpc: "2.0", method: "add", params: { a: 2, b: 2 }, id: 2 },
+      ]),
+    )
+    expect(ws.sent).toEqual([
+      [
+        { jsonrpc: "2.0", result: 2, id: 1 },
+        { jsonrpc: "2.0", result: 4, id: 2 },
+      ],
+    ])
+  })
+
+  it("unknown method over WebSocket -> a METHOD_NOT_FOUND Response sent back", async () => {
+    const tree = api_({ ping: op((_: unknown) => "pong") })
+    const { message } = createJsonRpcWebSocketHandlers(tree)
+    const ws = new FakeSocket()
+    await message(ws, JSON.stringify({ jsonrpc: "2.0", method: "nope", params: {}, id: 1 }))
+    expect(ws.sent).toEqual([{ jsonrpc: "2.0", error: { code: -32601, message: "Method not found: nope" }, id: 1 }])
   })
 })
