@@ -650,7 +650,30 @@ Ghelli, Sartiani. "Parametric schema inference for massive JSON datasets."
 [10.1007/s00778-018-0532-7](https://doi.org/10.1007/s00778-018-0532-7). See
 also the interactive follow-up: Baazizi, Berti, Colazzo, Ghelli, Sartiani.
 "Human-in-the-Loop Schema Inference for Massive JSON Datasets," *EDBT 2020*,
-pp. 635–638.
+pp. 635–638. And the quantitative-types branch: Baazizi, Colazzo, Ghelli,
+Sartiani. "Counting Types for Massive JSON Datasets," *DBPL 2017*,
+[10.1145/3122831.3122837](https://doi.org/10.1145/3122831.3122837).
+
+### Counting types (DBPL 2017)
+
+A separate branch of the same line, annotating every type constructor with an
+absolute occurrence count — `{title: Str^20K, author: {…}^2K}^20K`, where the
+count is how many items the corresponding path yields — under a
+set-of-multisets semantics, composed by `Int^i ⊕ Int^j → Int^(i+j)` and so
+still associative and map-reduce-able. Same parametric structure as the K/L
+paper: reduction is parameterised on an equivalence relation, with the analyst
+choosing the succinctness/precision tradeoff.
+
+Two things worth knowing when reading it alongside the enum proposal in the
+VLDB-journal paper's §8. First, the counts are *structural*: they count
+occurrences per path, never distinct values, so this paper supplies N and the
+enum proposal supplies K, and the two are never available together. Second,
+their evaluation contains the only external real-data measurement bearing on
+our own array-shape claims — fixed-size arrays ranging 0–4 in length against
+0–35 for variable-size, with fixed-size contents "a tuple of numeric values"
+and variable-size contents "lists of records," across Twitter, GitHub and
+NYTimes. See `docs/design/inference-theory.md` §16.3 and §13 for how both
+points land on the theory.
 
 ### Core idea
 

@@ -574,6 +574,11 @@ costume — a threshold on one variable is the enum-shaped analogue of a flat ch
 fails for the same reason: the quantity it needs to separate is not a function of the
 variable it looks at.
 
+The reason their rule reads K alone may be structural rather than an oversight: their
+counting extension collects per-path occurrence counts (N) and their enum extension collects
+distinct values (K), but they are separate papers and the two statistics are never available
+together (§16.3). A rule can only cut on what its inputs contain.
+
 The boundary the net actually draws is `N > log₂C(D,K) / log₂(D/K) ≈ K·(1 + log₂e/log₂(D/K))`:
 
 ```
@@ -701,6 +706,11 @@ ordering — so the aggregate computation is the same underlying quantity, obtai
 instead of by committing to one arbitrary sequence and inheriting its bias. Prequential
 remains correct elsewhere in this document for a different purpose (§6.1, where the question
 is within-model complexity rather than composition).
+
+Independently confirmed from type theory rather than from de Finetti: Baazizi et al.'s
+counting types (§16.3) compose by `Intⁱ ⊕ Intʲ → Int^(i+j)`, associative and commutative, and
+they adopt counts as the aggregate for the same reason — it is the statistic that does not
+depend on the order the occurrences arrived in.
 
 ## 8. Synthesis, allocation, and cohort-relativity
 
@@ -1045,6 +1055,17 @@ always without a charge. Fixed array length (near-zero length entropy) indicates
 schema-determined arity; this shares a common cause with position-dependent content rather
 than causing it — scope is conserved under ragged arrays, since Σnᵢ = N always.
 
+**This is the one claim in the document with external real-data support**, and it is not
+ours. Baazizi et al. (§16.3) measured array cardinality across Twitter, GitHub and NYTimes
+and report that fixed-size arrays range 0–4 in length while variable-size arrays range 0–35;
+that many Twitter arrays have length 2 and "correspond to longitude and latitude
+coordinates"; and that "most of the time, the content of fixed size arrays is a tuple of
+numeric values, whereas the content of variable size arrays are lists of records." Fixed
+length co-occurring with tuple-shaped numeric content, variable length with homogeneous
+lists, on three real corpora — which is the claim above, measured by someone who was not
+trying to test it. Note the limits: it is a co-occurrence observed by direct inspection, not
+a controlled test, and it says nothing about the `N·Î(position; value)` quantity itself.
+
 ## 14. Retractions from the superseded document
 
 `inference-from-first-principles.md` retains its own retraction table, which remains
@@ -1222,6 +1243,58 @@ commutativity and associativity theorems for `Fuse` are order-invariance *proven
 into one body type matches §7.5's array flattening including the acknowledged loss. These are
 genuine convergences, not gaps.
 
+### 16.3 Baazizi, Colazzo, Ghelli & Sartiani, *Counting Types* (DBPL 2017)
+
+Their quantitative-types extension, and the closest existing thing to the statistics §6.6
+needs. Contains no MDL, entropy, description length, probability or threshold — zero hits for
+all of them. It is a type system, not a scoring criterion.
+
+**It supplies N but not K, and that is the finding.** Every type constructor is annotated
+with an absolute occurrence count: `{title: Str²⁰ᴷ, author: {…}²ᴷ}²⁰ᴷ`, where the count is
+how many items the corresponding path yields. That is exactly §6.6's N, collected per path,
+map-reduce-able, with a formal semantics. But nothing counts *distinct values* — `Num³` means
+three numbers, not three different ones. K lives in the *other* paper's enum extension
+(`StrEnum{s₁…s_j}`, §16.2), and the two extensions are never combined. **So the two inputs
+§6.6 needs exist, in halves, in two separate papers, and neither half can make the decision
+alone.** §6.6's whole content is that the decision is a joint function of (N, K, D); their
+counting paper holds N, their enum proposal holds K and cuts on it alone, which is the rule
+§6.6 shows fails in both directions.
+
+**Their PER parameter sits exactly where a credit difference would go.** They observe that
+merging is sometimes free — `{a:Int¹,b:Int¹}¹ ⊕ {a:Int²,b:Int²}² = {a:Int³,b:Int³}³` loses
+nothing — and sometimes lossy, and that "the loss is more severe when the merged types are
+farther one from the other." Having named a distance governing the size of the loss, they
+parameterise by an equivalence relation rather than measure it. This framework predicts the
+loss is exactly the credit difference, and therefore **exactly zero for their lossless
+example**, since both types denote the same set of multisets and so induce the same code
+(P2′, §10.2). That is a concrete, checkable prediction on their own worked example, and the
+clearest available statement of what this framework adds to theirs: they locate the decision,
+we score it.
+
+Three convergences worth recording, all independently derived:
+
+- **Counts are the order-invariant sufficient statistic.** `Intⁱ ⊕ Intʲ → Int^(i+j)`,
+  associative and commutative. That is §7.5's argument for aggregating array-composed facts
+  over counts rather than scoring sequentially, reached from type theory instead of from
+  de Finetti.
+- **Set-of-multisets semantics**, adopted because the objects being described are occurrences
+  rather than values. Same commitment as §2's addresses-are-not-identity and §13's
+  corpus-is-not-a-value, forced by the same consideration.
+- **Same information, several presentations, one canonical.** Their types (3), (4) and (5)
+  all express mutual exclusion between two optional fields; (5) is "canonical, since it
+  separately lists each distinct possibility," and full correlation costs 2ⁿ. That is §8's
+  position that presentation is a synthesis choice not fixed by the evidence, plus §7.2's
+  correlation cost, arrived at independently.
+
+**A practical warning for §6.6.** They report that an existing streaming implementation
+"introduces counting errors when optional fields are found." If domain-restriction credit
+depends on accurate per-path N, that is a known real-world failure mode in the exact statistic
+it consumes.
+
+**What it does not change.** No candidate search and no selection problem — reduction is a
+deterministic fold once E is fixed — so it bears on neither §16.1's Facility Location question
+nor §6.1's multiplicity gap. Both stand as they were.
+
 ## 17. Relationship to other documents in this repo
 
 `inference-from-first-principles.md` — superseded by this document; retained for its
@@ -1254,14 +1327,27 @@ The confidence is not uniform and should not be read as such:
   failure is exhibited for arbitrary k rather than found by search. It all still rests on a
   declared `top` (the value of D), which is a modelling choice, not a measurement.
 
+**One claim now has real-data support, and it is borrowed.** §13's fixed-length-implies-tuple
+claim matches array-cardinality measurements Baazizi et al. published across Twitter, GitHub
+and NYTimes (§16.3). It is the only externally-corroborated claim in the document, it was
+measured by people not testing it, and it is a co-occurrence rather than a controlled result.
+It does not generalise to the rest.
+
 **The strongest external check remains unmet.** Baazizi et al. inspected seven real datasets
 and concluded a mathematical optimum "does not make sense here" (§16.2). Part of that lands
 on committing-to-one-answer rather than on this core, and part of it lands squarely on §7.3's
 interface and is unanswered. Either way it is an empirical finding from real data set against
-a document that has none. Nothing below has changed that: the numbers here are still all
-synthetic, and this framework's central bet — that quantified evidence plus caller-side
-policy beats a declared parameter — has not been tested against a corpus, let alone against
-an analyst.
+a document that has essentially none. The numbers here are still all synthetic, and this
+framework's central bet — that quantified evidence plus caller-side policy beats a declared
+parameter — has not been tested against a corpus, let alone against an analyst.
+
+Worth noting that they consider the latter test the only real one, and did not run it either.
+On whether their own quantitative types help: "This theme is inherently subjective: knowing
+the frequency of one specific field or the frequency of a combination of fields in a record
+may be extremely important, or totally irrelevant, depending on the role of the field or the
+record and on the need of the data analyst. The only way to measure the practical benefit
+would be by collecting and…" — the sentence is cut off at a column break in the source, so
+what they proposed collecting is not recoverable from the copy read here.
 - §7 numbers come from a prototyping pass — bottom-up versus brute-force agreement, the DU
   locality break, the three-policy composition check, and the refactor equivalence check.
   Same synthetic-data caveat applies.
