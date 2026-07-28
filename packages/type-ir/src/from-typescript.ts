@@ -22,6 +22,7 @@
 // `$comment` that names the unhandled case — self-documenting rather than
 // silently lossy.
 
+import path from "node:path"
 import ts from "typescript"
 import { email, uri, uuid } from "./kinds/common.ts"
 import { nodeCount, t, types, type TypeRef, type TypeShape } from "./index.ts"
@@ -1208,19 +1209,53 @@ function typeRefFromTypeStructural(
   return puntRef(`unsupported (${checker.typeToString(type)})`)
 }
 
-/** Create a read-only Program over a single entry file — reasonable defaults
- * for a build-time (not editor/language-service) extraction pass: modern
- * target/module settings, `noEmit` (this is analysis, never a transformer),
- * and `skipLibCheck` (extraction only needs a resolvable `ts.Type`, not a
- * fully-checked lib surface). */
+/** Reasonable defaults for a build-time (not editor/language-service)
+ * extraction pass, used only when `entryFile` has no discoverable
+ * `tsconfig.json` — e.g. a bare fixture file outside any project. */
+const FALLBACK_COMPILER_OPTIONS: ts.CompilerOptions = {
+  target: ts.ScriptTarget.ES2022,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  allowImportingTsExtensions: true,
+  noEmit: true,
+  skipLibCheck: true,
+  strict: true,
+}
+
+/**
+ * Load the `CompilerOptions` a normal `tsc` invocation would use for
+ * `entryFile` — walking up from its directory to find the nearest
+ * `tsconfig.json` (via `ts.findConfigFile`, exactly how `tsc`/editors locate
+ * a loose file's project) and resolving its full `extends` chain (via
+ * `ts.parseJsonConfigFileContent`), so `paths`/`baseUrl`-based module
+ * resolution — including workspace `paths` remaps — behaves identically to
+ * the file's own project instead of silently diverging via a hard-coded
+ * options bag. Generalizes beyond this monorepo: any consumer's own
+ * `tsconfig.json` is picked up the same way.
+ *
+ * `noEmit`/`skipLibCheck` are forced regardless of what the discovered
+ * config says, since extraction is always a read-only, single-file analysis
+ * pass — never a transformer, and never needs a fully-checked lib surface —
+ * even when `entryFile` happens to live under a `tsconfig.build.json`-style
+ * project where the plain `tsconfig.json` sets `noEmit: false` for `tsc -b`.
+ * (`findConfigFile`'s default `searchName` is `"tsconfig.json"`, so a sibling
+ * `tsconfig.build.json` is never what gets picked up in the first place.)
+ */
+function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOptions {
+  const configPath = ts.findConfigFile(path.dirname(entryFile), ts.sys.fileExists)
+  if (!configPath) return FALLBACK_COMPILER_OPTIONS
+
+  const { config, error } = ts.readConfigFile(configPath, ts.sys.readFile)
+  if (error) return FALLBACK_COMPILER_OPTIONS
+
+  const parsed = ts.parseJsonConfigFileContent(config, ts.sys, path.dirname(configPath))
+  if (parsed.errors.length > 0) return FALLBACK_COMPILER_OPTIONS
+
+  return { ...parsed.options, noEmit: true, skipLibCheck: true }
+}
+
+/** Create a read-only Program over a single entry file, resolving modules
+ * exactly the way `entryFile`'s own `tsconfig.json` (if any) would. */
 export function createExtractorProgram(entryFile: string): ts.Program {
-  return ts.createProgram([entryFile], {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    allowImportingTsExtensions: true,
-    noEmit: true,
-    skipLibCheck: true,
-    strict: true,
-  })
+  return ts.createProgram([entryFile], loadCompilerOptionsForFile(entryFile))
 }
