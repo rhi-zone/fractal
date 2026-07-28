@@ -1135,8 +1135,7 @@ always without a charge. Fixed array length (near-zero length entropy) indicates
 schema-determined arity; this shares a common cause with position-dependent content rather
 than causing it — scope is conserved under ragged arrays, since Σnᵢ = N always.
 
-**This is the one claim in the document with external real-data support**, and it is not
-ours. Baazizi et al. (§16.3) measured array cardinality across Twitter, GitHub and NYTimes
+**Borrowed external support, which did not replicate — see §17.1.** Baazizi et al. (§16.3) measured array cardinality across Twitter, GitHub and NYTimes
 and report that fixed-size arrays range 0–4 in length while variable-size arrays range 0–35;
 that many Twitter arrays have length 2 and "correspond to longitude and latitude
 coordinates"; and that "most of the time, the content of fixed size arrays is a tuple of
@@ -1145,6 +1144,9 @@ length co-occurring with tuple-shaped numeric content, variable length with homo
 lists, on three real corpora — which is the claim above, measured by someone who was not
 trying to test it. Note the limits: it is a co-occurrence observed by direct inspection, not
 a controlled test, and it says nothing about the `N·Î(position; value)` quantity itself.
+**On this repository's own corpora the pattern does not appear at all** (§17.1): zero of
+three fixed-length array paths hold numeric tuples, and position-signature MI is zero across
+all of them. The claim now has one supporting measurement and one non-replication.
 
 ## 14. Retractions from the superseded document
 
@@ -1389,7 +1391,138 @@ it consumes.
 deterministic fold once E is fixed — so it bears on neither §16.1's Facility Location question
 nor §6.1's multiplicity gap. Both stand as they were.
 
-## 17. Relationship to other documents in this repo
+## 17. First contact with real corpora
+
+**Status: the first test of anything in this document against real JSON.** Corpora at
+`.local-data/corpora/` (gitignored): 1098 npm registry `package.json` manifests, 394
+schemastore JSON Schemas, 22 real API payloads (GitHub, PokeAPI, CoinGecko, Stripe's OpenAPI
+spec, npm's full lodash document, others). Run adversarially — looking for breakage, not
+confirmation. **Four failures, no clean confirmations.** One corpus proves little either way;
+a claim surviving would have been weak evidence, and none did.
+
+### 17.1 §13's borrowed array support does not replicate
+
+§13 cites Baazizi et al.'s Twitter/GitHub/NYTimes measurement — fixed-size arrays hold
+"a tuple of numeric values," variable-size hold "lists of records" — as the document's only
+externally-corroborated claim. On npm + api-examples, restricted to array paths with ≥20
+non-empty observations (20 paths qualify):
+
+```
+FIXED length (H(len)<0.05)   3 paths   dominant element kind: {str: 3}   MI(pos;sig) = 0.0000 for all
+MID  (0.05<=H<1)             3 paths   {obj: 2, str: 1}
+VARIABLE (H>=1)             14 paths   {obj: 5, str: 9}
+```
+
+**Zero of three fixed-length paths hold numeric tuples.** They are `.cpu` (`["x64"]`),
+`.libc`, and `[*].base.repo.topics` — all homogeneous string lists, none position-dependent.
+And 9 of 14 variable-length paths hold strings rather than records, so the other half of the
+claim fares no better. `MI(pos;sig) = 0` across every fixed-length path: there is no
+position-dependent content for fixed length to share a common cause with.
+
+Honest limits: 20 qualifying paths is a small sample, and these corpora differ in character
+from theirs — package manifests and REST payloads rather than social/news firehoses. The
+claim is not refuted in general. But **the document should no longer describe itself as
+having external real-data support for §13**, because the nearest corpus available does not
+reproduce it.
+
+### 17.2 N counts occurrences, and real payloads duplicate entities
+
+Not a claim under test — a hazard the corpus surfaced. Real API responses embed parent
+entities once per child:
+
+```
+file                                     path            N   distinct   ratio
+github_pulls_microsoft_typescript.json   base.repo      50          1    0.020
+github_releases_nodejs.json              author         30          5    0.167
+github_issues_facebook_react.json        user           50         23    0.460
+github_commits_torvalds_linux.json       commit.author  50         50    1.000  (control)
+coingecko_markets.json                   id            100        100    1.000  (control)
+```
+
+Fifty pull requests against one repository embed that repository fifty times. Every credit
+computed over `base.repo.*` sees N = 50 where the evidence is one observation. The controls
+confirm the measurement is not an artefact. The superseded document listed corpus
+multiplicity distortion as an accepted limitation; this shows it is **not an edge case but
+the normal shape of REST payloads**, and it silently multiplies the N that §6.6 consumes.
+
+### 17.3 §6.6's verdict is decided by the declared `D`, and no non-circular choice works
+
+The sharpest failure. §6.6 requires a declared universe size D. For string fields every
+corpus-independent choice is astronomically large, and §6.6's own boundary table already
+shows the required N/K ratio → 1.0 as D/K → ∞. On real npm fields, under three defensible
+declared universes:
+
+```
+field         N     K    K/N     empirical D   D=64^32    D=26^8      verdict
+license    1085    38  0.035           6,947   195,479    33,825      KEEP  KEEP  KEEP
+main        927   286  0.309           2,026   117,434    18,466      KEEP  KEEP  KEEP
+version    1098   543  0.495             859   100,740    15,050      KEEP  KEEP  KEEP
+homepage   1059   919  0.868            -858    24,182     2,567    reject  KEEP  KEEP
+description 1094 1030  0.941          -1,141    10,168       286    reject  KEEP  KEEP
+name       1098  1098  1.000          -1,331    -1,578    -1,578    reject reject reject
+```
+
+Under either corpus-independent universe, §6.6 asserts that `description` — **94% distinct
+values**, where the repeats are empty strings and boilerplate — is a closed domain restricted
+to exactly those 1030 observed strings. Same for `homepage`. That is memorization admitted
+with positive credit, which is precisely what §6.2 and §6.5 claim the charge prevents.
+
+The only universe that produces sensible verdicts is the empirical one, D = distinct strings
+observed corpus-wide — **which §15.3 rules out as circular.** So the dilemma is exact: the
+non-circular choices give wrong answers on real string fields, and the choice that gives
+right answers is the one the theory forbids. §6.6's `K = N` boundary does hold (`name`
+rejects everywhere, as designed) — the failure is in the band `0.85 < K/N < 1.0`, which is
+where most real string fields live.
+
+(Numerical note: computing `log₂C(D,K)` by `lgamma` differences loses all precision at
+D ≈ 10⁵⁷. The figures above use the Stirling form `K·log₂(D/K) + K·log₂e − ½log₂(2πK)`,
+validated against the exact computation where both are reliable. An earlier run of this
+analysis reported nonsense for that column before the substitution.)
+
+### 17.4 Mutual information is blind exactly where real dependence is strongest
+
+§7.2, §13's DU credit, and §13's `N·Î(position; value)` all rest on mutual information
+between siblings or positions. Measured against a shuffled null — the same data with one
+column permuted, which is provable independence:
+
+```
+path                       a × b                 N   K(a)  K(b)   MI_obs  MI_null  excess
+npm .dist                  shasum × integrity 1098   1098  1098   10.101   10.101   0.000
+api [*][*]                 id × iso2Code       295    295   295    8.205    8.205   0.000
+npm .maintainers[*]        name × email       3383   1918  1931   10.362    9.020   1.341
+api [*].user               login × id          100     50    50    4.993    3.499   1.494
+npm .scripts               test × build        477    266   315    6.492    5.942   0.550
+```
+
+Two failures in one table. First, **raw MI is mostly bias** — 9.02 of the 10.36 bits for
+`name × email` survive shuffling. That is §6.1's vacuity result reproduced on real data, and
+§7 prescribes MI with no charge term anywhere.
+
+Second and worse: **the null-corrected excess is exactly 0.000 for the two strongest real
+dependencies in the corpus.** `integrity` is a deterministic re-encoding of `shasum`; `id`
+and `iso2Code` are a fixed pairing. Both are functions, the most dependent pairs available,
+and the statistic reports nothing — because when both fields are unique per record the true
+joint and the shuffled joint are both N cells of count 1, and no amount of data helps, since
+every new record adds a new cell.
+
+So the framework's correlation apparatus cannot see functional dependency between
+high-cardinality fields. §7.2 presents the discriminated union as "the clearest case" of
+locality breaking; on real data the common case is a derived-identifier pair, for which the
+DU mechanism (a scope decision over a low-cardinality tag) does not apply and MI returns
+zero. This is a gap in what §7 can represent, not only in how it is estimated.
+
+### 17.5 What this does and does not establish
+
+It does not refute the framework. Every failure above is a failure of a *specific* claim
+against a *specific* corpus, and three of the four point at things the document already flags
+as declared choices or accepted limitations — they show those choices bite harder in practice
+than the document conveys. §17.4 is the exception: it identifies a representational gap that
+was not previously named.
+
+What it removes is the document's one piece of external empirical support (§17.1), and it
+replaces "we have not tested this" with four specific places where testing went badly.
+
+## 18. Relationship to other documents in this repo
 
 `inference-from-first-principles.md` — superseded by this document; retained for its
 cleanroom provenance record, its own retraction table, and its convergence check against
@@ -1403,7 +1536,7 @@ admission discards and that the corpus is allowed to be silent. Its fact/synthes
 is broadly compatible with §3 here. Fully reconciling the two is not load-bearing for this
 revision and has not been attempted; where they conflict, this document is current.
 
-## 18. Provenance of the quantitative claims
+## 19. Provenance of the quantitative claims
 
 Every number in this document comes from one of the simulations run during derivation, or
 from the two prototyping passes behind §7 and §4.2. All are on synthetic structure. **None
@@ -1421,11 +1554,14 @@ The confidence is not uniform and should not be read as such:
   failure is exhibited for arbitrary k rather than found by search. It all still rests on a
   declared `top` (the value of D), which is a modelling choice, not a measurement.
 
-**One claim now has real-data support, and it is borrowed.** §13's fixed-length-implies-tuple
-claim matches array-cardinality measurements Baazizi et al. published across Twitter, GitHub
-and NYTimes (§16.3). It is the only externally-corroborated claim in the document, it was
-measured by people not testing it, and it is a co-occurrence rather than a controlled result.
-It does not generalise to the rest.
+**The document has now had first contact with real corpora, and it went badly (§17).** Four
+claims were tested adversarially against npm manifests, schemastore schemas and real API
+payloads; four failed. The one previously-corroborated claim (§13, borrowed from Baazizi
+et al.) did not replicate. §6.6's verdict was shown to be decided by the declared `D`, with
+no non-circular choice that behaves. And the mutual-information statistic underpinning §7 and
+§13 was shown to be both mostly bias and blind to the strongest real dependencies. None of
+this refutes the framework; it does mean the numbers below are no longer the only evidence,
+and the new evidence is negative.
 
 **The strongest external check remains unmet.** Baazizi et al. inspected seven real datasets
 and concluded a mathematical optimum "does not make sense here" (§16.2). Part of that lands
