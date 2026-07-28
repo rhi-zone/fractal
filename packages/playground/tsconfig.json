@@ -6,7 +6,7 @@
     "jsxImportSource": "solid-js",
     "exactOptionalPropertyTypes": true,
     "isolatedModules": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "bun-types"]
   },
   "include": ["src"]
 }
