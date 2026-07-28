@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fc from "fast-check"
 import { t, types, type TypeRef } from "./index.ts"
 import { uint8 } from "./kinds/common.ts"
-import { fromJsonCorpus, collectEvidence, resolveEvidence } from "./from-json-corpus.ts"
+import { fromJsonCorpus, collectEvidence, resolveEvidence, defaultStages, resolvedStrategy, perPosition, type Stage } from "./from-json-corpus.ts"
 
 // ---------------------------------------------------------------------------
 // Unit tests — deterministic, verifying specific behavior
@@ -1088,5 +1088,101 @@ describe("enumMaxMembers", () => {
     const allUnique = Array.from({ length: 40 }, (_, i) => ({ id: `u${i}` }))
     expect(JSON.stringify(fromJsonCorpus(allUnique, { enumMaxMembers: Infinity })))
       .not.toContain('"enum"')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Grouping / Generalization stages
+//
+// The two pluggable layers. These tests exist to prove the seams are real —
+// that a caller can inspect, filter, replace and extend the pipeline — not
+// just that the defaults still work (the suites above already pin that).
+// ---------------------------------------------------------------------------
+
+describe("stage pipeline", () => {
+  const duCorpus = [
+    { kind: "circle", radius: 1 }, { kind: "circle", radius: 2 },
+    { kind: "circle", radius: 3 }, { kind: "square", side: 4 },
+    { kind: "square", side: 5 }, { kind: "square", side: 6 },
+  ]
+
+  test("defaults are exposed as an ordered, inspectable list", () => {
+    const stages = defaultStages(resolvedStrategy())
+    expect(stages.map((s) => s.step.name)).toEqual([
+      "enums", "discriminated-union", "dict-vs-record", "cfd-discriminant", "structural-split",
+    ])
+    // the enum GENERALIZATION precedes the DU GROUPING, because DU grouping
+    // only fires on discriminants already typed as enum/literal
+    expect(stages[0]!.kind).toBe("generalization")
+    expect(stages[1]!.kind).toBe("grouping")
+  })
+
+  test("dropping every grouping stage leaves generalization intact", () => {
+    const all = defaultStages(resolvedStrategy())
+    const noGrouping = all.filter((s) => s.kind === "generalization")
+    const out = JSON.stringify(fromJsonCorpus(duCorpus, { stages: noGrouping }))
+    // no DU split happened, but the discriminant still generalized to an enum
+    expect(out).toContain('"enum"')
+    expect(out).not.toContain('"union"')
+  })
+
+  test("an empty pipeline yields the mechanical merge and nothing else", () => {
+    const out = JSON.stringify(fromJsonCorpus(duCorpus, { stages: [] }))
+    expect(out).not.toContain('"enum"')
+    expect(out).not.toContain('"union"')
+    expect(out).toContain('"object"')
+  })
+
+  test("a custom generalization can be spliced in and sees accumulated evidence", () => {
+    const seen: { n: number; k: number; singletons: number }[] = []
+    const probe: Stage = {
+      kind: "generalization",
+      step: {
+        name: "probe",
+        apply: perPosition((ref, node) => {
+          if (node.leafCount > 0) {
+            seen.push({ n: node.leafCount, k: node.distinctValues.size, singletons: node.singletons })
+          }
+          return ref
+        }),
+      },
+    }
+    fromJsonCorpus(duCorpus, { stages: [probe] })
+    // the `kind` field: 6 leaf occurrences, 2 distinct, 0 seen exactly once
+    expect(seen).toContainEqual({ n: 6, k: 2, singletons: 0 })
+    // the `radius` field: 3 occurrences, 3 distinct, all singletons
+    expect(seen).toContainEqual({ n: 3, k: 3, singletons: 3 })
+  })
+
+  test("a coverage-based generalization is expressible over the same evidence", () => {
+    // Good-Turing: P(next value unseen) ~ singletons/N. Emit an enum only when
+    // estimated coverage clears a declared bar. See inference-theory.md §6.10.
+    const coverageEnum = (bar: number): Stage => ({
+      kind: "generalization",
+      step: {
+        name: "coverage-enum",
+        apply: perPosition((ref, node) => {
+          if (node.leafCount < 4 || node.distinctValues.size < 2) return ref
+          const coverage = 1 - node.singletons / node.leafCount
+          if (coverage < bar) return ref
+          const members = [...node.distinctValues].map((v) => JSON.parse(v) as unknown)
+          if (!members.every((m) => typeof m === "string")) return ref
+          return t(types.enum(members as string[]), ref.meta)
+        }),
+      },
+    })
+    // 40 occurrences of 4 statuses: coverage 1.0, comfortably over any bar
+    const tight = Array.from({ length: 40 }, (_, i) => ({ s: `s${i % 4}` }))
+    expect(JSON.stringify(fromJsonCorpus(tight, { stages: [coverageEnum(0.9)] }))).toContain('"enum"')
+    // 40 all-distinct values: coverage 0, under the bar
+    const open = Array.from({ length: 40 }, (_, i) => ({ s: `v${i}` }))
+    expect(JSON.stringify(fromJsonCorpus(open, { stages: [coverageEnum(0.9)] }))).not.toContain('"enum"')
+  })
+
+  test("stage order is honoured — reversing it changes the result", () => {
+    const all = defaultStages(resolvedStrategy())
+    const forward = JSON.stringify(fromJsonCorpus(duCorpus, { stages: all }))
+    const reversed = JSON.stringify(fromJsonCorpus(duCorpus, { stages: [...all].reverse() }))
+    expect(forward).not.toEqual(reversed)
   })
 })

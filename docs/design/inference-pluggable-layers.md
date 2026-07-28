@@ -1,9 +1,11 @@
 # Grouping and generalization as separate pluggable layers
 
-**Status.** Design, plus one small implemented change (§6). The larger refactor is
-specified but **not** built, for reasons in §1 — the motivating premise turned out to be
-factually wrong about the current code, and the remaining delta is much smaller than a
-rewrite.
+**Status.** **Implemented.** `Grouping` / `Generalization` / `Stage` / `perPosition` /
+`defaultStages` / `resolvedStrategy` all ship in `from-json-corpus.ts`, and `resolveEvidence`
+is now a driver over the stage pipeline. Behaviour-preserving: the whole package went from
+4482 to 4493 passing tests with no test changed to accommodate the refactor. §1–2 record two
+corrections to the original brief that survived implementation; §7 records the one place the
+design as written was wrong and had to change.
 
 Companion to `inference-theory.md`, which supplies the policy content this document only
 provides seams for.
@@ -61,65 +63,49 @@ selecting later is strictly more capable than committing during the walk.
 
 So grouping is a **pluggable decision that consumes accumulated evidence**, not a pre-pass.
 
-## 3. The two interfaces
+## 3. The two interfaces (as built)
 
 ```ts
-/** Which occurrences count as one position. Consumes accumulated evidence. */
-export interface Grouping {
-  /** Split an object-typed position into variants, or return undefined to keep it whole. */
-  partition?(node: EvidenceNode, ctx: GroupingContext): readonly Partition[] | undefined
-
-  /** Choose how an array position is grouped: one shared element position, or per-index. */
-  arrayGrouping?(node: EvidenceNode, ctx: GroupingContext): "element" | "perIndex"
-
-  /**
-   * Identity of an embedded object, for deduplication. Occurrences whose enclosing
-   * entity has the same key count once. Returning undefined means "every occurrence is
-   * its own observation" (today's behaviour).
-   *
-   * NOT derivable from the data — see inference-theory.md §6.11. Whatever this returns
-   * encodes a declared unit of observation.
-   */
-  entityKey?(value: unknown, ctx: GroupingContext): string | undefined
-}
-
-export interface GroupingContext {
-  readonly path: readonly (string | number)[]
-  readonly depth: number
+export interface StageContext {
   readonly corpusSize: number
+  readonly strategy: ResolvedStrategy
 }
 
-/** One variant produced by a partition, with the occurrence indices it owns. */
-export interface Partition {
-  readonly label?: string
-  readonly memberIndices: readonly number[]
-  /** The field whose value induced the split, when there was one. */
-  readonly discriminant?: string
+/** A stage that decides which occurrences constitute one position. */
+export interface Grouping {
+  readonly name: string
+  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef
 }
 
-/** Given evidence at an already-grouped position, decide what type to emit. */
+/** A stage that decides what type an already-grouped position emits. */
 export interface Generalization {
-  decide(ev: PositionEvidence, ctx: GroupingContext): TypeRef | undefined
+  readonly name: string
+  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef
 }
 
-/** The evidence a generalization policy is allowed to see. Deliberately narrow. */
-export interface PositionEvidence {
-  readonly n: number            // occurrences (N)
-  readonly distinct: number     // distinct values (K)
-  readonly singletons: number   // values seen exactly once (n1) — the coverage estimate
-  readonly nullCount: number
-  readonly typeCounts: Readonly<Record<string, number>>
-  readonly distinctValues: ReadonlySet<string>
-  readonly sortedNumeric: readonly number[]
-  /** The mechanically-merged type, before any generalization policy runs. */
-  readonly literalType: TypeRef
-}
+/** One entry in the pipeline, tagged with which kind of judgment it makes. */
+export type Stage =
+  | { readonly kind: "grouping"; readonly step: Grouping }
+  | { readonly kind: "generalization"; readonly step: Generalization }
+
+/** Lift a per-position decision into a whole-tree stage, supplying the traversal. */
+export function perPosition(
+  fn: (ref: TypeRef, node: EvidenceNode,
+       ctx: StageContext & { path: readonly (string | number)[] }) => TypeRef,
+): (ref: TypeRef, node: EvidenceNode, ctx: StageContext) => TypeRef
+
+export function defaultStages(resolved: ResolvedStrategy): Stage[]
+export function resolvedStrategy(s?: ResolveStrategy, cfg?: CorpusInferConfig): ResolvedStrategy
 ```
 
-`PositionEvidence` deliberately exposes `singletons`, which the current `EvidenceNode` does
-not carry. That is the one field addition the refactor requires, and it is what makes the
-`inference-theory.md` §6.10 coverage estimate (`1 − n₁/N`) expressible as a policy rather
-than needing a separate pass.
+`EvidenceNode` gained one field, `singletons` (Good–Turing's n₁), computed in phase 1. That
+is what makes the `inference-theory.md` §6.10 coverage estimate (`1 − n₁/N`) expressible as a
+policy instead of a separate pass — there is a test showing a working coverage-based
+generalization built on it.
+
+`ResolveStrategy.stages` overrides the pipeline wholesale. `resolvedStrategy()` returns the
+fully-defaulted strategy so callers can start from `defaultStages(...)` and filter or splice
+rather than reconstructing.
 
 ## 4. How the walk invokes them
 
@@ -166,7 +152,7 @@ all candidate groupings; deferring the grouping choice; `fromJson`'s leaf typing
 Because (3) is blocked on (entity key), the recommended shipping default remains the current
 ratio cascade, with the cutoffs *named* rather than inlined. That is what §6 implements.
 
-## 6. Implemented now
+## 6. Also implemented
 
 `enumMaxMembers` (`from-json-corpus.ts`), default 50, previously the hardcoded
 `if (K > 50) return false` in `looksLikeEnum`. Zero behaviour change; five new tests pin both
@@ -178,12 +164,29 @@ ratio. The default rejects a 60-value vocabulary observed 6000 times (`K/N = 0.0
 unambiguous) purely for exceeding the cap. The cap is now documented as an output-size guard
 rather than an evidence test, and is swappable — including `Infinity` to disable it.
 
-The rest of the refactor is deliberately **not** built in this pass. The interfaces above are
-additive and can land incrementally behind the existing `ResolveStrategy`; doing it as one
-rewrite against 192 passing tests, for an architecture whose main claimed benefit turned out
-to already exist, is not a good trade.
+## 7. Where the design above was wrong
 
-## 7. Open, and blocking
+**Stages are whole-tree transforms, not per-position callbacks.** The first cut of §3
+specified `Generalization.decide(ev: PositionEvidence, ctx)` — one call per position. That
+does not match the built-ins: every `walkAndX` is a `TypeRef × EvidenceNode → TypeRef`
+transform that owns its own recursion, and forcing them into a per-position shape would have
+meant rewriting all six rather than relocating them. Worse, the first implementation attempt
+silently invoked custom stages **only at the root**, which two tests caught immediately.
+
+Resolved by making the stage contract whole-tree (matching reality) and supplying
+`perPosition` as an adapter that provides the traversal for the common case. Policies that
+need whole-tree context keep it; policies that are one repeated judgment get the ergonomics
+the design intended. `PositionEvidence` was dropped — `EvidenceNode` plus `singletons` already
+carries everything it listed, and a parallel type would have been redundant.
+
+**The pipeline does not split into two clean phases.** `walkAndDetectDU` only fires on
+positions whose discriminant is already typed as enum/literal, so the enum *generalization*
+must precede the DU *grouping*. Grouping by a discriminant requires knowing the discriminant
+is low-arity, which is itself a generalization decision. The pipeline is therefore an ordered
+list of tagged stages rather than a grouping phase followed by a generalization phase, and a
+test pins that reversing the order changes the result.
+
+## 8. Open, and blocking
 
 - **Entity key / unit of observation.** Blocks the Good–Turing default. Not derivable
   (§6.11); needs a caller-facing declaration.

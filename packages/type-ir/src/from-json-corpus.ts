@@ -54,6 +54,15 @@ export interface EvidenceNode {
   readonly values: readonly unknown[]
   /** JSON-serialized distinct leaf values — the enum evidence's K. */
   readonly distinctValues: ReadonlySet<string>
+  /**
+   * How many distinct leaf values were observed exactly once (Good-Turing's
+   * n1). `singletons / leafCount` estimates the probability that the next
+   * value at this position is one never seen before, which is the coverage
+   * estimate a generalization policy needs. See `docs/design/
+   * inference-theory.md` §6.10 for why this is the estimable quantity and
+   * §6.8 for the assumption it rests on (an i.i.d. corpus).
+   */
+  readonly singletons: number
   /** Distinct integer leaf values, sorted ascending — clustering evidence for integer enum detection. */
   readonly sortedNumeric: readonly number[]
   /** Present when at least one raw value at this position was a plain object. */
@@ -105,6 +114,16 @@ export interface ResolveStrategy extends InferConfig {
   detectDicts?: boolean
   /** Dirty-data detection (flag anomalous minority types). Default: false. */
   detectDirtyData?: boolean
+  /**
+   * Full override of the resolution pipeline. When omitted, `defaultStages`
+   * builds the built-in ordered list from the knobs on this interface.
+   *
+   * Supplying this replaces every grouping and generalization decision, so
+   * the `detectEnums` / `detectDicts` / … booleans no longer apply — build
+   * from `defaultStages(resolved)` and filter or splice if you want to keep
+   * most of the defaults. Stage order is significant (see `Stage`).
+   */
+  stages?: readonly Stage[]
   /** Minimum samples before enum detection fires. Default: 3. */
   enumMinSamples?: number
   /**
@@ -268,6 +287,7 @@ function buildEvidenceNode(values: readonly unknown[]): EvidenceNode {
   const typeCounts: Record<string, number> = {}
   let nullCount = 0
   const distinctValues = new Set<string>()
+  const leafCounts = new Map<string, number>()
   const numericSet = new Set<number>()
   const objectSamples: Record<string, unknown>[] = []
   const arraySamples: unknown[][] = []
@@ -278,6 +298,7 @@ function buildEvidenceNode(values: readonly unknown[]): EvidenceNode {
       nullCount++
       typeCounts.null = (typeCounts.null ?? 0) + 1
       distinctValues.add("null")
+      leafCounts.set("null", (leafCounts.get("null") ?? 0) + 1)
       continue
     }
     if (Array.isArray(v)) {
@@ -293,7 +314,9 @@ function buildEvidenceNode(values: readonly unknown[]): EvidenceNode {
       continue
     }
     typeCounts[typeof v] = (typeCounts[typeof v] ?? 0) + 1
-    distinctValues.add(JSON.stringify(v))
+    const key = JSON.stringify(v)
+    distinctValues.add(key)
+    leafCounts.set(key, (leafCounts.get(key) ?? 0) + 1)
     if (typeof v === "number" && Number.isInteger(v)) numericSet.add(v)
   }
 
@@ -339,6 +362,7 @@ function buildEvidenceNode(values: readonly unknown[]): EvidenceNode {
     typeCounts,
     values,
     distinctValues,
+    singletons: [...leafCounts.values()].reduce((acc, c) => acc + (c === 1 ? 1 : 0), 0),
     sortedNumeric: [...numericSet].sort((a, b) => a - b),
     ...(objectEvidence !== undefined ? { object: objectEvidence } : {}),
     ...(arrayEvidence !== undefined ? { array: arrayEvidence } : {}),
@@ -1675,10 +1699,16 @@ interface ResolvedStrategy {
   readonly cfdMinGroupSize: number
   readonly cfdMinScore: number
   readonly customResolvers: readonly EvidenceResolver[]
+  readonly stages: readonly Stage[]
 }
 
-function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): ResolvedStrategy {
-  const cfg = tree.config
+/**
+ * Build the fully-defaulted strategy — including `defaultStages` — from a
+ * partial one. Exported so callers can start from the built-in pipeline
+ * (`resolvedStrategy(opts).stages`) and filter or splice it rather than
+ * reconstructing it.
+ */
+export function resolvedStrategy(strategy?: ResolveStrategy, cfg?: CorpusInferConfig): ResolvedStrategy {
 
   const innerConfig: InferConfig = {}
   const arrayThreshold = strategy?.arrayThreshold ?? cfg?.arrayThreshold
@@ -1690,7 +1720,7 @@ function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): Resolv
   const leafHeuristics = strategy?.leafHeuristics ?? cfg?.leafHeuristics
   if (leafHeuristics !== undefined) innerConfig.leafHeuristics = leafHeuristics as LeafHeuristic[]
 
-  return {
+  const base: ResolvedStrategy = {
     innerConfig,
     detectEnums: strategy?.detectEnums ?? cfg?.detectEnums ?? true,
     detectDiscriminatedUnions: strategy?.detectDiscriminatedUnions ?? cfg?.detectDiscriminatedUnions ?? true,
@@ -1710,7 +1740,172 @@ function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): Resolv
     cfdMinGroupSize: strategy?.cfdMinGroupSize ?? cfg?.cfdMinGroupSize ?? 2,
     cfdMinScore: strategy?.cfdMinScore ?? cfg?.cfdMinScore ?? 0.5,
     customResolvers: strategy?.customResolvers ?? cfg?.customResolvers ?? [],
+    stages: [],
   }
+  // `defaultStages` reads the fully-defaulted strategy, so it is built after
+  // the rest and folded back in.
+  const stages = strategy?.stages ?? cfg?.stages ?? defaultStages(base)
+  return { ...base, stages }
+}
+
+// ---------------------------------------------------------------------------
+// The two pluggable layers
+//
+// Everything `resolveEvidence` does beyond the mechanical merge is one of two
+// kinds of judgment, and they are different questions:
+//
+//   GROUPING       which occurrences count as ONE position?
+//                  DU splitting, dict-vs-record, structural clustering. All
+//                  three answer "are these one population or several", before
+//                  any question of what type to emit for them.
+//
+//   GENERALIZATION given an already-grouped position and its accumulated
+//                  evidence, what type should it emit? Enum-vs-literal-vs-base,
+//                  dirty-data flagging.
+//
+// Both consume ACCUMULATED evidence — a grouping policy is invoked once phase 1
+// has gathered evidence under every candidate grouping simultaneously
+// (`array.element` AND `array.perIndex`, `object.keySets`, `elementObjects`),
+// so it selects among pre-gathered alternatives rather than committing during
+// the walk. That deferral is deliberate and is what makes the interface
+// possible at all: a policy that had to decide per-record could not see the
+// discriminant distribution it needs.
+//
+// ORDER IS LOAD-BEARING, and the two kinds interleave rather than forming two
+// clean phases. `walkAndDetectDU` only fires on positions whose discriminant
+// field has already been typed as an enum/literal, so the enum GENERALIZATION
+// must run before the DU GROUPING. This is a real constraint, not an artifact:
+// grouping by a discriminant requires knowing the discriminant is low-arity,
+// which is itself a generalization decision. The pipeline is therefore an
+// ordered list of tagged stages, not two passes.
+// ---------------------------------------------------------------------------
+
+/** Context handed to every stage. */
+export interface StageContext {
+  /** Number of top-level corpus values. */
+  readonly corpusSize: number
+  /** The fully-defaulted strategy, so custom stages can read the same knobs the defaults do. */
+  readonly strategy: ResolvedStrategy
+}
+
+/** A stage that decides which occurrences constitute one position. */
+export interface Grouping {
+  readonly name: string
+  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef
+}
+
+/** A stage that decides what type an already-grouped position emits. */
+export interface Generalization {
+  readonly name: string
+  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef
+}
+
+/** One entry in the resolution pipeline, tagged with which kind of judgment it makes. */
+export type Stage =
+  | { readonly kind: "grouping"; readonly step: Grouping }
+  | { readonly kind: "generalization"; readonly step: Generalization }
+
+const grouping = (name: string, apply: Grouping["apply"]): Stage =>
+  ({ kind: "grouping", step: { name, apply } })
+const generalization = (name: string, apply: Generalization["apply"]): Stage =>
+  ({ kind: "generalization", step: { name, apply } })
+
+
+/**
+ * Lift a PER-POSITION decision into a whole-tree stage.
+ *
+ * Stages are whole-tree transforms (`TypeRef × EvidenceNode → TypeRef`),
+ * matching the shape of the built-ins. Most policies are not whole-tree
+ * decisions though — they are one judgment repeated at every position — so
+ * this adapter supplies the traversal, mirroring the recursion the built-in
+ * walkers use: object → fields, array → element, tuple → per-index, union →
+ * every variant against the same node.
+ *
+ * `fn` is applied top-down. Returning a ref different from the input means
+ * "I have decided this position", and its children are left alone; returning
+ * the input unchanged lets traversal continue into them.
+ */
+export function perPosition(
+  fn: (ref: TypeRef, node: EvidenceNode, ctx: StageContext & { path: readonly (string | number)[] }) => TypeRef,
+): (ref: TypeRef, node: EvidenceNode, ctx: StageContext) => TypeRef {
+  const walk = (
+    ref: TypeRef, node: EvidenceNode, ctx: StageContext, path: readonly (string | number)[],
+  ): TypeRef => {
+    const decided = fn(ref, node, { ...ctx, path })
+    if (decided !== ref) return decided
+
+    const { shape } = ref
+    if (shape.kind === "object") {
+      const fields = (shape as { fields: Record<string, TypeRef> }).fields
+      const next: Record<string, TypeRef> = {}
+      for (const [name, fieldRef] of Object.entries(fields)) {
+        const child = node.object?.fields[name]
+        next[name] = child !== undefined ? walk(fieldRef, child, ctx, [...path, name]) : fieldRef
+      }
+      return t(types.object(next), ref.meta)
+    }
+    if (shape.kind === "array") {
+      const el = (shape as { element: TypeRef }).element
+      const child = node.array?.element
+      return child !== undefined
+        ? t(types.array(walk(el, child, ctx, [...path, "[]"])), ref.meta)
+        : ref
+    }
+    if (shape.kind === "tuple") {
+      const els = (shape as { elements: readonly TypeRef[] }).elements
+      const perIndex = node.array?.perIndex
+      return t(types.tuple(els.map((el, i) => {
+        const child = perIndex?.[i]
+        return child !== undefined ? walk(el, child, ctx, [...path, i]) : el
+      })), ref.meta)
+    }
+    if (shape.kind === "union") {
+      const variants = (shape as { variants: readonly TypeRef[] }).variants
+      return t(types.union(variants.map((v) => walk(v, node, ctx, path))), ref.meta)
+    }
+    return ref
+  }
+  return (ref, node, ctx) => walk(ref, node, ctx, [])
+}
+
+/**
+ * The built-in pipeline. Same steps, same order, same behaviour as before the
+ * stage refactor — each entry wraps the `walkAndX` transform that already
+ * existed, now named and individually replaceable.
+ *
+ * Callers can override wholesale via `ResolveStrategy.stages`, filter by
+ * `kind` or `name`, or splice their own stage in at a chosen position.
+ */
+export function defaultStages(resolved: ResolvedStrategy): Stage[] {
+  const out: Stage[] = []
+
+  // GENERALIZATION first: DU grouping below consumes its output (see above).
+  if (resolved.detectEnums) {
+    out.push(generalization("enums", (ref, node) =>
+      walkAndDetectEnums(ref, node, resolved.enumMinSamples, resolved.literalMinSamples, resolved.enumMaxMembers)))
+  }
+  if (resolved.detectDiscriminatedUnions) {
+    out.push(grouping("discriminated-union", (ref, node) => walkAndDetectDU(ref, node)))
+  }
+  if (resolved.detectDicts) {
+    out.push(grouping("dict-vs-record", (ref, node, ctx) =>
+      walkAndDetectDicts(ref, node, ctx.corpusSize, resolved.dictMinSamples)))
+  }
+  if (resolved.detectCfdDiscriminants) {
+    out.push(grouping("cfd-discriminant", (ref, node) =>
+      walkAndDetectCfdDiscriminant(ref, node,
+        resolved.cfdMinSamples, resolved.cfdMaxCardinalityRatio,
+        resolved.cfdMinGroupSize, resolved.cfdMinScore)))
+  }
+  if (resolved.splitDissimilarObjects) {
+    out.push(grouping("structural-split", (ref, node) =>
+      walkAndSplitDissimilarObjects(ref, node,
+        resolved.objectSplitThreshold, resolved.objectSplitMinSamples, resolved.clusteringMethod)))
+  }
+  if (resolved.detectDirtyData) {
+    out.push(generalization("dirty-data", (ref, node) => walkAndDetectDirty(ref, node)))
+  }
+  return out
 }
 
 /**
@@ -1722,56 +1917,20 @@ function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): Resolv
 export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy): TypeRef {
   if (tree.values.length === 0) return t(types.unknown)
 
-  const resolved = resolveStrategy(tree, strategy)
+  const resolved = resolvedStrategy(strategy, tree.config)
+  const ctx: StageContext = { corpusSize: tree.values.length, strategy: resolved }
 
-  // 1. Run fromJson on each raw value, then structurally merge (incl.
-  //    integer width widening, union flattening).
-  const perValue = tree.values.map((v) => fromJson(v, resolved.innerConfig))
-  let merged = mergeAll(perValue)
+  // Mechanics, not policy: type each raw value, then structurally merge
+  // (integer width widening, union flattening). Nothing here is a judgment
+  // call, so it is not a stage and is not pluggable.
+  let merged = mergeAll(tree.values.map((v) => fromJson(v, resolved.innerConfig)))
 
-  // 2. Enum detection
-  if (resolved.detectEnums) {
-    merged = walkAndDetectEnums(merged, tree.root, resolved.enumMinSamples, resolved.literalMinSamples, resolved.enumMaxMembers)
+  // Policy: an ordered pipeline of grouping and generalization stages.
+  for (const stage of resolved.stages) {
+    merged = stage.step.apply(merged, tree.root, ctx)
   }
 
-  // 3. Discriminated union detection
-  if (resolved.detectDiscriminatedUnions) {
-    merged = walkAndDetectDU(merged, tree.root)
-  }
-
-  // 4. Dict detection
-  if (resolved.detectDicts) {
-    merged = walkAndDetectDicts(merged, tree.root, tree.values.length, resolved.dictMinSamples)
-  }
-
-  // 5. CFD-style discriminant search (no pre-typed enum required) — runs
-  //    after dict detection (same "growing key set looks dissimilar too"
-  //    reasoning as general splitting below) and only ever acts on
-  //    positions `walkAndDetectDU` left in plain `object` form, so it never
-  //    re-litigates a discriminant DU detection already committed to.
-  if (resolved.detectCfdDiscriminants) {
-    merged = walkAndDetectCfdDiscriminant(
-      merged, tree.root,
-      resolved.cfdMinSamples, resolved.cfdMaxCardinalityRatio, resolved.cfdMinGroupSize, resolved.cfdMinScore,
-    )
-  }
-
-  // 6. General structural union splitting (no discriminant field) — runs
-  //    last of the union-shaping passes so it only ever sees positions
-  //    neither `tryDetectDU` nor the CFD discriminant search above could
-  //    resolve to a discriminated union.
-  if (resolved.splitDissimilarObjects) {
-    merged = walkAndSplitDissimilarObjects(
-      merged, tree.root, resolved.objectSplitThreshold, resolved.objectSplitMinSamples, resolved.clusteringMethod,
-    )
-  }
-
-  // 7. Dirty data detection (opt-in)
-  if (resolved.detectDirtyData) {
-    merged = walkAndDetectDirty(merged, tree.root)
-  }
-
-  // 8. Custom resolvers
+  // Escape hatch, applied after every stage: arbitrary per-node overrides.
   if (resolved.customResolvers.length > 0) {
     merged = applyCustomResolvers(merged, tree.root, resolved.customResolvers)
   }
