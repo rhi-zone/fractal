@@ -1130,10 +1130,83 @@ cov cutoff   GOF V̂/K<2   GOF V̂/K<5   K/N@best   K/N@0.5   1−n₁/N   net@2
 
 **Verdict: a genuine negative.** It fails the category it was designed for, it is the most
 duplication-fragile option available, and it loses at every operating point. The one durable
-takeaway is that `s` is real and identifiable while `V` is not — so the frequency spectrum
-can characterise *how skewed* a vocabulary is, and cannot say *how much of it remains
-unseen*, which is the question. That is the same wall as §6.8, reached from classical
-statistics instead of from coding theory.
+takeaway is that `s` is real and identifiable while `V` is not.
+
+**The diagnosis above is the symptom; §6.10 gives the cause.** "The series converges for
+`s > 1`" describes *when* the fit visibly failed, but `V` is unidentifiable for **every** `s`,
+and for a reason that has nothing to do with the Zipf family.
+
+### 6.10 "Closed vs open" is not a well-posed binary; coverage is the estimable quantity
+
+This reframes §6.9 rather than extending it, and sharpens the "same wall from two directions"
+claim into something provable.
+
+**The likelihood only ever sees tail mass beyond the observed support.** Fix a head
+`p₁…p_K` and compare `A` (support exactly `{1..K}`) against `B_ε` (mass `(1−ε)p` on the same
+head, `ε` on a disjoint tail). For any `x ∈ {1..K}^N`, `B^N(x) = (1−ε)^N·A^N(x)`, so
+
+```
+TV(A^N, B_ε^N) = 1 − (1−ε)^N          exactly
+best achievable accuracy of ANY test = 1 − ½(1−ε)^N
+```
+
+and on the event "no tail value observed" the likelihood ratio is the **constant** `(1−ε)^N`.
+A constant likelihood ratio carries zero information: no statistic — spectrum, GOF, MDL,
+Good–Turing, or anything not yet invented — can beat chance on such a sample. The only
+evidence is an actual tail observation, and the boundary is the product `εN`, the expected
+number of them (`εN ≪ 1` indistinguishable, `εN ≈ 1` → 82% ceiling, `εN > 5` separable).
+
+**Note what does *not* appear anywhere in that statement: whether the tail is finite.**
+Truncating a Zipf at `V` versus leaving it infinite only renormalises, so the two have
+identical conditional distributions given a draw landed in the head — this is exactly the
+`A` versus `B_ε` situation with `ε = 1 − H_K(s)/ζ(s)`. A closed vocabulary can be perfectly
+Zipfian; English is finite and is the canonical example. So **"closed" is the single point
+`ε = 0` on a continuum, not a category**, and a finite sample can only ever return an upper
+bound `ε ≲ c/N`. It is excludable, never confirmable.
+
+**`V` is unidentifiable precisely *because* coverage is insensitive to it.** Same
+license-like head, `K = 38`, `N = 1085`, appending a tail:
+
+```
+V_tail            ε        total V      εN      TV   best acc   coverage
+0           0.0e+00             38    0.00   0.000      50.0%    1.00000
+1,000       1.0e-04          1,038    0.11   0.103      55.1%    0.99990
+1,000,000   1.0e-03      1,000,038    1.08   0.662      83.1%    0.99900
+1,000,000,000 1.0e-04  1,000,000,038   0.11   0.103      55.1%    0.99990
+```
+
+`V` spans nine orders of magnitude; coverage moves in the fourth decimal place. `V` is not
+hard to estimate — **it is not a function of anything the data resolves.** This is the
+classical species-richness non-estimability result: arbitrarily many arbitrarily-rare types
+can be appended without changing the finite-sample law.
+
+**So §6.9's approach was targeting a malformed quantity**, and that is a sharper diagnosis
+than its duplication-fragility or its head-to-head loss, both of which are real but
+secondary. Fitting `V` was estimating a parameter that does not exist as an inference target.
+Fitting `s` was fine.
+
+**What remains, and it is a different problem.** Coverage at the observed sample size is
+fully well-posed and Good–Turing estimates it distribution-free. Coverage at a *larger*
+sample size is not. Measured on 41 real fields with `N ≥ 400`, predicting from a quarter
+sample:
+
+```
+|GT(N) − actual coverage at N|     median 0.0111    p90 0.0557
+|GT(N) − actual coverage at 2N|    median 0.0346    p90 0.1264
+```
+
+Three times worse and systematically biased, because coverage grows with sample size and
+`GT(N)` says nothing about `2N` without a tail-shape assumption. **The residual is
+extrapolation, not identification.**
+
+**This corrects the "same wall" framing of §6.9.** It is not that two methods both struggled
+empirically — it is that both were trying to recover an unidentifiable parameter, which is a
+provable impossibility rather than an observed difficulty. And the wall is not where §6.9 put
+it: coverage-at-`N` is fully recoverable, so there is no wall there at all. The genuine
+limits are exactly three, and they are separable: `V` is unidentifiable (provably); coverage
+extrapolation needs an assumption (measured above); and Good–Turing assumes i.i.d. draws,
+which duplication violates (§6.8). Only the third is a defect in the machinery; the first is
+a fact about inference, and the second is a declared modelling choice.
 
 ## 7. The abstraction space is a tree of lattices
 
