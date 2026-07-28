@@ -1208,6 +1208,87 @@ extrapolation needs an assumption (measured above); and Good–Turing assumes i.
 which duplication violates (§6.8). Only the third is a defect in the machinery; the first is
 a fact about inference, and the second is a declared modelling choice.
 
+### 6.11 Deduplication prototyped: mechanically cheap, and it relocates the problem
+
+§6.8 concluded that deduplication is a hard precondition. Built and tested it, avoiding key/ID
+identification (broken per §17.4) by detecting repeated *whole objects* by similarity.
+
+**Tier 1, exact hash of the enclosing object, does essentially all the work.** A scalar
+occurrence's dedup key is the identity of its immediately-enclosing object, so two occurrences
+whose enclosing objects are the same entity count once. On the real corpora this affects
+**21 of 110 paths, all of them in api-examples and none in npm** — exactly the split §17.2
+predicted, since npm is 1098 separate documents with no within-document entity repetition:
+
+```
+path                                              N_raw   N_ded   kept
+[*].base.repo.topics[*]                             200       4   2.0%
+moves[*].version_group_details[*].…move_learn        1135       5   0.4%
+[*][*].incomeLevel.value                            295       5   1.7%
+```
+
+**Tier 2, MinHash + LSH, is not needed on this data.** Across 43 object populations it
+produced **100 extra merges in total**, mostly zero or one per population. Exact repetition,
+not near-repetition, is what real embedded-entity duplication looks like here.
+
+**Performance is linear and not a concern.** Exact hashing: 9 ms → 128 ms for N = 411 → 6576
+(16× data, 14× time). MinHash cost is dominated by signatures over distinct representatives,
+so per-record cost *falls* with duplication (2.31 → 0.16 ms/record). No pairwise scan; the
+only quadratic risk is inside an LSH bucket, capped at 200 members.
+
+**It does reduce the §6.8 contamination, but does not measurably improve the estimator.**
+Paths with `n₁ = 0` (the trivially-100%-coverage artefact) drop from **23 to 6**. But
+Good–Turing's validation error is essentially unchanged:
+
+```
+                    median |GT − held-out coverage|      p90
+raw       ALL                             0.0146       0.1086
+deduped   ALL                             0.0197       0.1193
+raw       npm                             0.0347       0.1114
+deduped   npm                             0.0325       0.1210
+```
+
+So the honest answer to "does dedup restore `n₁`'s reliability" is: it removes the most
+visible artefact and leaves accuracy where it was.
+
+**The limit, and it is not a tuning problem.** Two structurally identical situations require
+opposite treatment:
+
+- `github_pulls`: 50 PRs each embed the **same** repository → 1 observation reported as 50.
+  Deduping is correct.
+- `worldbank`: 295 countries each embed one of 5 `incomeLevel` objects → 295 genuine
+  observations of a 5-value category. Deduping to 5 **destroys real evidence**.
+
+Both are "an identical object repeated within one document." No statistic separates them. I
+also tried an independence-based test — compare the observed exact-collision rate against what
+independent per-field marginals predict — and it fails on exactly the case it was built for:
+when an entity is duplicated 100%, the per-field marginals go degenerate and independence
+predicts perfect collision too, giving a ratio of 1.00 for `base.repo` (the true duplicate)
+and 1.27 for `publishConfig.access` (a genuine shared value). The baseline is estimated from
+the duplicated data and absorbs the duplication — the same circularity as everywhere else in
+§6.
+
+The difference between the two cases is **which entity is the unit of observation**, which is
+a modelling declaration, not a property of the bytes. So deduplication does not discharge
+§6.8's precondition; it converts "the corpus must be an independent sample" into "the caller
+must declare the unit of observation," which is the same information requirement in a more
+actionable form.
+
+**Residual near-duplication is a real second gap.** Snapshot drift (a repo whose star count
+changed between fetches) defeats exact hashing by construction, and MinHash handles it only
+for wide objects:
+
+```
+fields   drifting   Jaccard   exact groups   mh@0.8   mh@0.95
+103             1     0.981             50        1         1
+103             3     0.943             50        1        50
+5               1     0.667             50       50        50
+```
+
+A single drifting field out of 103 merges at 0.95; out of 5 it merges at neither threshold.
+So near-dup detection works for wide entity objects — the realistic case — and the similarity
+threshold deciding it has **no data-driven value**, which is a third declared constant on top
+of the unit-of-observation declaration.
+
 ## 7. The abstraction space is a tree of lattices
 
 **Status: argued in design dialogue, then confirmed by a prototyping pass. Numbers below
