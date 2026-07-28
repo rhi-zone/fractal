@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { authLayer, authMiddleware } from "@rhi-zone/fractal-api-tree/auth"
+import { jsonToBase64Url } from "./jwt.ts"
 import { oidcServer } from "./server.ts"
 import { makeSignedJwt } from "./test-helpers.ts"
 import type { FetchLike, Jwks } from "./jwks.ts"
@@ -83,6 +84,52 @@ describe("oidcServer", () => {
     const { token } = await makeValidToken()
     const { publicJwk: unrelatedKey } = await makeSignedJwt({ sub: "user-2", exp: Date.now() / 1000 + 3600 })
     const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [unrelatedKey] }) })
+    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
+    expect(user).toBeNull()
+  })
+
+  it("resolves null for an unsupported/forged alg (e.g. \"none\") without ever hitting the JWKS endpoint", async () => {
+    // The classic "alg: none" JWT bypass — a token that claims an
+    // unsupported algorithm must be rejected on the header check alone,
+    // before any JWKS lookup or signature verification is attempted.
+    const header = jsonToBase64Url({ alg: "none" })
+    const claims = jsonToBase64Url({ sub: "attacker", iss: ISSUER, aud: AUDIENCE, exp: Date.now() / 1000 + 3600 })
+    const forgedToken = `${header}.${claims}.`
+    const fetchImpl: FetchLike = async () => {
+      throw new Error("JWKS endpoint should not be contacted for an unsupported alg")
+    }
+    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl })
+    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${forgedToken}` } }))
+    expect(user).toBeNull()
+  })
+
+  it("resolves null for HS256 (symmetric alg, deliberately unsupported per jwt.ts's module doc)", async () => {
+    const header = jsonToBase64Url({ alg: "HS256" })
+    const claims = jsonToBase64Url({ sub: "attacker", exp: Date.now() / 1000 + 3600 })
+    const forgedToken = `${header}.${claims}.forged-sig`
+    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
+    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${forgedToken}` } }))
+    expect(user).toBeNull()
+  })
+
+  it("resolves null for a Bearer scheme with no token following it", async () => {
+    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
+    const noToken = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: "Bearer" } }))
+    expect(noToken).toBeNull()
+    const emptyToken = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: "Bearer " } }))
+    expect(emptyToken).toBeNull()
+  })
+
+  it("resolves null when the token's kid doesn't match any key in the served JWKS", async () => {
+    const { token, publicJwk } = await makeSignedJwt(
+      { sub: "user-1", iss: ISSUER, aud: AUDIENCE, exp: Date.now() / 1000 + 3600 },
+      { kid: "key-signed-with" },
+    )
+    // JWKS is served but only has an unrelated kid — getKey force-refreshes
+    // once and still can't find "key-signed-with", so it throws internally;
+    // resolve() must catch that and return null, not propagate.
+    const servedJwks: Jwks = { keys: [{ ...publicJwk, kid: "some-other-kid" }] }
+    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl(servedJwks) })
     const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
     expect(user).toBeNull()
   })

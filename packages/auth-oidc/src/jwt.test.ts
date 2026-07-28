@@ -1,7 +1,7 @@
 // packages/auth-oidc/src/jwt.test.ts — parseJwt/verifyJwt (./jwt.ts)
 
 import { describe, expect, it } from "bun:test"
-import { checkClaims, isSupportedAlg, JwtClaimError, JwtParseError, parseJwt, verifyJwt, verifyJwtSignature } from "./jwt.ts"
+import { checkClaims, isSupportedAlg, jsonToBase64Url, JwtClaimError, JwtParseError, parseJwt, verifyJwt, verifyJwtSignature } from "./jwt.ts"
 import { makeSignedJwt } from "./test-helpers.ts"
 
 describe("parseJwt", () => {
@@ -60,6 +60,20 @@ describe("verifyJwtSignature", () => {
     const parsed = parseJwt(tampered)
     expect(await verifyJwtSignature(parsed, publicJwk)).toBe(false)
   })
+
+  it("returns false (never throws) for an unsupported/forged alg, e.g. the classic \"alg: none\" attack", async () => {
+    // A token whose header claims an algorithm this module doesn't
+    // recognize (HS256 is deliberately unsupported — see jwt.ts's module
+    // doc — and "none" is the textbook JWT signature-bypass attack). Both
+    // must fail closed via the boolean return, not throw and not verify.
+    for (const alg of ["none", "HS256"]) {
+      const header = jsonToBase64Url({ alg })
+      const claims = jsonToBase64Url({ sub: "attacker", exp: 9999999999 })
+      const parsed = parseJwt(`${header}.${claims}.`)
+      const { publicJwk } = await makeSignedJwt({ sub: "user-1", exp: 9999999999 })
+      expect(await verifyJwtSignature(parsed, publicJwk)).toBe(false)
+    }
+  })
 })
 
 describe("checkClaims", () => {
@@ -102,6 +116,10 @@ describe("checkClaims", () => {
   it("passes when expected audience is any-of a list", () => {
     expect(() => checkClaims({ exp: Date.now() / 1000 + 3600, aud: "my-api" }, { audience: ["my-api", "other-api"] })).not.toThrow()
   })
+
+  it("throws JwtClaimError when audience is required but the claim has no \"aud\" at all", () => {
+    expect(() => checkClaims({ exp: Date.now() / 1000 + 3600 }, { audience: "my-api" })).toThrow(JwtClaimError)
+  })
 })
 
 describe("verifyJwt (full pipeline)", () => {
@@ -124,6 +142,16 @@ describe("verifyJwt (full pipeline)", () => {
 
   it("throws on an expired token even with a valid signature", async () => {
     const { token, publicJwk } = await makeSignedJwt({ sub: "user-1", exp: Date.now() / 1000 - 10 })
+    await expect(verifyJwt(token, publicJwk)).rejects.toThrow(JwtClaimError)
+  })
+
+  it("throws JwtParseError (not JwtClaimError) when the token itself is malformed", async () => {
+    const { publicJwk } = await makeSignedJwt({ sub: "user-1", exp: 9999999999 })
+    await expect(verifyJwt("a.b", publicJwk)).rejects.toThrow(JwtParseError)
+  })
+
+  it("throws JwtClaimError when a validly-signed token has no \"exp\" claim at all", async () => {
+    const { token, publicJwk } = await makeSignedJwt({ sub: "user-1" })
     await expect(verifyJwt(token, publicJwk)).rejects.toThrow(JwtClaimError)
   })
 })

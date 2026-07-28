@@ -141,4 +141,17 @@ describe("createJwksCache", () => {
     const cache = createJwksCache("https://auth.example.com/jwks.json", { fetchImpl })
     await expect(cache.getJwks()).rejects.toThrow(JwksFetchError)
   })
+
+  it("throws JwksFetchError when a 200 JWKS response body has no \"keys\" array", async () => {
+    const fetchImpl = async (): Promise<Response> => jsonResponse({ notKeys: [] })
+    const cache = createJwksCache("https://auth.example.com/jwks.json", { fetchImpl })
+    await expect(cache.getJwks()).rejects.toThrow(JwksFetchError)
+  })
+
+  it("getKey throws JwksFetchError on an ambiguous no-kid lookup against a multi-key set, even after refresh", async () => {
+    const multiKeyJwks: Jwks = { keys: [{ kty: "RSA", kid: "key-1", n: "abc", e: "AQAB" }, { kty: "RSA", kid: "key-2", n: "def", e: "AQAB" }] }
+    const fetchImpl = async (): Promise<Response> => jsonResponse(multiKeyJwks)
+    const cache = createJwksCache("https://auth.example.com/jwks.json", { fetchImpl })
+    await expect(cache.getKey(undefined)).rejects.toThrow(JwksFetchError)
+  })
 })
