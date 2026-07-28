@@ -1048,3 +1048,45 @@ describe("property: dict detection with fast-check", () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// `enumMaxMembers` — the distinct-value cap as a declared, swappable policy
+//
+// The cap is an output-size guard, not an evidence test. `docs/design/
+// inference-theory.md` §6.6-6.7 derives why a cut on K alone cannot separate
+// memorization from genuine restriction: the evidence lives in the K/N ratio,
+// and a K-only bound rejects arbitrarily well-supported bounded vocabularies
+// while admitting poorly-supported small ones. These tests pin the default
+// (50, unchanged) AND the fact that it is overridable, so the policy is
+// visible rather than buried in a constant.
+// ---------------------------------------------------------------------------
+
+describe("enumMaxMembers", () => {
+  // 60 distinct values each seen 100 times: K/N = 0.01, about as unambiguous
+  // as a bounded vocabulary gets. The default cap rejects it anyway.
+  const wide = Array.from({ length: 6000 }, (_, i) => ({ status: `s${i % 60}` }))
+
+  test("default cap of 50 rejects a K=60 vocabulary even at ratio 0.01", () => {
+    expect(JSON.stringify(fromJsonCorpus(wide))).not.toContain('"enum"')
+  })
+
+  test("raising the cap admits it — the ratio evidence was always there", () => {
+    expect(JSON.stringify(fromJsonCorpus(wide, { enumMaxMembers: 100 }))).toContain('"enum"')
+  })
+
+  test("Infinity disables the cap entirely, leaving the K/N tests in charge", () => {
+    expect(JSON.stringify(fromJsonCorpus(wide, { enumMaxMembers: Infinity }))).toContain('"enum"')
+  })
+
+  test("lowering the cap suppresses an enum the default would have found", () => {
+    const narrow = Array.from({ length: 300 }, (_, i) => ({ status: `s${i % 6}` }))
+    expect(JSON.stringify(fromJsonCorpus(narrow))).toContain('"enum"')
+    expect(JSON.stringify(fromJsonCorpus(narrow, { enumMaxMembers: 3 }))).not.toContain('"enum"')
+  })
+
+  test("the cap does not override the K>=N unique-values rejection", () => {
+    const allUnique = Array.from({ length: 40 }, (_, i) => ({ id: `u${i}` }))
+    expect(JSON.stringify(fromJsonCorpus(allUnique, { enumMaxMembers: Infinity })))
+      .not.toContain('"enum"')
+  })
+})

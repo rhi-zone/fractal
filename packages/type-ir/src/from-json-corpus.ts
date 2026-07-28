@@ -117,6 +117,20 @@ export interface ResolveStrategy extends InferConfig {
    * Default: 5.
    */
   literalMinSamples?: number
+  /**
+   * Upper bound on distinct-value count (K) above which a position is never
+   * called an enum, regardless of how many samples support it. Default: 50.
+   *
+   * PROVISIONAL — this is a policy default, not a derived constant, and the
+   * K-only form is known to be defective: it rejects a field with K=100 at
+   * N=100,000 (ratio 0.001, unambiguously a bounded vocabulary) purely
+   * because K exceeds the cap, while admitting K=49 at N=50. The ratio tests
+   * below (`K/N`) are the part that carries the evidence; this cap is an
+   * independent guard on output size. Set to `Infinity` to disable it and
+   * rely on the ratio alone. See `docs/design/inference-theory.md` §6.6-6.7
+   * for why a cut on K alone cannot separate memorization from restriction.
+   */
+  enumMaxMembers?: number
   /** Minimum samples before dict detection fires. Default: 3. */
   dictMinSamples?: number
   /**
@@ -608,10 +622,14 @@ function looksLikeEnum(
   N: number,
   sortedValues?: readonly number[],
   literalMinSamples = 5,
+  enumMaxMembers = 50,
 ): boolean {
   if (K === 1) return N >= literalMinSamples
   if (K >= N) return false // every value unique — definitely not an enum
-  if (K > 50) return false // too many distinct values to be enum-like
+  // Output-size guard, NOT an evidence test — see `enumMaxMembers`. A cut on
+  // K alone cannot distinguish memorization from genuine restriction; the
+  // K/N ratio tests below are what carry the evidence.
+  if (K > enumMaxMembers) return false
 
   const ratio = K / N
   const saturated = ratio < 0.5 // K stopped growing relative to N
@@ -635,6 +653,7 @@ function walkAndDetectEnums(
   node: EvidenceNode,
   minSamples: number,
   literalMinSamples: number,
+  enumMaxMembers: number,
 ): TypeRef {
   const { shape } = ref
 
@@ -642,7 +661,7 @@ function walkAndDetectEnums(
     if (node.leafCount >= minSamples) {
       const K = node.distinctValues.size
       const N = node.leafCount
-      if (looksLikeEnum(K, N, undefined, literalMinSamples)) {
+      if (looksLikeEnum(K, N, undefined, literalMinSamples, enumMaxMembers)) {
         const members = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
         // Only if all values are strings
         if (members.every((m) => typeof m === "string")) {
@@ -665,7 +684,7 @@ function walkAndDetectEnums(
       const values = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
       if (values.every((v) => typeof v === "number" && Number.isInteger(v))) {
         const numericValues = values as number[]
-        if (looksLikeEnum(K, N, node.sortedNumeric, literalMinSamples)) {
+        if (looksLikeEnum(K, N, node.sortedNumeric, literalMinSamples, enumMaxMembers)) {
           // K === 1 → single constant value, represent as a literal.
           // K > 1 → union of literals.
           if (numericValues.length === 1) return t(types.literal(numericValues[0]!), ref.meta)
@@ -683,7 +702,7 @@ function walkAndDetectEnums(
     for (const [name, fieldRef] of Object.entries(fields)) {
       const childNode = node.object?.fields[name]
       newFields[name] = childNode !== undefined
-        ? walkAndDetectEnums(fieldRef, childNode, minSamples, literalMinSamples)
+        ? walkAndDetectEnums(fieldRef, childNode, minSamples, literalMinSamples, enumMaxMembers)
         : fieldRef
     }
     return t(types.object(newFields), ref.meta)
@@ -693,7 +712,7 @@ function walkAndDetectEnums(
     const el = (shape as { element: TypeRef }).element
     const childNode = node.array?.element
     const newEl = childNode !== undefined
-      ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples)
+      ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples, enumMaxMembers)
       : el
     return t(types.array(newEl), ref.meta)
   }
@@ -704,14 +723,14 @@ function walkAndDetectEnums(
     return t(types.tuple(els.map((el, i) => {
       const childNode = perIndex?.[i]
       return childNode !== undefined
-        ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples)
+        ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples, enumMaxMembers)
         : el
     })), ref.meta)
   }
 
   if (shape.kind === "union") {
     const variants = (shape as { variants: readonly TypeRef[] }).variants
-    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, minSamples, literalMinSamples))), ref.meta)
+    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, minSamples, literalMinSamples, enumMaxMembers))), ref.meta)
   }
 
   return ref
@@ -1644,6 +1663,7 @@ interface ResolvedStrategy {
   readonly detectDirtyData: boolean
   readonly enumMinSamples: number
   readonly literalMinSamples: number
+  readonly enumMaxMembers: number
   readonly dictMinSamples: number
   readonly splitDissimilarObjects: boolean
   readonly objectSplitThreshold: number
@@ -1678,6 +1698,7 @@ function resolveStrategy(tree: EvidenceTree, strategy?: ResolveStrategy): Resolv
     detectDirtyData: strategy?.detectDirtyData ?? cfg?.detectDirtyData ?? false,
     enumMinSamples: strategy?.enumMinSamples ?? cfg?.enumMinSamples ?? 3,
     literalMinSamples: strategy?.literalMinSamples ?? cfg?.literalMinSamples ?? 5,
+    enumMaxMembers: strategy?.enumMaxMembers ?? cfg?.enumMaxMembers ?? 50,
     dictMinSamples: strategy?.dictMinSamples ?? cfg?.dictMinSamples ?? 3,
     splitDissimilarObjects: strategy?.splitDissimilarObjects ?? cfg?.splitDissimilarObjects ?? true,
     objectSplitThreshold: strategy?.objectSplitThreshold ?? cfg?.objectSplitThreshold ?? 0.5,
@@ -1710,7 +1731,7 @@ export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy):
 
   // 2. Enum detection
   if (resolved.detectEnums) {
-    merged = walkAndDetectEnums(merged, tree.root, resolved.enumMinSamples, resolved.literalMinSamples)
+    merged = walkAndDetectEnums(merged, tree.root, resolved.enumMinSamples, resolved.literalMinSamples, resolved.enumMaxMembers)
   }
 
   // 3. Discriminated union detection
