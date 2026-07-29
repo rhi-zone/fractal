@@ -261,12 +261,45 @@ function walkNodeType(
 }
 
 /**
+ * The returned expression of a top-level function-declaration "tree
+ * factory" body: the LAST top-level statement, if (and only if) it is an
+ * unconditional `return <expr>`. Everything before it — destructuring, local
+ * `op(...)`/`api(...)` consts, unrelated computation — is walked over
+ * untouched and never inspected; only the TYPE of the final returned
+ * expression matters, and the checker resolves an identifier's type through
+ * its local binding on its own, so both `return api({...})` directly and
+ * `const tree = api({...}); return tree` fall out of the same check with no
+ * extra tracing needed. This is also the sibling codebase's actual pattern:
+ * `buildDomainAuthTree(composed)` destructures `composed`, builds three
+ * `op(...)` locals, then `return api({}, { fallback: {...} })`.
+ *
+ * A body ending in anything else — a conditional/branch, a loop, an
+ * expression statement, multiple top-level returns spread across branches —
+ * doesn't match and the factory is skipped, same as any other export that
+ * isn't a tree. Deliberately no control-flow analysis: this only ever looks
+ * at the LAST statement.
+ */
+function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefined {
+  const stmts = body.statements
+  const last = stmts[stmts.length - 1]
+  return last && ts.isReturnStatement(last) && last.expression ? last.expression : undefined
+}
+
+/**
  * Walk every exported `api(children, opts?)` tree in a source file, mirroring
  * toTools' name construction, and invoke `onLeaf` for each `op(fn, meta?)`
  * leaf found. Finds exports via a minimal AST scan (there is no type-level
  * way to enumerate a file's exports); the tree SHAPE itself — leaves,
  * branches, fallbacks — comes entirely from `checker.getTypeAtLocation` on
  * each export, not from matching call expressions.
+ *
+ * Two export shapes are recognized: a top-level `export const x = api(...)`
+ * (tree built eagerly), and a top-level `export function f(...) { ... }`
+ * whose body returns a tree per `returnExpressionOfFactoryBody` above (tree
+ * built inside a factory closing over a composition-time value, e.g.
+ * `export function buildDomainAuthTree(composed) { return api({...}) }`) —
+ * the factory's own parameters are never inspected, only the type of the
+ * expression it returns.
  */
 function walkTree(entryFile: string, onLeaf: OnLeaf): void {
   const program = createExtractorProgram(entryFile)
@@ -274,20 +307,31 @@ function walkTree(entryFile: string, onLeaf: OnLeaf): void {
   const source = program.getSourceFile(entryFile)
   if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
 
+  // A Node value always carries `meta`; skip candidates that aren't trees
+  // (plain re-exported types, unrelated constants, a factory that doesn't
+  // return a tree, …).
+  const walkIfTree = (nodeType: ts.Type, loc: ts.Node): void => {
+    if (!checker.getPropertyOfType(nodeType, "meta")) return
+    walkNodeType(nodeType, "", [], loc, checker, onLeaf)
+  }
+
   for (const stmt of source.statements) {
-    if (
-      !ts.isVariableStatement(stmt) ||
-      !stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
-    ) {
+    const isExported =
+      ts.canHaveModifiers(stmt) &&
+      (ts.getModifiers(stmt)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false)
+    if (!isExported) continue
+
+    if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (!ts.isIdentifier(decl.name) || !decl.initializer) continue
+        walkIfTree(checker.getTypeAtLocation(decl.name), decl.name)
+      }
       continue
     }
-    for (const decl of stmt.declarationList.declarations) {
-      if (!ts.isIdentifier(decl.name) || !decl.initializer) continue
-      const nodeType = checker.getTypeAtLocation(decl.name)
-      // A Node value always carries `meta`; skip exports that aren't trees
-      // (plain re-exported types, unrelated constants, …).
-      if (!checker.getPropertyOfType(nodeType, "meta")) continue
-      walkNodeType(nodeType, "", [], decl.name, checker, onLeaf)
+
+    if (ts.isFunctionDeclaration(stmt) && stmt.body) {
+      const returnExpr = returnExpressionOfFactoryBody(stmt.body)
+      if (returnExpr) walkIfTree(checker.getTypeAtLocation(returnExpr), returnExpr)
     }
   }
 }
