@@ -28,6 +28,8 @@ export interface InferConfig {
   narrowIntegerWidth?: boolean
   /** Try ISO date/datetime, uuid, email, uri format detection on strings. Default: true. */
   detectStringFormats?: boolean
+  /** Detect nominal class identity on non-JSON runtime values (see `classIdentity`). Default: true. */
+  detectClassInstances?: boolean
   /**
    * Custom leaf heuristics, tried in order before the built-in inference at
    * every node (leaves and containers alike). The first heuristic to return
@@ -46,6 +48,7 @@ interface ResolvedConfig {
   readonly arrayThreshold: number
   readonly narrowIntegerWidth: boolean
   readonly detectStringFormats: boolean
+  readonly detectClassInstances: boolean
   readonly leafHeuristics: readonly LeafHeuristic[]
 }
 
@@ -173,14 +176,56 @@ function inferArray(value: readonly unknown[], config: ResolvedConfig): TypeRef 
   return t(types.tuple(elementRefs))
 }
 
+/**
+ * Nominal class identity of a runtime value, or `undefined` when there is none
+ * to speak of.
+ *
+ * Read off the PROTOTYPE, never `value.constructor` — JSON data can carry a
+ * `constructor` key (`{"constructor":{"name":"Date"}}` is valid JSON) and the
+ * naive read would happily report `"Date"` for it. A JSON-parsed object's
+ * prototype is always `Object.prototype`, so the prototype read is inert on
+ * anything that came through `JSON.parse`, which is the overwhelmingly common
+ * input to this module.
+ *
+ * Excluded: null-prototype objects (`Object.create(null)`), plain literals,
+ * and anonymous classes — a mangled or empty name is worse than an honest
+ * structural answer. Note names are not reliable under minification; this is
+ * identity as the runtime reports it, not a guarantee.
+ */
+function classIdentity(value: object): string | undefined {
+  const proto: unknown = Object.getPrototypeOf(value)
+  if (proto === null || proto === Object.prototype) return undefined
+  const ctor: unknown = (proto as { constructor?: unknown }).constructor
+  if (typeof ctor !== "function") return undefined
+  const name = ctor.name
+  if (name === "" || name === "Object") return undefined
+  return name
+}
+
 function inferObject(value: Record<string, unknown>, config: ResolvedConfig): TypeRef {
   const keys = Object.keys(value)
-  // Single-inhabitant type (the empty record) — same reasoning as `[]`.
-  if (keys.length === 0) return t(types.object({}))
+  const className = config.detectClassInstances ? classIdentity(value) : undefined
+
+  // A class instance with no own enumerable data — `Date`, `Map`, `Set`, a
+  // behaviour-only class. The structural reading is `object{}`, which says
+  // nothing; the nominal `instance` kind says what it actually is. Strictly
+  // more information, none lost.
+  if (keys.length === 0) {
+    return className !== undefined
+      ? t(types.instance(className, ""))
+      : t(types.object({})) // single-inhabitant type (the empty record) — same reasoning as `[]`
+  }
 
   const fields: Record<string, TypeRef> = {}
   for (const key of keys) fields[key] = inferValue(value[key], config)
-  return t(types.object(fields))
+  const ref = t(types.object(fields))
+
+  // A class instance that DOES carry data. `instance` is nominal-only by
+  // design ("never structure" — see index.ts), so returning it here would
+  // discard the fields we can actually see, which downstream projectors that
+  // cannot express nominal identity must then render as an opaque placeholder.
+  // Keep the structure and record the identity alongside it.
+  return className !== undefined ? t(types.object(fields), { className }) : ref
 }
 
 // ---------------------------------------------------------------------------
@@ -220,6 +265,7 @@ export function inferValueShape(value: unknown, config?: InferConfig): TypeRef {
     arrayThreshold: config?.arrayThreshold ?? 3,
     narrowIntegerWidth: config?.narrowIntegerWidth ?? true,
     detectStringFormats: config?.detectStringFormats ?? true,
+    detectClassInstances: config?.detectClassInstances ?? true,
     leafHeuristics: config?.leafHeuristics ?? [],
   }
   return inferValue(value, resolved)

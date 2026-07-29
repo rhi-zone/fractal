@@ -1826,6 +1826,8 @@ export function resolvedStrategy(strategy?: ResolveStrategy, cfg?: CorpusInferCo
   if (narrowIntegerWidth !== undefined) innerConfig.narrowIntegerWidth = narrowIntegerWidth
   const detectStringFormats = strategy?.detectStringFormats ?? cfg?.detectStringFormats
   if (detectStringFormats !== undefined) innerConfig.detectStringFormats = detectStringFormats
+  const detectClassInstances = strategy?.detectClassInstances ?? cfg?.detectClassInstances
+  if (detectClassInstances !== undefined) innerConfig.detectClassInstances = detectClassInstances
   const leafHeuristics = strategy?.leafHeuristics ?? cfg?.leafHeuristics
   if (leafHeuristics !== undefined) innerConfig.leafHeuristics = leafHeuristics as LeafHeuristic[]
 

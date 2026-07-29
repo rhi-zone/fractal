@@ -247,3 +247,72 @@ describe("custom leaf heuristics", () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// Nominal class identity on runtime values
+//
+// Inference normally sees JSON-parsed data, where every object's prototype is
+// `Object.prototype` and none of this fires. It matters on the one path that
+// feeds inference values that did NOT come from `JSON.parse` —
+// `from-standard-schema.ts`'s `~standard.types.output` sample, whose output
+// type need not be JSON-safe (`z.instanceof(Date)` produces a live Date).
+// ---------------------------------------------------------------------------
+
+class Money {
+  constructor(public cents = 5) {}
+}
+class Behaviour {
+  greet(): string { return "hi" }
+}
+
+describe("class identity", () => {
+  test("a data-less instance becomes nominal rather than an empty object", () => {
+    expect(inferOne(new Date())).toEqual(t(types.instance("Date", "")))
+    expect(inferOne(new Map([["a", 1]]))).toEqual(t(types.instance("Map", "")))
+    expect(inferOne(new Set([1]))).toEqual(t(types.instance("Set", "")))
+    expect(inferOne(new Behaviour())).toEqual(t(types.instance("Behaviour", "")))
+  })
+
+  test("an instance carrying data keeps its structure and records identity", () => {
+    // `instance` is nominal-only by design, so returning it here would discard
+    // fields we can actually see. Structure is kept; the name rides in meta.
+    const out = inferOne(new Money(5))
+    expect(out.shape).toEqual({ kind: "object", fields: { cents: uint8() } })
+    expect(out.meta?.className).toBe("Money")
+  })
+
+  test("plain objects are untouched", () => {
+    expect(inferOne({})).toEqual(t(types.object({})))
+    const out = inferOne({ a: 1 })
+    expect(out.shape.kind).toBe("object")
+    expect(out.meta?.className).toBeUndefined()
+  })
+
+  test("a JSON `constructor` key does not fake an instance", () => {
+    // `{"constructor":{"name":"Date"}}` is valid JSON, and reading
+    // `value.constructor.name` would report "Date" for it. Identity is read
+    // off the prototype instead, which JSON.parse never sets.
+    const evil = JSON.parse('{"constructor":{"name":"Date"}}') as unknown
+    const out = inferOne(evil)
+    expect(out.shape.kind).toBe("object")
+    expect(out.shape.kind).not.toBe("instance")
+  })
+
+  test("a JSON `__proto__` key does not fake an instance either", () => {
+    const out = inferOne(JSON.parse('{"__proto__":{"x":1}}') as unknown)
+    expect(out.shape.kind).not.toBe("instance")
+  })
+
+  test("null-prototype objects have no identity to report", () => {
+    expect(inferOne(Object.create(null))).toEqual(t(types.object({})))
+  })
+
+  test("detectClassInstances: false restores the structural reading", () => {
+    expect(inferOne(new Date(), { detectClassInstances: false })).toEqual(t(types.object({})))
+    expect(inferOne(new Money(5), { detectClassInstances: false }).meta?.className).toBeUndefined()
+  })
+
+  test("arrays are unaffected", () => {
+    expect(inferOne([1, 2, 3]).shape.kind).toBe("array")
+  })
+})

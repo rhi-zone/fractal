@@ -94,31 +94,23 @@ function exportJsonSchema(converter: StandardJSONSchemaV1.Converter): JsonSchema
  * exports no JSON Schema — so which is "richer" never arbitrates anything at
  * runtime. Recorded for accuracy: neither tier dominates the other in general.
  *
- * Tier 1 wins in two distinct ways.
+ * Tier 1 wins on the thing a single sample categorically cannot supply: a
+ * schema describes the whole space of allowed values, a sample is one point in
+ * it. No amount of runtime reflection recovers optionality (a `note?: string`
+ * this sample omits), enum member sets, union branches not taken, or
+ * constraints (`minLength`, `pattern`). That is not historical framing; it is
+ * a difference in kind, and it is why tier 1 stays the preferred path.
  *
- *   Declared structure the sample cannot show. A real export carries
- *   optionality (a `note?: string` a single sample simply does not exhibit)
- *   and constraints (`minLength` -> meta), and avoids tier 2's one-sample
- *   artifacts — `tags: ["a"]` infers a 1-`tuple`, not an `array`, because one
- *   observation cannot distinguish fixed arity from variable.
+ *   It also avoids tier 2's one-sample artifacts: `tags: ["a"]` infers a
+ *   1-`tuple`, not an `array`, because one observation cannot distinguish
+ *   fixed arity from variable.
  *
- *   Values outside the JSON-corpus importer's input domain. TypeRef itself
- *   represents plenty that JSON has no notion of — `instance` is nominal,
- *   there are `function`/`method`/`interface`/`stream`/`page` kinds — but
- *   `fromJsonCorpus`/`inferValueShape` specifically infer structure from JSON
- *   *values*, so that importer's input domain is JSON-shaped data. That is a
- *   fact about this one inference path, not about the IR.
- *
- *   It matters here because tier 2 feeds it something that need not be JSON.
- *   `~standard.types.output` is an example of the schema's OUTPUT type, and
- *   for validators like Zod that is not restricted to JSON-safe values —
- *   `z.instanceof(Date)` produces a live `Date`. Fed that, inference does
- *   typeof dispatch with no class-instance awareness and yields `object{}`
- *   (a Date has no own enumerable keys); `new Map([["a",1]])` likewise. The
- *   ideal answer, `instance("Date")`, is representable in the IR, and tier 1
- *   now reaches it when the vendor emits `x-class-name` (see (b) above).
- *   Tier 2 still cannot: nothing in a live `Date`'s JSON-shaped projection
- *   says "Date".
+ *   Nominal identity — no longer a tier-1 advantage. Inference now reads class
+ *   identity off a runtime value's prototype, so `z.instanceof(Date)` yields
+ *   `instance("Date")` from the sample directly. That is ground truth, where
+ *   tier 1 recovers identity only if the vendor happens to emit the
+ *   non-standard `x-class-name` extension. On this one axis tier 2 is the
+ *   more reliable of the two.
  *
  * Tier 2 wins when the vendor CANNOT express the construct at all
  * (`z.custom<T>()`, instanceof-style checks) and degrades to a permissive
