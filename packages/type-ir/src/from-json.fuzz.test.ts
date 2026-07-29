@@ -13,7 +13,13 @@ import {
   uint8, uint16, uint32, uint64,
   date, datetime, email, uuid, uri,
 } from "./kinds/common.ts"
-import { fromJson } from "./from-json.ts"
+import { fromJsonCorpus, type CorpusInferConfig } from "./from-json-corpus.ts"
+
+// Single-value inference is the N=1 case of the one public entry point; there
+// is no separate single-value function. This file exercises that case.
+const inferOne = (value: unknown, config?: CorpusInferConfig): TypeRef =>
+  fromJsonCorpus([value], config)
+
 
 // ---------------------------------------------------------------------------
 // TypeRef arbitrary — recursive, depth-bounded via fc.memo
@@ -455,7 +461,7 @@ describe("fromJson property-based tests", () => {
     fc.assert(
       fc.property(fc.jsonValue(), (value) => {
         // Should not throw
-        fromJson(value)
+        inferOne(value)
       }),
       { numRuns: 10000 },
     )
@@ -465,8 +471,8 @@ describe("fromJson property-based tests", () => {
   test("determinism: same input, same output", () => {
     fc.assert(
       fc.property(fc.jsonValue(), (value) => {
-        const a = fromJson(value)
-        const b = fromJson(value)
+        const a = inferOne(value)
+        const b = inferOne(value)
         expect(a).toEqual(b)
       }),
       { numRuns: 5000 },
@@ -477,7 +483,7 @@ describe("fromJson property-based tests", () => {
   test("roundtrip: value inhabits inferred type", () => {
     fc.assert(
       fc.property(arbTypeAndValue(), ({ type, value }) => {
-        const inferred = fromJson(value)
+        const inferred = inferOne(value)
         const error = valueInhabitsType(value, inferred)
         if (error !== null) {
           throw new Error(
@@ -498,7 +504,7 @@ describe("fromJson property-based tests", () => {
       fc.property(
         fc.integer({ min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER }),
         (value) => {
-          const inferred = fromJson(value)
+          const inferred = inferOne(value)
           const error = checkIntegerTightness(value, inferred)
           if (error !== null) throw new Error(error)
         },
@@ -520,10 +526,10 @@ describe("fromJson property-based tests", () => {
           arbPlainString(),
         ),
         (value) => {
-          const first = fromJson(value)
+          const first = inferOne(value)
           // Generate a "canonical" value from the inferred type and re-infer.
           // For leaves, the same value re-inferred should give the same type.
-          const second = fromJson(value)
+          const second = inferOne(value)
           expect(first).toEqual(second)
         },
       ),
@@ -547,7 +553,7 @@ describe("fromJson property-based tests", () => {
           { minKeys: 1, maxKeys: 8 },
         ),
         (obj) => {
-          const inferred = fromJson(obj)
+          const inferred = inferOne(obj)
           expect(inferred.shape.kind).toBe("object")
           const fields = (inferred.shape as { fields: Record<string, TypeRef> }).fields
           for (const key of Object.keys(obj)) {
@@ -572,7 +578,7 @@ describe("fromJson property-based tests", () => {
       fc.property(
         fc.array(fc.integer({ min: 0, max: 100 }), { minLength: 3, maxLength: 20 }),
         (arr) => {
-          const inferred = fromJson(arr)
+          const inferred = inferOne(arr)
           // All elements are small non-negative integers -> all infer as uint8
           // -> homogeneous -> should be array, not tuple
           expect(inferred.shape.kind).toBe("array")
@@ -586,7 +592,7 @@ describe("fromJson property-based tests", () => {
   test("string format soundness: detected formats match value", () => {
     fc.assert(
       fc.property(arbPlainString(), (s) => {
-        const inferred = fromJson(s)
+        const inferred = inferOne(s)
         // Plain strings (starting with uppercase, no special format) should
         // not be detected as date, datetime, uuid, email, or uri
         expect(inferred.shape.kind).toBe("string")

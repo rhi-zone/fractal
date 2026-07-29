@@ -30,13 +30,16 @@ phase 1  collectEvidence   mechanical, no decisions, single accumulating pass
 phase 2  resolveEvidence   every heuristic, behind ResolveStrategy
 ```
 
-which is the fixed-mechanics / pluggable-policy split the brief asked for. `fromJson` is
+which is the fixed-mechanics / pluggable-policy split the brief asked for. `inferValueShape` (the per-value leaf primitive, formerly the public `fromJson`) is
 called per-record only in three specific phase-2 paths that genuinely need per-value
 re-inference (dirty-data detection, DU variant construction, root union resolution).
 
-Merging the two *files* is also not indicated: `from-json.ts` is 217 lines of single-value
-leaf inference (string-format detection, integer narrowing) and is imported independently by
-`from-standard-schema.ts`. It is a leaf-typing library, not half of a two-pass pipeline.
+**Superseded on the public surface.** `from-json.ts` remains a distinct module — it holds
+`inferValueShape`, the per-value leaf primitive the corpus pipeline is built on — but it no
+longer exports a public single-value entry point. There is now exactly one:
+`fromJsonCorpus(values[])`, and a single value is `fromJsonCorpus([value])`. Two public
+functions that were expected to agree but measurably did not (68 of 1510 real documents) was
+a mental-model error, not a layering.
 
 **What is genuinely missing is the separation the brief identified**: grouping and
 generalization are tangled together inside `resolveEvidence`, sharing one flat
@@ -126,7 +129,7 @@ the *default* implementations, so every current caller keeps working unchanged.
 ## 5. Defaults — settled vs. provisional
 
 **Settled** (mechanics, not policy): phase 1's accumulating walk; collecting evidence under
-all candidate groupings; deferring the grouping choice; `fromJson`'s leaf typing.
+all candidate groupings; deferring the grouping choice; `inferValueShape`'s leaf typing.
 
 **Default grouping — reasonable, some parts provisional:**
 

@@ -19,7 +19,7 @@
 //      `InferInput`/`InferOutput` — implementations are not required to
 //      (and typically don't) populate it at runtime — so this path
 //      degrades to `unknown` unless a vendor actually attaches a runtime
-//      sample value, in which case fromJson() infers a structural TypeRef
+//      sample value, in which case fromJsonCorpus([sample]) infers a structural TypeRef
 //      from that sample the same way it would from any other JSON value.
 //
 // The originating vendor name (`~standard.vendor`) is always preserved in
@@ -29,7 +29,7 @@
 import type { StandardJSONSchemaV1, StandardSchemaV1, StandardTypedV1 } from "@standard-schema/spec"
 import { t, types, type TypeRef } from "./index.ts"
 import { fromJsonSchema, type JsonSchema } from "./from-json-schema.ts"
-import { fromJson } from "./from-json.ts"
+import { fromJsonCorpus } from "./from-json-corpus.ts"
 
 export type { StandardJSONSchemaV1, StandardSchemaV1, StandardTypedV1 }
 
@@ -79,7 +79,7 @@ export function fromStandardSchema(schema: StandardSchemaV1): TypeRef {
 
   const sample = props.types?.output ?? props.types?.input
   if (sample !== undefined) {
-    return withMeta(fromJson(sample), { vendor })
+    return withMeta(fromJsonCorpus([sample]), { vendor })
   }
 
   return withMeta(t(types.unknown), { vendor })

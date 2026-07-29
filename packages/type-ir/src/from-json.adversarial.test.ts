@@ -16,8 +16,13 @@
 import { describe, expect, test } from "bun:test"
 import fc from "fast-check"
 import { t, types, ancestors, type TypeRef } from "./index.ts"
-import { fromJson } from "./from-json.ts"
-import { fromJsonCorpus } from "./from-json-corpus.ts"
+import { fromJsonCorpus, type CorpusInferConfig } from "./from-json-corpus.ts"
+
+// Single-value inference is the N=1 case of the one public entry point; there
+// is no separate single-value function. This file exercises that case.
+const inferOne = (value: unknown, config?: CorpusInferConfig): TypeRef =>
+  fromJsonCorpus([value], config)
+
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -169,7 +174,7 @@ describe("adversarial: deep nesting", () => {
   test("fromJson never crashes on 5+ level deep structures", () => {
     fc.assert(
       fc.property(jsonDeep, (value) => {
-        fromJson(value)
+        inferOne(value)
       }),
       { numRuns: 2000 },
     )
@@ -194,7 +199,7 @@ describe("adversarial: deep nesting", () => {
         },
       ],
     }
-    const inferred = fromJson(sample)
+    const inferred = inferOne(sample)
     expect(inferred.shape.kind).toBe("object")
     const err = inhabits(sample, inferred)
     expect(err).toBeNull()
@@ -218,7 +223,7 @@ describe("adversarial: mixed numeric types", () => {
           { minLength: 3, maxLength: 15 },
         ).filter((arr) => arr.some((n) => !Number.isInteger(n)) && arr.some((n) => Number.isInteger(n))),
         (arr) => {
-          const inferred = fromJson(arr)
+          const inferred = inferOne(arr)
           const err = inhabits(arr, inferred)
           if (err !== null) {
             throw new Error(`${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
@@ -260,7 +265,7 @@ describe("adversarial: mixed numeric types", () => {
       fc.property(
         fc.array(fc.integer({ min: -3_000_000_000, max: 3_000_000_000 }), { minLength: 3, maxLength: 10 }),
         (arr) => {
-          const inferred = fromJson(arr)
+          const inferred = inferOne(arr)
           const err = inhabits(arr, inferred)
           if (err !== null) {
             throw new Error(`${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
@@ -285,7 +290,7 @@ describe("adversarial: string format confusion", () => {
   test("near-miss format strings never crash and infer as plain string", () => {
     fc.assert(
       fc.property(fc.oneof(almostUuid(), almostEmail(), almostDate()), (s) => {
-        const inferred = fromJson(s)
+        const inferred = inferOne(s)
         // These are deliberately malformed vs. every format regex — must not
         // be misclassified as a semantic string subtype.
         expect(inferred.shape.kind).toBe("string")
@@ -352,7 +357,7 @@ describe("adversarial: union stress", () => {
           { minLength: 3, maxLength: 12 },
         ),
         (arr) => {
-          const inferred = fromJson(arr)
+          const inferred = inferOne(arr)
           const err = inhabits(arr, inferred)
           if (err !== null) {
             throw new Error(`${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
@@ -776,7 +781,7 @@ describe("adversarial: dirty data simulation", () => {
       { totallyDifferent: true, nested: { x: 1 } },
       { id: 4, name: "d" },
     ]
-    const inferred = fromJson(arr)
+    const inferred = inferOne(arr)
     const err = inhabits(arr, inferred)
     expect(err).toBeNull()
   })
@@ -826,7 +831,7 @@ describe("adversarial: empty and degenerate cases", () => {
   test("array of nulls never crashes", () => {
     fc.assert(
       fc.property(fc.array(fc.constant(null), { minLength: 0, maxLength: 10 }), (arr) => {
-        fromJson(arr)
+        inferOne(arr)
       }),
       { numRuns: 200 },
     )
@@ -837,7 +842,7 @@ describe("adversarial: empty and degenerate cases", () => {
       fc.property(
         fc.dictionary(fc.stringMatching(/^[a-z]{2,6}$/), fc.constant(null), { minKeys: 1, maxKeys: 6 }),
         (obj) => {
-          const inferred = fromJson(obj)
+          const inferred = inferOne(obj)
           const err = inhabits(obj, inferred)
           expect(err).toBeNull()
         },
@@ -848,7 +853,7 @@ describe("adversarial: empty and degenerate cases", () => {
 
   test("deeply nested empty containers never crash", () => {
     const value = { a: [{ b: [] }, { b: [] }, { b: {} }], c: {} }
-    expect(() => fromJson(value)).not.toThrow()
+    expect(() => inferOne(value)).not.toThrow()
     expect(() => fromJsonCorpus([value, value, value])).not.toThrow()
   })
 })
@@ -995,7 +1000,7 @@ describe("adversarial: misc numeric and structural edge cases", () => {
           fc.double({ min: 1e16, max: 1e21, noNaN: true, noDefaultInfinity: true }).filter(Number.isInteger),
         ),
         (n) => {
-          const inferred = fromJson(n)
+          const inferred = inferOne(n)
           const err = inhabits(n, inferred)
           if (err !== null) {
             throw new Error(`${err}\n  value: ${n}\n  inferred: ${JSON.stringify(inferred.shape)}`)
@@ -1219,7 +1224,7 @@ describe("adversarial: K=1 in arrays of objects", () => {
       { status: "active", id: 4 },
       { status: "active", id: 5 },
     ]
-    const inferred = fromJson(samples)
+    const inferred = inferOne(samples)
     expect(inferred.shape.kind).toBe("array")
     // CORRECTED. This asserted `string` and its comment said the point was to
     // "confirm the two entry points disagree" — pinning the divergence as if it

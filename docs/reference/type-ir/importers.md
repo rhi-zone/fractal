@@ -241,9 +241,10 @@ detail has no `TypeRef` equivalent. Unrecognized/future ES types degrade to
 ## JSON value
 
 ```ts
-import { fromJson } from "@rhi-zone/fractal-type-ir/from-json"
+import { fromJsonCorpus } from "@rhi-zone/fractal-type-ir/from-json-corpus"
 
-fromJson({ id: 42, email: "a@b.com", tags: ["x", "y", "z"] })
+// One entry point, always an array. A single value is the N=1 case.
+fromJsonCorpus([{ id: 42, email: "a@b.com", tags: ["x", "y", "z"] }])
 ```
 
 ```ts
@@ -254,8 +255,11 @@ t(types.object({
 }))
 ```
 
-Infers a `TypeRef` from a single JSON *value* by structural heuristic — no
-declared schema to read, only a shape to guess. Core heuristic: narrow away
+Infers a `TypeRef` from JSON *values* by structural heuristic — no declared
+schema to read, only a shape to guess. There is one calling convention: always
+an array of observations. Passing `[value]` is the single-value case, and it is
+not a separate function — the same evidence machinery runs, so nested arrays
+inside that one value are still typed from all their elements. Core heuristic: narrow away
 from a wide type only when the observed value lands in a subspace ~0% of the
 wide type's inhabitants occupy (a whole number narrows to the tightest
 fixed-width integer kind; a string that validates as a UUID/email/URI/date
