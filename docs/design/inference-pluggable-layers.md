@@ -137,21 +137,36 @@ all candidate groupings; deferring the grouping choice; `fromJson`'s leaf typing
 | entity key | `undefined` — every occurrence is its own observation | **provisional and known-wrong for API payloads.** §17.2 measured 50 PRs embedding one repo. §6.11 shows the correct key is not derivable; it must be declared. |
 
 **Default generalization — SHIPPED, and it is the session's finding rather than the old
-heuristic.** The decision is a swappable predicate, `ResolveStrategy.isEnum: EnumPredicate`,
-receiving an `EnumDecisionContext` — `distinct` (K), `occurrences` (N), `singletons` (n₁),
-the candidate `distinctValues`, `sortedNumeric`, the `path` from the root, the merged `ref`,
-the full `node`, and the resolved `strategy`. Arbitrary logic, no numeric component required:
+heuristic.** The decision **returns a type**: `ResolveStrategy.generalize: Generalize`, where
 
 ```ts
-// by field name, regardless of the evidence
-const byName: EnumPredicate = (c) =>
-  ["status", "type", "kind"].includes(String(c.path.at(-1))) || defaultEnumPredicate(c)
-// only where an out-of-band declaration says so
-const declaredOnly: EnumPredicate = (c) => declaredPaths.has(c.path.join("."))
+type Generalize = (ctx: PositionContext) => TypeRef | undefined
 ```
 
-`defaultEnumPredicate` is the built-in, and the four numeric knobs are **parameters of that
-default**, not the only way to influence the outcome:
+`undefined` means "no opinion" — the merged type stands and traversal continues into
+children; a `TypeRef` commits the position and its children are left alone. `PositionContext`
+carries `distinct` (K), `occurrences` (N), `singletons` (n₁), `distinctValues`, the parsed
+`members`, `sortedNumeric`, the `path` from the root, the merged `ref`, the full `node`, and
+the resolved `strategy`.
+
+A yes/no rule is the degenerate case, `cond ? defaultGeneralize(c) : undefined`. Returning a
+type is strictly more general, and lets a caller construct what the built-ins never would:
+
+```ts
+// a branded scalar rather than an enum
+const branded: Generalize = (c) =>
+  c.path.at(-1) === "status" ? t(types.string, { format: "x-status-code" }) : undefined
+// a union structure with no built-in equivalent
+const nullable: Generalize = (c) =>
+  t(types.union([t(types.enum(nonNullMembers(c))), t(types.null)]))
+// commit a whole subtree, skipping its children
+const collapse: Generalize = (c) =>
+  c.path.join(".") === "user" ? t(types.map(t(types.string), t(types.unknown))) : undefined
+```
+
+`defaultGeneralize` is the built-in, and `defaultEnumPredicate` remains exported so a caller
+can reuse the evidence test without its construction. The four numeric knobs are **parameters
+of that default**, not the only way to influence the outcome:
 
 ```
 K === 1              -> literal, once N >= literalMinSamples      (unchanged)

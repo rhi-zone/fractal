@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fc from "fast-check"
 import { t, types, type TypeRef } from "./index.ts"
 import { uint8 } from "./kinds/common.ts"
-import { fromJsonCorpus, collectEvidence, resolveEvidence, defaultStages, resolvedStrategy, perPosition, defaultEnumPredicate, type Stage, type EnumPredicate } from "./from-json-corpus.ts"
+import { fromJsonCorpus, collectEvidence, resolveEvidence, defaultStages, resolvedStrategy, perPosition, defaultEnumPredicate, defaultGeneralize, type Stage, type Generalize } from "./from-json-corpus.ts"
 
 // ---------------------------------------------------------------------------
 // Unit tests — deterministic, verifying specific behavior
@@ -1136,7 +1136,7 @@ describe("stage pipeline", () => {
   test("defaults are exposed as an ordered, inspectable list", () => {
     const stages = defaultStages(resolvedStrategy())
     expect(stages.map((s) => s.step.name)).toEqual([
-      "enums", "discriminated-union", "dict-vs-record", "cfd-discriminant", "structural-split",
+      "generalize", "discriminated-union", "dict-vs-record", "cfd-discriminant", "structural-split",
     ])
     // the enum GENERALIZATION precedes the DU GROUPING, because DU grouping
     // only fires on discriminants already typed as enum/literal
@@ -1215,58 +1215,90 @@ describe("stage pipeline", () => {
 })
 
 // ---------------------------------------------------------------------------
-// `isEnum` — the decision itself is replaceable, not just its thresholds
+// `generalize` — the decision RETURNS A TYPE, it is not a yes/no gate
 //
-// The numeric knobs (enumMaxMembers / enumMaxRatio / enumCoverageBar /
-// enumMinSamples) are parameters of `defaultEnumPredicate`. These tests pin
-// that a caller can replace the whole decision with logic those knobs cannot
-// express — including rules with no numeric component at all.
+// `Generalize = (ctx: PositionContext) => TypeRef | undefined`. A boolean rule
+// is the degenerate case (`cond ? defaultGeneralize(c) : undefined`); these
+// tests pin the cases a boolean could not have expressed — constructing types
+// the built-in path never produces.
 // ---------------------------------------------------------------------------
 
-describe("isEnum predicate", () => {
+describe("generalize", () => {
   // every value distinct: no threshold rule would ever call this an enum
   const allDistinct = Array.from({ length: 12 }, (_, i) => ({ status: `s${i}`, other: `o${i}` }))
 
-  test("field-name rule fires where the evidence alone never would", () => {
-    const byName: EnumPredicate = (c) =>
-      ["status", "type", "kind"].includes(String(c.path.at(-1))) || defaultEnumPredicate(c)
-    const fields = objectFieldsOf(fromJsonCorpus(allDistinct, { isEnum: byName }))
+  test("degenerate boolean case still works — field-name rule", () => {
+    const byName: Generalize = (c) =>
+      ["status", "type", "kind"].includes(String(c.path.at(-1)))
+        ? t(types.enum(c.members as string[]))
+        : defaultGeneralize(c)
+    const fields = objectFieldsOf(fromJsonCorpus(allDistinct, { generalize: byName }))
     expect(fields.status!.shape.kind).toBe("enum")
-    // the sibling is untouched — the rule is per-position, not global
     expect(fields.other!.shape.kind).toBe("string")
   })
 
-  test("a declaration-driven rule with no numeric component at all", () => {
-    const declared = new Set(["other"])
-    const declaredOnly: EnumPredicate = (c) => declared.has(c.path.join("."))
-    const fields = objectFieldsOf(fromJsonCorpus(allDistinct, { isEnum: declaredOnly }))
-    expect(fields.other!.shape.kind).toBe("enum")
+  test("returns a type the built-in path never constructs — a branded string", () => {
+    const branded: Generalize = (c) =>
+      c.path.at(-1) === "status" ? t(types.string, { format: "x-status-code" }) : undefined
+    const fields = objectFieldsOf(fromJsonCorpus(allDistinct, { generalize: branded }))
     expect(fields.status!.shape.kind).toBe("string")
+    expect(fields.status!.meta?.format).toBe("x-status-code")
   })
 
-  test("a predicate that always refuses disables enum inference entirely", () => {
+  test("returns a custom UNION structure — enum-or-null, which no boolean gate could produce", () => {
+    const withNull = [...allDistinct.map((v) => ({ ...v })), { status: null, other: "x" }]
+    const nullable: Generalize = (c) => {
+      if (c.path.at(-1) !== "status") return undefined
+      const nonNull = c.members.filter((m) => m !== null) as string[]
+      return t(types.union([t(types.enum(nonNull)), t(types.null)]))
+    }
+    const fields = objectFieldsOf(fromJsonCorpus(withNull, { generalize: nullable }))
+    expect(fields.status!.shape.kind).toBe("union")
+    const variants = (fields.status!.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants.map((v) => v.shape.kind).sort()).toEqual(["enum", "null"])
+  })
+
+  test("can commit a whole SUBTREE, replacing an object position outright", () => {
+    const nested = Array.from({ length: 12 }, (_, i) => ({ user: { a: i, b: `x${i}` } }))
+    const collapse: Generalize = (c) =>
+      c.path.join(".") === "user" ? t(types.map(t(types.string), t(types.unknown))) : undefined
+    const fields = objectFieldsOf(fromJsonCorpus(nested, { generalize: collapse }))
+    expect(fields.user!.shape.kind).toBe("map")
+    // children were not visited — the position was committed
+    expect(JSON.stringify(fields.user!)).not.toContain('"b"')
+  })
+
+  test("undefined means no opinion — traversal continues into children", () => {
+    const nested = Array.from({ length: 40 }, (_, i) => ({ user: { role: `r${i % 4}` } }))
+    const out = fromJsonCorpus(nested, { generalize: defaultGeneralize })
+    const user = objectFieldsOf(out).user!
+    expect(objectFieldsOf(user).role!.shape.kind).toBe("enum")
+  })
+
+  test("a rule that always commits disables inference below the root", () => {
     const repetitive = Array.from({ length: 40 }, (_, i) => ({ s: `v${i % 4}` }))
     expect(JSON.stringify(fromJsonCorpus(repetitive))).toContain('"enum"')
-    expect(JSON.stringify(fromJsonCorpus(repetitive, { isEnum: () => false }))).not.toContain('"enum"')
+    const frozen = fromJsonCorpus(repetitive, { generalize: (c) => c.ref })
+    expect(JSON.stringify(frozen)).not.toContain('"enum"')
   })
 
-  test("the predicate sees the evidence the default consumes", () => {
+  test("defaultEnumPredicate stays available for reuse without its construction", () => {
+    const evidenceOnly: Generalize = (c) =>
+      defaultEnumPredicate(c) ? t(types.string, { xEnumLike: true }) : undefined
+    const repetitive = Array.from({ length: 40 }, (_, i) => ({ s: `v${i % 4}` }))
+    const fields = objectFieldsOf(fromJsonCorpus(repetitive, { generalize: evidenceOnly }))
+    expect(fields.s!.meta?.xEnumLike).toBe(true)
+  })
+
+  test("the rule sees the evidence the default consumes", () => {
     const seen: { path: string; K: number; N: number; n1: number }[] = []
     fromJsonCorpus(allDistinct, {
-      isEnum: (c) => {
-        seen.push({ path: c.path.join("."), K: c.distinct, N: c.occurrences, n1: c.singletons })
-        return false
+      generalize: (c) => {
+        if (c.occurrences > 0) seen.push({ path: c.path.join("."), K: c.distinct, N: c.occurrences, n1: c.singletons })
+        return undefined
       },
     })
     expect(seen).toContainEqual({ path: "status", K: 12, N: 12, n1: 12 })
-  })
-
-  test("nested paths are addressable", () => {
-    const nested = Array.from({ length: 12 }, (_, i) => ({ user: { role: `r${i}` } }))
-    const deep: EnumPredicate = (c) => c.path.join(".") === "user.role"
-    const out = fromJsonCorpus(nested, { isEnum: deep })
-    const user = objectFieldsOf(out).user!
-    expect(objectFieldsOf(user).role!.shape.kind).toBe("enum")
   })
 })
 
