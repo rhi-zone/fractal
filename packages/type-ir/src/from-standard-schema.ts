@@ -82,10 +82,25 @@ function exportJsonSchema(converter: StandardJSONSchemaV1.Converter): JsonSchema
  * `types.unknown` — in every case preserving `~standard.vendor` in
  * `meta.vendor`.
  *
- * The tiers are mutually exclusive: tier 2 is only reached when the vendor
- * exports no JSON Schema, so the lossiness of tier 1 (see module doc) is
- * never a reason to prefer tier 2 — there is no case where both apply and
- * the sample would carry more information.
+ * The tiers are mutually exclusive — tier 2 is only reached when the vendor
+ * exports no JSON Schema — so which is "better" never actually arbitrates
+ * anything at runtime. Stated for accuracy rather than as a justification:
+ * tier 1 is not unconditionally richer.
+ *
+ * Normal case, vendor exports a real schema: tier 1 wins clearly. It carries
+ * optionality (a `note?: string` the sample simply doesn't exhibit) and
+ * constraints (`minLength` -> meta), and avoids tier 2's single-sample
+ * artifacts — one sample of `tags: ["a"]` infers a 1-`tuple`, not an
+ * `array`, because one observation cannot distinguish fixed arity from
+ * variable.
+ *
+ * Degenerate case, vendor CANNOT express the construct (`z.custom<T>()`,
+ * instanceof-style checks) and exports a permissive schema: tier 1 collapses
+ * — `{}` and `true` both infer `unknown`, `{type:"object"}` infers an empty
+ * object — while a JSON-serializable sample still yields the real field
+ * shape. There tier 2 carries strictly more. It is unreachable given the
+ * mutual exclusivity above, but the ordering is a property of the inputs,
+ * not a law.
  */
 export function fromStandardSchema(schema: StandardSchemaV1): TypeRef {
   const props = schema["~standard"]
