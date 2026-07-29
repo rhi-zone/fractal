@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-type-ir",
   "version": "0.1.0-alpha.0",
-  "description": "Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.)",
+  "description": "Type IR \u2014 subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.)",
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
@@ -43,6 +43,10 @@
     "./from-standard-schema": {
       "types": "./dist/from-standard-schema.d.ts",
       "import": "./dist/from-standard-schema.js"
+    },
+    "./from-standard-schema-type": {
+      "types": "./dist/from-standard-schema-type.d.ts",
+      "import": "./dist/from-standard-schema-type.js"
     },
     "./standard-schema": {
       "types": "./dist/standard-schema.d.ts",

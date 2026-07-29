@@ -10,6 +10,20 @@
 // vendor's own structural description rather than a guess. "Richest of
 // what is available", not "lossless": see the caveat on tier 1 below.
 //
+// RUNTIME path. Everything below is bounded by what is observable from a live
+// schema OBJECT. When compiler context is available — a build step, a codegen
+// pass, anything holding a `ts.Program` — prefer
+// `from-standard-schema-type.ts`'s `fromStandardSchemaType`, which resolves
+// `~standard.types.output` through the type checker and subsumes all three
+// tiers here: it recovers optionality, untaken union branches, enum members,
+// and nominal/branded identity, none of which any runtime observation can
+// supply. It also reads `~standard.types` at all, which is a PHANTOM property
+// the spec defines for compile-time inference and implementations typically do
+// not populate at runtime — so tier 2 below fires only when a vendor happens to
+// leave a real value there.
+//
+// The tiers below are the fallbacks for when no compiler context exists.
+//
 // Strategy, in priority order:
 //   1. StandardJSONSchemaV1 present -> export JSON Schema (target
 //      "draft-2020-12", falling back to "draft-07" if the vendor doesn't
