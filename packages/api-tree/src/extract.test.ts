@@ -471,6 +471,24 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
     expect(inputRef.meta.declarationFile).toBe(TYPEREF_FIXTURE)
   })
 
+  // Regression: a TS builtin/global utility type (`Record<K,V>`) used
+  // directly as a handler's whole parameter type IS nameable
+  // (`type.aliasSymbol.name === "Record"`, same as `BookQuery`/`BookIdParam`
+  // above) but its declaration lives in TypeScript's own bundled
+  // `lib.es5.d.ts`, not a real project file — there is no module at that
+  // path a generated `import type { Record } from "…"` could ever resolve.
+  // `typeProvenanceOf` must exclude it and fall through to structural
+  // inlining, same as a genuinely anonymous inline parameter type.
+  it("typeRefFromFunctionNode carries NO typeName/declarationFile for a builtin/global TS utility type (Record) parameter type", () => {
+    const builtinFn = findExportedFn(source, "builtinNamedParamFn")
+    const inputRef = typeRefFromFunctionNode(builtinFn, checker)
+    expect(inputRef.meta.typeName).toBeUndefined()
+    expect(inputRef.meta.declarationFile).toBeUndefined()
+    // Structural lowering still happens underneath — a Record<string,
+    // number> still lowers to a `map` shape, just without import provenance.
+    expect(inputRef.shape.kind).toBe("map")
+  })
+
   it("typeRefFromType matches schemaFromType for the same resolved parameter type", () => {
     const fnType = checker.getTypeAtLocation(fn)
     const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)

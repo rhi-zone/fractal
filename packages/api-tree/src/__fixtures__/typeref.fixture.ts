@@ -302,6 +302,16 @@ export interface BookIdParam {
 
 export const namedInterfaceParamFn = (_input: BookIdParam): void => {}
 
+/** A TS BUILTIN/GLOBAL utility type (`Record<K,V>`) used directly as a
+ * handler's own parameter type — same NAMEABLE shape as `BookQuery`/
+ * `BookIdParam` above (`type.aliasSymbol.name === "Record"`), but its alias
+ * declaration lives in TypeScript's own bundled `lib.es5.d.ts`, not this
+ * fixture file — `typeProvenanceOf` (extract.ts) must recognize that and
+ * carry NO `meta.typeName`/`meta.declarationFile`, same as a genuinely
+ * anonymous inline parameter type, so a codegen consumer never tries to
+ * `import type { Record } from ".../lib.es5.d.ts"` (not a real module). */
+export const builtinNamedParamFn = (_input: Record<string, number>): void => {}
+
 // ── Symbol-branded type fixtures ────────────────────────────────────────────
 
 declare const LocationIdBrand: unique symbol

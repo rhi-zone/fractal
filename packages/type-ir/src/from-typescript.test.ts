@@ -398,6 +398,54 @@ describe("recursion and sharing", () => {
     const fields = (roots.root!.shape as { fields: Record<string, { shape: { kind: string } }> }).fields
     expect(fields.home!.shape.kind).toBe("object")
   })
+
+  // Regression: `seen`'s cycle detection is IDENTITY-keyed (a `Set<ts.Type>`),
+  // which correctly terminates a hand-authored self-recursive alias (the test
+  // just above — TS reuses the SAME `ts.Type` object for `X`'s repeated
+  // occurrences) but does NOT terminate a walk into certain TS/DOM builtin
+  // LIBRARY types. The Fetch API's `Response` is a real, minimal repro: its
+  // method surface is mutually self-referential (`.clone(): Response`,
+  // `.body: ReadableStream<Uint8Array> | null`, whose own reader types chain
+  // back through more overloaded, generic methods) and TS does NOT hand back
+  // a referentially-stable `ts.Type` for those repeated occurrences — each
+  // visit is a fresh instance, so `seen.has(type)` never fires. Before the
+  // call-budget circuit breaker, extracting `Response` overflowed the native
+  // JS stack (`RangeError: Maximum call stack size exceeded`, confirmed via a
+  // real op's `Promise<Response>` return type in a downstream consumer,
+  // ~3200 `typeRefFromType` calls deep with `seen.size` still under 25 the
+  // whole way — the runaway is BREADTH across overload sets, not path depth).
+  it("a generically self-referential builtin library type (Response) terminates via the call budget, not a stack overflow", () => {
+    const ref = typeRefOf(`type X = Response`, "X")
+    // Terminates at all (no RangeError) — the primary regression. The walk
+    // also genuinely can't finish within budget, so SOME node in the tree
+    // must carry the budget-exceeded punt rather than a silently-truncated
+    // (and therefore wrong) full structural rendering.
+    const serialized = JSON.stringify(ref)
+    expect(serialized).toContain("extraction call budget exceeded")
+  })
+
+  // A hand-authored type nested many objects deep (but genuinely non-cyclic
+  // and non-generic) must NOT trip the same budget — it's exactly the case
+  // the budget must stay well clear of. 100 levels comfortably exceeds any
+  // legitimate domain DTO's nesting (this repo's own working slices peak at
+  // single-digit `seen` depth) while staying far under `MAX_TYPE_REF_CALLS`.
+  it("a deeply (but finitely) nested ordinary object type extracts fully, no budget punt", () => {
+    let source = "type Leaf = { value: number }\n"
+    for (let i = 0; i < 100; i++) {
+      source += `type L${i} = { inner: ${i === 0 ? "Leaf" : `L${i - 1}`} }\n`
+    }
+    source += "type X = L99\n"
+    const ref = typeRefOf(source, "X")
+    expect(JSON.stringify(ref)).not.toContain("budget exceeded")
+    // Walk down to the bottom and confirm the leaf's real shape survived.
+    let cursor = ref
+    for (let i = 0; i < 100; i++) {
+      cursor = (cursor.shape as { fields: Record<string, typeof ref> }).fields.inner!
+    }
+    // `cursor` is now `Leaf` itself (`{ value: number }`) — one more field hop.
+    const leafFields = (cursor.shape as { fields: Record<string, typeof ref> }).fields
+    expect(leafFields.value!.shape.kind).toBe("number")
+  })
 })
 
 // ============================================================================
