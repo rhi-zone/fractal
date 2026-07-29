@@ -129,8 +129,51 @@
   of scope for the tree/dispatch model itself, which is finalized and does
   not include versioning. Versioning is handled via helper functions at the
   handler layer, not the core model.
+- **OPEN: workspace robustness against foreign-root installs** — detection and
+  recovery are done (`tooling/check-workspace.sh`, see Troubleshooting). Two
+  bun-level knobs could reduce the chance of the corruption occurring at all;
+  both are real changes with real costs, so they are an owner call, not a
+  mechanical fix:
+  - `[install] linker = "hoisted"` in a `bunfig.toml` (currently unset, so bun
+    uses `isolated`). Hoisting removes the per-package symlink-into-a-store
+    layer entirely, which is the layer that can be pointed at a foreign root —
+    it would make this failure mode structurally impossible. Cost: hoisted
+    resolution has different (looser) semantics — packages can resolve deps
+    they never declared — and this repo currently gets strict isolation for
+    free. Also changes disk layout and install behaviour repo-wide.
+  - `[install] auto = "fallback"` (or `"disable"`). Bun's default is
+    `auto = "auto"`, which silently runs an install when `node_modules` looks
+    absent — including during a plain `bun run`. Constraining it means a
+    broken tree produces an explicit error instead of a silent background
+    install. Cost: contributors who forget `bun install` get an error rather
+    than transparent recovery. NOT verified to be the mechanism that produced
+    the observed corruption — it is a plausible contributor, not a diagnosed
+    cause, and should not be adopted on the strength of that guess alone.
 
 ---
+
+## Troubleshooting
+
+- **Build fails with a pile of "Cannot find module" errors, or a test throws
+  `ENOENT reading ".../node_modules/<pkg>"`** — the dependency store was linked
+  against a different workspace root, so `node_modules` symlinks are
+  well-formed but point outside this repo at a tree that may not exist.
+  **Fix: `bun install` from the repo root** (it reports "no changes" — it
+  re-points the links without re-downloading anything). Do not investigate
+  further; this is not a code problem.
+
+  `bun run check:workspace` (`tooling/check-workspace.sh`) detects it in ~50ms
+  and is wired into `build:packages` and `test`, so it should normally fail
+  fast with the recovery command rather than letting you hit the confusing
+  downstream errors. The check distinguishes this case (dangling link escaping
+  the repo — fails) from harmless leftovers pointing at removed workspace
+  packages (reported, does not fail).
+
+  Observed cause was an unrelated process outside this repo running an install
+  that resolved the workspace root elsewhere; nothing in this repo can prevent
+  that, so the tooling targets detection and fast recovery instead. See the
+  "workspace robustness" entry under Design backlog for the two bun-level
+  knobs that were considered.
 
 ## Pointers
 

@@ -15,9 +15,10 @@
     "examples/library-api"
   ],
   "scripts": {
+    "check:workspace": "tooling/check-workspace.sh --verbose",
     "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun run --filter '*' test",
-    "build:packages": "tsc -b tsconfig.build.json"
+    "test": "tooling/check-workspace.sh && bun run --filter '*' test",
+    "build:packages": "tooling/check-workspace.sh && tsc -b tsconfig.build.json"
   },
   "devDependencies": {
     "@typescript/native-preview": "latest",
