@@ -16,18 +16,28 @@
 //      support 2020-12 — both are the spec's "strongly recommended"
 //      targets) and delegate to fromJsonSchema().
 //
-//      Best of the three paths, but NOT lossless with respect to the
-//      original validator schema. It is bounded by what JSON Schema can
-//      express, which is strictly less than what Zod/Valibot/ArkType can:
-//      `z.instanceof(SomeClass)`, nominal/branded types
-//      (`string & {__brand}`), arbitrary `.refine()` predicates and
-//      `.transform()` bodies have no JSON Schema representation and are
-//      gone by the time we see the export. Standard keywords survive —
-//      `{type:"string", pattern, minLength}` lands as
-//      `string` with `meta.pattern`/`meta.minLength`, and
-//      `format: "date-time"` becomes the `datetime` domain kind — but
-//      vendor-specific keywords (`x-brand`, etc.) are dropped by
-//      fromJsonSchema(), not carried into meta.
+//      Best of the three paths, but NOT lossless. Two different losses,
+//      worth separating because only one is inherent:
+//
+//      (a) Inherent to JSON Schema. Arbitrary `.refine()` predicates and
+//          `.transform()` bodies are code; nothing declarative represents
+//          them, and they are gone before we see the export.
+//
+//      (b) NOT inherent — an importer gap on our side. TypeRef has a
+//          first-class nominal `instance` kind (className/declarationFile),
+//          and `json-schema.ts` already SERIALIZES it as
+//          `{type:"object", "x-class-name": Name}` — that convention is
+//          named in index.ts as how nominal identity travels. But
+//          fromJsonSchema() does not read `x-class-name` back, so the round
+//          trip loses it: `instance("Date")` -> JSON Schema -> `object{}`,
+//          not even preserved in meta. A vendor exporting
+//          `z.instanceof(Date)` under that convention hits the same drop.
+//          Same for other `x-` extensions (`x-brand`). Fixable in
+//          fromJsonSchema(), not a limit of the format.
+//
+//      Standard keywords do survive: `{type:"string", pattern, minLength}`
+//      lands as `string` with `meta.pattern`/`meta.minLength`, and
+//      `format: "date-time"` becomes the `datetime` domain kind.
 //   2. No JSON Schema export -> fall back to whatever `~standard.types`
 //      offers. Per spec this property exists purely to drive TypeScript's
 //      `InferInput`/`InferOutput` — implementations are not required to
@@ -94,15 +104,22 @@ function exportJsonSchema(converter: StandardJSONSchemaV1.Converter): JsonSchema
  *   artifacts — `tags: ["a"]` infers a 1-`tuple`, not an `array`, because one
  *   observation cannot distinguish fixed arity from variable.
  *
- *   Non-JSON runtime values. This is specific to tier 2's input and is worth
- *   being precise about, because it is the one place in this package where a
- *   value that is NOT already JSON-shaped can arrive. `~standard.types.output`
- *   is an example of the schema's OUTPUT type, and for validators like Zod the
- *   output type is not restricted to JSON-safe values — `z.instanceof(Date)`
- *   validates to and produces a live `Date`. Fed that, inference does typeof
- *   dispatch with no class-instance awareness and yields `object{}` (a Date
- *   has no own enumerable keys); `new Map([["a",1]])` likewise. The vendor's
- *   export says `{type:"string", format:"date-time"}` -> `datetime`.
+ *   Values outside the JSON-corpus importer's input domain. TypeRef itself
+ *   represents plenty that JSON has no notion of — `instance` is nominal,
+ *   there are `function`/`method`/`interface`/`stream`/`page` kinds — but
+ *   `fromJsonCorpus`/`inferValueShape` specifically infer structure from JSON
+ *   *values*, so that importer's input domain is JSON-shaped data. That is a
+ *   fact about this one inference path, not about the IR.
+ *
+ *   It matters here because tier 2 feeds it something that need not be JSON.
+ *   `~standard.types.output` is an example of the schema's OUTPUT type, and
+ *   for validators like Zod that is not restricted to JSON-safe values —
+ *   `z.instanceof(Date)` produces a live `Date`. Fed that, inference does
+ *   typeof dispatch with no class-instance awareness and yields `object{}`
+ *   (a Date has no own enumerable keys); `new Map([["a",1]])` likewise. The
+ *   ideal answer, `instance("Date")`, is representable in the IR — neither
+ *   tier reaches it: tier 2 cannot see it, and tier 1 drops it at
+ *   fromJsonSchema() per (b) above.
  *
  * Tier 2 wins when the vendor CANNOT express the construct at all
  * (`z.custom<T>()`, instanceof-style checks) and degrades to a permissive

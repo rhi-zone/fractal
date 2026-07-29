@@ -256,8 +256,13 @@ t(types.object({
 ```
 
 Infers a `TypeRef` from JSON *values* by structural heuristic — no declared
-schema to read, only a shape to guess. There is one calling convention: always
-an array of observations. Passing `[value]` is the single-value case, and it is
+schema to read, only a shape to guess. Note this is a property of *this
+importer's input domain*, not of `TypeRef`: the IR is a superset across the
+concrete type systems this package projects to, and represents plenty JSON has
+no notion of (nominal `instance` types, `function`/`method`/`interface`,
+`stream`/`page`). Inference from bare JSON values simply cannot *detect* those
+— there is nothing in the data to detect them from. There is one calling
+convention: always an array of observations. Passing `[value]` is the single-value case, and it is
 not a separate function — the same evidence machinery runs, so nested arrays
 inside that one value are still typed from all their elements. Core heuristic: narrow away
 from a wide type only when the observed value lands in a subspace ~0% of the
