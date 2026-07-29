@@ -83,24 +83,33 @@ function exportJsonSchema(converter: StandardJSONSchemaV1.Converter): JsonSchema
  * `meta.vendor`.
  *
  * The tiers are mutually exclusive — tier 2 is only reached when the vendor
- * exports no JSON Schema — so which is "better" never actually arbitrates
- * anything at runtime. Stated for accuracy rather than as a justification:
- * tier 1 is not unconditionally richer.
+ * exports no JSON Schema — so which is "richer" never arbitrates anything at
+ * runtime. Recorded for accuracy: neither tier dominates the other in general.
  *
- * Normal case, vendor exports a real schema: tier 1 wins clearly. It carries
- * optionality (a `note?: string` the sample simply doesn't exhibit) and
- * constraints (`minLength` -> meta), and avoids tier 2's single-sample
- * artifacts — one sample of `tags: ["a"]` infers a 1-`tuple`, not an
- * `array`, because one observation cannot distinguish fixed arity from
- * variable.
+ * Tier 1 wins in two distinct ways.
  *
- * Degenerate case, vendor CANNOT express the construct (`z.custom<T>()`,
- * instanceof-style checks) and exports a permissive schema: tier 1 collapses
- * — `{}` and `true` both infer `unknown`, `{type:"object"}` infers an empty
- * object — while a JSON-serializable sample still yields the real field
- * shape. There tier 2 carries strictly more. It is unreachable given the
- * mutual exclusivity above, but the ordering is a property of the inputs,
- * not a law.
+ *   Declared structure the sample cannot show. A real export carries
+ *   optionality (a `note?: string` a single sample simply does not exhibit)
+ *   and constraints (`minLength` -> meta), and avoids tier 2's one-sample
+ *   artifacts — `tags: ["a"]` infers a 1-`tuple`, not an `array`, because one
+ *   observation cannot distinguish fixed arity from variable.
+ *
+ *   Non-JSON runtime values. This is specific to tier 2's input and is worth
+ *   being precise about, because it is the one place in this package where a
+ *   value that is NOT already JSON-shaped can arrive. `~standard.types.output`
+ *   is an example of the schema's OUTPUT type, and for validators like Zod the
+ *   output type is not restricted to JSON-safe values — `z.instanceof(Date)`
+ *   validates to and produces a live `Date`. Fed that, inference does typeof
+ *   dispatch with no class-instance awareness and yields `object{}` (a Date
+ *   has no own enumerable keys); `new Map([["a",1]])` likewise. The vendor's
+ *   export says `{type:"string", format:"date-time"}` -> `datetime`.
+ *
+ * Tier 2 wins when the vendor CANNOT express the construct at all
+ * (`z.custom<T>()`, instanceof-style checks) and degrades to a permissive
+ * schema: `{}` and `true` both infer `unknown` and `{type:"object"}` infers an
+ * empty object, while a JSON-serializable sample still yields the real field
+ * shape. Unreachable given the mutual exclusivity above, but it means the
+ * ordering is a property of the inputs, not a law.
  */
 export function fromStandardSchema(schema: StandardSchemaV1): TypeRef {
   const props = schema["~standard"]
