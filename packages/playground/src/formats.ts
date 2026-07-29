@@ -127,6 +127,22 @@ const flatbuffersSample = `table Person {
   tags: [string];
 }`
 
+const flowSample = `export type User = {
+  id: string,
+  name: string,
+  age?: number,
+  tags: Array<string>,
+}`
+
+const protobufSample = `syntax = "proto3";
+
+message User {
+  string id = 1;
+  string name = 2;
+  int32 age = 3;
+  repeated string tags = 4;
+}`
+
 export const inputFormats: readonly FormatSpec[] = [
   { id: "json-schema", label: "JSON Schema", lang: "json", sample: jsonSchemaSample },
   { id: "json", label: "JSON (instance)", lang: "json", sample: jsonSample },
@@ -141,6 +157,8 @@ export const inputFormats: readonly FormatSpec[] = [
   { id: "standard-schema", label: "Standard Schema (JSON envelope)", lang: "json", sample: standardSchemaSample },
   { id: "capnp", label: "Cap'n Proto schema", lang: "plain", sample: capnpSample },
   { id: "flatbuffers", label: "FlatBuffers schema", lang: "plain", sample: flatbuffersSample },
+  { id: "flow", label: "Flow", lang: "js", sample: flowSample },
+  { id: "protobuf", label: "Protocol Buffers", lang: "plain", sample: protobufSample },
 ]
 
 export const outputFormats: readonly FormatSpec[] = [
@@ -189,6 +207,37 @@ export const outputFormats: readonly FormatSpec[] = [
   { id: "json-schema-04", label: "JSON Schema (draft-04)", lang: "json" },
   { id: "openapi30", label: "OpenAPI 3.0 schema", lang: "json" },
   { id: "openapi20", label: "OpenAPI/Swagger 2.0 schema", lang: "json" },
+
+  // Alternate serializer bindings for languages already listed above, plus
+  // the targets that have no entry at all up there. Everything here resolves
+  // through the same shared registry as the entries above — the split is
+  // ordering for the picker, not two mechanisms.
+  { id: "python-msgspec", label: "Python (msgspec)", lang: "python" },
+  { id: "python-cattrs", label: "Python (cattrs)", lang: "python" },
+  { id: "go-easyjson", label: "Go (easyjson)", lang: "plain" },
+  { id: "go-jsoniter", label: "Go (jsoniter)", lang: "plain" },
+  { id: "go-sonic", label: "Go (sonic)", lang: "plain" },
+  { id: "java-jsonb", label: "Java (JSON-B)", lang: "plain" },
+  { id: "kotlin-jackson", label: "Kotlin (Jackson)", lang: "plain" },
+  { id: "kotlin-gson", label: "Kotlin (Gson)", lang: "plain" },
+  { id: "swift-swiftyjson", label: "Swift (SwiftyJSON)", lang: "plain" },
+  { id: "swift-objectmapper", label: "Swift (ObjectMapper)", lang: "plain" },
+  { id: "csharp-servicestack", label: "C# (ServiceStack)", lang: "plain" },
+  { id: "cpp-rapidjson", label: "C++ (RapidJSON)", lang: "plain" },
+  { id: "cpp-simdjson", label: "C++ (simdjson)", lang: "plain" },
+  { id: "cpp-boost-json", label: "C++ (Boost.JSON)", lang: "plain" },
+  { id: "cpp-glaze", label: "C++ (Glaze)", lang: "plain" },
+  { id: "dart-built-value", label: "Dart (built_value)", lang: "plain" },
+  { id: "elixir-jason", label: "Elixir (Jason)", lang: "plain" },
+  { id: "php-symfony", label: "PHP (Symfony Serializer)", lang: "plain" },
+  { id: "php-jms", label: "PHP (JMS Serializer)", lang: "plain" },
+  { id: "ruby-dry-types", label: "Ruby (dry-types)", lang: "plain" },
+  { id: "ruby-rbs", label: "Ruby (RBS)", lang: "plain" },
+  { id: "standard-schema", label: "Standard Schema", lang: "json" },
+  { id: "json-rpc", label: "JSON-RPC methods", lang: "json" },
+  { id: "docusaurus-reference", label: "Docusaurus reference", lang: "plain" },
+  { id: "starlight-reference", label: "Starlight reference", lang: "plain" },
+  { id: "mkdocs-reference", label: "MkDocs reference", lang: "plain" },
 ]
 
 export function inputFormatById(id: string): FormatSpec | undefined {

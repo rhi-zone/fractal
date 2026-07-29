@@ -1,14 +1,13 @@
 // packages/playground/src/convert.test.ts — ingest/project/convert bridge tests
 //
-// Exercises convert.ts's own logic (format-id dispatch, JSON.parse wrapping,
-// fromRegistry's root selection, the viaRefFirst/viaNameFirst/viaNameFirstOnly
-// multi-def branching, and error propagation) using the exact sample text
-// shown in the playground UI (formats.ts) as real input, rather than
-// re-testing the underlying type-ir ingestors/projectors themselves (already
-// covered in packages/type-ir).
+// The dispatch itself now lives in `@rhi-zone/fractal-type-ir/registry` and is
+// unit-tested there. What these tests cover is the playground's own view of
+// it: that every format id the UI offers actually resolves, that the exact
+// sample text shown in the UI (formats.ts) really converts, and that the
+// text-flattening the two panes depend on produces something displayable.
 
 import { describe, expect, test } from "bun:test"
-import { convert, ingest, project } from "./convert.ts"
+import { appliesTo, convert, getProjector, ingest, project } from "./convert.ts"
 import { inputFormatById, inputFormats, outputFormats } from "./formats.ts"
 
 function sampleFor(id: string): string {
@@ -67,6 +66,13 @@ describe("project", () => {
 
   for (const format of outputFormats) {
     test(`${format.id}: renders the sample document without throwing`, () => {
+      // `json-rpc` needs an `interface` root; the JSON Schema sample is an
+      // object, so the contract to check is that it says so, not that it
+      // renders.
+      if (!appliesTo(getProjector(format.id), doc)) {
+        expect(() => project(format.id, doc)).toThrow(/requires an interface root/)
+        return
+      }
       const rendered = project(format.id, doc)
       expect(typeof rendered).toBe("string")
       expect(rendered.length).toBeGreaterThan(0)
@@ -120,11 +126,20 @@ describe("convert", () => {
     )
   })
 
-  test("every input sample converts cleanly to every output format", () => {
+  test("every input sample converts cleanly to every applicable output format", () => {
     for (const input of inputFormats) {
+      const doc = ingest(input.id, sampleFor(input.id))
       for (const output of outputFormats) {
+        // `json-rpc` needs an `interface` root (a service method surface); no
+        // input sample produces one, and the registry says so up front rather
+        // than failing somewhere inside the projector.
+        if (!appliesTo(getProjector(output.id), doc)) continue
         expect(() => convert(input.id, output.id, sampleFor(input.id))).not.toThrow()
       }
     }
+  })
+
+  test("inapplicable output formats are reported, not silently skipped", () => {
+    expect(() => convert("json", "json-rpc", sampleFor("json"))).toThrow(/requires an interface root/)
   })
 })
