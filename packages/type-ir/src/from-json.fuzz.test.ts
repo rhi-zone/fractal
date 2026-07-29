@@ -480,6 +480,14 @@ describe("fromJson property-based tests", () => {
   })
 
   // Property 3: the generated value inhabits the inferred type
+  // Explicit timeout: this property runs 3.8-5.2s standalone and 6-7.5s under
+  // full-suite CPU contention, against bun's 5000ms default — so it failed
+  // intermittently with "timed out", which reads exactly like a flaky property
+  // violation but is not one (no counterexample, no seed, because fast-check
+  // never failed; the runner killed it mid-run). Every other property in this
+  // file is under 0.3s. Raising the bound rather than cutting `numRuns` keeps
+  // the search space; the timeout is here to catch a genuine hang, so it wants
+  // real headroom over normal variance, not a value tuned to the current time.
   test("roundtrip: value inhabits inferred type", () => {
     fc.assert(
       fc.property(arbTypeAndValue(), ({ type, value }) => {
@@ -496,7 +504,7 @@ describe("fromJson property-based tests", () => {
       }),
       { numRuns: 10000 },
     )
-  })
+  }, 30_000)
 
   // Property 4: integer tightness — inferred width is the tightest possible
   test("tightness: integers infer to tightest width", () => {
