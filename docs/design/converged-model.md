@@ -132,8 +132,12 @@ see `package.json` comment.) 130 tests pass across the 5 active workspaces,
 - `preset.ts` — `createFetch(node, opts?)`: OOTB preset composing buildRoutes +
   makeRouter + autoMethodLayer + optional corsLayer; returns WHATWG
   `(req)=>Promise<Response>` suitable for Bun, Deno, Cloudflare Workers, Node.
-- `adapter.ts` — `serveBun` / `serveNode` runtime adapters (isolated; core stays
-  runtime-agnostic).
+- `adapter.ts` — runtime adapters (isolated; core stays runtime-agnostic):
+  `serveBun` / `serveNode` / `serveDeno` (bind a listening socket),
+  `serveFastlyCompute` (registers Compute's `fetch` event listener),
+  `toCloudflareWorker` / `toVercelEdge` (translate to the platform's module
+  export shape), `toAwsLambdaHandler` (translates APIGatewayProxyEventV2 to
+  and from Request/Response — the one non-passthrough adapter).
 
 **[BUILT] `@rhi-zone/fractal-mcp-api-projector` (`packages/mcp-api-projector`):**
 - `project.ts` — `toTools(node, opts?)`: walks Node tree, emits `McpTool[]` (one

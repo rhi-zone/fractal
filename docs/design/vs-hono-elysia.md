@@ -175,8 +175,7 @@ statement of the current position.
 (verified: `packages/api-tree/src/index.ts` imports are zero — no external imports at
 all). `@rhi-zone/fractal-http-api-projector` imports no Bun and no Node (verified: its only
 imports are from `@rhi-zone/fractal-api-tree` and WHATWG globals). The single runtime
-touch is `packages/http-api-projector/src/adapter.ts` (`serveBun`/`serveNode`), which `index.ts`
-does not import.
+touch is `packages/http-api-projector/src/adapter.ts`, which `index.ts` does not import.
 
 However, **`Request`/`Response` live in `Handler` itself** — they are WHATWG globals
 in the core type. The framework is deliberately and firmly HTTP/fetch-surface-
@@ -185,13 +184,56 @@ routing algebra serves CLI or IPC by swapping a `RoutingCtx` — is retired with
 builder model that made it. The current model's `Handler<P>` is `(req: Request & ...)
 => Response | undefined`: HTTP is in the type, not in a swappable adapter.
 
-What fractal retains: it is **runtime-agnostic** (runs on Bun, Node, or any WHATWG
-environment without change) and the core imports no runtime-specific code. Hono is
-similarly runtime-agnostic. Elysia is Bun-first. On the "not HTTP-specific" axis:
-all three are HTTP frameworks by construction.
+**Adapter coverage.** This sub-criterion was previously unearned: the doc claimed
+a tie on "runtime-target support" while `adapter.ts` shipped exactly two adapters
+(`serveBun`, `serveNode`) against Hono's seven (Node, Deno, Bun, Cloudflare
+Workers, Fastly Compute, Vercel Edge, AWS Lambda). That gap is now closed —
+`adapter.ts` ships seven adapters matching Hono's target list one-for-one:
 
-Honest verdict: runtime-agnostic tie with Hono; slight win over Elysia's Bun-first
-stance. "Core decoupled from HTTP" is retired.
+- `serveBun` / `serveNode` (pre-existing) — bind a listening socket via
+  `Bun.serve` / `node:http`.
+- `serveDeno` — binds a listening socket via `Deno.serve`; same shape as
+  `serveBun` since Deno's `Request`/`Response` are native WHATWG.
+- `serveFastlyCompute` — registers Compute's `fetch` event listener
+  (`event.request` → handler → `event.respondWith`).
+- `toCloudflareWorker` — translates to the module-worker `{ fetch(request, env,
+  ctx) }` export shape, dropping the unused `env`/`ctx` bindings.
+- `toVercelEdge` — identity function; Vercel's edge runtime dispatches with the
+  exact `(req: Request) => Promise<Response>` shape already used throughout the
+  package, so there's nothing to translate.
+- `toAwsLambdaHandler` — the one adapter that isn't a thin Request/Response
+  passthrough: translates `APIGatewayProxyEventV2` (Lambda Function URLs / API
+  Gateway HTTP APIs v2) to `Request` and back, matching the event shape Hono's
+  own `aws-lambda` adapter targets (headers/cookies folding, text vs.
+  base64-encoded body by content type).
+
+Each new adapter is a small, independent function — no shared "adapter
+framework" was introduced, consistent with the rest of the package's style.
+Tests (`packages/http-api-projector/src/adapter-edge.test.ts`) exercise each
+adapter's translation/wiring logic directly (stubbing the ambient `Deno`/
+`addEventListener` globals where needed), the same approach `adapter.test.ts`
+already used for `serveNode`'s `node:http` shim — none of them run inside their
+actual target isolate, since a Workers/Lambda/Fastly sandbox isn't available in
+this repo's test environment.
+
+**Caveat, stated honestly:** breadth is now matched, but not maturity. Hono's
+adapters have run in production across those seven runtimes for years and are
+exercised by real deployments; fractal's are new, verified only by unit tests
+against each platform's documented event/response contract, not against a live
+Workers isolate, a real Lambda invocation, or a Fastly Compute sandbox. The
+architectural claim (a portable `FetchHandler` core plus one small file for all
+runtime wiring) is fully earned; production-hardening on each target is not yet
+proven the way Hono's is.
+
+What fractal retains: it is **runtime-agnostic** (runs on Bun, Node, Deno, or
+any WHATWG environment without change) and the core imports no runtime-specific
+code. Hono is similarly runtime-agnostic. Elysia is Bun-first. On the "not
+HTTP-specific" axis: all three are HTTP frameworks by construction.
+
+Honest verdict: runtime-agnostic tie with Hono, now backed by matching adapter
+breadth (both ship 7 runtime targets) rather than architecture alone; Hono
+still leads on adapter maturity/production mileage. Slight win over Elysia's
+Bun-first stance. "Core decoupled from HTTP" is retired.
 
 **5 — Barrier to entry (TIE with caveats / TIE with caveats).** A one-endpoint
 hello-world is straightforward:

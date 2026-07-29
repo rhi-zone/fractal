@@ -9,8 +9,11 @@ Turns an `api()`/`op()` tree into an HTTP router. A rewriter pipeline
 each leaf's HTTP verb and path from its tags/directives, producing an
 `HttpRoute` tree that a compiled matcher (radix or char-based) dispatches
 against. Ships DX sugar (`crud()`, `httpProjection()`, the `http.*` verb
-bundles), CORS/auto-method layers, and `createFetch`/`serveBun`/`serveNode`
-adapters to run the result as a real server.
+bundles), CORS/auto-method layers, and `createFetch`/`serveBun`/`serveNode`/
+`serveDeno`/`serveFastlyCompute`/`toCloudflareWorker`/`toVercelEdge`/
+`toAwsLambdaHandler` adapters to run the result as a real server on Bun,
+Node, Deno, Fastly Compute, Cloudflare Workers, Vercel Edge Functions, or
+AWS Lambda.
 
 ## Key exports
 
@@ -19,7 +22,7 @@ adapters to run the result as a real server.
 - `httpProjection(tree, opts?)` — one-call `Node => HttpRoute` with the standard rewriter pipeline
 - `mapRoute`, `fusePipeline`, `skipEmptyInput`, `createApplyValidation` — route-tree rewriters (`./route`)
 - `toRouter`, `radixRouter`, `compiledCharRouter`, `withALS` — compiled matchers (`./compile`)
-- `./adapter` — `createFetch`, `serveBun`, `serveNode`
+- `./adapter` — `createFetch`, `serveBun`, `serveNode`, `serveDeno`, `serveFastlyCompute`, `toCloudflareWorker`, `toVercelEdge`, `toAwsLambdaHandler`
 - `./preset` — configurable out-of-the-box `createFetch` preset
 - `./project` — direct tree-walk `makeRouter`, `verbFromTags`, layers (`autoMethodLayer`, `corsLayer`)
 
