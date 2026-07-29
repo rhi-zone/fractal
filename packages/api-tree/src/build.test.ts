@@ -112,6 +112,31 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     expect(validators["builtinNamedInput/merge"]!.check({ a: 1 })).toBe(false)
   })
 
+  // Regression, end-to-end: a leaf whose RETURN type reaches into a TS/DOM
+  // builtin's generically self-referential, symbol-keyed-member-bearing
+  // structure (`Response`, fixture leaf `builtinReturnType/fetchIt`) must
+  // produce a module that's syntactically valid TypeScript top to bottom —
+  // the call-budget circuit breaker alone (type-ir's from-typescript.ts)
+  // stops the RangeError, but the resulting TypeRef still needed a SECOND
+  // fix (excluding symbol-keyed properties like `Uint8Array`'s
+  // `[Symbol.iterator]`, whose TS-synthetic name — e.g. `"__@iterator@8"`
+  // — isn't valid to emit as a bare object-type field name) before the
+  // generated annotation text itself stopped being a syntax error. This
+  // test is the one that actually would have caught that second bug —
+  // from-typescript.test.ts's unit-level coverage checks the TypeRef
+  // shape, not the compiled TEXT.
+  it("a leaf reaching into a TS/DOM builtin's structure (Response, via its return type) compiles to syntactically valid TS", () => {
+    const source = buildValidatorModuleSource(FIXTURE)
+    expect(source).not.toContain("__@")
+    // Bun's transpiler throws on invalid syntax — `evalModule` (used
+    // throughout this file) already exercises this implicitly, but do it
+    // explicitly here so a syntax error inside this one entry's annotation
+    // text fails with a clear message pointing at this leaf, not a cryptic
+    // parse error from whichever OTHER entry evalModule happens to hit
+    // first.
+    expect(() => tsTranspiler.transformSync(source)).not.toThrow()
+  })
+
   it("without shouldShare, no defs are emitted — every route's input inlines its full structure (prior behavior)", () => {
     const source = buildValidatorModuleSource(SHARING_FIXTURE)
     expect(source).not.toContain("__def_Address_check")

@@ -174,6 +174,57 @@ test("array of intersection uses Array<>", () => {
   expect(toTypeScript(ref)).toBe("Array<string & number>")
 })
 
+// Regression: a `function`-shaped intersection member (the overloaded-method
+// rendering — `functionRefFromSignatures`/`methodRefFromSignatures` in
+// from-typescript.ts wrap ≥2 call signatures as
+// `types.intersection([types.function(...), types.function(...)])`) MUST be
+// parenthesized — TypeScript's own grammar requires it (`TS1387: Function
+// type notation must be parenthesized when used in an intersection type`),
+// not just a style preference. Confirmed via a real TS/DOM builtin's
+// overloaded method surface (`Response`, reachable now that the call-budget
+// circuit breaker lets extraction terminate INTO it) breaking codegen with
+// exactly this symptom before this fix.
+test("intersection of function-typed members parenthesizes each function member", () => {
+  const ref = t(
+    types.intersection([
+      t(types.function([{ name: "a", type: t(types.string) }], t(types.number))),
+      t(types.function([{ name: "a", type: t(types.number) }], t(types.string))),
+    ]),
+  )
+  expect(toTypeScript(ref)).toBe("((a: string) => number) & ((a: number) => string)")
+})
+
+// Same TS grammar rule (`TS1385`) applies to a union of function types.
+test("union of function-typed members parenthesizes each function member", () => {
+  const ref = t(
+    types.union([
+      t(types.function([{ name: "a", type: t(types.string) }], t(types.number))),
+      t(types.function([{ name: "a", type: t(types.number) }], t(types.string))),
+    ]),
+  )
+  expect(toTypeScript(ref)).toBe("((a: string) => number) | ((a: number) => string)")
+})
+
+// A `union`-shaped intersection member changes MEANING (not just a syntax
+// error) if left unwrapped: `A & X | Y & B` reads completely differently
+// from the intended `A & (X | Y) & B` — `&` binds tighter than `|`.
+test("intersection of a union member parenthesizes the union member", () => {
+  const ref = t(
+    types.intersection([
+      t(types.object({ id: t(types.string) })),
+      t(types.union([t(types.string), t(types.number)])),
+    ]),
+  )
+  expect(toTypeScript(ref)).toBe("{ id: string } & (string | number)")
+})
+
+// A `meta.nullable` intersection member (`X | null`) has the same
+// precedence hazard as a `union`-shaped member above.
+test("intersection of a nullable member parenthesizes the nullable member", () => {
+  const ref = t(types.intersection([t(types.object({ id: t(types.string) })), t(types.string, { nullable: true })]))
+  expect(toTypeScript(ref)).toBe("{ id: string } & (string | null)")
+})
+
 test("literal number", () => {
   expect(toTypeScript(t(types.literal(42)))).toBe("42")
 })

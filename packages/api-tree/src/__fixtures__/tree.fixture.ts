@@ -152,6 +152,29 @@ export const tree = api({
     builtinNamedInput: api({
         merge: op((input: Record<string, string>) => ({ merged: input })),
       }),
+    // A leaf whose RETURN type reaches into a TS/DOM builtin's generically
+    // self-referential, symbol-keyed-member-bearing structure (`Response`,
+    // via `Uint8Array`/`ReadableStream` in its own surface) — regression
+    // coverage for two upstream `type-ir` fixes together:
+    //   1. The call-budget circuit breaker (`typeRefFromType`'s
+    //      `seen`-based cycle detection can't terminate this walk on its
+    //      own — see from-typescript.test.ts's own `Response` test).
+    //   2. Symbol-keyed member exclusion (`Uint8Array`'s
+    //      `[Symbol.iterator]`/`[Symbol.toStringTag]` — TS's synthetic name
+    //      for these, e.g. `"__@iterator@8"`, is invalid to emit as a bare
+    //      object-type field name; from-typescript.test.ts's "classes"
+    //      describe block covers the unit-level case, this fixture leaf is
+    //      the end-to-end one: build.test.ts asserts the FULL generated
+    //      module — annotation text included — is syntactically valid TS).
+    builtinReturnType: api({
+        // Body never actually runs in any test (`toTools`/`runCli --help`
+        // never invoke a leaf's handler) — deliberately not calling real
+        // `fetch()` regardless, so this fixture can never trigger a network
+        // call if that assumption ever changes.
+        fetchIt: op((_input: { url: string }): Promise<Response> => {
+          throw new Error("fixture leaf — never actually invoked")
+        }),
+      }),
     // Genuinely-different union that must NOT be false-positived.
     // This is a 2-member union but does NOT have the Result name or DU shape.
     differentUnion: api({
