@@ -172,6 +172,49 @@ describe("MCP tool carries the derived inputSchema + description", () => {
 })
 
 // ============================================================================
+// 3a-factory. Trees built inside a top-level `export function` factory
+// instead of a top-level `export const` — walkTree's function-declaration
+// path (tree.ts's `returnExpressionOfFactoryBody`). Mirrors busiless's
+// `export function buildDomainAuthTree(composed) { const tree = api({...});
+// return tree }` pattern, where handlers close over a composition-time
+// value the walker never needs to inspect.
+// ============================================================================
+
+describe("walkTree recognizes trees returned from an exported factory function", () => {
+  const FACTORY_FIXTURE = `${import.meta.dir}/__fixtures__/tree-factory.fixture.ts`
+  const factorySchemas = extractToolSchemas(FACTORY_FIXTURE)
+
+  it("extracts the leaf behind the two-statement `const tree = api(...); return tree` form", () => {
+    expect(factorySchemas["greet"]).toBeDefined()
+    expect(factorySchemas["greet"]!.inputSchema).toEqual({
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+    })
+    expect(factorySchemas["greet"]!.description).toBe(
+      "Say hello, closing over the composition-time greeting.",
+    )
+  })
+
+  it("extracts the leaf behind the single `return api(...)` form", () => {
+    expect(factorySchemas["ping"]).toBeDefined()
+    expect(factorySchemas["ping"]!.inputSchema).toEqual({
+      type: "object",
+      properties: { count: { type: "number" } },
+      required: ["count"],
+    })
+  })
+
+  it("skips a non-exported factory", () => {
+    expect(factorySchemas["hidden"]).toBeUndefined()
+  })
+
+  it("skips an exported factory that doesn't return a tree", () => {
+    expect(Object.keys(factorySchemas)).not.toContain("plain")
+  })
+})
+
+// ============================================================================
 // 3b. meta.mcp.name / meta.mcp.segment overrides reflected in the
 // reconstructed name (tree.ts) — must agree with mcp-api-projector's actual
 // runtime `projectTools` walk, since they're supposed to be the same name.
