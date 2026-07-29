@@ -140,6 +140,18 @@ export const tree = api({
             list: op((_input: { limit?: number }) => ({ items: [] as string[] })),
           }, { meta: { mcp: { segment: "products" } } }),
       }),
+    // A TS BUILTIN/GLOBAL utility type (`Record<K,V>`) used directly as a
+    // handler's whole input — exercises `typeProvenanceOf`'s builtin-lib-file
+    // exclusion (extract.ts): `Record`'s alias declaration lives in
+    // TypeScript's own bundled `lib.es5.d.ts`, which IS nameable
+    // (`type.aliasSymbol.name === "Record"`) but is never IMPORTABLE (no
+    // module lives at that path) — this must inline structurally instead of
+    // producing `import type { Record } from ".../lib.es5.d.ts"` (which
+    // fails to compile downstream: `TS2306: File '…' is not a module`).
+    // build.test.ts's "given an outFile" describe block asserts on this.
+    builtinNamedInput: api({
+        merge: op((input: Record<string, string>) => ({ merged: input })),
+      }),
     // Genuinely-different union that must NOT be false-positived.
     // This is a 2-member union but does NOT have the Result name or DU shape.
     differentUnion: api({

@@ -85,6 +85,33 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     expect(validators["namedType/search"]!.check({})).toBe(true)
   })
 
+  // Regression: a handler input typed directly as a TS builtin/global
+  // utility type (`Record<K,V>`, `Partial<T>`, …) is NAMEABLE
+  // (`type.aliasSymbol.name === "Record"`) exactly like a real project type
+  // is, but its declaration lives in TypeScript's own bundled `lib.es5.d.ts`
+  // — there is no module at that path to import from. Before the
+  // `typeProvenanceOf` fix (extract.ts), an `outFile` triggered
+  // `import type { Record } from ".../lib.es5.d.ts"` in the generated
+  // module — invalid downstream (`TS2306: File '…' is not a module`) no
+  // matter where `outFile` lives. Fixture leaf: `builtinNamedInput/merge`
+  // (`__fixtures__/tree.fixture.ts`), input typed `Record<string, string>`.
+  it("given an outFile, a builtin/global TS utility type (Record) inlines structurally — no import to a TS lib .d.ts file", () => {
+    const outFile = `${import.meta.dir}/generated/validators.ts`
+    const source = buildValidatorModuleSource(FIXTURE, outFile)
+    // No import at all naming `Record` — TypeScript's global utility types
+    // never need one. The annotation itself legitimately still SAYS
+    // `Record<string, string>` (an inlined, ambient-global reference,
+    // exactly like an ordinary `Array<T>`/`Map<K,V>` annotation would) —
+    // only a spurious `import type { Record } from "…"` is the bug.
+    expect(source).not.toContain("import type { Record }")
+    expect(source).not.toMatch(/import type \{[^}]*\} from "[^"]*lib\.[a-z0-9.]*\.d\.ts"/i)
+    expect(source).toContain("value is Record<string, string>")
+
+    const validators = evalModule(source)
+    expect(validators["builtinNamedInput/merge"]!.check({ a: "x" })).toBe(true)
+    expect(validators["builtinNamedInput/merge"]!.check({ a: 1 })).toBe(false)
+  })
+
   it("without shouldShare, no defs are emitted — every route's input inlines its full structure (prior behavior)", () => {
     const source = buildValidatorModuleSource(SHARING_FIXTURE)
     expect(source).not.toContain("__def_Address_check")

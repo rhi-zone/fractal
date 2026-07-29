@@ -122,6 +122,28 @@ export function schemaFromType(
 // ============================================================================
 
 /**
+ * True when `fileName` is one of TypeScript's own bundled ambient
+ * declaration files (`lib.es5.d.ts`, `lib.dom.d.ts`, `lib.esnext.d.ts`, …) —
+ * the files a `ts.Program` implicitly includes for every project regardless
+ * of `node_modules` layout (a global/bare install, a `.bun` hoisted path, a
+ * pnpm content-addressed store, …), always shaped
+ * `<…>/typescript/lib/lib.<name>.d.ts`. These declare TypeScript's own
+ * GLOBAL utility types (`Record`, `Partial`, `Pick`, `Omit`, `Readonly`,
+ * `Array`, `ReadonlyArray`, `Map`, `Set`, `Promise`, …) as ambient ("no
+ * export") declarations — ones a generated `import type { X } from "…"`
+ * can never actually reach (`TS2306: File '…' is not a module`), because
+ * they were never a module's *export* to import in the first place; they're
+ * globally in scope everywhere already, no import needed at all. Matched by
+ * PATH rather than by an enumerated type-name list so the whole class of
+ * built-in/global TS utility types is covered generally (see
+ * `typeProvenanceOf`'s doc comment below), not just the ones observed to
+ * trip this so far.
+ */
+function isTsBuiltinLibFile(fileName: string): boolean {
+  return /[\\/]typescript[\\/]lib[\\/]lib\.[a-z0-9.]+\.d\.ts$/i.test(fileName)
+}
+
+/**
  * The declared-type provenance of a top-level extracted type: its name and
  * the absolute path of the file it's declared in — recoverable only when the
  * type is NAMED (a `type X = …` alias or an `interface X {…}`), not for an
@@ -137,6 +159,17 @@ export function schemaFromType(
  * is a `ts.TypeLiteralNode` (the `{ … }` syntax itself, not a named
  * declaration) — excluded here so those fall through to structural inlining
  * instead of being treated as "named".
+ *
+ * A TS builtin/global utility type used directly as a handler's whole input
+ * (`(input: Record<string, unknown>) => …`, `(input: Partial<Foo>) => …`, …)
+ * is EXCLUDED the same way: its alias/symbol declaration lives in one of
+ * TypeScript's own bundled `lib.*.d.ts` files (`isTsBuiltinLibFile` above),
+ * which is nameable (`type.aliasSymbol.name === "Record"`) but never
+ * IMPORTABLE — there is no module at that path to import from. Falling
+ * through here (returning `undefined`) routes it to the same structural
+ * inlining every anonymous type already gets, which is always correct:
+ * every builtin utility type has a real structural TypeScript rendering
+ * (`toTypeScript` — `compile.ts`'s `guardAnnotation` fallback).
  */
 function typeProvenanceOf(
   type: ts.Type,
@@ -145,12 +178,16 @@ function typeProvenanceOf(
   const aliasSymbol = type.aliasSymbol
   const aliasDecl = aliasSymbol?.declarations?.[0]
   if (aliasSymbol && aliasDecl) {
-    return { name: aliasSymbol.name, declarationFile: aliasDecl.getSourceFile().fileName }
+    const declarationFile = aliasDecl.getSourceFile().fileName
+    if (isTsBuiltinLibFile(declarationFile)) return undefined
+    return { name: aliasSymbol.name, declarationFile }
   }
   const symbol = type.getSymbol()
   const decl = symbol?.declarations?.[0]
   if (symbol && decl && !ts.isTypeLiteralNode(decl)) {
-    return { name: symbol.name, declarationFile: decl.getSourceFile().fileName }
+    const declarationFile = decl.getSourceFile().fileName
+    if (isTsBuiltinLibFile(declarationFile)) return undefined
+    return { name: symbol.name, declarationFile }
   }
   return undefined
 }

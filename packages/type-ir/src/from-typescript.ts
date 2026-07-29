@@ -32,6 +32,48 @@ const puntRef = (reason: string): TypeRef =>
   t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` })
 
 // ============================================================================
+// Call budget — a defensive circuit breaker `typeRefFromType`'s `seen`-based
+// (identity-keyed) cycle detection cannot substitute for.
+//
+// `seen` correctly terminates a hand-authored self-recursive domain type
+// (`type Tree = { children: Tree[] }`) because TS caches and reuses the SAME
+// `ts.Type` object for a directly-recursive alias's repeated occurrences —
+// `seen.has(type)` fires almost immediately. It does NOT terminate a walk
+// into certain TS/DOM built-in LIBRARY types (confirmed: the Fetch API's
+// `Response`/`ReadableStream`/`ReadableStreamReader`/`ReadableStreamBYOBReader`
+// family, reachable e.g. via a handler's `Promise<Response>` return type):
+// their mutually overloaded, generically self-referential methods resolve to
+// a FRESH, non-identical `ts.Type` instance on every visit — TS does not
+// guarantee referential stability for repeated generic instantiations reached
+// via different call paths — so `seen.has(type)` never fires even though the
+// walk never terminates, and it eventually overflows the native JS call
+// stack (confirmed via a reproduction against a real op's `Promise<Response>`
+// return type: ~3200 `typeRefFromType` calls before `RangeError: Maximum
+// call stack size exceeded`, with `seen.size` still under 25 throughout —
+// the runaway is BREADTH across overload sets, not path depth, so a
+// path-depth cap over `seen.size` would not catch it).
+//
+// `budget` is a mutable call counter threaded through every recursive call
+// the exact same way `seen`/`registry` already are — fresh per top-level
+// `typeRefFromType` entry (mirrors `seen`'s own "omitted param → fresh Set"
+// convention), shared by reference across one whole descent. Measured
+// against this repo's own working slices (domain-auth/forecasting/
+// tax-compliance), the largest full-FILE extraction (every leaf's input AND
+// output combined) totals a few hundred calls; `MAX_TYPE_REF_CALLS` is a
+// full order of magnitude above that per-leaf, and comfortably below the
+// ~3200-call point that overflows the native stack for the pathological
+// case, so it always trips and punts gracefully before a `RangeError` would.
+// ============================================================================
+
+/** Mutable call-budget for one top-level `typeRefFromType` descent — see the
+ * module doc above. */
+type Budget = { calls: number }
+
+/** Calls per top-level extraction before `typeRefFromType` punts instead of
+ * recursing further — see the module doc above for how this was calibrated. */
+const MAX_TYPE_REF_CALLS = 1000
+
+// ============================================================================
 // Structural sharing — an opt-in `SharingRegistry` threaded through
 // `typeRefFromType` (and everything it calls) accumulates named-type use
 // counts and builds a `defs` map, so a type used in multiple places is
@@ -258,16 +300,17 @@ function functionRefFromSignature(
   checker: ts.TypeChecker,
   loc: ts.Node,
   seen: Set<ts.Type>,
-  registry?: SharingRegistry,
+  registry: SharingRegistry | undefined,
+  budget: Budget,
 ): TypeRef {
   const params = sig.getParameters().map((param) => ({
     name: param.name,
-    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen, registry),
+    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen, registry, budget),
   }))
-  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry)
+  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry, budget)
   const thisParam = sig.thisParameter
   const thisType = thisParam
-    ? typeRefFromType(checker.getTypeOfSymbolAtLocation(thisParam, loc), checker, loc, seen, registry)
+    ? typeRefFromType(checker.getTypeOfSymbolAtLocation(thisParam, loc), checker, loc, seen, registry, budget)
     : undefined
   return t(types.function(params, returnType, thisType))
 }
@@ -288,9 +331,10 @@ function functionRefFromSignatures(
   checker: ts.TypeChecker,
   loc: ts.Node,
   seen: Set<ts.Type>,
-  registry?: SharingRegistry,
+  registry: SharingRegistry | undefined,
+  budget: Budget,
 ): TypeRef {
-  const refs = sigs.map((sig) => functionRefFromSignature(sig, checker, loc, seen, registry))
+  const refs = sigs.map((sig) => functionRefFromSignature(sig, checker, loc, seen, registry, budget))
   return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
 }
 
@@ -309,13 +353,14 @@ function methodRefFromSignature(
   loc: ts.Node,
   seen: Set<ts.Type>,
   thisType: TypeRef,
-  registry?: SharingRegistry,
+  registry: SharingRegistry | undefined,
+  budget: Budget,
 ): TypeRef {
   const params = sig.getParameters().map((param) => ({
     name: param.name,
-    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen, registry),
+    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen, registry, budget),
   }))
-  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry)
+  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry, budget)
   return t(types.method(params, returnType, thisType))
 }
 
@@ -331,9 +376,10 @@ function methodRefFromSignatures(
   loc: ts.Node,
   seen: Set<ts.Type>,
   thisType: TypeRef,
-  registry?: SharingRegistry,
+  registry: SharingRegistry | undefined,
+  budget: Budget,
 ): TypeRef {
-  const refs = sigs.map((sig) => methodRefFromSignature(sig, checker, loc, seen, thisType, registry))
+  const refs = sigs.map((sig) => methodRefFromSignature(sig, checker, loc, seen, thisType, registry, budget))
   return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
 }
 
@@ -353,7 +399,8 @@ function methodsFromClassType(
   loc: ts.Node,
   seen: Set<ts.Type>,
   thisType: TypeRef,
-  registry?: SharingRegistry,
+  registry: SharingRegistry | undefined,
+  budget: Budget,
 ): Record<string, TypeRef> {
   const methods: Record<string, TypeRef> = {}
   for (const prop of checker.getPropertiesOfType(type)) {
@@ -363,7 +410,7 @@ function methodsFromClassType(
     const sigs = checker.getSignaturesOfType(propType, ts.SignatureKind.Call)
     if (!isMethodDecl && sigs.length === 0) continue
     if (sigs.length === 0) continue
-    methods[prop.name] = methodRefFromSignatures(sigs, checker, loc, seen, thisType, registry)
+    methods[prop.name] = methodRefFromSignatures(sigs, checker, loc, seen, thisType, registry, budget)
   }
   return methods
 }
@@ -711,7 +758,8 @@ function typeRefFromBrandedIntersection(
   checker: ts.TypeChecker,
   loc: ts.Node,
   seen: Set<ts.Type>,
-  registry?: SharingRegistry,
+  registry: SharingRegistry | undefined,
+  budget: Budget,
 ): TypeRef | undefined {
   const bases: ts.Type[] = []
   const refinementMeta: Record<string, unknown> = {}
@@ -732,7 +780,7 @@ function typeRefFromBrandedIntersection(
   if (bases.length !== 1) return undefined
 
   const nextSeen = new Set(seen).add(type)
-  const baseRef = typeRefFromType(bases[0]!, checker, loc, nextSeen, registry)
+  const baseRef = typeRefFromType(bases[0]!, checker, loc, nextSeen, registry, budget)
 
   const branded =
     brandValue !== undefined
@@ -773,7 +821,17 @@ export function typeRefFromType(
   loc: ts.Node,
   seen: Set<ts.Type> = new Set(),
   registry?: SharingRegistry,
+  budget: Budget = { calls: 0 },
 ): TypeRef {
+  budget.calls++
+  if (budget.calls > MAX_TYPE_REF_CALLS) {
+    return puntRef(
+      "extraction call budget exceeded — likely reached a generically self-referential " +
+        "TS/DOM built-in library type (e.g. Response/ReadableStream/ReadableStreamReader) " +
+        "whose mutually overloaded methods resolve to fresh, non-identical ts.Type " +
+        "instances on every visit, so seen-based identity cycle detection never fires",
+    )
+  }
   if (seen.has(type)) {
     const registered = registry?.names.get(type)
     const typeName = registered ?? type.aliasSymbol?.name ?? type.symbol?.name
@@ -796,13 +854,13 @@ export function typeRefFromType(
       registry.names.set(type, assignedName)
       bumpUseCount(registry, assignedName)
       const nextSeen = new Set(seen).add(type)
-      const bodyRef = typeRefFromTypeStructural(type, checker, loc, nextSeen, registry)
+      const bodyRef = typeRefFromTypeStructural(type, checker, loc, nextSeen, registry, budget)
       registry.defs.set(assignedName, bodyRef)
       return t(types.ref(assignedName))
     }
   }
 
-  return typeRefFromTypeStructural(type, checker, loc, seen, registry)
+  return typeRefFromTypeStructural(type, checker, loc, seen, registry, budget)
 }
 
 function typeRefFromTypeStructural(
@@ -811,6 +869,7 @@ function typeRefFromTypeStructural(
   loc: ts.Node,
   seen: Set<ts.Type>,
   registry: SharingRegistry | undefined,
+  budget: Budget,
 ): TypeRef {
   const flags = type.flags
 
@@ -865,7 +924,7 @@ function typeRefFromTypeStructural(
     const style = type.aliasSymbol.name === "OffsetPage" ? "offset" : "cursor"
     return t(
       types.page(
-        elem ? typeRefFromType(elem, checker, loc, nextSeen, registry) : puntRef("unknown page element"),
+        elem ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget) : puntRef("unknown page element"),
         style,
       ),
     )
@@ -876,14 +935,14 @@ function typeRefFromTypeStructural(
   if (checker.isTupleType(type)) {
     const nextSeen = new Set(seen).add(type)
     const elements = checker.getTypeArguments(type as ts.TypeReference)
-    return t(types.tuple(elements.map((el) => typeRefFromType(el, checker, loc, nextSeen, registry))))
+    return t(types.tuple(elements.map((el) => typeRefFromType(el, checker, loc, nextSeen, registry, budget))))
   }
 
   // ── Arrays (T[] / Array<T>) ───────────────────────────────────────────────
   if (checker.isArrayType(type)) {
     const nextSeen = new Set(seen).add(type)
     const [elem] = checker.getTypeArguments(type as ts.TypeReference)
-    return t(types.array(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry) : puntRef("unknown array element")))
+    return t(types.array(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget) : puntRef("unknown array element")))
   }
 
   // ── Unions: TS enums + literal unions lower to enum/literal-union shapes;
@@ -918,7 +977,7 @@ function typeRefFromTypeStructural(
     // `enum` kind is `readonly string[]` only, so numeric/mixed cases use
     // `types.union` of literals instead.
     if (members.every(isLiteralMember)) {
-      return t(types.union(members.map((m) => typeRefFromType(m, checker, loc, seen, registry))))
+      return t(types.union(members.map((m) => typeRefFromType(m, checker, loc, seen, registry, budget))))
     }
 
     // ── Object-like unions: lower to `types.union([...variants])`, each
@@ -967,7 +1026,7 @@ function typeRefFromTypeStructural(
         }
       }
 
-      const variants = members.map((m) => typeRefFromType(m, checker, loc, nextSeen, registry))
+      const variants = members.map((m) => typeRefFromType(m, checker, loc, nextSeen, registry, budget))
       return t(types.union(variants), discriminator ? { discriminator } : {})
     }
 
@@ -1005,10 +1064,10 @@ function typeRefFromTypeStructural(
   // TypeScript's `&`, Zod's `z.intersection`, …) do, and the rest fall back to
   // their first member (lossy but safe — see each projector's handler).
   if (type.isIntersection()) {
-    const branded = typeRefFromBrandedIntersection(type, checker, loc, seen, registry)
+    const branded = typeRefFromBrandedIntersection(type, checker, loc, seen, registry, budget)
     if (branded) return branded
     const nextSeen = new Set(seen).add(type)
-    const members = type.types.map((member) => typeRefFromType(member, checker, loc, nextSeen, registry))
+    const members = type.types.map((member) => typeRefFromType(member, checker, loc, nextSeen, registry, budget))
     return t(types.intersection(members))
   }
 
@@ -1020,7 +1079,7 @@ function typeRefFromTypeStructural(
     // yet and still punt.
     const callSigs = checker.getSignaturesOfType(type, ts.SignatureKind.Call)
     if (callSigs.length > 0) {
-      return functionRefFromSignatures(callSigs, checker, loc, seen, registry)
+      return functionRefFromSignatures(callSigs, checker, loc, seen, registry, budget)
     }
     if (checker.getSignaturesOfType(type, ts.SignatureKind.Construct).length > 0) {
       return puntRef(`constructable (${checker.typeToString(type)})`)
@@ -1031,7 +1090,7 @@ function typeRefFromTypeStructural(
     // Promise<T> in field position: unwrap to T, same as the return-type path.
     if (type.symbol?.name === "Promise") {
       const [inner] = checker.getTypeArguments(type as ts.TypeReference)
-      if (inner) return typeRefFromType(inner, checker, loc, nextSeen, registry)
+      if (inner) return typeRefFromType(inner, checker, loc, nextSeen, registry, budget)
     }
 
     // AsyncIterable<T>/AsyncGenerator<T, TReturn, TNext>/AsyncIterableIterator<T>
@@ -1053,7 +1112,7 @@ function typeRefFromTypeStructural(
         type.symbol.name === "AsyncIterableIterator")
     ) {
       const [elem] = checker.getTypeArguments(type as ts.TypeReference)
-      return t(types.stream(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry) : puntRef("unknown stream element")))
+      return t(types.stream(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget) : puntRef("unknown stream element")))
     }
 
     // Set<T>/ReadonlySet<T>: checked before the general object-type properties
@@ -1076,7 +1135,7 @@ function typeRefFromTypeStructural(
     // ordered sequence of elements) and type-ir has no dedicated `set` kind.
     if (type.symbol && (type.symbol.name === "Set" || type.symbol.name === "ReadonlySet")) {
       const [elem] = checker.getTypeArguments(type as ts.TypeReference)
-      return t(types.array(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry) : puntRef("unknown set element")))
+      return t(types.array(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget) : puntRef("unknown set element")))
     }
 
     // Map<K, V>/ReadonlyMap<K, V>: same rationale as Set<T> immediately above
@@ -1092,8 +1151,8 @@ function typeRefFromTypeStructural(
       const [key, value] = checker.getTypeArguments(type as ts.TypeReference)
       return t(
         types.map(
-          key ? typeRefFromType(key, checker, loc, nextSeen, registry) : puntRef("unknown map key"),
-          value ? typeRefFromType(value, checker, loc, nextSeen, registry) : puntRef("unknown map value"),
+          key ? typeRefFromType(key, checker, loc, nextSeen, registry, budget) : puntRef("unknown map key"),
+          value ? typeRefFromType(value, checker, loc, nextSeen, registry, budget) : puntRef("unknown map value"),
         ),
       )
     }
@@ -1107,7 +1166,7 @@ function typeRefFromTypeStructural(
     if (properties.length === 0 && (stringIndex || numberIndex)) {
       const valueType = stringIndex ?? numberIndex!
       const keyRef = stringIndex ? t(types.string) : t(types.number)
-      return t(types.map(keyRef, typeRefFromType(valueType, checker, loc, nextSeen, registry)))
+      return t(types.map(keyRef, typeRefFromType(valueType, checker, loc, nextSeen, registry, budget)))
     }
 
     // Class instances: a symbol with a ts.ClassDeclaration among its
@@ -1129,7 +1188,7 @@ function typeRefFromTypeStructural(
       // return shape, additive and non-breaking for every existing consumer
       // of this function. `instance` itself stays purely nominal; nothing
       // here adds fields to it.
-      const methods = methodsFromClassType(type, checker, loc, nextSeen, instanceRef, registry)
+      const methods = methodsFromClassType(type, checker, loc, nextSeen, instanceRef, registry, budget)
       if (Object.keys(methods).length > 0) {
         return t(instanceRef.shape, { ...instanceRef.meta, interface: t(types.interface(methods)) })
       }
@@ -1153,7 +1212,7 @@ function typeRefFromTypeStructural(
       // Method-shaped fields (call signature) lower to `types.function` —
       // e.g. `callback: (x: number) => void` — same as any other callable
       // type position (see the call-signature branch above).
-      const fieldRef = typeRefFromType(propType, checker, loc, nextSeen, registry)
+      const fieldRef = typeRefFromType(propType, checker, loc, nextSeen, registry, budget)
 
       // Per-field JSDoc: `/** … */` above a property → `meta.description`;
       // `@default` tag → `meta.default`. Both flow through the type-ir
@@ -1197,7 +1256,7 @@ function typeRefFromTypeStructural(
     const constraint = type.getConstraint()
     if (constraint) {
       const nextSeen = new Set(seen).add(type)
-      const constraintRef = typeRefFromType(constraint, checker, loc, nextSeen, registry)
+      const constraintRef = typeRefFromType(constraint, checker, loc, nextSeen, registry, budget)
       return t(constraintRef.shape, { ...constraintRef.meta, generic: true })
     }
     return t(types.unknown, {
