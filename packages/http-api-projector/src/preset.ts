@@ -19,12 +19,16 @@
 //   3. rewriters          — user-supplied HttpRoute => HttpRoute passes,
 //                          applied last, right before router compilation.
 //   4. router             — HttpRoute => CompiledRouter. Defaults to
-//                          `makeRouterFromRoute` (zero build cost). Swap in
-//                          `radixRouter` / `compiledCharRouter` /
-//                          `mapCharRouter` (compile.ts) — or any function of
-//                          that shape — for faster dispatch at a build-time
-//                          cost. Deliberately a function, not a string enum:
-//                          the built-ins are just values of this same type.
+//                          `mapCharRouter` (compile.ts) — static routes in a
+//                          prebuilt Map, dynamic routes through a compiled
+//                          char-matcher function; best build cost among the
+//                          compiled routers with near-best dispatch (see
+//                          bench-results/). Swap in `makeRouterFromRoute`
+//                          (route.ts, zero build cost, tree-walk dispatch),
+//                          `radixRouter`, `compiledCharRouter` — or any
+//                          function of that shape. Deliberately a function,
+//                          not a string enum: the built-ins are just values
+//                          of this same type.
 //   5. als                — withALS (compile.ts), wraps the compiled router
 //                          so every request runs inside its own
 //                          AsyncLocalStorage context. Opt-in.
@@ -34,11 +38,11 @@
 //   7. corsLayer          — CORS preflight + origin headers.
 //
 // To drop the auto-method layer and use core routing only:
-//   return makeRouterFromRoute(httpProjection(node))
+//   return mapCharRouter(httpProjection(node))
 //
 // To compose manually with CORS:
 //   const routes  = httpProjection(node)
-//   const router  = makeRouterFromRoute(routes)
+//   const router  = mapCharRouter(routes)
 //   const methods = autoMethodLayer(router, routes)
 //   return corsLayer({ origin: "https://app.example.com" })(methods)
 
@@ -47,11 +51,10 @@ import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
-import { makeRouterFromRoute } from "./route.ts"
 import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, ThrownErrorEncoder } from "./route.ts"
 import { httpProjection } from "./dx.ts"
 import type { HttpProjectionOptions } from "./dx.ts"
-import { withALS } from "./compile.ts"
+import { mapCharRouter, withALS } from "./compile.ts"
 import type { CompiledRouter } from "./compile.ts"
 import { autoMethodLayer, corsLayer } from "./layers.ts"
 import type { CorsOptions, Fetch } from "./layers.ts"
@@ -110,11 +113,14 @@ export type PresetOptions<T = unknown> = {
    */
   readonly rewriters?: ReadonlyArray<(route: HttpRoute) => HttpRoute>
   /**
-   * `HttpRoute => CompiledRouter` compiler. Default `makeRouterFromRoute`
-   * (route.ts) — zero build cost, tree-walk dispatch. Swap in `radixRouter`,
-   * `compiledCharRouter`, or `mapCharRouter` (compile.ts) for faster
-   * dispatch at a build-time cost, or supply your own — this is a plain
-   * function value, not a string enum, so any conforming compiler works.
+   * `HttpRoute => CompiledRouter` compiler. Default `mapCharRouter`
+   * (compile.ts) — static routes in a prebuilt `Map`, dynamic routes through
+   * a compiled char-matcher function; best build cost among the compiled
+   * routers with near-best dispatch (see bench-results/). Swap in
+   * `makeRouterFromRoute` (route.ts, zero build cost, tree-walk dispatch),
+   * `radixRouter`, `compiledCharRouter`, or supply your own — this is a
+   * plain function value, not a string enum, so any conforming compiler
+   * works.
    * Every built-in compiler accepts `opts.handlerMiddleware` as its second
    * argument, `opts.detection` as its third, `opts.errorEncoder` as its
    * fourth, and `opts.thrownErrorEncoder` as its fifth (see below) —
@@ -287,7 +293,7 @@ export function createFetch<T = unknown>(
 
   for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
 
-  const compileRouter = opts.router ?? makeRouterFromRoute
+  const compileRouter = opts.router ?? mapCharRouter
   const router = compileRouter(routes, opts.handlerMiddleware, opts.detection, opts.errorEncoder, opts.thrownErrorEncoder)
 
   const withContext =

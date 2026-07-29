@@ -95,7 +95,7 @@ organized by path segment + HTTP method) from the API tree (organized by domain)
 fixed transform pipeline in `packages/http-api-projector/src/route.ts`:
 
 ```
-Node --naiveTransform--> HttpRoute --applyMethods, applyMoveTo, applyResponse--> HttpRoute --makeRouterFromRoute--> Fetch
+Node --naiveTransform--> HttpRoute --applyMethods, applyMoveTo, applyResponse--> HttpRoute --mapCharRouter--> Fetch
 ```
 
 - **`naiveTransform`** — the mechanical baseline: every child becomes a path-segment
@@ -116,13 +116,18 @@ composing all three rewriters over `naiveTransform`'s output; `crud(handlers)` i
 convention constructor for the standard 5-op REST resource, wiring `http.*` bundles for
 you. `createFetch(node, opts?)` (`preset.ts`) is the full OOTB pipeline: optional
 `wrapValidators`, `httpProjection`, user rewriters, router compilation
-(`makeRouterFromRoute` by default; `radixRouter`/`compiledCharRouter`/`mapCharRouter` in
-`compile.ts` for faster dispatch at a build-time cost), and the auto-method layer
-(HEAD-from-GET, OPTIONS/405).
+(`mapCharRouter` by default — static routes in a prebuilt `Map`, dynamic routes through a
+compiled char-matcher function, `compile.ts`; swap in `makeRouterFromRoute`,
+`radixRouter`, or `compiledCharRouter` for a different build-cost/dispatch-cost
+tradeoff), and the auto-method layer (HEAD-from-GET, OPTIONS/405).
 
-`makeRouterFromRoute` dispatches directly on the compiled `HttpRoute` tree — O(depth) via
-keyed child lookup at each node, walking `children` for static path segments and
-`fallback` for the wildcard-capture case. There is no flat route table.
+`mapCharRouter` dispatches directly on a flattened route list derived once from the
+compiled `HttpRoute` tree at build time: static routes are one `Map` lookup, dynamic
+routes fall through to a `new Function`-generated matcher. `makeRouterFromRoute`
+remains available as the zero-build-cost alternative — it dispatches directly on the
+`HttpRoute` tree itself, O(depth) via keyed child lookup at each node, walking
+`children` for static path segments and `fallback` for the wildcard-capture case, with
+no flat route table.
 
 Non-HTTP projections (MCP, CLI) never see the `HttpRoute` tree — they dispatch/enumerate
 the original `Node` tree directly and key children by their agnostic name as always.

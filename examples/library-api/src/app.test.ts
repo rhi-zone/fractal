@@ -377,7 +377,7 @@ describe("library-api — createFetch preset options against the real tree", () 
     expect(plain.headers.get("Access-Control-Allow-Origin")).toBeNull()
   })
 
-  it("router: radixRouter dispatches the full tree identically to the default makeRouterFromRoute", async () => {
+  it("router: radixRouter dispatches the full tree correctly when passed as opts.router", async () => {
     const withRadix = createFetch(api, { router: radixRouter })
 
     const addRes = await withRadix(

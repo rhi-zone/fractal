@@ -297,7 +297,9 @@ Promise<Response>` compilers:
 - `mapCharRouter` — Map + compiled character hybrid (best broad performance)
 
 Their underlying matchers compose via `chainMatchers` (first-wins).
-`makeRouterFromRoute` remains the zero-build-cost default in `createFetch`.
+`mapCharRouter` is `createFetch`'s default (best build cost among the compiled
+routers, near-best dispatch — see bench-results/); `makeRouterFromRoute`
+remains available as the zero-build-cost alternative via the `router` option.
 
 ## AsyncLocalStorage integration (2026-07-17)
 

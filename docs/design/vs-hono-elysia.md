@@ -108,7 +108,7 @@ Verification: `bun run test` — **100 pass, 0 fail** across all packages
 | 4 | Surface/runtime-agnostic core | **TIE** (deliberate trade — see below) | **TIE** |
 | 5 | Lower barrier to entry | **TIE** (with caveats at scale — see below) | **TIE** |
 | 6 | Types equally/more safe | **TIE** (contextual win on robustness/scale) | **TIE** (declared-response-schema caveat — see below) |
-| 7 | Routing-dispatch performance | **TIE** (default vs opt-in — see below) | **TIE** (default vs opt-in — see below) |
+| 7 | Routing-dispatch performance | **TIE** (no head-to-head timing — see below) | **TIE** (no head-to-head timing — see below) |
 
 ---
 
@@ -293,10 +293,11 @@ real gap (declared response schema required vs Eden's inferred response types).
 
 **7 — Routing-dispatch performance (TIE / TIE).**
 
-fractal's default router is the plain tree-walker (`makeRouterFromRoute`, route.ts)
-— zero build cost, `splitPath` + recursive descent per request. Three faster,
-opt-in compilers live in `packages/http-api-projector/src/compile.ts`, swapped in
-via the `router` option (`preset.ts:113-115`):
+fractal's default router is `mapCharRouter` (compile.ts) — static routes served
+from a prebuilt `Map`, dynamic routes through a compiled char-matcher function.
+The plain tree-walker (`makeRouterFromRoute`, route.ts — zero build cost,
+`splitPath` + recursive descent per request) and two other compilers remain
+available via the `router` option (`preset.ts:116-125`):
 
 - `radixMatcher`/`radixRouter` — a character-level radix trie, built once at
   setup; no `split`, no per-segment allocation, no codegen.
@@ -315,7 +316,7 @@ dispatch cases, `bun run packages/http-api-projector/src/route.bench.ts`; saved
 run: `packages/http-api-projector/bench-results/route-bench-2026-07-17T07-29-08-288Z.json`,
 AMD Ryzen 9 9900X, Bun 1.3.9 — per-dispatch time = `totalMs * 1e6 / 500_000` iterations):
 
-| dispatch case | 1. tree-walk (default) | 5. radix trie | 7. compiled fn | 8. Map+compiled hybrid |
+| dispatch case | 1. tree-walk | 5. radix trie | 7. compiled fn | 8. Map+compiled hybrid (default) |
 |---|---|---|---|---|
 | static hit | 189ns | 88ns | 162ns | 28ns |
 | dynamic hit | 205ns | 90ns | 114ns | 52ns |
@@ -324,9 +325,10 @@ AMD Ryzen 9 9900X, Bun 1.3.9 — per-dispatch time = `totalMs * 1e6 / 500_000` i
 | wide branch, late (120 siblings) | 224ns | 166ns | 436ns | 28ns |
 | static path, 8k chars | 24.6µs | 9.8µs | 0.92µs | 0.57µs |
 
-The hybrid (`mapCharRouter`) is fastest on every case measured — 3-9x the default
-tree-walker on short paths, ~40x on the 8k-char pathological case. The radix trie
-is the next-best all-rounder, 1.4-2.7x the default. `compiledCharMatcher` alone is
+The hybrid (`mapCharRouter`, now fractal's default) is fastest on every case
+measured — 3-9x the tree-walker on short paths, ~40x on the 8k-char pathological
+case. The radix trie is the next-best all-rounder, 1.4-2.7x the tree-walker.
+`compiledCharMatcher` alone is
 not uniformly the fastest: it loses to the radix trie on wide branching (436ns vs
 166ns at "wide late", 120 static siblings under one node) because compiling the
 whole route set into one generated function produces a long branch chain at wide
@@ -338,8 +340,11 @@ per `codegenSizes` in the same results file).
 Build (setup) cost scales the other way: tree-walk 623µs and radix trie 461µs to
 build the 993-route structure, vs 13.3ms for `compiledCharMatcher` (codegen +
 `new Function` compile of the full table) and 1.9ms for the hybrid (codegen over
-the dynamic subset only). The compilers trade one-time build cost for per-request
-dispatch cost — a build-time/request-time tradeoff, not a free win.
+the dynamic subset only) — the default's own build cost is the second-lowest
+measured, ahead of both non-hybrid compilers. The compilers trade one-time build
+cost for per-request dispatch cost — a build-time/request-time tradeoff, but the
+default now sits at the good end of both axes rather than trading one for the
+other.
 
 **vs Hono.** Hono's default router is RegExpRouter, which Hono's own docs
 (hono.dev/docs/concepts/routers) describe as "the fastest router in the
@@ -349,32 +354,36 @@ combined regular expression plus a `staticMap` for O(1) exact-path lookups
 (consistent with `docs/design/prior-art/hono.md`'s description of
 `src/router/reg-exp-router/router.ts`). Hono also ships TrieRouter,
 PatternRouter, and LinearRouter as explicit opt-ins for other perf/bundle-size
-tradeoffs — so both frameworks offer a menu of dispatch strategies. The
-difference is which one is the default: Hono's default is its fastest router;
-fractal's default is its slowest. `compiledCharMatcher`, fractal's closest analog
-to RegExpRouter's codegen approach, is not fractal's fastest option either (the
-Map+radix-shaped hybrid beats it, mirroring Hono's own claim that pure codegen
-doesn't always beat a tree/hash combination). No head-to-head timing exists
-between fractal and Hono — Hono was not run inside this repo's benchmark harness,
-so the two frameworks' numbers are not directly comparable, only their
-architectures and each side's own published numbers.
+tradeoffs — so both frameworks offer a menu of dispatch strategies, and each now
+defaults to the one it benchmarks fastest internally: Hono's default is its
+fastest router; fractal's default (`mapCharRouter`) is also fractal's fastest
+router, measured in this file's own benchmark. `compiledCharMatcher`, fractal's
+closest analog to RegExpRouter's codegen approach, is not fractal's fastest
+option (the Map+radix-shaped hybrid beats it, mirroring Hono's own claim that
+pure codegen doesn't always beat a tree/hash combination) — but fractal doesn't
+ship that one as default either. No head-to-head timing exists between fractal
+and Hono — Hono was not run inside this repo's benchmark harness, so the two
+frameworks' numbers are not directly comparable, only their architectures and
+each side's own published numbers.
 
 **vs Elysia.** Elysia's default router (via the bundled Memoirist package,
 github.com/SaltyAom/memoirist) stores static routes in a plain object for O(1)
 lookup and dynamic routes in a per-HTTP-method radix tree — structurally the
 same Map-plus-dynamic-matcher shape as fractal's `mapCharRouter`, except
 Elysia's dynamic half is a radix tree and fractal's is a compiled function.
-That shape is Elysia's default; fractal ships the equivalent shape
-(`mapCharRouter`) as an opt-in, not the default. No published Elysia benchmark
-numbers were verified against fractal's harness, so as with Hono this is an
-architectural comparison, not a timed one.
+That shape is Elysia's default, and it is now fractal's default too
+(`mapCharRouter`). No published Elysia benchmark numbers were verified against
+fractal's harness, so as with Hono this is an architectural comparison, not a
+timed one.
 
 Verdict: architecturally tied or ahead — fractal's benchmarked hybrid router
 beats every architecture in this file's own benchmark, including the one
-structurally closest to each rival's default. But both rivals ship their fast
-router as the default and fractal does not: reaching fractal's fastest
-dispatch requires knowing to pass `router: mapCharRouter` to `preset.ts` or
-`createFetch`. That's the gap the TIE covers, not a numbers gap.
+structurally closest to each rival's default, and as of `preset.ts:116-125` it
+is fractal's shipped default, closing the default-vs-opt-in gap this criterion
+previously flagged. The TIE now rests on the absence of head-to-head timing
+against Hono or Elysia's own routers, not on which router each project ships by
+default — all three frameworks default to the router shape their own
+benchmarks (or the closest available proxy) call fastest.
 
 ---
 
@@ -398,12 +407,6 @@ dispatch requires knowing to pass `router: mapCharRouter` to `preset.ts` or
    into the dev loop (comparable to Eden's install), but it is a real step that
    rivals avoid through pure inference at small scale. At scale, pure inference
    crashes stock tsc; but at small scale it is lower-friction.
-
-5. **Default router is the slowest one fractal ships.** Hono defaults to
-   RegExpRouter (its fastest); Elysia defaults to a Map+Memoirist-radix combo
-   (its fastest). fractal defaults to the plain tree-walker; its fastest router
-   (`mapCharRouter`) is opt-in via `preset.ts`'s `router` option and must be
-   selected explicitly.
 
 ---
 
@@ -432,4 +435,4 @@ dispatch requires knowing to pass `router: mapCharRouter` to `preset.ts` or
   - `packages/http-api-projector/src/compile.ts` — `radixMatcher`/`compiledCharMatcher`/`mapCharRouter`
   - `packages/http-api-projector/src/route.bench.ts` — benchmark harness, 8 architectures, 993 routes/30 cases
   - `packages/http-api-projector/bench-results/route-bench-2026-07-17T07-29-08-288Z.json` — measured run cited above
-  - `packages/http-api-projector/src/preset.ts:113-115` — `router` option, default `makeRouterFromRoute`
+  - `packages/http-api-projector/src/preset.ts:116-125` — `router` option, default `mapCharRouter`
