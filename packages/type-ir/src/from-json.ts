@@ -19,6 +19,7 @@
 // design sketch for that follow-on work.
 
 import { t, types, type TypeRef } from "./index.ts"
+import { fromJsonCorpus, type CorpusInferConfig } from "./from-json-corpus.ts"
 import { date, datetime, email, int8, int16, int32, int64, uint8, uint16, uint32, uint64, uuid, uri } from "./kinds/common.ts"
 
 export interface InferConfig {
@@ -205,8 +206,17 @@ function inferValue(value: unknown, config: ResolvedConfig): TypeRef {
   return t(types.unknown)
 }
 
-/** Infer a `TypeRef` shape from a single JSON value. See module doc for the heuristic. */
-export function fromJson(value: unknown, config?: InferConfig): TypeRef {
+/**
+ * Per-value structural typing: the shape of ONE value, with no cross-observation
+ * evidence. This is the leaf primitive the corpus pipeline is built on —
+ * `resolveEvidence` types every raw value with this and then merges.
+ *
+ * It is NOT the public single-value entry point. `fromJson` below is, and it
+ * routes through the full corpus machinery so that a lone document still gets
+ * evidence-based inference for its nested arrays (an array of 30 elements is 30
+ * observations, whatever the corpus size).
+ */
+export function inferValueShape(value: unknown, config?: InferConfig): TypeRef {
   const resolved: ResolvedConfig = {
     arrayThreshold: config?.arrayThreshold ?? 3,
     narrowIntegerWidth: config?.narrowIntegerWidth ?? true,
@@ -214,4 +224,17 @@ export function fromJson(value: unknown, config?: InferConfig): TypeRef {
     leafHeuristics: config?.leafHeuristics ?? [],
   }
   return inferValue(value, resolved)
+}
+
+/**
+ * Infer a `TypeRef` from a single JSON value.
+ *
+ * Defined as the N=1 case of corpus inference — literally `fromJsonCorpus([value])`.
+ * A single value is one observation of the same evidence machinery, not a
+ * different problem, so there is no separate single-value heuristic to keep in
+ * sync. Nested arrays inside the value still carry many observations and are
+ * typed accordingly.
+ */
+export function fromJson(value: unknown, config?: CorpusInferConfig): TypeRef {
+  return fromJsonCorpus([value], config)
 }

@@ -1221,12 +1221,16 @@ describe("adversarial: K=1 in arrays of objects", () => {
     ]
     const inferred = fromJson(samples)
     expect(inferred.shape.kind).toBe("array")
-    // fromJson (single-value, no corpus enum detection) should NOT collapse
-    // status to an enum/literal at all — that signal only exists in
-    // fromJsonCorpus. Confirm the two entry points disagree here.
+    // CORRECTED. This asserted `string` and its comment said the point was to
+    // "confirm the two entry points disagree" — pinning the divergence as if it
+    // were a feature. It was not: `fromJson` is now defined as the N=1 case of
+    // corpus inference, so the five array elements are five observations of
+    // `status` and a constant across all five clears `literalMinSamples`. The
+    // old single-value path returned `string` only because it had no
+    // cross-element evidence machinery, not because `string` was right here.
     const el = (inferred.shape as { element: TypeRef }).element
     const fields = objectFields(el)
-    expect(fields.status!.shape.kind).toBe("string")
+    expect(fields.status!.shape).toEqual({ kind: "literal", value: "active" })
 
     const corpusInferred = fromJsonCorpus(samples)
     const corpusFields = objectFields(corpusInferred)

@@ -25,7 +25,7 @@
 //   phases back to back, so existing callers see identical behavior.
 
 import { t, types, ancestors, type TypeRef } from "./index.ts"
-import { fromJson, type InferConfig, type LeafHeuristic } from "./from-json.ts"
+import { inferValueShape as fromJson, type InferConfig, type LeafHeuristic } from "./from-json.ts"
 import {
   int8, int16, int32, int64,
   uint8, uint16, uint32, uint64,
