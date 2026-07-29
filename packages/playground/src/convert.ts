@@ -28,7 +28,6 @@ import type { TypeRef, TypeRefDocument } from "@rhi-zone/fractal-type-ir"
 import { typeRefDocument } from "@rhi-zone/fractal-type-ir"
 
 import { fromJsonSchema } from "@rhi-zone/fractal-type-ir/from-json-schema"
-import { fromJson } from "@rhi-zone/fractal-type-ir/from-json"
 import { fromJsonCorpus } from "@rhi-zone/fractal-type-ir/from-json-corpus"
 import { fromJtdDocument } from "@rhi-zone/fractal-type-ir/from-jtd"
 import { fromGraphql } from "@rhi-zone/fractal-type-ir/from-graphql"
@@ -107,7 +106,9 @@ export function ingest(formatId: string, source: string): TypeRefDocument {
     case "json-schema":
       return typeRefDocument(fromJsonSchema(JSON.parse(source)))
     case "json":
-      return typeRefDocument(fromJson(JSON.parse(source)))
+      // A single value is the N=1 case of corpus inference — there is no
+      // separate single-value entry point.
+      return typeRefDocument(fromJsonCorpus([JSON.parse(source)]))
     case "json-corpus":
       return typeRefDocument(fromJsonCorpus(JSON.parse(source)))
     case "jtd":
@@ -129,7 +130,7 @@ export function ingest(formatId: string, source: string): TypeRefDocument {
       // safely eval arbitrary vendor schema code, so the input is a small
       // JSON envelope naming the vendor plus either a JSON Schema export (the
       // StandardJSONSchemaV1 fast path) or a runtime sample value (the
-      // fromJson fallback path) — this mock reconstructs exactly the
+      // runtime-sample fallback path) — this mock reconstructs exactly the
       // `~standard` shape fromStandardSchema expects.
       const envelope = JSON.parse(source) as {
         vendor?: string
