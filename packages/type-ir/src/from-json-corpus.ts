@@ -169,6 +169,17 @@ export interface ResolveStrategy extends InferConfig {
    * enum is a runtime failure rather than a lost optimisation.
    */
   enumCoverageBar?: number
+  /**
+   * Replace the enum decision itself, not just its thresholds. Receives an
+   * `EnumDecisionContext` (K, N, singletons, the candidate members, the path
+   * from the root, the merged type, full evidence, and the resolved strategy)
+   * and returns whether to commit to a closed member set.
+   *
+   * Defaults to `defaultEnumPredicate`, which is where `enumMaxMembers` /
+   * `enumMaxRatio` / `enumCoverageBar` / `enumMinSamples` / `literalMinSamples`
+   * are consumed. A replacement need not use any of them.
+   */
+  isEnum?: EnumPredicate
   /** Minimum samples before dict detection fires. Default: 3. */
   dictMinSamples?: number
   /**
@@ -660,87 +671,114 @@ function mergeAll(refs: readonly TypeRef[]): TypeRef {
  *
  * When signals disagree or are ambiguous, be conservative and say no.
  */
-function looksLikeEnum(
-  K: number,
-  N: number,
-  singletons: number,
-  literalMinSamples = 5,
-  enumMaxMembers = 50,
-  enumMaxRatio = 0.5,
-  enumCoverageBar = 0.9,
-): boolean {
-  if (K === 1) return N >= literalMinSamples
+/**
+ * Everything a decision about one position can see. Handed to `EnumPredicate`.
+ */
+export interface EnumDecisionContext {
+  /** Distinct leaf values observed here (K). */
+  readonly distinct: number
+  /** Leaf occurrences observed here (N). */
+  readonly occurrences: number
+  /** Distinct leaf values seen exactly once (Good-Turing's n1). */
+  readonly singletons: number
+  /** JSON-serialized distinct leaf values — the candidate member set. */
+  readonly distinctValues: ReadonlySet<string>
+  /** Distinct integer leaf values, ascending, when this position is integer-typed. */
+  readonly sortedNumeric: readonly number[]
+  /** Field names / array indices from the root to this position. `["user","role"]`, `["tags","[]"]`. */
+  readonly path: readonly (string | number)[]
+  /** The mechanically-merged type here, before any generalization ran. */
+  readonly ref: TypeRef
+  /** Full evidence for this position, for decisions the fields above do not cover. */
+  readonly node: EvidenceNode
+  /** The fully-defaulted strategy, so a custom predicate can reuse the built-in knobs. */
+  readonly strategy: ResolvedStrategy
+}
+
+/**
+ * Decides whether a position's observed values should be committed to as a
+ * closed member set. Arbitrary caller logic — it need not consult the numeric
+ * knobs at all:
+ *
+ * ```ts
+ * // always, by field name, regardless of the evidence
+ * const byName: EnumPredicate = (c) => c.path.at(-1) === "status" || defaultEnumPredicate(c)
+ * // never, without an out-of-band declaration
+ * const declaredOnly: EnumPredicate = (c) => declaredEnumPaths.has(c.path.join("."))
+ * ```
+ */
+export type EnumPredicate = (ctx: EnumDecisionContext) => boolean
+
+/**
+ * The built-in decision. A conjunction of one evidence term and two guards —
+ * see `docs/design/inference-pluggable-layers.md` §5 for why neither the
+ * coverage estimate nor the ratio is sound on its own.
+ *
+ * The numeric knobs (`enumMinSamples`, `literalMinSamples`, `enumMaxMembers`,
+ * `enumMaxRatio`, `enumCoverageBar`) are read from `ctx.strategy` and are
+ * parameters OF THIS DEFAULT, not the only way to influence the outcome —
+ * replace the predicate wholesale via `ResolveStrategy.isEnum` for logic the
+ * knobs cannot express.
+ */
+export function defaultEnumPredicate(ctx: EnumDecisionContext): boolean {
+  const { distinct: K, occurrences: N, singletons, strategy } = ctx
+  if (N < strategy.enumMinSamples) return false
+  if (K === 1) return N >= strategy.literalMinSamples
   if (K >= N) return false // every value unique — never a bounded vocabulary
 
   // Output-size guard, NOT an evidence test. A cut on K alone cannot separate
   // memorization from genuine restriction (inference-theory.md §6.6-6.7).
-  if (K > enumMaxMembers) return false
+  if (K > strategy.enumMaxMembers) return false
 
   // Guard term: K/N. Degrades gracefully when the corpus is not an
   // independent sample — under a duplication factor r it falls as (K/N)/r
   // rather than inverting. This is what makes the coverage term below safe to
   // use despite the unresolved entity-identity question (§6.8, §6.11).
-  const ratio = K / N
-  if (ratio >= enumMaxRatio) return false
+  if (K / N >= strategy.enumMaxRatio) return false
 
   // Evidence term: Good-Turing. `singletons / N` estimates the probability
-  // that the next value at this position is one never seen before, so
-  // `1 - singletons/N` estimates coverage. Measured against held-out data
-  // over 41 real fields: median absolute error 0.011, rho 0.991 (§6.10).
-  //
-  // Used ONLY in conjunction with the ratio guard above, never alone: on a
-  // duplicated corpus every count is >= 2, so `singletons` is 0 and coverage
-  // reads a spurious 1.0. The conjunction rejects for as long as the ratio
-  // term does.
-  return 1 - singletons / N >= enumCoverageBar
+  // that the next value here is one never seen before, so `1 - singletons/N`
+  // estimates coverage. Median absolute error 0.011 against held-out data over
+  // 41 real fields, rho 0.991 (§6.10). Never used alone: on a duplicated
+  // corpus every count is >= 2, so singletons is 0 and coverage reads a
+  // spurious 1.0.
+  return 1 - singletons / N >= strategy.enumCoverageBar
 }
 
 function walkAndDetectEnums(
   ref: TypeRef,
   node: EvidenceNode,
-  minSamples: number,
-  literalMinSamples: number,
-  enumMaxMembers: number,
-  enumMaxRatio: number,
-  enumCoverageBar: number,
+  resolved: ResolvedStrategy,
+  path: readonly (string | number)[] = [],
 ): TypeRef {
   const { shape } = ref
+  const decide = (): boolean => resolved.isEnum({
+    distinct: node.distinctValues.size,
+    occurrences: node.leafCount,
+    singletons: node.singletons,
+    distinctValues: node.distinctValues,
+    sortedNumeric: node.sortedNumeric,
+    path, ref, node, strategy: resolved,
+  })
 
   if (shape.kind === "string" || isSubkind(shape.kind, "string")) {
-    if (node.leafCount >= minSamples) {
-      const K = node.distinctValues.size
-      const N = node.leafCount
-      if (looksLikeEnum(K, N, node.singletons, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)) {
-        const members = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
-        // Only if all values are strings
-        if (members.every((m) => typeof m === "string")) {
-          // K === 1 → single constant value, represent as a literal, same
-          // as the integer branch below (see the asymmetry this replaced,
-          // documented in from-json.adversarial.test.ts §13).
-          // K > 1 → enum.
-          if (members.length === 1) return t(types.literal(members[0] as string), ref.meta)
-          return t(types.enum(members as string[]), ref.meta)
-        }
+    if (decide()) {
+      const members = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
+      if (members.every((m) => typeof m === "string")) {
+        // K === 1 → a single constant value, represented as a literal.
+        if (members.length === 1) return t(types.literal(members[0] as string), ref.meta)
+        return t(types.enum(members as string[]), ref.meta)
       }
     }
     return ref
   }
 
   if (integerKindSet.has(shape.kind)) {
-    if (node.leafCount >= minSamples) {
-      const K = node.distinctValues.size
-      const N = node.leafCount
-      const values = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
-      if (values.every((v) => typeof v === "number" && Number.isInteger(v))) {
-        const numericValues = values as number[]
-        if (looksLikeEnum(K, N, node.singletons, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)) {
-          // K === 1 → single constant value, represent as a literal.
-          // K > 1 → union of literals.
-          if (numericValues.length === 1) return t(types.literal(numericValues[0]!), ref.meta)
-          const variants = numericValues.map((v) => t(types.literal(v)))
-          return t(types.union(variants), ref.meta)
-        }
-      }
+    const values = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
+    if (values.every((v) => typeof v === "number" && Number.isInteger(v)) && decide()) {
+      const numericValues = values as number[]
+      if (numericValues.length === 1) return t(types.literal(numericValues[0]!), ref.meta)
+      return t(types.union(numericValues.map((v) => t(types.literal(v)))), ref.meta)
     }
     return ref
   }
@@ -751,7 +789,7 @@ function walkAndDetectEnums(
     for (const [name, fieldRef] of Object.entries(fields)) {
       const childNode = node.object?.fields[name]
       newFields[name] = childNode !== undefined
-        ? walkAndDetectEnums(fieldRef, childNode, minSamples, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)
+        ? walkAndDetectEnums(fieldRef, childNode, resolved, [...path, name])
         : fieldRef
     }
     return t(types.object(newFields), ref.meta)
@@ -760,10 +798,9 @@ function walkAndDetectEnums(
   if (shape.kind === "array") {
     const el = (shape as { element: TypeRef }).element
     const childNode = node.array?.element
-    const newEl = childNode !== undefined
-      ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)
-      : el
-    return t(types.array(newEl), ref.meta)
+    return childNode !== undefined
+      ? t(types.array(walkAndDetectEnums(el, childNode, resolved, [...path, "[]"])), ref.meta)
+      : ref
   }
 
   if (shape.kind === "tuple") {
@@ -771,15 +808,13 @@ function walkAndDetectEnums(
     const perIndex = node.array?.perIndex
     return t(types.tuple(els.map((el, i) => {
       const childNode = perIndex?.[i]
-      return childNode !== undefined
-        ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)
-        : el
+      return childNode !== undefined ? walkAndDetectEnums(el, childNode, resolved, [...path, i]) : el
     })), ref.meta)
   }
 
   if (shape.kind === "union") {
     const variants = (shape as { variants: readonly TypeRef[] }).variants
-    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, minSamples, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar))), ref.meta)
+    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, resolved, path))), ref.meta)
   }
 
   return ref
@@ -1715,6 +1750,7 @@ interface ResolvedStrategy {
   readonly enumMaxMembers: number
   readonly enumMaxRatio: number
   readonly enumCoverageBar: number
+  readonly isEnum: EnumPredicate
   readonly dictMinSamples: number
   readonly splitDissimilarObjects: boolean
   readonly objectSplitThreshold: number
@@ -1758,6 +1794,7 @@ export function resolvedStrategy(strategy?: ResolveStrategy, cfg?: CorpusInferCo
     enumMaxMembers: strategy?.enumMaxMembers ?? cfg?.enumMaxMembers ?? 50,
     enumMaxRatio: strategy?.enumMaxRatio ?? cfg?.enumMaxRatio ?? 0.5,
     enumCoverageBar: strategy?.enumCoverageBar ?? cfg?.enumCoverageBar ?? 0.9,
+    isEnum: strategy?.isEnum ?? cfg?.isEnum ?? defaultEnumPredicate,
     dictMinSamples: strategy?.dictMinSamples ?? cfg?.dictMinSamples ?? 3,
     splitDissimilarObjects: strategy?.splitDissimilarObjects ?? cfg?.splitDissimilarObjects ?? true,
     objectSplitThreshold: strategy?.objectSplitThreshold ?? cfg?.objectSplitThreshold ?? 0.5,
@@ -1910,8 +1947,7 @@ export function defaultStages(resolved: ResolvedStrategy): Stage[] {
 
   // GENERALIZATION first: DU grouping below consumes its output (see above).
   if (resolved.detectEnums) {
-    out.push(generalization("enums", (ref, node) =>
-      walkAndDetectEnums(ref, node, resolved.enumMinSamples, resolved.literalMinSamples, resolved.enumMaxMembers, resolved.enumMaxRatio, resolved.enumCoverageBar)))
+    out.push(generalization("enums", (ref, node) => walkAndDetectEnums(ref, node, resolved)))
   }
   if (resolved.detectDiscriminatedUnions) {
     out.push(grouping("discriminated-union", (ref, node) => walkAndDetectDU(ref, node)))

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fc from "fast-check"
 import { t, types, type TypeRef } from "./index.ts"
 import { uint8 } from "./kinds/common.ts"
-import { fromJsonCorpus, collectEvidence, resolveEvidence, defaultStages, resolvedStrategy, perPosition, type Stage } from "./from-json-corpus.ts"
+import { fromJsonCorpus, collectEvidence, resolveEvidence, defaultStages, resolvedStrategy, perPosition, defaultEnumPredicate, type Stage, type EnumPredicate } from "./from-json-corpus.ts"
 
 // ---------------------------------------------------------------------------
 // Unit tests — deterministic, verifying specific behavior
@@ -1213,3 +1213,63 @@ describe("stage pipeline", () => {
     expect(forward).not.toEqual(reversed)
   })
 })
+
+// ---------------------------------------------------------------------------
+// `isEnum` — the decision itself is replaceable, not just its thresholds
+//
+// The numeric knobs (enumMaxMembers / enumMaxRatio / enumCoverageBar /
+// enumMinSamples) are parameters of `defaultEnumPredicate`. These tests pin
+// that a caller can replace the whole decision with logic those knobs cannot
+// express — including rules with no numeric component at all.
+// ---------------------------------------------------------------------------
+
+describe("isEnum predicate", () => {
+  // every value distinct: no threshold rule would ever call this an enum
+  const allDistinct = Array.from({ length: 12 }, (_, i) => ({ status: `s${i}`, other: `o${i}` }))
+
+  test("field-name rule fires where the evidence alone never would", () => {
+    const byName: EnumPredicate = (c) =>
+      ["status", "type", "kind"].includes(String(c.path.at(-1))) || defaultEnumPredicate(c)
+    const fields = objectFieldsOf(fromJsonCorpus(allDistinct, { isEnum: byName }))
+    expect(fields.status!.shape.kind).toBe("enum")
+    // the sibling is untouched — the rule is per-position, not global
+    expect(fields.other!.shape.kind).toBe("string")
+  })
+
+  test("a declaration-driven rule with no numeric component at all", () => {
+    const declared = new Set(["other"])
+    const declaredOnly: EnumPredicate = (c) => declared.has(c.path.join("."))
+    const fields = objectFieldsOf(fromJsonCorpus(allDistinct, { isEnum: declaredOnly }))
+    expect(fields.other!.shape.kind).toBe("enum")
+    expect(fields.status!.shape.kind).toBe("string")
+  })
+
+  test("a predicate that always refuses disables enum inference entirely", () => {
+    const repetitive = Array.from({ length: 40 }, (_, i) => ({ s: `v${i % 4}` }))
+    expect(JSON.stringify(fromJsonCorpus(repetitive))).toContain('"enum"')
+    expect(JSON.stringify(fromJsonCorpus(repetitive, { isEnum: () => false }))).not.toContain('"enum"')
+  })
+
+  test("the predicate sees the evidence the default consumes", () => {
+    const seen: { path: string; K: number; N: number; n1: number }[] = []
+    fromJsonCorpus(allDistinct, {
+      isEnum: (c) => {
+        seen.push({ path: c.path.join("."), K: c.distinct, N: c.occurrences, n1: c.singletons })
+        return false
+      },
+    })
+    expect(seen).toContainEqual({ path: "status", K: 12, N: 12, n1: 12 })
+  })
+
+  test("nested paths are addressable", () => {
+    const nested = Array.from({ length: 12 }, (_, i) => ({ user: { role: `r${i}` } }))
+    const deep: EnumPredicate = (c) => c.path.join(".") === "user.role"
+    const out = fromJsonCorpus(nested, { isEnum: deep })
+    const user = objectFieldsOf(out).user!
+    expect(objectFieldsOf(user).role!.shape.kind).toBe("enum")
+  })
+})
+
+function objectFieldsOf(ref: TypeRef): Record<string, TypeRef> {
+  return (ref.shape as { fields: Record<string, TypeRef> }).fields
+}

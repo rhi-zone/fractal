@@ -137,7 +137,21 @@ all candidate groupings; deferring the grouping choice; `fromJson`'s leaf typing
 | entity key | `undefined` — every occurrence is its own observation | **provisional and known-wrong for API payloads.** §17.2 measured 50 PRs embedding one repo. §6.11 shows the correct key is not derivable; it must be declared. |
 
 **Default generalization — SHIPPED, and it is the session's finding rather than the old
-heuristic.** `looksLikeEnum` is now:
+heuristic.** The decision is a swappable predicate, `ResolveStrategy.isEnum: EnumPredicate`,
+receiving an `EnumDecisionContext` — `distinct` (K), `occurrences` (N), `singletons` (n₁),
+the candidate `distinctValues`, `sortedNumeric`, the `path` from the root, the merged `ref`,
+the full `node`, and the resolved `strategy`. Arbitrary logic, no numeric component required:
+
+```ts
+// by field name, regardless of the evidence
+const byName: EnumPredicate = (c) =>
+  ["status", "type", "kind"].includes(String(c.path.at(-1))) || defaultEnumPredicate(c)
+// only where an out-of-band declaration says so
+const declaredOnly: EnumPredicate = (c) => declaredPaths.has(c.path.join("."))
+```
+
+`defaultEnumPredicate` is the built-in, and the four numeric knobs are **parameters of that
+default**, not the only way to influence the outcome:
 
 ```
 K === 1              -> literal, once N >= literalMinSamples      (unchanged)
