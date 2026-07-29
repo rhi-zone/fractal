@@ -11,7 +11,7 @@ import {
   ingestCorpus,
   project,
   projectorIds,
-  projectors,
+  projectorRegistry,
   renderProjection,
 } from "./registry.ts"
 
@@ -45,16 +45,32 @@ describe("registry coverage", () => {
   })
 
   it("aliases resolve to canonical projectors, not to separate instances", () => {
-    expect(projectors.get("zod")).toBe(projectors.get("typescript-zod"))
-    expect(projectors.get("go")).toBe(projectors.get("go-encoding-json"))
-    expect(projectors.get("cpp")).toBe(projectors.get("cpp-nlohmann"))
+    expect(projectorRegistry.byId.get("zod")).toBe(projectorRegistry.byId.get("typescript-zod"))
+    expect(projectorRegistry.byId.get("go")).toBe(projectorRegistry.byId.get("go-encoding-json"))
+    expect(projectorRegistry.byId.get("cpp")).toBe(projectorRegistry.byId.get("cpp-nlohmann"))
     // Aliases are additive: the map is strictly larger than the canonical set.
-    expect(projectors.size).toBeGreaterThan(projectorIds.length)
+    expect(projectorRegistry.byId.size).toBeGreaterThan(projectorIds.length)
   })
 
   it("rejects unknown ids rather than returning undefined", () => {
     expect(() => getProjector("nope")).toThrow(/unknown output format/)
     expect(() => getImporter("nope")).toThrow(/unknown input format/)
+  })
+
+  // `typescript` is an OPTIONAL peer dependency. Keeping it out of the core
+  // mechanism and the base registry is the entire reason the checker-backed
+  // entries live in their own module, and it is a property a single casual
+  // import would silently destroy — so it is asserted, not just documented.
+  it("neither the core mechanism nor the base registry imports typescript", async () => {
+    for (const module of ["registry-core.ts", "registry.ts"]) {
+      const source = await Bun.file(`${import.meta.dir}/${module}`).text()
+      expect(source).not.toMatch(/from "typescript"/)
+    }
+  })
+
+  it("the core mechanism has no imports at all", async () => {
+    const source = await Bun.file(`${import.meta.dir}/registry-core.ts`).text()
+    expect(source).not.toMatch(/^import /m)
   })
 })
 

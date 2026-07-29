@@ -9,9 +9,11 @@
 // registry.
 //
 // The checker-backed importers (`from-typescript`,
-// `from-standard-schema-type`) are deliberately absent: they need a real
-// `ts.Program`, so they live behind `/registry-typescript` and are not
-// something a browser pane can supply.
+// `from-standard-schema-type`) are deliberately absent. They are mergeable
+// into the base registry via `/registry-core`'s `mergeRegistries`, but doing
+// so here would pull the TypeScript compiler into the browser bundle to
+// support an input shape — a file path plus a symbol plus a `ts.Program` —
+// that a text pane cannot supply in the first place.
 import type { TypeRefDocument } from "@rhi-zone/fractal-type-ir"
 import { project as projectStructured, renderProjection } from "@rhi-zone/fractal-type-ir/registry"
 
@@ -23,10 +25,10 @@ export {
   getImporter,
   getProjector,
   importerIds,
-  importers,
+  importerRegistry,
   ingest,
   projectorIds,
-  projectors,
+  projectorRegistry,
   renderProjection,
   project as projectStructured,
 } from "@rhi-zone/fractal-type-ir/registry"

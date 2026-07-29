@@ -1,17 +1,33 @@
-// Registry entries whose input is a TypeScript *program*, not text.
+// The `typescript`-backed importers, as a pluggable registry extension.
 //
-// Split out from `./registry` on purpose. These importers cannot work from a
-// string: resolving `type User = { … }` means running the real type checker,
-// which needs a `ts.Program` built over the file and its imports, plus the
-// name of the symbol to extract. Forcing that into the text-in interface
-// would mean either lying about the input shape or bundling the TypeScript
-// compiler — a *peer* dependency here — into every consumer, including the
-// browser playground. So the input shape is different and lives behind its
-// own subpath; the text-in registry is unaffected by importing this one.
+// These entries cannot work from a string: resolving `type User = { … }` means
+// running the real type checker, which needs a `ts.Program` built over the
+// file and its imports, plus the name of the symbol to extract.
+//
+// They live in their own module because `typescript` is an OPTIONAL peer
+// dependency — a consumer who never imports this file never pulls the compiler
+// in, at runtime or at typecheck time. But they are built with the same
+// `defineRegistry` as the base entries and are the same kind of value, so a
+// caller who wants both merges the two registries and afterwards uses one
+// lookup and one id space:
+//
+//     const importers = mergeRegistries<AnyImporter>(
+//       importerRegistry,
+//       typescriptImporterRegistry,
+//     )
+//     ingestFrom(importers, "typescript", { file, symbol })
+//
+// The `input` tag makes that union a discriminated union, so narrowing on it
+// recovers the right `run` signature — the differing input shape is expressed
+// in the type system rather than by making callers remember which module a
+// given id came from.
 import ts from "typescript"
 
 import type { TypeRef, TypeRefDocument } from "./index.ts"
 import { typeRefDocument } from "./index.ts"
+import type { Registry, RegistryEntry } from "./registry-core.ts"
+import { defineRegistry, lookup } from "./registry-core.ts"
+import type { Importer } from "./registry.ts"
 import { createExtractorProgram, typeRefFromType } from "./from-typescript.ts"
 import { fromStandardSchemaType } from "./from-standard-schema-type.ts"
 
@@ -28,13 +44,17 @@ export interface TypeScriptInput {
   readonly program?: ts.Program
 }
 
-export interface TypeScriptImporter {
-  readonly id: string
+export interface TypeScriptImporter extends RegistryEntry {
   readonly subpath: string
   readonly extensions: readonly string[]
   readonly input: "typescript"
   run(input: TypeScriptInput): TypeRefDocument
 }
+
+/** An importer from either half of the registry. Narrow on `input` to call it:
+ * `"typescript"` takes a `TypeScriptInput`, everything else takes source
+ * text. */
+export type AnyImporter = Importer | TypeScriptImporter
 
 interface Resolved {
   readonly checker: ts.TypeChecker
@@ -101,21 +121,38 @@ const typescriptImporterList: readonly TypeScriptImporter[] = [
   },
 ]
 
-export const typescriptImporters: ReadonlyMap<string, TypeScriptImporter> = new Map(
-  typescriptImporterList.map((i) => [i.id, i]),
-)
+/** Mergeable into `importerRegistry` from `./registry`. */
+export const typescriptImporterRegistry: Registry<TypeScriptImporter> = defineRegistry(typescriptImporterList)
 
 /** Every checker-backed importer id, in registration order. */
-export const typescriptImporterIds: readonly string[] = typescriptImporterList.map((i) => i.id)
+export const typescriptImporterIds: readonly string[] = typescriptImporterRegistry.ids
 
 export function getTypeScriptImporter(id: string): TypeScriptImporter {
-  const importer = typescriptImporters.get(id)
-  if (importer === undefined) throw new Error(`unknown TypeScript input format: ${id}`)
-  return importer
+  return lookup(typescriptImporterRegistry, "TypeScript input format", id)
 }
 
-/** Run a checker-backed importer. Distinct from `./registry`'s `ingest`
- * because the input is a program + symbol, not a string. */
-export function ingestTypeScript(id: string, input: TypeScriptInput): TypeRefDocument {
-  return getTypeScriptImporter(id).run(input)
+/** Run any importer from a (possibly merged) registry through one call.
+ *
+ * This is the unified convention the merge exists for: the caller supplies
+ * whatever the entry needs and does not have to know which module registered
+ * it. `input` stays a union rather than collapsing to one type because the
+ * underlying shapes genuinely differ — no amount of indirection makes a
+ * `.proto` file and a `ts.Program` the same thing — but a mismatch is caught
+ * here, named, instead of surfacing as a failure deep inside an importer. */
+export function ingestFrom(
+  registry: Registry<AnyImporter>,
+  id: string,
+  input: string | TypeScriptInput,
+): TypeRefDocument {
+  const importer = lookup(registry, "input format", id)
+  if (importer.input === "typescript") {
+    if (typeof input === "string") {
+      throw new Error(`input format ${id} needs a file and symbol, not source text`)
+    }
+    return importer.run(input)
+  }
+  if (typeof input !== "string") {
+    throw new Error(`input format ${id} needs source text, not a file and symbol`)
+  }
+  return importer.run(input)
 }

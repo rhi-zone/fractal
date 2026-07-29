@@ -1,18 +1,31 @@
-// Environment-neutral importer/projector registry.
+// The base importer/projector registry — entries as data, over the generic
+// mechanism in `./registry-core`.
 //
 // Every ingester and every projection target in this package is reachable
 // through one table here, keyed by a stable string id. Nothing in this module
-// touches the DOM, the filesystem, or `typescript` — callers hand in text (or
-// already-parsed JSON) and get back a `TypeRefDocument`, then hand that to a
-// projector and get back a `Projection`. That makes the same registry usable
-// from a browser playground, a CLI, or a test.
+// touches the DOM, the filesystem, or `typescript` — callers hand in source
+// text and get back a `TypeRefDocument`, then hand that to a projector and get
+// back a `Projection`. That makes the same registry usable from a browser
+// playground, a CLI, or a test.
 //
 // The `typescript`-backed importers (`from-typescript`,
-// `from-standard-schema-type`) are deliberately NOT here: they need a
-// `ts.Program` plus a symbol name, which is a genuinely different input shape,
-// and importing them would drag the TypeScript compiler — a *peer* dependency
-// of this package — into every consumer's bundle. They live in
-// `./registry-typescript`, which re-exports this module's types.
+// `from-standard-schema-type`) are NOT registered here, because they need a
+// `ts.Program` plus a symbol name rather than text, and because `typescript`
+// is an OPTIONAL peer dependency that must not be forced on consumers who
+// never ask for it. They ship as their own `Registry` in
+// `./registry-typescript`, built with the same `defineRegistry`, and a caller
+// who wants both merges them:
+//
+//     const importers = mergeRegistries<Importer | TypeScriptImporter>(
+//       importerRegistry,
+//       typescriptImporterRegistry,
+//     )
+//
+// After that there is one id space, one lookup, and one error path. The
+// entries' `input` tag is a discriminated-union discriminator, so narrowing on
+// it recovers each entry's real `run` signature statically — unification costs
+// no type safety, and the isolation holds because the union type only exists
+// in code that imported both halves.
 //
 // Two irregularities in the projector surface are absorbed by the adapters
 // below rather than papered over:
@@ -29,6 +42,8 @@
 //     exactly those cases instead of forcing everything through `string`.
 import type { TypeRef, TypeRefDocument } from "./index.ts"
 import { typeRefDocument } from "./index.ts"
+import type { Registry, RegistryEntry } from "./registry-core.ts"
+import { defineRegistry, lookup } from "./registry-core.ts"
 
 import { fromJsonSchema } from "./from-json-schema.ts"
 import { fromJsonCorpus } from "./from-json-corpus.ts"
@@ -137,33 +152,43 @@ export const DEFAULT_ROOT_NAME = "Root"
 // Importers — input shape varies, so the registry is a discriminated union
 // ---------------------------------------------------------------------------
 
-/** What an importer needs in order to run. `text` importers take raw source
- * (GraphQL SDL, SQL DDL, a `.proto` file); `json` importers take one parsed
- * JSON value; `json-corpus` importers take many, because inferring from N
- * sample documents is a different operation than parsing one schema. */
+/** What an importer needs in order to run — metadata, not dispatch.
+ *
+ * Every importer in *this* registry consumes one string, so `run` is uniform
+ * and nothing switches on this tag to decide how to call it. The tag exists
+ * because callers still need to know what that string should contain: `text`
+ * is raw source (GraphQL SDL, SQL DDL, a `.proto` file), `json` is one JSON
+ * document, and `json-corpus` is an array of them — and a corpus importer
+ * additionally accepts N documents that arrived separately, via `runMany`,
+ * which is the shape a CLI sees when handed a glob.
+ *
+ * The `typescript` extension registry adds a fourth tag from its own module.
+ * That one *does* change the shape of `run`, which is exactly why the tag is
+ * a discriminated-union discriminator: narrowing on it recovers the right
+ * signature statically. */
 export type ImporterInputKind = "text" | "json" | "json-corpus"
 
-interface ImporterBase {
-  readonly id: string
+interface ImporterBase extends RegistryEntry {
   /** Package subpath this importer's implementation is exported from. */
   readonly subpath: string
   /** Conventional file extensions, for CLI format sniffing. */
   readonly extensions: readonly string[]
+  run(source: string): TypeRefDocument
 }
 
 export interface TextImporter extends ImporterBase {
   readonly input: "text"
-  run(source: string): TypeRefDocument
 }
 
 export interface JsonImporter extends ImporterBase {
   readonly input: "json"
-  run(value: unknown): TypeRefDocument
 }
 
 export interface JsonCorpusImporter extends ImporterBase {
   readonly input: "json-corpus"
-  run(values: readonly unknown[]): TypeRefDocument
+  /** Infer from documents that arrived as separate sources rather than as one
+   * JSON array. */
+  runMany(sources: readonly string[]): TypeRefDocument
 }
 
 export type Importer = TextImporter | JsonImporter | JsonCorpusImporter
@@ -185,12 +210,16 @@ const text = (
   run: (source: string) => TypeRefDocument,
 ): TextImporter => ({ id, subpath, extensions, input: "text", run })
 
+/** JSON importers parse their own source. Hoisting the parse into a dispatch
+ * switch was what forced the caller-visible input shapes apart in the first
+ * place; doing it here makes every entry in this registry `string -> document`
+ * and leaves the tag as pure metadata. */
 const json = (
   id: string,
   subpath: string,
   extensions: readonly string[],
   run: (value: unknown) => TypeRefDocument,
-): JsonImporter => ({ id, subpath, extensions, input: "json", run })
+): JsonImporter => ({ id, subpath, extensions, input: "json", run: (source) => run(JSON.parse(source)) })
 
 /** The `~standard` envelope the playground and CLI accept in place of live
  * vendor schema code. Arbitrary vendor modules can't be evaluated safely from
@@ -243,7 +272,8 @@ const importerList: readonly Importer[] = [
     subpath: "./from-json-corpus",
     extensions: [".json"],
     input: "json-corpus",
-    run: (values) => typeRefDocument(fromJsonCorpus([...values])),
+    run: (source) => typeRefDocument(fromJsonCorpus(JSON.parse(source) as unknown[])),
+    runMany: (sources) => typeRefDocument(fromJsonCorpus(sources.map((s) => JSON.parse(s)))),
   },
   json("jtd", "./from-jtd", [".jtd.json"], (v) => fromJtdDocument(v as Parameters<typeof fromJtdDocument>[0])),
   json("elasticsearch", "./from-elasticsearch", [".json"], (v) =>
@@ -268,31 +298,26 @@ const importerList: readonly Importer[] = [
   text("protobuf", "./from-protobuf", [".proto"], (s) => fromProtoText(s)),
 ]
 
-export const importers: ReadonlyMap<string, Importer> = new Map(importerList.map((i) => [i.id, i]))
+/** The text-based importers. Merge `typescriptImporterRegistry` from
+ * `./registry-typescript` into this to also reach the checker-backed ones. */
+export const importerRegistry: Registry<Importer> = defineRegistry(importerList)
 
 /** Every importer id, in registration order. */
-export const importerIds: readonly string[] = importerList.map((i) => i.id)
+export const importerIds: readonly string[] = importerRegistry.ids
 
 export function getImporter(id: string): Importer {
-  const importer = importers.get(id)
-  if (importer === undefined) throw new Error(`unknown input format: ${id}`)
-  return importer
+  return lookup(importerRegistry, "input format", id)
 }
 
-/** Run an importer against raw source text, parsing JSON on its behalf when
- * the importer's input shape calls for it. `json-corpus` importers accept
- * either a JSON array of documents or, via `ingestCorpus`, many separate
- * sources. */
+/** Run an importer from this registry against raw source text.
+ *
+ * Deliberately typed to `Importer`, not to the merged union: a checker-backed
+ * importer cannot be driven from a string, and accepting one here would only
+ * let the mistake through to a runtime failure. Callers holding a merged
+ * registry narrow on `entry.input` and call `entry.run` directly — see
+ * `ingestFrom` in `./registry-typescript`. */
 export function ingest(id: string, source: string): TypeRefDocument {
-  const importer = getImporter(id)
-  switch (importer.input) {
-    case "text":
-      return importer.run(source)
-    case "json":
-      return importer.run(JSON.parse(source))
-    case "json-corpus":
-      return importer.run(JSON.parse(source) as readonly unknown[])
-  }
+  return getImporter(id).run(source)
 }
 
 /** Run a `json-corpus` importer over documents that arrived as separate
@@ -302,7 +327,7 @@ export function ingestCorpus(id: string, sources: readonly string[]): TypeRefDoc
   if (importer.input !== "json-corpus") {
     throw new Error(`input format ${id} is not a corpus importer`)
   }
-  return importer.run(sources.map((s) => JSON.parse(s)))
+  return importer.runMany(sources)
 }
 
 // ---------------------------------------------------------------------------
@@ -656,22 +681,13 @@ const projectorAliases: Readonly<Record<string, string>> = {
   haskell: "haskell-aeson",
 }
 
-const projectorMap = new Map<string, Projector>(projectorList.map((p) => [p.id, p]))
-for (const [alias, target] of Object.entries(projectorAliases)) {
-  const projector = projectorMap.get(target)
-  if (projector === undefined) throw new Error(`projector alias ${alias} targets unknown id ${target}`)
-  projectorMap.set(alias, projector)
-}
-
-export const projectors: ReadonlyMap<string, Projector> = projectorMap
+export const projectorRegistry: Registry<Projector> = defineRegistry(projectorList, projectorAliases)
 
 /** Canonical projector ids, in registration order — aliases excluded. */
-export const projectorIds: readonly string[] = projectorList.map((p) => p.id)
+export const projectorIds: readonly string[] = projectorRegistry.ids
 
 export function getProjector(id: string): Projector {
-  const projector = projectors.get(id)
-  if (projector === undefined) throw new Error(`unknown output format: ${id}`)
-  return projector
+  return lookup(projectorRegistry, "output format", id)
 }
 
 export function project(id: string, doc: TypeRefDocument, options?: ProjectionOptions): Projection {
