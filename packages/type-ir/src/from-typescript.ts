@@ -405,6 +405,7 @@ function methodsFromClassType(
   const methods: Record<string, TypeRef> = {}
   for (const prop of checker.getPropertiesOfType(type)) {
     if (isPrivateOrProtected(prop)) continue
+    if (isSymbolKeyedProp(prop)) continue
     const isMethodDecl = (prop.declarations ?? []).some(ts.isMethodDeclaration)
     const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
     const sigs = checker.getSignaturesOfType(propType, ts.SignatureKind.Call)
@@ -413,6 +414,42 @@ function methodsFromClassType(
     methods[prop.name] = methodRefFromSignatures(sigs, checker, loc, seen, thisType, registry, budget)
   }
   return methods
+}
+
+/**
+ * True for a symbol-keyed property (`escapedName` starting `__@`, TS's
+ * internal spelling for a `unique symbol`-keyed member — see
+ * `isRefinementTagProp`'s doc comment above for the same prefix check used
+ * to recognize a SPECIFIC symbol-keyed marker). General filter: EVERY
+ * symbol-keyed property — brand/refinement tags, well-known Symbols
+ * (`Symbol.iterator`/`Symbol.dispose`/`Symbol.asyncIterator`/
+ * `Symbol.toStringTag`/…), or any other `unique symbol` key — is excluded
+ * from the plain object-field/method-surface walk below.
+ *
+ * Two independent reasons, either alone sufficient:
+ *   1. A JSON payload can never carry a symbol key, so a symbol-keyed
+ *      property is never part of the shape an AOT validator checks against
+ *      real decoded input, regardless of what type declares it.
+ *   2. `prop.name` for a well-known-Symbol-keyed property is TS's own
+ *      internal synthetic spelling (`"__@iterator@8"`,
+ *      `"__@dispose@46197"`, …) — not a usable property name at all: it
+ *      contains `@`, so a codegen consumer emitting it as a bare object-type
+ *      field name (`{ __@iterator@8: … }`) produces a TypeScript SYNTAX
+ *      ERROR, not just a semantically-useless field. Confirmed via TS/DOM
+ *      builtin types reachable now that the call-budget circuit breaker
+ *      (above) lets extraction terminate INTO their structure instead of
+ *      overflowing the stack before ever reaching this loop — `Uint8Array`'s
+ *      `[Symbol.iterator]`/`[Symbol.toStringTag]`, `ReadableStream`'s
+ *      `[Symbol.dispose]`, etc.
+ *
+ * (Brand/refinement-tag symbol-keyed properties never reach this loop in
+ * the first place — they're consumed by `typeRefFromBrandedIntersection`
+ * BEFORE the intersection's base type's own properties are walked here —
+ * but this filter is correct and needed independently of that, for every
+ * OTHER symbol-keyed property no intersection classification consumes.)
+ */
+function isSymbolKeyedProp(prop: ts.Symbol): boolean {
+  return prop.escapedName.toString().startsWith("__@")
 }
 
 /** True for symbols with at least one private/protected declaration. */
@@ -1203,6 +1240,12 @@ function typeRefFromTypeStructural(
       // reach this loop — this guards structural types that still carry
       // private/protected member symbols.)
       if (isPrivateOrProtected(prop)) continue
+      // Skip symbol-keyed members (well-known Symbols, brand/refinement
+      // tags not already consumed by `typeRefFromBrandedIntersection`) —
+      // see `isSymbolKeyedProp`'s doc comment for why this is correct
+      // (never JSON-representable) AND necessary (TS's own synthetic name
+      // for these isn't valid to emit as a bare object-type field name).
+      if (isSymbolKeyedProp(prop)) continue
 
       const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0
       const readonly = isReadonly(prop)

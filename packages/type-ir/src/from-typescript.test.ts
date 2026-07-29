@@ -272,6 +272,47 @@ describe("classes", () => {
     const iface = (ref.meta.interface as { shape: { methods: Record<string, unknown> } }).shape
     expect(Object.keys(iface.methods)).toEqual(["greet"])
   })
+
+  // Regression: a symbol-keyed member (a `unique symbol`-computed property
+  // name — same `__@`-prefixed `escapedName` shape as a brand/refinement
+  // tag, but not one `classifyIntersectionConstituent` ever classifies,
+  // since this isn't reached via an intersection at all) must be excluded
+  // from the object-field walk. `prop.name` for a well-known-Symbol-keyed
+  // member is TS's own synthetic spelling (`"__@iterator@8"`, confirmed via
+  // `Uint8Array` below, a REAL lib type — a hand-authored class's own
+  // `[Symbol.iterator]` does NOT reproduce this synthetic-name shape in a
+  // minimal in-memory program, so this test exercises the general
+  // mechanism via an explicit `unique symbol` AND the exact real-world
+  // shape via `Uint8Array` itself) — contains `@`, so a codegen consumer
+  // emitting it as a bare object-type field name produces a TypeScript
+  // SYNTAX ERROR downstream, not just a useless field. Reachable in
+  // practice via a TS/DOM builtin type's structural surface
+  // (`Uint8Array`/`ReadableStream`/`Response`/…) now that the call budget
+  // above lets extraction terminate INTO such types instead of overflowing
+  // the stack first — confirmed via a real generated module downstream
+  // (busiless's `ingestion` slice, whose `resumeGet`-shaped leaf
+  // return-types reach `Uint8Array`/`ReadableStream`) breaking with exactly
+  // this symptom before this fix; `build.test.ts`'s
+  // `builtinReturnType/fetchIt` fixture leaf is the end-to-end regression
+  // test for that.
+  it("a symbol-keyed member (unique symbol) is excluded from the object-field walk", () => {
+    const objRef = typeRefOf(
+      `declare const sym: unique symbol
+       type X = { id: string; [sym](): void }`,
+      "X",
+    )
+    const fields = (objRef.shape as { fields: Record<string, unknown> }).fields
+    expect(Object.keys(fields)).toEqual(["id"])
+  })
+
+  it("a real TS/DOM builtin type's well-known-Symbol-keyed members (Uint8Array's [Symbol.iterator]/[Symbol.toStringTag]) are excluded", () => {
+    const ref = typeRefOf(`type X = Uint8Array`, "X")
+    const fields = (ref.shape as { fields: Record<string, unknown> }).fields
+    expect(Object.keys(fields).some((name) => name.startsWith("__@"))).toBe(false)
+    // Ordinary (non-symbol-keyed) members are unaffected — the filter is
+    // narrowly scoped to symbol-keyed properties only.
+    expect(fields.length).toBeDefined()
+  })
 })
 
 // ============================================================================

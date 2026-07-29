@@ -81,7 +81,7 @@ const handlers: Record<string, Converter> = {
   },
   union: (shape) => {
     const s = shape as TypeShape & { kind: "union" }
-    return s.variants.map(toTypeScript).join(" | ")
+    return s.variants.map(toTypeScriptAsCompoundMember).join(" | ")
   },
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" }
@@ -98,7 +98,7 @@ const handlers: Record<string, Converter> = {
   },
   intersection: (shape) => {
     const s = shape as TypeShape & { kind: "intersection" }
-    return s.members.map(toTypeScript).join(" & ")
+    return s.members.map(toTypeScriptAsCompoundMember).join(" & ")
   },
   // TS's function-type syntax (`(params) => ReturnType`) supports an explicit
   // `this` parameter as its own leading pseudo-parameter
@@ -143,6 +143,52 @@ export function toTypeScript(ref: TypeRef): string {
     type = `${type} & { readonly __brand: ${quote(ref.meta.brand)} }`
   }
   return ref.meta.nullable === true ? `${type} | null` : type
+}
+
+/**
+ * `toTypeScript(ref)`, but parenthesized when needed for `ref` to be safely
+ * embedded as ONE MEMBER of a bigger union (`|`) or intersection (`&`) —
+ * used by both the `union`/`intersection` handlers above (never called at
+ * the top level).
+ *
+ * TypeScript's function-type syntax is the lowest-precedence type-level
+ * grammar production (it extends as far right as it can) — a bare function
+ * type as a union/intersection member is a genuine SYNTAX ERROR
+ * (`TS1385`/`TS1387`: "Function type notation must be parenthesized when
+ * used in a union/intersection type"), not just a style nit. Confirmed via
+ * a real overloaded method (`functionRefFromSignatures`/
+ * `methodRefFromSignatures` wrap ≥2 signatures as
+ * `types.intersection([types.function(...), …])`) reached through a TS/DOM
+ * builtin's method surface (`Response`) once the call-budget circuit
+ * breaker (from-typescript.ts) let extraction terminate INTO it instead of
+ * overflowing the stack first.
+ *
+ * Two more cases genuinely change MEANING (not just a syntax error) if left
+ * unwrapped, both because `|` binds looser than `&`:
+ *   - A `union`-shaped member nested in an intersection: `A & (X | Y) & B`
+ *     unwrapped would read as `A & X | Y & B` — a completely different type.
+ *   - A `meta.nullable` member (renders as `X | null`) nested in an
+ *     intersection: same issue, the trailing `| null` silently becomes a
+ *     top-level alternative of the whole intersection instead of applying
+ *     only to this one member.
+ *
+ * Wrapping in the union-nests-brand/nullable case (a `meta.brand` member,
+ * `X & {...}`, or `meta.nullable`, `X | null`, nested in a UNION) is not
+ * strictly required by precedence (`&` already binds tighter than `|`, so
+ * it parses correctly unwrapped) but is harmless — the same conservative
+ * "wrap whenever the rendered text is a compound expression" rule below
+ * covers both call sites with one implementation rather than threading a
+ * union-vs-intersection context parameter through for a purely-cosmetic
+ * difference.
+ */
+function toTypeScriptAsCompoundMember(ref: TypeRef): string {
+  const text = toTypeScript(ref)
+  const isCompound =
+    ref.shape.kind === "function" ||
+    ref.shape.kind === "union" ||
+    ref.meta.nullable === true ||
+    typeof ref.meta.brand === "string"
+  return isCompound ? `(${text})` : text
 }
 
 // TSDoc (https://tsdoc.org/) comment above a declaration — driven by
