@@ -416,3 +416,67 @@ describe("round-trip: fromJsonSchema(toJsonSchema(ref))", () => {
     expect(fromJsonSchema(toJsonSchema(complex))).toEqual(complex)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Nominal identity and vendor extensions
+//
+// `json-schema.ts` has always SERIALIZED `instance` as
+// `{type:"object", "x-class-name": …}` — index.ts names that convention as how
+// nominal identity travels — but the importer used to drop it, so the round
+// trip degraded `instance("Date")` to a field-less `object`. Unrecognized `x-`
+// keywords were dropped the same way.
+// ---------------------------------------------------------------------------
+
+describe("nominal instance round trip", () => {
+  test("instance -> JSON Schema -> instance, exactly", () => {
+    const ref = t(types.instance("Date", "lib.es5.d.ts"))
+    expect(fromJsonSchema(toJsonSchema(ref))).toEqual(ref)
+  })
+
+  test("x-class-name alone rebuilds an instance with an empty declaration file", () => {
+    expect(fromJsonSchema({ type: "object", "x-class-name": "User" })).toEqual(
+      t(types.instance("User", "")),
+    )
+  })
+
+  test("nominal identity beats the structural branch", () => {
+    // the carrier is `{type:"object"}`, which `fromObject` would otherwise
+    // resolve to a field-less object, silently discarding the identity
+    const out = fromJsonSchema({ type: "object", "x-class-name": "User" })
+    expect(out.shape.kind).toBe("instance")
+    expect(out.shape.kind).not.toBe("object")
+  })
+
+  test("the consumed keywords do not also leak into meta", () => {
+    const out = fromJsonSchema({ type: "object", "x-class-name": "D", "x-declaration-file": "d.ts" })
+    expect(out.meta?.["x-class-name"]).toBeUndefined()
+    expect(out.meta?.["x-declaration-file"]).toBeUndefined()
+  })
+})
+
+describe("vendor extension passthrough", () => {
+  test("unrecognized x- keywords are preserved in meta", () => {
+    const out = fromJsonSchema({ type: "string", "x-brand": "UserId" })
+    expect(out.shape).toEqual({ kind: "string" })
+    expect(out.meta?.["x-brand"]).toBe("UserId")
+  })
+
+  test("several extensions survive together, alongside standard keywords", () => {
+    const out = fromJsonSchema({
+      type: "string", minLength: 3, "x-brand": "UserId", "x-internal": true,
+    })
+    expect(out.meta?.minLength).toBe(3)
+    expect(out.meta?.["x-brand"]).toBe("UserId")
+    expect(out.meta?.["x-internal"]).toBe(true)
+  })
+
+  test("non-x- unknown keywords are still ignored", () => {
+    const out = fromJsonSchema({ type: "string", somethingElse: 1 } as never)
+    expect(out.meta?.somethingElse).toBeUndefined()
+  })
+
+  test("plain object schemas are unaffected", () => {
+    const out = fromJsonSchema({ type: "object", properties: { a: { type: "string" } } })
+    expect(out.shape.kind).toBe("object")
+  })
+})

@@ -45,6 +45,18 @@ function extractMeta(schema: JsonSchema): Record<string, unknown> {
     if (schema[key] !== undefined) meta[key] = schema[key]
   }
 
+  // Vendor extensions. JSON Schema reserves nothing here, and dropping them
+  // silently loses information the writer deliberately encoded (`x-brand`,
+  // OAS `x-*` fields, this package's own `x-class-name` convention). Carry
+  // them verbatim. `x-class-name`/`x-declaration-file` are excluded because
+  // `fromJsonSchema` consumes them to rebuild a nominal `instance` type —
+  // they would otherwise appear both as the shape AND as stray meta.
+  for (const key of Object.keys(schema)) {
+    if (!key.startsWith("x-")) continue
+    if (key === "x-class-name" || key === "x-declaration-file") continue
+    meta[key] = (schema as Record<string, unknown>)[key]
+  }
+
   return meta
 }
 
@@ -161,6 +173,16 @@ export function fromJsonSchema(schema: JsonSchema): TypeRef {
       const inner = fromJsonSchema({ ...schema, type: nonNull[0] })
       return withMeta(inner, { ...meta, ...(isNullable ? { nullable: true } : {}) })
     }
+  }
+
+  // Nominal class identity, written by `json-schema.ts`'s `instance` projector.
+  // Checked before the structural branches because the carrier is
+  // `{type:"object", ...}` and `fromObject` would otherwise return a
+  // field-less `object`, silently discarding the identity.
+  const className = (schema as Record<string, unknown>)["x-class-name"]
+  if (typeof className === "string") {
+    const declFile = (schema as Record<string, unknown>)["x-declaration-file"]
+    return withMeta(t(types.instance(className, typeof declFile === "string" ? declFile : "")), meta)
   }
 
   if (schema.not !== undefined && Object.keys(schema.not as object).length === 0) {

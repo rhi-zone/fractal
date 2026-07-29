@@ -134,9 +134,19 @@ describe("object", () => {
 })
 
 describe("instance", () => {
-  test("degrades to an untyped object schema, carrying x-class-name", () => {
+  test("degrades to an untyped object schema, carrying nominal identity", () => {
     const ref = t(types.instance("User", "src/user.ts"))
     expect(toJsonSchema(ref)).toEqual({
+      type: "object",
+      "x-class-name": "User",
+      // carried so `fromJsonSchema` can rebuild the full identity; without it
+      // the round trip reconstructs only half the `instance`
+      "x-declaration-file": "src/user.ts",
+    })
+  })
+
+  test("omits x-declaration-file when there is none", () => {
+    expect(toJsonSchema(t(types.instance("User", "")))).toEqual({
       type: "object",
       "x-class-name": "User",
     })

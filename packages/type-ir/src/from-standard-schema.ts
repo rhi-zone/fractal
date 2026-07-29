@@ -23,17 +23,15 @@
 //          `.transform()` bodies are code; nothing declarative represents
 //          them, and they are gone before we see the export.
 //
-//      (b) NOT inherent — an importer gap on our side. TypeRef has a
-//          first-class nominal `instance` kind (className/declarationFile),
-//          and `json-schema.ts` already SERIALIZES it as
-//          `{type:"object", "x-class-name": Name}` — that convention is
-//          named in index.ts as how nominal identity travels. But
-//          fromJsonSchema() does not read `x-class-name` back, so the round
-//          trip loses it: `instance("Date")` -> JSON Schema -> `object{}`,
-//          not even preserved in meta. A vendor exporting
-//          `z.instanceof(Date)` under that convention hits the same drop.
-//          Same for other `x-` extensions (`x-brand`). Fixable in
-//          fromJsonSchema(), not a limit of the format.
+//      (b) NOT inherent, and now FIXED. TypeRef has a first-class nominal
+//          `instance` kind (className/declarationFile) and `json-schema.ts`
+//          serializes it as `{type:"object", "x-class-name": Name,
+//          "x-declaration-file": File}`. fromJsonSchema() used to drop that,
+//          degrading `instance("Date")` -> JSON Schema -> `object{}`; it now
+//          reads it back, so the round trip is exact and a vendor exporting
+//          `z.instanceof(Date)` under that convention keeps its identity.
+//          Other `x-` extensions (`x-brand`, OAS `x-*`) are likewise carried
+//          into meta rather than dropped.
 //
 //      Standard keywords do survive: `{type:"string", pattern, minLength}`
 //      lands as `string` with `meta.pattern`/`meta.minLength`, and
@@ -117,9 +115,10 @@ function exportJsonSchema(converter: StandardJSONSchemaV1.Converter): JsonSchema
  *   `z.instanceof(Date)` produces a live `Date`. Fed that, inference does
  *   typeof dispatch with no class-instance awareness and yields `object{}`
  *   (a Date has no own enumerable keys); `new Map([["a",1]])` likewise. The
- *   ideal answer, `instance("Date")`, is representable in the IR — neither
- *   tier reaches it: tier 2 cannot see it, and tier 1 drops it at
- *   fromJsonSchema() per (b) above.
+ *   ideal answer, `instance("Date")`, is representable in the IR, and tier 1
+ *   now reaches it when the vendor emits `x-class-name` (see (b) above).
+ *   Tier 2 still cannot: nothing in a live `Date`'s JSON-shaped projection
+ *   says "Date".
  *
  * Tier 2 wins when the vendor CANNOT express the construct at all
  * (`z.custom<T>()`, instanceof-style checks) and degrades to a permissive
