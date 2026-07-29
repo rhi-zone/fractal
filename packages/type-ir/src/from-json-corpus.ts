@@ -150,6 +150,25 @@ export interface ResolveStrategy extends InferConfig {
    * for why a cut on K alone cannot separate memorization from restriction.
    */
   enumMaxMembers?: number
+  /**
+   * Guard term for enum detection: reject when `K/N` reaches this. Default: 0.5.
+   * Chosen empirically — across 61 real npm string fields the best fixed cutoff
+   * for a 50% coverage requirement was 0.53 (inference-theory.md §6.10). Its
+   * real job is robustness: it is the term that degrades gracefully rather than
+   * inverting when the corpus contains duplicated records.
+   */
+  enumMaxRatio?: number
+  /**
+   * Required coverage before committing to a closed member set: emit an enum
+   * only when the Good-Turing estimate `1 - n1/N` reaches this. Default: 0.9.
+   *
+   * This is the declared bar §6.10 shows is unavoidable — the "right" K/N
+   * cutoff is a function of how much coverage you demand (0.19 at 90%, 0.535
+   * at 50%), so any fixed ratio silently encodes one. Naming it makes the
+   * choice visible. 0.9 is a conservative default for codegen, where a wrong
+   * enum is a runtime failure rather than a lost optimisation.
+   */
+  enumCoverageBar?: number
   /** Minimum samples before dict detection fires. Default: 3. */
   dictMinSamples?: number
   /**
@@ -644,32 +663,36 @@ function mergeAll(refs: readonly TypeRef[]): TypeRef {
 function looksLikeEnum(
   K: number,
   N: number,
-  sortedValues?: readonly number[],
+  singletons: number,
   literalMinSamples = 5,
   enumMaxMembers = 50,
+  enumMaxRatio = 0.5,
+  enumCoverageBar = 0.9,
 ): boolean {
   if (K === 1) return N >= literalMinSamples
-  if (K >= N) return false // every value unique — definitely not an enum
-  // Output-size guard, NOT an evidence test — see `enumMaxMembers`. A cut on
-  // K alone cannot distinguish memorization from genuine restriction; the
-  // K/N ratio tests below are what carry the evidence.
+  if (K >= N) return false // every value unique — never a bounded vocabulary
+
+  // Output-size guard, NOT an evidence test. A cut on K alone cannot separate
+  // memorization from genuine restriction (inference-theory.md §6.6-6.7).
   if (K > enumMaxMembers) return false
 
+  // Guard term: K/N. Degrades gracefully when the corpus is not an
+  // independent sample — under a duplication factor r it falls as (K/N)/r
+  // rather than inverting. This is what makes the coverage term below safe to
+  // use despite the unresolved entity-identity question (§6.8, §6.11).
   const ratio = K / N
-  const saturated = ratio < 0.5 // K stopped growing relative to N
-  if (!saturated) return false
+  if (ratio >= enumMaxRatio) return false
 
-  const stronglyRepetitive = ratio <= 1 / 3 // K << N
-  if (stronglyRepetitive) return true
-
-  // Borderline saturation (1/3 < ratio < 1/2): look for corroborating
-  // clustering evidence among integers before committing to enum.
-  if (sortedValues !== undefined && sortedValues.length >= 2) {
-    const range = sortedValues[sortedValues.length - 1]! - sortedValues[0]!
-    if (range > 0) return K <= range / 2
-  }
-
-  return false
+  // Evidence term: Good-Turing. `singletons / N` estimates the probability
+  // that the next value at this position is one never seen before, so
+  // `1 - singletons/N` estimates coverage. Measured against held-out data
+  // over 41 real fields: median absolute error 0.011, rho 0.991 (§6.10).
+  //
+  // Used ONLY in conjunction with the ratio guard above, never alone: on a
+  // duplicated corpus every count is >= 2, so `singletons` is 0 and coverage
+  // reads a spurious 1.0. The conjunction rejects for as long as the ratio
+  // term does.
+  return 1 - singletons / N >= enumCoverageBar
 }
 
 function walkAndDetectEnums(
@@ -678,6 +701,8 @@ function walkAndDetectEnums(
   minSamples: number,
   literalMinSamples: number,
   enumMaxMembers: number,
+  enumMaxRatio: number,
+  enumCoverageBar: number,
 ): TypeRef {
   const { shape } = ref
 
@@ -685,7 +710,7 @@ function walkAndDetectEnums(
     if (node.leafCount >= minSamples) {
       const K = node.distinctValues.size
       const N = node.leafCount
-      if (looksLikeEnum(K, N, undefined, literalMinSamples, enumMaxMembers)) {
+      if (looksLikeEnum(K, N, node.singletons, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)) {
         const members = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
         // Only if all values are strings
         if (members.every((m) => typeof m === "string")) {
@@ -708,7 +733,7 @@ function walkAndDetectEnums(
       const values = [...node.distinctValues].map((s) => JSON.parse(s) as unknown)
       if (values.every((v) => typeof v === "number" && Number.isInteger(v))) {
         const numericValues = values as number[]
-        if (looksLikeEnum(K, N, node.sortedNumeric, literalMinSamples, enumMaxMembers)) {
+        if (looksLikeEnum(K, N, node.singletons, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)) {
           // K === 1 → single constant value, represent as a literal.
           // K > 1 → union of literals.
           if (numericValues.length === 1) return t(types.literal(numericValues[0]!), ref.meta)
@@ -726,7 +751,7 @@ function walkAndDetectEnums(
     for (const [name, fieldRef] of Object.entries(fields)) {
       const childNode = node.object?.fields[name]
       newFields[name] = childNode !== undefined
-        ? walkAndDetectEnums(fieldRef, childNode, minSamples, literalMinSamples, enumMaxMembers)
+        ? walkAndDetectEnums(fieldRef, childNode, minSamples, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)
         : fieldRef
     }
     return t(types.object(newFields), ref.meta)
@@ -736,7 +761,7 @@ function walkAndDetectEnums(
     const el = (shape as { element: TypeRef }).element
     const childNode = node.array?.element
     const newEl = childNode !== undefined
-      ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples, enumMaxMembers)
+      ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)
       : el
     return t(types.array(newEl), ref.meta)
   }
@@ -747,14 +772,14 @@ function walkAndDetectEnums(
     return t(types.tuple(els.map((el, i) => {
       const childNode = perIndex?.[i]
       return childNode !== undefined
-        ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples, enumMaxMembers)
+        ? walkAndDetectEnums(el, childNode, minSamples, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar)
         : el
     })), ref.meta)
   }
 
   if (shape.kind === "union") {
     const variants = (shape as { variants: readonly TypeRef[] }).variants
-    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, minSamples, literalMinSamples, enumMaxMembers))), ref.meta)
+    return t(types.union(variants.map((v) => walkAndDetectEnums(v, node, minSamples, literalMinSamples, enumMaxMembers, enumMaxRatio, enumCoverageBar))), ref.meta)
   }
 
   return ref
@@ -1688,6 +1713,8 @@ interface ResolvedStrategy {
   readonly enumMinSamples: number
   readonly literalMinSamples: number
   readonly enumMaxMembers: number
+  readonly enumMaxRatio: number
+  readonly enumCoverageBar: number
   readonly dictMinSamples: number
   readonly splitDissimilarObjects: boolean
   readonly objectSplitThreshold: number
@@ -1729,6 +1756,8 @@ export function resolvedStrategy(strategy?: ResolveStrategy, cfg?: CorpusInferCo
     enumMinSamples: strategy?.enumMinSamples ?? cfg?.enumMinSamples ?? 3,
     literalMinSamples: strategy?.literalMinSamples ?? cfg?.literalMinSamples ?? 5,
     enumMaxMembers: strategy?.enumMaxMembers ?? cfg?.enumMaxMembers ?? 50,
+    enumMaxRatio: strategy?.enumMaxRatio ?? cfg?.enumMaxRatio ?? 0.5,
+    enumCoverageBar: strategy?.enumCoverageBar ?? cfg?.enumCoverageBar ?? 0.9,
     dictMinSamples: strategy?.dictMinSamples ?? cfg?.dictMinSamples ?? 3,
     splitDissimilarObjects: strategy?.splitDissimilarObjects ?? cfg?.splitDissimilarObjects ?? true,
     objectSplitThreshold: strategy?.objectSplitThreshold ?? cfg?.objectSplitThreshold ?? 0.5,
@@ -1882,7 +1911,7 @@ export function defaultStages(resolved: ResolvedStrategy): Stage[] {
   // GENERALIZATION first: DU grouping below consumes its output (see above).
   if (resolved.detectEnums) {
     out.push(generalization("enums", (ref, node) =>
-      walkAndDetectEnums(ref, node, resolved.enumMinSamples, resolved.literalMinSamples, resolved.enumMaxMembers)))
+      walkAndDetectEnums(ref, node, resolved.enumMinSamples, resolved.literalMinSamples, resolved.enumMaxMembers, resolved.enumMaxRatio, resolved.enumCoverageBar)))
   }
   if (resolved.detectDiscriminatedUnions) {
     out.push(grouping("discriminated-union", (ref, node) => walkAndDetectDU(ref, node)))

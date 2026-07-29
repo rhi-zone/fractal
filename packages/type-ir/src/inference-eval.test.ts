@@ -315,6 +315,12 @@ describe("runEvaluation", () => {
 // ---------------------------------------------------------------------------
 
 describe("CFD-style discriminant search — union-fidelity comparison", () => {
+  // PRECONDITION (see from-json-corpus.test.ts's CFD block for the full note):
+  // the CFD pass only runs on discriminants the enum generalization declines
+  // to type. The coverage rule now types this corpus's `tag` as an enum, so
+  // `tryDetectDU` recovers the union first — a better outcome, but not the one
+  // these tests are measuring. Set the precondition explicitly.
+  const cfdOnly = { enumCoverageBar: 1.1 } as const
   test("recovers full union fidelity via chaining-immune exact-value grouping, where single-linkage's chaining failure leaves general splitting at zero", () => {
     // `stage` "p"/"q"/"r" groups chain under single-linkage: p={stage,shared1},
     // q={stage,shared1,shared2}, r={stage,shared2} — q is close enough to
@@ -341,8 +347,8 @@ describe("CFD-style discriminant search — union-fidelity comparison", () => {
       ]),
     )
 
-    const withCfd = fromJsonCorpus(values)
-    const withoutCfd = fromJsonCorpus(values, { detectCfdDiscriminants: false })
+    const withCfd = fromJsonCorpus(values, cfdOnly)
+    const withoutCfd = fromJsonCorpus(values, { ...cfdOnly, detectCfdDiscriminants: false })
 
     const withScore = scoreInference(original, withCfd)
     const withoutScore = scoreInference(original, withoutCfd)
@@ -384,8 +390,8 @@ describe("CFD-style discriminant search — union-fidelity comparison", () => {
       ]),
     )
 
-    const withCfd = fromJsonCorpus(values)
-    const withoutCfd = fromJsonCorpus(values, { detectCfdDiscriminants: false })
+    const withCfd = fromJsonCorpus(values, cfdOnly)
+    const withoutCfd = fromJsonCorpus(values, { ...cfdOnly, detectCfdDiscriminants: false })
 
     const withScore = scoreInference(original, withCfd)
     const withoutScore = scoreInference(original, withoutCfd)
@@ -904,15 +910,18 @@ describe("dirty-outlier profile — walkAndDetectDirty threshold behavior", () =
 describe("generator profiles — threshold-behavior findings", () => {
   const TRIAL_COUNT = 40
 
-  test("FINDING: zipfian-presence's skewed enum-member frequency significantly IMPROVES enum-detection F1 over uniform at small N (8-10) on the Status Enum case", () => {
-    // Status Enum has 4 members. Under uniform, all 4 are roughly equally
-    // likely, so a small corpus needs to sample widely before K/N settles
-    // below looksLikeEnum's saturation threshold. Under zipfian skew, most
-    // samples concentrate on the 1-2 highest-weight members, so the
-    // OBSERVED K stays low even at small N -- the corpus looks MORE
-    // enum-like sooner, not less. This is the opposite of the naive
-    // expectation that skew makes detection harder; the harness surfaces
-    // it precisely because it varies a previously-fixed distribution.
+  test("SUPERSEDED FINDING: zipfian skew no longer buys a shape-detection advantage", () => {
+    // ORIGINAL FINDING (K/N-only rule): zipfian-presence significantly
+    // IMPROVED enum-detection F1 at small N, because skew concentrates
+    // samples on 1-2 members so observed K stays low and the ratio test
+    // saturates sooner. The very next test recorded that this "gain" was an
+    // illusion — the same sampling pattern silently drops the rare members.
+    //
+    // The coverage rule closes that gap directly rather than by a separate
+    // guard: rare members are the ones seen exactly once, and singletons are
+    // what the Good-Turing term measures. Skew now REDUCES estimated coverage
+    // instead of flattering the ratio, so the spurious advantage is gone.
+    // Measured at N=10, 40 trials: meanDiff -0.075, p=0.47, not significant.
     const statusEnumCase = defaultLabeledCases.find((c) => c.name === "Status Enum")!
     const n = 10
     const uniform = runEvaluationTrials([statusEnumCase], [n], TRIAL_COUNT).results[0]!
@@ -927,23 +936,19 @@ describe("generator profiles — threshold-behavior findings", () => {
       axisValues(uniform, "enumDetectionF1"),
       mulberry32(0xa11e),
     )
-    expect(result.meanDiff).toBeGreaterThan(0)
-    expect(result.significant).toBe(true)
-    expect(result.pValue).toBeLessThan(0.05)
+    // no longer a significant advantage in either direction
+    expect(result.significant).toBe(false)
+    expect(result.meanDiff).toBeLessThanOrEqual(0)
   })
 
-  test("FINDING (member-set fidelity, corrected metric): zipfian-presence's small-N enum-detection F1 gain is a shape-only illusion -- member-set fidelity is significantly WORSE under zipfian, not better", () => {
-    // Same setup as the enum-detection-F1 finding above (Status Enum, N=10,
-    // zipfian-presence vs uniform), scored with the member-set-fidelity
-    // axis this task added specifically to see past shape detection. The
-    // mechanism the module doc warned about: zipfian skew concentrates
-    // samples onto the 1-2 highest-weight members, so K/N saturates fast
-    // and `looksLikeEnum` fires sooner (shape detection improves) -- but
-    // that's exactly the sampling pattern that makes the tail members
-    // (archived, and often done) NEVER appear at N=10, so the recovered
-    // enum is missing real members far more often than under uniform
-    // sampling. The shape-only enumDetection axis is blind to this; the
-    // member-set-fidelity axis is not.
+  test("FINDING (member-set fidelity): skew still costs real members, and the shape metric no longer disagrees", () => {
+    // The corrected metric's warning stands: at N=10 a zipfian corpus still
+    // fails to show the tail members, so member-set fidelity is significantly
+    // worse (meanDiff -0.052, p=0.001). What CHANGED is that the shape metric
+    // no longer reports the opposite. Under the old rule the two axes pointed
+    // in opposite directions, which is what made the shape reading an
+    // illusion; under the coverage rule they agree in sign, so shape
+    // detection is no longer blind to the tail it is dropping.
     const statusEnumCase = defaultLabeledCases.find((c) => c.name === "Status Enum")!
     const n = 10
     const uniform = runEvaluationTrials([statusEnumCase], [n], TRIAL_COUNT).results[0]!
@@ -953,18 +958,6 @@ describe("generator profiles — threshold-behavior findings", () => {
     }
     const zipfian = runEvaluationTrials([zipfianCase], [n], TRIAL_COUNT).results[0]!
 
-    // Shape detection still shows the Phase 2 finding: zipfian is BETTER.
-    const shapeResult = pairedBootstrapTest(
-      axisValues(zipfian, "enumDetectionF1"),
-      axisValues(uniform, "enumDetectionF1"),
-      mulberry32(0xa11e),
-    )
-    expect(shapeResult.meanDiff).toBeGreaterThan(0)
-    expect(shapeResult.significant).toBe(true)
-
-    // Member-set fidelity tells the opposite story: zipfian is WORSE. This
-    // is the gap the shape-only metric couldn't see -- a real risk (rare
-    // members silently dropped), not a sample-size artifact.
     const memberResult = pairedBootstrapTest(
       axisValues(zipfian, "enumMemberFidelityF1"),
       axisValues(uniform, "enumMemberFidelityF1"),
@@ -973,6 +966,14 @@ describe("generator profiles — threshold-behavior findings", () => {
     expect(memberResult.meanDiff).toBeLessThan(0)
     expect(memberResult.significant).toBe(true)
     expect(memberResult.pValue).toBeLessThan(0.05)
+
+    // the two axes now agree in sign — no shape-vs-members divergence
+    const shapeResult = pairedBootstrapTest(
+      axisValues(zipfian, "enumDetectionF1"),
+      axisValues(uniform, "enumDetectionF1"),
+      mulberry32(0xa11e),
+    )
+    expect(shapeResult.meanDiff).toBeLessThanOrEqual(0)
   })
 
   test("FINDING: high-cardinality-id fields are NOT flagged as false-positive enums under current thresholds -- enum-detection precision stays 1 across sizes", () => {

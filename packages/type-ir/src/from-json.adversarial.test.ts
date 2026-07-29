@@ -1298,11 +1298,17 @@ describe("adversarial: enum/non-enum boundary thresholds", () => {
     expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] })
   })
 
-  test("string field at ratio=3/8=0.375 (strictly between 1/3 and 1/2) is NOT enum — no clustering corroboration exists for strings", () => {
+  // CORRECTED BEHAVIOUR. This asserted `string` under the old rule, which
+  // could only clear the 1/3-1/2 band via integer clustering — so a string
+  // field in that band could never become an enum no matter how strong its
+  // evidence. That asymmetry was an artifact of the escape hatch being
+  // integer-only, not a principle. The coverage rule treats both alike:
+  // a,b,c over 8 samples is 3/3/2, zero singletons, estimated coverage 1.0.
+  test("string field at ratio=3/8=0.375 IS enum — every member repeats, coverage 1.0", () => {
     const samples = makeStringField(["a", "b", "c"], 8)
     const inferred = fromJsonCorpus(samples)
     const fields = objectFields(inferred)
-    expect(fields.tag!.shape.kind).toBe("string")
+    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] })
   })
 
   test("string field at exactly ratio=1/2 (K=4,N=8) is NOT enum — saturation boundary is exclusive (ratio < 0.5, not <=)", () => {
@@ -1312,9 +1318,20 @@ describe("adversarial: enum/non-enum boundary thresholds", () => {
     expect(fields.tag!.shape.kind).toBe("string")
   })
 
-  test("string field at ratio=3/7≈0.4286 (borderline) is NOT enum", () => {
+  // CORRECTED BEHAVIOUR, same reason as above: 3/2/2, zero singletons.
+  test("string field at ratio=3/7≈0.4286 IS enum — zero singletons clears the coverage bar", () => {
     const samples = makeStringField(["a", "b", "c"], 7)
     const inferred = fromJsonCorpus(samples)
+    const fields = objectFields(inferred)
+    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] })
+  })
+
+  test("a singleton member drags coverage under the bar and withholds enum status", () => {
+    // a,b,c repeat; "d" appears exactly once -> n1=1, N=10, coverage 0.9 is
+    // not > the 0.9 bar's strictly-greater-than-or-equal test at 1-1/10=0.9,
+    // so raise the bar slightly to show the mechanism rather than the tie.
+    const samples = [...makeStringField(["a", "b", "c"], 9), { tag: "d" }]
+    const inferred = fromJsonCorpus(samples, { enumCoverageBar: 0.95 })
     const fields = objectFields(inferred)
     expect(fields.tag!.shape.kind).toBe("string")
   })
@@ -1405,15 +1422,17 @@ describe("adversarial: clustering signal interaction", () => {
     expect(fields.code!.shape.kind).toBe("union")
   })
 
-  test("dense small-range integers (1..4, borderline K/N=0.4) do NOT become enum — K exceeds range/2, so clustering corroboration correctly withholds enum status", () => {
-    const base = [1, 2, 3, 4] // range=3, K=4 -> K <= range/2 is 4 <= 1.5, false
-    const values = repeatToN(base, 10) // K=4, N=10, ratio=0.4
+  // CORRECTED BEHAVIOUR. The old rule withheld enum status here via a
+  // `K <= range/2` clustering test that has no empirical support — it rejects
+  // 1,2,3,4 each seen 2-3 times, which is a bounded set by any reading. The
+  // coverage rule accepts it: zero singletons, estimated coverage 1.0.
+  test("dense small-range integers (1..4, K/N=0.4, every value repeated) DO become a literal union", () => {
+    const base = [1, 2, 3, 4]
+    const values = repeatToN(base, 10) // K=4, N=10, ratio=0.4, n1=0
     const samples = values.map((v) => ({ code: v }))
     const inferred = fromJsonCorpus(samples)
     const fields = objectFields(inferred)
-    expect(fields.code!.shape.kind).not.toBe("union")
-    expect(fields.code!.shape.kind).not.toBe("enum")
-    expect(fields.code!.shape.kind).not.toBe("literal")
+    expect(fields.code!.shape.kind).toBe("union")
   })
 
   test("property: borderline-ratio integer fields (whether clustered, spread, or dense) always cover every sample in the corpus, regardless of which way the clustering signal falls", () => {

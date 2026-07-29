@@ -136,23 +136,73 @@ all candidate groupings; deferring the grouping choice; `fromJson`'s leaf typing
 | object partition | existing DU/CFD/clustering cascade | settled as behaviour; `clusteringMethod` remains an open call (no method dominates) |
 | entity key | `undefined` — every occurrence is its own observation | **provisional and known-wrong for API payloads.** §17.2 measured 50 PRs embedding one repo. §6.11 shows the correct key is not derivable; it must be declared. |
 
-**Default generalization — provisional throughout.** The honest default given everything in
-§6 of `inference-theory.md`:
+**Default generalization — SHIPPED, and it is the session's finding rather than the old
+heuristic.** `looksLikeEnum` is now:
 
-1. `K ≥ N` → never a closed vocabulary (settled; the one boundary that held up everywhere).
-2. Otherwise rank by `K/N`, and cut at a **declared coverage requirement** rather than a
-   fixed constant — §6.10 showed the optimal `K/N` cutoff tracks the required coverage
-   near-linearly (0.19 at 90%, 0.535 at 50%), so a bare constant silently encodes an
-   undeclared bar.
-3. Prefer the Good–Turing estimate `1 − n₁/N` where the corpus is trusted to be an
-   independent sample, since it needs no constant and was the only rule stable across
-   coverage bars — but it inverts under duplication (§6.8), so it must not be the default
-   until the entity-key question above is answered.
+```
+K === 1              -> literal, once N >= literalMinSamples      (unchanged)
+K >= N               -> never a bounded vocabulary                (unchanged; held everywhere)
+K > enumMaxMembers   -> reject; output-size guard, not evidence   (default 50)
+K/N >= enumMaxRatio  -> reject; the DUPLICATION GUARD             (default 0.5)
+1 - n1/N >= enumCoverageBar -> ACCEPT; the EVIDENCE TERM          (default 0.9)
+```
 
-Because (3) is blocked on (entity key), the recommended shipping default remains the current
-ratio cascade, with the cutoffs *named* rather than inlined. That is what §6 implements.
+The conjunction is the point. Neither term is sound alone:
 
-## 6. Also implemented
+- `1 − n₁/N` is the well-calibrated one — median absolute error 0.011 against held-out
+  coverage over 41 real fields, ρ = 0.991 (`inference-theory.md` §6.10) — but it **inverts**
+  under duplication, since every count becomes ≥ 2, `n₁` collapses to 0 and coverage reads a
+  spurious 1.0 (§6.8).
+- `K/N` is the robust one: under a duplication factor `r` it falls as `(K/N)/r`, degrading
+  gracefully instead of inverting.
+
+**This is the concrete answer to whether the unresolved entity-key question blocks the
+coverage default: it blocks the coverage term *alone*, not the conjunction.** Verified on the
+duplication construction — 1000 all-distinct values copied `r` times, which every rule should
+reject:
+
+```
+r      K/N     1-n1/N    coverage alone    coverage AND K/N<0.5
+1     1.000     0.000        reject               reject
+2     0.500     1.000        ACCEPT (wrong)       reject
+3     0.333     1.000        ACCEPT (wrong)       ACCEPT (wrong)
+```
+
+The conjunction survives exactly as long as the `K/N` term does, and adds a calibrated
+estimate on top. It is not immune — nothing is, per §6.8 — but it is strictly no worse than
+the guard alone, and measurably better on clean data (npm, n=61): 98.4% vs 82.0% for the old
+rule at a 50% coverage bar, 96.7% vs 82.0% at 90%.
+
+`enumCoverageBar` defaults to **0.9**, deliberately conservative: for codegen a wrong enum is
+a runtime failure. §6.10 shows the "right" `K/N` cutoff is a function of this bar (0.19 at
+90%, 0.535 at 50%), so any fixed ratio silently encodes one — naming it makes the choice
+visible and swappable.
+
+## 6. Behaviour that changed, and why
+
+The refactor is not behaviour-preserving, by design — preserving heuristics this session had
+already shown wrong was never the goal. Four test groups changed:
+
+- **Strings in the 1/3–1/2 band now become enums.** The old rule could only clear that band
+  via integer clustering, so a string field could never qualify there regardless of evidence.
+  `a,b,c` over 8 samples (3/3/2, zero singletons, coverage 1.0) is now an enum. The asymmetry
+  was an artifact of the escape hatch being integer-only.
+- **`K <= range/2` integer clustering is gone.** It rejected `1,2,3,4` each seen 2–3 times,
+  which is a bounded set by any reading, and had no empirical support.
+- **CFD-discriminant tests now set their precondition explicitly.** They exist to exercise the
+  fallback for discriminants the enum pass *declines* to type; they previously reached that
+  state by accident, via the string/integer asymmetry above. Under the new default the same
+  corpus types `tag` as an enum and `tryDetectDU` recovers a 4-variant union with a real
+  discriminator — strictly better, and now pinned by its own test.
+- **A superseded eval finding.** The harness had recorded that zipfian skew *improved*
+  enum-detection F1 at small N, and a second test recorded that this "gain" was an illusion
+  hiding silently-dropped rare members. The coverage rule closes that gap at the source: rare
+  members are exactly the singletons the Good–Turing term measures, so skew now reduces
+  estimated coverage instead of flattering the ratio. The spurious advantage is gone
+  (meanDiff −0.075, p = 0.47, no longer significant) while the real member-fidelity cost
+  remains (−0.052, p = 0.001) — the two axes now agree in sign instead of contradicting.
+
+## 6a. Also implemented
 
 `enumMaxMembers` (`from-json-corpus.ts`), default 50, previously the hardcoded
 `if (K > 50) return false` in `looksLikeEnum`. Zero behaviour change; five new tests pin both

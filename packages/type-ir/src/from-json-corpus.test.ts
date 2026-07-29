@@ -320,6 +320,20 @@ describe("discriminated union detection", () => {
 })
 
 describe("CFD-style discriminant search (non-enum-typed fields)", () => {
+  // PRECONDITION, now explicit. The CFD pass exists for discriminants the
+  // enum generalization DECLINES to type — `tryDetectDU` only considers
+  // enum/literal-typed fields, so something else must recover the union.
+  //
+  // Under the old K/N-only rule this corpus reached that state by accident:
+  // `tag` sat in the ambiguous 1/3-1/2 band, and the escape hatch out of that
+  // band was integer-clustering, which a string field could never satisfy.
+  // The coverage rule types it as an enum instead (K=4, N=10, zero
+  // singletons, coverage 1.0) and the DU pass then recovers a 4-variant union
+  // with a discriminator — a strictly better outcome, verified below.
+  //
+  // So these tests now set the precondition deliberately, via an unreachable
+  // coverage bar, rather than relying on a rule asymmetry that has been fixed.
+  const cfdOnly = { enumCoverageBar: 1.1 } as const
   // `tag` has K=4 distinct string values over N=10 samples (ratio 0.4),
   // squarely in `looksLikeEnum`'s ambiguous 1/3-1/2 band — which for a
   // STRING field (no integer-clustering escape hatch) is rejected, so `tag`
@@ -342,15 +356,27 @@ describe("CFD-style discriminant search (non-enum-typed fields)", () => {
     { tag: "d", r: 19, s: 20 },
   ]
 
+  test("under the DEFAULT rule this corpus no longer needs the CFD pass at all", () => {
+    // The improvement the precondition above documents: the enum pass types
+    // `tag`, `tryDetectDU` fires, and the result is a 4-variant union carrying
+    // a real discriminator with literal tags — the primary mechanism, not the
+    // fallback.
+    const result = fromJsonCorpus(values)
+    expect(result.shape.kind).toBe("union")
+    expect(result.meta?.discriminator).toBe("tag")
+    const variants = (result.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants.length).toBe(4)
+  })
+
   test("tag never gets typed enum on its own (ambiguous K/N band for a string field)", () => {
-    const plain = fromJsonCorpus(values, { detectDiscriminatedUnions: false, detectCfdDiscriminants: false, splitDissimilarObjects: false })
+    const plain = fromJsonCorpus(values, { ...cfdOnly, detectDiscriminatedUnions: false, detectCfdDiscriminants: false, splitDissimilarObjects: false })
     expect(plain.shape.kind).toBe("object")
     const fields = (plain.shape as { fields: Record<string, TypeRef> }).fields
     expect(fields.tag!.shape.kind).toBe("string")
   })
 
   test("a non-enum-typed field that functionally determines structure is found as a CFD discriminant", () => {
-    const result = fromJsonCorpus(values)
+    const result = fromJsonCorpus(values, cfdOnly)
     expect(result.shape.kind).toBe("union")
     expect(result.meta.discriminator).toBe("tag")
     const variants = (result.shape as { variants: readonly TypeRef[] }).variants
@@ -362,7 +388,7 @@ describe("CFD-style discriminant search (non-enum-typed fields)", () => {
   })
 
   test("detectCfdDiscriminants: false disables the pass (general splitting may still recover a union, without a discriminator)", () => {
-    const result = fromJsonCorpus(values, { detectCfdDiscriminants: false })
+    const result = fromJsonCorpus(values, { ...cfdOnly, detectCfdDiscriminants: false })
     // General structural splitting (Jaccard clustering on raw field sets)
     // can still separate these four disjoint shapes, but it never attaches
     // a `discriminator` — that's how we know the CFD pass, not general
@@ -379,6 +405,7 @@ describe("CFD-style discriminant search (non-enum-typed fields)", () => {
     // terms, but orthogonal to what this test isolates (the union-shaping
     // passes), so it's turned off here to see the plain merge underneath.
     const result = fromJsonCorpus(values, {
+      ...cfdOnly,
       detectDiscriminatedUnions: false, detectCfdDiscriminants: false, splitDissimilarObjects: false,
       detectDicts: false,
     })
@@ -409,7 +436,7 @@ describe("CFD-style discriminant search (non-enum-typed fields)", () => {
     // non-enum-eligible, so DU never fires either) — raising cfdMinSamples
     // above N=10 disables the CFD pass, and no other pass attaches a
     // `discriminator`.
-    const result = fromJsonCorpus(values, { cfdMinSamples: 20 })
+    const result = fromJsonCorpus(values, { ...cfdOnly, cfdMinSamples: 20 })
     expect(result.meta.discriminator).toBeUndefined()
   })
 
