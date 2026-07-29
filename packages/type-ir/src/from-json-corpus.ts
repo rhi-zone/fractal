@@ -472,12 +472,36 @@ function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
   return { shape: ref.shape, meta: { ...ref.meta, ...extra } }
 }
 
+// Structural equality is on the serialized form, and the serialized form of a
+// TypeRef never changes — they are constructed fresh by `t(...)`/`withMeta` and
+// never mutated — so it is cached per object. Without this, comparing against a
+// growing accumulator re-serializes the whole accumulated subtree on every
+// step, which is quadratic in the number of merged types and was ~90% of the
+// runtime on structurally-diverse corpora (JSON Schema documents).
+const shapeKeyCache = new WeakMap<TypeRef, string>()
+function shapeKey(r: TypeRef): string {
+  let k = shapeKeyCache.get(r)
+  if (k === undefined) { k = JSON.stringify(r.shape); shapeKeyCache.set(r, k) }
+  return k
+}
+const refKeyCache = new WeakMap<TypeRef, string>()
+function refKey(r: TypeRef): string {
+  let k = refKeyCache.get(r)
+  if (k === undefined) { k = JSON.stringify(r); refKeyCache.set(r, k) }
+  return k
+}
+
 function shapeEqual(a: TypeRef, b: TypeRef): boolean {
-  return JSON.stringify(a.shape) === JSON.stringify(b.shape)
+  if (a === b) return true
+  if (a.shape.kind !== b.shape.kind) return false
+  return shapeKey(a) === shapeKey(b)
 }
 
 function typeRefEqual(a: TypeRef, b: TypeRef): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
+  // Cheap discriminators before paying for serialization at all.
+  if (a === b) return true
+  if (a.shape.kind !== b.shape.kind) return false
+  return refKey(a) === refKey(b)
 }
 
 function isSubkind(child: string, parent: string): boolean {
@@ -607,10 +631,15 @@ function makeUnion(a: TypeRef, b: TypeRef): TypeRef {
   const bVariants = b.shape.kind === "union"
     ? (b.shape as { variants: readonly TypeRef[] }).variants
     : [b]
-  // Deduplicate
+  // Deduplicate. A linear scan of `typeRefEqual` here is quadratic in the
+  // variant count and re-serializes every existing variant per candidate;
+  // a key set makes it linear.
   const all = [...aVariants]
+  const seen = new Set<string>()
+  for (const existing of all) seen.add(refKey(existing))
   for (const v of bVariants) {
-    if (!all.some((existing) => typeRefEqual(existing, v))) all.push(v)
+    const k = refKey(v)
+    if (!seen.has(k)) { seen.add(k); all.push(v) }
   }
   return all.length === 1 ? all[0]! : t(types.union(all))
 }
