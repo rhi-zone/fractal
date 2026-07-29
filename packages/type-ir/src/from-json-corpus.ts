@@ -182,6 +182,14 @@ export interface ResolveStrategy extends InferConfig {
    * them, and may construct types the built-ins never would.
    */
   generalize?: Generalize
+  /** Replace the discriminated-union grouping decision. Default `defaultDetectDU`. */
+  duGrouping?: Group
+  /** Replace the dict-vs-record grouping decision. Default `defaultDetectDict`. */
+  dictGrouping?: Group
+  /** Replace the CFD discriminant-search grouping decision. Default `defaultDetectCfd`. */
+  cfdGrouping?: Group
+  /** Replace the discriminant-free structural-split grouping decision. Default `defaultSplitObjects`. */
+  splitGrouping?: Group
   /** Minimum samples before dict detection fires. Default: 3. */
   dictMinSamples?: number
   /**
@@ -862,17 +870,17 @@ function fieldSetJaccardDistance(a: ReadonlySet<string>, b: ReadonlySet<string>)
 // Discriminated union detection
 // ---------------------------------------------------------------------------
 
-function walkAndDetectDU(ref: TypeRef, node: EvidenceNode): TypeRef {
+function walkAndDetectDU(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStrategy, corpusSize: number, path: readonly (string|number)[] = []): TypeRef {
   const { shape } = ref
 
   if (shape.kind === "array") {
     const el = (shape as { element: TypeRef }).element
     if (el.shape.kind === "object" && node.array !== undefined) {
-      const du = tryDetectDU(el, node.array.elementObjects)
-      if (du !== null) return t(types.array(du), ref.meta)
+      const du = resolved.duGrouping(groupingContext(el, node.array.element, node.array.elementObjects, [...path, "[]"], resolved, corpusSize))
+      if (du !== undefined) return t(types.array(du), ref.meta)
     }
     const childNode = node.array?.element
-    const newEl = childNode !== undefined ? walkAndDetectDU(el, childNode) : el
+    const newEl = childNode !== undefined ? walkAndDetectDU(el, childNode, resolved, corpusSize, [...path, "[]"]) : el
     return t(types.array(newEl), ref.meta)
   }
 
@@ -890,14 +898,14 @@ function walkAndDetectDU(ref: TypeRef, node: EvidenceNode): TypeRef {
     const objectSamples = node.values.filter(
       (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
     )
-    const du = tryDetectDU(ref, objectSamples)
-    if (du !== null) return withMeta(du, ref.meta)
+    const du = resolved.duGrouping(groupingContext(ref, node, objectSamples, path, resolved, corpusSize))
+    if (du !== undefined) return withMeta(du, ref.meta)
 
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
       const childNode = node.object?.fields[name]
-      newFields[name] = childNode !== undefined ? walkAndDetectDU(fieldRef, childNode) : fieldRef
+      newFields[name] = childNode !== undefined ? walkAndDetectDU(fieldRef, childNode, resolved, corpusSize, [...path, name]) : fieldRef
     }
     return t(types.object(newFields), ref.meta)
   }
@@ -1194,27 +1202,18 @@ function tryDetectCfdDiscriminant(
   return buildDiscriminatedUnion(best.field, best.groups)
 }
 
-function walkAndDetectCfdDiscriminant(
-  ref: TypeRef,
-  node: EvidenceNode,
-  minSamples: number,
-  maxCardinalityRatio: number,
-  minGroupSize: number,
-  minScore: number,
-): TypeRef {
+function walkAndDetectCfdDiscriminant(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStrategy, corpusSize: number, path: readonly (string|number)[] = []): TypeRef {
   const { shape } = ref
 
   if (shape.kind === "array") {
     const el = (shape as { element: TypeRef }).element
     if (el.shape.kind === "object" && node.array !== undefined) {
-      const cfd = tryDetectCfdDiscriminant(
-        node.array.elementObjects, minSamples, maxCardinalityRatio, minGroupSize, minScore,
-      )
-      if (cfd !== null) return t(types.array(cfd), ref.meta)
+      const cfd = resolved.cfdGrouping(groupingContext(el, node.array.element, node.array.elementObjects, [...path, "[]"], resolved, corpusSize))
+      if (cfd !== undefined) return t(types.array(cfd), ref.meta)
     }
     const childNode = node.array?.element
     const newEl = childNode !== undefined
-      ? walkAndDetectCfdDiscriminant(el, childNode, minSamples, maxCardinalityRatio, minGroupSize, minScore)
+      ? walkAndDetectCfdDiscriminant(el, childNode, resolved, corpusSize, path)
       : el
     return t(types.array(newEl), ref.meta)
   }
@@ -1225,15 +1224,15 @@ function walkAndDetectCfdDiscriminant(
     const objectSamples = node.values.filter(
       (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
     )
-    const cfd = tryDetectCfdDiscriminant(objectSamples, minSamples, maxCardinalityRatio, minGroupSize, minScore)
-    if (cfd !== null) return withMeta(cfd, ref.meta)
+    const cfd = resolved.cfdGrouping(groupingContext(ref, node, objectSamples, path, resolved, corpusSize))
+    if (cfd !== undefined) return withMeta(cfd, ref.meta)
 
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
       const childNode = node.object?.fields[name]
       newFields[name] = childNode !== undefined
-        ? walkAndDetectCfdDiscriminant(fieldRef, childNode, minSamples, maxCardinalityRatio, minGroupSize, minScore)
+        ? walkAndDetectCfdDiscriminant(fieldRef, childNode, resolved, corpusSize, path)
         : fieldRef
     }
     return t(types.object(newFields), ref.meta)
@@ -1477,25 +1476,19 @@ function trySplitDissimilarObjects(
   return t(types.union(variants))
 }
 
-function walkAndSplitDissimilarObjects(
-  ref: TypeRef,
-  node: EvidenceNode,
-  threshold: number,
-  minSamples: number,
-  clusteringMethod: ClusteringMethod,
-): TypeRef {
+function walkAndSplitDissimilarObjects(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStrategy, corpusSize: number, path: readonly (string|number)[] = []): TypeRef {
   const { shape } = ref
 
   if (shape.kind === "object") {
-    const split = trySplitDissimilarObjects(node, threshold, minSamples, clusteringMethod)
-    if (split !== null) return withMeta(split, ref.meta)
+    const split = resolved.splitGrouping(groupingContext(ref, node, [], path, resolved, corpusSize))
+    if (split !== undefined) return withMeta(split, ref.meta)
 
     const fields = (shape as { fields: Record<string, TypeRef> }).fields
     const newFields: Record<string, TypeRef> = {}
     for (const [name, fieldRef] of Object.entries(fields)) {
       const childNode = node.object?.fields[name]
       newFields[name] = childNode !== undefined
-        ? walkAndSplitDissimilarObjects(fieldRef, childNode, threshold, minSamples, clusteringMethod)
+        ? walkAndSplitDissimilarObjects(fieldRef, childNode, resolved, corpusSize, path)
         : fieldRef
     }
     return t(types.object(newFields), ref.meta)
@@ -1505,7 +1498,7 @@ function walkAndSplitDissimilarObjects(
     const el = (shape as { element: TypeRef }).element
     const childNode = node.array?.element
     const newEl = childNode !== undefined
-      ? walkAndSplitDissimilarObjects(el, childNode, threshold, minSamples, clusteringMethod)
+      ? walkAndSplitDissimilarObjects(el, childNode, resolved, corpusSize, path)
       : el
     return t(types.array(newEl), ref.meta)
   }
@@ -1516,7 +1509,7 @@ function walkAndSplitDissimilarObjects(
     return t(types.tuple(els.map((el, i) => {
       const childNode = perIndex?.[i]
       return childNode !== undefined
-        ? walkAndSplitDissimilarObjects(el, childNode, threshold, minSamples, clusteringMethod)
+        ? walkAndSplitDissimilarObjects(el, childNode, resolved, corpusSize, path)
         : el
     })), ref.meta)
   }
@@ -1536,18 +1529,13 @@ function walkAndSplitDissimilarObjects(
 // Dict detection (record vs. map)
 // ---------------------------------------------------------------------------
 
-function walkAndDetectDicts(
-  ref: TypeRef,
-  node: EvidenceNode,
-  totalValues: number,
-  minSamples: number,
-): TypeRef {
+function walkAndDetectDicts(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStrategy, corpusSize: number, path: readonly (string|number)[] = []): TypeRef {
   const { shape } = ref
   if (shape.kind !== "object") {
     if (shape.kind === "array") {
       const el = (shape as { element: TypeRef }).element
       const childNode = node.array?.element
-      const newEl = childNode !== undefined ? walkAndDetectDicts(el, childNode, totalValues, minSamples) : el
+      const newEl = childNode !== undefined ? walkAndDetectDicts(el, childNode, resolved, corpusSize, path) : el
       return t(types.array(newEl), ref.meta)
     }
     return ref
@@ -1559,15 +1547,31 @@ function walkAndDetectDicts(
   const newFields: Record<string, TypeRef> = {}
   for (const [name, fieldRef] of Object.entries(fields)) {
     const childNode = node.object?.fields[name]
-    newFields[name] = childNode !== undefined ? walkAndDetectDicts(fieldRef, childNode, totalValues, minSamples) : fieldRef
+    newFields[name] = childNode !== undefined ? walkAndDetectDicts(fieldRef, childNode, resolved, corpusSize, path) : fieldRef
   }
 
-  if (totalValues < minSamples) return t(types.object(newFields), ref.meta)
+  const recursed = t(types.object(newFields), ref.meta)
+  return resolved.dictGrouping(groupingContext(recursed, node, [], path, resolved, corpusSize)) ?? recursed
+}
+
+/**
+ * The dict-vs-record decision, given a position whose children have already
+ * been resolved. Returns `null` to keep it a record.
+ */
+function tryDetectDict(
+  ref: TypeRef,
+  node: EvidenceNode,
+  totalValues: number,
+  minSamples: number,
+): TypeRef | null {
+  const newFields = (ref.shape as { fields: Record<string, TypeRef> }).fields
+
+  if (totalValues < minSamples) return null
 
   // Key sets observed at this path across the corpus
   const allKeySets = node.object?.keySets ?? []
 
-  if (allKeySets.length < minSamples) return t(types.object(newFields), ref.meta)
+  if (allKeySets.length < minSamples) return null
 
   // Measure key-set growth: how many distinct keys appear as we add samples?
   const allDistinctKeys = new Set<string>()
@@ -1636,7 +1640,7 @@ function walkAndDetectDicts(
     return t(types.map(t(types.string), valueType))
   }
 
-  return t(types.object(newFields), ref.meta)
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -1760,6 +1764,10 @@ interface ResolvedStrategy {
   readonly enumMaxRatio: number
   readonly enumCoverageBar: number
   readonly generalize: Generalize
+  readonly duGrouping: Group
+  readonly dictGrouping: Group
+  readonly cfdGrouping: Group
+  readonly splitGrouping: Group
   readonly dictMinSamples: number
   readonly splitDissimilarObjects: boolean
   readonly objectSplitThreshold: number
@@ -1804,6 +1812,10 @@ export function resolvedStrategy(strategy?: ResolveStrategy, cfg?: CorpusInferCo
     enumMaxRatio: strategy?.enumMaxRatio ?? cfg?.enumMaxRatio ?? 0.5,
     enumCoverageBar: strategy?.enumCoverageBar ?? cfg?.enumCoverageBar ?? 0.9,
     generalize: strategy?.generalize ?? cfg?.generalize ?? defaultGeneralize,
+    duGrouping: strategy?.duGrouping ?? cfg?.duGrouping ?? defaultDetectDU,
+    dictGrouping: strategy?.dictGrouping ?? cfg?.dictGrouping ?? defaultDetectDict,
+    cfdGrouping: strategy?.cfdGrouping ?? cfg?.cfdGrouping ?? defaultDetectCfd,
+    splitGrouping: strategy?.splitGrouping ?? cfg?.splitGrouping ?? defaultSplitObjects,
     dictMinSamples: strategy?.dictMinSamples ?? cfg?.dictMinSamples ?? 3,
     splitDissimilarObjects: strategy?.splitDissimilarObjects ?? cfg?.splitDissimilarObjects ?? true,
     objectSplitThreshold: strategy?.objectSplitThreshold ?? cfg?.objectSplitThreshold ?? 0.5,
@@ -1944,6 +1956,67 @@ export function perPosition(
 }
 
 /**
+ * Everything a GROUPING decision at one position can see: the generalization
+ * context plus the raw object samples a partition is computed over.
+ */
+export interface GroupingContext extends PositionContext {
+  /** Raw object samples observed at this position. */
+  readonly samples: readonly Record<string, unknown>[]
+  /** Total corpus size, which some grouping decisions gate on. */
+  readonly corpusSize: number
+}
+
+/**
+ * Decide how a position's occurrences are grouped — split into union variants,
+ * reshaped into a map, or left alone.
+ *
+ * Returning `undefined` means "no opinion": the built-in cascade continues and
+ * traversal proceeds into children. Returning a `TypeRef` commits this
+ * position's grouping.
+ *
+ * Same shape as `Generalize`, and deliberately so — both answer "what type
+ * does this position emit", they just answer it at different points in the
+ * pipeline and about different questions. There are four named instantiation
+ * points rather than one because the ORDER of the built-in grouping passes is
+ * load-bearing: CFD only acts on positions DU left as plain objects, and
+ * structural splitting only sees what neither resolved. Collapsing them into
+ * one hook would erase that precedence.
+ */
+export type Group = (ctx: GroupingContext) => TypeRef | undefined
+
+function groupingContext(
+  ref: TypeRef, node: EvidenceNode, samples: readonly Record<string, unknown>[],
+  path: readonly (string | number)[], strategy: ResolvedStrategy, corpusSize: number,
+): GroupingContext {
+  return {
+    distinct: node.distinctValues.size,
+    occurrences: node.leafCount,
+    singletons: node.singletons,
+    distinctValues: node.distinctValues,
+    members: [...node.distinctValues].map((v) => JSON.parse(v) as unknown),
+    sortedNumeric: node.sortedNumeric,
+    path, ref, node, strategy, samples, corpusSize,
+  }
+}
+
+/** Built-in discriminated-union detection: an enum/literal-typed field that partitions the shapes. */
+export const defaultDetectDU: Group = (c) => tryDetectDU(c.ref, c.samples) ?? undefined
+
+/** Built-in CFD-style discriminant search over all scalar fields, not just enum-typed ones. */
+export const defaultDetectCfd: Group = (c) =>
+  tryDetectCfdDiscriminant(c.samples, c.strategy.cfdMinSamples, c.strategy.cfdMaxCardinalityRatio,
+    c.strategy.cfdMinGroupSize, c.strategy.cfdMinScore) ?? undefined
+
+/** Built-in discriminant-free structural splitting by field-set similarity. */
+export const defaultSplitObjects: Group = (c) =>
+  trySplitDissimilarObjects(c.node, c.strategy.objectSplitThreshold,
+    c.strategy.objectSplitMinSamples, c.strategy.clusteringMethod) ?? undefined
+
+/** Built-in dict-vs-record decision, by key-set growth. */
+export const defaultDetectDict: Group = (c) =>
+  tryDetectDict(c.ref, c.node, c.corpusSize, c.strategy.dictMinSamples) ?? undefined
+
+/**
  * The built-in pipeline. Same steps, same order, same behaviour as before the
  * stage refactor — each entry wraps the `walkAndX` transform that already
  * existed, now named and individually replaceable.
@@ -1959,22 +2032,17 @@ export function defaultStages(resolved: ResolvedStrategy): Stage[] {
     out.push(generalization("generalize", (ref, node) => walkAndGeneralize(ref, node, resolved)))
   }
   if (resolved.detectDiscriminatedUnions) {
-    out.push(grouping("discriminated-union", (ref, node) => walkAndDetectDU(ref, node)))
+    out.push(grouping("discriminated-union", (ref, node, ctx) => walkAndDetectDU(ref, node, resolved, ctx.corpusSize)))
   }
   if (resolved.detectDicts) {
-    out.push(grouping("dict-vs-record", (ref, node, ctx) =>
-      walkAndDetectDicts(ref, node, ctx.corpusSize, resolved.dictMinSamples)))
+    out.push(grouping("dict-vs-record", (ref, node, ctx) => walkAndDetectDicts(ref, node, resolved, ctx.corpusSize)))
   }
   if (resolved.detectCfdDiscriminants) {
-    out.push(grouping("cfd-discriminant", (ref, node) =>
-      walkAndDetectCfdDiscriminant(ref, node,
-        resolved.cfdMinSamples, resolved.cfdMaxCardinalityRatio,
-        resolved.cfdMinGroupSize, resolved.cfdMinScore)))
+    out.push(grouping("cfd-discriminant", (ref, node, ctx) =>
+      walkAndDetectCfdDiscriminant(ref, node, resolved, ctx.corpusSize)))
   }
   if (resolved.splitDissimilarObjects) {
-    out.push(grouping("structural-split", (ref, node) =>
-      walkAndSplitDissimilarObjects(ref, node,
-        resolved.objectSplitThreshold, resolved.objectSplitMinSamples, resolved.clusteringMethod)))
+    out.push(grouping("structural-split", (ref, node, ctx) => walkAndSplitDissimilarObjects(ref, node, resolved, ctx.corpusSize)))
   }
   if (resolved.detectDirtyData) {
     out.push(generalization("dirty-data", (ref, node) => walkAndDetectDirty(ref, node)))

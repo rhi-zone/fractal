@@ -133,7 +133,7 @@ all candidate groupings; deferring the grouping choice; `fromJson`'s leaf typing
 | decision | default | status |
 |---|---|---|
 | array grouping | `element` unless lengths are near-constant and per-index types disagree | provisional — `inference-theory.md` §13 gives the criterion, §17.1 shows it did not replicate on this repo's corpora |
-| object partition | existing DU/CFD/clustering cascade | settled as behaviour; `clusteringMethod` remains an open call (no method dominates) |
+| object partition | `defaultDetectDU` → `defaultDetectDict` → `defaultDetectCfd` → `defaultSplitObjects`, each a swappable `Group` | settled as behaviour; `clusteringMethod` remains an open call (no method dominates) |
 | entity key | `undefined` — every occurrence is its own observation | **provisional and known-wrong for API payloads.** §17.2 measured 50 PRs embedding one repo. §6.11 shows the correct key is not derivable; it must be declared. |
 
 **Default generalization — SHIPPED, and it is the session's finding rather than the old
@@ -242,6 +242,34 @@ alone cannot separate memorization from genuine restriction, because the evidenc
 ratio. The default rejects a 60-value vocabulary observed 6000 times (`K/N = 0.01`,
 unambiguous) purely for exceeding the cap. The cap is now documented as an output-size guard
 rather than an evidence test, and is swappable — including `Infinity` to disable it.
+
+## 6b. Grouping decisions are functions too
+
+Same treatment as `Generalize`, applied to the four grouping passes:
+
+```ts
+interface GroupingContext extends PositionContext {
+  readonly samples: readonly Record<string, unknown>[]   // raw objects here
+  readonly corpusSize: number
+}
+type Group = (ctx: GroupingContext) => TypeRef | undefined
+```
+
+Four named instantiation points — `duGrouping`, `dictGrouping`, `cfdGrouping`,
+`splitGrouping` — defaulting to `defaultDetectDU`, `defaultDetectDict`,
+`defaultDetectCfd`, `defaultSplitObjects`. `objectSplitThreshold`, `cfdMinScore`,
+`clusteringMethod`, `dictMinSamples` and the rest are read from `ctx.strategy` **inside those
+defaults**, so they are parameters of the default rather than the customisation surface.
+
+**Why four points and not one unified `group`.** The built-in ordering is load-bearing: CFD
+only acts on positions DU left as plain objects, and structural splitting only sees what
+neither resolved. A single hook would erase that precedence, and collapsing the four
+whole-tree passes into one per-position cascade would change when children are visited
+relative to later passes. This is the concrete structural reason, not caution — the four
+share one interface, so it is still one concept with four ordered instantiations.
+
+Extracting `tryDetectDict` out of `walkAndDetectDicts` was needed to give the dict decision
+the same per-position shape the other three already had.
 
 ## 7. Where the design above was wrong
 

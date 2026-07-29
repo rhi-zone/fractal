@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fc from "fast-check"
 import { t, types, type TypeRef } from "./index.ts"
 import { uint8 } from "./kinds/common.ts"
-import { fromJsonCorpus, collectEvidence, resolveEvidence, defaultStages, resolvedStrategy, perPosition, defaultEnumPredicate, defaultGeneralize, type Stage, type Generalize } from "./from-json-corpus.ts"
+import { fromJsonCorpus, collectEvidence, resolveEvidence, defaultStages, resolvedStrategy, perPosition, defaultEnumPredicate, defaultGeneralize, defaultDetectDU, defaultDetectDict, type Stage, type Generalize, type Group } from "./from-json-corpus.ts"
 
 // ---------------------------------------------------------------------------
 // Unit tests — deterministic, verifying specific behavior
@@ -1304,4 +1304,97 @@ describe("generalize", () => {
 
 function objectFieldsOf(ref: TypeRef): Record<string, TypeRef> {
   return (ref.shape as { fields: Record<string, TypeRef> }).fields
+}
+
+// ---------------------------------------------------------------------------
+// Grouping decisions are swappable functions too
+//
+// `Group = (ctx: GroupingContext) => TypeRef | undefined`, instantiated at four
+// named points (du / dict / cfd / split) because the built-in ordering is
+// load-bearing. These tests pin groupings the numeric constants could not
+// express at any setting.
+// ---------------------------------------------------------------------------
+
+describe("grouping rules", () => {
+  test("partition on a field the built-ins would never choose as a discriminant", () => {
+    // `id` is unique per record — maximal cardinality, so no discriminant
+    // search or similarity threshold would ever split on it. A custom rule can.
+    const rows = Array.from({ length: 12 }, (_, i) => ({ id: `id${i}`, n: i }))
+    const byParity: Group = (c) => {
+      if (c.path.length !== 0 || c.samples.length === 0) return undefined
+      const even = c.samples.filter((r) => (r.n as number) % 2 === 0)
+      const odd = c.samples.filter((r) => (r.n as number) % 2 === 1)
+      if (even.length === 0 || odd.length === 0) return undefined
+      return t(types.union([
+        t(types.object({ id: t(types.string), n: t(types.integer) }), { parity: "even" }),
+        t(types.object({ id: t(types.string), n: t(types.integer) }), { parity: "odd" }),
+      ]))
+    }
+    const out = fromJsonCorpus(rows, { duGrouping: byParity })
+    expect(out.shape.kind).toBe("union")
+    const variants = (out.shape as { variants: readonly TypeRef[] }).variants
+    expect(variants.map((v) => v.meta?.parity)).toEqual(["even", "odd"])
+  })
+
+  test("force a map where the built-in growth heuristic says record", () => {
+    // identical key sets in every sample — growthRatio 0, so dict detection
+    // never fires at any dictMinSamples setting.
+    const rows = Array.from({ length: 20 }, (_, i) => ({ a: i, b: i + 1 }))
+    expect(fromJsonCorpus(rows).shape.kind).toBe("object")
+    const alwaysMap: Group = (c) =>
+      c.path.length === 0 ? t(types.map(t(types.string), t(types.integer))) : undefined
+    expect(fromJsonCorpus(rows, { dictGrouping: alwaysMap }).shape.kind).toBe("map")
+  })
+
+  test("veto a split the built-ins do make, by path", () => {
+    const rows = [
+      ...Array.from({ length: 6 }, (_, i) => ({ kind: "circle", radius: i })),
+      ...Array.from({ length: 6 }, (_, i) => ({ kind: "square", side: i })),
+    ]
+    expect(fromJsonCorpus(rows).shape.kind).toBe("union")
+    const noRootSplit: Group = (c) => (c.path.length === 0 ? undefined : defaultDetectDU(c))
+    // vetoing at the root leaves a merged object rather than a DU
+    const out = fromJsonCorpus(rows, {
+      duGrouping: noRootSplit, cfdGrouping: () => undefined, splitGrouping: () => undefined,
+    })
+    expect(out.shape.kind).toBe("object")
+  })
+
+  test("delegate to the built-in and post-process its result", () => {
+    const rows = [
+      ...Array.from({ length: 6 }, (_, i) => ({ kind: "circle", radius: i })),
+      ...Array.from({ length: 6 }, (_, i) => ({ kind: "square", side: i })),
+    ]
+    const tagged: Group = (c) => {
+      const built = defaultDetectDU(c)
+      return built === undefined ? undefined : withTag(built)
+    }
+    const out = fromJsonCorpus(rows, { duGrouping: tagged })
+    expect(out.meta?.xGroupedBy).toBe("builtin-du")
+  })
+
+  test("each of the four points is independently replaceable", () => {
+    const rows = Array.from({ length: 12 }, (_, i) => ({ kind: `k${i % 3}`, v: i }))
+    const seen: string[] = []
+    fromJsonCorpus(rows, {
+      duGrouping: (c) => { seen.push("du"); return defaultDetectDU(c) },
+      dictGrouping: (c) => { seen.push("dict"); return defaultDetectDict(c) },
+      cfdGrouping: () => { seen.push("cfd"); return undefined },
+      splitGrouping: () => { seen.push("split"); return undefined },
+    })
+    expect(new Set(seen)).toEqual(new Set(["du", "dict", "cfd", "split"]))
+  })
+
+  test("grouping rules see the raw samples, not just merged evidence", () => {
+    const rows = Array.from({ length: 12 }, (_, i) => ({ kind: `k${i % 3}`, v: i }))
+    let sampleCount = -1
+    fromJsonCorpus(rows, {
+      duGrouping: (c) => { if (c.path.length === 0) sampleCount = c.samples.length; return undefined },
+    })
+    expect(sampleCount).toBe(12)
+  })
+})
+
+function withTag(ref: TypeRef): TypeRef {
+  return { shape: ref.shape, meta: { ...ref.meta, xGroupedBy: "builtin-du" } }
 }
