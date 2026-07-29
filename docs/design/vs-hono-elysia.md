@@ -1,8 +1,8 @@
-# fractal vs Hono vs Elysia — honest head-to-head
+# fractal vs Hono vs Elysia — scorecard
 
-Brutally honest, evidence-first comparison on six criteria. Where fractal loses or
-ties, it says so. Hono/Elysia snippets are reference snippets, idiomatic per
-current (2026) docs — not run, but API-accurate (sources at the end).
+Evidence-first comparison across seven criteria. Hono/Elysia snippets are reference
+snippets, idiomatic per current (2026) docs — not run, but API-accurate (sources at
+the end).
 
 Frameworks compared:
 - **Hono 4.x** — `zValidator`, `c.req.valid()`, `hc<App>()`.
@@ -108,6 +108,7 @@ Verification: `bun run test` — **100 pass, 0 fail** across all packages
 | 4 | Surface/runtime-agnostic core | **TIE** (deliberate trade — see below) | **TIE** |
 | 5 | Lower barrier to entry | **TIE** (with caveats at scale — see below) | **TIE** |
 | 6 | Types equally/more safe | **TIE** (contextual win on robustness/scale) | **TIE** (declared-response-schema caveat — see below) |
+| 7 | Routing-dispatch performance | **TIE** (default vs opt-in — see below) | **TIE** (default vs opt-in — see below) |
 
 ---
 
@@ -168,8 +169,7 @@ router, and a `Context` object with many surfaces (`c.req`, `c.json`, `c.set`,
 `onError`), plugins, macros, the Sucrose static analyzer. fractal's "everything is a
 `(req)=>Response|undefined`" surface is materially smaller and more uniform.
 
-**4 — Surface/runtime-agnostic (TIE / TIE).** This criterion requires an HONEST
-statement of the current position.
+**4 — Surface/runtime-agnostic (TIE / TIE).**
 
 `@rhi-zone/fractal-api-tree` imports no Bun, no Node, and no `Request`/`Response`
 (verified: `packages/api-tree/src/index.ts` imports are zero — no external imports at
@@ -216,24 +216,23 @@ already used for `serveNode`'s `node:http` shim — none of them run inside thei
 actual target isolate, since a Workers/Lambda/Fastly sandbox isn't available in
 this repo's test environment.
 
-**Caveat, stated honestly:** breadth is now matched, but not maturity. Hono's
-adapters have run in production across those seven runtimes for years and are
-exercised by real deployments; fractal's are new, verified only by unit tests
-against each platform's documented event/response contract, not against a live
-Workers isolate, a real Lambda invocation, or a Fastly Compute sandbox. The
-architectural claim (a portable `FetchHandler` core plus one small file for all
-runtime wiring) is fully earned; production-hardening on each target is not yet
-proven the way Hono's is.
+**Caveat:** breadth is now matched, but not maturity. Hono's adapters have run in
+production across those seven runtimes for years and are exercised by real
+deployments; fractal's are new, verified only by unit tests against each
+platform's documented event/response contract, not against a live Workers
+isolate, a real Lambda invocation, or a Fastly Compute sandbox. The architectural
+claim (a portable `FetchHandler` core plus one small file for all runtime wiring)
+is earned; production-hardening on each target is not.
 
 What fractal retains: it is **runtime-agnostic** (runs on Bun, Node, Deno, or
 any WHATWG environment without change) and the core imports no runtime-specific
 code. Hono is similarly runtime-agnostic. Elysia is Bun-first. On the "not
 HTTP-specific" axis: all three are HTTP frameworks by construction.
 
-Honest verdict: runtime-agnostic tie with Hono, now backed by matching adapter
-breadth (both ship 7 runtime targets) rather than architecture alone; Hono
-still leads on adapter maturity/production mileage. Slight win over Elysia's
-Bun-first stance. "Core decoupled from HTTP" is retired.
+Verdict: runtime-agnostic tie with Hono, now backed by matching adapter breadth
+(both ship 7 runtime targets) rather than architecture alone; Hono still leads
+on adapter maturity/production mileage. Slight win over Elysia's Bun-first
+stance. "Core decoupled from HTTP" is retired.
 
 **5 — Barrier to entry (TIE with caveats / TIE with caveats).** A one-endpoint
 hello-world is straightforward:
@@ -249,7 +248,7 @@ with no decorator, no plugin, no class. The codegen step (`fractal watch app.ts
 --out generated`) folds into the dev loop via file-watching and is comparable in
 effort to Hono's `hc<AppType>` setup or Elysia's Eden install.
 
-The honest nuance is at SCALE. Hono's `hc<AppType>` and Elysia's Eden rely on
+The nuance is at scale. Hono's `hc<AppType>` and Elysia's Eden rely on
 recursive structural type inference over the whole app tree. At ≥600 routes this
 inference is O(N²) or worse: stock `tsc` crashes with a stack overflow on Hono's
 chained builder variant at 600 routes (verified: `spike/scale/logs/stock-tsc-
@@ -270,7 +269,7 @@ bound. These are genuine wins over both rivals' raw string-keyed access.
 
 *Response types:* fractal types responses where `returns(handler, schema)` is
 declared — the `returns` schema becomes the codegen-emitted client return type. This
-is an honest gap vs Eden: **Elysia infers response types directly from return
+is a gap vs Eden: **Elysia infers response types directly from return
 annotations** without a separate declaration; fractal requires an explicit
 `returns(...)` call to get a typed response in the generated client. Routes without
 `returns` produce `unknown` response types on the client side.
@@ -290,11 +289,96 @@ formulation fractal uses) survives to 900 routes on stock tsc. This is the concr
 reason codegen exists: inference doesn't scale, codegen does.
 
 Net verdict on criterion 6: contextual win on robustness and scale over both rivals;
-honest gap (declared response schema required vs Eden's inferred response types).
+real gap (declared response schema required vs Eden's inferred response types).
+
+**7 — Routing-dispatch performance (TIE / TIE).**
+
+fractal's default router is the plain tree-walker (`makeRouterFromRoute`, route.ts)
+— zero build cost, `splitPath` + recursive descent per request. Three faster,
+opt-in compilers live in `packages/http-api-projector/src/compile.ts`, swapped in
+via the `router` option (`preset.ts:113-115`):
+
+- `radixMatcher`/`radixRouter` — a character-level radix trie, built once at
+  setup; no `split`, no per-segment allocation, no codegen.
+- `compiledCharMatcher`/`compiledCharRouter` — generates a JS function body
+  (nested `if`/`startsWith` on `charCodeAt`) and instantiates it via
+  `new Function(...)`. This is the architecture analogous to Hono's
+  RegExpRouter: both compile the whole route table into one generated matcher
+  instead of walking a data structure per request.
+- `mapMatcher`/`mapCharRouter` — static routes served from a prebuilt
+  `Map<pathname, methods>` (one hash lookup); dynamic routes fall through to
+  `compiledCharMatcher`, fed only the dynamic subset so the generated function
+  is smaller than compiling the full tree.
+
+**Measured** (`packages/http-api-projector/src/route.bench.ts`, 993 routes / 30
+dispatch cases, `bun run packages/http-api-projector/src/route.bench.ts`; saved
+run: `packages/http-api-projector/bench-results/route-bench-2026-07-17T07-29-08-288Z.json`,
+AMD Ryzen 9 9900X, Bun 1.3.9 — per-dispatch time = `totalMs * 1e6 / 500_000` iterations):
+
+| dispatch case | 1. tree-walk (default) | 5. radix trie | 7. compiled fn | 8. Map+compiled hybrid |
+|---|---|---|---|---|
+| static hit | 189ns | 88ns | 162ns | 28ns |
+| dynamic hit | 205ns | 90ns | 114ns | 52ns |
+| deep hit (5 segs) | 353ns | 130ns | 158ns | 29ns |
+| miss (404) | 183ns | 99ns | 162ns | 49ns |
+| wide branch, late (120 siblings) | 224ns | 166ns | 436ns | 28ns |
+| static path, 8k chars | 24.6µs | 9.8µs | 0.92µs | 0.57µs |
+
+The hybrid (`mapCharRouter`) is fastest on every case measured — 3-9x the default
+tree-walker on short paths, ~40x on the 8k-char pathological case. The radix trie
+is the next-best all-rounder, 1.4-2.7x the default. `compiledCharMatcher` alone is
+not uniformly the fastest: it loses to the radix trie on wide branching (436ns vs
+166ns at "wide late", 120 static siblings under one node) because compiling the
+whole route set into one generated function produces a long branch chain at wide
+fan-out — the reason `mapCharRouter` partitions statics into a `Map` first and
+only feeds the codegen path the dynamic subset (31KB generated source for the
+dynamic-only hybrid vs 256KB compiling all 993 routes as one function,
+per `codegenSizes` in the same results file).
+
+Build (setup) cost scales the other way: tree-walk 623µs and radix trie 461µs to
+build the 993-route structure, vs 13.3ms for `compiledCharMatcher` (codegen +
+`new Function` compile of the full table) and 1.9ms for the hybrid (codegen over
+the dynamic subset only). The compilers trade one-time build cost for per-request
+dispatch cost — a build-time/request-time tradeoff, not a free win.
+
+**vs Hono.** Hono's default router is RegExpRouter, which Hono's own docs
+(hono.dev/docs/concepts/routers) describe as "the fastest router in the
+JavaScript world" and claim "works faster than methods that use tree-based
+algorithms such as radix-tree in most cases," compiling the route table into one
+combined regular expression plus a `staticMap` for O(1) exact-path lookups
+(consistent with `docs/design/prior-art/hono.md`'s description of
+`src/router/reg-exp-router/router.ts`). Hono also ships TrieRouter,
+PatternRouter, and LinearRouter as explicit opt-ins for other perf/bundle-size
+tradeoffs — so both frameworks offer a menu of dispatch strategies. The
+difference is which one is the default: Hono's default is its fastest router;
+fractal's default is its slowest. `compiledCharMatcher`, fractal's closest analog
+to RegExpRouter's codegen approach, is not fractal's fastest option either (the
+Map+radix-shaped hybrid beats it, mirroring Hono's own claim that pure codegen
+doesn't always beat a tree/hash combination). No head-to-head timing exists
+between fractal and Hono — Hono was not run inside this repo's benchmark harness,
+so the two frameworks' numbers are not directly comparable, only their
+architectures and each side's own published numbers.
+
+**vs Elysia.** Elysia's default router (via the bundled Memoirist package,
+github.com/SaltyAom/memoirist) stores static routes in a plain object for O(1)
+lookup and dynamic routes in a per-HTTP-method radix tree — structurally the
+same Map-plus-dynamic-matcher shape as fractal's `mapCharRouter`, except
+Elysia's dynamic half is a radix tree and fractal's is a compiled function.
+That shape is Elysia's default; fractal ships the equivalent shape
+(`mapCharRouter`) as an opt-in, not the default. No published Elysia benchmark
+numbers were verified against fractal's harness, so as with Hono this is an
+architectural comparison, not a timed one.
+
+Verdict: architecturally tied or ahead — fractal's benchmarked hybrid router
+beats every architecture in this file's own benchmark, including the one
+structurally closest to each rival's default. But both rivals ship their fast
+router as the default and fractal does not: reaching fractal's fastest
+dispatch requires knowing to pass `router: mapCharRouter` to `preset.ts` or
+`createFetch`. That's the gap the TIE covers, not a numbers gap.
 
 ---
 
-## Where fractal genuinely loses or ties today (no spin)
+## Where fractal loses or ties today
 
 1. **Declared response schema required.** Routes without `returns(handler, schema)`
    produce `unknown` client response types. Eden infers response types from return
@@ -313,7 +397,13 @@ honest gap (declared response schema required vs Eden's inferred response types)
 4. **Watch/build step is required for the typed client.** `fractal watch` folds this
    into the dev loop (comparable to Eden's install), but it is a real step that
    rivals avoid through pure inference at small scale. At scale, pure inference
-   crashes stock tsc; but at small scale it is genuinely lower-friction.
+   crashes stock tsc; but at small scale it is lower-friction.
+
+5. **Default router is the slowest one fractal ships.** Hono defaults to
+   RegExpRouter (its fastest); Elysia defaults to a Map+Memoirist-radix combo
+   (its fastest). fractal defaults to the plain tree-walker; its fastest router
+   (`mapCharRouter`) is opt-in via `preset.ts`'s `router` option and must be
+   selected explicitly.
 
 ---
 
@@ -326,6 +416,10 @@ honest gap (declared response schema required vs Eden's inferred response types)
 - Elysia TypeBox (`t.Object`): https://elysiajs.com/patterns/typebox
 - Elysia auth via `resolve`/macro: https://elysiajs.com/patterns/macro
 - Elysia 405 (issue #682, closed not-planned → still 404): github.com/elysiajs/elysia/issues/682
+- Hono router implementations (RegExpRouter/TrieRouter/PatternRouter/LinearRouter,
+  "fastest router in the JavaScript world" claim): https://hono.dev/docs/concepts/routers
+- Elysia default router (Memoirist radix tree + static object): github.com/SaltyAom/memoirist,
+  github.com/elysiajs/elysia
 - fractal sources verified:
   - `packages/api-tree/src/index.ts` — `Handler<P>`, combinators, `.meta` types
   - `packages/http-api-projector/src/index.ts` — `toFetch`, `validated`, `returns`, response builders
@@ -335,3 +429,7 @@ honest gap (declared response schema required vs Eden's inferred response types)
   - `examples/todo-api/src/app.ts` — full working example (16 pass)
   - `spike/drift-guard/logs/table.md` — linearity numbers at 99–900 routes
   - `spike/scale/logs/stock-tsc-crossval.md` — stock tsc crash at 600 routes (chained inference)
+  - `packages/http-api-projector/src/compile.ts` — `radixMatcher`/`compiledCharMatcher`/`mapCharRouter`
+  - `packages/http-api-projector/src/route.bench.ts` — benchmark harness, 8 architectures, 993 routes/30 cases
+  - `packages/http-api-projector/bench-results/route-bench-2026-07-17T07-29-08-288Z.json` — measured run cited above
+  - `packages/http-api-projector/src/preset.ts:113-115` — `router` option, default `makeRouterFromRoute`
