@@ -535,6 +535,58 @@ describe("compileValidator — standalone output typechecks (bug: ValidationErro
   })
 })
 
+describe("compileValidator — a map whose VALUE is an object typechecks (bug: Object.values(any) resolves to unknown[], not any[])", () => {
+  // `checkHandlers.map`'s generated `check()` body calls `Object.values(${v})`
+  // on an `any`-typed expression — TS's `values<T>(o: {[s:string]:T}): T[]`
+  // overload matches even an `any` argument, but with no contextual type to
+  // infer `T` from it resolves to `unknown` (not `any`), so `.every`'s
+  // callback parameter loses `any`'s implicit-index-access exemption. Only
+  // surfaces when the map's VALUE type is itself an object/interface (the
+  // callback then indexes a property on it, e.g. `__e["before"]` — a plain
+  // leaf-valued map, `Record<string, string>`, never indexes into `__e` so
+  // never trips it) — this reproduces that exact shape:
+  // `Record<string, { before: string; after: string }>`.
+  it("a map with an object value type typechecks under tsc with no TS7053", () => {
+    const ref = t(
+      types.object({
+        transforms: t(
+          types.map(
+            t(types.string),
+            t(types.object({ before: t(types.string), after: t(types.string) })),
+          ),
+        ),
+      }),
+    )
+    const expr = compileValidator(ref)
+    const source = `const v = (${expr});\nexport {};\n`
+    const dir = mkdtempSync(join(tmpdir(), "compile-validator-map-object-tsc-"))
+    const file = join(dir, "standalone.ts")
+    writeFileSync(file, source)
+    const result = spawnSync(
+      "bunx",
+      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", "--ignoreConfig", file],
+      { encoding: "utf-8" },
+    )
+    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
+  })
+
+  it("still validates real values correctly (runtime behavior unchanged by the `as any[]` type-only cast)", () => {
+    const ref = t(
+      types.object({
+        transforms: t(
+          types.map(
+            t(types.string),
+            t(types.object({ before: t(types.string), after: t(types.string) })),
+          ),
+        ),
+      }),
+    )
+    const v = evalValidator(compileValidator(ref))
+    expect(v.check({ transforms: { field1: { before: "a", after: "b" } } })).toBe(true)
+    expect(v.check({ transforms: { field1: { before: "a", after: 2 } } })).toBe(false)
+  })
+})
+
 describe("compileValidator — errors()/parse() agree on error kind for wrong-type values (bug: parse over-reported coerce)", () => {
   it("a boolean where a number is expected is a type error in both errors() and parse()", () => {
     const ref = t(types.object({ age: t(types.number) }))
