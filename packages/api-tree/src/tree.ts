@@ -301,8 +301,8 @@ function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefine
  * the factory's own parameters are never inspected, only the type of the
  * expression it returns.
  */
-function walkTree(entryFile: string, onLeaf: OnLeaf): void {
-  const program = createExtractorProgram(entryFile)
+function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program): void {
+  const program = sharedProgram ?? createExtractorProgram(entryFile)
   const checker = program.getTypeChecker()
   const source = program.getSourceFile(entryFile)
   if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
@@ -372,24 +372,36 @@ export type TypeRefMapWithDefs = { readonly types: TypeRefMap; readonly defs: Re
  * leaf's input/output TypeRefs: the return shape becomes
  * `{ types, defs }`, `types` value TypeRefs may contain `{ kind: "ref" }`
  * nodes resolving into `defs` (see type-ir's `TypeRefDocument`).
+ *
+ * Passing `options.program` reuses a pre-built `ts.Program` (e.g. from
+ * `createExtractorProgram`'s multi-root form) instead of building a fresh
+ * single-root one over `entryFile` — see that function's doc comment for why
+ * this matters for batch extraction across many entry files in one process.
  */
-export function extractToolTypeRefs(entryFile: string): TypeRefMap
-export function extractToolTypeRefs(entryFile: string, options: { shouldShare: ShouldShare }): TypeRefMapWithDefs
+export function extractToolTypeRefs(entryFile: string, options?: { program?: ts.Program }): TypeRefMap
 export function extractToolTypeRefs(
   entryFile: string,
-  options?: { shouldShare: ShouldShare },
+  options: { shouldShare: ShouldShare; program?: ts.Program },
+): TypeRefMapWithDefs
+export function extractToolTypeRefs(
+  entryFile: string,
+  options?: { shouldShare?: ShouldShare; program?: ts.Program },
 ): TypeRefMap | TypeRefMapWithDefs {
-  const registry = options ? createSharingRegistry() : undefined
+  const registry = options?.shouldShare ? createSharingRegistry() : undefined
   const out: TypeRefMap = {}
-  walkTree(entryFile, (name, _path, fn, descriptionSource, checker) => {
-    const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
-    out[name] = {
-      input: typeRefFromFunctionNode(fn, checker, registry),
-      output: typeRefFromReturnType(fn, checker, registry),
-      ...(description !== undefined ? { description } : {}),
-    }
-  })
-  if (!options || !registry) return out
+  walkTree(
+    entryFile,
+    (name, _path, fn, descriptionSource, checker) => {
+      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
+      out[name] = {
+        input: typeRefFromFunctionNode(fn, checker, registry),
+        output: typeRefFromReturnType(fn, checker, registry),
+        ...(description !== undefined ? { description } : {}),
+      }
+    },
+    options?.program,
+  )
+  if (!options?.shouldShare || !registry) return out
   return finalizeWithDefs(out, registry, options.shouldShare)
 }
 
@@ -401,27 +413,34 @@ export function extractToolTypeRefs(
  * the underscore-joined MCP tool name. This is the key shape
  * `wrapValidators`'s generated-entry map expects.
  *
- * Same `options.shouldShare` opt-in as `extractToolTypeRefs` — see its doc
- * comment.
+ * Same `options.shouldShare`/`options.program` opt-ins as `extractToolTypeRefs`
+ * — see its doc comment.
  */
-export function extractRouteTypeRefs(entryFile: string): TypeRefMap
-export function extractRouteTypeRefs(entryFile: string, options: { shouldShare: ShouldShare }): TypeRefMapWithDefs
+export function extractRouteTypeRefs(entryFile: string, options?: { program?: ts.Program }): TypeRefMap
 export function extractRouteTypeRefs(
   entryFile: string,
-  options?: { shouldShare: ShouldShare },
+  options: { shouldShare: ShouldShare; program?: ts.Program },
+): TypeRefMapWithDefs
+export function extractRouteTypeRefs(
+  entryFile: string,
+  options?: { shouldShare?: ShouldShare; program?: ts.Program },
 ): TypeRefMap | TypeRefMapWithDefs {
-  const registry = options ? createSharingRegistry() : undefined
+  const registry = options?.shouldShare ? createSharingRegistry() : undefined
   const out: TypeRefMap = {}
-  walkTree(entryFile, (_name, path, fn, descriptionSource, checker) => {
-    const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
-    const key = path.join("/")
-    out[key] = {
-      input: typeRefFromFunctionNode(fn, checker, registry),
-      output: typeRefFromReturnType(fn, checker, registry),
-      ...(description !== undefined ? { description } : {}),
-    }
-  })
-  if (!options || !registry) return out
+  walkTree(
+    entryFile,
+    (_name, path, fn, descriptionSource, checker) => {
+      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
+      const key = path.join("/")
+      out[key] = {
+        input: typeRefFromFunctionNode(fn, checker, registry),
+        output: typeRefFromReturnType(fn, checker, registry),
+        ...(description !== undefined ? { description } : {}),
+      }
+    },
+    options?.program,
+  )
+  if (!options?.shouldShare || !registry) return out
   return finalizeWithDefs(out, registry, options.shouldShare)
 }
 

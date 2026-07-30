@@ -16,6 +16,7 @@
 // own doc comment below).
 
 import * as path from "node:path"
+import type ts from "typescript"
 import { compileValidatorModule } from "@rhi-zone/fractal-type-ir"
 import { extractRouteTypeRefs } from "./tree.ts"
 import type { ShouldShare } from "./extract.ts"
@@ -167,18 +168,38 @@ function relativeImportSpecifier(outFile: string, declarationFile: string): stri
  * recursive type, infinitely re-descended) at each one. Omitted, this is
  * exactly the prior behavior: every route's input inlines its full structure
  * independently, no `defs`.
+ *
+ * `program`, when given, reuses a pre-built `ts.Program` instead of building
+ * a fresh single-root one over `entryFile` — pass a Program built via
+ * `createExtractorProgram`'s multi-root form (`@rhi-zone/fractal-type-ir`)
+ * over ALL the entry files a batch caller is about to build, so the
+ * transitive-import parse+bind cost (a `ts.Program`'s dominant memory cost,
+ * often multiple GB for a real app's dependency closure) is paid ONCE for
+ * the whole batch instead of once per entry file. A sequential loop that
+ * calls this function once per file WITHOUT passing a shared `program`
+ * builds a fresh multi-GB `ts.Program` on every call in the same process —
+ * `the sibling codebase`'s 16-slice validator codegen script did exactly this and
+ * accumulated to 20+GB RSS before the caller was fixed to build and pass one
+ * shared Program across the batch (see `createExtractorProgram`'s doc
+ * comment in type-ir for the measured before/after).
  */
-export function buildValidatorModuleSource(entryFile: string, outFile?: string, shouldShare?: ShouldShare): string {
+export function buildValidatorModuleSource(
+  entryFile: string,
+  outFile?: string,
+  shouldShare?: ShouldShare,
+  program?: ts.Program,
+): string {
   const resolveImportOpt =
     outFile === undefined
       ? {}
       : { resolveImport: (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile) }
+  const programOpt = program === undefined ? {} : { program }
   if (shouldShare === undefined) {
-    const typeRefs = extractRouteTypeRefs(entryFile)
+    const typeRefs = extractRouteTypeRefs(entryFile, programOpt)
     const entries = Object.entries(typeRefs).map(([name, info]) => ({ name, ref: info.input }))
     return compileValidatorModule(entries, resolveImportOpt)
   }
-  const { types, defs } = extractRouteTypeRefs(entryFile, { shouldShare })
+  const { types, defs } = extractRouteTypeRefs(entryFile, { shouldShare, ...programOpt })
   const entries = Object.entries(types).map(([name, info]) => ({ name, ref: info.input }))
   return compileValidatorModule(entries, { ...resolveImportOpt, defs })
 }

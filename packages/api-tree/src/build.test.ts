@@ -16,7 +16,7 @@ import type { GeneratedEntry } from "./build.ts"
 import { api, op } from "./node.ts"
 import type { Node } from "./node.ts"
 import { isResultShape } from "./index.ts"
-import { defaultShouldShare } from "./extract.ts"
+import { createExtractorProgram, defaultShouldShare } from "./extract.ts"
 
 /** Strip TypeScript syntax (type annotations, `as` casts, `import type`) via
  * Bun's transpiler — `buildValidatorModuleSource` now emits typed guards, so
@@ -151,6 +151,37 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     expect(validators["setBilling"]!.check({ userId: "u1", billing: validAddress })).toBe(true)
     expect(validators["setBilling"]!.check({ userId: "u1", billing: {} })).toBe(false)
     expect(validators["setShipping"]!.check({ userId: "u1", shipping: validAddress })).toBe(true)
+  })
+
+  // Regression: a caller doing BATCH extraction across many entry files (e.g.
+  // the sibling codebase's codegen-fractal-validators.ts, 16 slices in one process) used
+  // to have no way to avoid building 16 independent full `ts.Program`s in one
+  // long-lived process — each Program's transitive-import parse+bind cost
+  // (multi-GB for a real app) piling up faster than the GC reclaimed earlier
+  // ones, which is exactly how that script reached 20+GB RSS and repeatedly
+  // OOM-killed unrelated processes on the host. The 4th `program` parameter
+  // lets a batch caller build ONE shared `ts.Program` (via
+  // `createExtractorProgram`'s multi-root overload) and reuse it across every
+  // `buildValidatorModuleSource` call — this test only proves the plumbing is
+  // correct (same output, program's source-file table actually consulted, no
+  // duplicate Program silently built underneath); the memory-shape regression
+  // guard itself lives in type-ir's `from-typescript.memory.test.ts`, which
+  // is where `createExtractorProgram` — the thing that actually holds the
+  // multi-GB cost — is defined.
+  it("passing a pre-built program (createExtractorProgram) produces byte-identical output to the default per-call program", () => {
+    const withoutProgram = buildValidatorModuleSource(FIXTURE, undefined, undefined)
+    const program = createExtractorProgram(FIXTURE)
+    const withProgram = buildValidatorModuleSource(FIXTURE, undefined, undefined, program)
+    expect(withProgram).toEqual(withoutProgram)
+  })
+
+  it("a program shared across TWO different entry files (multi-root) extracts each correctly", () => {
+    const program = createExtractorProgram([FIXTURE, SHARING_FIXTURE])
+    const fixtureSource = buildValidatorModuleSource(FIXTURE, undefined, undefined, program)
+    const sharingSource = buildValidatorModuleSource(SHARING_FIXTURE, undefined, defaultShouldShare, program)
+
+    expect(fixtureSource).toEqual(buildValidatorModuleSource(FIXTURE))
+    expect(sharingSource).toEqual(buildValidatorModuleSource(SHARING_FIXTURE, undefined, defaultShouldShare))
   })
 })
 

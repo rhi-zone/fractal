@@ -119,6 +119,26 @@ test("object with readonly optional field", () => {
   expect(toTypeScript(ref)).toBe("{ readonly id?: string }")
 })
 
+// Regression: a field name that isn't a valid bare TS identifier (contains a
+// hyphen, e.g. DOM's `Headers`/fetch multi-value-cookie surface exposing a
+// `"set-cookie"` member) rendered UNQUOTED — `set-cookie?: string[]` — is a
+// genuine syntax error (`TS1005`/parser "Unexpected -"), not a style nit.
+// Found via `the sibling codebase`'s `curriculum`/`hiring`/`kpis` slices once
+// `createExtractorProgram`'s multi-root batch form (this repo's fix for the
+// 16-slice codegen script's 20+GB memory blowup) changed the exact checker
+// traversal order into `Headers`'s structure enough to reach this field —
+// the bug was always latent, just never reached via the old per-file-Program
+// path for those specific slices.
+test("object field name that isn't a valid identifier renders as a quoted string key", () => {
+  const ref = t(types.object({ "set-cookie": t(types.array(t(types.string))) }))
+  expect(toTypeScript(ref)).toBe('{ "set-cookie": string[] }')
+})
+
+test("object field name starting with a digit renders as a quoted string key", () => {
+  const ref = t(types.object({ "0invalid": t(types.string) }))
+  expect(toTypeScript(ref)).toBe('{ "0invalid": string }')
+})
+
 test("array", () => {
   expect(toTypeScript(t(types.array(t(types.string))))).toBe("string[]")
 })
@@ -341,6 +361,11 @@ describe("interface", () => {
       }),
     )
     expect(toTypeScript(ref)).toBe("{ deposit(amount: number): void; balance(): number }")
+  })
+
+  test("a method name that isn't a valid identifier renders as a quoted string key", () => {
+    const ref = t(types.interface({ "set-cookie": t(types.method([], t(types.string))) }))
+    expect(toTypeScript(ref)).toBe('{ "set-cookie"(): string }')
   })
 })
 
