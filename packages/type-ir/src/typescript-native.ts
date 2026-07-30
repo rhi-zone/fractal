@@ -1,6 +1,14 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 
-type Converter = (shape: TypeShape) => string
+// `defNames` — the set of shared/recursive `defs` entry names in scope for
+// this render (see type-ir's `TypeRefDocument.defs`/compile.ts's
+// `compileDefs`) — is threaded through every recursive `toTypeScript` call
+// below so the `ref` handler can tell "a ref to a known def, render the
+// locally-declared alias" apart from "a ref to something else entirely,
+// render the bare (unimportable) name" (see `ref`'s own doc comment).
+// Defaults to an empty set everywhere, so every existing call site that
+// doesn't pass `defNames` keeps rendering exactly as before this change.
+type Converter = (shape: TypeShape, defNames: ReadonlySet<string>) => string
 
 const leaf =
   (type: string): Converter =>
@@ -9,6 +17,24 @@ const leaf =
 
 function quote(value: string): string {
   return JSON.stringify(value)
+}
+
+/** Sanitizes a `defs` entry name to a valid JS/TS identifier fragment (def
+ * names can contain characters an identifier can't, e.g. `"Foo.Bar"`). Shared
+ * by `defTypeAliasName` below and compile.ts's `defFnName`, so a def's type
+ * alias and its generated check/errors/parse function names agree on the
+ * same base fragment. */
+export function sanitizeDefName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_$]/g, "_")
+}
+
+/** The locally-declared type alias name a `ref` targeting a shared/recursive
+ * `defs` entry renders as (see `compile.ts`'s `compileDefs`, which emits
+ * `type __def_NAME = <structural>;` for every entry in `defNames` alongside
+ * the runtime check/errors/parse functions it already generated) — e.g.
+ * `defTypeAliasName("Expr")` → `"__def_Expr"`. */
+export function defTypeAliasName(name: string): string {
+  return `__def_${sanitizeDefName(name)}`
 }
 
 const complexKinds = new Set(["union", "object", "map", "intersection", "function", "stream", "page"])
@@ -34,12 +60,12 @@ const handlers: Record<string, Converter> = {
   void: leaf("void"),
   unknown: leaf("unknown"),
   never: leaf("never"),
-  object: (shape) => {
+  object: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "object" }
     const fields = Object.entries(s.fields).map(([name, field]) => {
       const optional = field.meta.optional === true
       const readonly = field.meta.readonly === true
-      return `${readonly ? "readonly " : ""}${name}${optional ? "?" : ""}: ${toTypeScript(field)}`
+      return `${readonly ? "readonly " : ""}${name}${optional ? "?" : ""}: ${toTypeScript(field, defNames)}`
     })
     return `{ ${fields.join("; ")} }`
   },
@@ -48,40 +74,42 @@ const handlers: Record<string, Converter> = {
   // assembles this emitted source into a module) is responsible for ensuring
   // `className` is imported from `source` alongside the generated declaration.
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
-  array: (shape) => {
+  array: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "array" }
     return complexKinds.has(s.element.shape.kind)
-      ? `Array<${toTypeScript(s.element)}>`
-      : `${toTypeScript(s.element)}[]`
+      ? `Array<${toTypeScript(s.element, defNames)}>`
+      : `${toTypeScript(s.element, defNames)}[]`
   },
-  tuple: (shape) => {
+  tuple: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "tuple" }
-    return `[${s.elements.map(toTypeScript).join(", ")}]`
+    return `[${s.elements.map((e) => toTypeScript(e, defNames)).join(", ")}]`
   },
   // `AsyncIterable<T>` is TypeScript's own native construct for an
   // asynchronously-produced sequence — the same type `AsyncIterableIterator<T>`
   // (an `async function*`'s return type) and `AsyncGenerator<T, ...>` widen to.
-  stream: (shape) => {
+  stream: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "stream" }
-    return `AsyncIterable<${toTypeScript(s.element)}>`
+    return `AsyncIterable<${toTypeScript(s.element, defNames)}>`
   },
   // Renders back to the same named alias the extractor matched against
   // (`@rhi-zone/fractal-api-tree`'s `CursorPage<T>`/`OffsetPage<T>` — see
   // extract.ts's `pageAliasName` check) — the caller assembling this emitted
   // source is responsible for importing the name, same as `instance` above.
-  page: (shape) => {
+  page: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "page" }
-    return s.style === "offset" ? `OffsetPage<${toTypeScript(s.element)}>` : `CursorPage<${toTypeScript(s.element)}>`
+    return s.style === "offset"
+      ? `OffsetPage<${toTypeScript(s.element, defNames)}>`
+      : `CursorPage<${toTypeScript(s.element, defNames)}>`
   },
-  map: (shape) => {
+  map: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "map" }
     return s.key.shape.kind === "string"
-      ? `Record<string, ${toTypeScript(s.value)}>`
-      : `Map<${toTypeScript(s.key)}, ${toTypeScript(s.value)}>`
+      ? `Record<string, ${toTypeScript(s.value, defNames)}>`
+      : `Map<${toTypeScript(s.key, defNames)}, ${toTypeScript(s.value, defNames)}>`
   },
-  union: (shape) => {
+  union: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "union" }
-    return s.variants.map(toTypeScriptAsCompoundMember).join(" | ")
+    return s.variants.map((v) => toTypeScriptAsCompoundMember(v, defNames)).join(" | ")
   },
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" }
@@ -92,23 +120,31 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "enum" }
     return s.members.map(quote).join(" | ")
   },
-  ref: (shape) => {
+  // A `ref` targeting a name in `defNames` (a shared/recursive `defs` entry —
+  // see compile.ts's `compileDefs`, which emits a matching `type __def_NAME =
+  // …` alias alongside the runtime check/errors/parse functions) renders the
+  // locally-declared alias name, which the caller assembling this into a
+  // module is guaranteed to have in scope. Any other `ref` (not in `defNames`
+  // — an arbitrary named type this projector has no import mechanism for)
+  // renders the bare target name as before, unimported — the caller is
+  // responsible for ensuring it resolves, same as `instance`/`page` above.
+  ref: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "ref" }
-    return s.target
+    return defNames.has(s.target) ? defTypeAliasName(s.target) : s.target
   },
-  intersection: (shape) => {
+  intersection: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "intersection" }
-    return s.members.map(toTypeScriptAsCompoundMember).join(" & ")
+    return s.members.map((m) => toTypeScriptAsCompoundMember(m, defNames)).join(" & ")
   },
   // TS's function-type syntax (`(params) => ReturnType`) supports an explicit
   // `this` parameter as its own leading pseudo-parameter
   // (https://www.typescriptlang.org/docs/handbook/2/functions.html#declaring-this-in-a-function) —
   // used when the TypeRef carries `thisType` (e.g. a class method's `this`).
-  function: (shape) => {
+  function: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "function" }
-    const thisParam = s.thisType === undefined ? [] : [`this: ${toTypeScript(s.thisType)}`]
-    const params = [...thisParam, ...s.params.map((p) => `${p.name}: ${toTypeScript(p.type)}`)]
-    return `(${params.join(", ")}) => ${toTypeScript(s.returnType)}`
+    const thisParam = s.thisType === undefined ? [] : [`this: ${toTypeScript(s.thisType, defNames)}`]
+    const params = [...thisParam, ...s.params.map((p) => `${p.name}: ${toTypeScript(p.type, defNames)}`)]
+    return `(${params.join(", ")}) => ${toTypeScript(s.returnType, defNames)}`
   },
   // `method` has no explicit entry here for the *standalone* case — falls
   // back to the `function` handler above (arrow-function syntax) via
@@ -122,23 +158,23 @@ const handlers: Record<string, Converter> = {
   // `function` handler emits, and the idiomatic form once a callable belongs
   // to an object/interface's own member list rather than being a value in
   // type position.
-  interface: (shape) => {
+  interface: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "interface" }
     const methods = Object.entries(s.methods).map(([name, methodRef]) => {
       const m = methodRef.shape as TypeShape & { kind: "method" | "function" }
       if (m.params === undefined || m.returnType === undefined) {
-        return `${name}(): ${toTypeScript(methodRef)}`
+        return `${name}(): ${toTypeScript(methodRef, defNames)}`
       }
-      const params = m.params.map((p) => `${p.name}: ${toTypeScript(p.type)}`)
-      return `${name}(${params.join(", ")}): ${toTypeScript(m.returnType)}`
+      const params = m.params.map((p) => `${p.name}: ${toTypeScript(p.type, defNames)}`)
+      return `${name}(${params.join(", ")}): ${toTypeScript(m.returnType, defNames)}`
     })
     return `{ ${methods.join("; ")} }`
   },
 }
 
-export function toTypeScript(ref: TypeRef): string {
+export function toTypeScript(ref: TypeRef, defNames: ReadonlySet<string> = new Set()): string {
   const converter = resolve(ref.shape.kind, handlers)
-  let type = converter === undefined ? "unknown" : converter(ref.shape)
+  let type = converter === undefined ? "unknown" : converter(ref.shape, defNames)
   if (typeof ref.meta.brand === "string") {
     type = `${type} & { readonly __brand: ${quote(ref.meta.brand)} }`
   }
@@ -181,8 +217,8 @@ export function toTypeScript(ref: TypeRef): string {
  * union-vs-intersection context parameter through for a purely-cosmetic
  * difference.
  */
-function toTypeScriptAsCompoundMember(ref: TypeRef): string {
-  const text = toTypeScript(ref)
+function toTypeScriptAsCompoundMember(ref: TypeRef, defNames: ReadonlySet<string>): string {
+  const text = toTypeScript(ref, defNames)
   const isCompound =
     ref.shape.kind === "function" ||
     ref.shape.kind === "union" ||

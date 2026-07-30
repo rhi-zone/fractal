@@ -32,7 +32,7 @@
 // its parent's via `ancestors()`).
 
 import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { toTypeScript } from "./typescript-native.ts"
+import { defTypeAliasName, sanitizeDefName, toTypeScript } from "./typescript-native.ts"
 
 // ============================================================================
 // ValidationError — the structured error shape `errors()`/`parse()` emit.
@@ -126,7 +126,7 @@ class GenCtx {
  * identifier fragment so def names containing characters JS identifiers
  * can't (e.g. `"Foo.Bar"`, generic instantiation names) still emit valid code. */
 function defFnName(name: string, facet: "check" | "errors" | "parse"): string {
-  return `__def_${name.replace(/[^a-zA-Z0-9_$]/g, "_")}_${facet}`
+  return `__def_${sanitizeDefName(name)}_${facet}`
 }
 
 /** A JSON-serializable TypeRef literal, hoisted to a shared const (via `ctx`)
@@ -836,18 +836,27 @@ const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any): any {
  *     index.ts's meta-bag doc) AND the caller passed `resolveImport`: the
  *     annotation is the bare type name, imported.
  *   - Otherwise: the annotation is the type's own structural TypeScript
- *     rendering (`toTypeScript`), inlined directly.
+ *     rendering (`toTypeScript`), inlined directly. `defNames` (the shared/
+ *     recursive `defs` entries in scope for this compile — see `compileDefs`'
+ *     doc comment above) is threaded through so a NESTED `ref` inside this
+ *     structural rendering — not just the entry's own top-level type — also
+ *     resolves to its locally-declared `__def_NAME` alias instead of an
+ *     unimportable bare name (the gap this function's `defNames` parameter
+ *     closes: previously only the entry's OWN top-level type could get
+ *     import-provenance treatment; a nested field typed as a shared/
+ *     recursive def fell through to the bare rendering unconditionally).
  */
 function guardAnnotation(
   ref: TypeRef,
   resolveImport: ((declarationFile: string) => string) | undefined,
+  defNames: ReadonlySet<string> = new Set(),
 ): { annotation: string; typeImport?: { typeName: string; from: string } } {
   const typeName = typeof ref.meta.typeName === "string" ? ref.meta.typeName : undefined
   const declarationFile = typeof ref.meta.declarationFile === "string" ? ref.meta.declarationFile : undefined
   if (typeName !== undefined && declarationFile !== undefined && resolveImport !== undefined) {
     return { annotation: typeName, typeImport: { typeName, from: resolveImport(declarationFile) } }
   }
-  return { annotation: toTypeScript(ref) }
+  return { annotation: toTypeScript(ref, defNames) }
 }
 
 /**
@@ -859,10 +868,29 @@ function guardAnnotation(
  * not a no-op passthrough: recursion is ordinary JS function recursion, not
  * anything special-cased here. Declared as `function` statements (hoisted),
  * so declaration order among mutually-referential defs never matters.
+ *
+ * ALSO emits one `type __def_NAME = <structural TS>;` alias per entry (via
+ * `toTypeScript(ref, ctx.defNames)` — see typescript-native.ts's `ref`
+ * handler and `defTypeAliasName`), so a caller building a real static
+ * annotation for a value that contains a `ref` to a shared/recursive def
+ * (`guardAnnotation` below, via `toTypeScript(ref, defNames)`) has a real,
+ * locally-declared type to name instead of an unimportable bare string. A
+ * `type` alias is a local, block-scoped declaration in TS (unlike a runtime
+ * `const`), so emitting it inside an IIFE body (the standalone
+ * `compileValidator` case) is exactly as valid as at module scope (the
+ * `compileValidatorModule` case) — both callers just splice these lines in
+ * alongside the function declarations below. Emitted with `ctx.defNames`
+ * (populated on the line above, BEFORE this loop) so a def that refs itself
+ * or another def in the same batch renders its OWN alias name, not a bare
+ * unimported string — the same recursion guarantee the runtime functions
+ * below already have.
  */
 function compileDefs(defs: Record<string, TypeRef>, ctx: GenCtx): string[] {
   for (const name of Object.keys(defs)) ctx.defNames.add(name)
   const lines: string[] = []
+  for (const [name, ref] of Object.entries(defs)) {
+    lines.push(`type ${defTypeAliasName(name)} = ${toTypeScript(ref, ctx.defNames)};`)
+  }
   for (const [name, ref] of Object.entries(defs)) {
     const checkExpr = genCheckExpr(ref, "value", ctx)
     const errorsBody = genValidate(ref, "value", "path", ctx, "errors")
@@ -991,7 +1019,8 @@ function compileEntryBody(
  * hoist to, unlike `compileValidatorModule`).
  */
 export function compileValidator(ref: TypeRef, defs?: Record<string, TypeRef>): string {
-  const { annotation } = guardAnnotation(ref, undefined)
+  const defNames = new Set(Object.keys(defs ?? {}))
+  const { annotation } = guardAnnotation(ref, undefined, defNames)
   const body = compileEntryBody(ref, annotation, true, defs)
   return ["(function () {", ...indentLines(body, 2), "})()"].join("\n")
 }
@@ -1054,7 +1083,7 @@ export function compileValidatorModule(
 
   const entryLines: string[] = []
   for (const { name, ref } of entries) {
-    const { annotation, typeImport } = guardAnnotation(ref, options?.resolveImport)
+    const { annotation, typeImport } = guardAnnotation(ref, options?.resolveImport, defNames)
     if (typeImport) {
       const names = imports.get(typeImport.from) ?? new Set<string>()
       names.add(typeImport.typeName)

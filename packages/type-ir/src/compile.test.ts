@@ -687,3 +687,94 @@ describe("compileValidator/compileValidatorModule — defs + recursive validator
     expect(v.check({ kind: "a", next: { kind: "b", next: { kind: "wrong" } } })).toBe(false)
   })
 })
+
+describe("compileDefs — a shared/recursive def gets a real static type alias, not a bare unimported name (bug: TS2304)", () => {
+  // Reproduces the real-world shape (the sibling codebase's `triggers.ts`'s self-
+  // recursive `Expr` type): the recursive def is NOT the entry's own
+  // top-level type — it's a field NESTED inside an unrelated object (the
+  // route/tool input). Before this fix, `guardAnnotation`'s fallback branch
+  // (`toTypeScript(ref)`, no `defNames` awareness) rendered that nested
+  // field's `ref` as the bare string `"Expr"` with no corresponding
+  // declaration anywhere in the generated module — a build-time `TS2304:
+  // Cannot find name 'Expr'` in the entry's `value is {...}` guard
+  // annotation. A self-recursive `Expr`-shaped def:
+  //   Expr = { op: "ref"; ref: string }
+  //        | { op: "and"; args: Expr[] }
+  //        | { op: "not"; arg: Expr }
+  const exprRef = t(
+    types.union([
+      t(types.object({ op: t(types.literal("ref")), ref: t(types.string) })),
+      t(types.object({ op: t(types.literal("and")), args: t(types.array(t(types.ref("Expr")))) })),
+      t(types.object({ op: t(types.literal("not")), arg: t(types.ref("Expr")) })),
+    ]),
+  )
+  const defs = { Expr: exprRef }
+  // The entry's own top-level type: an unrelated object with a NESTED field
+  // typed as the recursive def — not the def itself.
+  const conditionRef = t(types.object({ name: t(types.string), condition: t(types.ref("Expr")) }))
+  const validValue = { name: "trigger-1", condition: { op: "and", args: [{ op: "ref", ref: "x" }] } }
+  const invalidValue = { name: "trigger-1", condition: { op: "and", args: [{ op: "ref", ref: 123 }] } }
+
+  it("compileDefs emits a `type __def_NAME = <structural>` alias for every def, not just runtime functions", () => {
+    const source = compileValidatorModule([{ name: "condition", ref: conditionRef }], { defs })
+    expect(source).toContain("type __def_Expr =")
+  })
+
+  it("a nested ref to a shared def renders the local alias name in the entry's guard annotation, not the bare unimported target", () => {
+    const source = compileValidatorModule([{ name: "condition", ref: conditionRef }], { defs })
+    // The generated `value is {...}` annotation for the `condition` entry
+    // must reference the locally-declared `__def_Expr` alias, not a bare
+    // `Expr` that resolves to nothing in the generated module.
+    expect(source).toContain("condition: __def_Expr")
+    expect(source).not.toMatch(/condition:\s*Expr[^_a-zA-Z0-9]/)
+  })
+
+  it("compileValidatorModule's output — a recursive def nested inside an entry's field — typechecks under tsc with no unresolved names", () => {
+    const source = compileValidatorModule([{ name: "condition", ref: conditionRef }], { defs })
+    // The only unresolved-under-`tsc`-in-isolation piece of a real generated
+    // module is the cross-package `import type { ValidationError } from
+    // "@rhi-zone/fractal-type-ir"` — resolvable in a real consumer (which
+    // has the package installed) but not from a bare temp file with no
+    // node_modules, and unrelated to what THIS test covers (the nested
+    // recursive-def alias/annotation, not that unrelated import mechanism —
+    // already exercised by the package's own build). Swapped for a local
+    // shim type so the only names tsc is checking here are the ones this
+    // fix controls.
+    const shimmed = source.replace(
+      /^import type \{ ValidationError \} from "@rhi-zone\/fractal-type-ir"$/m,
+      "type ValidationError = unknown;",
+    )
+    expect(shimmed).not.toBe(source)
+    const dir = mkdtempSync(join(tmpdir(), "compile-defs-nested-ref-tsc-"))
+    const file = join(dir, "module.ts")
+    writeFileSync(file, shimmed)
+    const result = spawnSync(
+      "bunx",
+      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", "--ignoreConfig", file],
+      { encoding: "utf-8" },
+    )
+    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
+  })
+
+  it("compileValidator's standalone output — same nested-recursive-def shape — typechecks under tsc with no unresolved names", () => {
+    const expr = compileValidator(conditionRef, defs)
+    const source = `const v = (${expr});\nexport {};\n`
+    const dir = mkdtempSync(join(tmpdir(), "compile-validator-nested-ref-tsc-"))
+    const file = join(dir, "standalone.ts")
+    writeFileSync(file, source)
+    const result = spawnSync(
+      "bunx",
+      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", "--ignoreConfig", file],
+      { encoding: "utf-8" },
+    )
+    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
+  })
+
+  it("the recursive def still validates real values correctly through the nested field (runtime behavior unchanged by the type-alias fix)", () => {
+    const validators = evalModule(compileValidatorModule([{ name: "condition", ref: conditionRef }], { defs }))
+    expect(validators.condition!.check(validValue)).toBe(true)
+    expect(validators.condition!.check(invalidValue)).toBe(false)
+    const parsed = validators.condition!.parse(validValue)
+    expect(parsed).toEqual({ kind: "ok", value: validValue })
+  })
+})
