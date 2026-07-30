@@ -19,6 +19,22 @@ function quote(value: string): string {
   return JSON.stringify(value)
 }
 
+/** A bare (unquoted) identifier is only valid TS/JS member-name syntax for
+ * names matching this shape — anything else (a hyphen, a leading digit, …)
+ * needs a quoted string literal key instead. Real-world trigger: DOM/fetch
+ * builtins expose a `"set-cookie"` member (`Headers`'s multi-value getter
+ * family) — emitting `set-cookie?: string[]` unquoted inside an object/
+ * interface type annotation is a syntax error (`TS1005`/parser "Unexpected
+ * -"), not just unidiomatic. */
+const VALID_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+
+/** Render `name` as a TS object/interface member key — bare if it's already
+ * a valid identifier (the common case, kept unquoted for readability), a
+ * quoted string literal otherwise. */
+function propertyKeyText(name: string): string {
+  return VALID_IDENTIFIER.test(name) ? name : quote(name)
+}
+
 /** Sanitizes a `defs` entry name to a valid JS/TS identifier fragment (def
  * names can contain characters an identifier can't, e.g. `"Foo.Bar"`). Shared
  * by `defTypeAliasName` below and compile.ts's `defFnName`, so a def's type
@@ -65,7 +81,7 @@ const handlers: Record<string, Converter> = {
     const fields = Object.entries(s.fields).map(([name, field]) => {
       const optional = field.meta.optional === true
       const readonly = field.meta.readonly === true
-      return `${readonly ? "readonly " : ""}${name}${optional ? "?" : ""}: ${toTypeScript(field, defNames)}`
+      return `${readonly ? "readonly " : ""}${propertyKeyText(name)}${optional ? "?" : ""}: ${toTypeScript(field, defNames)}`
     })
     return `{ ${fields.join("; ")} }`
   },
@@ -161,12 +177,13 @@ const handlers: Record<string, Converter> = {
   interface: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "interface" }
     const methods = Object.entries(s.methods).map(([name, methodRef]) => {
+      const key = propertyKeyText(name)
       const m = methodRef.shape as TypeShape & { kind: "method" | "function" }
       if (m.params === undefined || m.returnType === undefined) {
-        return `${name}(): ${toTypeScript(methodRef, defNames)}`
+        return `${key}(): ${toTypeScript(methodRef, defNames)}`
       }
       const params = m.params.map((p) => `${p.name}: ${toTypeScript(p.type, defNames)}`)
-      return `${name}(${params.join(", ")}): ${toTypeScript(m.returnType, defNames)}`
+      return `${key}(${params.join(", ")}): ${toTypeScript(m.returnType, defNames)}`
     })
     return `{ ${methods.join("; ")} }`
   },

@@ -1416,7 +1416,29 @@ function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOptions {
 }
 
 /** Create a read-only Program over a single entry file, resolving modules
- * exactly the way `entryFile`'s own `tsconfig.json` (if any) would. */
-export function createExtractorProgram(entryFile: string): ts.Program {
-  return ts.createProgram([entryFile], loadCompilerOptionsForFile(entryFile))
+ * exactly the way `entryFile`'s own `tsconfig.json` (if any) would.
+ *
+ * Pass MULTIPLE entry files (all under the same project) to get one Program
+ * rooted at all of them — critical for batch extraction. A `ts.Program`'s
+ * dominant cost is parsing+binding its whole transitive import closure, not
+ * the root file count: for a set of entry files that share most of their
+ * dependency graph (siblings in one app, e.g.), that closure is nearly the
+ * SAME whether it's rooted at one file or all of them (measured: one
+ * `busiless` slice's Program ≈ 3.3GB peak RSS; all 16 slices sharing one
+ * Program ≈ 3.3GB peak RSS too — the union of their imports barely grew).
+ * Building N separate single-root Programs in a sequential batch instead
+ * pays that multi-GB parse+bind cost N times, and — since each `ts.Program`
+ * is a large, long-lived-looking object graph — a long-running batch process
+ * can accumulate several of them before the GC gets around to reclaiming the
+ * earlier ones, which is exactly how `busiless`'s 16-slice validator codegen
+ * script (`apps/web/scripts/codegen-fractal-validators.ts`) reached 20+GB
+ * RSS and repeatedly OOM-killed unrelated processes on the host before this
+ * function grew multi-root support. See `build.ts`'s `buildValidatorModuleSource`
+ * `program` parameter for the batch-reuse entry point. */
+export function createExtractorProgram(entryFile: string): ts.Program
+export function createExtractorProgram(entryFiles: readonly string[]): ts.Program
+export function createExtractorProgram(entryFile: string | readonly string[]): ts.Program {
+  const files = Array.isArray(entryFile) ? entryFile : [entryFile as string]
+  if (files.length === 0) throw new Error("createExtractorProgram: at least one entry file required")
+  return ts.createProgram(files as string[], loadCompilerOptionsForFile(files[0]!))
 }
