@@ -489,6 +489,29 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
     expect(inputRef.shape.kind).toBe("map")
   })
 
+  // Regression: a conditional/mapped-type utility alias (mirroring valibot's
+  // `InferOutput<TSchema>`) used directly as a handler's parameter type
+  // resolves with `type.aliasSymbol` UNDEFINED at the reference site, falling
+  // to `type.getSymbol()` — TypeScript's own synthesized `"__type"`
+  // placeholder for the anonymous mapped-type result, declared via a
+  // `ts.MappedTypeNode`, not a `ts.TypeLiteralNode`. The OLD
+  // `!ts.isTypeLiteralNode(decl)` guard missed this shape and treated
+  // `"__type"` as a real, importable name — found migrating the sibling codebase's
+  // `triggers` slice, where it emitted an unusable `import type { __type }
+  // from ".../valibot/dist/index.d.mts"` (valibot never exports `__type`).
+  // `typeProvenanceOf` must exclude ANY symbol named `"__type"`, regardless
+  // of the declaring AST node kind.
+  it("typeRefFromFunctionNode carries NO typeName/declarationFile for a mapped-type-utility (InferOutput-shaped) parameter type", () => {
+    const mappedFn = findExportedFn(source, "mappedUtilityNamedParamFn")
+    const inputRef = typeRefFromFunctionNode(mappedFn, checker)
+    expect(inputRef.meta.typeName).toBeUndefined()
+    expect(inputRef.meta.declarationFile).toBeUndefined()
+    // Structural lowering still happens underneath — the mapped type still
+    // lowers to an `object` shape with both fields, just without import
+    // provenance.
+    expect(inputRef.shape.kind).toBe("object")
+  })
+
   it("typeRefFromType matches schemaFromType for the same resolved parameter type", () => {
     const fnType = checker.getTypeAtLocation(fn)
     const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)

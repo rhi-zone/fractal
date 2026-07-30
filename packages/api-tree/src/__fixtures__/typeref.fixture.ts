@@ -312,6 +312,35 @@ export const namedInterfaceParamFn = (_input: BookIdParam): void => {}
  * `import type { Record } from ".../lib.es5.d.ts"` (not a real module). */
 export const builtinNamedParamFn = (_input: Record<string, number>): void => {}
 
+/**
+ * A conditional/mapped-type utility ALIAS (`MyInferOutput<T>`, mirroring
+ * valibot's own `InferOutput<TSchema>`) applied to a named interface, then
+ * itself aliased and used directly as a handler's parameter type. At the
+ * reference site, `type.aliasSymbol` resolves to `undefined` (TS does not
+ * preserve the `MappedResult` alias through the mapped-type instantiation),
+ * falling to `type.getSymbol()` — TypeScript's own synthesized `"__type"`
+ * placeholder name for the anonymous mapped-type result, whose declaration
+ * is a `ts.MappedTypeNode`, NOT a `ts.TypeLiteralNode`. Regression fixture
+ * for the exact shape that broke `typeProvenanceOf`'s old
+ * `!ts.isTypeLiteralNode(decl)` guard (found migrating the sibling codebase's `triggers`
+ * slice) — `extract.ts` must recognize `symbol.name === "__type"` generally,
+ * not just the `TypeLiteralNode` case, and carry NO
+ * `meta.typeName`/`meta.declarationFile`.
+ */
+interface MappedUtilitySchema<TEntries> {
+  entries: TEntries
+}
+type MappedUtility<T> = T extends MappedUtilitySchema<infer TEntries>
+  ? { [K in keyof TEntries]: TEntries[K] }
+  : never
+interface MappedSourceEntries {
+  a: string
+  b: number
+}
+declare const mappedUtilitySchema: MappedUtilitySchema<MappedSourceEntries>
+export type MappedResult = MappedUtility<typeof mappedUtilitySchema>
+export const mappedUtilityNamedParamFn = (_input: MappedResult): void => {}
+
 // ── Symbol-branded type fixtures ────────────────────────────────────────────
 
 declare const LocationIdBrand: unique symbol
