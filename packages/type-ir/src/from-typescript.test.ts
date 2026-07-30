@@ -150,6 +150,37 @@ describe("objects", () => {
     expect(fields.name!.meta.maxLength).toBe(20)
     expect(fields.name!.meta.pattern).toBe("^[a-z]+$")
   })
+
+  // Regression (found migrating busiless's `triggers` slice, 2026-07-30; also
+  // affects the ALREADY-LIVE `filter-sets` slice's own `expr: unknown`
+  // field): `ts.Type#getNonNullableType()` applied to a field typed
+  // `unknown` does NOT return `unknown` unchanged — it returns a type
+  // reporting `TypeFlags.Object` with ZERO own properties (confirmed via the
+  // TS compiler API directly). Left unguarded, an OPTIONAL `unknown` field
+  // lowered to `types.object({})` instead of `types.unknown` — actively
+  // harmful, not just imprecise: a validator module generated from
+  // `types.object({})` reconstructs its PARSE output using only the shape's
+  // declared fields (none), silently discarding the real submitted value.
+  // `unknown`/`any` fields must still lower to `types.unknown` regardless of
+  // optionality.
+  it("an OPTIONAL `unknown` field lowers to `types.unknown`, NOT `types.object({})`", () => {
+    const ref = typeRefOf(`type X = { name: string; payload?: unknown }`, "X")
+    const fields = (ref.shape as { fields: Record<string, { shape: Record<string, unknown> }> }).fields
+    expect(fields.payload!.shape.kind).toBe("unknown")
+  })
+
+  it("an OPTIONAL `any` field lowers to `types.unknown`, NOT `types.object({})`", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- exercising `any` itself
+    const ref = typeRefOf(`type X = { name: string; payload?: any }`, "X")
+    const fields = (ref.shape as { fields: Record<string, { shape: Record<string, unknown> }> }).fields
+    expect(fields.payload!.shape.kind).toBe("unknown")
+  })
+
+  it("a REQUIRED `unknown` field still lowers to `types.unknown` (unaffected by the optional-stripping fix)", () => {
+    const ref = typeRefOf(`type X = { payload: unknown }`, "X")
+    const fields = (ref.shape as { fields: Record<string, { shape: Record<string, unknown> }> }).fields
+    expect(fields.payload!.shape.kind).toBe("unknown")
+  })
 })
 
 // ============================================================================

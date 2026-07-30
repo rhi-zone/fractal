@@ -155,10 +155,19 @@ function isTsBuiltinLibFile(fileName: string): boolean {
  * as before; only the OUTER type gets a name worth importing, since that's
  * the one a generated type-guard annotation needs to reference.
  *
- * Anonymous object-literal types resolve to a symbol whose sole declaration
- * is a `ts.TypeLiteralNode` (the `{ … }` syntax itself, not a named
- * declaration) — excluded here so those fall through to structural inlining
- * instead of being treated as "named".
+ * Anonymous object-shaped types resolve to a symbol TypeScript itself names
+ * `"__type"` — its own universal synthesized placeholder for "an object type
+ * with no user-given name," emitted uniformly regardless of what PRODUCED
+ * the shape: a literal `{ … }` (`ts.TypeLiteralNode`), a mapped type
+ * (`{ [K in keyof T]: … }`, `ts.MappedTypeNode`), or any other combinator
+ * that resolves to a fresh anonymous object type. Excluded here BY NAME
+ * (`symbol.name === "__type"`) — general across every AST node kind that can
+ * produce it, not narrowed to `ts.TypeLiteralNode` (an earlier version of
+ * this check only excluded the TypeLiteralNode case, missing the mapped-type
+ * one below) — so it falls through to structural inlining instead of being
+ * treated as "named". `"__type"` is TypeScript's own compiler-internal
+ * convention (a double-underscore-prefixed synthesized name), never a real
+ * project export, so the exclusion is safe unconditionally.
  *
  * A TS builtin/global utility type used directly as a handler's whole input
  * (`(input: Record<string, unknown>) => …`, `(input: Partial<Foo>) => …`, …)
@@ -170,6 +179,19 @@ function isTsBuiltinLibFile(fileName: string): boolean {
  * inlining every anonymous type already gets, which is always correct:
  * every builtin utility type has a real structural TypeScript rendering
  * (`toTypeScript` — `compile.ts`'s `guardAnnotation` fallback).
+ *
+ * Regression (found migrating busiless's `triggers` slice, 2026-07-30): a
+ * type alias defined as `type X = SomeLibrary.InferOutput<typeof schema>`
+ * (valibot's `InferOutput`, a `MappedTypeNode`-shaped conditional/mapped
+ * utility) resolved with `aliasSymbol` UNDEFINED at the parameter-type
+ * reference site — TS does not always preserve the outer alias symbol
+ * through a generic mapped-type instantiation — falling to the `symbol`
+ * branch, whose declaration was a `MappedTypeNode` (not a
+ * `TypeLiteralNode`), so the OLD `!ts.isTypeLiteralNode(decl)` guard missed
+ * it and treated `"__type"` itself as a real, importable name, emitting
+ * `import type { __type } from ".../valibot/dist/index.d.mts"` — a name
+ * valibot never exports (`TS2305`). The name-based check above fixes this
+ * generally, not just for valibot's `InferOutput` specifically.
  */
 function typeProvenanceOf(
   type: ts.Type,
@@ -177,14 +199,14 @@ function typeProvenanceOf(
 ): { name: string; declarationFile: string } | undefined {
   const aliasSymbol = type.aliasSymbol
   const aliasDecl = aliasSymbol?.declarations?.[0]
-  if (aliasSymbol && aliasDecl) {
+  if (aliasSymbol && aliasDecl && aliasSymbol.name !== "__type") {
     const declarationFile = aliasDecl.getSourceFile().fileName
     if (isTsBuiltinLibFile(declarationFile)) return undefined
     return { name: aliasSymbol.name, declarationFile }
   }
   const symbol = type.getSymbol()
   const decl = symbol?.declarations?.[0]
-  if (symbol && decl && !ts.isTypeLiteralNode(decl)) {
+  if (symbol && decl && symbol.name !== "__type") {
     const declarationFile = decl.getSourceFile().fileName
     if (isTsBuiltinLibFile(declarationFile)) return undefined
     return { name: symbol.name, declarationFile }

@@ -1250,7 +1250,35 @@ function typeRefFromTypeStructural(
       const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0
       const readonly = isReadonly(prop)
       // Strip `| undefined` so `field?: string` lowers as a plain string.
-      const propType = checker.getTypeOfSymbolAtLocation(prop, loc).getNonNullableType()
+      //
+      // Regression (found migrating busiless's `triggers` slice, 2026-07-30;
+      // also affects the ALREADY-LIVE `filter-sets` slice's own `expr:
+      // unknown` field — see `packages/api-tree/src/extract.test.ts`'s
+      // regression test): `ts.Type#getNonNullableType()` applied to a field
+      // typed `unknown` (or `any`) does NOT return `unknown` unchanged — it
+      // returns a type reporting `TypeFlags.Object` with ZERO own properties
+      // (TS's internal approximation of "unknown minus null/undefined" as
+      // the structural empty-object type `{}`, confirmed via the TS compiler
+      // API directly, not guessed). Left unguarded, this made an `unknown`
+      // OPTIONAL field lower to `types.object({})` instead of
+      // `types.unknown` — silently WRONG in a way that is actively harmful,
+      // not just imprecise: `compile.ts`'s `objectValidate` PARSE mode
+      // reconstructs its output using ONLY the shape's OWN declared fields
+      // (empty, for `{}`), so a validator generated from this shape
+      // DISCARDS the real value entirely and replaces it with `{}` — e.g. a
+      // real `Expr` condition submitted to a wired endpoint gets silently
+      // wiped before the handler ever sees it. `unknown`/`any` are already
+      // maximally permissive with nothing meaningful to strip a `|
+      // undefined` from, so the non-nullable narrowing is skipped for them,
+      // preserving the original type (still `Unknown`/`Any`-flagged) into
+      // the recursive `typeRefFromType` call below, which lowers it to
+      // `types.unknown` via the ordinary punt path (`from-typescript.ts`'s
+      // own fallback for a type flags don't otherwise handle).
+      const rawPropType = checker.getTypeOfSymbolAtLocation(prop, loc)
+      const propType =
+        (rawPropType.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.Any)) !== 0
+          ? rawPropType
+          : rawPropType.getNonNullableType()
 
       // Method-shaped fields (call signature) lower to `types.function` —
       // e.g. `callback: (x: number) => void` — same as any other callable
