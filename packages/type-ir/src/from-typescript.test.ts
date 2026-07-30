@@ -371,6 +371,34 @@ describe("Map/Set/Record", () => {
 })
 
 // ============================================================================
+// File / Blob — Web API binary-upload types punt to `unknown`, not a
+// structural walk (found migrating the sibling codebase's `curriculum` slice: a
+// multipart resource-upload leaf typed a field `file: File`, and the
+// generated validator's structural check rejected every real Bun `File`
+// instance for missing `webkitRelativePath` — a DOM-lib-declared property
+// Bun's own File implementation never has)
+// ============================================================================
+
+describe("File/Blob binary-upload types", () => {
+  it("a field typed File lowers to types.unknown, not a structural walk of DOM's File interface", () => {
+    const ref = typeRefOf(`type X = { file: File }`, "X")
+    const fields = (ref.shape as { fields: Record<string, { shape: { kind: string } }> }).fields
+    expect(fields.file!.shape.kind).toBe("unknown")
+  })
+
+  it("a field typed Blob lowers to types.unknown, not a structural walk", () => {
+    const ref = typeRefOf(`type X = { blob: Blob }`, "X")
+    const fields = (ref.shape as { fields: Record<string, { shape: { kind: string } }> }).fields
+    expect(fields.blob!.shape.kind).toBe("unknown")
+  })
+
+  it("File used directly as the whole type also lowers to types.unknown", () => {
+    const ref = typeRefOf(`type X = File`, "X")
+    expect(ref.shape.kind).toBe("unknown")
+  })
+})
+
+// ============================================================================
 // Generics: constrained type parameters extract the constraint
 // ============================================================================
 

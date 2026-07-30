@@ -1194,6 +1194,37 @@ function typeRefFromTypeStructural(
       )
     }
 
+    // File/Blob: the Web `File`/`Blob` binary-upload types — checked before
+    // the general properties walk below, same name-based special-casing
+    // style as Promise/AsyncIterable/Set/Map above. A multipart POST body
+    // decodes a file field into a REAL runtime `File` instance
+    // (`@rhi-zone/fractal-http-api-projector/decode.ts`'s
+    // `parseRequestBody`), never JSON data — there is no meaningful
+    // structural JSON validation for it. Worse than merely meaningless: DOM
+    // lib's own declared `File`/`Blob` member surface
+    // (`webkitRelativePath: string`, `arrayBuffer(): Promise<ArrayBuffer>`,
+    // `slice(...): Blob`, …) does not reliably match every JS runtime's
+    // actual implementation — Bun's own `File`, for instance, has no
+    // `webkitRelativePath` property at all (`"webkitRelativePath" in new
+    // File([], "x")` is `false`, confirmed directly against the Bun
+    // runtime) — so a check/parse function built from that structural
+    // surface REJECTS every real multipart-decoded `File` (`check` fails on
+    // the missing property) and, worse, a PARSE-mode caller would silently
+    // reconstruct a `{}`-shaped non-File value from it (the same class of
+    // corruption the optional-`unknown` non-nullable-narrowing bug caused
+    // elsewhere in this file — see the git history around
+    // `MAX_TYPE_REF_CALLS`). Found reproducing a multipart resource-upload
+    // leaf (the sibling codebase's `curriculum` slice) whose generated validator
+    // rejected every real upload with `file.webkitRelativePath: missing`.
+    // Lowered to `types.unknown` — the same opaque, always-passes,
+    // pass-through treatment a genuinely non-JSON-representable field
+    // already gets elsewhere (e.g. a hand-typed `condition?: unknown`
+    // field), not a punt-with-comment (this is a KNOWN, intentional case,
+    // not an unhandled one).
+    if (type.symbol && (type.symbol.name === "File" || type.symbol.name === "Blob")) {
+      return t(types.unknown, { $comment: "binary upload type (File/Blob) — not structurally validated" })
+    }
+
     const properties = checker.getPropertiesOfType(type)
 
     // Pure index-signature types (Record<K,V>, `{ [key: string]: V }`) have no
