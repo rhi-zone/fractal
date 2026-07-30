@@ -346,7 +346,21 @@ const checkHandlers: Record<string, CheckHandler> = {
   },
   map: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "map" }
-    return `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}) && Object.keys(${v}).every((__k) => (${genCheckExpr(s.key, "__k", ctx)})) && Object.values(${v}).every((__e) => (${genCheckExpr(s.value, "__e", ctx)})))`
+    // `Object.values(${v})` — NOT `Object.keys` (always `string[]`, no
+    // generic ambiguity) — hits a genuine TS overload-resolution quirk when
+    // `${v}` is `any`: `values<T>(o: { [s: string]: T } | ArrayLike<T>): T[]`
+    // matches even an `any` argument, but with no contextual type to infer
+    // `T` from, TS resolves it to `unknown` (not `any`), so the `.every`
+    // callback's element parameter loses `any`'s implicit-index-access
+    // exemption — a real, reproduced `TS7053` on the very next
+    // property/index access inside that callback (confirmed via a minimal
+    // repro: `Object.values((v as any)["x"]).every((e) => e["y"])` fails
+    // `noImplicitAny` under `--strict` even though `v` is `any`). `as any[]`
+    // forces the array itself back to `any[]`, restoring `any`'s
+    // pass-through semantics for the callback parameter — this is a type-
+    // level cast only, erased at runtime, with no effect on the emitted
+    // module's actual validation behavior.
+    return `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}) && Object.keys(${v}).every((__k) => (${genCheckExpr(s.key, "__k", ctx)})) && (Object.values(${v}) as any[]).every((__e) => (${genCheckExpr(s.value, "__e", ctx)})))`
   },
   union: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "union" }
