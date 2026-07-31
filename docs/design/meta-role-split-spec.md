@@ -109,19 +109,37 @@ read it — §4, "`description` itself").
 
 Every protocol namespace a projector owns is exported by that projector as
 an INERT plain interface, split by role — never wrapped in a `declare
-module` block. Where a single protocol namespace has members at more than
-one role (true of `http`, `cli`, and `openapi` today — §4), the projector
-declares its own local role split and exports each piece separately —
-still with no augmentation anywhere in the package. E.g. http-api-projector:
+module` block. Each fragment is NAMESPACED — it carries its own single
+property (`http?`, `mcp?`, `cli?`, …), matching today's `meta.http`/
+`meta.mcp`/… runtime shape — not a flat merge of bare field names directly
+onto the role interface. Where a single protocol namespace has members at
+more than one role (true of `http`, `cli`, and `openapi` today — §4), the
+projector declares its own local role split for the CONTENTS of that
+namespace and exports each piece separately — still with no augmentation
+anywhere in the package.
+
+**Rule: the nested bag itself — the type of `meta.http`, `meta.mcp`, etc. —
+must be a NAMED, EXPORTED interface, never an inline object-literal type.**
+An inline literal (`http?: { moveTo?: string }` written directly, with no
+separate named type) can't itself be declaration-merged or extended by
+anything downstream — a deployer wanting to add its own field onto
+`meta.http` without touching the projector's source would have nowhere to
+hook in. Naming and exporting the bag (`HttpSharedMetaProperties`,
+`HttpLeafMetaProperties`, …) keeps it as open to further extension as every
+other interface in this design. E.g. http-api-projector:
 
 ```ts
 // packages/http-api-projector/src/project.ts
 
-export interface HttpSharedMeta {
+export interface HttpSharedMetaProperties {
   moveTo?: string
 }
 
-export interface HttpLeafMeta extends HttpSharedMeta {
+export interface HttpSharedMeta {
+  http?: HttpSharedMetaProperties
+}
+
+export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
   method?: string
   verb?: string
   response?: { status?: number; headers?: Record<string, string> }
@@ -129,11 +147,29 @@ export interface HttpLeafMeta extends HttpSharedMeta {
   validate?: StandardSchemaV1
   sourceMap?: SourceMap
 }
+
+export interface HttpLeafMeta {
+  http?: HttpLeafMetaProperties
+}
 ```
+
+`HttpLeafMetaProperties extends HttpSharedMetaProperties` (not `HttpLeafMeta
+extends HttpSharedMeta`) is where the shared/leaf inheritance actually
+lives — the wrapper interfaces (`HttpSharedMeta`, `HttpLeafMeta`) each stay
+a single-property passthrough onto their respective properties interface,
+which is what keeps `LeafMeta`'s inherited `http` member (via
+`SharedMeta.http: HttpSharedMetaProperties`, once `SharedMeta extends
+HttpSharedMeta` in the deployment's augmentation — §3) compatible with
+`LeafMeta`'s own `http: HttpLeafMetaProperties` — required for TypeScript
+to accept the redeclaration when a single deployment merges both role
+interfaces' `http` contribution together.
 
 mcp-api-projector, cli-api-projector, json-rpc-api-projector, and
 graphql-api-projector each export the equivalent leaf/branch/shared
-fragments for their own namespace, per §4's per-projector table.
+wrapper-plus-properties pair for their own namespace, per §4's
+per-projector table (the table's "Exported on" column names the wrapper;
+the properties interface it wraps follows the same
+`{Protocol}{Role}MetaProperties` naming).
 **Importing any projector package is now type-inert** — its `.ts` module
 graph contains no `declare module` block, so `import type { HttpLeafMeta }
 from "@rhi-zone/fractal-http-api-projector"` (or any transitive import that
@@ -202,18 +238,22 @@ minimal repro mirroring `op()`'s `HasRequiredKeys`-driven arity flip
    zero-argument `op(fn)` call fails to typecheck — `HasRequiredKeys<LeafMeta>`
    correctly flips to `true` and the rest-parameter tuple type correctly
    demands at least one `LeafMeta` argument.
-2. A contribution object literal supplying `scopes` plus an optional member
-   pulled in transitively through the heritage clause (e.g. a projector's
-   own `method` field, present on `LeafMeta` only because `LeafMeta extends
-   HttpLeafMeta`) typechecks cleanly — heritage-clause members are not
-   second-class relative to members declared directly in the augmenting
-   block.
+2. A contribution object literal supplying `scopes` plus the namespaced
+   `http` bag pulled in transitively through the heritage clause (e.g.
+   `{ scopes: [...], http: { verb: "GET" } }` — `http` is present on
+   `LeafMeta` only because `LeafMeta extends HttpLeafMeta`, and
+   `HttpLeafMeta`'s own `http` property is typed `HttpLeafMetaProperties`)
+   typechecks cleanly — heritage-clause members are not second-class
+   relative to members declared directly in the augmenting block, and this
+   holds through a level of nesting, not just at the top.
 3. Excess-property checking on an object literal passed directly as a
-   contribution catches a misspelled OPTIONAL key inherited through the
-   heritage clause (`metho` instead of `method`) with the usual "did you
-   mean" diagnostic — the same checking TypeScript already does for a
-   directly-declared interface, unaffected by the member's having arrived
-   via `extends` inside a `declare module` augmentation.
+   contribution catches a misspelled OPTIONAL key NESTED inside the
+   heritage-clause-inherited `http` bag (`{ http: { moveeTo: "../v2" } }`,
+   `moveeTo` instead of `moveTo`) with the usual "did you mean" diagnostic —
+   the same checking TypeScript already does for a directly-declared
+   interface, unaffected by the member's having arrived via `extends`
+   inside a `declare module` augmentation, and unaffected by the extra
+   level of nesting the namespaced-fragment rule (§2) requires.
 
 A transitive import of an unused projector changes nothing, because
 projectors carry no augmentations (§2) — only importing a projector's
