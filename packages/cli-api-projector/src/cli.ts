@@ -488,6 +488,26 @@ function resolveLeaf(
         schemaPath: [...schemaPath, key],
       }
     }
+
+    // No static/alias match at the terminal segment — if `head` isn't a
+    // literal key at all, it may BE the fallback-captured slug value, with
+    // the fallback subtree itself a bare leaf (`op()`, no further
+    // subcommand). The Node model allows this (see api-tree/node.ts's doc);
+    // without this check `head` is a dead end even though a real handler
+    // sits at `fallback.subtree` — same blind spot as the listing walks
+    // above (api-tree/tree.ts's `walkNodeType` fix, aa28952), just on the
+    // dispatch side: `head` IS the slug value directly (no separate key
+    // segment), matching the non-terminal fallback branch below.
+    if (n.fallback !== undefined && isLeaf(n.fallback.subtree)) {
+      return {
+        handler: n.fallback.subtree.handler!,
+        slugs: { ...slugs, [n.fallback.name]: head },
+        leafName: n.fallback.name,
+        leafMeta: n.fallback.subtree.meta,
+        schemaPath: [...schemaPath, n.fallback.name],
+      }
+    }
+
     return null
   }
 
@@ -1509,7 +1529,25 @@ export function walkCliCommands(
   }
 
   if (n.fallback !== undefined) {
-    out.push(...walkCliCommands(n.fallback.subtree, prefix, [...slugAcc, n.fallback.name]))
+    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+    // not just a branch (`api({...})`) — recursing into it unconditionally
+    // (`Object.entries(subtree.children ?? {})`) would silently see no
+    // children and drop it from the listing entirely. Mirror the
+    // ordinary-leaf push above: when the subtree itself is a leaf, push it
+    // directly at the CURRENT `prefix` with `leafName = fallback.name` — no
+    // extra path segment beyond the fallback's own name (same convention
+    // api-tree/tree.ts's `walkNodeType` fix, aa28952, and the other
+    // projectors' identical fix use).
+    if (isLeaf(n.fallback.subtree)) {
+      out.push({
+        path: prefix,
+        leafName: n.fallback.name,
+        handler: n.fallback.subtree.handler!,
+        slugs: [...slugAcc, n.fallback.name],
+      })
+    } else {
+      out.push(...walkCliCommands(n.fallback.subtree, prefix, [...slugAcc, n.fallback.name]))
+    }
   }
 
   return out

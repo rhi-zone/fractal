@@ -348,15 +348,36 @@ function buildClientNode(
 
   if (node.fallback !== undefined) {
     const { name, subtree } = node.fallback
-    out[name] = (value: string): AnyGraphQLClient =>
-      buildClientNode(
-        subtree,
-        [...path, name],
-        [...capturedArgs, { name, typeSDL: "ID!" }],
-        { ...slugValues, [name]: value },
-        transport,
-        opts,
-      )
+
+    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+    // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
+    // project.ts's identical fix to `walkLeaves` (mirrors api-tree/tree.ts's
+    // `walkNodeType` fix, aa28952). `buildClientNode(subtree, ...)` on a
+    // bare leaf would read `subtree.children` (undefined for a leaf) and
+    // return `{}` — an empty sub-client with nothing callable. When the
+    // subtree IS the leaf, the fallback function returns the leaf's OWN
+    // caller directly (no extra property-access step beyond the fallback's
+    // own name) instead of a one-off nested client object.
+    out[name] = isLeaf(subtree)
+      ? (value: string): (input?: unknown) => Promise<unknown> =>
+          buildLeaf(
+            subtree,
+            path,
+            name,
+            [...capturedArgs, { name, typeSDL: "ID!" }],
+            { ...slugValues, [name]: value },
+            transport,
+            opts,
+          )
+      : (value: string): AnyGraphQLClient =>
+          buildClientNode(
+            subtree,
+            [...path, name],
+            [...capturedArgs, { name, typeSDL: "ID!" }],
+            { ...slugValues, [name]: value },
+            transport,
+            opts,
+          )
   }
 
   return out

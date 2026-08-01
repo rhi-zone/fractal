@@ -211,42 +211,51 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
   const schemas = opts.schemas ?? {}
   const handlers = new Map<string, Dispatch>()
 
+  // Build one JsonRpcMethod (+ register its dispatch handler) for a leaf
+  // node at a fully-resolved `name` — factored out so the SAME construction
+  // applies to an ordinary child leaf (name = prefix + its own tree key) and
+  // to a `fallback.subtree` that is itself a bare leaf (name = prefix + the
+  // fallback's own name, no further key — see the `n.fallback` branch below,
+  // mirroring mcp-api-projector/project.ts's `buildTool` and api-tree/tree.ts's
+  // `walkNodeType` fix, aa28952). `descriptionFallback` is the last-resort
+  // description text (the tree key for an ordinary leaf; the fallback's own
+  // `name` when there is no key).
+  const buildMethod = (child: Node, name: string, descriptionFallback: string): JsonRpcMethod => {
+    const jr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
+    const resolvedName = typeof jr.name === "string" ? jr.name : name
+
+    const derived = schemas[resolvedName]
+
+    const description =
+      typeof jr.description === "string"
+        ? jr.description
+        : typeof child.meta.description === "string"
+          ? child.meta.description
+          : typeof derived?.description === "string"
+            ? derived.description
+            : descriptionFallback
+
+    const errorSchema = jsonRpcErrorSchema(jr.errorDataSchema)
+
+    handlers.set(resolvedName, { handler: child.handler as Handler, sourceMap: jr.sourceMap ?? {}, meta: child.meta })
+
+    return {
+      name: resolvedName,
+      description,
+      paramsSchema: derived?.paramsSchema ?? { type: "object" },
+      ...(derived?.resultSchema !== undefined ? { resultSchema: derived.resultSchema } : {}),
+      errorSchema,
+      ...tagFields((child.meta.tags ?? {}) as Tags),
+    }
+  }
+
   const walk = (n: Node, prefix: string): JsonRpcMethod[] => {
     const out: JsonRpcMethod[] = []
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const jr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
-
-        const name =
-          typeof jr.name === "string"
-            ? jr.name
-            : prefix.length > 0
-              ? `${prefix}.${key}`
-              : key
-
-        const derived = schemas[name]
-
-        const description =
-          typeof jr.description === "string"
-            ? jr.description
-            : typeof child.meta.description === "string"
-              ? child.meta.description
-              : typeof derived?.description === "string"
-                ? derived.description
-                : key
-
-        const errorSchema = jsonRpcErrorSchema(jr.errorDataSchema)
-
-        out.push({
-          name,
-          description,
-          paramsSchema: derived?.paramsSchema ?? { type: "object" },
-          ...(derived?.resultSchema !== undefined ? { resultSchema: derived.resultSchema } : {}),
-          errorSchema,
-          ...tagFields((child.meta.tags ?? {}) as Tags),
-        })
-        handlers.set(name, { handler: child.handler as Handler, sourceMap: jr.sourceMap ?? {}, meta: child.meta })
+        const name = prefix.length > 0 ? `${prefix}.${key}` : key
+        out.push(buildMethod(child, name, key))
       } else {
         const childJr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
         const rawSeg = typeof childJr.segment === "string" ? childJr.segment : key
@@ -257,7 +266,18 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
 
     if (n.fallback !== undefined) {
       const seg = prefix.length > 0 ? `${prefix}.${n.fallback.name}` : n.fallback.name
-      out.push(...walk(n.fallback.subtree, seg))
+
+      // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+      // not just a branch (`api({...})`) — walking it as a branch here
+      // (`Object.entries(subtree.children ?? {})`) would silently see no
+      // children and omit it entirely. Mirror extraction: when the subtree
+      // itself is a leaf, build its method directly at `seg` (no extra
+      // segment beyond the fallback's own name).
+      if (isLeaf(n.fallback.subtree)) {
+        out.push(buildMethod(n.fallback.subtree, seg, n.fallback.name))
+      } else {
+        out.push(...walk(n.fallback.subtree, seg))
+      }
     }
 
     return out

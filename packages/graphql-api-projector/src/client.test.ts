@@ -249,6 +249,49 @@ describe("createGraphQLClient — document construction", () => {
 
     expect(capturedVars).toEqual({ userId: "override", name: "New" })
   })
+
+  // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
+  // api({...})) — the Node model explicitly allows this (api-tree/node.ts's
+  // `fallback: { name, subtree: Node }`). `buildClientNode(subtree, ...)`
+  // on a bare leaf used to read `subtree.children` (undefined for a leaf)
+  // and return `{}` — an empty sub-client with nothing callable. Fixed to
+  // return the leaf's OWN caller directly (no extra property-access step
+  // beyond the fallback's own name).
+  it("fallback.subtree as a bare op() leaf: the capture function returns the leaf's own caller directly", async () => {
+    const localTree = api_({
+        books: api_({}, {
+            fallback: {
+              name: "bookId",
+              subtree: op((input: { bookId: string }) => ({ id: input.bookId }), {
+                tags: { readOnly: true },
+              }),
+            },
+          }),
+      })
+    let capturedQuery = ""
+    let capturedVars: Record<string, unknown> | undefined
+    const transport: GraphQLTransport = async (query, variables) => {
+      capturedQuery = query
+      capturedVars = variables
+      return { data: { books: { bookId: { id: "b-1" } } } }
+    }
+    const client = createGraphQLClient(localTree, transport)
+
+    // "books" is itself a branch — its client object has one property,
+    // keyed by the fallback's own name ("bookId"), whose value is the
+    // fallback capture function.
+    expect(typeof client.books).toBe("object")
+    expect(typeof client.books.bookId).toBe("function")
+    const caller = client.books.bookId("b-1")
+    expect(typeof caller).toBe("function")
+    const result = await caller()
+
+    expect(capturedQuery).toContain("$bookId: ID!")
+    expect(capturedQuery).toContain("books {")
+    expect(capturedQuery).toContain("bookId(bookId: $bookId)")
+    expect(capturedVars).toEqual({ bookId: "b-1" })
+    expect(result).toEqual({ id: "b-1" })
+  })
 })
 
 // ============================================================================

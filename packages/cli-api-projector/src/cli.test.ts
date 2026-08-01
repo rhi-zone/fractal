@@ -7,7 +7,7 @@
 // so the bun test runner stays alive across all tests.
 
 import { describe, it, expect, beforeEach } from "bun:test"
-import { runCli, CliError } from "./cli.ts"
+import { runCli, CliError, walkCliCommands } from "./cli.ts"
 import { api, clearStore } from "../../../examples/library-api/src/tree.ts"
 
 // ============================================================================
@@ -276,5 +276,52 @@ describe("meta.tags.deprecated surfaces in CLI help text", () => {
     await runCli(tree, ["--help"], mock.io)
     const out = mock.out.join("")
     expect(out).not.toContain("[DEPRECATED]")
+  })
+})
+
+// ============================================================================
+// fallback.subtree as a bare op() leaf (not wrapped in api({...})) — the
+// Node model explicitly allows this (api-tree/node.ts's `fallback: { name,
+// subtree: Node }`). Two independent gaps of the same shape existed here:
+//   - `walkCliCommands` (listing/introspection) walked `fallback.subtree` as
+//     if it were always a branch, silently omitting a bare leaf.
+//   - `resolveLeaf` (dispatch, private) never even checked `n.fallback` at
+//     the TERMINAL argv segment — a bare-leaf fallback subtree (no further
+//     subcommand beyond the captured slug) was an unconditional dead end.
+// Same gap api-tree/tree.ts's `walkNodeType` had for extraction (aa28952).
+// ============================================================================
+
+describe("fallback.subtree as a bare op() leaf (not wrapped in api())", () => {
+  it("walkCliCommands lists the leaf, keyed by the fallback's own name with no extra path segment", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const tree = api_({
+      widgets: api_({}, {
+        fallback: {
+          name: "widgetId",
+          subtree: op((input: { widgetId: string }) => ({ id: input.widgetId, kind: "widget" })),
+        },
+      }),
+    })
+    const commands = walkCliCommands(tree)
+    expect(commands).toHaveLength(1)
+    expect(commands[0]!.path).toEqual(["widgets"])
+    expect(commands[0]!.leafName).toBe("widgetId")
+    expect(commands[0]!.slugs).toEqual(["widgetId"])
+  })
+
+  it("runCli dispatches the terminal fallback segment (`widgets <id>`, no further subcommand) directly to the leaf", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const tree = api_({
+      widgets: api_({}, {
+        fallback: {
+          name: "widgetId",
+          subtree: op((input: { widgetId: string }) => ({ id: input.widgetId, kind: "widget" })),
+        },
+      }),
+    })
+    const mock = makeMockIO()
+    await runCli(tree, ["widgets", "w-1"], mock.io)
+    const result = JSON.parse(mock.out.join("")) as { id: string; kind: string }
+    expect(result).toEqual({ id: "w-1", kind: "widget" })
   })
 })

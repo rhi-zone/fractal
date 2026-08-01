@@ -44,6 +44,20 @@ const tree = api_({
   summarize: op((input: { text: string }) => `summary of: ${input.text}`, {
     mcp: { as: "prompt" },
   }),
+  // A fallback subtree that is a BARE `op()` leaf, not `api({...})` — the
+  // Node model (api-tree/node.ts's `fallback: { name, subtree: Node }`)
+  // explicitly allows this. Regression coverage for `buildClientNode`'s own
+  // fix (mirrors `project.ts`'s three walks and api-tree/tree.ts's
+  // `walkNodeType`, aa28952): calling the fallback capture function returns
+  // the leaf's OWN caller directly (no nested sub-client — there's no
+  // further tree position to descend into), keyed with no extra segment
+  // beyond the fallback's own name.
+  widgets: api_({}, {
+    fallback: {
+      name: "widgetId",
+      subtree: op((input: { widgetId: string }) => ({ id: input.widgetId, kind: "widget" })),
+    },
+  }),
 })
 
 async function connectedClientPair() {
@@ -101,6 +115,19 @@ describe("createMcpClient — tool calls", () => {
     await expect(proxy.boom()).rejects.toBeInstanceOf(McpClientError)
     await expect(proxy.boom()).rejects.toThrow("internal error")
   })
+
+  it("a bare op() fallback.subtree's capture function returns the leaf's own caller directly, reaching the right handler with the captured slug", async () => {
+    const { proxy } = await connectedClientPair()
+    // "widgets" is itself a branch (an `api_({}, { fallback: {...} })`) —
+    // its client object has one property, keyed by the fallback's own name
+    // ("widgetId"), whose value is the fallback capture function.
+    expect(typeof proxy.widgets).toBe("object")
+    expect(typeof proxy.widgets.widgetId).toBe("function")
+    const caller = proxy.widgets.widgetId("w-1")
+    expect(typeof caller).toBe("function")
+    const result = await caller()
+    expect(result).toEqual({ id: "w-1", kind: "widget" })
+  })
 })
 
 // ============================================================================
@@ -146,7 +173,7 @@ describe("createMcpClient — name/URI parity with server projection", () => {
     const { sdkClient } = await connectedClientPair()
     const { tools } = await sdkClient.listTools()
     const names = tools.map((t) => t.name).sort()
-    expect(names).toEqual(["boom", "users_list", "users_userId_get"])
+    expect(names).toEqual(["boom", "users_list", "users_userId_get", "widgets_widgetId"])
   })
 
   it("resource URIs the client reads appear in the server's resources/list and templates/list", async () => {

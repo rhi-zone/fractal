@@ -112,6 +112,8 @@
 
 - **Root tsconfig investigation** — workspace root `tsconfig.json` needs a full audit for strictness/consistency across packages.
 
+- **`graphql-api-projector/src/codegen.ts`'s `buildTree` doesn't handle a bare-leaf `fallback.subtree`** (found 2026-08-01 while fixing the MCP/JSON-RPC/CLI/GraphQL/HTTP walk-blind-spot family — see aa28952/its sibling fixes this session). `client.ts`'s runtime `buildClientNode` was fixed so a bare-`op()` `fallback.subtree` (Node model explicitly allows this) resolves to the leaf's own caller directly instead of an empty nested client object (no further tree position to descend into). `codegen.ts`'s STATIC client generator has the identical gap — `buildTree`'s `ClientTreeNode.param` field always wraps a full nested `subtree: ClientTreeNode`, with no way to represent "this fallback position IS the operation, not a container of operations" — so generated TypeScript for this shape would render an empty object type / no member, silently drifting from the (now-fixed) runtime behavior it's supposed to mirror. Left unfixed this session: fixing it correctly needs `ClientTreeNode.param` to become a union (`{ subtree: ClientTreeNode } | { operation: OperationEntry }`) plus matching changes to the type-rendering path (`render`/whatever consumes `ClientTreeNode`, not yet audited) — a real but separate lift from the mechanical walk-recursion fixes, deferred rather than rushed.
+
 ---
 
 ## Design backlog

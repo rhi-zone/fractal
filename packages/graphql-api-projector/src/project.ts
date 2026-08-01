@@ -468,7 +468,20 @@ function walkLeaves(n: Node, path: readonly string[], capturedArgs: readonly Arg
 
   if (n.fallback !== undefined) {
     const captured = [...capturedArgs, { name: n.fallback.name, typeSDL: "ID!" }]
-    walkLeaves(n.fallback.subtree, [...path, n.fallback.name], captured, out)
+
+    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+    // not just a branch (`api({...})`) — recursing into it as a branch here
+    // (`Object.entries(subtree.children ?? {})`) would silently see no
+    // children and drop it entirely. Mirror the ordinary-leaf push above:
+    // when the subtree itself is a leaf, push it directly at the CURRENT
+    // `path` with `key = fallback.name` — no extra path segment beyond the
+    // fallback's own name (same convention api-tree/tree.ts's `walkNodeType`
+    // fix, aa28952, and the other projectors' identical fix use).
+    if (isLeaf(n.fallback.subtree)) {
+      out.push({ path, key: n.fallback.name, node: n.fallback.subtree, capturedArgs: captured })
+    } else {
+      walkLeaves(n.fallback.subtree, [...path, n.fallback.name], captured, out)
+    }
   }
 }
 

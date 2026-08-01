@@ -279,6 +279,64 @@ describe("fallback-subtree leaves produce a tool", () => {
 })
 
 // ============================================================================
+// 6b. A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
+// api({...})) — the Node model explicitly allows this (api-tree/node.ts's
+// `fallback: { name, subtree: Node }`), and api-tree/tree.ts's `walkNodeType`
+// (aa28952) already had this exact gap for extraction. `projectTools`/
+// `projectResources`/`projectPrompts` all walked `fallback.subtree` as if it
+// were always a branch (`Object.entries(subtree.children ?? {})`), which
+// silently sees no children and omits the leaf entirely when it's bare.
+// ============================================================================
+
+describe("fallback.subtree as a bare op() leaf (not wrapped in api())", () => {
+  it("projectTools visits the leaf, keyed with no extra segment beyond the fallback's own name", () => {
+    const api = api_({
+        widgets: api_({}, { fallback: {
+            name: "widgetId",
+            subtree: op((input: { widgetId: string }) => ({ widgetId: input.widgetId }), {
+              tags: { idempotent: true },
+            }),
+          } }),
+      })
+    const { tools, handlers } = projectTools(api)
+    expect(tools).toHaveLength(1)
+    expect(tools[0]!.name).toBe("widgets_widgetId")
+    expect(tools[0]!.annotations?.idempotentHint).toBe(true)
+    expect(handlers.has("widgets_widgetId")).toBe(true)
+  })
+
+  it("projectResources visits the leaf as a ResourceTemplate, no extra URI segment beyond {widgetId}", () => {
+    const api = api_({
+        widgets: api_({}, { fallback: {
+            name: "widgetId",
+            subtree: op((input: { widgetId: string }) => ({ widgetId: input.widgetId }), {
+              mcp: { as: "resource" },
+            }),
+          } }),
+      })
+    const { resources, resourceTemplates, templateHandlers } = projectResources(api)
+    expect(resources).toHaveLength(0)
+    expect(resourceTemplates).toHaveLength(1)
+    expect(resourceTemplates[0]!.uriTemplate).toBe("resource://widgets/{widgetId}")
+    expect(templateHandlers).toHaveLength(1)
+    expect(templateHandlers[0]!.paramNames).toEqual(["widgetId"])
+  })
+
+  it("projectPrompts visits the leaf, keyed with no extra segment beyond the fallback's own name", () => {
+    const api = api_({
+        docs: api_({}, { fallback: {
+            name: "docId",
+            subtree: op((_input: { docId: string }) => ({}), { mcp: { as: "prompt" } }),
+          } }),
+      })
+    const { prompts, handlers } = projectPrompts(api)
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]!.name).toBe("docs_docId")
+    expect(handlers.has("docs_docId")).toBe(true)
+  })
+})
+
+// ============================================================================
 // 7. inputSchema placeholder is always present
 // ============================================================================
 

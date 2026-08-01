@@ -184,7 +184,20 @@ function collectHandlerNames(n: Node, out: Map<Handler, string>): void {
     }
   }
   if (n.fallback !== undefined) {
-    collectHandlerNames(n.fallback.subtree, out)
+    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+    // not just a branch (`api({...})`) — recursing unconditionally
+    // (`Object.entries(subtree.children ?? {})`) would silently see no
+    // children and never record this handler's name. Mirror the
+    // ordinary-leaf branch above: when the subtree itself is a leaf, key it
+    // by the fallback's own name directly (same convention api-tree/tree.ts's
+    // `walkNodeType` fix, aa28952, and the other projectors' identical fix
+    // use).
+    if (isLeaf(n.fallback.subtree)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      out.set(n.fallback.subtree.handler!, n.fallback.name)
+    } else {
+      collectHandlerNames(n.fallback.subtree, out)
+    }
   }
 }
 
@@ -223,7 +236,16 @@ function collectCodegenNames(n: Node, prefix: string, out: Map<Handler, string>)
   }
   if (n.fallback !== undefined) {
     const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
-    collectCodegenNames(n.fallback.subtree, seg, out)
+
+    // Same bare-leaf `fallback.subtree` case as `collectHandlerNames` above
+    // — key it directly at `seg` (no extra segment beyond the fallback's
+    // own name) instead of recursing into a leaf's nonexistent `children`.
+    if (isLeaf(n.fallback.subtree)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      out.set(n.fallback.subtree.handler!, seg)
+    } else {
+      collectCodegenNames(n.fallback.subtree, seg, out)
+    }
   }
 }
 
