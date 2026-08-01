@@ -74,24 +74,79 @@ export type AuthAdapter<TUser> = {
  * For `als.getStore()` to read the user downstream, `T` in `AlsConfig<Request, T>`
  * must be (or embed) `TUser | null` — pair this with `createContext` (./context.ts)
  * when the per-request context needs MORE than just the user.
+ *
+ * Shares its resolution with `authMiddleware` via `resolveCached` below when
+ * the SAME `adapter` object is passed to both (the documented pairing) — see
+ * that function's doc for why this is safe to do unconditionally.
  */
 export function authLayer<TUser>(adapter: AuthAdapter<TUser>): (req: Request) => Promise<TUser | null> {
-  return (req) => adapter.resolve(req);
+  return (req) => resolveCached(adapter, req);
 }
+
+/**
+ * Per-adapter, per-request memoization for `AuthAdapter.resolve` — the fix
+ * for the double-resolution `authMiddleware` used to document here.
+ * `authMiddleware`'s guard runs as the OUTERMOST layer (see
+ * `createFetch`/`preset.ts`: `opts.middleware` wraps around `opts.als`'s
+ * `withALS`), so when both `authMiddleware(auth)` and `authLayer(auth)` are
+ * wired for the SAME `adapter` object (the documented pairing — see both
+ * functions' examples), `authMiddleware` calls `resolve` first and then,
+ * unless its `guard` short-circuits, calls straight through to `inner(req)`
+ * with the SAME `Request` instance, which is what reaches `withALS`'s
+ * `init` (i.e. `authLayer`'s returned function) further in. That shared
+ * `Request` identity — already relied on by the framework to carry the
+ * request through the whole `createFetch` composition chain unmodified — is
+ * what this cache keys on: no new carrier needed, and no `AsyncLocalStorage`
+ * involved, since ALS entry itself is downstream of the first (outer) call
+ * this is deduping against.
+ *
+ * Cache key is two-level (`adapter` then `req`, via nested `WeakMap`s) so
+ * the memoization is transparent to existing call sites: no consumer needs
+ * to pass a shared cache handle around, only the SAME `adapter` value to
+ * both `authLayer` and `authMiddleware`, which every documented usage
+ * already does. A `Request` used with two DIFFERENT adapter instances
+ * resolves independently under each, as expected. Both `WeakMap` levels let
+ * entries be collected once the adapter or the in-flight request is
+ * otherwise unreferenced — no manual cache eviction.
+ *
+ * Stores the in-flight `Promise`, not its awaited result, so concurrent
+ * callers within the same request (not just the two known hooks) also
+ * collapse onto one `resolve` call instead of racing separate ones.
+ * Resolve-failure semantics are unchanged by this cache: a rejected
+ * `resolve` promise is cached and re-delivered identically to every
+ * awaiter, matching what already happens for any promise awaited from
+ * multiple places — and since `authMiddleware` throwing during its own
+ * (first) call already short-circuits before `inner(req)` is reached today,
+ * a failing `resolve` still only ever produces the ONE code path it did
+ * before this cache existed.
+ */
+function resolveCached<TUser>(adapter: AuthAdapter<TUser>, req: Request): Promise<TUser | null> {
+  let perAdapter = resolveCache.get(adapter as AuthAdapter<unknown>);
+  if (perAdapter === undefined) {
+    perAdapter = new WeakMap();
+    resolveCache.set(adapter as AuthAdapter<unknown>, perAdapter);
+  }
+  let pending = perAdapter.get(req);
+  if (pending === undefined) {
+    pending = adapter.resolve(req);
+    perAdapter.set(req, pending);
+  }
+  return pending as Promise<TUser | null>;
+}
+
+const resolveCache = new WeakMap<AuthAdapter<unknown>, WeakMap<Request, Promise<unknown>>>();
 
 /**
  * Convert a server `AuthAdapter`'s `guard` into a `Fetch => Fetch` layer —
  * drops directly into `PresetOptions.middleware` (http-api-projector/
  * preset.ts) or any other `(inner: (req: Request) => Promise<Response>) =>
- * (req: Request) => Promise<Response>` middleware slot. Re-runs
- * `adapter.resolve` independently of whatever `als.init` (via `authLayer`)
- * also runs for the same request — the two are separate hooks with no
- * shared cache, so a `resolve` that does real work (a network call, a slow
- * hash) should memoize itself if both are used together. The OIDC adapter's
- * `resolve` is local JWT verification against an already-cached JWKS key
- * set (see `@rhi-zone/fractal-auth-oidc`), so the duplicate call is cheap
- * in the common case. A no-op (returns `inner` unchanged) when the adapter
- * has no `guard`.
+ * (req: Request) => Promise<Response>` middleware slot. Shares its
+ * `adapter.resolve` call with whatever `als.init` (via `authLayer`) also
+ * runs for the same request, via `resolveCached` above — `resolve` runs at
+ * most once per `(adapter, request)` pair regardless of how many of these
+ * hooks are wired up, so a `resolve` that does real work (a network call, a
+ * slow hash) no longer needs to memoize itself by caller discipline. A
+ * no-op (returns `inner` unchanged) when the adapter has no `guard`.
  *
  * ```ts
  * createFetch(tree, {
@@ -106,7 +161,7 @@ export function authMiddleware<TUser>(
   if (adapter.guard === undefined) return (inner) => inner;
   const guard = adapter.guard;
   return (inner) => async (req) => {
-    const user = await adapter.resolve(req);
+    const user = await resolveCached(adapter, req);
     const rejected = guard(req, user);
     if (rejected !== undefined) return rejected;
     return inner(req);

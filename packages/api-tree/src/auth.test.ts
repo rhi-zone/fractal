@@ -78,6 +78,44 @@ describe("authMiddleware", () => {
     expect(await allowed.json()).toEqual({ ok: true });
   });
 
+  it("resolves at most once per request when both authLayer and authMiddleware are wired", async () => {
+    let resolveCalls = 0;
+    const adapter: AuthAdapter<User> = {
+      resolve: async (req) => {
+        resolveCalls += 1;
+        const header = req.headers.get("Authorization");
+        return header === "Bearer valid" ? { id: "user-1" } : null;
+      },
+      guard: (_req, user) => (user === null ? new Response("Unauthorized", { status: 401 }) : undefined),
+    };
+    const storage = new AsyncLocalStorage<User | null>();
+    const tree = api({
+      whoami: op((_: unknown) => ({ id: storage.getStore()?.id ?? null }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    });
+    const fetchHandler = createFetch(tree, {
+      als: { storage, init: authLayer(adapter) },
+      middleware: [authMiddleware(adapter)],
+    });
+
+    resolveCalls = 0;
+    const res = await fetchHandler(
+      new Request("http://localhost/whoami", { headers: { Authorization: "Bearer valid" } }),
+    );
+    expect(await res.json()).toEqual({ id: "user-1" });
+    expect(resolveCalls).toBe(1);
+
+    // A second, separate request gets its own resolution — the cache is
+    // per-request, not global.
+    resolveCalls = 0;
+    const res2 = await fetchHandler(
+      new Request("http://localhost/whoami", { headers: { Authorization: "Bearer valid" } }),
+    );
+    expect(await res2.json()).toEqual({ id: "user-1" });
+    expect(resolveCalls).toBe(1);
+  });
+
   it("is a no-op pass-through when the adapter has no guard", async () => {
     const adapter: AuthAdapter<User> = { resolve: async () => null };
     const middleware = authMiddleware(adapter);
