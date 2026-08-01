@@ -132,20 +132,19 @@ const checkoutNode = api_({
 /**
  * The per-book subtree: read/replace/remove co-locate onto their parent
  * position (via each leaf's own `moveTo` directive, read by the HttpRoute
- * pipeline); checkout stays a branch. The `dispatch:{kind:"method"}`
- * node-level marker below is retained meta, NOT interpreted by the HttpRoute
- * pipeline (which reads only `moveTo`/`method` directives) — it's read
- * independently by openapi's and client's own self-contained Node-tree
- * walks (packages/http-api-projector/src/openapi.ts, packages/http-api-projector/src/client.ts),
- * which still derive method-co-location from this marker rather than from
- * `moveTo` directives. Two projectors, two encodings of the same fact.
+ * pipeline); checkout stays a branch. This node previously also carried a
+ * `{ http: { dispatch: { kind: "method" } } }` marker — the retired direct
+ * tree-walk dispatcher's own co-location signal — but that marker was
+ * verified read nowhere (docs/design/meta-role-split-spec.md §4/§9(6):
+ * `dispatch` handling is deleted, not given a typed home) even before this
+ * split, so it's dropped here rather than carried forward as dead meta.
  */
 const bookItemNode = api_({
     read: readBook,
     replace: replaceBook,
     remove: removeBook,
     checkout: checkoutNode,
-  }, { meta: { http: { dispatch: { kind: "method" } } } })
+  })
 
 // ============================================================================
 // Books — list/add ops, plus the per-book fallback subtree
