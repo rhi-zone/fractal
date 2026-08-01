@@ -53,7 +53,7 @@ import { jsonRpcErrorSchema } from "@rhi-zone/fractal-type-ir/json-rpc"
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SourceMap } from "@rhi-zone/fractal-api-tree"
 
 // ============================================================================
@@ -98,11 +98,11 @@ export type MethodSchema = {
 /** Map of method name -> derived schema/description (from codegen). */
 export type SchemaMap = Readonly<Record<string, MethodSchema>>
 
-/** A dispatch entry: the leaf's handler plus its `meta.jsonrpc.sourceMap` (empty when the leaf declares no overrides) and its own `Meta`. */
+/** A dispatch entry: the leaf's handler plus its `meta.jsonrpc.sourceMap` (empty when the leaf declares no overrides) and its own `LeafMeta`. */
 export type Dispatch = {
   readonly handler: Handler
   readonly sourceMap: SourceMap
-  readonly meta: Meta
+  readonly meta: LeafMeta
 }
 
 /** Options for `projectMethods`/`toMethods`. */
@@ -121,14 +121,20 @@ export type ProjectMethodsResult = {
 // meta.jsonrpc open bag
 // ============================================================================
 
-/** `meta.jsonrpc` open bag — per-projection overrides for JSON-RPC method generation, mirroring `McpMeta` (mcp-api-projector/src/project.ts). */
-export type JsonRpcMeta = {
+/**
+ * `meta.jsonrpc` open bag — per-projection overrides for JSON-RPC method
+ * generation, split by role (docs/design/meta-role-split-spec.md §2/§4),
+ * mirroring `McpLeafMeta`/`McpBranchMeta` (mcp-api-projector/src/project.ts)
+ * — no `JsonRpcSharedMeta`, every key here is either leaf-only or
+ * branch-only, never both.
+ */
+
+/** `meta.jsonrpc` fields valid at LEAF position only. */
+export type JsonRpcLeafMetaProperties = {
   /** Full method-name override (dot-prefix ignored when set). */
   readonly name?: string
   /** Description text override. */
   readonly description?: string
-  /** This node's contribution to the dot-joined method-name prefix (branch nodes only). */
-  readonly segment?: string
   /** Narrows the JSON-RPC error envelope's `data` field for this method (see `jsonRpcErrorSchema`). */
   readonly errorDataSchema?: JsonSchema
   /** Per-param source overrides for this leaf's input assembly (see `packages/api-tree/src/input.ts`). Params not listed here resolve from the `"params"` store by their own name. */
@@ -136,14 +142,31 @@ export type JsonRpcMeta = {
   readonly [key: string]: unknown
 }
 
-declare module "@rhi-zone/fractal-api-tree/node" {
-  interface Meta {
-    jsonrpc?: JsonRpcMeta
-  }
+/** Wraps `JsonRpcLeafMetaProperties` under the `jsonrpc` key — extend `LeafMeta` with this in a deployment's augmentation file. */
+export type JsonRpcLeafMeta = {
+  readonly jsonrpc?: JsonRpcLeafMetaProperties
 }
 
-/** Safely extract the open `meta.jsonrpc` bag from a Meta. */
-export function getJsonRpcMeta(meta: Meta): JsonRpcMeta {
+/** `meta.jsonrpc` fields valid at BRANCH position only. */
+export type JsonRpcBranchMetaProperties = {
+  /** This node's own contribution to the dot-joined method-name prefix. */
+  readonly segment?: string
+  readonly [key: string]: unknown
+}
+
+/** Wraps `JsonRpcBranchMetaProperties` under the `jsonrpc` key — extend `BranchMeta` with this in a deployment's augmentation file. */
+export type JsonRpcBranchMeta = {
+  readonly jsonrpc?: JsonRpcBranchMetaProperties
+}
+
+/**
+ * Safely extract the open `meta.jsonrpc` bag. Accepts the intersection of
+ * both role wrappers — this function is called on both leaf meta (reading
+ * `.name`/`.description`/`.errorDataSchema`/`.sourceMap`) and branch meta
+ * (reading `.segment`) at different call sites below; the intersection is
+ * safe because the two roles' field sets don't overlap.
+ */
+export function getJsonRpcMeta(meta: JsonRpcLeafMeta & JsonRpcBranchMeta): JsonRpcLeafMetaProperties & JsonRpcBranchMetaProperties {
   const j = meta.jsonrpc
   if (typeof j !== "object" || j === null) return {}
   return j
@@ -193,7 +216,7 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const jr = getJsonRpcMeta(child.meta)
+        const jr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
 
         const name =
           typeof jr.name === "string"
@@ -225,7 +248,7 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
         })
         handlers.set(name, { handler: child.handler as Handler, sourceMap: jr.sourceMap ?? {}, meta: child.meta })
       } else {
-        const childJr = getJsonRpcMeta(child.meta)
+        const childJr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
         const rawSeg = typeof childJr.segment === "string" ? childJr.segment : key
         const seg = prefix.length > 0 ? `${prefix}.${rawSeg}` : rawSeg
         out.push(...walk(child, seg))

@@ -5,6 +5,11 @@ import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { createJsonRpcHttpHandler } from "./server.ts"
 import { createJsonRpcClient, createJsonRpcHttpCall, createJsonRpcHttpClient, JsonRpcClientError } from "./client.ts"
 import type { JsonRpcCall } from "./client.ts"
+// Side-effect import: this test suite's own "deployment" augmentation —
+// see project.ts's deployment-meta.test-support.ts doc comment. Needed for
+// `meta.jsonrpc.segment` below (a real, spec-endorsed branch-position
+// override) to type-check.
+import "./deployment-meta.test-support.ts"
 
 describe("createJsonRpcClient: proxy shape mirrors the tree", () => {
   it("a leaf becomes an async callable dispatching through the supplied call", async () => {
