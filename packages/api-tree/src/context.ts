@@ -24,7 +24,7 @@
 // gets full type-checking against them at the call site.
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Meta } from "./node.ts";
+import type { LeafMeta } from "./node.ts";
 
 // ============================================================================
 // Structural mirrors of the per-projector middleware context shapes
@@ -39,7 +39,7 @@ import type { Meta } from "./node.ts";
 
 /** Structural mirror of cli-api-projector's `CliAlsContext`. */
 export type CliContextShape = {
-  readonly meta: Meta;
+  readonly meta: LeafMeta;
   readonly io: {
     readonly stdout: { write(s: string): void };
     readonly stderr: { write(s: string): void };
@@ -51,14 +51,14 @@ export type CliContextShape = {
 
 /** Structural mirror of mcp-api-projector's `McpAlsContext`. */
 export type McpContextShape = {
-  readonly meta: Meta;
+  readonly meta: LeafMeta;
   readonly name: string;
   readonly requestType: "tool" | "resource" | "prompt";
 };
 
 /** Structural mirror of graphql-api-projector's `GraphQLAlsContext`. */
 export type GraphQLContextShape = {
-  readonly meta: Meta;
+  readonly meta: LeafMeta;
   readonly fieldName: string;
   readonly operationType: "query" | "mutation" | "subscription";
 };

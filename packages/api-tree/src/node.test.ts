@@ -7,7 +7,7 @@ import {
   isNode,
   isLeaf,
   mergeMeta,
-  type Meta,
+  type SharedMeta,
   type Node,
 } from "./node.ts"
 import {
@@ -21,14 +21,15 @@ import {
 } from "./tags.ts"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 
-// `Meta` uses declaration merging (each projector package types its own
-// slot — see node.ts's doc comment). Tests below exercise the bag's
-// genuinely-open, undeclared-key runtime behavior — arbitrary keys still
-// pass through unchanged at the value level, they're just not statically
-// known here. `OpenMeta` is the test-only escape hatch for that: an index
-// signature back on top of `Meta`, used ONLY where a test's whole point is
-// an undeclared key.
-type OpenMeta = Meta & Record<string, unknown>
+// `SharedMeta`/`LeafMeta`/`BranchMeta` are extended via declaration merging
+// (a deployment's own augmentation file — see node.ts's doc comment and
+// docs/design/meta-role-split-spec.md §2/§3). Tests below exercise the
+// bag's genuinely-open, undeclared-key runtime behavior — arbitrary keys
+// still pass through unchanged at the value level, they're just not
+// statically known here. `OpenMeta` is the test-only escape hatch for that:
+// an index signature back on top of `SharedMeta`, used ONLY where a test's
+// whole point is an undeclared key.
+type OpenMeta = SharedMeta & Record<string, unknown>
 
 // ============================================================================
 // 1. op() — leaf-node constructor
@@ -195,7 +196,7 @@ describe("op surfaces", () => {
       { tags: { [TAG_READ_ONLY]: true }, http: { segment: "detail" } } as OpenMeta,
     )
     expect(await leaf.handler!({ id: "x" })).toEqual({ found: true, id: "x" })
-    expect(leaf.meta.tags?.[TAG_READ_ONLY]).toBe(true)
+    expect(((leaf.meta as OpenMeta).tags as Tags | undefined)?.[TAG_READ_ONLY]).toBe(true)
     expect((leaf.meta as OpenMeta)["http"]).toEqual({ segment: "detail" })
   })
 
@@ -244,9 +245,9 @@ describe("mapNodes", () => {
       isLeaf(n) ? { ...n, meta: { ...n.meta, tags: { readOnly: true } } } : n,
     )
 
-    expect((tagged.children?.["list"] as Node).meta.tags?.readOnly).toBe(true)
+    expect(((tagged.children?.["list"] as Node).meta.tags as Tags | undefined)?.readOnly).toBe(true)
     expect(
-      ((tagged.children?.["detail"] as Node).children?.["read"] as Node).meta.tags?.readOnly,
+      (((tagged.children?.["detail"] as Node).children?.["read"] as Node).meta.tags as Tags | undefined)?.readOnly,
     ).toBe(true)
     // Original tree is untouched
     expect((tree.children?.["list"] as Node).meta.tags).toBeUndefined()
@@ -338,7 +339,15 @@ describe("api()", () => {
 
   it("api(children, opts) forwards meta and fallback exactly as given", () => {
     const children = { users: op(() => []) }
-    const meta: Meta = { tags: { readOnly: true } }
+    // `tags` is a LEAF-only field under the SharedMeta/LeafMeta/BranchMeta
+    // split (docs/design/meta-role-split-spec.md §2) — `description` is the
+    // real BranchMeta-valid field this branch-node test exercises instead;
+    // the point of this test is generic forwarding, not which field. No
+    // explicit `: SharedMeta` annotation — a bare interface reference isn't
+    // assignable to `api()`'s own `Widen<...>`-indexed return type (see
+    // node.ts's `Widen` doc comment), where a plain inferred object literal
+    // type is.
+    const meta = { description: "users branch" }
     const fallback = { name: "id", subtree: op(() => ({})) }
     expect(api(children, { meta, fallback })).toEqual(
       { children, meta, fallback },

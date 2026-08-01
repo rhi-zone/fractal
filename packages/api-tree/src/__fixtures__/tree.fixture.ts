@@ -15,13 +15,17 @@ import type { Result } from "../index.ts"
 // unchanged. TypeScript sees the same identifier "Result" — the syntax path
 // matches it by name and extracts the first type argument.
 import type { Result as ResultFromBarrel } from "./result-reexport.fixture.ts"
-// Side-effect import: brings mcp-api-projector's `declare module "../node.ts"
-// { interface Meta { mcp?: McpMeta } }` augmentation into this file's
-// compilation, so `op(fn, { mcp: { name: … } })` below type-checks the same
-// way it would in a real tree that uses MCP overrides — see the
-// `mcpOverrides` branch below and extract.test.ts's "meta.mcp overrides
-// reflected in the reconstructed name" describe block.
-import "@rhi-zone/fractal-mcp-api-projector"
+// Side-effect import: brings this test suite's own "deployment" augmentation
+// (`LeafMeta extends McpLeafMeta`, `BranchMeta extends McpBranchMeta` — see
+// that fixture's own doc comment) into this file's compilation, so
+// `op(fn, { mcp: { name: … } })` and `api(children, { meta: { mcp: {
+// segment: … } } })` below type-check the same way they would in a real
+// deployment that uses MCP overrides — see the `mcpOverrides` branch below
+// and extract.test.ts's "meta.mcp overrides reflected in the reconstructed
+// name" describe block. Per docs/design/meta-role-split-spec.md §2/§3,
+// mcp-api-projector itself performs no augmentation — only a deployment's
+// own file (this one, for this test suite) does.
+import "./deployment-meta.fixture.ts"
 
 // (c) Further-generic alias: a local type alias that wraps Result<T, string>.
 // The syntax path recognizes this by walking the local TypeAliasDeclaration —
