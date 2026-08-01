@@ -24,24 +24,61 @@
 export type { Store, Stores, ParamSource, SourceMap } from "@rhi-zone/fractal-api-tree"
 export { assemble } from "@rhi-zone/fractal-api-tree"
 
-import type { Stores } from "@rhi-zone/fractal-api-tree"
+import type { ProjectorStores, Store } from "@rhi-zone/fractal-api-tree"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 
-// Augment the shared StoreRegistry with HTTP's store names, so `Stores`
-// (declaration-merged across all projectors that are loaded) exposes exactly
-// these keys here — accessing any other store name is a compile-time error.
-declare module "@rhi-zone/fractal-api-tree" {
-  interface StoreRegistry {
-    path: true
-    query: true
-    header: true
-    body: true
-  }
+/**
+ * HTTP's own store-name fragment: an INERT, plain interface naming the stores
+ * this projector builds and the shape each one carries. Deliberately NOT a
+ * `declare module` augmentation of api-tree's `StoreRegistry` — per
+ * docs/design/typed-store-spec.md §3 (and the sibling rule for `Meta`,
+ * meta-role-split-spec §9(4)), a projector that augments core makes the type
+ * surface depend on which packages happen to be in the compilation: merely
+ * importing this package, even without using it, would change what
+ * `stores.someName` means project-wide.
+ *
+ * A DEPLOYMENT composes this in, once, in its own augmentation file:
+ *
+ * ```ts
+ * import "@rhi-zone/fractal-api-tree/input"
+ * import type { HttpStores } from "@rhi-zone/fractal-http-api-projector"
+ *
+ * declare module "@rhi-zone/fractal-api-tree/input" {
+ *   interface StoreRegistry extends HttpStores {}
+ * }
+ * ```
+ *
+ * Every member is OPTIONAL: these are per-request stores this projector builds
+ * when it dispatches, and a compilation that also merges CLI's or MCP's
+ * fragment doesn't mean an HTTP request populates those (nor a CLI invocation
+ * these) — see `Stores`' doc in api-tree's input.ts.
+ *
+ * `caller` is NOT declared here: core declares it once (api-tree's
+ * `CoreStores`), shared across every projector, because every projector
+ * populates one.
+ */
+export interface HttpStores {
+  /** Route-slug params captured from the URL path — plain object, always strings. */
+  path?: Record<string, string>
+  /** URL query params. Proxy-backed over `URLSearchParams` (see `httpStores`) — still `Store`-shaped from a read site's perspective. */
+  query?: Store
+  /** Request headers. Proxy-backed over `Headers` (see `httpStores`) — still `Store`-shaped from a read site's perspective. */
+  header?: Store
+  /** The parsed request body (see `parseRequestBody`); an empty object when there was nothing to parse. */
+  body?: Store
 }
 
-// `caller` itself is declared once, in api-tree's input.ts — shared across
-// all three projectors (see that file's doc comment on StoreRegistry) —
-// rather than re-declared here.
+/**
+ * The full per-request store bag an HTTP dispatch builds and threads through
+ * middleware: the shared `Stores` (core's `caller`, plus whatever service
+ * stores the deployment registered) intersected with HTTP's own fragment.
+ *
+ * The intersection is what lets this package build and read `path`/`query`/
+ * `header`/`body` WITHOUT its own ambient augmentation — in a compilation
+ * where no deployment has merged `HttpStores` into `StoreRegistry` (this
+ * package's own typecheck, for instance), `Stores` alone doesn't name them.
+ */
+export type HttpStoreBag = ProjectorStores & HttpStores
 
 // ============================================================================
 // HttpStoreRegistry — the store names `http.source()` (verbs.ts) accepts
@@ -187,7 +224,7 @@ export function httpStores(
   req: Request,
   slugs: Readonly<Record<string, string>>,
   parsedBody: unknown,
-): Stores {
+): HttpStoreBag {
   const caller: Record<string, unknown> = {}
   for (const [key, value] of req.headers.entries()) {
     caller[key] = value

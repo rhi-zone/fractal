@@ -61,21 +61,39 @@ import {
   isStreamProgress,
   matchKind,
 } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, Page, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, Page, ProjectorStores, SourceMap, Store } from "@rhi-zone/fractal-api-tree"
 
-// Augment the shared StoreRegistry with CLI's store names — see
-// http-api-projector/src/decode.ts for the matching augmentation and its doc.
-declare module "@rhi-zone/fractal-api-tree" {
-  interface StoreRegistry {
-    flag: true
-    path: true
-    env: true
-  }
+/**
+ * CLI's own store-name fragment: an INERT, plain interface naming the stores
+ * this projector builds and the shape each carries. Deliberately NOT a
+ * `declare module` augmentation of api-tree's `StoreRegistry` — per
+ * docs/design/typed-store-spec.md §3, a projector that augments core makes the
+ * type surface depend on which packages are in the compilation rather than on
+ * what the deployment composes. A DEPLOYMENT composes this in, once, in its own
+ * augmentation file (`interface StoreRegistry extends CliStores {}`); see
+ * `HttpStores` in http-api-projector/src/decode.ts for the worked example.
+ *
+ * Every member is OPTIONAL — per-invocation stores this projector builds when
+ * it dispatches. `caller` is NOT declared here: core declares it once
+ * (api-tree's `CoreStores`), shared across every projector.
+ */
+export interface CliStores {
+  /** Parsed flags — a repeated flag collects into an array, a valueless flag is `true`. */
+  flag?: Store
+  /** Positional/slug params matched against the command path. */
+  path?: Store
+  /** The process environment (`process.env`). */
+  env?: Store
 }
 
-// `caller` itself is declared once, in api-tree's input.ts — shared across
-// all three projectors (see that file's doc comment on StoreRegistry) —
-// rather than re-declared here.
+/**
+ * The full per-invocation store bag a CLI dispatch builds and threads through
+ * middleware: the shared `Stores` (core's `caller`, plus whatever service
+ * stores the deployment registered) intersected with CLI's own fragment. The
+ * intersection is what lets this package build and read `flag`/`path`/`env`
+ * without its own ambient augmentation — see `HttpStoreBag`'s doc.
+ */
+export type CliStoreBag = ProjectorStores & CliStores
 
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
@@ -283,8 +301,8 @@ export type CliOpts<T = unknown> = {
  * `runCli` applies `opts.middleware` outermost-first (see `CliOpts`).
  */
 export type CliMiddleware = (
-  next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
+  next: (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>
 
 /**
  * Compose `middleware` around `base`, first entry outermost — `middleware[0]`
@@ -293,8 +311,8 @@ export type CliMiddleware = (
  */
 function composeMiddleware(
   middleware: readonly CliMiddleware[],
-  base: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-): (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown> {
+  base: (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>,
+): (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown> {
   let wrapped = base
   for (let i = middleware.length - 1; i >= 0; i--) {
     wrapped = middleware[i]!(wrapped)
@@ -753,11 +771,11 @@ function buildInput(
   flags: Record<string, string | string[] | true>,
   slugs: Record<string, string>,
   sourceMap: SourceMap,
-): { readonly input: Record<string, unknown>; readonly stores: Stores } {
+): { readonly input: Record<string, unknown>; readonly stores: CliStoreBag } {
   const caller: Record<string, unknown> = {
     user: process.env.USER ?? process.env.USERNAME,
   }
-  const stores: Stores = {
+  const stores: CliStoreBag = {
     flag: flags,
     path: slugs,
     env: process.env as Record<string, unknown>,
@@ -1163,7 +1181,7 @@ export async function runCli<T = unknown>(
   // Bridge the plain handler `(input) => result` into `F => F`'s base case
   // `(input, stores) => handler(input)` — the handler never sees `stores`,
   // structurally (see CliMiddleware's module doc above).
-  const base = (input: Record<string, unknown>, _stores: Stores) => alsHandler(input)
+  const base = (input: Record<string, unknown>, _stores: CliStoreBag) => alsHandler(input)
   const middleware = opts.middleware ?? []
   const callHandler = middleware.length === 0
     ? base
@@ -1402,9 +1420,9 @@ function writePaginationHint(
 
 /** One page fetch + the same Result-unwrapping `runCli`'s first call already applies — a subsequent page can be an `err` Result exactly like the first. */
 async function fetchNextPage(
-  callHandler: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
+  callHandler: (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>,
   input: Record<string, unknown>,
-  stores: Stores,
+  stores: CliStoreBag,
   detectResult: boolean,
   errorEncoder: CliErrorEncoder | undefined,
   io: CliIO,
@@ -1437,8 +1455,8 @@ async function fetchNextPage(
 async function streamAllPages(
   first: Page<unknown>,
   input: Record<string, unknown>,
-  callHandler: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-  stores: Stores,
+  callHandler: (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>,
+  stores: CliStoreBag,
   detectResult: boolean,
   errorEncoder: CliErrorEncoder | undefined,
   paginatedMeta: CliLeafMetaProperties["paginated"],

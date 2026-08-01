@@ -27,6 +27,7 @@ export type {
   SourceMap,
 } from "./project.ts"
 export type { HttpLeafMeta, HttpSharedMeta } from "./meta.ts"
+export type { HttpStoreBag, HttpStores } from "./decode.ts"
 export type { HttpStore, HttpStoreRegistry, StandardSchemaOutcome, StandardSchemaV1 } from "./decode.ts"
 export { runStandardSchema } from "./decode.ts"
 export type { Sources } from "./route.ts"
