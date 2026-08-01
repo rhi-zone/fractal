@@ -4,7 +4,8 @@
 // cross-surface fixture. Every test asserts a specific OpenAPI invariant.
 
 import { describe, expect, it, beforeAll } from "bun:test"
-import { toOpenApi, type OpenApiDoc } from "./openapi.ts"
+import { listRoutes, mergeOpenApiDocs, toOpenApi, type OpenApiDoc } from "./openapi.ts"
+import { httpRoute, type RouteLeafMeta } from "./route.ts"
 import { api } from "../../../examples/library-api/src/tree.ts"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
 
@@ -349,5 +350,219 @@ describe("security", () => {
         expect(op.security).toBeUndefined()
       }
     }
+  })
+})
+
+// ============================================================================
+// listRoutes — public HttpRoute walk
+// ============================================================================
+
+describe("listRoutes", () => {
+  it("empty route (no methods/children/fallback) yields no entries", () => {
+    const route = httpRoute({ meta: {} })
+    expect(listRoutes(route)).toEqual([])
+  })
+
+  it("a single method at the root yields one entry with path '/'", () => {
+    const route = httpRoute({
+      methods: { GET: { handler: (_: unknown) => null, meta: { tags: { deprecated: true } } } },
+      meta: {},
+    })
+    const entries = listRoutes(route)
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ path: "/", verb: "GET" })
+    expect(entries[0]?.meta).toEqual({ tags: { deprecated: true } })
+  })
+
+  it("multiple methods on the same path each produce their own entry", () => {
+    const route = httpRoute({
+      methods: {
+        GET: { handler: (_: unknown) => null, meta: {} },
+        POST: { handler: (_: unknown) => null, meta: {} },
+        DELETE: { handler: (_: unknown) => null, meta: {} },
+      },
+      meta: {},
+    })
+    const entries = listRoutes(route)
+    expect(entries.map((e) => e.verb).sort()).toEqual(["DELETE", "GET", "POST"])
+    expect(new Set(entries.map((e) => e.path))).toEqual(new Set(["/"]))
+  })
+
+  it("nested children accumulate path segments", () => {
+    const route = httpRoute({
+      children: {
+        books: httpRoute({
+          children: {
+            featured: httpRoute({
+              methods: { GET: { handler: (_: unknown) => null, meta: {} } },
+              meta: {},
+            }),
+          },
+          meta: {},
+        }),
+      },
+      meta: {},
+    })
+    const entries = listRoutes(route)
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.path).toBe("/books/featured")
+    expect(entries[0]?.verb).toBe("GET")
+  })
+
+  it("fallback segments become a {param}-style path component", () => {
+    const route = httpRoute({
+      children: {
+        books: httpRoute({
+          fallback: {
+            name: "bookId",
+            subtree: httpRoute({
+              methods: { GET: { handler: (_: unknown) => null, meta: {} } },
+              meta: {},
+            }),
+          },
+          meta: {},
+        }),
+      },
+      meta: {},
+    })
+    const entries = listRoutes(route)
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.path).toBe("/books/{bookId}")
+  })
+
+  it("codenName falls back to a path-derived name when no names map is supplied", () => {
+    const route = httpRoute({
+      children: {
+        books: httpRoute({
+          methods: { GET: { handler: (_: unknown) => null, meta: {} } },
+          meta: {},
+        }),
+      },
+      meta: {},
+    })
+    const entries = listRoutes(route)
+    expect(entries[0]?.codenName).toBe("books_get")
+  })
+
+  it("codenName is read from the supplied names map by handler identity", () => {
+    const handler = (_: unknown) => null
+    const route = httpRoute({
+      methods: { GET: { handler, meta: {} } },
+      meta: {},
+    })
+    const names = new Map([[handler, "books_bookId_read"]])
+    const entries = listRoutes(route, "", names)
+    expect(entries[0]?.codenName).toBe("books_bookId_read")
+  })
+
+  it("meta propagates through per method entry, independent of sibling methods", () => {
+    // `openapi` is an open-bag field (owned by openapi.ts, read via
+    // `getOpenApiMeta`) that `RouteLeafMeta`'s static type — this package's
+    // own `http`-namespace-only leaf meta (route.ts) — doesn't declare; the
+    // cast mirrors how `buildDoc`/`listRoutes` themselves treat `meta.openapi`
+    // as a runtime-only bag layered on top of `RouteLeafMeta`.
+    const route = httpRoute({
+      methods: {
+        GET: { handler: (_: unknown) => null, meta: { openapi: { summary: "get it" } } as RouteLeafMeta },
+        POST: { handler: (_: unknown) => null, meta: { openapi: { summary: "post it" } } as RouteLeafMeta },
+      },
+      meta: {},
+    })
+    const entries = listRoutes(route)
+    const get = entries.find((e) => e.verb === "GET")
+    const post = entries.find((e) => e.verb === "POST")
+    expect((get?.meta as { openapi?: { summary?: string } }).openapi?.summary).toBe("get it")
+    expect((post?.meta as { openapi?: { summary?: string } }).openapi?.summary).toBe("post it")
+  })
+
+  it("listRoutes matches the walk toOpenApi uses internally — path/method sets agree", async () => {
+    const d = await toOpenApi(api)
+    const entries = listRoutes((await import("./dx.ts")).httpProjection(api))
+    const fromDoc = new Set(
+      Object.entries(d.paths).flatMap(([path, methods]) =>
+        Object.keys(methods).map((m) => `${m.toUpperCase()} ${path}`)
+      ),
+    )
+    const fromList = new Set(entries.map((e) => `${e.verb} ${e.path}`))
+    expect(fromList).toEqual(fromDoc)
+  })
+})
+
+// ============================================================================
+// mergeOpenApiDocs
+// ============================================================================
+
+describe("mergeOpenApiDocs", () => {
+  const baseDoc = (overrides: Partial<OpenApiDoc> = {}): OpenApiDoc => ({
+    openapi: "3.1.0",
+    info: { title: "API", version: "0.1.0" },
+    paths: {},
+    ...overrides,
+  })
+
+  it("throws when called with zero documents", () => {
+    expect(() => mergeOpenApiDocs([])).toThrow("at least one document is required")
+  })
+
+  it("merges paths across 2+ non-conflicting documents", () => {
+    const a = baseDoc({
+      paths: { "/books": { get: { operationId: "books.list", responses: { "200": { description: "ok", content: { "application/json": { schema: {} } } } } } } },
+    })
+    const b = baseDoc({
+      paths: { "/authors": { get: { operationId: "authors.list", responses: { "200": { description: "ok", content: { "application/json": { schema: {} } } } } } } },
+    })
+    const c = baseDoc({
+      paths: { "/books": { post: { operationId: "books.create", responses: { "200": { description: "ok", content: { "application/json": { schema: {} } } } } } } },
+    })
+    const merged = mergeOpenApiDocs([a, b, c])
+    expect(Object.keys(merged.paths).sort()).toEqual(["/authors", "/books"])
+    expect(Object.keys(merged.paths["/books"] ?? {}).sort()).toEqual(["get", "post"])
+    expect(merged.paths["/authors"]?.["get"]?.operationId).toBe("authors.list")
+  })
+
+  it("throws when two documents define the same path+method", () => {
+    const a = baseDoc({
+      paths: { "/books": { get: { operationId: "a", responses: { "200": { description: "ok", content: { "application/json": { schema: {} } } } } } } },
+    })
+    const b = baseDoc({
+      paths: { "/books": { get: { operationId: "b", responses: { "200": { description: "ok", content: { "application/json": { schema: {} } } } } } } },
+    })
+    expect(() => mergeOpenApiDocs([a, b])).toThrow(/conflicting route.*get \/books/)
+  })
+
+  it("merges components.securitySchemes across documents by name, no conflict", () => {
+    const a = baseDoc({ components: { securitySchemes: { bearer: { type: "http", scheme: "bearer" } } } })
+    const b = baseDoc({ components: { securitySchemes: { apiKey: { type: "apiKey", in: "header", name: "X-API-Key" } } } })
+    const merged = mergeOpenApiDocs([a, b])
+    expect(merged.components?.securitySchemes).toEqual({
+      bearer: { type: "http", scheme: "bearer" },
+      apiKey: { type: "apiKey", in: "header", name: "X-API-Key" },
+    })
+  })
+
+  it("throws when two documents define the same security scheme name", () => {
+    const a = baseDoc({ components: { securitySchemes: { bearer: { type: "http", scheme: "bearer" } } } })
+    const b = baseDoc({ components: { securitySchemes: { bearer: { type: "apiKey", in: "header", name: "X" } } } })
+    expect(() => mergeOpenApiDocs([a, b])).toThrow(/conflicting security scheme.*"bearer"/)
+  })
+
+  it("no components on any input → merged doc has no components key", () => {
+    const merged = mergeOpenApiDocs([baseDoc(), baseDoc()])
+    expect(merged.components).toBeUndefined()
+  })
+
+  it("info/openapi/security are taken from the first document", () => {
+    const a = baseDoc({ info: { title: "First", version: "1.0.0" }, security: [{ bearer: [] }] })
+    const b = baseDoc({ info: { title: "Second", version: "2.0.0" } })
+    const merged = mergeOpenApiDocs([a, b])
+    expect(merged.info).toEqual({ title: "First", version: "1.0.0" })
+    expect(merged.security).toEqual([{ bearer: [] }])
+  })
+
+  it("a single document merges to an equivalent document", () => {
+    const a = baseDoc({
+      paths: { "/books": { get: { operationId: "books.list", responses: { "200": { description: "ok", content: { "application/json": { schema: {} } } } } } } },
+    })
+    expect(mergeOpenApiDocs([a])).toEqual(a)
   })
 })

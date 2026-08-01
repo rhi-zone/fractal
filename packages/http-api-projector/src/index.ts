@@ -48,7 +48,7 @@ export {
   withALS,
 } from "./compile.ts"
 export type { CompiledRouter, Matcher, RouteMatch } from "./compile.ts"
-export { toOpenApi, toOpenApiFromRoute } from "./openapi.ts"
+export { listRoutes, mergeOpenApiDocs, toOpenApi, toOpenApiFromRoute } from "./openapi.ts"
 export type {
   OpenApiDoc,
   OpenApiLeafMetaProperties,
@@ -58,6 +58,7 @@ export type {
   OpenApiParameter,
   OpenApiSchema,
   OpenApiSharedMetaProperties,
+  RouteEntry,
 } from "./openapi.ts"
 export { createClient, createClientFromRoute } from "./client.ts"
 export type { AnyClient, ClientOptions } from "./client.ts"

@@ -319,7 +319,17 @@ function nameLeaves(n: Node, prefix: string, out: Map<Handler, string>): void {
   }
   if (n.fallback !== undefined) {
     const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
-    nameLeaves(n.fallback.subtree, seg, out)
+
+    // Same bare-leaf `fallback.subtree` case as client.ts's
+    // `collectHandlerNames`/`collectCodegenNames` — key it directly at `seg`
+    // (no extra segment beyond the fallback's own name) instead of
+    // recursing into a leaf's nonexistent `children`.
+    if (isLeaf(n.fallback.subtree)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      out.set(n.fallback.subtree.handler!, seg)
+    } else {
+      nameLeaves(n.fallback.subtree, seg, out)
+    }
   }
 }
 
@@ -343,20 +353,47 @@ function nameFromPath(path: string, verb: string): string {
 }
 
 // ============================================================================
-// Internal: HttpRoute walk — computes (codenName, path, verb, meta) per method
+// listRoutes — public API: HttpRoute walk, one entry per (path, method)
 // ============================================================================
 
-type RouteEntry = {
-  readonly codenName: string // underscore-joined name (for schema lookup + default operationId)
-  readonly path: string // HTTP path string e.g. /books/{bookId}/details
-  readonly verb: string // HTTP method in uppercase
-  readonly meta: LeafMeta & OpenApiLeafMeta // the method entry's own meta bag
+/** One `(path, method)` leaf produced by walking an `HttpRoute` tree — see `listRoutes`. */
+export type RouteEntry = {
+  /** Underscore-joined name (schema-map lookup key + default operationId source) — see `nameFromPath`. */
+  readonly codenName: string
+  /** HTTP path string, e.g. `/books/{bookId}/details`. */
+  readonly path: string
+  /** HTTP method, in whatever case the route tree's `methods` keys use (uppercase for trees built via `httpProjection`). */
+  readonly verb: string
+  /** The method entry's own meta bag. */
+  readonly meta: LeafMeta & OpenApiLeafMeta
 }
 
-function walkRoute(
+/**
+ * Enumerate every `(path, method)` leaf of an already-projected `HttpRoute`
+ * tree, in tree order. Path and verb come directly from the route tree's own
+ * structure (children keys, `fallback`, `methods` keys) — exactly matching
+ * what `makeRouterFromRoute` dispatches against and what `toOpenApiFromRoute`
+ * projects into path items. This is the shared walk both `toOpenApi`/
+ * `toOpenApiFromRoute` (this module) and any other consumer that needs a
+ * flat route inventory from the same tree (e.g. deriving a route table
+ * without building a full OpenAPI document) should use — do not re-walk
+ * `HttpRoute` independently.
+ *
+ * `codenName` falls back to a path-derived name (`nameFromPath`) when `names`
+ * is omitted or doesn't have an entry for a given handler — a bare
+ * `HttpRoute` has no memory of the authored `Node` tree position a moved
+ * handler started at. Pass the handler → codegen-name map built from the
+ * original `Node` tree (see `toOpenApi`'s internal `buildNameMap`) to recover
+ * conventional dotted names.
+ *
+ * @param route - The (already rewritten) HttpRoute tree to walk.
+ * @param path  - Path prefix accumulated so far; omit at the top-level call.
+ * @param names - Optional handler → codegen-name map for `codenName`.
+ */
+export function listRoutes(
   route: HttpRoute,
-  path: string,
-  names: ReadonlyMap<Handler, string> | undefined,
+  path = "",
+  names?: ReadonlyMap<Handler, string>,
 ): RouteEntry[] {
   const out: RouteEntry[] = []
 
@@ -366,11 +403,11 @@ function walkRoute(
   }
 
   for (const [key, child] of Object.entries(route.children ?? {})) {
-    out.push(...walkRoute(child, `${path}/${key}`, names))
+    out.push(...listRoutes(child, `${path}/${key}`, names))
   }
 
   if (route.fallback !== undefined) {
-    out.push(...walkRoute(route.fallback.subtree, `${path}/{${route.fallback.name}}`, names))
+    out.push(...listRoutes(route.fallback.subtree, `${path}/{${route.fallback.name}}`, names))
   }
 
   return out
@@ -451,7 +488,7 @@ async function buildDoc(
     schemas = extractToolSchemas(opts.sourceFile)
   }
 
-  const entries = walkRoute(route, "", names)
+  const entries = listRoutes(route, "", names)
 
   // Security schemes: merged from every node in the tree (see
   // collectSecuritySchemes doc above). Only emitted on the doc when at least
@@ -560,6 +597,78 @@ async function buildDoc(
     info: { title, version },
     paths,
     ...(Array.isArray(rootSecurity) ? { security: rootSecurity } : {}),
+    ...(Object.keys(securitySchemes).length > 0 ? { components: { securitySchemes } } : {}),
+  }
+}
+
+// ============================================================================
+// mergeOpenApiDocs — public API
+// ============================================================================
+
+/**
+ * Merge multiple OpenAPI documents (each produced by `toOpenApi`/
+ * `toOpenApiFromRoute` over a different tree) into one. Mirrors
+ * `applyMoveTo`'s route-tree merge (`mergeRoutes` in route.ts): a path+method
+ * defined by more than one input document is a genuine authoring conflict —
+ * which operation would serve the request? — not something a merge can
+ * silently resolve, so this throws naming the exact path and method that
+ * collided, in the same style as `mergeRoutes`'s conflict message.
+ *
+ * `components.securitySchemes` is merged by scheme name across every doc,
+ * with the same conflict philosophy: a name defined by more than one
+ * document throws rather than picking one side's definition, since a shared
+ * scheme name is expected to be authored once (see `collectSecuritySchemes`'
+ * doc comment on same-tree scheme merging, which — unlike this cross-document
+ * merge — uses last-write-wins because it's merging one authored tree's own
+ * intentionally-shared definitions, not independently-authored documents).
+ *
+ * `openapi`/`info`/`security` are taken from the first document in `docs`;
+ * merging across documents authored with different title/version/security is
+ * not a case this function reconciles — pass a shared `opts.title`/
+ * `opts.version` to the builders that produced `docs`, or override the
+ * returned document's `info` directly.
+ *
+ * @param docs - The documents to merge, in priority order for `info`/`security` (at least one required).
+ */
+export function mergeOpenApiDocs(docs: readonly OpenApiDoc[]): OpenApiDoc {
+  if (docs.length === 0) {
+    throw new Error("mergeOpenApiDocs: at least one document is required")
+  }
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const first = docs[0]!
+
+  const paths: Record<string, Record<string, OpenApiOperation>> = {}
+  const securitySchemes: Record<string, OpenApiSecurityScheme> = {}
+
+  for (const doc of docs) {
+    for (const [path, methods] of Object.entries(doc.paths)) {
+      const existing = paths[path] ?? {}
+      for (const [method, operation] of Object.entries(methods)) {
+        if (method in existing) {
+          throw new Error(
+            `mergeOpenApiDocs: conflicting route — ${method} ${path} is defined by more than one document`,
+          )
+        }
+        existing[method] = operation
+      }
+      paths[path] = existing
+    }
+
+    for (const [name, scheme] of Object.entries(doc.components?.securitySchemes ?? {})) {
+      if (name in securitySchemes) {
+        throw new Error(
+          `mergeOpenApiDocs: conflicting security scheme — "${name}" is defined by more than one document`,
+        )
+      }
+      securitySchemes[name] = scheme
+    }
+  }
+
+  return {
+    openapi: first.openapi,
+    info: first.info,
+    paths,
+    ...(first.security !== undefined ? { security: first.security } : {}),
     ...(Object.keys(securitySchemes).length > 0 ? { components: { securitySchemes } } : {}),
   }
 }
