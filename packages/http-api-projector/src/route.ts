@@ -39,7 +39,7 @@
 // the removed interceptable-array abstraction.
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, LeafMeta, Node, SharedMeta } from "@rhi-zone/fractal-api-tree/node"
 import {
   composeErrorEncoders,
   isCursorPage,
@@ -51,9 +51,29 @@ import {
   matchKind,
 } from "@rhi-zone/fractal-api-tree"
 import type { DetectionOptions, ErrorEncoder, Page, Stores } from "@rhi-zone/fractal-api-tree"
-import type { HttpDirective } from "./project.ts"
+import type { HttpDirective, HttpLeafMeta, HttpSharedMeta } from "./project.ts"
 import { httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
 import type { ParamSource, SourceMap, StandardSchemaV1 } from "./decode.ts"
+
+// `HttpDirective`/`HttpLeafMeta`/`HttpSharedMeta` are type-only imports from
+// project.ts, which VALUE-imports from this file (`naiveTransform`,
+// `makeRouterFromRoute`, …) — a type-only import here can't create a runtime
+// cycle (TS erases it at emit), so this stays safe despite the value-import
+// direction the other way. `RouteMeta`/`RouteLeafMeta` below mirror
+// `Node["meta"]`'s own `SharedMeta`/`LeafMeta` split (node.ts) — the branch-
+// position `HttpRoute["meta"]` and the leaf-position
+// `HttpRoute["methods"][x]["meta"]`, respectively — intersected with this
+// package's own `http` namespace fragment for the position. Every field on
+// every one of these interfaces is optional (within this package's own
+// UNAUGMENTED view of `SharedMeta`/`LeafMeta` — only a deployment's own
+// augmentation file ever adds a required field, see
+// docs/design/meta-role-split-spec.md §2/§3), so `RouteMeta`/`RouteLeafMeta`
+// are freely mutually assignable to each other and to their own
+// constituents — no casts needed to pass a `SharedMeta`/`LeafMeta` value
+// into either, only to read a field off an expression whose OWN declared
+// type doesn't carry it.
+export type RouteMeta = SharedMeta & HttpSharedMeta
+export type RouteLeafMeta = LeafMeta & HttpLeafMeta
 
 // ============================================================================
 // Sources — declarative per-route decode configuration. Real, protocol-
@@ -92,11 +112,11 @@ export type Sources = {
  */
 export type HttpRoute<H extends Handler = Handler> = {
   readonly methods?: Readonly<
-    Record<string, { readonly handler: H; readonly meta: Meta; readonly sources?: Sources }>
+    Record<string, { readonly handler: H; readonly meta: RouteLeafMeta; readonly sources?: Sources }>
   >
   readonly children?: Readonly<Record<string, HttpRoute>>
   readonly fallback?: { readonly name: string; readonly subtree: HttpRoute }
-  readonly meta: Meta
+  readonly meta: RouteMeta
 }
 
 /**
@@ -110,10 +130,10 @@ const routeBrand = new WeakSet<object>()
 
 /** Construct an `HttpRoute` value. Registers the value for `isHttpRoute`. */
 export function httpRoute(def: {
-  methods?: Record<string, { handler: Handler; meta: Meta; sources?: Sources }> | undefined
+  methods?: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> | undefined
   children?: Record<string, HttpRoute> | undefined
   fallback?: { name: string; subtree: HttpRoute } | undefined
-  meta?: Meta | undefined
+  meta?: RouteMeta | undefined
 }): HttpRoute {
   const route: HttpRoute = {
     ...(def.methods !== undefined ? { methods: def.methods } : {}),
@@ -134,7 +154,7 @@ export function isHttpRoute(v: unknown): v is HttpRoute {
 // Directive helpers — shared by the rewriters below
 // ============================================================================
 
-function directivesOf(meta: Meta): readonly HttpDirective[] {
+function directivesOf(meta: RouteMeta): readonly HttpDirective[] {
   const h = meta.http
   if (typeof h !== "object" || h === null) return []
   const d = (h as { directives?: unknown }).directives
@@ -151,7 +171,7 @@ function directivesOf(meta: Meta): readonly HttpDirective[] {
  * not a call to `getHttpMeta` — route.ts can't import project.ts, since
  * project.ts imports FROM route.ts and a reverse import would cycle).
  */
-function sourceMapOf(meta: Meta): SourceMap | undefined {
+function sourceMapOf(meta: RouteMeta): SourceMap | undefined {
   let merged: Record<string, ParamSource> | undefined
   for (const d of directivesOf(meta)) {
     if (d.kind === "source") merged = { ...merged, ...d.map }
@@ -167,7 +187,7 @@ function sourceMapOf(meta: Meta): SourceMap | undefined {
  * one, not composing with it — same "later wins" convention `getHttpMeta`
  * (project.ts) already applies to `verb`/`method`/`moveTo`/`response`).
  */
-function validateOf(meta: Meta): StandardSchemaV1 | undefined {
+function validateOf(meta: RouteMeta): StandardSchemaV1 | undefined {
   let schema: StandardSchemaV1 | undefined
   for (const d of directivesOf(meta)) {
     if (d.kind === "validate") schema = d.schema
@@ -184,7 +204,7 @@ function validateOf(meta: Meta): StandardSchemaV1 | undefined {
  * imports FROM route.ts, so a reverse import would cycle.
  */
 function paginatedDirectiveOf(
-  meta: Meta,
+  meta: RouteMeta,
 ): Extract<HttpDirective, { readonly kind: "paginated" }> | undefined {
   let directive: Extract<HttpDirective, { readonly kind: "paginated" }> | undefined
   for (const d of directivesOf(meta)) {
@@ -193,7 +213,7 @@ function paginatedDirectiveOf(
   return directive
 }
 
-function withoutDirective(meta: Meta, directive: HttpDirective): Meta {
+function withoutDirective(meta: RouteMeta, directive: HttpDirective): RouteMeta {
   const h = meta.http as { directives?: readonly HttpDirective[] } | undefined
   if (h === undefined) return meta
   return {
@@ -206,7 +226,7 @@ function withoutDirective(meta: Meta, directive: HttpDirective): Meta {
 // 1. Naive transform: Node => HttpRoute
 //
 // Every child becomes a path-segment child. Every handler becomes a single
-// POST entry in `methods`. Meta is copied through unchanged. Recursive.
+// POST entry in `methods`. meta is copied through unchanged. Recursive.
 // ============================================================================
 
 /**
@@ -239,7 +259,7 @@ function withoutDirective(meta: Meta, directive: HttpDirective): Meta {
  */
 export type NaiveRoute<N extends Node> =
   & (N extends { readonly handler: infer H extends Handler }
-      ? { readonly methods: { readonly POST: { readonly handler: H; readonly meta: Meta; readonly sources?: Sources } } }
+      ? { readonly methods: { readonly POST: { readonly handler: H; readonly meta: RouteLeafMeta; readonly sources?: Sources } } }
       : {})
   & (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
       ? { readonly children: { readonly [K in keyof C]: NaiveRoute<C[K]> } }
@@ -247,7 +267,7 @@ export type NaiveRoute<N extends Node> =
   & (N extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends Node } }
       ? { readonly fallback: { readonly name: Nm; readonly subtree: NaiveRoute<S> } }
       : {})
-  & { readonly meta: Meta }
+  & { readonly meta: RouteMeta }
 
 export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
   const sourceMap = sourceMapOf(node.meta)
@@ -329,7 +349,7 @@ export function mapRoute(route: HttpRoute, fn: (node: HttpRoute) => HttpRoute): 
  * The `HttpRoute` shape after `applyMethods` rewrites a tree of type `R`.
  * The rename target (`directive.value`) comes out of the open `meta` bag as
  * a plain runtime `string` — never a literal type (see `HttpDirective` in
- * project.ts and `Meta` in node.ts) — so the resulting method KEY can't be
+ * project.ts and `SharedMeta`/`LeafMeta` in node.ts) — so the resulting method KEY can't be
  * tracked statically; only the entry's VALUE (its handler type) survives.
  * `methods` is therefore widened to `Record<string, ...>` over the union of
  * the input methods' entry types — for the common case of a single method
@@ -338,7 +358,7 @@ export function mapRoute(route: HttpRoute, fn: (node: HttpRoute) => HttpRoute): 
  * the key is no longer tracked.
  */
 export type ApplyMethodsRoute<R extends HttpRoute> =
-  & (R extends { readonly methods: infer M extends Readonly<Record<string, { readonly handler: Handler; readonly meta: Meta }>> }
+  & (R extends { readonly methods: infer M extends Readonly<Record<string, { readonly handler: Handler; readonly meta: RouteLeafMeta }>> }
       ? { readonly methods: Readonly<Record<string, M[keyof M]>> }
       : {})
   & (R extends { readonly children: infer C extends Readonly<Record<string, HttpRoute>> }
@@ -347,13 +367,13 @@ export type ApplyMethodsRoute<R extends HttpRoute> =
   & (R extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute } }
       ? { readonly fallback: { readonly name: Nm; readonly subtree: ApplyMethodsRoute<S> } }
       : {})
-  & { readonly meta: Meta }
+  & { readonly meta: RouteMeta }
 
 export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R> {
   return mapRoute(route, (node) => {
     let methods = node.methods
     if (methods !== undefined) {
-      const rebuilt: Record<string, { handler: Handler; meta: Meta; sources?: Sources }> = {}
+      const rebuilt: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> = {}
       let changed = false
       for (const [key, entry] of Object.entries(methods)) {
         const directive = directivesOf(entry.meta).find(
@@ -533,7 +553,7 @@ function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpR
  * the open `meta` bag; TypeScript has no way to know, for a given input tree
  * type, WHERE a subtree ends up without parsing that string as a type-level
  * template literal and re-deriving the whole tree shape from it. Doing that
- * would need `HttpDirective`/`Meta` to carry a typed, literal directive
+ * would need `HttpDirective`/`LeafMeta` to carry a typed, literal directive
  * language instead of today's open `{ [key: string]: unknown }` bag — a
  * separate, much larger design question (typed directives), not a narrower
  * fix within this rewriter. `applyMoveTo` returns the erased `HttpRoute`
@@ -597,8 +617,8 @@ function wrapResponse(
 type ResponseWrappedHandler = (input: unknown) => Promise<ResponseOverride>
 
 export type ApplyResponseRoute<R extends HttpRoute> =
-  & (R extends { readonly methods: infer M extends Readonly<Record<string, { readonly handler: Handler; readonly meta: Meta }>> }
-      ? { readonly methods: { readonly [K in keyof M]: { readonly handler: M[K]["handler"] | ResponseWrappedHandler; readonly meta: Meta } } }
+  & (R extends { readonly methods: infer M extends Readonly<Record<string, { readonly handler: Handler; readonly meta: RouteLeafMeta }>> }
+      ? { readonly methods: { readonly [K in keyof M]: { readonly handler: M[K]["handler"] | ResponseWrappedHandler; readonly meta: RouteLeafMeta } } }
       : {})
   & (R extends { readonly children: infer C extends Readonly<Record<string, HttpRoute>> }
       ? { readonly children: { readonly [K in keyof C]: ApplyResponseRoute<C[K]> } }
@@ -606,13 +626,13 @@ export type ApplyResponseRoute<R extends HttpRoute> =
   & (R extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute } }
       ? { readonly fallback: { readonly name: Nm; readonly subtree: ApplyResponseRoute<S> } }
       : {})
-  & { readonly meta: Meta }
+  & { readonly meta: RouteMeta }
 
 export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute<R> {
   return mapRoute(route, (node) => {
     let methods = node.methods
     if (methods !== undefined) {
-      const rebuilt: Record<string, { handler: Handler; meta: Meta; sources?: Sources }> = {}
+      const rebuilt: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> = {}
       let changed = false
       for (const [key, entry] of Object.entries(methods)) {
         const directive = directivesOf(entry.meta).find(
@@ -657,7 +677,7 @@ export function composeTransforms(
 type RouteCandidate = {
   readonly method: string
   readonly handler: Handler
-  readonly meta: Meta
+  readonly meta: RouteLeafMeta
   readonly slugs: Readonly<Record<string, string>>
 }
 
@@ -731,7 +751,7 @@ function matchRoute(
   idx: number,
   method: string,
   slugs: Record<string, string>,
-): { entry: { handler: Handler; meta: Meta; sources?: Sources }; slugs: Record<string, string> } | undefined {
+): { entry: { handler: Handler; meta: RouteLeafMeta; sources?: Sources }; slugs: Record<string, string> } | undefined {
   if (idx === segs.length) {
     const entry = route.methods?.[method]
     if (entry === undefined) return undefined
@@ -966,7 +986,7 @@ async function defaultDecode(
  * body regardless, this header is a convenience on top, not the only way to
  * discover the next page.
  */
-function pageLinkHeader(req: Request, output: Page<unknown>, meta: Meta): string | undefined {
+function pageLinkHeader(req: Request, output: Page<unknown>, meta: RouteLeafMeta): string | undefined {
   if (!output.hasMore) return undefined
   if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "DELETE") return undefined
 
@@ -986,7 +1006,7 @@ function pageLinkHeader(req: Request, output: Page<unknown>, meta: Meta): string
 }
 
 /** Default `encode`: a 200 JSON response, with a `Link: ...; rel="next"` header attached when `output` is page-shaped and has a next page (see `pageLinkHeader`). */
-function defaultEncode(output: unknown, req?: Request, meta?: Meta): Response {
+function defaultEncode(output: unknown, req?: Request, meta?: RouteLeafMeta): Response {
   if (req !== undefined && meta !== undefined && isPageShape(output)) {
     const link = pageLinkHeader(req, output, meta)
     if (link !== undefined) return jsonRouteResponse(output, { status: 200, headers: { Link: link } })
@@ -1131,7 +1151,7 @@ function composeHandlerMiddleware(
 export async function runRoute(
   req: Request,
   handler: Handler,
-  meta: Meta,
+  meta: RouteLeafMeta,
   sources: Sources | undefined,
   slugs: Readonly<Record<string, string>>,
   handlerMiddleware?: readonly HttpHandlerMiddleware[],

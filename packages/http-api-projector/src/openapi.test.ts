@@ -325,15 +325,17 @@ describe("security", () => {
     expect(d.paths["/open"]?.["post"]?.security).toBeUndefined()
   })
 
-  it("root node's meta.openapi.security is emitted as the spec-level default", async () => {
+  it("opts.defaultSecurity is emitted as the spec-level default", async () => {
+    // Root-position `meta.openapi.security` no longer means "spec-level
+    // default" — that dual meaning was removed (§6,
+    // docs/design/meta-role-split-spec.md): `openapi.security` on `meta` is
+    // per-operation only now, and the spec-level default is a plain builder
+    // option instead.
     const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
-    const n = api_(
-      {
-        thing: op((_: unknown) => null, {}),
-      },
-      { meta: { openapi: { security: [{ bearer: [] }] } } },
-    )
-    const d = await toOpenApi(n)
+    const n = api_({
+      thing: op((_: unknown) => null, {}),
+    })
+    const d = await toOpenApi(n, { defaultSecurity: [{ bearer: [] }] })
     expect(d.security).toEqual([{ bearer: [] }])
     // Not duplicated onto the operation itself — that stays a per-op override.
     expect(d.paths["/thing"]?.["post"]?.security).toBeUndefined()

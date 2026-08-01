@@ -1,15 +1,16 @@
 import { describe, expect, it } from "bun:test"
 import { verbFromTags } from "./tags.ts"
-import type { Meta } from "@rhi-zone/fractal-api-tree/node"
+import type { LeafMeta } from "@rhi-zone/fractal-api-tree/node"
+import type { HttpLeafMeta } from "./project.ts"
 
 // These tests deliberately feed malformed `meta.http` shapes (wrong type
 // for `http` itself, `directives` not an array, a directive `value` that
 // isn't a string) to verify verbFromTags's runtime defensive parsing still
 // degrades gracefully — the shape is invalid ON PURPOSE, so it's built as
-// `unknown` and cast, bypassing the compile-time `HttpMeta` shape that
-// declaration merging now gives `meta.http` (see node.ts / project.ts).
-function malformed(meta: unknown): Meta {
-  return meta as Meta
+// `unknown` and cast, bypassing the compile-time `HttpLeafMeta` shape
+// (see node.ts / project.ts).
+function malformed(meta: unknown): LeafMeta & HttpLeafMeta {
+  return meta as LeafMeta & HttpLeafMeta
 }
 
 describe("verbFromTags — tag lattice dispatch", () => {

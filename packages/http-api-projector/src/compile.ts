@@ -19,10 +19,17 @@
 // convenience wrappers for the three benchmarked shapes.
 
 import type { AsyncLocalStorage } from "node:async_hooks"
-import type { Handler, Meta } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler } from "@rhi-zone/fractal-api-tree/node"
 import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 import { runRoute, splitPath } from "./route.ts"
-import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, Sources, ThrownErrorEncoder } from "./route.ts"
+import type {
+  HttpErrorEncoder,
+  HttpHandlerMiddleware,
+  HttpRoute,
+  RouteLeafMeta,
+  Sources,
+  ThrownErrorEncoder,
+} from "./route.ts"
 
 // ============================================================================
 // Shared types
@@ -30,7 +37,7 @@ import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, Sources, Throw
 
 export type RouteMatch = {
   readonly handler: Handler
-  readonly meta: Meta
+  readonly meta: RouteLeafMeta
   readonly sources?: Sources
   readonly slugs: Record<string, string>
 }
@@ -76,7 +83,7 @@ type CollectedRoute = {
   readonly path: string
   readonly method: string
   readonly handler: Handler
-  readonly meta: Meta
+  readonly meta: RouteLeafMeta
   readonly sources?: Sources
 }
 

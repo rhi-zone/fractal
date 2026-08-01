@@ -49,12 +49,12 @@
 //
 // See:
 //   packages/api-tree/src/tree-manifest.ts        — the protocol-agnostic analogue
-//   packages/api-tree/src/node.ts                 — Node, Handler, Meta, op()'s literal-preserving meta
+//   packages/api-tree/src/node.ts                 — Node, Handler, SharedMeta, op()'s literal-preserving meta
 //   packages/http-api-projector/src/project.ts    — HttpDirective<M, P>
 //   packages/http-api-projector/src/verbs.ts      — httpVerbBundle, http.*, moveTo
 //   packages/http-api-projector/src/route.ts      — naiveTransform, applyMethods, applyMoveTo, resolveMoveTo
 
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
 
 /**
  * Union-to-intersection — identical technique to `TreeManifest`'s own helper
@@ -263,7 +263,27 @@ type ManifestEntry = {
 
 type CollectEntries<N extends Node, Prefix extends string, Root extends Node> =
   // Leaf part — this node's own entry, at its moveTo-resolved path.
-  | (N extends { readonly handler: infer H extends Handler; readonly meta: infer M extends Meta }
+  //
+  // `infer M` is deliberately UNCONSTRAINED here (no `extends SharedMeta`) —
+  // constraining it broke every leaf carrying a real meta contribution
+  // (e.g. `op(fn, http.get)`, whose actual `meta` type is `Widen<...>` —
+  // node.ts's `Widen`, `{...} & { readonly [key: string]: unknown }`)
+  // silently to `never`: TypeScript's "weak type" inference check applies
+  // to a CONSTRAINED `infer X extends Y` the same way it applies to a
+  // function-argument assignability check (verified empirically, scratch
+  // `tsc`) — `SharedMeta` has only one optional member (`description`), a
+  // real leaf's folded meta (`{http:{...}, tags:{...}}`) shares NOT ONE
+  // property name with it, and `Widen`'s own index signature on the SOURCE
+  // does not exempt it (confirmed: an indexed source does not bypass this
+  // check, only an indexed TARGET does — see node.ts's `Widen` doc for that
+  // other direction). The whole `N extends {handler...; meta...}` check
+  // then fails outright (not just the `M` binding), so the entire leaf
+  // silently drops out of `CollectEntries`'s union — `E` collapses to
+  // `never`, and `BuildManifest<never>` is the empty object `{}`, not an
+  // error. `M`'s own uses below (`ResolveMethod`/`ResolveMoveTo`) already
+  // defensively check `M extends {http?: {...}}` themselves, so no
+  // constraint is needed here for them to work correctly.
+  | (N extends { readonly handler: infer H extends Handler; readonly meta: infer M }
       ? H extends (input: infer I) => infer R
         ? {
             readonly path: ResolvedPath<Prefix, ResolveMoveTo<M>, Root>

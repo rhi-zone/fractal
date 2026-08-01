@@ -21,7 +21,7 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { ParamSource } from "@rhi-zone/fractal-api-tree"
 import { http } from "./verbs.ts"
 import { getHttpMeta, verbFromTags } from "./project.ts"
-import type { HttpDirective, HttpMeta } from "./project.ts"
+import type { HttpDirective, HttpLeafMetaProperties } from "./project.ts"
 
 // ============================================================================
 // Helpers
@@ -312,7 +312,7 @@ function sourceMapOf(n: ReturnType<typeof op>): Record<string, ParamSource> | un
   return getHttpMeta(n.meta).sourceMap as Record<string, ParamSource> | undefined
 }
 
-function sourceDirectives(meta: HttpMeta): readonly HttpDirective[] {
+function sourceDirectives(meta: HttpLeafMetaProperties): readonly HttpDirective[] {
   return (meta as { directives?: readonly HttpDirective[] }).directives ?? []
 }
 
@@ -359,7 +359,7 @@ describe("http.source", () => {
 
   it("two http.source() calls concatenate as two directive entries", () => {
     const merged = mergeMeta(http.source({ year: "query" }), http.source({ months: "body" }))
-    expect(sourceDirectives(merged.http as HttpMeta)).toEqual([
+    expect(sourceDirectives(merged.http as HttpLeafMetaProperties)).toEqual([
       { kind: "source", map: { year: { store: "query", key: "year" } } },
       { kind: "source", map: { months: { store: "body", key: "months" } } },
     ])

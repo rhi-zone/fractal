@@ -35,7 +35,7 @@
 //   packages/api-tree/src/node.ts               — Node, Handler, fallback
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import { httpProjection } from "./dx.ts"
@@ -65,6 +65,17 @@ export type OpenApiOpts = {
    * TypeScript compiler when the map is already available.
    */
   readonly schemas?: SchemaMap
+  /**
+   * Spec-level default security requirement (`OpenApiDoc.security`) — applies
+   * to every operation that doesn't set its own `meta.openapi.security`. A
+   * plain document-level option (same footing as `title`/`version`), NOT
+   * read off any tree-authored `meta` value — `openapi.security` on `meta`
+   * means exactly one thing now, a per-operation requirement
+   * (`HttpLeafMeta`); see docs/design/meta-role-split-spec.md §6 for why the
+   * prior root-position reading of the same key was removed rather than kept
+   * as a second meaning.
+   */
+  readonly defaultSecurity?: OpenApiSecurityRequirement[]
 }
 
 /** A JSON-Schema-compatible object (open bag — OpenAPI 3.1 allows any $schema). */
@@ -133,10 +144,16 @@ export type OpenApiDoc = {
   }
   readonly paths: Record<string, Record<string, OpenApiOperation>>
   /**
-   * Spec-level default security requirement, read from the root node's
-   * `meta.openapi.security` — applies to every operation that doesn't
-   * override it with its own `security` field. Absent when the root carries
-   * no `meta.openapi.security`.
+   * Spec-level default security requirement — applies to every operation
+   * that doesn't override it with its own `meta.openapi.security`. Sourced
+   * from `OpenApiOpts.defaultSecurity` (an explicit builder option), NOT
+   * from any tree-authored `meta` value — `openapi.security` on `meta` now
+   * means exactly one thing (a per-operation requirement, `HttpLeafMeta`);
+   * the spec-level default is a document-level choice, same footing as
+   * `title`/`version`/`servers`, not a value smuggled onto the root node's
+   * meta where it used to read exactly like a per-operation override that
+   * happened to be authored one level up (docs/design/meta-role-split-spec.md
+   * §6). Absent when the caller doesn't pass `defaultSecurity`.
    */
   readonly security?: OpenApiSecurityRequirement[]
   /**
@@ -168,8 +185,34 @@ function pathParams(path: string): string[] {
 // Internal: safe openapi meta extraction
 // ============================================================================
 
-/** Per-operation OpenAPI overrides read from `meta.openapi` — see `toOpenApi`. */
-export type OpenApiMeta = {
+// ============================================================================
+// meta.openapi — role-split fragments (see
+// docs/design/meta-role-split-spec.md §2/§4/§6). `openapi.security` has
+// exactly ONE meaning now — a per-operation requirement, `HttpLeafMeta`-only
+// (§6): the prior ROOT-position "spec-level default" reading of the same
+// key was a dual-meaning defect, now fixed by moving that concern to
+// `OpenApiOpts.defaultSecurity` (a plain builder option, see `OpenApiDoc`
+// above) instead of a second meaning for the same tree-authored field.
+// ============================================================================
+
+/** `meta.openapi` fields valid at BOTH leaf and branch position. */
+export interface OpenApiSharedMetaProperties {
+  /**
+   * Security scheme definitions — can be authored on any node in the tree;
+   * the OpenAPI projector walks the whole tree (and every method entry) and
+   * merges every node's `securitySchemes` bag into `components.securitySchemes`
+   * (see `collectSecuritySchemes`). Not itself emitted on any operation.
+   */
+  readonly securitySchemes?: Record<string, OpenApiSecurityScheme>
+}
+
+/** Wraps `OpenApiSharedMetaProperties` under the `openapi` key — combined into `HttpSharedMeta` (see meta.ts). */
+export interface OpenApiSharedMeta {
+  readonly openapi?: OpenApiSharedMetaProperties
+}
+
+/** `meta.openapi` fields valid at LEAF (operation) position only — see `toOpenApi`. */
+export interface OpenApiLeafMetaProperties extends OpenApiSharedMetaProperties {
   readonly operationId?: string
   readonly summary?: string
   readonly description?: string
@@ -178,31 +221,28 @@ export type OpenApiMeta = {
   /**
    * Per-operation security requirement — set on a method entry's own meta.
    * "This operation requires scheme A OR scheme B": `[{ a: [] }, { b: [] }]`.
-   * Set on the ROOT node's meta instead, it becomes the spec-level default
-   * (`OpenApiDoc.security`) rather than a per-operation override — see
-   * `buildDoc`.
+   * The spec-level default is `OpenApiOpts.defaultSecurity`, not a second
+   * meaning of this same field (§6) — see `OpenApiDoc.security`'s doc above.
    */
   readonly security?: OpenApiSecurityRequirement[]
-  /**
-   * Security scheme definitions — can be authored on any node in the tree;
-   * the OpenAPI projector walks the whole tree and merges every node's
-   * `securitySchemes` bag into `components.securitySchemes` (see
-   * `collectSecuritySchemes`). Not itself emitted on the operation.
-   */
-  readonly securitySchemes?: Record<string, OpenApiSecurityScheme>
   readonly [key: string]: unknown
 }
 
-// Declaration merging: types this package's `meta.openapi` slot on the
-// shared `Meta` open bag (see api-tree/src/node.ts) so consumers get a
-// typed `meta.openapi` instead of an untyped index-signature fallback.
-declare module "@rhi-zone/fractal-api-tree/node" {
-  interface Meta {
-    openapi?: OpenApiMeta
-  }
+/** Wraps `OpenApiLeafMetaProperties` under the `openapi` key — combined into `HttpLeafMeta` (see meta.ts). */
+export interface OpenApiLeafMeta {
+  readonly openapi?: OpenApiLeafMetaProperties
 }
 
-function getOpenApiMeta(meta: Meta): OpenApiMeta {
+/** Public alias kept for the exported "resolved per-operation openapi meta" shape — see `getOpenApiMeta`. */
+export type OpenApiMeta = OpenApiLeafMetaProperties
+
+function getOpenApiSharedMeta(meta: OpenApiSharedMeta): OpenApiSharedMetaProperties {
+  const o = meta.openapi
+  if (typeof o !== "object" || o === null) return {}
+  return o
+}
+
+function getOpenApiMeta(meta: OpenApiLeafMeta): OpenApiLeafMetaProperties {
   const o = meta.openapi
   if (typeof o !== "object" || o === null) return {}
   return o
@@ -222,12 +262,21 @@ function collectSecuritySchemes(
   route: HttpRoute,
   out: Record<string, OpenApiSecurityScheme>,
 ): void {
-  const nodeSchemes = getOpenApiMeta(route.meta).securitySchemes
+  // `securitySchemes` is a SHARED-role field (read at both leaf and branch
+  // position, per docs/design/meta-role-split-spec.md §4) — `route.meta`/
+  // `entry.meta`'s own declared type (`HttpRoute`, route.ts) carries only
+  // this package's `http` namespace, not `openapi`, so the cast here is
+  // reading a field the expression's own static type doesn't declare, not
+  // widening past a real constraint (see route.ts's `RouteMeta`/
+  // `RouteLeafMeta` doc comment for why no OTHER cast in this file needs
+  // this — this is the one place `openapi` fields are read directly off an
+  // `HttpRoute` value rather than through `RouteEntry.meta`, below).
+  const nodeSchemes = getOpenApiSharedMeta(route.meta as OpenApiSharedMeta).securitySchemes
   if (typeof nodeSchemes === "object" && nodeSchemes !== null) {
     Object.assign(out, nodeSchemes)
   }
   for (const entry of Object.values(route.methods ?? {})) {
-    const entrySchemes = getOpenApiMeta(entry.meta).securitySchemes
+    const entrySchemes = getOpenApiSharedMeta(entry.meta as OpenApiSharedMeta).securitySchemes
     if (typeof entrySchemes === "object" && entrySchemes !== null) {
       Object.assign(out, entrySchemes)
     }
@@ -301,7 +350,7 @@ type RouteEntry = {
   readonly codenName: string // underscore-joined name (for schema lookup + default operationId)
   readonly path: string // HTTP path string e.g. /books/{bookId}/details
   readonly verb: string // HTTP method in uppercase
-  readonly meta: Meta // the method entry's own meta bag
+  readonly meta: LeafMeta & OpenApiLeafMeta // the method entry's own meta bag
 }
 
 function walkRoute(
@@ -411,9 +460,10 @@ async function buildDoc(
   const securitySchemes: Record<string, OpenApiSecurityScheme> = {}
   collectSecuritySchemes(route, securitySchemes)
 
-  // Spec-level default security: the root node's own meta.openapi.security
-  // (NOT a method entry's — those are per-operation and read below).
-  const rootSecurity = getOpenApiMeta(route.meta).security
+  // Spec-level default security: an explicit builder option now, not read
+  // off any node's meta — see `OpenApiOpts.defaultSecurity`'s doc comment
+  // and docs/design/meta-role-split-spec.md §6.
+  const rootSecurity = opts.defaultSecurity
 
   const paths: Record<string, Record<string, OpenApiOperation>> = {}
 

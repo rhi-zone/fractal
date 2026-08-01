@@ -11,25 +11,35 @@
 // meta.http is a DU interpreted by the rewriter pipeline (interpreter
 // pattern), not a fixed record of named keys:
 //   meta.http.directives  — an array of HttpDirective DU values, each tagged
-//                           by `kind` ("verb" | "segment" | "when" |
-//                           "legacyPath" | "method" | "moveTo" | "response")
+//                           by `kind` ("verb" | "method" | "moveTo" |
+//                           "response" | "paginated" | "source" | "validate")
 //
-// `dispatch` markers (header/query/contentType attribute dispatch) and the
-// `legacyPath`/`segment`/`when` directives were interpreted by a direct
-// tree-walk dispatcher that has been retired in favor of the single
-// `HttpRoute` pipeline below (naiveTransform → rewriters → makeRouterFromRoute,
-// see route.ts). Attribute dispatch (header/query/contentType-based routing
-// at the same path+method) has no equivalent in the new pipeline yet — it
-// is an open design question, see TODO.md.
+// The `dispatch` marker (header/query/contentType attribute dispatch) and
+// the `segment`/`when`/`legacyPath` directives — read by a direct tree-walk
+// dispatcher that has since been retired in favor of the single `HttpRoute`
+// pipeline below (naiveTransform → rewriters → makeRouterFromRoute, see
+// route.ts) — were DELETED (not given a typed home): verified read nowhere
+// else in the tree (see docs/design/meta-role-split-spec.md §4/§9(6)).
+// Attribute dispatch (header/query/contentType-based routing at the same
+// path+method) has no equivalent in the new pipeline yet — it is an open
+// design question, see TODO.md.
+//
+// This package performs NO `declare module` augmentation of api-tree's
+// `SharedMeta`/`LeafMeta`/`BranchMeta` — it exports its own `http`/`openapi`
+// namespaced fragments (`HttpSharedMeta`/`HttpLeafMeta` here and in
+// openapi.ts, combined in meta.ts) as inert interfaces. A deployment is the
+// only place that ever augments core's role interfaces — see
+// docs/design/meta-role-split-spec.md §2/§3.
 //
 // See:
 //   docs/design/router-model.md              — Node Shape, Dispatch, HTTP metadata
 //   docs/design/routing-and-transforms.md    — HttpRoute pipeline, DX
 //   docs/design/dispatch-extensibility.md    — DU + interpreter pattern
+//   docs/design/meta-role-split-spec.md      — SharedMeta/LeafMeta/BranchMeta split
 
 import { makeRouterFromRoute, naiveTransform } from "./route.ts"
 import type { HttpRoute } from "./route.ts"
-import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SourceMap, StandardSchemaV1 } from "./decode.ts"
 
 export { verbFromTags } from "./tags.ts"
@@ -61,24 +71,13 @@ export function toHttpRoutes(node: Node): HttpRoute {
   return naiveTransform(node)
 }
 
-// Declaration merging: types this package's `meta.http` slot on the shared
-// `Meta` open bag (see api-tree/src/node.ts) so consumers get a typed
-// `meta.http` instead of an untyped index-signature fallback.
-declare module "@rhi-zone/fractal-api-tree/node" {
-  interface Meta {
-    http?: HttpMeta
-  }
-}
-
 // ============================================================================
 // meta.http DU types
 // ============================================================================
 
 /**
  * A single HTTP directive — a tagged variant interpreted by the rewriter
- * pipeline (route.ts) or, for the retired variants below, by other
- * packages' own self-contained tree walks (openapi, client — see those
- * packages' `getHttpMeta`). Interpreter pattern: each variant is a
+ * pipeline (route.ts). Interpreter pattern: each variant is a
  * self-describing value, not a fixed record field.
  *
  * Interpreted by the HttpRoute rewriters in route.ts — see
@@ -134,17 +133,6 @@ declare module "@rhi-zone/fractal-api-tree/node" {
  *
  * - `{ kind: "verb", value }` — explicit verb override; wins over tags.
  *
- * Retired from http's own dispatch (the direct tree-walk dispatcher that
- * read these has been deleted) but still read by other packages' own
- * self-contained Node-tree walks (openapi, client) for their own,
- * independent projections:
- *
- * - `{ kind: "segment", value }`    — explicit path-segment rename.
- * - `{ kind: "when", value }`       — per-child match-value override for
- *   non-method attribute dispatch (key ≠ match value).
- * - `{ kind: "legacyPath", value }` — [DEBT] full-path override, bypasses
- *   the tree-walk address entirely.
- *
  * `method`'s `value` and `moveTo`'s `path` are generic (`M`/`P`, both
  * defaulting to plain `string`) so a constructor that knows its own literal
  * value — `http.get`/`http.post`/etc. and `http.moveTo(path)` (verbs.ts) —
@@ -153,14 +141,11 @@ declare module "@rhi-zone/fractal-api-tree/node" {
  * `HttpDirective` (no type argument) keeps working unchanged — the defaults
  * reproduce today's `string`-typed fields exactly, so this is a
  * backwards-compatible narrowing, not a breaking change. The other variants
- * (`verb`/`segment`/`when`/`legacyPath`/`response`) aren't parameterized —
- * nothing in this task's scope constructs them with a literal to preserve.
+ * (`verb`/`response`) aren't parameterized — nothing in this task's scope
+ * constructs them with a literal to preserve.
  */
 export type HttpDirective<M extends string = string, P extends string = string> =
   | { readonly kind: "verb"; readonly value: string }
-  | { readonly kind: "segment"; readonly value: string }
-  | { readonly kind: "when"; readonly value: string }
-  | { readonly kind: "legacyPath"; readonly value: string }
   | { readonly kind: "method"; readonly value: M }
   | { readonly kind: "moveTo"; readonly path: P }
   | {
@@ -179,50 +164,38 @@ export type HttpDirective<M extends string = string, P extends string = string> 
   | { readonly kind: "validate"; readonly schema: StandardSchemaV1 }
 
 // ============================================================================
-// getHttpMeta — the ONE canonical `meta.http` parser
-//
-// Resolves the raw `meta.http` bag (dispatch marker + directives array) into
-// a typed, fully-resolved shape. This is what openapi's and client's own
-// self-contained tree walks read instead of each maintaining a divergent
-// local copy (see docs/design — the pre-consolidation state had THREE
-// separate typeof/null-checking parsers: this one, plus one apiece in
-// openapi-api-projector and client-api-projector, with diverging field sets
-// — `dispatch` collapsed vs. not, `moveTo`/`when`/`response` parsed vs.
-// skipped, `dispatchKind` vs. `dispatch` naming).
-//
-// `dispatch` is collapsed from the raw marker (`{kind: "method" | "header" |
-// "query" | "contentType"}`) to `{kind: "method" | "attr"}` — "attr" covers
-// any non-method marker, matching how openapi/client both treat
-// attribute-dispatched children (as segment-dispatch, an approximation; see
-// those packages' own tree walks for how the collapsed value is used).
-//
-// Each directive kind is resolved to its own field — last directive of a
-// given kind in the array wins, matching the pre-consolidation local walks'
-// behavior (a plain for-loop overwriting as it goes).
+// meta.http — role-split fragments (see docs/design/meta-role-split-spec.md
+// §2/§4). `HttpSharedMetaProperties`/`HttpLeafMetaProperties` are the
+// RESOLVED shape (what `getHttpMeta` produces) — a deployment that wants to
+// require `http.method` on every op, for instance, extends `LeafMeta` with
+// `HttpLeafMeta` (below) and adds `http: { method: string } & ...` on top.
+// These are NOT the raw authoring shape (`{ directives: HttpDirective[] }`)
+// contributions like `http.get`/`http.moveTo()` (verbs.ts) actually produce
+// — `op()`'s own literal-preserving return type (`FoldMeta<C>`, node.ts)
+// carries that raw shape through independently of what's declared here;
+// this interface only has to be assignable FROM it (every field here is
+// optional), never equal to it.
 // ============================================================================
 
-/** Fully-resolved `meta.http` shape — see `getHttpMeta` above. */
-export type HttpMeta = {
-  /** Collapsed dispatch marker: "attr" covers any non-method marker. */
-  readonly dispatch?: { readonly kind: "method" | "attr" }
-  /** The raw directives array, passed through unresolved for callers that need it. */
+/** `meta.http` fields valid at BOTH leaf and branch position. */
+export interface HttpSharedMetaProperties {
+  /** Resolved `{ kind: "moveTo" }` directive path — single-op or whole-subtree relocation (route.ts § applyMoveTo; placement axis left open, see spec §8). */
+  readonly moveTo?: string
+  /** The raw directives array, passed through unresolved for callers that need it (e.g. `getHttpMeta`'s own resolution, `route.ts`'s rewriters). */
   readonly directives?: readonly HttpDirective[]
-  /** Per-param HTTP store overrides — see `http.source()` in verbs.ts. */
-  readonly sourceMap?: SourceMap
-  /** Resolved `{ kind: "validate" }` directive schema — see `http.validate()` in verbs.ts. */
-  readonly validate?: StandardSchemaV1
-  /** Resolved `{ kind: "verb" }` directive value. */
-  readonly verb?: string
-  /** Resolved `{ kind: "segment" }` directive value. */
-  readonly segment?: string
-  /** Resolved `{ kind: "legacyPath" }` directive value. */
-  readonly legacyPath?: string
-  /** Resolved `{ kind: "when" }` directive value. */
-  readonly when?: string
+}
+
+/** Wraps `HttpSharedMetaProperties` under the `http` key — extend `SharedMeta` with this in a deployment's augmentation file. */
+export interface HttpSharedMeta {
+  readonly http?: HttpSharedMetaProperties
+}
+
+/** `meta.http` fields valid at LEAF (operation) position only. */
+export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
   /** Resolved `{ kind: "method" }` directive value. */
   readonly method?: string
-  /** Resolved `{ kind: "moveTo" }` directive path. */
-  readonly moveTo?: string
+  /** Resolved `{ kind: "verb" }` directive value. */
+  readonly verb?: string
   /** Resolved `{ kind: "response" }` directive fields. */
   readonly response?: { readonly status?: number; readonly headers?: Record<string, string> }
   /** Resolved `{ kind: "paginated" }` directive fields — see `paginated()` in verbs.ts. */
@@ -232,22 +205,37 @@ export type HttpMeta = {
     readonly inputOffsetParam?: string
     readonly inputLimitParam?: string
   }
+  /** Resolved `{ kind: "validate" }` directive schema — see `http.validate()` in verbs.ts. */
+  readonly validate?: StandardSchemaV1
+  /** Per-param HTTP store overrides — see `http.source()` in verbs.ts. */
+  readonly sourceMap?: SourceMap
 }
 
-/** Parse `meta.http` into the resolved `HttpMeta` shape — see module doc above. */
-export function getHttpMeta(meta: Meta): HttpMeta {
+/** Wraps `HttpLeafMetaProperties` under the `http` key — extend `LeafMeta` with this in a deployment's augmentation file. */
+export interface HttpLeafMeta {
+  readonly http?: HttpLeafMetaProperties
+}
+
+// ============================================================================
+// getHttpMeta — the ONE canonical `meta.http` parser
+//
+// Resolves the raw `meta.http` bag (directives array) into a typed,
+// fully-resolved shape. Each directive kind is resolved to its own field —
+// last directive of a given kind in the array wins, matching the
+// pre-consolidation local walks' behavior (a plain for-loop overwriting as
+// it goes).
+// ============================================================================
+
+/** Parse `meta.http` into the resolved `HttpLeafMetaProperties` shape — see module doc above. */
+export function getHttpMeta(meta: HttpLeafMeta): HttpLeafMetaProperties {
   const h = meta.http
   if (typeof h !== "object" || h === null) return {}
 
   const out: {
-    dispatch?: { kind: "method" | "attr" }
     directives?: readonly HttpDirective[]
     sourceMap?: SourceMap
     validate?: StandardSchemaV1
     verb?: string
-    segment?: string
-    legacyPath?: string
-    when?: string
     method?: string
     moveTo?: string
     response?: { status?: number; headers?: Record<string, string> }
@@ -259,10 +247,6 @@ export function getHttpMeta(meta: Meta): HttpMeta {
     }
   } = {}
 
-  if (typeof h.dispatch === "object" && h.dispatch !== null) {
-    out.dispatch = { kind: h.dispatch.kind === "method" ? "method" : "attr" }
-  }
-
   if (Array.isArray(h.directives)) {
     const directives = h.directives
     out.directives = directives
@@ -270,15 +254,6 @@ export function getHttpMeta(meta: Meta): HttpMeta {
       switch (d.kind) {
         case "verb":
           out.verb = d.value
-          break
-        case "segment":
-          out.segment = d.value
-          break
-        case "legacyPath":
-          out.legacyPath = d.value
-          break
-        case "when":
-          out.when = d.value
           break
         case "method":
           out.method = d.value

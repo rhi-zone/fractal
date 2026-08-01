@@ -19,7 +19,14 @@ export type { HttpMethods, Method, SourceMapInput, VerbBundle } from "./verbs.ts
 export { crud, httpProjection } from "./dx.ts"
 export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
 export { getHttpMeta } from "./project.ts"
-export type { HttpDirective, HttpMeta, ParamSource, SourceMap } from "./project.ts"
+export type {
+  HttpDirective,
+  HttpLeafMetaProperties,
+  HttpSharedMetaProperties,
+  ParamSource,
+  SourceMap,
+} from "./project.ts"
+export type { HttpLeafMeta, HttpSharedMeta } from "./meta.ts"
 export type { HttpStore, HttpStoreRegistry, StandardSchemaOutcome, StandardSchemaV1 } from "./decode.ts"
 export { runStandardSchema } from "./decode.ts"
 export type { Sources } from "./route.ts"
@@ -40,11 +47,13 @@ export type { CompiledRouter, Matcher, RouteMatch } from "./compile.ts"
 export { toOpenApi, toOpenApiFromRoute } from "./openapi.ts"
 export type {
   OpenApiDoc,
+  OpenApiLeafMetaProperties,
   OpenApiMeta,
   OpenApiOperation,
   OpenApiOpts,
   OpenApiParameter,
   OpenApiSchema,
+  OpenApiSharedMetaProperties,
 } from "./openapi.ts"
 export { createClient, createClientFromRoute } from "./client.ts"
 export type { AnyClient, ClientOptions } from "./client.ts"
