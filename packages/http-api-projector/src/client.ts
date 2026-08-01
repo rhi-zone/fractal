@@ -65,10 +65,10 @@
 //   packages/api-tree/src/node.ts               — Node, Handler, fallback, isLeaf
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { TypedClient } from "@rhi-zone/fractal-api-tree"
 import { httpProjection } from "./dx.ts"
-import type { HttpRoute } from "./route.ts"
+import type { HttpRoute, RouteLeafMeta } from "./route.ts"
 import { ClientError } from "./client-error.ts"
 import { composeDecodeResponse, composeFetch } from "./extension.ts"
 import type { ClientExtension } from "./extension.ts"
@@ -247,7 +247,7 @@ function makeCaller(
   baseTimeout: number | undefined,
   baseSignal: AbortSignal | undefined,
   extensions: readonly ClientExtension[] | undefined,
-  meta: Meta,
+  meta: RouteLeafMeta,
   codegenName: string | undefined,
 ): (input?: unknown, callOpts?: CallOptions) => Promise<unknown> {
   return async (input?: unknown, callOpts?: CallOptions): Promise<unknown> => {

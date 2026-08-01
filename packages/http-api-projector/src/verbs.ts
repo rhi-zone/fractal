@@ -3,7 +3,7 @@
 // Verb-helper bundles: `http.get`, `http.post`, `http.put`, `http.patch`,
 // `http.delete`, `http.head`, `http.options`.
 //
-// Each helper is a METADATA VALUE (a Meta object), NOT a function. It bundles:
+// Each helper is a METADATA VALUE (a leaf meta contribution value), NOT a function. It bundles:
 //   - the verb pin (a `{kind:"verb",value}` directive in `meta.http.directives`)
 //     — wins over tag-derived verb in verbFromTags
 //   - the behavioral tags that verb implies (`meta.tags`)
@@ -19,9 +19,8 @@
 //
 // See docs/design/router-model.md §"Verb helpers are verb+implied-tags BUNDLES"
 
-import type { Meta } from "@rhi-zone/fractal-api-tree/node"
 import type { ParamSource } from "@rhi-zone/fractal-api-tree"
-import type { HttpDirective } from "./project.ts"
+import type { HttpDirective, HttpLeafMeta } from "./project.ts"
 import type { HttpStore } from "./decode.ts"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 
@@ -59,18 +58,19 @@ export type Method = keyof HttpMethods
 // ============================================================================
 
 /**
- * A verb-helper bundle: a Meta value carrying both a verb directive and
- * implied tags. Attach to a handler via `op(fn, http.put)` or compose with
- * extra contributions via `op(fn, http.put, { tags: { deprecated: true } })`.
+ * A verb-helper bundle: a leaf meta CONTRIBUTION value carrying both a verb
+ * directive and implied tags. Attach to a handler via `op(fn, http.put)` or
+ * compose with extra contributions via
+ * `op(fn, http.put, { tags: { deprecated: true } })`.
  *
  * Generic in `V` (the verb's own literal, e.g. `"GET"`) so `http.get`'s type
  * is `VerbBundle<"GET">` — the `method` directive's `value` carries the
  * literal, not just `string`. Defaults to `string` so a bare `VerbBundle`
  * reference (no type argument) keeps working wherever one already appeared.
  *
- * Deliberately NOT `Meta & {...}` (an earlier revision was) — `Meta`'s own
- * `http?: HttpMeta` (declaration-merged in project.ts) declares `directives?:
- * readonly HttpDirective[]`, a LOOSE array type; intersecting it with this
+ * Deliberately NOT `LeafMeta & {...}` (an earlier revision, against the
+ * pre-split `Meta`, was) — intersecting a loosely-typed declared `http?`
+ * field (an ARRAY type, `directives?: readonly HttpDirective[]`) with this
  * type's own literal 2-tuple produces `readonly HttpDirective[] & readonly
  * [...]`, and TypeScript does not reliably preserve tuple arity when
  * spreading/recursing over an intersection like that (confirmed directly: a
@@ -80,9 +80,14 @@ export type Method = keyof HttpMethods
  * TS's inference draws from at each step) — which silently defeated
  * `HttpManifest<N>`'s method extraction the moment two contributions were
  * merged (`op(fn, http.get, http.moveTo(".."))`, this package's own
- * `examples/library-api/src/tree.ts` pattern). A plain, self-contained object
- * type is still structurally assignable to `Meta` (all of `Meta`'s own
- * fields are optional) without ever forming that intersection.
+ * `examples/library-api/src/tree.ts` pattern). This hazard is structurally
+ * gone now that core's `LeafMeta` carries no `http` field of its own at all
+ * (projectors never augment core, docs/design/meta-role-split-spec.md §2) —
+ * this type still stays a plain, self-contained object literal type on
+ * principle: op()'s own `FoldMeta<C>` fold (node.ts) is what has to compose
+ * this bundle's literal tuple with another contribution's, not this type's
+ * own declaration, so there is nothing to gain from intersecting it with
+ * `LeafMeta` here and a real (if now-closed) class of hazard to keep clear of.
  */
 export type VerbBundle<V extends string = string> = {
   readonly http: { readonly directives: readonly [HttpDirective<V>, HttpDirective<V>] }
@@ -165,7 +170,7 @@ type MoveToDirective<P extends string> = Extract<HttpDirective<string, P>, { rea
 /**
  * `http.moveTo(path)` — DX helper for the `{ kind: "moveTo", path }` directive
  * (see project.ts § HttpDirective and route.ts § applyMoveTo). Returns a
- * plain `Meta` (no verb, no tags) so it composes with a verb bundle via
+ * plain contribution (no verb, no tags) so it composes with a verb bundle via
  * `mergeMeta`'s array-concatenation of `http.directives`:
  *
  * ```ts
@@ -178,10 +183,8 @@ type MoveToDirective<P extends string> = Extract<HttpDirective<string, P>, { rea
  * argument's literal type — `http.moveTo("..")` returns a bundle whose
  * `directives[0].path` is `".."`, not `string`.
  *
- * Deliberately NOT `Meta & {...}` — same reason as `VerbBundle` above (see
- * its doc comment): intersecting with `Meta`'s own declaration-merged,
- * loosely-typed `http?: HttpMeta` would contaminate this literal 1-tuple the
- * same way, defeating array concatenation across contributions.
+ * Deliberately NOT `LeafMeta & {...}` — same reason as `VerbBundle` above
+ * (see its doc comment).
  */
 export function moveTo<const P extends string>(
   path: P,
@@ -211,7 +214,7 @@ type PaginatedDirective = Extract<HttpDirective, { readonly kind: "paginated" }>
  * op(listBooks, http.get, paginated({ style: "cursor", inputCursorParam: "after" }))
  * ```
  *
- * Returns a plain `Meta` (no verb, no tags) so it composes with a verb
+ * Returns a plain contribution (no verb, no tags) so it composes with a verb
  * bundle via `mergeMeta`'s array-concatenation of `http.directives`, same as
  * `moveTo()` above.
  */
@@ -398,5 +401,8 @@ export const http = {
   validate,
 } as const satisfies Record<
   string,
-  VerbBundle | ((path: string) => Meta) | ((map: SourceMapInput) => Meta) | ((schema: StandardSchemaV1) => Meta)
+  | VerbBundle
+  | ((path: string) => HttpLeafMeta)
+  | ((map: SourceMapInput) => HttpLeafMeta)
+  | ((schema: StandardSchemaV1) => HttpLeafMeta)
 >

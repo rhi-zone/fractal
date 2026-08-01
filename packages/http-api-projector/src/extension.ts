@@ -35,7 +35,7 @@
 //   packages/http-api-projector/src/codegen.ts  — codegen; CodegenOptions.extensions
 //   packages/http-api-projector/src/layers.ts   — the server-side analogue this mirrors
 
-import type { Meta } from "@rhi-zone/fractal-api-tree/node"
+import type { RouteLeafMeta } from "./route.ts"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 
 /** A fetch-shaped function: takes a `Request`, returns a `Response`. */
@@ -59,7 +59,7 @@ export type FetchImpl = (req: Request) => Promise<Response>
 export type DecodeContext = {
   readonly request: Request
   readonly refetch: FetchImpl
-  readonly meta: Meta
+  readonly meta: RouteLeafMeta
   /**
    * The `SchemaMap` key identifying this operation (e.g. `"books_bookId_read"`
    * — see `@rhi-zone/fractal-api-tree/tree`'s `extractToolSchemas`), when the

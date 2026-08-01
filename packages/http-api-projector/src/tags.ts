@@ -26,10 +26,11 @@
 
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Meta } from "@rhi-zone/fractal-api-tree/node"
+import type { LeafMeta } from "@rhi-zone/fractal-api-tree/node"
+import type { HttpLeafMeta } from "./project.ts"
 
 /** Extract the `{ kind: "verb", value }` directive from `meta.http.directives`, if present. */
-function verbDirective(meta: Meta): string | undefined {
+function verbDirective(meta: HttpLeafMeta): string | undefined {
   const h = meta.http
   if (typeof h !== "object" || h === null) return undefined
   const directives = (h as { directives?: unknown }).directives
@@ -42,7 +43,15 @@ function verbDirective(meta: Meta): string | undefined {
   return undefined
 }
 
-export function verbFromTags(meta: Meta): string {
+/**
+ * `meta`'s declared type here is the intersection of core's `LeafMeta`
+ * (for `.tags`) and this package's own `HttpLeafMeta` fragment (for
+ * `.http`) — the same pattern route.ts's `RouteLeafMeta` uses, see that
+ * file's own doc comment for why no cast is needed to call this with a
+ * plain `LeafMeta`-typed value (every field on both sides stays optional
+ * within this package's own unaugmented view).
+ */
+export function verbFromTags(meta: LeafMeta & HttpLeafMeta): string {
   const httpVerb = verbDirective(meta)
   if (httpVerb !== undefined) return httpVerb.toUpperCase()
 
