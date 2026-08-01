@@ -14,8 +14,9 @@
 //      full-form values pass through unchanged, and two http.source() calls
 //      compose their sourceMaps via ordinary meta merge (mergeMeta)
 
-import { describe, expect, it } from "bun:test"
+import { describe, expect, expectTypeOf, it } from "bun:test"
 import { mergeMeta, op } from "@rhi-zone/fractal-api-tree/node"
+import type { FindStoreForParam } from "@rhi-zone/fractal-api-tree"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { ParamSource } from "@rhi-zone/fractal-api-tree"
@@ -402,6 +403,74 @@ describe("http.source", () => {
     // `bun run typecheck`.
     // @ts-expect-error — "carrierPigeon" is not a registered HttpStore
     http.source({ f: "carrierPigeon" })
+
+    expect(true).toBe(true)
+  })
+})
+
+// ============================================================================
+// Static source coverage — docs/design/typed-store-spec.md §6
+//
+// These assert at COMPILE time (`bun run typecheck`); the runtime bodies exist
+// only so `bun test` reports them. A `@ts-expect-error` that stops being an
+// error fails typecheck with "Unused '@ts-expect-error' directive", so each
+// negative case genuinely guards its invariant.
+// ============================================================================
+
+describe("http.source() preserves literal key/store association (§6)", () => {
+  it("a source() map's keys and stores survive as literal types on the directive", () => {
+    const getBudget = (input: { year: string; months: string }) => input
+    const n = op(getBudget, http.get, http.source({ year: "query" }), http.source({ months: { store: "body", key: "budgetMonths" } }))
+
+    // The literal association is what the type-level walk needs; before the
+    // `const M` redesign this was `Readonly<Record<string, ParamSource>>`.
+    type Directives = typeof n.meta extends { http: { directives: infer D } } ? D : never
+    expectTypeOf<FindStoreForParam<Directives, "year">>().toEqualTypeOf<"query">()
+    expectTypeOf<FindStoreForParam<Directives, "months">>().toEqualTypeOf<"body">()
+    // A param no source() directive names falls through to the path/convention
+    // steps, which are runtime-resolved — `never` is "not statically declared".
+    type NopeUnresolved = [FindStoreForParam<Directives, "nope">] extends [never] ? true : false
+    expectTypeOf<NopeUnresolved>().toEqualTypeOf<true>()
+
+    // Runtime agrees with the type.
+    expect(sourceMapOf(n)).toEqual({
+      year: { store: "query", key: "year" },
+      months: { store: "body", key: "budgetMonths" },
+    })
+  })
+
+  it("the LAST source() directive naming a param wins", () => {
+    const getBudget = (input: { year: string }) => input
+    const n = op(getBudget, http.source({ year: "query" }), http.source({ year: "header" }))
+
+    type Directives = typeof n.meta extends { http: { directives: infer D } } ? D : never
+    expectTypeOf<FindStoreForParam<Directives, "year">>().toEqualTypeOf<"header">()
+
+    expect(sourceMapOf(n)).toEqual({ year: { store: "header", key: "year" } })
+  })
+})
+
+describe("op() rejects a source() param the handler doesn't declare (§6)", () => {
+  it("a mistyped param name in source() is a compile error at the op() call site", () => {
+    const getBudget = (input: { year: string; months: string }) => input
+
+    // Covered: every source()-named param is a declared handler input.
+    op(getBudget, http.source({ year: "query", months: "body" }))
+
+    // @ts-expect-error — "yearr" is not one of getBudget's input keys, so this
+    // override would assemble a param the handler never reads while `year`
+    // silently fell through to the method convention.
+    op(getBudget, http.source({ yearr: "query" }))
+
+    expect(true).toBe(true)
+  })
+
+  it("stays vacuous when the handler's input keys aren't statically known", () => {
+    // No declared input, an open record, and an erased input type must all pass
+    // — the check speaks only when it actually knows the handler's key set.
+    op((_input: unknown) => "x", http.source({ anything: "query" }))
+    op((_input: Record<string, unknown>) => "x", http.source({ anything: "query" }))
+    op((_input: unknown) => "x", http.source({ anything: "query" }))
 
     expect(true).toBe(true)
   })

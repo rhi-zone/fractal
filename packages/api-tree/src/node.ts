@@ -24,6 +24,7 @@
 // ============================================================================
 
 import type { Tags } from "./tags.ts"
+import type { UncoveredSourceParams } from "./input.ts"
 
 // ============================================================================
 // Core types
@@ -490,11 +491,40 @@ type ExtractErrorKind<H> = H extends (...args: any[]) => infer R
     : R extends { kind: "err"; error: infer E } ? E : never
   : never
 
+/**
+ * `C` when every `source`-declared param name is one the handler `H` actually
+ * declares as an input, and an UNSATISFIABLE intersection naming the offenders
+ * otherwise — the static half of docs/design/typed-store-spec.md §6's coverage
+ * check, applied to `op()`'s own contributions.
+ *
+ * The offending names are carried in the phantom property's type so the
+ * compiler's own error message names them, rather than only reporting that the
+ * argument list didn't match.
+ *
+ * Written as `C & ...` rather than a conditional returning some other type
+ * specifically to keep `C` in an INFERENCE position: `contributions`' declared
+ * type is what `C` is inferred from, and wrapping it in a type that doesn't
+ * mention `C` nakedly would break the literal-preserving inference every
+ * downstream `FoldMeta<C>` depends on. Verified against a scratch repro before
+ * being wired in here.
+ *
+ * The check is vacuously satisfied — never a false positive — when the handler
+ * declares no input at all, when it takes an open `Record<string, unknown>`, or
+ * when no contribution carries a `source` directive.
+ */
+type CheckedContributions<H, C extends readonly unknown[]> = [
+  UncoveredSourceParams<H, FoldMeta<C>>,
+] extends [never]
+  ? C
+  : C & {
+      readonly __source_declares_a_param_this_handler_does_not: UncoveredSourceParams<H, FoldMeta<C>>
+    }
+
 export function op<H extends Handler, const C extends readonly unknown[] = []>(
   fn: H,
   ...contributions: HasRequiredKeys<LeafMeta> extends true
-    ? FoldMeta<C> extends LeafMeta ? C : [LeafMeta, ...LeafMeta[]]
-    : C
+    ? FoldMeta<C> extends LeafMeta ? CheckedContributions<H, C> : [LeafMeta, ...LeafMeta[]]
+    : CheckedContributions<H, C>
 ): Omit<Node, "handler" | "meta"> & {
   readonly handler: H
   readonly meta: Widen<Simplify<FoldMeta<C>>>
