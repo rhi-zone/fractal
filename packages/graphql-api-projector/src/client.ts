@@ -78,7 +78,7 @@ import {
   getGraphQLMeta,
   underscoreJoin,
 } from "./project.ts"
-import type { Arg, FieldTypeMap, OperationType } from "./project.ts"
+import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts"
 
 // ============================================================================
 // Public API types
@@ -306,7 +306,7 @@ function buildLeaf(
   transport: GraphQLTransport,
   opts: ResolvedOptions,
 ): (input?: unknown) => Promise<unknown> {
-  const gql = getGraphQLMeta(child.meta)
+  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta)
   const lookupKey = [...path, key].reduce(underscoreJoin, "")
   const typeInfo = opts.types[lookupKey]
   const operationType = deriveOperationType(child.meta, typeInfo?.output)
