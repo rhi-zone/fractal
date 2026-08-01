@@ -2,7 +2,10 @@
 export type {
   Dispatch,
   McpAnnotations,
-  McpMeta,
+  McpBranchMeta,
+  McpBranchMetaProperties,
+  McpLeafMeta,
+  McpLeafMetaProperties,
   McpPrompt,
   McpPromptArgument,
   McpResource,

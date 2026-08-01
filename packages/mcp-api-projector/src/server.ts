@@ -70,7 +70,7 @@ import type {
   ServerNotification,
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
-import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
 import type { DetectionOptions, ErrorEncoder, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
 
@@ -699,7 +699,7 @@ function composeMiddleware(
 
 /** Dispatch context `CreateMcpServerOptions.als`'s `init` receives. */
 export type McpAlsContext = {
-  readonly meta: Meta
+  readonly meta: LeafMeta
   readonly name: string
   readonly requestType: "tool" | "resource" | "prompt"
 }
