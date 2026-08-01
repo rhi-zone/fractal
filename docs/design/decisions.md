@@ -141,7 +141,10 @@ verification workflows across both committed-output and gitignored-output setups
 **Decision:**
 
 - Subcommands: `build` (mtime skip, `--force`), `watch` (`fs.watch` + 150ms debounce),
-  `stub` (empty-map placeholder), `check` (verify output is current, exit 1 if stale).
+  `check` (verify output is current, exit 1 if stale). (2026-08: the `stub` subcommand —
+  an empty-map placeholder — was removed; `wrapValidators` is now loud, so an empty map
+  means throw-for-every-leaf. The pre-codegen workflow is to omit the `validators` option
+  entirely, not wire a placeholder — see docs/guide/codegen-cli.md.)
 - `@generated` header on all output (GitHub collapses it in diffs; tools can skip it).
 - No auto-formatting: emit readable code, let the user's own tooling handle formatting if
   they commit the output.

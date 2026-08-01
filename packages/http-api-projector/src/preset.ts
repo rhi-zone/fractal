@@ -101,10 +101,14 @@ export type PresetOptions<T = unknown> = {
    * `node` is wrapped via `wrapValidators` BEFORE `httpProjection` runs: any
    * leaf with a matching entry has its handler run through the generated
    * `parse()` (coercion + validation in one pass) before the original
-   * handler ever sees the input. Leaves with no matching entry (or when this
-   * option is omitted entirely) keep their original handler untouched. Same
-   * mechanism `createMcpServer`'s and `runCli`'s `opts.validators` use, so a
-   * single generated module wires validation into HTTP, MCP, and CLI alike.
+   * handler ever sees the input. `wrapValidators` is LOUD — every leaf
+   * reachable from `node` must either have a matching entry here or be
+   * tagged `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError`
+   * (see `@rhi-zone/fractal-api-tree/build`'s own doc for the exact
+   * contract). Omitting `validators` entirely skips the wrap (and the check)
+   * — the right choice pre-codegen. Same mechanism `createMcpServer`'s and
+   * `runCli`'s `opts.validators` use, so a single generated module wires
+   * validation into HTTP, MCP, and CLI alike.
    */
   readonly validators?: Readonly<Record<string, GeneratedEntry>>
   /**
@@ -278,8 +282,10 @@ export function createFetch<T = unknown>(
   opts: PresetOptions<T> = {},
 ): CompiledRouter {
   // Wire generated validators onto the tree BEFORE any projection walk — see
-  // `PresetOptions.validators`. Leaves with no matching entry keep their
-  // original handler untouched (wrapValidators is a no-op there).
+  // `PresetOptions.validators`. wrapValidators is loud: every leaf reachable
+  // from `node` must have a matching entry or be tagged
+  // `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError`. Omitting
+  // `opts.validators` entirely (the pre-codegen default) skips the wrap.
   const workingNode = opts.validators !== undefined ? wrapValidators(node, opts.validators) : node
 
   const projectionOpts: HttpProjectionOptions =

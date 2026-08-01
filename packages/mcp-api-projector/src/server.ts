@@ -727,9 +727,12 @@ export type CreateMcpServerOptions<T = unknown> = {
    * with a matching entry has its handler run through the generated
    * `parse()` (coercion + validation in one pass), and the manual
    * `validateAgainstSchema` check for that tool is skipped — the generated
-   * validator takes over. Leaves with no matching entry (or when this option
-   * is omitted entirely) keep going through `validateAgainstSchema` as
-   * before.
+   * validator takes over. `wrapValidators` is LOUD — every leaf reachable
+   * from `tree` must either have a matching entry here or be tagged
+   * `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError` (see
+   * `@rhi-zone/fractal-api-tree/build`'s own doc for the exact contract).
+   * Omitting `validators` entirely skips the wrap (and the check) — the
+   * right choice pre-codegen.
    */
   readonly validators?: Readonly<Record<string, GeneratedEntry>>
   /**
@@ -867,8 +870,10 @@ export type CreateMcpServerOptions<T = unknown> = {
  */
 export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOptions<T>): Server {
   // Wire generated validators onto the tree BEFORE any projection walk — see
-  // `CreateMcpServerOptions.validators`. Leaves with no matching entry keep
-  // their original handler untouched (wrapValidators is a no-op there).
+  // `CreateMcpServerOptions.validators`. wrapValidators is loud: every leaf
+  // reachable from `tree` must have a matching entry or be tagged
+  // `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError`. Omitting
+  // `opts.validators` entirely (the pre-codegen default) skips the wrap.
   const workingTree = opts.validators !== undefined ? wrapValidators(tree, opts.validators) : tree
 
   const { tools, handlers } = projectTools(workingTree, opts.schemas !== undefined ? { schemas: opts.schemas } : {})

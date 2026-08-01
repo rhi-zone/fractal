@@ -195,9 +195,12 @@ export type CliOpts<T = unknown> = {
    * matching entry has its handler run through the generated `parse()`
    * (coercion + validation in one pass), and `coerceInput`/`applyDefaults`/
    * `validateRequired` are skipped for that leaf — the generated validator
-   * takes over. Leaves with no matching entry (or when this option is
-   * omitted entirely) keep using `coerceInput`/`validateRequired` against
-   * `opts.schemas` as before.
+   * takes over. `wrapValidators` is LOUD — every leaf reachable from `n`
+   * must either have a matching entry here or be tagged
+   * `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError` (see
+   * `@rhi-zone/fractal-api-tree/build`'s own doc for the exact contract).
+   * Omitting `validators` entirely skips the wrap (and the check) — the
+   * right choice pre-codegen.
    */
   readonly validators?: Readonly<Record<string, GeneratedEntry>>
   /**
@@ -1003,8 +1006,10 @@ export async function runCli<T = unknown>(
   const schemas: SchemaMap = opts.schemas ?? {}
   const programName = opts.programName ?? "cli"
   // Wire generated validators onto the tree BEFORE any dispatch — see
-  // `CliOpts.validators`. Leaves with no matching entry keep their original
-  // handler untouched (wrapValidators is a no-op there).
+  // `CliOpts.validators`. wrapValidators is loud: every leaf reachable from
+  // `rootNode` must have a matching entry or be tagged
+  // `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError`. Omitting
+  // `opts.validators` entirely (the pre-codegen default) skips the wrap.
   const n = opts.validators !== undefined ? wrapValidators(rootNode, opts.validators) : rootNode
 
   // Split argv into subcommand-path segments vs flag tokens.

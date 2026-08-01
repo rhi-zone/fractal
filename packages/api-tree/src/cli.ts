@@ -1,6 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { buildValidatorModuleSource, stubValidatorModuleSource } from "./build.ts"
+import { buildValidatorModuleSource } from "./build.ts"
 
 // No `@ts-nocheck`: `compileValidatorModule` (type-ir/src/compile.ts) emits
 // typed guards — each entry's `check` is cast to `(value: unknown) => value
@@ -13,7 +13,6 @@ const USAGE = `Usage: fractal-api-tree <command> [options]
 Commands:
   build <entry> -o <output>   Build the validator module (skip if up to date)
   watch <entry> -o <output>   Rebuild on change
-  stub -o <output>            Write an empty stub validator module
   check <entry> -o <output>   Verify output is up to date; exit 1 if stale
 
 Options:
@@ -105,13 +104,6 @@ function runBuild(entryFile: string, outFile: string, force: boolean): void {
   process.stdout.write(`built ${outFile} in ${elapsed.toFixed(1)}ms\n`)
 }
 
-function runStub(outFile: string): void {
-  const source = withHeader(stubValidatorModuleSource())
-  ensureParentDir(outFile)
-  fs.writeFileSync(outFile, source)
-  process.stdout.write(`wrote stub ${outFile}\n`)
-}
-
 function runCheck(entryFile: string, outFile: string): void {
   const source = withHeader(buildValidatorModuleSource(entryFile, outFile))
   const existing = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : undefined
@@ -179,11 +171,6 @@ function main(): void {
       const entry = requireEntry(args.positional)
       const output = requireOutput(args.output)
       runWatch(entry, output, args.force)
-      break
-    }
-    case "stub": {
-      const output = requireOutput(args.output)
-      runStub(output)
       break
     }
     case "check": {

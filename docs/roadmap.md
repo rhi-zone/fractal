@@ -745,7 +745,7 @@ What exists:
 - Core tree model (`packages/api-tree`) — `api`, `op`, `Node`, `Meta`,
   `mergeMeta`, tags lattice, extraction from TypeScript source
   (`extract.ts`), build orchestration (`build.ts`), and a
-  `fractal-api-tree` CLI (`build`/`watch`/`stub`/`check`). Also the
+  `fractal-api-tree` CLI (`build`/`watch`/`check`). Also the
   shared input-assembly core (`assemble()`/`Stores`/`SourceMap` in
   `input.ts`) — HTTP, CLI, and MCP projectors all build their own named
   stores and primary-store convention, then resolve params through this

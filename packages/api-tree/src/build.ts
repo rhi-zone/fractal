@@ -9,11 +9,15 @@
 //            --compileValidatorModule--> module source (exports `validators`,
 //              `Record<path, { check, errors, parse }>` — see compile.ts)
 //
-// `buildValidatorModuleSource` is the one-shot "codegen has run" path;
-// `stubValidatorModuleSource` is the pre-codegen dev-time placeholder — an
-// empty `validators` map, so `wrapValidators(tree, {})` is a no-op
-// passthrough for every leaf until real codegen runs (see `wrapValidators`'s
-// own doc comment below).
+// `buildValidatorModuleSource` is the one-shot "codegen has run" path. Before
+// codegen has run at all — first checkout, a freshly scaffolded package — a
+// consumer should simply OMIT the `validators` option on `createFetch`/
+// `createMcpServer`/`runCli` entirely (all three already treat it as fully
+// optional — see each preset's own `opts.validators !== undefined` guard)
+// rather than wire an empty placeholder map. `wrapValidators` is LOUD: every
+// leaf reachable from the tree it's given must be covered by a generated
+// validator entry, or explicitly tagged `meta.tags.unvalidated`, or it throws
+// `UnvalidatedLeafError` — see that function's own doc comment below for why.
 
 import * as path from "node:path"
 import type ts from "typescript"
@@ -22,6 +26,7 @@ import { extractRouteTypeRefs } from "./tree.ts"
 import type { ShouldShare } from "./extract.ts"
 import type { Handler, Node } from "./node.ts"
 import { err } from "./index.ts"
+import { TAG_UNVALIDATED } from "./tags.ts"
 
 /** One generated entry's public shape — see compile.ts's `compileValidatorModule`. */
 export type GeneratedEntry = {
@@ -84,6 +89,71 @@ function wrapHandler(handler: Handler, entry: GeneratedEntry): Handler {
 }
 
 /**
+ * True when `node` is a leaf (`node.handler !== undefined`) explicitly
+ * tagged `meta.tags.unvalidated === true` — see `TAG_UNVALIDATED`'s own doc
+ * comment (tags.ts) for what this opts a leaf out of.
+ */
+function isTaggedUnvalidated(node: Node): boolean {
+  const tags = (node.meta as { tags?: Record<string, boolean | undefined> }).tags
+  return tags?.[TAG_UNVALIDATED] === true
+}
+
+/**
+ * Walk `node`, collecting the `"/"`-joined path of every leaf that has
+ * neither a matching entry in `validators` nor `meta.tags.unvalidated` —
+ * mirrors `wrapValidators`'s own walk/path-joining convention exactly (same
+ * `path` accumulation, same `:name` rendering for a fallback segment) so the
+ * paths it reports are exactly the keys a generated validator module (or an
+ * `unvalidated` tag) would need to cover.
+ */
+function collectUnvalidatedLeaves(
+  node: Node,
+  validators: Readonly<Record<string, GeneratedEntry>>,
+  path: readonly string[],
+  out: string[],
+): void {
+  if (node.handler !== undefined) {
+    const key = path.join("/")
+    if (validators[key] === undefined && !isTaggedUnvalidated(node)) out.push(key)
+  }
+  if (node.children !== undefined) {
+    for (const [key, child] of Object.entries(node.children)) {
+      collectUnvalidatedLeaves(child, validators, [...path, key], out)
+    }
+  }
+  if (node.fallback !== undefined) {
+    collectUnvalidatedLeaves(
+      node.fallback.subtree,
+      validators,
+      [...path, `:${node.fallback.name}`],
+      out,
+    )
+  }
+}
+
+/**
+ * Thrown by `wrapValidators` when one or more leaves in the tree it was
+ * given have neither a matching `validators` entry nor a
+ * `meta.tags.unvalidated` opt-out — see `wrapValidators`'s own doc comment.
+ * `paths` carries every offending leaf's `"/"`-joined route path (not just
+ * the first one found), matching `message`'s one-per-line listing.
+ */
+export class UnvalidatedLeafError extends Error {
+  readonly paths: readonly string[]
+  constructor(paths: readonly string[]) {
+    super(
+      `wrapValidators: the following leaves have no matching generated validator ` +
+        `entry and aren't tagged unvalidated:\n${paths.join("\n")}\n\n` +
+        `Fix by either adding a validator entry for each path (re-run codegen — ` +
+        `see @rhi-zone/fractal-api-tree's build/watch/check CLI), or tagging the ` +
+        `leaf to opt it out explicitly: op(fn, { tags: { unvalidated: true } }).`,
+    )
+    this.name = "UnvalidatedLeafError"
+    this.paths = paths
+  }
+}
+
+/**
  * Walk `node`, wiring each leaf's handler through its generated validator's
  * `parse()` before the original handler runs — see the module doc above for
  * why this lives at the `Node` level rather than on any one protocol's own
@@ -94,15 +164,41 @@ function wrapHandler(handler: Handler, entry: GeneratedEntry): Handler {
  * `"books/:bookId"`) — so a validator module built by
  * `buildValidatorModuleSource` plugs into `wrapValidators` with no re-keying.
  *
- * A leaf with no matching entry in `validators` passes through with its
- * original handler, untouched — this is what makes `wrapValidators` safe to
- * call with a partial (or empty/stub) validator map: uncovered leaves are a
- * no-op. Never mutates `node`; always returns a fresh tree.
+ * LOUD by design: before wrapping anything, `wrapValidators` walks the WHOLE
+ * tree and collects every leaf whose path has no matching entry in
+ * `validators` AND isn't tagged `meta.tags.unvalidated === true` (see
+ * `TAG_UNVALIDATED`, tags.ts). If that list is non-empty, it throws
+ * `UnvalidatedLeafError` (all offending paths at once, not just the first) —
+ * a silently-unvalidated leaf is exactly the failure class this check exists
+ * to kill; a caller who genuinely wants a leaf to go unvalidated says so
+ * explicitly via the tag. Only once every leaf is accounted for does
+ * `wrapValidators` proceed: a leaf with a matching entry gets its handler
+ * wrapped via `wrapHandler`; a leaf tagged `unvalidated` keeps its original
+ * handler, untouched.
+ *
+ * Never mutates `node`; always returns a fresh tree (on success — a thrown
+ * `UnvalidatedLeafError` returns nothing, the input is left untouched either
+ * way).
  */
 export function wrapValidators(
   node: Node,
   validators: Readonly<Record<string, GeneratedEntry>>,
   path: readonly string[] = [],
+): Node {
+  const offending: string[] = []
+  collectUnvalidatedLeaves(node, validators, path, offending)
+  if (offending.length > 0) throw new UnvalidatedLeafError(offending)
+  return wrapValidatorsUnchecked(node, validators, path)
+}
+
+/** The actual wrap-and-rebuild walk, run only once `wrapValidators`'s loud
+ * coverage check has passed — split out so the check runs exactly once, at
+ * the root call, rather than re-walking (and re-throwing on) every
+ * recursive descent. */
+function wrapValidatorsUnchecked(
+  node: Node,
+  validators: Readonly<Record<string, GeneratedEntry>>,
+  path: readonly string[],
 ): Node {
   const entry = validators[path.join("/")]
   const handler = node.handler !== undefined
@@ -112,14 +208,18 @@ export function wrapValidators(
     ? Object.fromEntries(
         Object.entries(node.children).map(([key, child]) => [
           key,
-          wrapValidators(child, validators, [...path, key]),
+          wrapValidatorsUnchecked(child, validators, [...path, key]),
         ]),
       )
     : undefined
   const fallback = node.fallback !== undefined
     ? {
         name: node.fallback.name,
-        subtree: wrapValidators(node.fallback.subtree, validators, [...path, `:${node.fallback.name}`]),
+        subtree: wrapValidatorsUnchecked(
+          node.fallback.subtree,
+          validators,
+          [...path, `:${node.fallback.name}`],
+        ),
       }
     : undefined
   return {
@@ -204,19 +304,9 @@ export function buildValidatorModuleSource(
   return compileValidatorModule(entries, { ...resolveImportOpt, defs })
 }
 
-/** An empty validator module — the pre-codegen dev-time stub. */
-export function stubValidatorModuleSource(): string {
-  return compileValidatorModule([])
-}
-
 /**
  * Build the validator module for `entryFile` and write it to `outFile`.
  */
 export async function writeValidatorModule(entryFile: string, outFile: string): Promise<void> {
   await Bun.write(outFile, buildValidatorModuleSource(entryFile, outFile))
-}
-
-/** Write the empty pre-codegen stub module to `outFile`. */
-export async function writeStubValidatorModule(outFile: string): Promise<void> {
-  await Bun.write(outFile, stubValidatorModuleSource())
 }

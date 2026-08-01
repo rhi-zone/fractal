@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import { UnvalidatedLeafError, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import {
   applyMethods,
@@ -913,10 +913,11 @@ describe("wrapValidators — HTTP dispatch", () => {
     expect(Array.isArray(body.error)).toBe(true)
   })
 
-  it("leaf with no matching validator entry passes through untouched", async () => {
+  it("a leaf tagged unvalidated with no matching validator entry passes through untouched", async () => {
     const tree = api_({
       ping: op((_: unknown) => ({ pong: true }), {
         http: { directives: [{ kind: "method", value: "GET" }] },
+        tags: { unvalidated: true },
       }),
     })
     const wrapped = wrapValidators(tree, { greet: nameEntry() })
@@ -924,6 +925,15 @@ describe("wrapValidators — HTTP dispatch", () => {
     const res = await router(new Request("http://localhost/ping"))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ pong: true })
+  })
+
+  it("a leaf with no matching validator entry and no unvalidated tag makes wrapValidators throw UnvalidatedLeafError", () => {
+    const tree = api_({
+      ping: op((_: unknown) => ({ pong: true }), {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    expect(() => wrapValidators(tree, { greet: nameEntry() })).toThrow(UnvalidatedLeafError)
   })
 })
 
