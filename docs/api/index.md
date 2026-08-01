@@ -10,7 +10,7 @@ All 6 packages built and passing tests. `@rhi-zone/fractal-codegen` was merged i
 
 | Package | Status | Description |
 |---------|--------|-------------|
-| `@rhi-zone/fractal-api-tree` | Built & green | Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in `./node`; Tags lattice in `./tags`; build-time extractor + source-level tree walker in `./extract`/`./tree`; `fractal-api-tree` build/watch/stub/check CLI |
+| `@rhi-zone/fractal-api-tree` | Built & green | Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in `./node`; Tags lattice in `./tags`; build-time extractor + source-level tree walker in `./extract`/`./tree`; entry-file autodetection in `./discover`; `fractal-api-tree` build/watch/check CLI |
 | `@rhi-zone/fractal-http-api-projector` | Built & green | WHATWG renderer for the function-core tree — direct tree-walk `makeRouter`, `autoMethodLayer`, `corsLayer`, `createFetch`, `serveBun`/`serveNode`; OpenAPI 3.1 projection (`toOpenApi`/`toOpenApiFromRoute`) from routes + tags + codegen schemas, auto-served at `/openapi.json` by `createFetch`; runtime HTTP client (`createClient`/`createClientFromRoute`) whose verb/path derivation walks the same `HttpRoute` tree the router dispatches against |
 | `@rhi-zone/fractal-type-ir` | Built & green | Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.), plus AOT validator codegen (`compile.ts`) |
 | `@rhi-zone/fractal-mcp-api-projector` | Built & green | MCP tool projection for the function-core tree — `toTools`, annotation hints derived from `meta.tags` |
@@ -55,7 +55,8 @@ of the base model don't pull in the TypeScript compiler:
 | `typeRefFromType` / `typeRefFromFunctionNode` / `typeRefFromReturnType` | (`./extract`) Same, but produce a `TypeRef` instead of raw JSON Schema |
 | `extractJsDoc` | (`./extract`) Pull JSDoc description text off a node |
 | `extractToolSchemas` / `extractRouteTypeRefs` / `extractToolTypeRefs` | (`./tree`) Walk a `Node` tree AT THE SOURCE LEVEL, keying schemas/type-refs by the same underscore-joined name used by MCP/OpenAPI |
-| `fractal-api-tree` CLI | `build`/`watch`/`stub`/`check` subcommands over a validator module (`./cli.ts`), orchestrating `./tree`'s extraction into `@rhi-zone/fractal-type-ir`'s `compileValidatorModule` (`./build.ts`) |
+| `fractal-api-tree` CLI | `build`/`watch`/`check` subcommands over a validator module (`./cli.ts`), orchestrating `./tree`'s extraction into `@rhi-zone/fractal-type-ir`'s `compileValidatorModule` (`./build.ts`) |
+| `findEntryFiles` / `hasTreeExport` | (`./discover`, `./tree`) Autodetect a deployment's `api()`/`op()` tree entry files by directory scan + export-shape detection, with `include`/`exclude` overrides — replaces a hand-maintained per-consumer entry-file list |
 
 ## HTTP kit: `@rhi-zone/fractal-http-api-projector`
 

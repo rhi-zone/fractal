@@ -46,6 +46,10 @@
       "types": "./dist/build.d.ts",
       "import": "./dist/build.js"
     },
+    "./discover": {
+      "types": "./dist/discover.d.ts",
+      "import": "./dist/discover.js"
+    },
     "./context": {
       "types": "./dist/context.d.ts",
       "import": "./dist/context.js"

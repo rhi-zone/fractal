@@ -286,12 +286,16 @@ function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefine
 }
 
 /**
- * Walk every exported `api(children, opts?)` tree in a source file, mirroring
- * toTools' name construction, and invoke `onLeaf` for each `op(fn, meta?)`
- * leaf found. Finds exports via a minimal AST scan (there is no type-level
- * way to enumerate a file's exports); the tree SHAPE itself — leaves,
- * branches, fallbacks — comes entirely from `checker.getTypeAtLocation` on
- * each export, not from matching call expressions.
+ * Find every exported `api(children, opts?)` TREE candidate in `source` and
+ * invoke `visit(nodeType, loc)` for each — the shared export-scanning walk
+ * behind both `walkTree` (below, which additionally descends into each
+ * candidate via `walkNodeType`) and `hasTreeExport` (which only needs to
+ * know whether at least one candidate exists, not walk into it).
+ *
+ * Finds exports via a minimal AST scan (there is no type-level way to
+ * enumerate a file's exports); the tree SHAPE itself — leaves, branches,
+ * fallbacks — comes entirely from `checker.getTypeAtLocation` on each
+ * export, not from matching call expressions.
  *
  * Two export shapes are recognized: a top-level `export const x = api(...)`
  * (tree built eagerly), and a top-level `export function f(...) { ... }`
@@ -300,19 +304,23 @@ function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefine
  * `export function buildDomainAuthTree(composed) { return api({...}) }`) —
  * the factory's own parameters are never inspected, only the type of the
  * expression it returns.
+ *
+ * A candidate only reaches `visit` once it's confirmed Node-shaped (carries
+ * a `meta` property) — plain re-exported types, unrelated constants, and a
+ * factory whose body doesn't return a tree are filtered out here, not left
+ * for `visit` to re-check.
  */
-function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program): void {
-  const program = sharedProgram ?? createExtractorProgram(entryFile)
-  const checker = program.getTypeChecker()
-  const source = program.getSourceFile(entryFile)
-  if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
-
+function forEachTreeCandidate(
+  source: ts.SourceFile,
+  checker: ts.TypeChecker,
+  visit: (nodeType: ts.Type, loc: ts.Node) => void,
+): void {
   // A Node value always carries `meta`; skip candidates that aren't trees
   // (plain re-exported types, unrelated constants, a factory that doesn't
   // return a tree, …).
-  const walkIfTree = (nodeType: ts.Type, loc: ts.Node): void => {
+  const visitIfTree = (nodeType: ts.Type, loc: ts.Node): void => {
     if (!checker.getPropertyOfType(nodeType, "meta")) return
-    walkNodeType(nodeType, "", [], loc, checker, onLeaf)
+    visit(nodeType, loc)
   }
 
   for (const stmt of source.statements) {
@@ -324,16 +332,61 @@ function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program)
     if (ts.isVariableStatement(stmt)) {
       for (const decl of stmt.declarationList.declarations) {
         if (!ts.isIdentifier(decl.name) || !decl.initializer) continue
-        walkIfTree(checker.getTypeAtLocation(decl.name), decl.name)
+        visitIfTree(checker.getTypeAtLocation(decl.name), decl.name)
       }
       continue
     }
 
     if (ts.isFunctionDeclaration(stmt) && stmt.body) {
       const returnExpr = returnExpressionOfFactoryBody(stmt.body)
-      if (returnExpr) walkIfTree(checker.getTypeAtLocation(returnExpr), returnExpr)
+      if (returnExpr) visitIfTree(checker.getTypeAtLocation(returnExpr), returnExpr)
     }
   }
+}
+
+/**
+ * Walk every exported `api(children, opts?)` tree in a source file, mirroring
+ * toTools' name construction, and invoke `onLeaf` for each `op(fn, meta?)`
+ * leaf found. See `forEachTreeCandidate` above for how exports are found and
+ * filtered to genuine tree candidates; this just additionally descends into
+ * each one via `walkNodeType`.
+ */
+function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program): void {
+  const program = sharedProgram ?? createExtractorProgram(entryFile)
+  const checker = program.getTypeChecker()
+  const source = program.getSourceFile(entryFile)
+  if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
+
+  forEachTreeCandidate(source, checker, (nodeType, loc) =>
+    walkNodeType(nodeType, "", [], loc, checker, onLeaf),
+  )
+}
+
+/**
+ * True when `entryFile` exports at least one `api(children, opts?)` tree at
+ * its top level — per the same two export shapes `walkTree` recognizes (a
+ * `const` bound directly to `api(...)`, or a factory function whose body's
+ * final statement returns one) — WITHOUT requiring any leaf to be present
+ * (an `api({})` with zero children still counts). This answers "is this a
+ * Node-tree entry file", not "does it have anything to validate" — the
+ * question `discover.ts`'s `findEntryFiles` needs answered to autodetect
+ * entry files by directory scan instead of a hand-maintained list.
+ *
+ * `sharedProgram`, when given, reuses a pre-built `ts.Program` instead of
+ * building a fresh single-root one over `entryFile` — same rationale as
+ * `walkTree`'s own `sharedProgram` parameter and `buildValidatorModuleSource`'s
+ * `program` option (build.ts).
+ */
+export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): boolean {
+  const program = sharedProgram ?? createExtractorProgram(entryFile)
+  const checker = program.getTypeChecker()
+  const source = program.getSourceFile(entryFile)
+  if (!source) throw new Error(`hasTreeExport: source not found: ${entryFile}`)
+  let found = false
+  forEachTreeCandidate(source, checker, () => {
+    found = true
+  })
+  return found
 }
 
 /**
