@@ -52,7 +52,7 @@ import {
 } from "@rhi-zone/fractal-api-tree"
 import type { DetectionOptions, ErrorEncoder, Page } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective, HttpLeafMeta, HttpSharedMeta } from "./project.ts"
-import { httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
+import { BUILTIN_HTTP_STORE_NAMES, httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
 import type { HttpStoreBag, ParamSource, SourceMap, StandardSchemaV1 } from "./decode.ts"
 
 // `HttpDirective`/`HttpLeafMeta`/`HttpSharedMeta` are type-only imports from
@@ -1240,6 +1240,149 @@ export async function runRoute(
   }
 }
 
+// ============================================================================
+// Wire-time source coverage — the RUNTIME half of the §6 check
+// ============================================================================
+//
+// `op()` statically checks the one resolution-order step visible at its own
+// call site (a `source()` override naming a param the handler doesn't declare —
+// see `UncoveredSourceParams`, api-tree's input.ts). The other two steps are
+// not visible there, for reasons docs/design/typed-store-spec.md §6 establishes
+// as structural rather than as engineering gaps: a path-param match depends on
+// where the leaf is MOUNTED (a property of the tree passed to `api()`, not of
+// the leaf's own `op()` arguments), and the no-`paramNames` convention fallback
+// resolves against the live request's own keys.
+//
+// Both of those DO exist by the time the route tree is built — which is where
+// this check runs: once, at wire time, walking every leaf method. It reports
+// EVERY problem it finds in one pass rather than failing on the first, so one
+// boot surfaces the whole list.
+//
+// Leaves without `sources.paramNames` are skipped: without a codegen-derived
+// param list there is no fixed set to check coverage against at all (§6's last
+// bullet), independent of store typing.
+
+/** One thing wrong with a leaf method's declared param sources. */
+export type SourceCoverageProblem = {
+  /** The route's mount path, with slug segments as `{name}` — e.g. `/books/{id}`. */
+  readonly path: string
+  readonly method: string
+  readonly param: string
+  readonly kind: "unknown-store" | "unused-override"
+  /** Human-readable statement of what's wrong with this param. */
+  readonly detail: string
+}
+
+/** Thrown by `checkRouteSourceCoverage` when a route tree has any coverage problem. Carries every problem found, not just the first. */
+export class SourceCoverageError extends Error {
+  readonly problems: readonly SourceCoverageProblem[]
+  constructor(problems: readonly SourceCoverageProblem[]) {
+    super(
+      `HTTP route source coverage: ${problems.length} problem(s)\n` +
+        problems.map((p) => `  ${p.method} ${p.path} — param "${p.param}": ${p.detail}`).join("\n"),
+    )
+    this.name = "SourceCoverageError"
+    this.problems = problems
+  }
+}
+
+/** Options for `findRouteSourceCoverageProblems`/`checkRouteSourceCoverage`. */
+export type SourceCoverageOptions = {
+  /**
+   * Store names to accept beyond `BUILTIN_HTTP_STORE_NAMES` (decode.ts) — for a
+   * deployment that declaration-merged extra members into `HttpStoreRegistry`
+   * and builds them itself. No runtime value can enumerate an open interface's
+   * merged members, so they are named here.
+   */
+  readonly knownStores?: Iterable<string>
+}
+
+/**
+ * Walk `root` and collect every leaf method whose declared param sources don't
+ * hold up — the non-throwing form, for a caller that wants to report the
+ * problems itself. `checkRouteSourceCoverage` is the throwing form.
+ *
+ * For each param in a leaf's `sources.paramNames`, resolves its store the same
+ * way `assemble` does (path match → `sourceMap` override → primary-store
+ * convention) and checks the result is a store something actually builds. Also
+ * flags a `sourceMap` entry for a param that is NOT in `paramNames`: `assemble`
+ * only ever reads `paramNames`, so such an override is dead — the runtime
+ * counterpart of the static check, reaching the cases where the handler's own
+ * input type is erased and the static check is therefore vacuous.
+ */
+export function findRouteSourceCoverageProblems(
+  root: HttpRoute,
+  opts?: SourceCoverageOptions,
+): readonly SourceCoverageProblem[] {
+  const known = new Set<string>([...BUILTIN_HTTP_STORE_NAMES, ...(opts?.knownStores ?? [])])
+  const problems: SourceCoverageProblem[] = []
+
+  const visit = (route: HttpRoute, segments: readonly string[], pathParams: readonly string[]): void => {
+    const path = segments.length === 0 ? "/" : `/${segments.join("/")}`
+    for (const [method, entry] of Object.entries(route.methods ?? {})) {
+      const sources = entry.sources
+      const paramNames = sources?.paramNames
+      const sourceMap = sources?.sourceMap ?? {}
+      if (paramNames !== undefined) {
+        const primary = primaryStoreForMethod(method)
+        for (const param of paramNames) {
+          // Same order as `assemble`: a path match wins, then an explicit
+          // override, then the method-derived convention. Only the override
+          // step can name a store nothing builds — the other two resolve to
+          // "path" and to a primary store this package itself defines.
+          if (pathParams.includes(param)) continue
+          const override = sourceMap[param]
+          const store = override?.store ?? primary
+          if (!known.has(store)) {
+            problems.push({
+              path,
+              method,
+              param,
+              kind: "unknown-store",
+              detail: `reads from store "${store}", which no projector builds`
+                + ` (known: ${[...known].sort().join(", ")})`,
+            })
+          }
+        }
+        for (const param of Object.keys(sourceMap)) {
+          if (!paramNames.includes(param)) {
+            problems.push({
+              path,
+              method,
+              param,
+              kind: "unused-override",
+              detail: `has a source override but is not one of this route's params`
+                + ` (${paramNames.join(", ") || "none"}) — the override is never applied`,
+            })
+          }
+        }
+      }
+    }
+    for (const [name, child] of Object.entries(route.children ?? {})) {
+      visit(child, [...segments, name], pathParams)
+    }
+    if (route.fallback !== undefined) {
+      // A fallback segment IS a path param: `matchRoute` binds the raw segment
+      // to `fallback.name` as a slug, so every leaf below here can source that
+      // name from "path".
+      visit(route.fallback.subtree, [...segments, `{${route.fallback.name}}`], [...pathParams, route.fallback.name])
+    }
+  }
+
+  visit(root, [], [])
+  return problems
+}
+
+/**
+ * `findRouteSourceCoverageProblems`, but THROWS a `SourceCoverageError` listing
+ * every problem when there is at least one. Run once at wire time — see
+ * `makeRouterFromRoute`, which calls it while building the dispatcher.
+ */
+export function checkRouteSourceCoverage(root: HttpRoute, opts?: SourceCoverageOptions): void {
+  const problems = findRouteSourceCoverageProblems(root, opts)
+  if (problems.length > 0) throw new SourceCoverageError(problems)
+}
+
 export function makeRouterFromRoute(
   root: HttpRoute,
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
@@ -1247,6 +1390,11 @@ export function makeRouterFromRoute(
   errorEncoder?: HttpErrorEncoder,
   thrownErrorEncoder?: ThrownErrorEncoder,
 ): (req: Request) => Promise<Response> {
+  // Once, at wire time — not per request. This is the point at which mount
+  // position and the codegen'd `paramNames` list both exist, which is exactly
+  // why §6 puts the check here instead of at `op()`.
+  checkRouteSourceCoverage(root)
+
   return async (req) => {
     const segs = splitPath(new URL(req.url).pathname)
     const matched = matchRoute(root, segs, 0, req.method, {})
