@@ -55,6 +55,7 @@ import type { CallToolResult, GetPromptResult, ReadResourceResult } from "@model
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { getMcpMeta } from "./project.ts"
+import type { McpBranchMeta, McpLeafMeta } from "./project.ts"
 
 // ============================================================================
 // Public API types
@@ -217,7 +218,7 @@ function buildClientNode(
 
   for (const [key, child] of Object.entries(node.children ?? {})) {
     if (isLeaf(child)) {
-      const mcp = getMcpMeta(child.meta)
+      const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
       const as = mcp.as ?? "tool"
 
       if (as === "resource") {
@@ -234,7 +235,7 @@ function buildClientNode(
             : makeToolCaller(client, name, slugValues)
       }
     } else {
-      const childMcp = getMcpMeta(child.meta)
+      const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
       const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
       const childToolPrefix = toolPrefix.length > 0 ? `${toolPrefix}_${rawSeg}` : rawSeg
       out[key] = buildClientNode(

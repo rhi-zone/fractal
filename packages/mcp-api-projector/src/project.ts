@@ -53,7 +53,7 @@
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SourceMap } from "@rhi-zone/fractal-api-tree"
 
 // ============================================================================
@@ -175,10 +175,10 @@ export type SchemaMap = Readonly<Record<string, ToolSchema>>
 export type Dispatch = {
   readonly handler: Handler
   readonly sourceMap: SourceMap
-  /** The leaf's own `Meta` — carried through for consumers (e.g. `server.ts`'s
+  /** The leaf's own `LeafMeta` — carried through for consumers (e.g. `server.ts`'s
    * middleware context) that need dispatch-time access to it without a second
    * tree walk. */
-  readonly meta: Meta
+  readonly meta: LeafMeta
 }
 
 /** Options for `toTools`. */
@@ -276,19 +276,21 @@ function isObjectSchema(schema: Record<string, unknown> | undefined): schema is 
 // ============================================================================
 
 /**
- * `meta.mcp` open bag — per-projection overrides for MCP tool generation.
- * Standard keys are typed; any other key passes through untouched (open bag,
- * not a fixed schema — see the DU + interpreter design philosophy).
+ * `meta.mcp` open bag — per-projection overrides for MCP tool generation,
+ * split by role (docs/design/meta-role-split-spec.md §2/§4) — no
+ * `McpSharedMeta` here: every `meta.mcp` key this projector reads is either
+ * leaf-only or branch-only, never both, so there's no shared piece for
+ * `McpLeafMetaProperties`/`McpBranchMetaProperties` to extend.
  */
-export type McpMeta = {
+
+/** `meta.mcp` fields valid at LEAF position only. Standard keys are typed; any other key passes through untouched (open bag, not a fixed schema — see the DU + interpreter design philosophy). */
+export type McpLeafMetaProperties = {
   /** Full tool-name override (prefix ignored when set), or resource name override. */
   readonly name?: string
   /** Description text override. */
   readonly description?: string
   /** Emits `annotations.title`. */
   readonly title?: string
-  /** This node's contribution to the tool-name/resource-URI prefix (branch nodes only). */
-  readonly segment?: string
   /** Merged over tag-derived hints (override wins per key). Tools only. */
   readonly annotations?: McpAnnotations
   /**
@@ -314,17 +316,33 @@ export type McpMeta = {
   readonly [key: string]: unknown
 }
 
-// Declaration merging: types this package's `meta.mcp` slot on the shared
-// `Meta` open bag (see api-tree/src/node.ts) so consumers get a typed
-// `meta.mcp` instead of an untyped index-signature fallback.
-declare module "@rhi-zone/fractal-api-tree/node" {
-  interface Meta {
-    mcp?: McpMeta
-  }
+/** Wraps `McpLeafMetaProperties` under the `mcp` key — extend `LeafMeta` with this in a deployment's augmentation file. */
+export type McpLeafMeta = {
+  readonly mcp?: McpLeafMetaProperties
 }
 
-/** Safely extract the open meta.mcp bag from a Meta. */
-export function getMcpMeta(meta: Meta): McpMeta {
+/** `meta.mcp` fields valid at BRANCH position only. */
+export type McpBranchMetaProperties = {
+  /** This node's own contribution to the tool-name/resource-URI prefix. */
+  readonly segment?: string
+  readonly [key: string]: unknown
+}
+
+/** Wraps `McpBranchMetaProperties` under the `mcp` key — extend `BranchMeta` with this in a deployment's augmentation file. */
+export type McpBranchMeta = {
+  readonly mcp?: McpBranchMetaProperties
+}
+
+/**
+ * Safely extract the open `meta.mcp` bag. Accepts the INTERSECTION of both
+ * role wrappers, not either alone — this function is called on both leaf
+ * meta (reading `.name`/`.description`/…) and branch meta (reading
+ * `.segment`) at different call sites below, so its parameter has to
+ * declare both roles' fields; the intersection is safe here because the two
+ * roles' field sets don't overlap (no field means two different things at
+ * the two positions).
+ */
+export function getMcpMeta(meta: McpLeafMeta & McpBranchMeta): McpLeafMetaProperties & McpBranchMetaProperties {
   const m = meta.mcp
   if (typeof m !== "object" || m === null) return {}
   return m
@@ -376,7 +394,7 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
         // ── Leaf node: this is a callable → build an MCP tool ──────────────
-        const mcp = getMcpMeta(child.meta)
+        const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
 
         // meta.mcp.as discriminates the leaf's target surface. Omitted or
         // "tool" → project as a tool (this walk); "resource" / "prompt" →
@@ -450,7 +468,7 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         // Static child: use meta.mcp.segment override or the tree key
-        const childMcp = getMcpMeta(child.meta)
+        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
         const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
         const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg
         out.push(...walk(child, seg))
@@ -539,15 +557,15 @@ export type ResourceTemplateHandler = {
   readonly handler: Handler
   /** The leaf's `meta.mcp.sourceMap` (empty when none declared). See `Dispatch`. */
   readonly sourceMap: SourceMap
-  /** The leaf's own `Meta` — see `Dispatch.meta`. */
-  readonly meta: Meta
+  /** The leaf's own `LeafMeta` — see `Dispatch.meta`. */
+  readonly meta: LeafMeta
 }
 
-/** Fixed-resource dispatch entry: the leaf's handler plus its `Meta`. Fixed
+/** Fixed-resource dispatch entry: the leaf's handler plus its `LeafMeta`. Fixed
  * resources take no input (no sourceMap — see `ProjectResourcesResult`). */
 export type ResourceDispatch = {
   readonly handler: Handler
-  readonly meta: Meta
+  readonly meta: LeafMeta
 }
 
 /** Options for `projectResources`. */
@@ -630,7 +648,7 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const mcp = getMcpMeta(child.meta)
+        const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
 
         // Only leaves explicitly tagged for the resource surface are projected here.
         if (mcp.as !== "resource") continue
@@ -687,7 +705,7 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
         }
       } else {
         // ── Branch child ────────────────────────────────────────────────────
-        const childMcp = getMcpMeta(child.meta)
+        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
         const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
         const sub = walk(child, [...segments, rawSeg], hasFallback)
         resources.push(...sub.resources)
@@ -799,7 +817,7 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const mcp = getMcpMeta(child.meta)
+        const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
 
         // Only leaves explicitly tagged for the prompt surface are projected here.
         if (mcp.as !== "prompt") continue
@@ -841,7 +859,7 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
         handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
       } else {
         // ── Branch child ────────────────────────────────────────────────────
-        const childMcp = getMcpMeta(child.meta)
+        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
         const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
         const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg
         out.push(...walk(child, seg))

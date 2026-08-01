@@ -4,6 +4,11 @@ import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { verbFromTags } from "@rhi-zone/fractal-http-api-projector/project"
 import { projectPrompts, projectResources, projectTools, toTools } from "./project.ts"
+// Side-effect import: this test suite's own "deployment" augmentation
+// (`LeafMeta extends McpLeafMeta`, `BranchMeta extends McpBranchMeta`) — see
+// that file's own doc comment. Needed for `meta.mcp.segment` below (a real,
+// spec-endorsed branch-position override) to type-check.
+import "./deployment-meta.test-support.ts"
 
 // ============================================================================
 // 1. Cross-surface payoff: one meta.tags → MCP annotations + HTTP verb
@@ -60,11 +65,21 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
 
 describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
   it("a node-level tag does NOT flow to leaf children with no own tags", () => {
+    // `tags` is a LEAF-only field under the SharedMeta/LeafMeta/BranchMeta
+    // split (docs/design/meta-role-split-spec.md §2) — api_()'s typed
+    // `opts.meta` no longer accepts it on a BRANCH at all, which is itself
+    // a stronger, compile-time version of "no ancestor inheritance." This
+    // test still exercises the RUNTIME behavior (a leaf reads only its own
+    // meta.tags, never an ancestor's) against a tree whose branch carries a
+    // `tags` key the typed constructor can't author — built via object
+    // spread over a real api_() result instead, the same shape a hand-built
+    // or legacy-computed tree could still produce.
+    const catalog = api_({
+      list: op((_: unknown) => []), // no own tags — does NOT inherit
+      search: op((_: unknown) => []), // no own tags — does NOT inherit
+    })
     const api = api_({
-        catalog: api_({
-            list: op((_: unknown) => []), // no own tags — does NOT inherit
-            search: op((_: unknown) => []), // no own tags — does NOT inherit
-          }, { meta: { tags: { readOnly: true } } }),
+        catalog: { ...catalog, meta: { tags: { readOnly: true } } },
       })
     const tools = toTools(api)
     expect(tools).toHaveLength(2)
@@ -77,8 +92,11 @@ describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
     const leaf = op((_: unknown) => ({}), {
       tags: { readOnly: false, idempotent: true, destructive: true },
     })
+    // See the previous test's comment: `tags` on a branch is no longer
+    // constructible via api_()'s typed opts, built via object spread instead.
+    const items = api_({ delete: leaf })
     const api = api_({
-        items: api_({ delete: leaf }, { meta: { tags: { readOnly: true } } }),
+        items: { ...items, meta: { tags: { readOnly: true } } },
       })
     const tools = toTools(api)
     expect(tools[0]!.annotations?.readOnlyHint).toBe(false)
