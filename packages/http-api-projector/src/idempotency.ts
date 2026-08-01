@@ -25,7 +25,7 @@
 //   packages/http-api-projector/src/route.ts                  — HttpHandlerMiddleware, Stores
 
 import type { HttpHandlerMiddleware } from "./route.ts"
-import type { Stores } from "@rhi-zone/fractal-api-tree"
+import type { HttpStoreBag } from "./decode.ts"
 
 // ============================================================================
 // Store interface — pluggable, matching this package's other extension-point
@@ -93,8 +93,8 @@ export type IdempotencyMiddlewareOptions = {
   readonly ttl?: number
 }
 
-function headerValue(stores: Stores, header: string): string | undefined {
-  const value = (stores.header as Record<string, unknown> | undefined)?.[header]
+function headerValue(stores: HttpStoreBag, header: string): string | undefined {
+  const value = stores.header?.[header]
   return typeof value === "string" ? value : undefined
 }
 

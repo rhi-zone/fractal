@@ -38,6 +38,7 @@ export {
 } from "./wire.ts"
 
 export type { CreateJsonRpcServerOptions, JsonRpcErrorEncoder, JsonRpcSocket, JsonRpcWebSocketHandlers } from "./server.ts"
+export type { JsonRpcStoreBag, JsonRpcStores } from "./server.ts"
 export { createJsonRpcHttpHandler, createJsonRpcWebSocketHandlers, jsonRpcErrors } from "./server.ts"
 
 export type { AnyJsonRpcClient, FetchLike, JsonRpcCall, JsonRpcHttpClientOptions } from "./client.ts"

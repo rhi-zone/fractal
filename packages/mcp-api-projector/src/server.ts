@@ -72,20 +72,41 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js"
 import type { LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, SourceMap, Stores } from "@rhi-zone/fractal-api-tree"
+import type { CallerStoreShape, DetectionOptions, ErrorEncoder, ProjectorStores, SourceMap, Store } from "@rhi-zone/fractal-api-tree"
 
-// Augment the shared StoreRegistry with MCP's store names — see
-// http-api-projector/src/decode.ts for the matching augmentation and its doc.
-declare module "@rhi-zone/fractal-api-tree" {
-  interface StoreRegistry {
-    argument: true
-    "uri-variable": true
-  }
+/**
+ * MCP's own store-name fragment: an INERT, plain interface naming the stores
+ * this projector builds and the shape each carries. Deliberately NOT a
+ * `declare module` augmentation of api-tree's `StoreRegistry` — per
+ * docs/design/typed-store-spec.md §3, a projector that augments core makes the
+ * type surface depend on which packages are in the compilation rather than on
+ * what the deployment composes. A DEPLOYMENT composes this in, once, in its own
+ * augmentation file (`interface StoreRegistry extends McpStores {}`); see
+ * `HttpStores` in http-api-projector/src/decode.ts for the worked example.
+ *
+ * Both members are OPTIONAL — per-request stores this projector builds when it
+ * dispatches, and only ever ONE of the two per request (a tool/prompt call
+ * builds `argument`, a resource read builds `uri-variable`; see
+ * `assembleArgumentInput`/`assembleUriVariableInput`). `caller` is NOT declared
+ * here: core declares it once (api-tree's `CoreStores`), shared across every
+ * projector.
+ */
+export interface McpStores {
+  /** A tool call's or prompt's named arguments. */
+  argument?: Store
+  /** A resource template's URI variables, captured from the requested URI. */
+  "uri-variable"?: Store
 }
 
-// `caller` itself is declared once, in api-tree's input.ts — shared across
-// all three projectors (see that file's doc comment on StoreRegistry) —
-// rather than re-declared here.
+/**
+ * The full per-request store bag an MCP dispatch builds and threads through
+ * middleware: the shared `Stores` (core's `caller`, plus whatever service
+ * stores the deployment registered) intersected with MCP's own fragment. The
+ * intersection is what lets this package build and read `argument`/
+ * `uri-variable` without its own ambient augmentation — see `HttpStoreBag`'s
+ * doc.
+ */
+export type McpStoreBag = ProjectorStores & McpStores
 
 import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
@@ -581,20 +602,9 @@ export interface SendLogFn {
 // ============================================================================
 
 /**
- * Assemble a handler's input bag from a single named store of raw values,
- * via the shared resolution pipeline `assemble`. Mirrors cli-api-projector's
- * `buildInput`: `paramNames` is the union of the raw values' own keys and any
- * name declared in `sourceMap` — so a param sourced purely from an override
- * (not present in the raw values at all) still gets assembled. Returns the
- * `stores` alongside the assembled `input` bag — `stores` is threaded into
- * `McpMiddleware` (see below), which sees both the assembled input AND the
- * raw pre-assembly stores; the handler itself only ever sees `input`.
- *
- * With an empty `sourceMap`, every param resolves from `storeName` by its own
- * key — i.e. `input` reduces to `values` unchanged, matching prior behavior
- * (tool calls got `request.params.arguments` directly; resource template
- * reads got the regex-captured vars object directly; prompt calls got
- * `request.params.arguments` directly).
+ * Build the `caller` store for one request — shared verbatim by both
+ * assembly paths below, which differ ONLY in which named store they put the
+ * raw values under.
  *
  * `extra` is the SDK's per-request `RequestHandlerExtra` (second argument to
  * every `setRequestHandler` callback below) — its `authInfo`/`sessionId`
@@ -613,30 +623,79 @@ export interface SendLogFn {
  * pre-bound to this request's `extra.sessionId` — see this module's
  * "Logging" doc section and `SendLogFn`.
  */
-function assembleInput(
-  storeName: string,
+function callerStore(
+  extra: McpRequestExtra,
+  createMessage?: CreateMessageFn,
+  sendLoggingMessage?: (params: SendLogParams, sessionId?: string) => Promise<void>,
+): CallerStoreShape {
+  return {
+    authInfo: extra.authInfo,
+    sessionId: extra.sessionId,
+    ...(createMessage !== undefined ? { createMessage } : {}),
+    ...(sendLoggingMessage !== undefined
+      ? { sendLog: (params: SendLogParams) => sendLoggingMessage(params, extra.sessionId) }
+      : {}),
+  }
+}
+
+/** `paramNames` for one assembly: the union of the raw values' own keys and any name declared in `sourceMap` — so a param sourced purely from an override (not present in the raw values at all) still gets assembled. */
+const paramNamesFor = (values: Record<string, unknown>, sourceMap: SourceMap): readonly string[] =>
+  [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
+
+// ----------------------------------------------------------------------------
+// Two assembly paths, one per store name — NOT one function taking the store
+// name as a parameter.
+//
+// The single-function form necessarily built its stores object with a COMPUTED
+// key (`{ [storeName]: values, ... }`), which TypeScript cannot narrow to a
+// literal member of `McpStoreBag` no matter what the registry's members are
+// typed as — so it needed an `as Stores` cast that erased the whole check.
+// Splitting the two call shapes apart lets each build an object literal with a
+// LITERAL key, which checks against `McpStoreBag` directly, with no cast (see
+// docs/design/typed-store-spec.md §5's second bullet, §9(4)). Every call site
+// already passed a literal `"argument"` or `"uri-variable"`, so this costs the
+// callers nothing.
+//
+// Both mirror cli-api-projector's `buildInput`, and both return the `stores`
+// alongside the assembled `input` bag — `stores` is threaded into
+// `McpMiddleware` (see below), which sees both the assembled input AND the raw
+// pre-assembly stores; the handler itself only ever sees `input`.
+//
+// With an empty `sourceMap`, every param resolves from the store by its own
+// key — i.e. `input` reduces to `values` unchanged, matching prior behavior
+// (tool calls got `request.params.arguments` directly; resource template reads
+// got the regex-captured vars object directly; prompt calls got
+// `request.params.arguments` directly).
+// ----------------------------------------------------------------------------
+
+/** Assemble a tool call's or prompt's input bag — raw values land in the `argument` store. */
+function assembleArgumentInput(
   values: Record<string, unknown>,
   sourceMap: SourceMap,
   extra: McpRequestExtra,
   createMessage?: CreateMessageFn,
   sendLoggingMessage?: (params: SendLogParams, sessionId?: string) => Promise<void>,
-): { readonly input: Record<string, unknown>; readonly stores: Stores } {
-  // storeName is always one of MCP's declared store names ("argument" or
-  // "uri-variable") at call sites below, but it's threaded through as a
-  // plain string — cast past the declaration-merged `Stores`' literal keys.
-  const stores = {
-    [storeName]: values,
-    caller: {
-      authInfo: extra.authInfo,
-      sessionId: extra.sessionId,
-      ...(createMessage !== undefined ? { createMessage } : {}),
-      ...(sendLoggingMessage !== undefined
-        ? { sendLog: (params: SendLogParams) => sendLoggingMessage(params, extra.sessionId) }
-        : {}),
-    },
-  } as Stores
-  const paramNames = [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
-  return { input: assemble(stores, paramNames, sourceMap, storeName), stores }
+): { readonly input: Record<string, unknown>; readonly stores: McpStoreBag } {
+  const stores: McpStoreBag = {
+    argument: values,
+    caller: callerStore(extra, createMessage, sendLoggingMessage),
+  }
+  return { input: assemble(stores, paramNamesFor(values, sourceMap), sourceMap, "argument"), stores }
+}
+
+/** Assemble a resource read's input bag — raw values land in the `uri-variable` store. */
+function assembleUriVariableInput(
+  values: Record<string, unknown>,
+  sourceMap: SourceMap,
+  extra: McpRequestExtra,
+  createMessage?: CreateMessageFn,
+  sendLoggingMessage?: (params: SendLogParams, sessionId?: string) => Promise<void>,
+): { readonly input: Record<string, unknown>; readonly stores: McpStoreBag } {
+  const stores: McpStoreBag = {
+    "uri-variable": values,
+    caller: callerStore(extra, createMessage, sendLoggingMessage),
+  }
+  return { input: assemble(stores, paramNamesFor(values, sourceMap), sourceMap, "uri-variable"), stores }
 }
 
 // ============================================================================
@@ -672,8 +731,8 @@ type McpRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>
  * `CreateMcpServerOptions.middleware` is the OUTERMOST wrapper.
  */
 export type McpMiddleware = (
-  next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
+  next: (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>
 
 /**
  * Compose `middleware` around `base`, first entry outermost. An empty array
@@ -681,8 +740,8 @@ export type McpMiddleware = (
  */
 function composeMiddleware(
   middleware: readonly McpMiddleware[],
-  base: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-): (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown> {
+  base: (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>,
+): (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown> {
   let wrapped = base
   for (let i = middleware.length - 1; i >= 0; i--) {
     wrapped = middleware[i]!(wrapped)
@@ -917,7 +976,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   // structurally (see McpMiddleware's module doc above).
   const toBase = (
     handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-  ): ((input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>) =>
+  ): ((input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>) =>
     (input, _stores) => handler(input)
 
   const implementation: Implementation = {
@@ -1005,7 +1064,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
     }
 
     try {
-      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra, createMessage, sendLoggingMessage)
+      const { input, stores } = assembleArgumentInput(args ?? {}, dispatch.sourceMap, extra, createMessage, sendLoggingMessage)
       const toolContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "tool" }
       const base = toBase(withAls(dispatch.handler, toolContext))
       const callHandler = middleware.length === 0
@@ -1089,7 +1148,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
           : composeMiddleware(middleware, base)
         // No URI-variables for a fixed resource — assembleInput still builds
         // the `caller` store from `extra` so middleware sees it here too.
-        const { input, stores } = assembleInput("uri-variable", {}, {}, extra, createMessage, sendLoggingMessage)
+        const { input, stores } = assembleUriVariableInput({}, {}, extra, createMessage, sendLoggingMessage)
         const result = await callHandler(input, stores)
         if (detectStreaming && isAsyncIterable(result)) {
           return { contents: await collectStreamedResourceContents(result, extra, uri, mimeType) }
@@ -1104,7 +1163,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         template.paramNames.forEach((name, i) => {
           captured[name] = match[i + 1] as string
         })
-        const { input, stores } = assembleInput("uri-variable", captured, template.sourceMap, extra, createMessage, sendLoggingMessage)
+        const { input, stores } = assembleUriVariableInput(captured, template.sourceMap, extra, createMessage, sendLoggingMessage)
         const templateContext: McpAlsContext = { meta: template.meta, name: uri, requestType: "resource" }
         const base = toBase(withAls(template.handler, templateContext))
         const callHandler = middleware.length === 0
@@ -1132,7 +1191,7 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
       }
 
-      const { input, stores } = assembleInput("argument", args ?? {}, dispatch.sourceMap, extra, createMessage, sendLoggingMessage)
+      const { input, stores } = assembleArgumentInput(args ?? {}, dispatch.sourceMap, extra, createMessage, sendLoggingMessage)
       const promptContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "prompt" }
       const base = toBase(withAls(dispatch.handler, promptContext))
       const callHandler = middleware.length === 0

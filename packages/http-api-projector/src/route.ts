@@ -50,10 +50,10 @@ import {
   isStreamProgress,
   matchKind,
 } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, Page, Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, Page } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective, HttpLeafMeta, HttpSharedMeta } from "./project.ts"
 import { httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
-import type { ParamSource, SourceMap, StandardSchemaV1 } from "./decode.ts"
+import type { HttpStoreBag, ParamSource, SourceMap, StandardSchemaV1 } from "./decode.ts"
 
 // `HttpDirective`/`HttpLeafMeta`/`HttpSharedMeta` are type-only imports from
 // project.ts, which VALUE-imports from this file (`naiveTransform`,
@@ -926,7 +926,7 @@ async function defaultDecode(
   req: Request,
   slugs: Readonly<Record<string, string>>,
   sources?: Sources,
-): Promise<{ readonly input: unknown; readonly stores: Stores }> {
+): Promise<{ readonly input: unknown; readonly stores: HttpStoreBag }> {
   const url = new URL(req.url)
   const primary = primaryStoreForMethod(req.method)
 
@@ -1109,8 +1109,8 @@ function encodeHttpError(response: HttpErrorResponse): Response {
  * convention as `CliMiddleware`/`McpMiddleware`.
  */
 export type HttpHandlerMiddleware = (
-  next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
+  next: (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown>
 
 /**
  * Compose `middleware` around `base`, first entry outermost. An empty array
@@ -1118,8 +1118,8 @@ export type HttpHandlerMiddleware = (
  */
 function composeHandlerMiddleware(
   middleware: readonly HttpHandlerMiddleware[],
-  base: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-): (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown> {
+  base: (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown>,
+): (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown> {
   let wrapped = base
   for (let i = middleware.length - 1; i >= 0; i--) {
     wrapped = middleware[i]!(wrapped)
@@ -1162,7 +1162,7 @@ export async function runRoute(
   const detectStreaming = detection?.streaming ?? true
   const detectResult = detection?.result ?? true
   let input: unknown
-  let stores: Stores
+  let stores: HttpStoreBag
   try {
     const decoded = await defaultDecode(req, slugs, sources)
     input = decoded.input
@@ -1197,7 +1197,7 @@ export async function runRoute(
     // Bridge the plain handler `(input) => result` into `F => F`'s base case
     // `(input, stores) => handler(input)` — the handler never sees `stores`,
     // structurally (see HttpHandlerMiddleware's module doc above).
-    const base = (input: Record<string, unknown>, _stores: Stores) =>
+    const base = (input: Record<string, unknown>, _stores: HttpStoreBag) =>
       (handler as (input: Record<string, unknown>) => unknown | Promise<unknown>)(input)
     const middleware = handlerMiddleware ?? []
     const callHandler = middleware.length === 0

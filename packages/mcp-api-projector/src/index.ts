@@ -36,6 +36,7 @@ export type {
   SendLogParams,
   ValidationResult,
 } from "./server.ts"
+export type { McpStoreBag, McpStores } from "./server.ts"
 export { createMcpServer, mcpErrors, validateAgainstSchema } from "./server.ts"
 // SDK sampling types re-exported so consumers of `stores.caller.createMessage`
 // (see `CreateMessageFn`, server.ts) don't need to reach into

@@ -68,7 +68,7 @@
 //   packages/mcp-api-projector/src/server.ts          — sibling preset (structural mirror: detection, errorEncoder)
 
 import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, ProjectorStores, Store } from "@rhi-zone/fractal-api-tree"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { projectMethods } from "./project.ts"
 import type { Dispatch, ProjectMethodsOptions, SchemaMap } from "./project.ts"
@@ -104,15 +104,33 @@ export {
   isJsonRpcError,
 } from "./wire.ts"
 
-// Augment the shared StoreRegistry with this projector's one store — see
-// http-api-projector/src/decode.ts and mcp-api-projector/src/server.ts for
-// the matching augmentations and this file's doc comment on why `caller` is
-// NOT re-declared here (already shared, from api-tree's input.ts).
-declare module "@rhi-zone/fractal-api-tree" {
-  interface StoreRegistry {
-    params: true
-  }
+/**
+ * JSON-RPC's own store-name fragment: an INERT, plain interface naming the one
+ * store this projector builds and the shape it carries. Deliberately NOT a
+ * `declare module` augmentation of api-tree's `StoreRegistry` — per
+ * docs/design/typed-store-spec.md §3, a projector that augments core makes the
+ * type surface depend on which packages are in the compilation rather than on
+ * what the deployment composes. A DEPLOYMENT composes this in, once, in its own
+ * augmentation file (`interface StoreRegistry extends JsonRpcStores {}`); see
+ * `HttpStores` in http-api-projector/src/decode.ts for the worked example.
+ *
+ * The member is OPTIONAL — a per-request store this projector builds when it
+ * dispatches. `caller` is NOT declared here: core declares it once (api-tree's
+ * `CoreStores`), shared across every projector.
+ */
+export interface JsonRpcStores {
+  /** A request's by-name `params` object (a positional/array `params` degrades to `{}` — see `dispatchRequest`). */
+  params?: Store
 }
+
+/**
+ * The full per-request store bag a JSON-RPC dispatch builds: the shared
+ * `Stores` (core's `caller`, plus whatever service stores the deployment
+ * registered) intersected with this projector's own fragment — see
+ * `HttpStoreBag`'s doc for why the intersection is what lets this package build
+ * and read `params` without an ambient augmentation.
+ */
+export type JsonRpcStoreBag = ProjectorStores & JsonRpcStores
 
 // ============================================================================
 // Error encoding
@@ -280,7 +298,7 @@ async function dispatchRequest(
       : {}
 
   try {
-    const stores = { params: paramsObj, caller: {} } as Stores
+    const stores: JsonRpcStoreBag = { params: paramsObj, caller: {} }
     const paramNames = [...new Set([...Object.keys(paramsObj), ...Object.keys(dispatch.sourceMap)])]
     const input = assemble(stores, paramNames, dispatch.sourceMap, "params")
 

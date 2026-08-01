@@ -15,18 +15,38 @@
 
 import { GraphQLError } from "graphql"
 import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, Stores } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, ProjectorStores, Store } from "@rhi-zone/fractal-api-tree"
 import type { Dispatch } from "./project.ts"
 
-// Augment the shared StoreRegistry with the "argument" store name — see
-// mcp-api-projector/src/server.ts and http-api-projector/src/decode.ts for
-// the matching per-projector augmentations. `caller` itself is declared once
-// in api-tree's input.ts (shared across every projector).
-declare module "@rhi-zone/fractal-api-tree" {
-  interface StoreRegistry {
-    argument: true
-  }
+/**
+ * GraphQL's own store-name fragment: an INERT, plain interface naming the one
+ * store this projector builds and the shape it carries. Deliberately NOT a
+ * `declare module` augmentation of api-tree's `StoreRegistry` — per
+ * docs/design/typed-store-spec.md §3, a projector that augments core makes the
+ * type surface depend on which packages are in the compilation rather than on
+ * what the deployment composes. A DEPLOYMENT composes this in, once, in its own
+ * augmentation file (`interface StoreRegistry extends GraphQLStores {}`); see
+ * `HttpStores` in http-api-projector/src/decode.ts for the worked example.
+ *
+ * The member is OPTIONAL — a per-request store this projector builds when it
+ * dispatches. The name deliberately MATCHES MCP's `argument` (see this module's
+ * doc): the two fragments declare the same member with the same shape, so a
+ * deployment composing both merges them without conflict. `caller` is NOT
+ * declared here: core declares it once (api-tree's `CoreStores`).
+ */
+export interface GraphQLStores {
+  /** A field's resolver `args` — already the flat named-value bag `assemble()` expects. */
+  argument?: Store
 }
+
+/**
+ * The full per-request store bag a GraphQL field dispatch builds and threads
+ * through middleware: the shared `Stores` (core's `caller`, plus whatever
+ * service stores the deployment registered) intersected with this projector's
+ * own fragment — see `HttpStoreBag`'s doc for why the intersection is what
+ * lets this package build and read `argument` without an ambient augmentation.
+ */
+export type GraphQLStoreBag = ProjectorStores & GraphQLStores
 
 // ============================================================================
 // Structured error types — composable error-to-transport mapping (mirrors
@@ -99,8 +119,8 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
 function assembleGraphQLInput(
   entry: Dispatch,
   args: Record<string, unknown>,
-): { readonly input: Record<string, unknown>; readonly stores: Stores } {
-  const stores = { argument: args, caller: {} } as Stores
+): { readonly input: Record<string, unknown>; readonly stores: GraphQLStoreBag } {
+  const stores: GraphQLStoreBag = { argument: args, caller: {} }
   const input = assemble(stores, entry.inputNames, entry.sourceMap, "argument")
   return { input, stores }
 }
@@ -115,14 +135,14 @@ function assembleGraphQLInput(
 
 /** A GraphQL resolver-scoped middleware — wraps the handler-invoking function `next`. */
 export type GraphQLHandlerMiddleware = (
-  next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
+  next: (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>
 
 /** Compose `middleware` around `base`, first entry outermost. An empty array returns `base` unchanged. */
 function composeMiddleware(
   middleware: readonly GraphQLHandlerMiddleware[],
-  base: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-): (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown> {
+  base: (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>,
+): (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown> {
   let wrapped = base
   for (let i = middleware.length - 1; i >= 0; i--) {
     wrapped = middleware[i]!(wrapped)
@@ -206,7 +226,7 @@ async function runHandler(
 function createFieldResolver(entry: Dispatch, options: ResolverOptions): FieldResolver {
   const middleware = options.middleware ?? []
   const detectResult = options.detection?.result ?? true
-  const base = (input: Record<string, unknown>, _stores: Stores): unknown | Promise<unknown> =>
+  const base = (input: Record<string, unknown>, _stores: GraphQLStoreBag): unknown | Promise<unknown> =>
     runHandler(entry, input, options.errorEncoder, detectResult)
   const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base)
 
@@ -253,7 +273,7 @@ async function* drainSubscription(iterable: AsyncIterable<unknown>): AsyncGenera
  */
 function createSubscriptionResolver(entry: Dispatch, options: ResolverOptions): SubscriptionFieldConfig {
   const middleware = options.middleware ?? []
-  const base = (input: Record<string, unknown>, _stores: Stores): unknown | Promise<unknown> => entry.handler(input)
+  const base = (input: Record<string, unknown>, _stores: GraphQLStoreBag): unknown | Promise<unknown> => entry.handler(input)
   const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base)
 
   return {

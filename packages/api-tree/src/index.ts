@@ -48,7 +48,19 @@ export { isCursorPage, isOffsetPage, isPageShape } from "./page.ts"
 // where a param came from consult the sourceMap directly — see "./input.ts"
 // for the full doc.
 export { assemble } from "./input.ts"
-export type { ParamSource, SourceMap, Store, StoreRegistry, Stores } from "./input.ts"
+export type {
+  CallerStoreShape,
+  CoreStores,
+  ParamSource,
+  ProjectorStores,
+  RequiredServiceStoreKeys,
+  RequiredStoreKeys,
+  ServiceStores,
+  SourceMap,
+  Store,
+  StoreRegistry,
+  Stores,
+} from "./input.ts"
 
 // Dev tooling — the build-time extractor (extract.ts, TS source -> TypeRef)
 // and the source-level api()/op() tree walker (tree.ts) it feeds — lives on

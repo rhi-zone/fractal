@@ -30,6 +30,7 @@ export type {
   ResolverOptions,
   SubscriptionFieldConfig,
 } from "./resolve.ts"
+export type { GraphQLStoreBag, GraphQLStores } from "./resolve.ts"
 export { createResolver, graphqlErrors } from "./resolve.ts"
 export type { CreateGraphQLServerOptions, GraphQLAlsContext, GraphQLServer } from "./server.ts"
 export { createGraphQLServer } from "./server.ts"

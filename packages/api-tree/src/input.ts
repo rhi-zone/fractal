@@ -33,13 +33,21 @@
 export type Store = Record<string, unknown>
 
 /**
- * Registry of store names, populated via declaration merging. The base
- * interface is empty; each projector augments it with the store names it
- * defines (e.g. HTTP adds `path`/`query`/`header`/`body`), so that
- * `stores.someStore` is a compile-time error unless some projector actually
- * declares `someStore`. See http-api-projector/src/decode.ts,
- * cli-api-projector/src/cli.ts, mcp-api-projector/src/server.ts for the
- * `declare module` augmentations.
+ * The `caller` store's shape — auth/identity context, populated by every
+ * projector (see `CoreStores.caller`). Deliberately `Store` (a plain bag of
+ * unknown-typed fields) at the CORE declaration: no single concrete shape
+ * unifies HTTP's raw header pass-through, CLI's environment, and MCP's
+ * `authInfo`/`sessionId` + optional `createMessage`/`sendLog`. A deployment
+ * wanting a richer `caller` composes it in its own augmentation, the same way
+ * it composes any other store member (docs/design/typed-store-spec.md §2).
+ */
+export type CallerStoreShape = Store
+
+/**
+ * The store members CORE itself declares, split out from `StoreRegistry` (which
+ * `StoreRegistry` then extends) purely so `RequiredServiceStoreKeys` has a way
+ * to tell a core-owned required member apart from a DEPLOYMENT-provided one.
+ * Nothing else should reference this — read sites use `Stores`.
  *
  * `caller` is declared HERE, in api-tree, rather than per-projector — unlike
  * `path`/`query`/`header`/etc. (which are genuinely projector-specific), every
@@ -48,24 +56,120 @@ export type Store = Record<string, unknown>
  * registry instead of being redundantly declared three times. HTTP populates
  * it from auth headers/cookies, CLI from environment, MCP from the SDK's
  * `authInfo`/`sessionId` — see each projector's stores factory
- * (`httpStores`, `buildInput`, `assembleInput`).
+ * (`httpStores`, `buildInput`, `assembleArgumentInput`).
  */
-export interface StoreRegistry {
-  caller: true
+export interface CoreStores {
+  caller: CallerStoreShape
 }
 
 /**
- * All input stores available for a given request/invocation. Values are
- * optional: `StoreRegistry` is declaration-merged globally across every
- * projector that's part of a given compilation (e.g. `tsc` type-checking
- * the whole monorepo pulls in HTTP's, CLI's, and MCP's augmentations at
- * once), but any single projector only ever builds the subset of stores it
- * actually defines. Optional values keep construction sound per-projector
- * while still making `stores.someUndeclaredName` a compile-time error —
- * that's the property this type exists to enforce, not "every registered
- * store is always present."
+ * Registry of store names AND their value shapes, populated via declaration
+ * merging. Core declares only `caller` (via `CoreStores`); a DEPLOYMENT's own
+ * single augmentation file adds everything else, by extending the inert
+ * fragment interfaces each projector exports (`HttpStores`, `CliStores`,
+ * `McpStores`, `JsonRpcStores`, `GraphQLStores`) plus whatever service stores
+ * that deployment provides. Projector packages never augment this themselves —
+ * see docs/design/typed-store-spec.md §3, and the sibling rule for `Meta` in
+ * docs/design/meta-role-split-spec.md §9(4): a projector-owned `declare module`
+ * makes the type surface depend on which packages happen to be in the
+ * compilation rather than on what the deployment actually composes.
+ *
+ * Two KINDS of member coexist here, distinguished by OPTIONALITY alone (not by
+ * a second registry or a wrapper type) — see `Stores`:
+ *
+ * - **Projector-built, per-request data stores** (`path`, `query`, `body`,
+ *   `flag`, `argument`, `params`, …) are declared OPTIONAL, because any single
+ *   projector only ever builds the subset it defines: a compilation merging
+ *   HTTP's and CLI's fragments together doesn't mean a given request populates
+ *   both.
+ * - **Deployment-provided, long-lived service stores** (a tabular-data source,
+ *   a domain read-model, …) are declared REQUIRED, because the deployment's
+ *   single registration site (`ServiceStores`) is checked structurally against
+ *   every required member — a missing one is a compile error THERE, not a
+ *   silent `undefined` at some read site later.
  */
-export type Stores = Readonly<{ [K in keyof StoreRegistry]?: Store }>
+export interface StoreRegistry extends CoreStores {}
+
+/**
+ * All input stores available for a given request/invocation — an IDENTITY
+ * projection over `StoreRegistry`, deliberately NOT a `Partial<>`-style
+ * blanket-`?` mapped type. Each member's own optionality, declared by whoever
+ * added that member, survives unchanged to every read site: an optional
+ * projector store needs a guard (`stores.query?.q`), a required service store
+ * does not (`stores.tabularSource.read(...)`). Blanket-optionaling every member
+ * here would make a required service store silently `| undefined` again — the
+ * exact hole docs/design/typed-store-spec.md §9(2) rules out.
+ *
+ * `stores.someUndeclaredName` remains a compile-time error, unchanged — that
+ * property is what this type has always existed to enforce.
+ */
+export type Stores = Readonly<{ [K in keyof StoreRegistry]: StoreRegistry[K] }>
+
+/**
+ * The keys of `StoreRegistry` whose members are REQUIRED (no `?`) — the
+ * service-store kind, per `StoreRegistry`'s doc above. `-?` strips optionality
+ * before the `{} extends Pick<...>` probe so an already-optional member is the
+ * one that resolves to `never`.
+ */
+export type RequiredStoreKeys = {
+  [K in keyof StoreRegistry]-?: {} extends Pick<StoreRegistry, K> ? never : K
+}[keyof StoreRegistry]
+
+/**
+ * The required members a DEPLOYMENT must supply — `RequiredStoreKeys` minus the
+ * ones core declares itself (`caller`, which every projector builds per-request
+ * rather than the deployment registering once).
+ */
+export type RequiredServiceStoreKeys = Exclude<RequiredStoreKeys, keyof CoreStores>
+
+/**
+ * The single registration object a deployment supplies for its service stores
+ * (docs/design/typed-store-spec.md §4). Annotate ONE `const` at the composition
+ * root with this type and a missing service store is a compile error at that
+ * site:
+ *
+ * ```ts
+ * const serviceStores: ServiceStores = {
+ *   tabularSource: createSomeTabularSource(...),
+ * }
+ * ```
+ *
+ * Deliberately one object, checked once — a required store supplied ad hoc at
+ * several call sites (each building its own partial `Stores`-shaped value)
+ * loses exactly the completeness property this type exists to provide
+ * (§9(6)). Projector data stores are NOT registered here; they stay
+ * per-request-built by the dispatching projector, which is precisely what their
+ * optionality buys.
+ *
+ * Resolves to `{}` in a compilation whose merged registry declares no service
+ * stores at all — a deployment with none simply never needs the registration
+ * site.
+ */
+export type ServiceStores = Readonly<Pick<StoreRegistry, RequiredServiceStoreKeys>>
+
+/**
+ * The portion of the merged registry a PROJECTOR builds on its own, per
+ * request: everything in `Stores` except the deployment-registered service
+ * stores. Each projector's own bag type is this intersected with its exported
+ * fragment (`HttpStoreBag = ProjectorStores & HttpStores`, and so on).
+ *
+ * Derived from `Stores` by `Omit`, NOT by re-mapping with a `?` modifier —
+ * every remaining member keeps its own declared optionality (`caller` stays
+ * REQUIRED here, projector data stores stay optional), so this is not a
+ * back-door reintroduction of the blanket-optional shape
+ * docs/design/typed-store-spec.md §9(2) rules out. `Stores` itself is
+ * unchanged and remains the read-site type.
+ *
+ * Why the split exists: §4 has a service store merged into the per-request bag
+ * by threading the registered `ServiceStores` value into each projector's own
+ * store-builder — but §8 explicitly defers HOW that threading reaches each of
+ * the five projectors' preset options ("an implementation-order question").
+ * Until it lands, a projector genuinely does not have the service stores in
+ * hand when it builds a request's bag, and this type says exactly that instead
+ * of overstating what a builder produces. When the threading does land, each
+ * `XStoreBag` widens back to `Stores & XStores` and this type goes away.
+ */
+export type ProjectorStores = Omit<Stores, RequiredServiceStoreKeys>
 
 // ============================================================================
 // Per-param source override
@@ -108,7 +212,7 @@ export type SourceMap = Readonly<Record<string, ParamSource>>
  * provenance record, so `assemble` doesn't need to hand back a second one.
  */
 export function assemble(
-  stores: Stores,
+  stores: ProjectorStores,
   paramNames: readonly string[],
   sourceMap: SourceMap,
   primaryStore: string,

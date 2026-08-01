@@ -16,4 +16,5 @@ export type {
   CliSharedMetaProperties,
   CliCommandEntry,
 } from "./cli.ts"
+export type { CliStoreBag, CliStores } from "./cli.ts"
 export { cliErrors, getCliMeta, runCli, walkCliCommands } from "./cli.ts"
