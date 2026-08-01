@@ -1,8 +1,42 @@
 # Typed Stores: value-carrying members, presence-correct by declaration, deployment-owned service stores
 
-Status: **design spec, settled by the project owner — not yet implemented.**
-This is not a proposal under discussion; it is the certified target
-architecture. Scope: `packages/api-tree/src/input.ts`'s `Store`/
+Status: **IMPLEMENTED in fractal.** Was: "design spec, settled by the project
+owner — not yet implemented." This is not a proposal under discussion; it is
+the certified target architecture, and the sections below are kept as written
+(they remain the contract §9's regression checklist is enforced against).
+What the implementation settled, beyond what the text already fixed:
+
+- **§5's `[verify:]` flag on MCP's `as Stores` cast is discharged — PROVEN.**
+  Splitting `assembleInput` into `assembleArgumentInput`/`assembleUriVariableInput`
+  over a shared `callerStore` helper removes the cast with a clean compile. The
+  diagnosis was exactly right: the cast existed only because the single-function
+  form built its object with a COMPUTED key, and each split path builds a
+  literal-key object that checks directly against the bag type. All four call
+  sites already passed a literal.
+- **§8's open question on `source()`'s `const M` — it composes.** The `const M
+  extends SourceMapInput` signature keeps each call's literal key/store
+  association through `HttpStore`'s own declaration-merged openness, verified by
+  compiling against the real types rather than a simplified stand-in. Two
+  guards were needed that the scratch repro could not have surfaced: a verb
+  bundle types its directives tuple as the whole `HttpDirective` UNION (whose
+  `source` member has an erased map), so both the coverage check and the
+  directive walk must skip erased maps — see `FindStoreForParam`'s own doc.
+- **§8's runtime wire-time check** is `checkRouteSourceCoverage`
+  (http-api-projector's route.ts), called once from `makeRouterFromRoute`;
+  it collects every problem across the tree into one `SourceCoverageError`
+  rather than failing on the first.
+- **§8's service-store threading remains DEFERRED, and is now tracked in
+  `TODO.md`.** Because it is not done, each projector's per-request bag is typed
+  `ProjectorStores & XStores` rather than `Stores & XStores` —
+  `ProjectorStores` being `Omit<Stores, RequiredServiceStoreKeys>`, derived so
+  every remaining member keeps its own modifier (NOT a blanket-optional twin,
+  which §9(2) rules out). It is a statement about what a projector genuinely
+  has in hand today, and it disappears when the threading lands.
+- **Fractal has no real deployment**, so §3's single-augmentation role is played
+  by `examples/library-api/src/stores.ts` (the example app's composition root)
+  and by `packages/api-tree/src/__fixtures__/deployment-store.fixture.ts` (that
+  package's own test suite's stand-in), mirroring the meta role-split precedent.
+  §7's consumer story is busiless's, and is not implemented here. Scope: `packages/api-tree/src/input.ts`'s `Store`/
 `StoreRegistry`/`Stores`/`assemble`, every projector's current `declare
 module` augmentation of `StoreRegistry` (`http-api-projector/src/decode.ts`,
 `cli-api-projector/src/cli.ts`, `mcp-api-projector/src/server.ts`,
