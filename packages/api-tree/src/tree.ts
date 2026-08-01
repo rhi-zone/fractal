@@ -445,6 +445,49 @@ export function extractToolSchemas(entryFile: string, options?: { program?: ts.P
   return out
 }
 
+/**
+ * Extract the tree-PATH → schema map for every exported `api(children,
+ * opts?)` tree in a source file — same walk and same JSON-Schema derivation
+ * as `extractToolSchemas`, keyed by `path.join("/")` instead of the
+ * underscore-joined tool name. Mirrors `extractRouteTypeRefs`'s own
+ * path-keying (this file) — that function already made this exact choice
+ * for validator codegen (`build.ts`'s `wrapValidators` looks its
+ * `GeneratedEntry` map up by `path.join("/")` at runtime, matching this
+ * key format 1:1).
+ *
+ * Exists ALONGSIDE `extractToolSchemas`, not as a replacement — a bare tool
+ * NAME is unique only within one standalone tree (fine for a single-tree
+ * OpenAPI/MCP/CLI/JSON-RPC projection, which is what `extractToolSchemas`
+ * still serves); a tree PATH is unique within a COMPOSED tree too (multiple
+ * files' trees nested as branches under one root — the sibling codebase's one-root
+ * composition, `docs/decisions/one-root-fractal-tree-2026-08-02.md` in that
+ * repo, is the motivating case: a naive merge of 17 files' own
+ * `extractToolSchemas` output collided on short generic names like `"list"`
+ * across up to 7 unrelated slices). A caller merging several files' schema
+ * maps into one for a composed root should call THIS function per file and
+ * merge the results — each file's own keys are already path-relative to
+ * that file's own tree root, so no additional per-file prefixing is needed
+ * as long as the composed root's `toOpenApi` call correlates schemas via
+ * the SAME path-keyed mechanism (see `openapi.ts`'s `buildPathMap`) rather
+ * than the underscore-joined `codenName`.
+ */
+export function extractRouteSchemas(entryFile: string, options?: { program?: ts.Program }): SchemaMap {
+  const out: SchemaMap = {}
+  walkTree(
+    entryFile,
+    (_name, path, fn, descriptionSource, checker) => {
+      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
+      out[path.join("/")] = {
+        inputSchema: schemaFromFunctionNode(fn, checker),
+        outputSchema: schemaFromReturnType(fn, checker),
+        ...(description !== undefined ? { description } : {}),
+      }
+    },
+    options?.program,
+  )
+  return out
+}
+
 /** Every leaf's derived input/output TypeRef, PLUS the shared `defs` map a
  * `shouldShare`-driven extraction produced — see `finalizeSharedDefs`
  * (extract.ts) and `SharingRegistry`'s doc comment. Sharing spans the WHOLE
