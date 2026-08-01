@@ -117,6 +117,21 @@ export interface HttpStoreRegistry {
 /** A registered HTTP store name — the key set of `HttpStoreRegistry`, open via merging. */
 export type HttpStore = keyof HttpStoreRegistry
 
+/**
+ * The store names this package itself builds, as a RUNTIME value — the
+ * reflection of `HttpStoreRegistry`'s built-in members, which a type alone
+ * can't provide to a check that runs at wire time
+ * (`checkRouteSourceCoverage`, route.ts).
+ *
+ * `satisfies readonly HttpStore[]` keeps it honest against the type: dropping a
+ * built-in member from the registry breaks this line. It deliberately does NOT
+ * track declaration-merged ADDITIONS — a deployer who merges `cookie` into
+ * `HttpStoreRegistry` also builds that store themselves, and passes its name
+ * through `checkRouteSourceCoverage`'s `knownStores` option. No runtime value
+ * can enumerate an open interface's merged members.
+ */
+export const BUILTIN_HTTP_STORE_NAMES = ["path", "query", "header", "body", "caller"] as const satisfies readonly HttpStore[]
+
 // ============================================================================
 // Body parsing — Content-Type-driven request body decode
 // ============================================================================

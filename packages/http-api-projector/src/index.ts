@@ -28,9 +28,12 @@ export type {
 } from "./project.ts"
 export type { HttpLeafMeta, HttpSharedMeta } from "./meta.ts"
 export type { HttpStoreBag, HttpStores } from "./decode.ts"
+export { BUILTIN_HTTP_STORE_NAMES } from "./decode.ts"
 export type { HttpStore, HttpStoreRegistry, StandardSchemaOutcome, StandardSchemaV1 } from "./decode.ts"
 export { runStandardSchema } from "./decode.ts"
 export type { Sources } from "./route.ts"
+export type { SourceCoverageOptions, SourceCoverageProblem } from "./route.ts"
+export { SourceCoverageError, checkRouteSourceCoverage, findRouteSourceCoverageProblems } from "./route.ts"
 export type { HttpManifest } from "./http-manifest.ts"
 export { mapRoute } from "./route.ts"
 export {
