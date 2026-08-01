@@ -99,6 +99,34 @@ describe("schema derivation from op input type", () => {
 })
 
 // ============================================================================
+// A `fallback.subtree` that is a bare `op()` leaf (not wrapped in `api(...)`)
+// — the Node model explicitly allows this (node.ts's `fallback: { name,
+// subtree: Node }`), and build.ts's runtime walks (`collectUnvalidatedLeaves`
+// / `wrapValidatorsUnchecked`) already key it as `[...path, ":name"]` with no
+// extra segment, since they check `node.handler !== undefined` on the
+// subtree itself before ever looking at `children`. Regression coverage:
+// extraction (this walker) must visit — and key — the leaf identically, or a
+// generated validator module silently omits it and `wrapValidators` throws
+// `UnvalidatedLeafError` at wiring time for a leaf that looks covered.
+// ============================================================================
+
+describe("fallback.subtree as a bare op() leaf", () => {
+  it("extractToolSchemas visits the leaf, keyed like any other fallback-namespaced tool", () => {
+    expect(schemas["widgetById_widgetId"]?.inputSchema).toEqual({
+      type: "object",
+      properties: { widgetId: { type: "string" } },
+      required: ["widgetId"],
+    })
+  })
+
+  it("extractRouteTypeRefs keys it exactly as build.ts's wrapValidators/collectUnvalidatedLeaves would at runtime — \"widgetById/:widgetId\", not an extra trailing segment", () => {
+    const routes = extractRouteTypeRefs(FIXTURE)
+    expect(routes["widgetById/:widgetId"]).toBeDefined()
+    expect(routes["widgetById/widgetId"]).toBeUndefined()
+  })
+})
+
+// ============================================================================
 // 1b. Per-field JSDoc → property `description` (+ `@default` → `default`)
 // ============================================================================
 
