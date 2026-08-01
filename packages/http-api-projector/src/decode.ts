@@ -24,7 +24,7 @@
 export type { Store, Stores, ParamSource, SourceMap } from "@rhi-zone/fractal-api-tree"
 export { assemble } from "@rhi-zone/fractal-api-tree"
 
-import type { ProjectorStores, Store } from "@rhi-zone/fractal-api-tree"
+import type { ServiceStores, Store, Stores } from "@rhi-zone/fractal-api-tree"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 
 /**
@@ -77,8 +77,14 @@ export interface HttpStores {
  * `header`/`body` WITHOUT its own ambient augmentation — in a compilation
  * where no deployment has merged `HttpStores` into `StoreRegistry` (this
  * package's own typecheck, for instance), `Stores` alone doesn't name them.
+ *
+ * `Stores` (not `ProjectorStores`) — service-store threading has landed
+ * (docs/design/typed-store-spec.md §8, was DEFERRED): `httpStores()` below
+ * takes the registered `ServiceStores` value and spreads it into the bag it
+ * builds, so a per-request bag genuinely has every required service store in
+ * hand by the time a handler/middleware reads it, same as `path`/`query`/etc.
  */
-export type HttpStoreBag = ProjectorStores & HttpStores
+export type HttpStoreBag = Stores & HttpStores
 
 // ============================================================================
 // HttpStoreRegistry — the store names `http.source()` (verbs.ts) accepts
@@ -234,17 +240,47 @@ const mapLikeHandler: ProxyHandler<{ get(key: string): unknown }> = {
  * source as the `header` store): PARSING what's inside (decoding a JWT,
  * splitting a cookie string into individual cookies, ...) is the consumer's
  * job, not this factory's — see docs/design/middleware-and-caller-context.md.
+ *
+ * `serviceStores` — the deployment's registered `ServiceStores` value
+ * (`PresetOptions.serviceStores`, preset.ts, threaded down through
+ * `createFetch` → the router compiler → `runRoute` → `defaultDecode`, route.ts)
+ * — is spread into the returned bag FIRST, so HTTP's own per-request members
+ * (`path`/`body`/`caller`/`query`/`header`) always win on a name collision
+ * (none exists today: service-store names are deployment-chosen and HTTP's
+ * five names are reserved, but spread order documents the intended precedence
+ * regardless).
+ *
+ * Optional, defaulting to an empty object — every EXISTING caller (this
+ * package's own tests, other projectors' fixtures, any consumer not yet on
+ * the threaded option) that never supplies it keeps compiling unchanged. The
+ * default's `as ServiceStores` cast (not a plain `{}`) is load-bearing, NOT
+ * decorative: `StoreRegistry` declaration-merging is GLOBAL to whatever
+ * `ts.Program` a compilation builds — api-tree's own test suite merges a
+ * REQUIRED `tabularSource` member via its `deployment-store.fixture.ts` (a
+ * stand-in "deployment," imported transitively into the same Program this
+ * package's source is type-checked under whenever api-tree's own typecheck
+ * runs), so `ServiceStores` resolves to a required-member type THERE even
+ * though this file itself supplies nothing for it. `{}` alone would fail
+ * against that required member; `{} as ServiceStores` is sound BECAUSE this
+ * default is genuinely never reached with a required member actually
+ * missing in practice — real enforcement lives at `PresetOptions.
+ * serviceStores` (the single registration site, typed-store-spec.md §4), not
+ * here. Same shape of escape hatch `assemble()`'s own `byName` cast is
+ * (input.ts) — internal plumbing below the one enforced site needs a wider
+ * type than a call site that IS checked.
  */
 export function httpStores(
   req: Request,
   slugs: Readonly<Record<string, string>>,
   parsedBody: unknown,
+  serviceStores: ServiceStores = {} as ServiceStores,
 ): HttpStoreBag {
   const caller: Record<string, unknown> = {}
   for (const [key, value] of req.headers.entries()) {
     caller[key] = value
   }
   return {
+    ...serviceStores,
     path: slugs,
     body: (typeof parsedBody === "object" && parsedBody !== null)
       ? (parsedBody as Record<string, unknown>)

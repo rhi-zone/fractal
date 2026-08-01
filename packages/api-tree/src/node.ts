@@ -78,9 +78,15 @@ export interface BranchMeta extends SharedMeta {}
  * Used to make `op()`/`api()`'s meta-contribution rest parameter require at
  * least one argument when a consumer declaration-merges a required field
  * onto `LeafMeta`/`BranchMeta` — fractal's own default (all-optional) keeps
- * the zero-contribution call legal.
+ * the zero-contribution call legal. Exported (not module-private) because
+ * `http-api-projector`'s `PresetOptions.serviceStores` (preset.ts) reuses the
+ * exact same conditional-arity technique to make `serviceStores` required
+ * only when a deployment's merged `StoreRegistry` (api-tree's input.ts)
+ * actually declares a required service store —
+ * docs/design/typed-store-spec.md §8's "plausibly with the `HasRequiredKeys`
+ * conditional-arity technique `op()`/`api()` already use" is this reuse.
  */
-type HasRequiredKeys<T> = {} extends T ? false : true
+export type HasRequiredKeys<T> = {} extends T ? false : true
 
 // ============================================================================
 // Type-level meta merge — mirrors `mergeRecords`'/`mergeMeta`'s runtime

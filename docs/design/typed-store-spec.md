@@ -25,13 +25,18 @@ What the implementation settled, beyond what the text already fixed:
   (http-api-projector's route.ts), called once from `makeRouterFromRoute`;
   it collects every problem across the tree into one `SourceCoverageError`
   rather than failing on the first.
-- **§8's service-store threading remains DEFERRED, and is now tracked in
-  `TODO.md`.** Because it is not done, each projector's per-request bag is typed
-  `ProjectorStores & XStores` rather than `Stores & XStores` —
-  `ProjectorStores` being `Omit<Stores, RequiredServiceStoreKeys>`, derived so
-  every remaining member keeps its own modifier (NOT a blanket-optional twin,
-  which §9(2) rules out). It is a statement about what a projector genuinely
-  has in hand today, and it disappears when the threading lands.
+- **§8's service-store threading LANDED for `http-api-projector`** (driven by
+  busiless's real `tabularSource` consumer, §7) — see `TODO.md`'s resolved
+  entry for the exact mechanics and the `HasRequiredKeys`-conditional design
+  it evaluated and rejected (declaration-merging is global to a `ts.Program`,
+  so a conditionally-required `PresetOptions.serviceStores` would force every
+  `createFetch` call in a compilation to supply it, not just the mounted
+  sub-app that reads it — wrong for a deployment with several independently-
+  mounted trees). `HttpStoreBag` is `Stores & HttpStores` again (not
+  `ProjectorStores & HttpStores`). **CLI/MCP/JSON-RPC/GraphQL projectors are
+  still DEFERRED** — each remains typed `ProjectorStores & XStores` — because
+  no real consumer has needed one yet; `ProjectorStores` (`Omit<Stores,
+  RequiredServiceStoreKeys>`) stays in api-tree for their sake.
 - **Fractal has no real deployment**, so §3's single-augmentation role is played
   by `examples/library-api/src/stores.ts` (the example app's composition root)
   and by `packages/api-tree/src/__fixtures__/deployment-store.fixture.ts` (that
@@ -524,8 +529,10 @@ what makes chain 1's fix possible in the first place.
   competing tradeoffs worth recording here.
 - **How a registered service store is threaded into each projector's
   per-request `Stores` merge** (§4's "mechanically... spreads them into its
-  per-request `Stores` value") — an implementation-order question across
-  five projector packages' preset options, not decided here.
+  per-request `Stores` value") — RESOLVED for `http-api-projector` (see the
+  status block at the top of this doc and `TODO.md`'s resolved entry); the
+  remaining four projectors' preset options are still an open
+  implementation-order question, deferred pending a real consumer.
 - **`source()`'s literal-preserving redesign's exact signature** (§6) —
   confirmed FEASIBLE via scratch repro, not specified to the letter; the
   real `SourceMapInput`/`HttpStore` types (unlike the scratch repro's
