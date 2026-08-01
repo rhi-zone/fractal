@@ -1,7 +1,10 @@
 // packages/json-rpc-api-projector/src/index.ts — @rhi-zone/fractal-json-rpc-api-projector
 export type {
   Dispatch,
-  JsonRpcMeta,
+  JsonRpcBranchMeta,
+  JsonRpcBranchMetaProperties,
+  JsonRpcLeafMeta,
+  JsonRpcLeafMetaProperties,
   JsonRpcMethod,
   JsonSchema,
   MethodSchema,

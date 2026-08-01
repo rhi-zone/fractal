@@ -43,6 +43,7 @@
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { getJsonRpcMeta } from "./project.ts"
+import type { JsonRpcBranchMeta, JsonRpcLeafMeta } from "./project.ts"
 import type { JsonRpcErrorObject, JsonRpcId, JsonRpcResponse } from "./wire.ts"
 
 // ============================================================================
@@ -88,11 +89,11 @@ function buildClient(
 
   for (const [key, child] of Object.entries(node.children ?? {})) {
     if (isLeaf(child)) {
-      const jr = getJsonRpcMeta(child.meta)
+      const jr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
       const name = typeof jr.name === "string" ? jr.name : prefix.length > 0 ? `${prefix}.${key}` : key
       client[key] = makeCaller(call, name, slugValues)
     } else {
-      const childJr = getJsonRpcMeta(child.meta)
+      const childJr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
       const rawSeg = typeof childJr.segment === "string" ? childJr.segment : key
       const seg = prefix.length > 0 ? `${prefix}.${rawSeg}` : rawSeg
       client[key] = buildClient(child, seg, call, slugValues)

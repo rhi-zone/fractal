@@ -3,6 +3,11 @@
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { projectMethods, toMethods } from "./project.ts"
+// Side-effect import: this test suite's own "deployment" augmentation
+// (`LeafMeta extends JsonRpcLeafMeta`, `BranchMeta extends JsonRpcBranchMeta`)
+// — see that file's own doc comment. Needed for `meta.jsonrpc.segment`
+// below (a real, spec-endorsed branch-position override) to type-check.
+import "./deployment-meta.test-support.ts"
 
 describe("naming: dot-separated method names from tree position", () => {
   it("root leaf -> bare name", () => {
@@ -69,8 +74,15 @@ describe("tags -> flat method metadata (no ancestor inheritance)", () => {
   })
 
   it("a node-level tag does not flow to leaf children with no own tags", () => {
+    // `tags` is a LEAF-only field under the SharedMeta/LeafMeta/BranchMeta
+    // split (docs/design/meta-role-split-spec.md §2) — api_()'s typed
+    // `opts.meta` no longer accepts it on a BRANCH at all, which is itself
+    // a stronger, compile-time version of "no ancestor inheritance." Built
+    // via object spread over a real api_() result instead, the same shape
+    // a hand-built or legacy-computed tree could still produce.
+    const catalog = api_({ list: op((_: unknown) => []) })
     const tree = api_({
-      catalog: api_({ list: op((_: unknown) => []) }, { meta: { tags: { readOnly: true } } }),
+      catalog: { ...catalog, meta: { tags: { readOnly: true } } },
     })
     const methods = toMethods(tree)
     expect(methods[0]!.readOnly).toBeUndefined()
