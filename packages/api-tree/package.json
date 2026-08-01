@@ -50,6 +50,14 @@
       "types": "./dist/build.d.ts",
       "import": "./dist/build.js"
     },
+    "./schema-build": {
+      "types": "./dist/schema-build.d.ts",
+      "import": "./dist/schema-build.js"
+    },
+    "./cache": {
+      "types": "./dist/cache.d.ts",
+      "import": "./dist/cache.js"
+    },
     "./discover": {
       "types": "./dist/discover.d.ts",
       "import": "./dist/discover.js"
