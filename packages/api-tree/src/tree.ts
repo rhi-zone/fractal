@@ -247,14 +247,38 @@ function walkNodeType(
       const subtreeProp = checker.getPropertyOfType(fallbackType, "subtree")
       if (subtreeProp) {
         const subtreeType = checker.getTypeOfSymbolAtLocation(subtreeProp, loc)
-        walkNodeType(
-          subtreeType,
-          join(prefix, fallbackName),
-          [...path, `:${fallbackName}`],
-          loc,
-          checker,
-          onLeaf,
-        )
+        const subtreePath = [...path, `:${fallbackName}`]
+
+        // The Node model explicitly allows `fallback.subtree` to be a bare
+        // leaf (`op()`), not just a branch (`api({...})`) — build.ts's
+        // runtime walks (`collectUnvalidatedLeaves`/`wrapValidatorsUnchecked`)
+        // check `node.handler !== undefined` on the subtree itself before
+        // ever looking at `children`, so a bare-leaf fallback subtree is
+        // keyed at `subtreePath` directly (no extra segment beyond the
+        // fallback's own name). Mirror that here: check whether the subtree
+        // TYPE is itself a leaf (handler required) before recursing into it
+        // as a branch, so extraction visits — and keys — a bare-leaf
+        // fallback subtree exactly the way `wrapValidators` will at runtime.
+        const subtreeHandlerProp = checker.getPropertyOfType(subtreeType, "handler")
+        if (subtreeHandlerProp && isRequiredProperty(subtreeHandlerProp)) {
+          const handlerType = checker.getTypeOfSymbolAtLocation(subtreeHandlerProp, loc)
+          const fn = functionNodeOfHandler(handlerType, checker)
+          if (fn) {
+            const descriptionSource = subtreeProp.declarations?.[0] ?? fn
+            const nameOverride = mcpMetaOverride(subtreeType, "name", loc, checker)
+            const name = nameOverride ?? join(prefix, fallbackName)
+            onLeaf(name, subtreePath, fn, descriptionSource, checker)
+          }
+        } else {
+          walkNodeType(
+            subtreeType,
+            join(prefix, fallbackName),
+            subtreePath,
+            loc,
+            checker,
+            onLeaf,
+          )
+        }
       }
     }
   }

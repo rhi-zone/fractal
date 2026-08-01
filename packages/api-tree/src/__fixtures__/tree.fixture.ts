@@ -82,6 +82,19 @@ export const tree = api({
             get: op((input: { userId: string }) => ({ userId: input.userId })),
           }),
       } }),
+    // A fallback subtree that is a BARE `op()` leaf, not `api({...})` — the
+    // Node model (node.ts's `fallback: { name, subtree: Node }`) explicitly
+    // allows this, and build.ts's runtime walks (`collectUnvalidatedLeaves`/
+    // `wrapValidatorsUnchecked`) already handle it (they check
+    // `node.handler !== undefined` on the subtree itself, before ever
+    // looking at `children`). Regression coverage for the extractor side:
+    // `walkNodeType` (tree.ts) must visit this leaf too, keyed identically
+    // to the runtime walk — extract.test.ts's
+    // "bare-leaf fallback.subtree" describe block asserts on it.
+    widgetById: api({}, { fallback: {
+        name: "widgetId",
+        subtree: op((input: { widgetId: string }) => ({ widgetId: input.widgetId })),
+      } }),
     // Union input → exercises the punt path.
     search: api({
         run: op((_input: { q: string | number }) => ({ hits: 0 })),
