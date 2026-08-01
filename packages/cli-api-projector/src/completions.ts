@@ -22,9 +22,10 @@
 //   packages/cli-api-projector/src/cli.ts — walkCliCommands, getCliMeta, resolveLeaf
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import { getCliMeta } from "./cli.ts"
+import type { CliLeafMeta } from "./cli.ts"
 
 // ============================================================================
 // Shell selector
@@ -41,7 +42,7 @@ export function isShellName(v: string | undefined): v is ShellName {
 // ============================================================================
 
 /** True when `meta.cli.hidden === true`. */
-function isHiddenMeta(meta: Meta): boolean {
+function isHiddenMeta(meta: CliLeafMeta): boolean {
   return getCliMeta(meta).hidden === true
 }
 
@@ -96,7 +97,7 @@ function buildLevels(
   const children = n.children ?? {}
   const statics: string[] = []
   for (const [childKey, child] of Object.entries(children)) {
-    if (isHiddenMeta(child.meta)) continue
+    if (isHiddenMeta(child.meta as CliLeafMeta)) continue
     statics.push(childKey)
   }
   // `completions` is a reserved top-level command (see cli.ts's runCli) —
@@ -115,7 +116,7 @@ function buildLevels(
   })
 
   for (const [childKey, child] of Object.entries(children)) {
-    if (isHiddenMeta(child.meta)) continue
+    if (isHiddenMeta(child.meta as CliLeafMeta)) continue
     const childPath = [...path, childKey]
     const childSchemaPath = [...schemaPath, childKey]
     if (isLeaf(child)) {

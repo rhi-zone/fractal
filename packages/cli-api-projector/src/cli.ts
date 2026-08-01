@@ -47,7 +47,7 @@
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, LeafMeta, Node, SharedMeta } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 import {
@@ -308,7 +308,7 @@ function composeMiddleware(
 
 /** Dispatch context `CliOpts.als`'s `init` receives. */
 export type CliAlsContext = {
-  readonly meta: Meta
+  readonly meta: LeafMeta
   readonly io: CliIO
   readonly slugs: Record<string, string>
   readonly leafName: string
@@ -320,13 +320,27 @@ export type CliAlsContext = {
 
 /**
  * `meta.cli` open bag — per-projection overrides for CLI subcommand
- * generation. Standard keys are typed; any other key passes through
- * untouched (open bag, not a fixed schema).
+ * generation, split by role (docs/design/meta-role-split-spec.md §2/§4).
+ * Standard keys are typed; any other key passes through untouched (open
+ * bag, not a fixed schema) at BOTH roles.
  */
-export type CliMeta = {
+
+/** `meta.cli` fields valid at BOTH leaf and branch position. */
+export type CliSharedMetaProperties = {
+  /** Hides this leaf/branch from generated help text (`buildHelp`) without removing it from dispatch. */
+  readonly hidden?: boolean
+  readonly [key: string]: unknown
+}
+
+/** Wraps `CliSharedMetaProperties` under the `cli` key — extend `SharedMeta` with this in a deployment's augmentation file. */
+export type CliSharedMeta = {
+  readonly cli?: CliSharedMetaProperties
+}
+
+/** `meta.cli` fields valid at LEAF position only. */
+export type CliLeafMetaProperties = CliSharedMetaProperties & {
   readonly name?: string
   readonly alias?: string
-  readonly hidden?: boolean
   /**
    * Per-param source overrides for this leaf's input assembly (see
    * `packages/api-tree/src/input.ts`). Lets a tree author pull a field from
@@ -352,19 +366,21 @@ export type CliMeta = {
     readonly inputCursorParam?: string
     readonly inputOffsetParam?: string
   }
-  readonly [key: string]: unknown
 }
 
-// Declaration merging: types this package's `meta.cli` slot on the shared
-// `Meta` open bag (see api-tree/src/node.ts) so consumers get a typed
-// `meta.cli` instead of an untyped index-signature fallback.
-declare module "@rhi-zone/fractal-api-tree/node" {
-  interface Meta {
-    cli?: CliMeta
-  }
+/** Wraps `CliLeafMetaProperties` under the `cli` key — extend `LeafMeta` with this in a deployment's augmentation file. */
+export type CliLeafMeta = {
+  readonly cli?: CliLeafMetaProperties
 }
 
-export function getCliMeta(meta: Meta): CliMeta {
+/**
+ * Parse `meta.cli`. Accepts `CliLeafMeta` (the broader of the two roles,
+ * since `CliLeafMetaProperties extends CliSharedMetaProperties`) — called
+ * on both leaf meta (reading `.name`/`.alias`/`.paginated`/`.sourceMap`)
+ * and branch meta (reading only `.hidden`, always via `CliLeafMeta`'s
+ * inherited `CliSharedMetaProperties` shape) at different call sites below.
+ */
+export function getCliMeta(meta: CliLeafMeta): CliLeafMetaProperties {
   const c = meta.cli
   if (typeof c !== "object" || c === null) return {}
   return c
@@ -382,7 +398,7 @@ type Resolved = {
   readonly handler: Handler
   readonly slugs: Record<string, string>
   readonly leafName: string
-  readonly leafMeta: Meta
+  readonly leafMeta: LeafMeta
   /**
    * The path used to look up this leaf's schema in a `SchemaMap`, i.e. the
    * same underscore-joined segments `extractToolSchemas` (packages/api-tree/
@@ -405,7 +421,7 @@ function findLeafByAlias(
   head: string,
 ): [string, Node] | undefined {
   for (const [key, child] of Object.entries(children)) {
-    if (isLeaf(child) && getCliMeta(child.meta).alias === head) return [key, child]
+    if (isLeaf(child) && getCliMeta(child.meta as CliLeafMeta).alias === head) return [key, child]
   }
   return undefined
 }
@@ -484,7 +500,7 @@ function resolveLeaf(
 // Help text generation
 // ============================================================================
 
-function descriptionFrom(meta: Meta): string | undefined {
+function descriptionFrom(meta: SharedMeta & CliLeafMeta): string | undefined {
   if (typeof meta.description === "string") return meta.description
   const cliMeta = getCliMeta(meta)
   if (typeof cliMeta.description === "string") return cliMeta.description
@@ -511,7 +527,7 @@ function buildHelp(
   if (leafEntries.length > 0) {
     lines.push("Commands:")
     for (const [key, child] of leafEntries) {
-      const cliMeta = getCliMeta(child.meta)
+      const cliMeta = getCliMeta(child.meta as CliLeafMeta)
       if (cliMeta.hidden === true) continue
       const leafDesc = descriptionFrom(child.meta)
       const leafName = typeof cliMeta.name === "string" ? cliMeta.name : key
@@ -527,13 +543,13 @@ function buildHelp(
     if (leafEntries.length > 0) lines.push("")
     lines.push("Subcommand groups:")
     for (const [key, child] of nonLeafEntries) {
-      const cliMeta = getCliMeta(child.meta)
+      const cliMeta = getCliMeta(child.meta as CliLeafMeta)
       if (cliMeta.hidden === true) continue
       const childDesc = descriptionFrom(child.meta)
       lines.push(`  ${key}${childDesc !== undefined ? `  — ${childDesc}` : ""}`)
     }
     if (n.fallback !== undefined) {
-      const cliMeta = getCliMeta(n.fallback.subtree.meta)
+      const cliMeta = getCliMeta(n.fallback.subtree.meta as CliLeafMeta)
       if (cliMeta.hidden !== true) {
         lines.push(`  <${n.fallback.name}>  — parameterized group`)
       }
@@ -1100,7 +1116,7 @@ export async function runCli<T = unknown>(
   // `required` field is present — all BEFORE the handler is ever called.
   const schemaName = target.schemaPath.join("_").replace(/-/g, "_")
   const inputSchema = schemas[schemaName]?.inputSchema
-  const sourceMap = getCliMeta(target.leafMeta).sourceMap ?? {}
+  const sourceMap = getCliMeta(target.leafMeta as CliLeafMeta).sourceMap ?? {}
   const { input: rawInput, stores } = buildInput(flags, target.slugs, sourceMap)
   // A generated validator (see CliOpts.validators) already wraps
   // target.handler to run parse() — coercion + validation + defaults in one
@@ -1221,7 +1237,7 @@ export async function runCli<T = unknown>(
   // when there IS a next page, so a human knows how to continue (a machine
   // consumer already has `cursor`/`offset`+`hasMore` in the JSON body).
   if (isPageShape(result)) {
-    const paginatedMeta = getCliMeta(target.leafMeta).paginated
+    const paginatedMeta = getCliMeta(target.leafMeta as CliLeafMeta).paginated
     if (allPages) {
       await streamAllPages(
         result,
@@ -1332,7 +1348,7 @@ async function streamAsyncIterable(
 // ============================================================================
 
 /** Resolved `{ inputCursorParam, inputOffsetParam }`, defaults matching HTTP's `pagination()` extension. */
-function resolvedPaginationParams(meta: CliMeta["paginated"]): { cursorParam: string; offsetParam: string } {
+function resolvedPaginationParams(meta: CliLeafMetaProperties["paginated"]): { cursorParam: string; offsetParam: string } {
   return {
     cursorParam: meta?.inputCursorParam ?? "cursor",
     offsetParam: meta?.inputOffsetParam ?? "offset",
@@ -1363,7 +1379,7 @@ function nextPageInput(
  */
 function writePaginationHint(
   page: Page<unknown>,
-  meta: CliMeta["paginated"],
+  meta: CliLeafMetaProperties["paginated"],
   io: CliIO,
 ): void {
   if (!page.hasMore) return
@@ -1420,7 +1436,7 @@ async function streamAllPages(
   stores: Stores,
   detectResult: boolean,
   errorEncoder: CliErrorEncoder | undefined,
-  paginatedMeta: CliMeta["paginated"],
+  paginatedMeta: CliLeafMetaProperties["paginated"],
   io: CliIO,
 ): Promise<void> {
   const { cursorParam, offsetParam } = resolvedPaginationParams(paginatedMeta)
@@ -1499,4 +1515,4 @@ function suggestCommand(root: Node, pathSegments: string[]): string | undefined 
 
 // Re-export types for consumers
 export type { SchemaMap }
-export type { Node, Handler, Meta }
+export type { Node, Handler, LeafMeta }
