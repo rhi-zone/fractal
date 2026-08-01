@@ -472,6 +472,23 @@ describe("OOTB preset — middleware", () => {
     expect(res.headers.get("X-Middleware")).toBe("a")
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
   })
+
+  it("a middleware that THROWS propagates uncaught — NOT run through thrownErrorEncoder (baseline for docs/design/subtree-layers-spec.md's error-semantics open question, resolved by tracing this)", async () => {
+    // `opts.middleware` wraps OUTSIDE the compiled router (createFetch's
+    // composition chain, this module's own doc) — outside `runRoute`'s own
+    // try/catch (route.ts), which is the ONLY place `thrownErrorEncoder`
+    // runs. A middleware throw is therefore loud (an uncaught exception out
+    // of the returned Fetch function) but NOT encoded — genuinely different
+    // from a `handlerMiddleware` throw (see the next `describe` block below,
+    // which IS encoded, since it sits inside `runRoute`). Subtree-scoped
+    // `http.middleware()`/`http.handlerMiddleware()` (subtree-layers.test.ts)
+    // must match each of these two existing behaviors exactly, per phase.
+    const throwing = (_inner: Fetch): Fetch => async () => {
+      throw new Error("middleware boom")
+    }
+    const f = createFetch(api, { middleware: [throwing] })
+    await expect(f(new Request("http://localhost/users/list"))).rejects.toThrow("middleware boom")
+  })
 })
 
 // ============================================================================

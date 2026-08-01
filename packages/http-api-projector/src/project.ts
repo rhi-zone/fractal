@@ -38,9 +38,17 @@
 //   docs/design/meta-role-split-spec.md      — SharedMeta/LeafMeta/BranchMeta split
 
 import { makeRouterFromRoute, naiveTransform } from "./route.ts"
-import type { HttpRoute } from "./route.ts"
+import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SourceMap, StandardSchemaV1 } from "./decode.ts"
+// `Fetch` is layers.ts's own type (`(req: Request) => Promise<Response>`) —
+// reused here, not redeclared (see `HttpDirective`'s `middleware` variant
+// doc below). Type-only: layers.ts VALUE-imports `allowHeader` from this
+// file, so a value import here would cycle; a type import is erased at
+// emit and creates no runtime cycle, the same reasoning route.ts's own
+// module doc already applies to its (reverse-direction) type-only import of
+// `HttpDirective`/`HttpLeafMeta`/`HttpSharedMeta` from this file.
+import type { Fetch } from "./layers.ts"
 
 export { verbFromTags } from "./tags.ts"
 export type { HttpRoute } from "./route.ts"
@@ -129,6 +137,55 @@ export function toHttpRoutes(node: Node): HttpRoute {
  *   doc for how this differs from type-ir's `fromStandardSchema` (shape
  *   ingestion) and api-tree's `wrapValidators` (AOT-compiled validators).
  *
+ * - `{ kind: "middleware"; value }` — a subtree-scoped, dispatch-around
+ *   `Fetch => Fetch` wrapper, attached via `http.middleware(...)`
+ *   (verbs.ts). Valid at BOTH leaf and branch position — a branch scopes the
+ *   wrapper to its whole subtree, a leaf scopes it to just itself. One
+ *   directive PER function passed to `http.middleware(...)` (variadic; each
+ *   argument becomes its own directive entry, same "one call, N array
+ *   entries" shape `http.source()`'s directive already establishes above).
+ *   `getHttpMeta` (below) collects every `middleware` directive in a
+ *   resolved `directives` array, IN ARRAY ORDER, into
+ *   `resolved.middleware`; `collectRoutes` (compile.ts) further composes
+ *   this per-node array with every ANCESTOR branch's own resolved
+ *   `middleware` array (root-to-leaf, root's entries outermost) into one
+ *   per-leaf wrap chain — see docs/design/subtree-layers-spec.md §5. Wraps
+ *   at the SAME point `PresetOptions.middleware` (preset.ts) wraps the whole
+ *   compiled router today — before the router even matches a route, before
+ *   decode, before `sources.validate` — just narrowed to requests that match
+ *   a leaf under the declaring node instead of every request.
+ * - `{ kind: "handlerMiddleware"; value }` — a subtree-scoped, handler-around
+ *   `F => F` wrapper (`F = (input, stores) => result`), attached via
+ *   `http.handlerMiddleware(...)` (verbs.ts). Also valid at both leaf and
+ *   branch position, also one directive per function argument, also
+ *   collected (array order) into `resolved.handlerMiddleware` by
+ *   `getHttpMeta` and further ancestor-composed by `collectRoutes`
+ *   (compile.ts), same as `middleware` above. Wraps at the SAME point
+ *   `PresetOptions.handlerMiddleware` already threads into `runRoute`
+ *   (route.ts) today — after decode and `sources.validate`, before the
+ *   handler is called — just narrowed to a subtree.
+ *
+ *   **Both `middleware` and `handlerMiddleware` MUST stay directive-array-
+ *   authored — never collapsed into a bare (non-array) function-valued field
+ *   on `HttpSharedMetaProperties.http` (e.g. `http: { middleware: fn }`
+ *   directly, bypassing `directives`).** This is not a style preference: a
+ *   scratch `tsc` check (docs/design/subtree-layers-spec.md §6/§7, reproduced
+ *   as a permanent regression test in subtree-layers.test.ts) confirmed that
+ *   when two separate `op()` meta contributions both set the SAME bare
+ *   function-valued key, `FoldMeta`/`MergeTwoMeta`'s mapped-type merge
+ *   (`Omit`/`Pick` over `keyof`, api-tree's node.ts) silently strips the
+ *   function's call signature — `keyof` a plain function type is empty, so
+ *   the merge's `Omit<A,keyof B> & Omit<B,keyof A> & {...}` intersection
+ *   reduces the folded member toward `{}` (structurally a function still
+ *   satisfies `extends object`, so `MergeMetaValue` takes the OBJECT-merge
+ *   branch, not the array-concatenation branch). `MergeMetaValue`'s ARRAY
+ *   branch (node.ts) concatenates without recursing into elements, so a
+ *   function VALUE living inside an array member is never merged as an
+ *   object and keeps its call signature — exactly the same class of hazard
+ *   (and the same fix) the `source` directive's own doc comment above
+ *   already documents for `Record<string,ParamSource>` index-signature
+ *   merging.
+ *
  * Interpreted by `verbFromTags` (tags.ts):
  *
  * - `{ kind: "verb", value }` — explicit verb override; wins over tags.
@@ -174,6 +231,8 @@ export type HttpDirective<
     }
   | { readonly kind: "source"; readonly map: S }
   | { readonly kind: "validate"; readonly schema: StandardSchemaV1 }
+  | { readonly kind: "middleware"; readonly value: (inner: Fetch) => Fetch }
+  | { readonly kind: "handlerMiddleware"; readonly value: HttpHandlerMiddleware }
 
 // ============================================================================
 // meta.http — role-split fragments (see docs/design/meta-role-split-spec.md
@@ -195,6 +254,22 @@ export interface HttpSharedMetaProperties {
   readonly moveTo?: string
   /** The raw directives array, passed through unresolved for callers that need it (e.g. `getHttpMeta`'s own resolution, `route.ts`'s rewriters). */
   readonly directives?: readonly HttpDirective[]
+  /**
+   * Resolved `{ kind: "middleware" }` directives — every `http.middleware(...)`
+   * function on THIS node's own `directives` array, in array order (this
+   * node's own contribution only; ancestor composition happens later, at
+   * `collectRoutes`/router-compile time, see docs/design/
+   * subtree-layers-spec.md §5). Valid at leaf or branch position: a branch
+   * scopes its subtree, a leaf scopes only itself.
+   */
+  readonly middleware?: readonly ((inner: Fetch) => Fetch)[]
+  /**
+   * Resolved `{ kind: "handlerMiddleware" }` directives — every
+   * `http.handlerMiddleware(...)` function on THIS node's own `directives`
+   * array, in array order. Same ancestor-composition note as `middleware`
+   * above applies.
+   */
+  readonly handlerMiddleware?: readonly HttpHandlerMiddleware[]
 }
 
 /** Wraps `HttpSharedMetaProperties` under the `http` key — extend `SharedMeta` with this in a deployment's augmentation file. */
@@ -232,10 +307,22 @@ export interface HttpLeafMeta {
 // getHttpMeta — the ONE canonical `meta.http` parser
 //
 // Resolves the raw `meta.http` bag (directives array) into a typed,
-// fully-resolved shape. Each directive kind is resolved to its own field —
-// last directive of a given kind in the array wins, matching the
-// pre-consolidation local walks' behavior (a plain for-loop overwriting as
-// it goes).
+// fully-resolved shape. Three resolution shapes coexist here:
+//   - "last-wins scalar" (verb/method/moveTo/response/paginated/validate) —
+//     last directive of a given kind in the array wins, matching the
+//     pre-consolidation local walks' behavior (a plain for-loop overwriting
+//     as it goes).
+//   - "collect-and-merge" (sourceMap) — every `source` directive's map is
+//     folded key-by-key, later call's keys win on overlap.
+//   - "collect-into-ordered-list" (middleware/handlerMiddleware) — every
+//     directive of the kind is APPENDED, in array order, into an ordered
+//     wrap list. Not last-wins (a later `http.middleware()` call doesn't
+//     replace an earlier one — subtree middleware compose, they don't
+//     override) and not key-merged (there's no key to merge on, only
+//     position in the wrap chain). This is this node's OWN resolved list
+//     only; ancestor composition (root-to-leaf) happens later, at
+//     `collectRoutes`/router-compile time (compile.ts) — see
+//     docs/design/subtree-layers-spec.md §5.
 // ============================================================================
 
 /** Parse `meta.http` into the resolved `HttpLeafMetaProperties` shape — see module doc above. */
@@ -257,11 +344,15 @@ export function getHttpMeta(meta: HttpLeafMeta): HttpLeafMetaProperties {
       inputOffsetParam?: string
       inputLimitParam?: string
     }
+    middleware?: readonly ((inner: Fetch) => Fetch)[]
+    handlerMiddleware?: readonly HttpHandlerMiddleware[]
   } = {}
 
   if (Array.isArray(h.directives)) {
     const directives = h.directives
     out.directives = directives
+    let middleware: Array<(inner: Fetch) => Fetch> | undefined
+    let handlerMiddleware: HttpHandlerMiddleware[] | undefined
     for (const d of directives) {
       switch (d.kind) {
         case "verb":
@@ -299,8 +390,19 @@ export function getHttpMeta(meta: HttpLeafMeta): HttpLeafMetaProperties {
             ...(d.inputLimitParam !== undefined ? { inputLimitParam: d.inputLimitParam } : {}),
           }
           break
+        case "middleware":
+          // Collect-into-ordered-list, not last-wins — see module doc above.
+          middleware = middleware ?? []
+          middleware.push(d.value)
+          break
+        case "handlerMiddleware":
+          handlerMiddleware = handlerMiddleware ?? []
+          handlerMiddleware.push(d.value)
+          break
       }
     }
+    if (middleware !== undefined) out.middleware = middleware
+    if (handlerMiddleware !== undefined) out.handlerMiddleware = handlerMiddleware
   }
 
   return out
