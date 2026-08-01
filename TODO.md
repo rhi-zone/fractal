@@ -131,6 +131,21 @@
   of scope for the tree/dispatch model itself, which is finalized and does
   not include versioning. Versioning is handled via helper functions at the
   handler layer, not the core model.
+- **OPEN: `docs/design/tree-lint-spec.md` — spec-only, not implemented.** No
+  `tree-lint` package/script exists yet on any branch. §8 names several
+  explicit non-decisions the eventual implementation will have to make: the
+  exact source-text-fingerprint normalization function (naive whitespace-
+  strip vs. full AST-normalize, a real cost/coverage tradeoff); whether
+  `openapi.operationId` (or a new dedicated field) becomes a REQUIRED,
+  lint-enforced leaf identity going forward, once a first pass exists and
+  there's real corpus evidence to pose the authoring-discipline question
+  against; whether tree-lint gains rules beyond collision detection (an
+  orphaned-descriptor rule, a cross-tree auth-drift rule — both named as
+  live candidates, neither designed); how `MountedTree.basePath` pairing
+  stays in sync with a deployment's actual `app.mount()` calls without hand-
+  maintenance; and CI severity/exit-code/output-format conventions (left to
+  the consumer's own lint-script conventions, not re-derived here). the sibling codebase
+  is the named consumer (§7) but hasn't started building against this spec.
 - **OPEN: workspace robustness against foreign-root installs** — detection and
   recovery are done (`tooling/check-workspace.sh`, see Troubleshooting). Two
   bun-level knobs could reduce the chance of the corruption occurring at all;
