@@ -252,15 +252,41 @@ function buildClientNode(
   if (node.fallback !== undefined) {
     const { name, subtree } = node.fallback
     const childToolPrefix = toolPrefix.length > 0 ? `${toolPrefix}_${name}` : name
-    out[name] = (value: string): AnyMcpClient =>
-      buildClientNode(
-        subtree,
-        childToolPrefix,
-        [...resourceSegments, `{${name}}`],
-        { ...slugValues, [name]: value },
-        client,
-        scheme,
-      )
+
+    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+    // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
+    // project.ts's identical fix (mirrors api-tree/tree.ts's `walkNodeType`,
+    // aa28952). `buildClientNode(subtree, ...)` on a bare leaf would read
+    // `subtree.children` (undefined for a leaf) and return `{}` — an empty
+    // sub-client with nothing callable. When the subtree IS the leaf, the
+    // fallback function returns the leaf's OWN caller directly (no extra
+    // property-access step beyond the fallback's own name) instead of a
+    // one-off nested client object.
+    out[name] = isLeaf(subtree)
+      ? (value: string): unknown => {
+          const mcp = getMcpMeta(subtree.meta as McpLeafMeta & McpBranchMeta)
+          const as = mcp.as ?? "tool"
+          const leafSlugValues = { ...slugValues, [name]: value }
+          if (as === "resource") {
+            const leafSegments = [...resourceSegments, `{${name}}`]
+            const derivedUri = `${scheme}${leafSegments.join("/")}`
+            const uriTemplate = typeof mcp.uri === "string" ? mcp.uri : derivedUri
+            return makeResourceCaller(client, uriTemplate, leafSlugValues)
+          }
+          const toolName = typeof mcp.name === "string" ? mcp.name : childToolPrefix
+          return as === "prompt"
+            ? makePromptCaller(client, toolName, leafSlugValues)
+            : makeToolCaller(client, toolName, leafSlugValues)
+        }
+      : (value: string): AnyMcpClient =>
+          buildClientNode(
+            subtree,
+            childToolPrefix,
+            [...resourceSegments, `{${name}}`],
+            { ...slugValues, [name]: value },
+            client,
+            scheme,
+          )
   }
 
   return out

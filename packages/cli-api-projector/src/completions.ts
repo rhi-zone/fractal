@@ -140,9 +140,36 @@ function buildLevels(
   }
 
   if (n.fallback !== undefined) {
-    levels.push(
-      ...buildLevels(n.fallback.subtree, schemas, [...path, "*"], [...schemaPath, n.fallback.name]),
-    )
+    const subtree = n.fallback.subtree
+    const fallbackPath = [...path, "*"]
+    const fallbackSchemaPath = [...schemaPath, n.fallback.name]
+
+    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+    // not just a branch (`api({...})`) — recursing into it unconditionally
+    // would push a spurious empty BRANCH level (no children to enumerate)
+    // instead of the leaf's own flags, so completion at that position would
+    // silently propose nothing. Mirror the ordinary-leaf branch above: when
+    // the subtree itself is a leaf, push its `isLeaf: true` level directly
+    // (same convention api-tree/tree.ts's `walkNodeType` fix, aa28952, and
+    // the other projectors' identical fix use).
+    if (isLeaf(subtree)) {
+      const toolSchema = schemas[schemaKeyFor(fallbackSchemaPath)]
+      const props = toolSchema?.inputSchema.properties ?? {}
+      const flags: FlagInfo[] = Object.entries(props).map(([field, fieldSchema]) =>
+        fieldSchema.enum !== undefined
+          ? { name: field, enumValues: fieldSchema.enum }
+          : { name: field },
+      )
+      levels.push({
+        key: fallbackPath.join(" "),
+        statics: [],
+        hasFallback: false,
+        isLeaf: true,
+        flags,
+      })
+    } else {
+      levels.push(...buildLevels(subtree, schemas, fallbackPath, fallbackSchemaPath))
+    }
   }
 
   return levels

@@ -66,6 +66,40 @@ describe("createJsonRpcClient: proxy shape mirrors the tree", () => {
     ])
   })
 
+  // A fallback subtree that is a BARE `op()` leaf, not `api({...})` — the
+  // Node model (api-tree/node.ts's `fallback: { name, subtree: Node }`)
+  // explicitly allows this. Regression coverage for `buildClient`'s own fix
+  // (mirrors project.ts's `projectMethods` fix and api-tree/tree.ts's
+  // `walkNodeType`, aa28952): calling the fallback capture function returns
+  // the leaf's OWN caller directly (no nested sub-client — there's no
+  // further tree position to descend into), dispatching under the exact
+  // name `projectMethods` derives for this shape ("books.bookId", no extra
+  // segment beyond the fallback's own name).
+  it("a bare op() fallback.subtree's capture function returns the leaf's own caller directly", async () => {
+    const calls: Array<{ method: string; params: Record<string, unknown> }> = []
+    const call: JsonRpcCall = async (method, params) => {
+      calls.push({ method, params })
+      return { id: (params as { bookId: string }).bookId }
+    }
+    const tree = api_({
+      books: api_({}, {
+        fallback: {
+          name: "bookId",
+          subtree: op((_: { bookId: string }) => ({})),
+        },
+      }),
+    })
+    const client = createJsonRpcClient(tree, call)
+
+    expect(typeof client.books.bookId).toBe("function")
+    const caller = client.books.bookId("b-1")
+    expect(typeof caller).toBe("function")
+    const result = await caller()
+
+    expect(result).toEqual({ id: "b-1" })
+    expect(calls).toEqual([{ method: "books.bookId", params: { bookId: "b-1" } }])
+  })
+
   it("meta.jsonrpc.name/segment overrides are respected", async () => {
     const calls: string[] = []
     const call: JsonRpcCall = async (method) => {

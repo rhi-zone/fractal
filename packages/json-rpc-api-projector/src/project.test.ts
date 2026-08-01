@@ -58,6 +58,36 @@ describe("naming: dot-separated method names from tree position", () => {
   })
 })
 
+// ============================================================================
+// A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
+// api({...})) — the Node model explicitly allows this (api-tree/node.ts's
+// `fallback: { name, subtree: Node }`), and `projectMethods` walked
+// `fallback.subtree` as if it were always a branch (`Object.entries(subtree
+// .children ?? {})`), which silently sees no children and omits the leaf
+// entirely when it's bare. Same gap api-tree/tree.ts's `walkNodeType` had
+// for extraction (aa28952).
+// ============================================================================
+
+describe("fallback.subtree as a bare op() leaf (not wrapped in api())", () => {
+  it("projectMethods visits the leaf, keyed with no extra segment beyond the fallback's own name", () => {
+    const tree = api_({
+      books: api_({}, {
+        fallback: {
+          name: "bookId",
+          subtree: op((input: { bookId: string }) => ({ id: input.bookId }), {
+            tags: { readOnly: true },
+          }),
+        },
+      }),
+    })
+    const { methods, handlers } = projectMethods(tree)
+    expect(methods).toHaveLength(1)
+    expect(methods[0]!.name).toBe("books.bookId")
+    expect(methods[0]!.readOnly).toBe(true)
+    expect(handlers.has("books.bookId")).toBe(true)
+  })
+})
+
 describe("tags -> flat method metadata (no ancestor inheritance)", () => {
   it("readOnly/destructive/idempotent surface as top-level three-valued fields", () => {
     const tree = api_({

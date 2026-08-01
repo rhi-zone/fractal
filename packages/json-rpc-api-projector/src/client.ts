@@ -104,7 +104,23 @@ function buildClient(
     const fallbackName = node.fallback.name
     const seg = prefix.length > 0 ? `${prefix}.${fallbackName}` : fallbackName
     const subtree = node.fallback.subtree
-    client[fallbackName] = (value: string) => buildClient(subtree, seg, call, { ...slugValues, [fallbackName]: value })
+
+    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+    // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
+    // project.ts's identical fix (mirrors api-tree/tree.ts's `walkNodeType`,
+    // aa28952). `buildClient(subtree, ...)` on a bare leaf would read
+    // `subtree.children` (undefined for a leaf) and return `{}` — an empty
+    // sub-client with nothing callable. When the subtree IS the leaf, the
+    // fallback function returns the leaf's OWN caller directly (no extra
+    // property-access step beyond the fallback's own name) instead of a
+    // one-off nested client object.
+    client[fallbackName] = isLeaf(subtree)
+      ? (value: string) => {
+          const jr = getJsonRpcMeta(subtree.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
+          const name = typeof jr.name === "string" ? jr.name : seg
+          return makeCaller(call, name, { ...slugValues, [fallbackName]: value })
+        }
+      : (value: string) => buildClient(subtree, seg, call, { ...slugValues, [fallbackName]: value })
   }
 
   return client

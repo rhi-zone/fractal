@@ -197,6 +197,34 @@ describe("fallback → named GraphQL argument", () => {
     expect(field.argsSDL).toBe("(userId: String!, name: String!)")
     expect(handlers.get("userIdRename")?.inputNames).toEqual(["userId", "name"])
   })
+
+  // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
+  // api({...})) — the Node model explicitly allows this (api-tree/node.ts's
+  // `fallback: { name, subtree: Node }`), and `walkLeaves` walked
+  // `fallback.subtree` as if it were always a branch (`Object.entries
+  // (subtree.children ?? {})`), which silently sees no children and omits
+  // the leaf entirely when it's bare. Same gap api-tree/tree.ts's
+  // `walkNodeType` had for extraction (aa28952).
+  it("a bare op() fallback.subtree becomes a query field nested under the branch namespace, no extra segment beyond the fallback's own name", () => {
+    const n = api_({
+        books: api_({}, {
+            fallback: {
+              name: "bookId",
+              subtree: op((input: { bookId: string }) => ({ id: input.bookId }), {
+                tags: { readOnly: true },
+              }),
+            },
+          }),
+      })
+    const result = projectGraphQL(n)
+    expect(result.queryFields.map((f) => f.name)).toEqual(["books"])
+    const booksFields = result.types.BooksQuery!.meta.graphqlFields as { name: string; argsSDL: string; typeSDL: string }[]
+    // No derived output TypeRef supplied → return type degrades to JSON
+    // (nullable, unknown) — same as the "no derived TypeRef" case elsewhere
+    // in this file (project.test.ts §4).
+    expect(booksFields).toEqual([{ name: "bookId", argsSDL: "(bookId: ID!)", typeSDL: "JSON" }])
+    expect(result.handlers.has("books_bookId")).toBe(true)
+  })
 })
 
 // ============================================================================

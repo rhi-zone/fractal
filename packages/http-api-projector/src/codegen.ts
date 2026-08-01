@@ -160,7 +160,18 @@ function buildCodegenNameMap(n: Node): Map<Handler, string> {
     }
     if (node.fallback !== undefined) {
       const seg = prefix.length > 0 ? `${prefix}_${node.fallback.name}` : node.fallback.name
-      visit(node.fallback.subtree, seg)
+
+      // Same bare-leaf `fallback.subtree` case as client.ts's
+      // `collectHandlerNames`/`collectCodegenNames`/openapi.ts's
+      // `nameLeaves` — key it directly at `seg` (no extra segment beyond
+      // the fallback's own name) instead of recursing into a leaf's
+      // nonexistent `children`.
+      if (isLeaf(node.fallback.subtree)) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        out.set(node.fallback.subtree.handler!, seg)
+      } else {
+        visit(node.fallback.subtree, seg)
+      }
     }
   }
   visit(n, "")
@@ -179,7 +190,16 @@ function buildMemberNameMap(n: Node): Map<Handler, string> {
         visit(child)
       }
     }
-    if (node.fallback !== undefined) visit(node.fallback.subtree)
+    if (node.fallback !== undefined) {
+      // Same bare-leaf `fallback.subtree` case as above — key it by the
+      // fallback's own name directly instead of recursing into a leaf.
+      if (isLeaf(node.fallback.subtree)) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        out.set(node.fallback.subtree.handler!, node.fallback.name)
+      } else {
+        visit(node.fallback.subtree)
+      }
+    }
   }
   visit(n)
   return out

@@ -81,6 +81,39 @@ describe("generateBashCompletion", () => {
     expect(script).toContain('FLAGS["widgets create"]="--name --qty"')
   })
 
+  // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
+  // api({...})) — the Node model explicitly allows this (api-tree/node.ts's
+  // `fallback: { name, subtree: Node }`). `buildLevels`'s fallback branch
+  // recursed into `n.fallback.subtree` unconditionally, which for a bare
+  // leaf sees no `children` and pushed a spurious empty BRANCH level
+  // instead of the leaf's own `isLeaf: true` level — completion at "widgets
+  // *" proposed nothing instead of the leaf's flags. Same gap
+  // api-tree/tree.ts's `walkNodeType` had for extraction (aa28952).
+  it("a bare op() fallback.subtree is completed as a leaf (its own flags), not a dead-end branch", () => {
+    const tree = api({
+      widgets: api({}, {
+        fallback: {
+          name: "widgetId",
+          subtree: op((input: { widgetId: string; qty: number }) => input),
+        },
+      }),
+    })
+    const schemas: SchemaMap = {
+      widgets_widgetId: {
+        inputSchema: {
+          type: "object",
+          properties: { widgetId: { type: "string" }, qty: { type: "number" } },
+        },
+      },
+    }
+    const script = generateBashCompletion(tree, schemas, "cli")
+    expect(script).toContain('HAS_FALLBACK["widgets"]=1')
+    expect(script).toContain('FLAGS["widgets *"]="--widgetId --qty"')
+    // No spurious branch-level entries for "widgets *" (empty statics/no
+    // fallback marker — a leaf level, not a dead-end group).
+    expect(script).not.toContain('HAS_FALLBACK["widgets *"]')
+  })
+
   it("derives enum-value completion for a flag with an enum schema", () => {
     const tree = api({
       widgets: api({ create: op((input: { color: string }) => input) }),

@@ -212,6 +212,32 @@ describe("operationId", () => {
     const op = doc.paths["/books/{bookId}"]?.["get"]
     expect(op?.operationId).toBe("books.bookId.read")
   })
+
+  // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
+  // api({...})) — the Node model explicitly allows this (api-tree/node.ts's
+  // `fallback: { name, subtree: Node }`). `nameLeaves`'s (openapi.ts)
+  // handler → codegen-name map recursed into a bare-leaf fallback.subtree as
+  // if it always had `children`, so the handler was never recorded — this
+  // handler's operationId silently degraded to the generic
+  // path-derived `nameFromPath` fallback ("widgets_widgetId_post", i.e.
+  // "widgets.widgetId.post", leaking the placeholder POST verb) instead of
+  // the real derived name. Same gap api-tree/tree.ts's `walkNodeType` had
+  // for extraction (aa28952).
+  it("operationId for a bare op() fallback.subtree is derived from the fallback's own name, no leaked verb segment", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const n = api_({
+        widgets: api_({}, {
+            fallback: {
+              name: "widgetId",
+              subtree: op((input: { widgetId: string }) => ({ id: input.widgetId })),
+            },
+          }),
+      })
+    const d = await toOpenApi(n, { title: "t", version: "1" })
+    const operation = d.paths["/widgets/{widgetId}"]?.["post"]
+    expect(operation).toBeDefined()
+    expect(operation?.operationId).toBe("widgets.widgetId")
+  })
 })
 
 // ============================================================================

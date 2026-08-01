@@ -388,83 +388,93 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
   const schemas = opts.schemas ?? {}
   const handlers = new Map<string, Dispatch>()
 
+  // Build one McpTool (+ register its dispatch handler) for a leaf node at a
+  // fully-resolved `name` — factored out of the loop below so the SAME
+  // construction applies to an ordinary child leaf (name = prefix + its own
+  // tree key) and to a `fallback.subtree` that is itself a bare leaf (name =
+  // prefix + the fallback's own name, no further key — see the `n.fallback`
+  // branch below, and api-tree/tree.ts's `walkNodeType` fix this mirrors).
+  // `descriptionFallback` is the last-resort description text (the tree key
+  // for an ordinary leaf; the fallback's own `name` when there is no key).
+  const buildTool = (child: Node, name: string, descriptionFallback: string): McpTool | undefined => {
+    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
+
+    // meta.mcp.as discriminates the leaf's target surface. Omitted or
+    // "tool" → project as a tool (this walk); "resource" / "prompt" →
+    // skip here (projected by projectResources / projectPrompts).
+    if (mcp.as !== undefined && mcp.as !== "tool") return undefined
+
+    // meta.mcp.name overrides the derived name entirely
+    const resolvedName = typeof mcp.name === "string" ? mcp.name : name
+
+    const derived = schemas[resolvedName]
+
+    // Description: meta.mcp.description > meta.description > JSDoc-derived
+    // (from codegen) > descriptionFallback.
+    const description =
+      typeof mcp.description === "string"
+        ? mcp.description
+        : typeof child.meta.description === "string"
+          ? child.meta.description
+          : typeof derived?.description === "string"
+            ? derived.description
+            : descriptionFallback
+
+    // Hints derived from the tag lattice (three-valued), the leaf's own tags only
+    const baseHints = hintsFromTags((child.meta.tags ?? {}) as Tags)
+
+    // meta.mcp.annotations overrides individual hint keys
+    const annotationOverride: Record<string, unknown> =
+      typeof mcp.annotations === "object" && mcp.annotations !== null
+        ? (mcp.annotations as Record<string, unknown>)
+        : {}
+
+    // meta.mcp.title → annotations.title
+    const titleEntry: Record<string, string> =
+      typeof mcp.title === "string" ? { title: mcp.title } : {}
+
+    const annotationsMerged = { ...baseHints, ...annotationOverride, ...titleEntry }
+    const annotations: McpAnnotations | undefined =
+      Object.keys(annotationsMerged).length > 0 ? annotationsMerged : undefined
+
+    // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
+    const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
+    const deprecated = resolved.deprecated === true
+
+    // stream/page kind recovery from the derived output schema (see
+    // `unwrapKindSchema`'s doc) — an explicit `meta.tags.streaming`
+    // (true OR false) wins over the schema's own `x-stream` marker,
+    // matching `resolveTags`'s own authored-over-inferred precedence for
+    // its `outputType` parameter. `paginated` has no tag-lattice
+    // equivalent to prioritize over, so it's schema-derived only.
+    const kind = unwrapKindSchema(derived?.outputSchema)
+    const streaming = resolved.streaming ?? (kind.streaming ? true : undefined)
+    const outputSchema = isObjectSchema(kind.outputSchema) ? kind.outputSchema : undefined
+
+    handlers.set(resolvedName, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
+
+    return {
+      name: resolvedName,
+      description,
+      // Derived-from-type schema when available; else the MCP spec minimum.
+      inputSchema: derived?.inputSchema ?? { type: "object" },
+      ...(outputSchema !== undefined ? { outputSchema } : {}),
+      ...(annotations !== undefined ? { annotations } : {}),
+      ...(streaming !== undefined ? { streaming } : {}),
+      ...(kind.paginated ? { paginated: true, ...(kind.pageStyle !== undefined ? { pageStyle: kind.pageStyle } : {}) } : {}),
+      ...(deprecated ? { deprecated: true } : {}),
+    }
+  }
+
   const walk = (n: Node, prefix: string): McpTool[] => {
     const out: McpTool[] = []
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
         // ── Leaf node: this is a callable → build an MCP tool ──────────────
-        const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
-
-        // meta.mcp.as discriminates the leaf's target surface. Omitted or
-        // "tool" → project as a tool (this walk); "resource" / "prompt" →
-        // skip here (projected by projectResources / a future prompt walk).
-        if (mcp.as !== undefined && mcp.as !== "tool") continue
-
-        // Name: meta.mcp.name wins; else underscore-join prefix + leaf key
-        const name =
-          typeof mcp.name === "string"
-            ? mcp.name
-            : prefix.length > 0
-              ? `${prefix}_${key}`
-              : key
-
-        const derived = schemas[name]
-
-        // Description: meta.mcp.description > meta.description > JSDoc-derived
-        // (from codegen) > leaf key.
-        const description =
-          typeof mcp.description === "string"
-            ? mcp.description
-            : typeof child.meta.description === "string"
-              ? child.meta.description
-              : typeof derived?.description === "string"
-                ? derived.description
-                : key
-
-        // Hints derived from the tag lattice (three-valued), the leaf's own tags only
-        const baseHints = hintsFromTags((child.meta.tags ?? {}) as Tags)
-
-        // meta.mcp.annotations overrides individual hint keys
-        const annotationOverride: Record<string, unknown> =
-          typeof mcp.annotations === "object" && mcp.annotations !== null
-            ? (mcp.annotations as Record<string, unknown>)
-            : {}
-
-        // meta.mcp.title → annotations.title
-        const titleEntry: Record<string, string> =
-          typeof mcp.title === "string" ? { title: mcp.title } : {}
-
-        const annotationsMerged = { ...baseHints, ...annotationOverride, ...titleEntry }
-        const annotations: McpAnnotations | undefined =
-          Object.keys(annotationsMerged).length > 0 ? annotationsMerged : undefined
-
-        // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
-        const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
-        const deprecated = resolved.deprecated === true
-
-        // stream/page kind recovery from the derived output schema (see
-        // `unwrapKindSchema`'s doc) — an explicit `meta.tags.streaming`
-        // (true OR false) wins over the schema's own `x-stream` marker,
-        // matching `resolveTags`'s own authored-over-inferred precedence for
-        // its `outputType` parameter. `paginated` has no tag-lattice
-        // equivalent to prioritize over, so it's schema-derived only.
-        const kind = unwrapKindSchema(derived?.outputSchema)
-        const streaming = resolved.streaming ?? (kind.streaming ? true : undefined)
-        const outputSchema = isObjectSchema(kind.outputSchema) ? kind.outputSchema : undefined
-
-        out.push({
-          name,
-          description,
-          // Derived-from-type schema when available; else the MCP spec minimum.
-          inputSchema: derived?.inputSchema ?? { type: "object" },
-          ...(outputSchema !== undefined ? { outputSchema } : {}),
-          ...(annotations !== undefined ? { annotations } : {}),
-          ...(streaming !== undefined ? { streaming } : {}),
-          ...(kind.paginated ? { paginated: true, ...(kind.pageStyle !== undefined ? { pageStyle: kind.pageStyle } : {}) } : {}),
-          ...(deprecated ? { deprecated: true } : {}),
-        })
-        handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
+        const name = prefix.length > 0 ? `${prefix}_${key}` : key
+        const tool = buildTool(child, name, key)
+        if (tool !== undefined) out.push(tool)
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         // Static child: use meta.mcp.segment override or the tree key
@@ -478,7 +488,20 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
     if (n.fallback !== undefined) {
       // fallback: contribute its name (e.g. "userId") as the segment
       const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
-      out.push(...walk(n.fallback.subtree, seg))
+
+      // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
+      // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
+      // api-tree/tree.ts's `walkNodeType` (extraction-side fix, aa28952).
+      // Walking it as a branch here (`Object.entries(subtree.children ?? {})`)
+      // would silently see no children and omit it entirely. Mirror
+      // extraction: when the subtree TYPE is itself a leaf, build its tool
+      // directly at `seg` (no extra segment beyond the fallback's own name).
+      if (isLeaf(n.fallback.subtree)) {
+        const tool = buildTool(n.fallback.subtree, seg, n.fallback.name)
+        if (tool !== undefined) out.push(tool)
+      } else {
+        out.push(...walk(n.fallback.subtree, seg))
+      }
     }
 
     return out
@@ -638,6 +661,81 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
   const handlers = new Map<string, ResourceDispatch>()
   const templateHandlers: ResourceTemplateHandler[] = []
 
+  // Build one resource-or-template descriptor (+ register its dispatch
+  // handler) for a leaf node at fully-resolved `leafSegments` — factored out
+  // so the SAME construction applies to an ordinary child leaf
+  // (leafSegments = segments + its own tree key) and to a `fallback.subtree`
+  // that is itself a bare leaf (leafSegments = segments + the fallback's
+  // `{name}` template segment, no further key — see the `n.fallback` branch
+  // below, and api-tree/tree.ts's `walkNodeType` fix this mirrors).
+  // `defaultKey` is the last-resort name/description text (the tree key for
+  // an ordinary leaf; the fallback's own `name` when there is no key).
+  const buildResource = (
+    child: Node,
+    leafSegments: readonly string[],
+    defaultKey: string,
+    hasFallback: boolean,
+  ): { resource?: McpResource; resourceTemplate?: McpResourceTemplate } | undefined => {
+    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
+
+    // Only leaves explicitly tagged for the resource surface are projected here.
+    if (mcp.as !== "resource") return undefined
+
+    const derivedUri = `${scheme}${leafSegments.join("/")}`
+    const uri = typeof mcp.uri === "string" ? mcp.uri : derivedUri
+
+    const name = typeof mcp.name === "string" ? mcp.name : defaultKey
+
+    const description =
+      typeof mcp.description === "string"
+        ? mcp.description
+        : typeof child.meta.description === "string"
+          ? child.meta.description
+          : defaultKey
+
+    const mimeType = typeof mcp.mimeType === "string" ? mcp.mimeType : "application/json"
+
+    // deprecated/streaming: tree-level meta.tags, three-valued (omit unless asserted)
+    const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
+    const deprecated = resolved.deprecated === true
+    const streaming = resolved.streaming
+
+    if (hasFallback) {
+      const { pattern, paramNames } = compileUriTemplate(uri)
+      templateHandlers.push({
+        uriTemplate: uri,
+        paramNames,
+        pattern,
+        mimeType,
+        handler: child.handler as Handler,
+        sourceMap: mcp.sourceMap ?? {},
+        meta: child.meta,
+      })
+      return {
+        resourceTemplate: {
+          uriTemplate: uri,
+          name,
+          description,
+          mimeType,
+          ...(streaming !== undefined ? { streaming } : {}),
+          ...(deprecated ? { deprecated: true } : {}),
+        },
+      }
+    }
+
+    handlers.set(uri, { handler: child.handler as Handler, meta: child.meta })
+    return {
+      resource: {
+        uri,
+        name,
+        description,
+        mimeType,
+        ...(streaming !== undefined ? { streaming } : {}),
+        ...(deprecated ? { deprecated: true } : {}),
+      },
+    }
+  }
+
   const walk = (
     n: Node,
     segments: readonly string[],
@@ -648,61 +746,9 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
-
-        // Only leaves explicitly tagged for the resource surface are projected here.
-        if (mcp.as !== "resource") continue
-
-        const leafSegments = [...segments, key]
-        const derivedUri = `${scheme}${leafSegments.join("/")}`
-        const uri = typeof mcp.uri === "string" ? mcp.uri : derivedUri
-
-        const name = typeof mcp.name === "string" ? mcp.name : key
-
-        const description =
-          typeof mcp.description === "string"
-            ? mcp.description
-            : typeof child.meta.description === "string"
-              ? child.meta.description
-              : key
-
-        const mimeType = typeof mcp.mimeType === "string" ? mcp.mimeType : "application/json"
-
-        // deprecated/streaming: tree-level meta.tags, three-valued (omit unless asserted)
-        const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
-        const deprecated = resolved.deprecated === true
-        const streaming = resolved.streaming
-
-        if (hasFallback) {
-          const { pattern, paramNames } = compileUriTemplate(uri)
-          resourceTemplates.push({
-            uriTemplate: uri,
-            name,
-            description,
-            mimeType,
-            ...(streaming !== undefined ? { streaming } : {}),
-            ...(deprecated ? { deprecated: true } : {}),
-          })
-          templateHandlers.push({
-            uriTemplate: uri,
-            paramNames,
-            pattern,
-            mimeType,
-            handler: child.handler as Handler,
-            sourceMap: mcp.sourceMap ?? {},
-            meta: child.meta,
-          })
-        } else {
-          resources.push({
-            uri,
-            name,
-            description,
-            mimeType,
-            ...(streaming !== undefined ? { streaming } : {}),
-            ...(deprecated ? { deprecated: true } : {}),
-          })
-          handlers.set(uri, { handler: child.handler as Handler, meta: child.meta })
-        }
+        const built = buildResource(child, [...segments, key], key, hasFallback)
+        if (built?.resource !== undefined) resources.push(built.resource)
+        if (built?.resourceTemplate !== undefined) resourceTemplates.push(built.resourceTemplate)
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
@@ -715,9 +761,21 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
 
     if (n.fallback !== undefined) {
       // fallback: contribute its name as a `{var}` template segment
-      const sub = walk(n.fallback.subtree, [...segments, `{${n.fallback.name}}`], true)
-      resources.push(...sub.resources)
-      resourceTemplates.push(...sub.resourceTemplates)
+      const fallbackSegments = [...segments, `{${n.fallback.name}}`]
+
+      // See `projectTools`' identical fallback-leaf handling for why this
+      // check exists: `fallback.subtree` may itself be a bare leaf, which
+      // `walk` (branch-shaped: reads `.children`) would otherwise silently
+      // drop.
+      if (isLeaf(n.fallback.subtree)) {
+        const built = buildResource(n.fallback.subtree, fallbackSegments, n.fallback.name, true)
+        if (built?.resource !== undefined) resources.push(built.resource)
+        if (built?.resourceTemplate !== undefined) resourceTemplates.push(built.resourceTemplate)
+      } else {
+        const sub = walk(n.fallback.subtree, fallbackSegments, true)
+        resources.push(...sub.resources)
+        resourceTemplates.push(...sub.resourceTemplates)
+      }
     }
 
     return { resources, resourceTemplates }
@@ -812,51 +870,59 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
   const schemas = opts.schemas ?? {}
   const handlers = new Map<string, Dispatch>()
 
+  // Build one McpPrompt (+ register its dispatch handler) for a leaf node at
+  // a fully-resolved `name` — see `projectTools`' `buildTool` for why this
+  // is factored out (same reason: a `fallback.subtree` may itself be a bare
+  // leaf, which needs the identical construction at a name with no extra
+  // segment beyond the fallback's own name).
+  const buildPrompt = (child: Node, name: string, descriptionFallback: string): McpPrompt | undefined => {
+    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
+
+    // Only leaves explicitly tagged for the prompt surface are projected here.
+    if (mcp.as !== "prompt") return undefined
+
+    // meta.mcp.name overrides the derived name entirely
+    const resolvedName = typeof mcp.name === "string" ? mcp.name : name
+
+    const derived = schemas[resolvedName]
+
+    // Description: meta.mcp.description > meta.description > JSDoc-derived
+    // (from codegen) > descriptionFallback.
+    const description =
+      typeof mcp.description === "string"
+        ? mcp.description
+        : typeof child.meta.description === "string"
+          ? child.meta.description
+          : typeof derived?.description === "string"
+            ? derived.description
+            : descriptionFallback
+
+    const args = argumentsFromSchema(derived?.inputSchema)
+
+    // deprecated/streaming: tree-level meta.tags, three-valued (omit unless asserted)
+    const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
+    const deprecated = resolved.deprecated === true
+
+    handlers.set(resolvedName, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
+
+    return {
+      name: resolvedName,
+      description,
+      ...(args !== undefined ? { arguments: args } : {}),
+      ...(resolved.streaming !== undefined ? { streaming: resolved.streaming } : {}),
+      ...(deprecated ? { deprecated: true } : {}),
+    }
+  }
+
   const walk = (n: Node, prefix: string): McpPrompt[] => {
     const out: McpPrompt[] = []
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
-
-        // Only leaves explicitly tagged for the prompt surface are projected here.
-        if (mcp.as !== "prompt") continue
-
         // Name: meta.mcp.name wins; else underscore-join prefix + leaf key (same as projectTools).
-        const name =
-          typeof mcp.name === "string"
-            ? mcp.name
-            : prefix.length > 0
-              ? `${prefix}_${key}`
-              : key
-
-        const derived = schemas[name]
-
-        // Description: meta.mcp.description > meta.description > JSDoc-derived
-        // (from codegen) > leaf key.
-        const description =
-          typeof mcp.description === "string"
-            ? mcp.description
-            : typeof child.meta.description === "string"
-              ? child.meta.description
-              : typeof derived?.description === "string"
-                ? derived.description
-                : key
-
-        const args = argumentsFromSchema(derived?.inputSchema)
-
-        // deprecated/streaming: tree-level meta.tags, three-valued (omit unless asserted)
-        const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
-        const deprecated = resolved.deprecated === true
-
-        out.push({
-          name,
-          description,
-          ...(args !== undefined ? { arguments: args } : {}),
-          ...(resolved.streaming !== undefined ? { streaming: resolved.streaming } : {}),
-          ...(deprecated ? { deprecated: true } : {}),
-        })
-        handlers.set(name, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
+        const name = prefix.length > 0 ? `${prefix}_${key}` : key
+        const prompt = buildPrompt(child, name, key)
+        if (prompt !== undefined) out.push(prompt)
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
@@ -868,7 +934,16 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
 
     if (n.fallback !== undefined) {
       const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
-      out.push(...walk(n.fallback.subtree, seg))
+
+      // See `projectTools`' identical fallback-leaf handling: `fallback.subtree`
+      // may itself be a bare leaf, which `walk` (branch-shaped) would
+      // otherwise silently drop.
+      if (isLeaf(n.fallback.subtree)) {
+        const prompt = buildPrompt(n.fallback.subtree, seg, n.fallback.name)
+        if (prompt !== undefined) out.push(prompt)
+      } else {
+        out.push(...walk(n.fallback.subtree, seg))
+      }
     }
 
     return out
