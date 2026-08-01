@@ -365,18 +365,23 @@ describe("FoldMeta array-shape hazard — why middleware/handlerMiddleware are d
 })
 
 // ============================================================================
-// 6. Error semantics — owner ruling (spec's open question 2, now closed): a
-// subtree layer's throw must behave IDENTICALLY to its global
-// (`PresetOptions`) counterpart's throw — traced and compared directly here,
-// against `toRouter` (compile.ts), the same compiler `createFetch` (preset.ts)
-// defaults to. See preset.test.ts's "a middleware that THROWS propagates
-// uncaught" test for the GLOBAL `PresetOptions.middleware` baseline this
-// compares against, and error-encoder.test.ts's `thrownErrorEncoder`
-// `describe` block for the GLOBAL `PresetOptions.handlerMiddleware` baseline.
+// 6. Error semantics — MAXIMAL CONSISTENCY (owner ruling, revisited
+// 2026-08-02, supersedes the "propagates uncaught" ruling this block
+// originally verified): a middleware throw — subtree-scoped or global — is
+// now caught and encoded via `thrownErrorEncoder`, IDENTICALLY to a
+// handlerMiddleware throw, instead of propagating uncaught. `toRouter`
+// (compile.ts) catches a subtree `http.middleware()` throw right where it
+// composes `match.middleware` around `runRoute`'s dispatch; `createFetch`
+// (preset.ts) does the analogous catch around the GLOBAL
+// `PresetOptions.middleware` array, which wraps OUTSIDE the compiled router
+// entirely (see preset.test.ts's own middleware-throw tests for that
+// baseline). Both funnel through the same `encodeThrownError` helper
+// (route.ts) `runRoute`'s own catch block uses for a handlerMiddleware
+// throw — one fallback-to-500 path, not three independent re-derivations.
 // ============================================================================
 
 describe("error semantics — a subtree layer's throw matches its global counterpart's throw exactly", () => {
-  it("a subtree http.middleware() that throws propagates UNCAUGHT — identical to a global PresetOptions.middleware throw (neither is inside runRoute's try/catch, so neither is run through thrownErrorEncoder)", async () => {
+  it("a subtree http.middleware() that throws IS caught and encoded — falls back to the existing 500 default when no thrownErrorEncoder is configured, identical to a global PresetOptions.middleware throw (preset.test.ts) and to a handlerMiddleware throw (next test)", async () => {
     const throwingMw: (inner: Fetch) => Fetch = () => async () => {
       throw new Error("subtree middleware boom")
     }
@@ -385,9 +390,28 @@ describe("error semantics — a subtree layer's throw matches its global counter
       methods: { POST: { handler: () => ({ ok: true }), meta: {} } },
     })
     const router = mapCharRouter(tree)
-    await expect(router(new Request("http://x/", { method: "POST" }))).rejects.toThrow(
-      "subtree middleware boom",
-    )
+    const res = await router(new Request("http://x/", { method: "POST" }))
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: "internal server error" })
+  })
+
+  it("a subtree http.middleware() throw reaches a configured thrownErrorEncoder, same as the global option and same as a subtree handlerMiddleware throw", async () => {
+    const throwingMw: (inner: Fetch) => Fetch = () => async () => {
+      throw { kind: "explosive", message: "kaboom" }
+    }
+    const tree = httpRoute({
+      meta: { http: { directives: [{ kind: "middleware", value: throwingMw }] } },
+      methods: { POST: { handler: () => ({ ok: true }), meta: {} } },
+    })
+    const router = mapCharRouter(tree, undefined, undefined, undefined, (error) => {
+      if (typeof error === "object" && error !== null && (error as { kind?: unknown }).kind === "explosive") {
+        return { status: 502, body: error }
+      }
+      return undefined
+    })
+    const res = await router(new Request("http://x/", { method: "POST" }))
+    expect(res.status).toBe(502)
+    expect(await res.json()).toEqual({ kind: "explosive", message: "kaboom" })
   })
 
   it("a subtree http.handlerMiddleware() that throws IS caught and encoded via thrownErrorEncoder — identical to a global PresetOptions.handlerMiddleware throw (both sit inside runRoute's try/catch)", async () => {

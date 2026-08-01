@@ -1090,6 +1090,30 @@ function encodeHttpError(response: HttpErrorResponse): Response {
   return jsonRouteResponse(response.body, init)
 }
 
+/**
+ * Encode a THROWN error (from anywhere in the pre-decode or handler-around
+ * path — a `handlerMiddleware`, a `middleware`, or any other unexpected
+ * failure) via `thrownErrorEncoder`, falling back to the existing default
+ * (500, `{ error: "internal server error" }`) when the encoder is absent or
+ * itself returns `undefined` — the exact fallback `runRoute`'s own catch
+ * block (below) has always used. Exported so every OTHER place a thrown
+ * error needs the identical encode-or-fall-back behavior — `toRouter`
+ * (compile.ts, wrapping a subtree's `http.middleware()` throw) and
+ * `createFetch` (preset.ts, wrapping a global `PresetOptions.middleware`
+ * throw) — calls this one function instead of re-deriving the same two-line
+ * fallback three times. No route context (meta/path) is available to any of
+ * these callers when a PRE-decode middleware throws before a route is even
+ * matched (the global `PresetOptions.middleware` case) — `ThrownErrorEncoder`
+ * only ever took the raw error, never route context, so there is nothing to
+ * fabricate here; every caller passes exactly what it has.
+ */
+export function encodeThrownError(error: unknown, thrownErrorEncoder?: ThrownErrorEncoder): Response {
+  const encoded = thrownErrorEncoder?.(error)
+  return encoded !== undefined
+    ? encodeHttpError(encoded)
+    : jsonRouteResponse({ error: "internal server error" }, { status: 500 })
+}
+
 // ============================================================================
 // Handler-level middleware — around-hooks wrapping the handler call itself,
 // distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/
@@ -1243,10 +1267,7 @@ export async function runRoute(
       ? encodeOverride(output)
       : defaultEncode(output, req, meta)
   } catch (error) {
-    const encoded = thrownErrorEncoder?.(error)
-    return encoded !== undefined
-      ? encodeHttpError(encoded)
-      : jsonRouteResponse({ error: "internal server error" }, { status: 500 })
+    return encodeThrownError(error, thrownErrorEncoder)
   }
 }
 

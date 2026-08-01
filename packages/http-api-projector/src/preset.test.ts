@@ -473,21 +473,50 @@ describe("OOTB preset — middleware", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*")
   })
 
-  it("a middleware that THROWS propagates uncaught — NOT run through thrownErrorEncoder (baseline for docs/design/subtree-layers-spec.md's error-semantics open question, resolved by tracing this)", async () => {
+  it("a middleware that THROWS is caught and encoded — falls back to the existing 500 default when no thrownErrorEncoder is configured (maximal consistency: a middleware throw now produces the same encoded shape as a handler/handlerMiddleware throw, see route.ts's encodeThrownError)", async () => {
     // `opts.middleware` wraps OUTSIDE the compiled router (createFetch's
     // composition chain, this module's own doc) — outside `runRoute`'s own
-    // try/catch (route.ts), which is the ONLY place `thrownErrorEncoder`
-    // runs. A middleware throw is therefore loud (an uncaught exception out
-    // of the returned Fetch function) but NOT encoded — genuinely different
-    // from a `handlerMiddleware` throw (see the next `describe` block below,
-    // which IS encoded, since it sits inside `runRoute`). Subtree-scoped
-    // `http.middleware()`/`http.handlerMiddleware()` (subtree-layers.test.ts)
-    // must match each of these two existing behaviors exactly, per phase.
+    // try/catch (route.ts). `createFetch` wraps this array's composed result
+    // in its own try/catch, calling the same `encodeThrownError` helper
+    // `runRoute`'s catch block and `toRouter`'s subtree-middleware catch
+    // (compile.ts) both use — so this is no longer a distinct, uncaught
+    // path. Subtree-scoped `http.middleware()` matches this exactly
+    // (subtree-layers.test.ts's "error semantics" describe block).
     const throwing = (_inner: Fetch): Fetch => async () => {
       throw new Error("middleware boom")
     }
     const f = createFetch(api, { middleware: [throwing] })
-    await expect(f(new Request("http://localhost/users/list"))).rejects.toThrow("middleware boom")
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: "internal server error" })
+  })
+
+  it("a middleware throw reaches a configured thrownErrorEncoder, identical to a handlerMiddleware throw's treatment", async () => {
+    const throwing = (_inner: Fetch): Fetch => async () => {
+      throw { kind: "explosive", message: "kaboom" }
+    }
+    const f = createFetch(api, {
+      middleware: [throwing],
+      thrownErrorEncoder: (error) => {
+        if (typeof error === "object" && error !== null && (error as { kind?: unknown }).kind === "explosive") {
+          return { status: 502, body: error }
+        }
+        return undefined
+      },
+    })
+    const res = await f(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(502)
+    expect(await res.json()).toEqual({ kind: "explosive", message: "kaboom" })
+  })
+
+  it("a middleware throw is encoded even for a request that matches NO route at all — the global array wraps outside route matching entirely, so there is no route-level context available, only the raw error (same signature thrownErrorEncoder always had)", async () => {
+    const throwing = (_inner: Fetch): Fetch => async () => {
+      throw new Error("middleware boom")
+    }
+    const f = createFetch(api, { middleware: [throwing] })
+    const res = await f(new Request("http://localhost/no/such/route"))
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: "internal server error" })
   })
 })
 

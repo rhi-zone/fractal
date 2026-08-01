@@ -51,6 +51,7 @@ import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import type { DetectionOptions, ServiceStores } from "@rhi-zone/fractal-api-tree"
+import { encodeThrownError } from "./route.ts"
 import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, ThrownErrorEncoder } from "./route.ts"
 import { httpProjection } from "./dx.ts"
 import type { HttpProjectionOptions } from "./dx.ts"
@@ -162,6 +163,14 @@ export type PresetOptions<T = unknown> = {
    * cross-cutting concerns like audit logging or request-scoped state that
    * want to wrap every dispatched request without reimplementing
    * `createFetch`'s composition chain. Empty/absent by default (no-op).
+   *
+   * A throw from any entry here is caught by `createFetch` and run through
+   * `opts.thrownErrorEncoder` (falling back to the existing 500 default,
+   * same as a `handlerMiddleware` throw) — even though this array wraps
+   * OUTSIDE the compiled router entirely, before a route is even matched, so
+   * there is no route-level `meta`/path context available to the encoder in
+   * that case (only the raw error itself, same as every other
+   * `thrownErrorEncoder` call). See `route.ts`'s `encodeThrownError`.
    */
   readonly middleware?: ReadonlyArray<(inner: Fetch) => Fetch>
   /**
@@ -342,10 +351,27 @@ export function createFetch<T = unknown>(
   // built-in protocol layers below — inside autoMethodLayer/corsLayer, so it
   // sees every request after protocol handling but before the raw router
   // dispatch. First entry in the array is the outermost wrapper.
-  const withMiddleware = (opts.middleware ?? []).reduceRight<CompiledRouter>(
+  //
+  // This wraps OUTSIDE `withContext` (the compiled router), which is itself
+  // OUTSIDE `runRoute`'s own try/catch (route.ts) — so a throw from one of
+  // these entries is the ONE remaining pre-decode throw source this package
+  // can observe (`toRouter`, compile.ts, already catches a subtree
+  // `http.middleware()` throw the same way). Caught here and encoded via
+  // `encodeThrownError`, for maximal consistency with every other error
+  // path — a middleware throw now produces the same encoded-response shape
+  // as a handler/handlerMiddleware throw, instead of propagating as an
+  // uncaught exception out of the returned `Fetch`.
+  const rawMiddleware = (opts.middleware ?? []).reduceRight<CompiledRouter>(
     (inner, mw) => mw(inner),
     withContext,
   )
+  const withMiddleware: CompiledRouter = async (req) => {
+    try {
+      return await rawMiddleware(req)
+    } catch (error) {
+      return encodeThrownError(error, opts.thrownErrorEncoder)
+    }
+  }
 
   const withMethods = autoMethodLayer(withMiddleware, routes)
 
