@@ -71,6 +71,33 @@ const puntRef = (reason: string): TypeRef =>
  * `TODO(codegen): …` marker on any punted node so the fallback is visible in
  * the emitted value itself. Punted nodes now come from `types.unknown` via
  * the TypeRef projector, so `type` is no longer guaranteed present.
+ *
+ * This type's field set must stay a SUPERSET of everything
+ * `@rhi-zone/fractal-type-ir/json-schema`'s `toJsonSchema` can actually
+ * emit (that module's own `JsonSchema` is intentionally the fully-open
+ * `Record<string, unknown>` — a codegen-time projector, not a validated
+ * value — so THIS type is the one place a consumer gets real field-level
+ * structure). Every field below is either a shape-kind's own base rendering
+ * (`type`/`properties`/`items`/…) or one of `json-schema.ts`'s
+ * `withMeta`/`passthroughKeys` meta-driven additions (numeric/string
+ * constraints, `readOnly`/`writeOnly`, `$comment`, …) — see that module for
+ * the authoritative emission list. `$ref`/`discriminator` are the two
+ * structural-sharing/union-tag fields (`json-schema.ts`'s `ref`-kind
+ * rendering and `discriminatedUnion` handling respectively).
+ *
+ * Found incomplete (2026-08-02): every prior consumer of `schemaFromType`/
+ * `schemaFromFunctionNode`/`schemaFromReturnType`/`extractToolSchemas` read
+ * the result as loosely-typed data (an `as JsonSchema` CAST inside this
+ * module, or JSON serialized straight through) — nothing had previously
+ * type-checked a concrete extracted value's LITERAL shape against this
+ * type, so the gap (missing `$ref`, `readOnly`, `writeOnly`, `minLength`,
+ * `maxLength`, `pattern`, `multipleOf`, `minimum`/`maximum`/
+ * `exclusiveMinimum`/`exclusiveMaximum`, `format`, `title`, `deprecated`,
+ * `examples`) went unnoticed. Surfaced by busiless's
+ * `codegen-fractal-validators.ts` schema-artifact codegen (Task 2, this
+ * commit's sibling change), which emits `export const schemas: SchemaMap =
+ * <object literal>` — a real structural check the loose `as`-cast path
+ * never exercised.
  */
 export type JsonSchema = {
   type?: "string" | "number" | "boolean" | "array" | "object"
@@ -84,7 +111,33 @@ export type JsonSchema = {
   anyOf?: JsonSchema[]
   oneOf?: JsonSchema[]
   discriminator?: { propertyName: string }
+  /** Structural-sharing reference (`json-schema.ts`'s `ref`-kind rendering)
+   * — `#/$defs/<name>`, resolved against the containing document's
+   * `$defs` (see `toJsonSchema`'s own doc comment on how `defs` surfaces
+   * at the document root vs. inline). */
+  $ref?: string
   $comment?: string
+  // Numeric/string constraint passthroughs — `json-schema.ts`'s
+  // `passthroughKeys`, copied verbatim from a TypeRef's `meta` onto the
+  // projected schema whenever present (branded numeric/string kinds,
+  // `t(types.string, { minLength: 1 })`-style meta, …).
+  minimum?: number
+  maximum?: number
+  exclusiveMinimum?: number
+  exclusiveMaximum?: number
+  minLength?: number
+  maxLength?: number
+  pattern?: string
+  multipleOf?: number
+  /** String/number sub-format (`json-schema.ts`'s tagged leaf kinds —
+   * `int32`/`int64`/`float32`/`float64`/`uuid`/`uri`/`email`/`datetime`/
+   * `date`/`time`/`duration`). */
+  format?: string
+  readOnly?: boolean
+  writeOnly?: boolean
+  title?: string
+  deprecated?: boolean
+  examples?: unknown[]
   // `description`/`default` are emitted by the underlying type-ir projector
   // (json-schema.ts's `withMeta`) whenever a TypeRef carries
   // `meta.description`/`meta.default`. `typeRefFromType` (in
