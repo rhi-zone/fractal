@@ -416,17 +416,32 @@ export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): bo
 /**
  * Extract the tool-name → schema map for every exported `api(children, opts?)`
  * tree in a source file. Mirrors toTools' name construction.
+ *
+ * Passing `options.program` reuses a pre-built `ts.Program` (e.g. from
+ * `createExtractorProgram`'s multi-root form) instead of building a fresh
+ * single-root one over `entryFile` — same rationale, and same parameter
+ * shape, as `extractToolTypeRefs`/`extractRouteTypeRefs`'s own
+ * `options.program` (this file) and `buildValidatorModuleSource`'s `program`
+ * argument (build.ts): a batch caller building JSON-Schema artifacts for many
+ * entry files alongside their validator modules (see
+ * `schema-build.ts`'s `buildSchemaModuleSource`) reuses the SAME shared
+ * Program instead of paying a second multi-GB `ts.Program` build just for
+ * schemas.
  */
-export function extractToolSchemas(entryFile: string): SchemaMap {
+export function extractToolSchemas(entryFile: string, options?: { program?: ts.Program }): SchemaMap {
   const out: SchemaMap = {}
-  walkTree(entryFile, (name, _path, fn, descriptionSource, checker) => {
-    const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
-    out[name] = {
-      inputSchema: schemaFromFunctionNode(fn, checker),
-      outputSchema: schemaFromReturnType(fn, checker),
-      ...(description !== undefined ? { description } : {}),
-    }
-  })
+  walkTree(
+    entryFile,
+    (name, _path, fn, descriptionSource, checker) => {
+      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
+      out[name] = {
+        inputSchema: schemaFromFunctionNode(fn, checker),
+        outputSchema: schemaFromReturnType(fn, checker),
+        ...(description !== undefined ? { description } : {}),
+      }
+    },
+    options?.program,
+  )
   return out
 }
 

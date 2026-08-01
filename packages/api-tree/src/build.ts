@@ -23,7 +23,8 @@ import * as path from "node:path"
 import type ts from "typescript"
 import { compileValidatorModule } from "@rhi-zone/fractal-type-ir"
 import { extractRouteTypeRefs } from "./tree.ts"
-import type { ShouldShare } from "./extract.ts"
+import { createExtractorProgram, type ShouldShare } from "./extract.ts"
+import { withCache, type CacheLocationOptions, type CachedBuildOutcome } from "./cache.ts"
 import type { Handler, Node } from "./node.ts"
 import { err } from "./index.ts"
 import { TAG_UNVALIDATED } from "./tags.ts"
@@ -309,4 +310,61 @@ export function buildValidatorModuleSource(
  */
 export async function writeValidatorModule(entryFile: string, outFile: string): Promise<void> {
   await Bun.write(outFile, buildValidatorModuleSource(entryFile, outFile))
+}
+
+// ============================================================================
+// Cached variants — see cache.ts's module doc for the content-addressed
+// caching design (key granularity, toolchain-version signal, cache-file
+// location) this wraps `buildValidatorModuleSource`/`writeValidatorModule`
+// with. A cache HIT skips both the `ts.Program` construction and the
+// extraction/compile walk entirely — the whole reason this exists, since a
+// batch caller (busiless's `codegen-fractal-validators.ts`) re-running with
+// no source changes should cost roughly what re-hashing a few dozen files
+// costs, not what re-parsing the whole dependency closure costs.
+// ============================================================================
+
+/**
+ * `buildValidatorModuleSource`, cached: skips the build (and the `program`
+ * construction it would otherwise need) when nothing the last successful
+ * build for `outFile` depended on has changed — see cache.ts's `withCache`.
+ * `options.program`, when given, is used only on an actual build (a cache
+ * hit never touches it) — same batch-sharing use as
+ * `buildValidatorModuleSource`'s own `program` parameter. `options.force`
+ * bypasses the cache unconditionally, same as the CLI's `--force`.
+ */
+export function buildValidatorModuleCached(
+  entryFile: string,
+  outFile: string,
+  options?: {
+    readonly shouldShare?: ShouldShare
+    readonly program?: ts.Program
+    readonly force?: boolean
+  } & CacheLocationOptions,
+): CachedBuildOutcome<string> {
+  return withCache(
+    entryFile,
+    outFile,
+    (program) => buildValidatorModuleSource(entryFile, outFile, options?.shouldShare, program),
+    { ...options, createProgram: createExtractorProgram },
+  )
+}
+
+/**
+ * `writeValidatorModule`, cached: only writes `outFile` (and updates cache
+ * metadata) when `buildValidatorModuleCached` actually built something. On a
+ * cache hit, `outFile` is left untouched (it's already correct) and no write
+ * happens at all.
+ */
+export async function writeValidatorModuleCached(
+  entryFile: string,
+  outFile: string,
+  options?: {
+    readonly shouldShare?: ShouldShare
+    readonly program?: ts.Program
+    readonly force?: boolean
+  } & CacheLocationOptions,
+): Promise<CachedBuildOutcome<string>> {
+  const outcome = buildValidatorModuleCached(entryFile, outFile, options)
+  if (outcome.status === "built") await Bun.write(outFile, outcome.result)
+  return outcome
 }
