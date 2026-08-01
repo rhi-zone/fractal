@@ -68,13 +68,13 @@ import {
   validate,
 } from "graphql"
 import type { DocumentNode, ExecutionResult, GraphQLFieldResolver, GraphQLSchema } from "graphql"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
 import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 import { getGraphQLMeta, projectGraphQL } from "./project.ts"
-import type { Dispatch, FieldTypeMap, OperationType } from "./project.ts"
+import type { Dispatch, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts"
 import { toSchema } from "./schema.ts"
 import { createResolver } from "./resolve.ts"
 import type { GraphQLErrorEncoder, GraphQLHandlerMiddleware, ResolverOptions, SubscriptionFieldConfig } from "./resolve.ts"
@@ -100,7 +100,7 @@ function pascalJoin(path: readonly string[]): string {
 
 /** Dispatch context `CreateGraphQLServerOptions.als`'s `init` receives. */
 export type GraphQLAlsContext = {
-  readonly meta: Meta
+  readonly meta: LeafMeta
   /** The field's rendered SDL name (query fields: just the leaf's own field name, not the qualified namespace path). */
   readonly fieldName: string
   readonly operationType: OperationType
@@ -301,7 +301,7 @@ export function createGraphQLServer<T = unknown>(
     // Query (nested) — reconstruct namespace path + field name from the
     // dispatch key + this leaf's own meta (see module doc's "Query (nested)" case).
     const segments = key.split("_")
-    const gql = getGraphQLMeta(dispatch.meta)
+    const gql = getGraphQLMeta(dispatch.meta as GraphQLLeafMeta)
     const fieldName = typeof gql.name === "string" ? gql.name : segments[segments.length - 1]!
     const namespacePath = segments.slice(0, -1)
 

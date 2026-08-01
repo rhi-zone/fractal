@@ -50,7 +50,7 @@
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Handler, Meta, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
 import type { SourceMap } from "@rhi-zone/fractal-api-tree"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import { toGraphQL } from "@rhi-zone/fractal-type-ir/graphql"
@@ -61,17 +61,18 @@ import { toGraphQL } from "@rhi-zone/fractal-type-ir/graphql"
 
 /**
  * `meta.graphql` open bag — per-projection overrides for GraphQL field
- * generation. Standard keys are typed; any other key passes through
- * untouched (open bag, not a fixed schema — matches `McpMeta`/HTTP's
- * directive bag conventions).
+ * generation, split by role (docs/design/meta-role-split-spec.md §2/§4).
+ * Standard keys are typed; any other key passes through untouched (open
+ * bag, not a fixed schema — matches `McpLeafMeta`/HTTP's directive bag
+ * conventions). No `GraphQLSharedMeta` — every currently-WIRED key here is
+ * leaf-only; `namespace` is branch-only and, per its own field doc below,
+ * declared but not yet read by any walk.
  */
-export type GraphQLMeta = {
+export type GraphQLLeafMetaProperties = {
   /** Overrides tag-derived operation-type inference outright. */
   readonly operation?: "query" | "mutation" | "subscription"
   /** Full field-name override (prefix/camelCase-join ignored when set). */
   readonly name?: string
-  /** This branch's contribution to the namespace path (Query only). */
-  readonly namespace?: string
   /** Description text override — emitted as an SDL `"""..."""` block. */
   readonly description?: string
   /** Deprecation flag override — else derived from `meta.tags.deprecated`. */
@@ -80,26 +81,43 @@ export type GraphQLMeta = {
   readonly deprecatedReason?: string
   /**
    * Per-arg source overrides for this leaf's input assembly (see
-   * `packages/api-tree/src/input.ts`) — mirrors `McpMeta.sourceMap`. Args not
-   * listed here resolve directly from the GraphQL resolver's own `args` bag
-   * (which already carries the flattened per-field argument names 1:1 with
-   * the handler's input bag — see resolve.ts).
+   * `packages/api-tree/src/input.ts`) — mirrors `McpLeafMetaProperties.sourceMap`.
+   * Args not listed here resolve directly from the GraphQL resolver's own
+   * `args` bag (which already carries the flattened per-field argument
+   * names 1:1 with the handler's input bag — see resolve.ts).
    */
   readonly sourceMap?: SourceMap
   readonly [key: string]: unknown
 }
 
-// Declaration merging: types this package's `meta.graphql` slot on the
-// shared `Meta` open bag (see api-tree/src/node.ts) so consumers get a
-// typed `meta.graphql` instead of an untyped index-signature fallback.
-declare module "@rhi-zone/fractal-api-tree/node" {
-  interface Meta {
-    graphql?: GraphQLMeta
-  }
+/** Wraps `GraphQLLeafMetaProperties` under the `graphql` key — extend `LeafMeta` with this in a deployment's augmentation file. */
+export type GraphQLLeafMeta = {
+  readonly graphql?: GraphQLLeafMetaProperties
 }
 
-/** Safely extract the open `meta.graphql` bag from a `Meta`. */
-export function getGraphQLMeta(meta: Meta): GraphQLMeta {
+/**
+ * `meta.graphql` fields valid at BRANCH position only.
+ *
+ * `namespace` — this branch's contribution to the namespace path (Query
+ * only) — is DECLARED here but currently UNWIRED: the leaf-centric Query
+ * walk explicitly doesn't visit branch nodes to read it (a later-phase
+ * refinement, see the walk's own comment further down this file). Kept
+ * typed (not deleted) because, unlike http's dead directive kinds (§9(6),
+ * verified read nowhere at all), this field is a documented, evidenced gap
+ * awaiting implementation, not dead code.
+ */
+export type GraphQLBranchMetaProperties = {
+  readonly namespace?: string
+  readonly [key: string]: unknown
+}
+
+/** Wraps `GraphQLBranchMetaProperties` under the `graphql` key — extend `BranchMeta` with this in a deployment's augmentation file. */
+export type GraphQLBranchMeta = {
+  readonly graphql?: GraphQLBranchMetaProperties
+}
+
+/** Safely extract the open `meta.graphql` bag — leaf position (every currently-wired read site is a per-field/leaf walk). */
+export function getGraphQLMeta(meta: GraphQLLeafMeta): GraphQLLeafMetaProperties {
   const g = meta.graphql
   if (typeof g !== "object" || g === null) return {}
   return g
@@ -173,8 +191,8 @@ export type Dispatch = {
   readonly inputNames: readonly string[]
   readonly sourceMap: SourceMap
   readonly operationType: OperationType
-  /** The leaf's own `Meta` — carried through for consumers needing dispatch-time access without a second walk. */
-  readonly meta: Meta
+  /** The leaf's own `LeafMeta` — carried through for consumers needing dispatch-time access without a second walk. */
+  readonly meta: LeafMeta
 }
 
 /** `projectGraphQL`'s full result. */
@@ -283,7 +301,7 @@ function formatArgs(args: readonly Arg[]): string {
  * different source of truth (same reasoning as `camelJoin`/`underscoreJoin`
  * above).
  */
-export function deriveOperationType(meta: Meta, output?: TypeRef): OperationType {
+export function deriveOperationType(meta: LeafMeta & GraphQLLeafMeta, output?: TypeRef): OperationType {
   const gql = getGraphQLMeta(meta)
   if (gql.operation !== undefined) return gql.operation
 
@@ -304,7 +322,7 @@ function buildField(
   capturedArgs: readonly Arg[],
   typeInfo: FieldTypeInfo | undefined,
 ): GraphQLField {
-  const gql = getGraphQLMeta(child.meta)
+  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta)
 
   const description =
     typeof gql.description === "string"
@@ -340,7 +358,7 @@ function buildDispatch(
   typeInfo: FieldTypeInfo | undefined,
   operationType: OperationType,
 ): Dispatch {
-  const gql = getGraphQLMeta(child.meta)
+  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta)
   const declaredArgs = argsFromInput(typeInfo?.input)
   const declaredNames = new Set(declaredArgs.map((a) => a.name))
   const inputNames = [
@@ -474,7 +492,7 @@ export function projectGraphQL(n: Node, opts: ProjectGraphQLOptions = {}): Proje
   const queryRoot = emptyNamespace()
 
   for (const leaf of leaves) {
-    const gql = getGraphQLMeta(leaf.node.meta)
+    const gql = getGraphQLMeta(leaf.node.meta as GraphQLLeafMeta)
     const lookupKey = [...leaf.path, leaf.key].reduce(underscoreJoin, "")
     const typeInfo = typeMap[lookupKey]
     const operationType = deriveOperationType(leaf.node.meta, typeInfo?.output)

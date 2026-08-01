@@ -54,7 +54,7 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import { toTypeScript } from "@rhi-zone/fractal-type-ir/typescript-native"
 import { buildDocument, selectionSetFor } from "./client.ts"
 import { argsFromInput, camelJoin, deriveOperationType, getGraphQLMeta, underscoreJoin } from "./project.ts"
-import type { Arg, FieldTypeMap, OperationType } from "./project.ts"
+import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts"
 
 // ============================================================================
 // Public API
@@ -163,7 +163,7 @@ function buildLeafEntry(
   types: FieldTypeMap,
   namedTypes: Readonly<Record<string, TypeRef>>,
 ): OperationEntry {
-  const gql = getGraphQLMeta(child.meta)
+  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta)
   const lookupKey = [...path, key].reduce(underscoreJoin, "")
   const typeInfo = types[lookupKey]
   const operationType = deriveOperationType(child.meta, typeInfo?.output)
