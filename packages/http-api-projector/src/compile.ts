@@ -21,7 +21,7 @@
 import type { AsyncLocalStorage } from "node:async_hooks"
 import type { Handler } from "@rhi-zone/fractal-api-tree/node"
 import type { DetectionOptions, ServiceStores } from "@rhi-zone/fractal-api-tree"
-import { runRoute, splitPath } from "./route.ts"
+import { encodeThrownError, runRoute, splitPath } from "./route.ts"
 import type {
   HttpErrorEncoder,
   HttpHandlerMiddleware,
@@ -86,6 +86,18 @@ export type CompiledRouter = (req: Request) => Promise<Response>
  * happened (subtree scope, no per-request path-prefix check) but BEFORE
  * `runRoute`'s own decode/validate (dispatch-around, same wire point the
  * global `middleware` option already runs at).
+ *
+ * A throw out of `wrapped(req)` — necessarily from a `match.middleware`
+ * entry itself, since `dispatch` (`runRoute`) already catches and encodes
+ * everything on its own path — is caught here and run through
+ * `encodeThrownError` (route.ts), the SAME fallback-to-500 path
+ * `runRoute`'s catch block uses for a `handlerMiddleware` throw. Maximal
+ * consistency: every thrown error this package can observe, pre-decode or
+ * handler-around, ends up as an encoded `Response`, never an uncaught
+ * exception out of the returned `CompiledRouter` (see `createFetch`,
+ * preset.ts, for the identical treatment of the GLOBAL
+ * `PresetOptions.middleware` array, which wraps outside this function
+ * entirely).
  */
 export function toRouter(
   matcher: Matcher,
@@ -103,7 +115,11 @@ export function toRouter(
     const dispatch: Fetch = (r) =>
       runRoute(r, match.handler, match.meta, match.sources, match.slugs, combinedHandlerMiddleware, detection, errorEncoder, thrownErrorEncoder, serviceStores)
     const wrapped = (match.middleware ?? []).reduceRight<Fetch>((inner, mw) => mw(inner), dispatch)
-    return wrapped(req)
+    try {
+      return await wrapped(req)
+    } catch (error) {
+      return encodeThrownError(error, thrownErrorEncoder)
+    }
   }
 }
 

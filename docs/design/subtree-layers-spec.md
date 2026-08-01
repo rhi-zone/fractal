@@ -564,34 +564,43 @@ un-scoped-here future work (§9).
   per-role declarative table, not per-subtree control flow). Not implemented
   as part of this spec; a future, separate, consumer-side (deployment-level)
   piece of work.
-- **CLOSED by owner ruling + direct trace: a layer's throw flows through
-  the SAME error-encoding path its EXISTING global (`PresetOptions`)
-  counterpart already uses — traced this session, not assumed.** Two
-  DIFFERENT existing paths, not one uniform "preset-level" path — verified
-  directly (scratch `createFetch` repros, reproduced permanently as
-  `preset.test.ts`'s "a middleware that THROWS propagates uncaught" test and
-  `error-encoder.test.ts`'s existing `thrownErrorEncoder` coverage):
-    - `PresetOptions.middleware` (dispatch-around) wraps OUTSIDE the compiled
-      router entirely, in `createFetch`'s own composition chain — OUTSIDE
-      `runRoute`'s try/catch. A throw from a global `middleware` entry today
-      propagates as an UNCAUGHT exception out of the returned `Fetch`
-      function — loud, but NOT run through `thrownErrorEncoder`, NOT encoded
-      into a `Response` at all.
-    - `PresetOptions.handlerMiddleware` (handler-around) wraps INSIDE
-      `runRoute`, around the handler call — INSIDE the try/catch. A throw
-      from a global `handlerMiddleware` entry today IS caught and encoded
-      via `thrownErrorEncoder` (falling back to the existing 500 default when
-      no encoder is configured or it returns `undefined`).
-  §5's mechanism composes subtree `middleware` OUTSIDE each route's `runRoute`
-  call (`toRouter`, compile.ts) and subtree `handlerMiddleware` INSIDE
-  `runRoute` (via the SAME `handlerMiddleware` parameter `runRoute` already
-  threads a global array through) — so each phase's subtree-scoped throw
-  behavior is now VERIFIED IDENTICAL to its own existing global counterpart,
-  per phase: a subtree `middleware` throw propagates uncaught (same as
-  global); a subtree `handlerMiddleware` throw is caught and encoded (same as
-  global). Never silent, no special channel — satisfies the owner's stated
-  ruling exactly, closing this question. Permanent regression tests:
-  `subtree-layers.test.ts`'s "error semantics" `describe` block.
+- **SUPERSEDED 2026-08-02 — see below.** This bullet originally closed the
+  question by ruling that a subtree layer's throw must match its EXISTING
+  global counterpart's throw, phase for phase — which meant a `middleware`
+  throw (dispatch-around, either scope) stayed UNCAUGHT, since that was the
+  global `PresetOptions.middleware` behavior at the time. The owner
+  subsequently revisited that call for maximal consistency: an uncaught
+  middleware throw was the one pre-decode path that didn't produce an
+  encoded `Response` like every other error path in this package, which is
+  itself an inconsistency worth closing. **CLOSED by owner ruling
+  (2026-08-02): a `middleware` throw — subtree-scoped or global — is now
+  CAUGHT and run through `thrownErrorEncoder`, identically to a
+  `handlerMiddleware` throw**, instead of propagating uncaught:
+    - `PresetOptions.middleware` (dispatch-around) still wraps OUTSIDE the
+      compiled router entirely, in `createFetch`'s own composition chain,
+      OUTSIDE `runRoute`'s try/catch — but `createFetch` now wraps that
+      composed chain in its own try/catch, encoding a throw via the same
+      `encodeThrownError` helper (route.ts) `runRoute`'s catch block uses.
+      No route context (`meta`/path) is available at that point — a
+      pre-decode, pre-route-match throw can't be, since matching hasn't
+      happened yet — but `ThrownErrorEncoder`'s signature never took route
+      context anyway, so nothing is lost or fabricated; the encoder just
+      sees the raw error, same as every other call site.
+    - `PresetOptions.handlerMiddleware` (handler-around) is UNCHANGED: wraps
+      INSIDE `runRoute`, around the handler call, INSIDE the try/catch —
+      caught and encoded via `thrownErrorEncoder` exactly as before.
+  §5's mechanism composes subtree `middleware` OUTSIDE each route's
+  `runRoute` call (`toRouter`, compile.ts — now wrapped in its own
+  try/catch, since matching HAS already happened by the time subtree
+  middleware runs) and subtree `handlerMiddleware` INSIDE `runRoute` (via
+  the SAME `handlerMiddleware` parameter `runRoute` already threads a global
+  array through, unchanged) — so both phases now funnel through
+  `encodeThrownError` identically, matching their own global counterpart
+  exactly, per phase: a subtree `middleware` throw is caught and encoded
+  (same as global); a subtree `handlerMiddleware` throw is caught and
+  encoded (same as global, same as before). Never silent, no special
+  channel. Permanent regression tests: `subtree-layers.test.ts`'s "error
+  semantics" `describe` block, `preset.test.ts`'s middleware-throw tests.
 - **Cross-protocol phase vocabulary** (§8) — MCP/CLI/JSON-RPC/GraphQL
   analogues of dispatch-around/handler-around are each that projector's own
   future design, not specified here.
