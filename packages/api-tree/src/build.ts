@@ -21,10 +21,24 @@
 
 import * as path from "node:path"
 import type ts from "typescript"
-import { compileValidatorModule } from "@rhi-zone/fractal-type-ir"
+import {
+  assembleValidatorModule,
+  compileDefsBlock,
+  compileEntryFragment,
+  compileValidatorModule,
+  type CompiledEntryFragment,
+} from "@rhi-zone/fractal-type-ir"
 import { extractRouteTypeRefs } from "./tree.ts"
 import { createExtractorProgram, type ShouldShare } from "./extract.ts"
-import { withCache, type CacheLocationOptions, type CachedBuildOutcome } from "./cache.ts"
+import {
+  checkCache,
+  computeDefNamesFingerprint,
+  computeLeafFingerprint,
+  readCarryForwardState,
+  writeCacheMetadata,
+  type CacheLocationOptions,
+  type CachedBuildOutcome,
+} from "./cache.ts"
 import type { Handler, Node } from "./node.ts"
 import { err } from "./index.ts"
 import { TAG_UNVALIDATED } from "./tags.ts"
@@ -313,20 +327,134 @@ export async function writeValidatorModule(entryFile: string, outFile: string): 
 }
 
 // ============================================================================
+// Tier 2 — leaf-level incremental build. See
+// docs/design/ir-keyed-cache-spec.md and cache.ts's IR-keyed-cache module
+// doc. Runs only after a Tier-1 miss (cache.ts's `checkCache`): re-extracts
+// every leaf (extraction is always precise — there's no cheaper way to know
+// a leaf's fingerprint than deriving it, spec §3) but recompiles ONLY the
+// leaves whose fingerprint actually changed, carrying forward every other
+// leaf's previously-compiled fragment verbatim.
+// ============================================================================
+
+/** One leaf's carried-forward Tier-2 state — a `CompiledEntryFragment`
+ * (type-ir/compile.ts) stored opaquely in cache.ts's `leafArtifacts`. Narrowed
+ * from `unknown` by `isCompiledFragment` before reuse — a cache file is
+ * untrusted input (hand-edited, or written by a different `fractal-type-ir`
+ * version whose fragment shape moved, though `toolchainMatches`,cache.ts,
+ * already guards the latter case at the whole-entry level). */
+function isCompiledFragment(v: unknown): v is CompiledEntryFragment {
+  return typeof v === "object" && v !== null && typeof (v as { code?: unknown }).code === "string"
+}
+
+export type ValidatorIncrementalResult = {
+  /** The complete, freshly-assembled module source (no header — same
+   * convention as `buildValidatorModuleSource`; a caller that prepends a
+   * generated-file header does so on this string, same as today). */
+  readonly source: string
+  /** Every leaf's CURRENT fingerprint — write this to Tier 2's cache record
+   * (`writeCacheMetadata`'s `leafData.leafFingerprints`) regardless of
+   * whether that leaf's code actually changed (§2 step 4: Tier 1's/Tier 2's
+   * records are rewritten to the new state on every Tier-2 run). */
+  readonly leafFingerprints: Record<string, string>
+  /** Every leaf's compiled fragment — carried-forward ones included verbatim,
+   * changed ones freshly compiled — ready to write back as the next run's
+   * carry-forward source. */
+  readonly leafArtifacts: Record<string, CompiledEntryFragment>
+  /** Fingerprint of the def-NAME set in scope for this compile (see cache.ts's
+   * `defNamesFingerprint` doc comment) — write this alongside
+   * `leafFingerprints`. */
+  readonly defNamesFingerprint: string
+  /** Leaf keys (route paths) whose fragment was actually RECOMPILED this run
+   * — everything else in `leafArtifacts` was carried forward unchanged. For
+   * tests/observability; not needed for correctness. */
+  readonly changedLeaves: readonly string[]
+}
+
+/** Prior Tier-2 state for one entry — exactly `readCarryForwardState`'s
+ * return shape (cache.ts), re-declared here as a named type so this file
+ * doesn't need to import it just to name a parameter. */
+export type ValidatorCarryForwardState = {
+  readonly leafFingerprints: Readonly<Record<string, string>>
+  readonly leafArtifacts: Readonly<Record<string, unknown>>
+  readonly defNamesFingerprint: string
+}
+
+/**
+ * `buildValidatorModuleSource`'s Tier-2 sibling: same extraction
+ * (`extractRouteTypeRefs`), same `compileEntryFragment`/`compileDefsBlock`/
+ * `assembleValidatorModule` codegen `compileValidatorModule` itself uses
+ * internally (type-ir/compile.ts) — the ONLY difference is that a leaf whose
+ * fingerprint matches `prior.leafFingerprints` (AND whose current def-name
+ * set fingerprint matches `prior.defNamesFingerprint` — see
+ * `compileEntryFragment`'s doc comment, type-ir/compile.ts, for why both are
+ * needed) reuses `prior.leafArtifacts`'s fragment VERBATIM instead of
+ * recompiling — see this file's Tier-2 module doc above.
+ *
+ * `prior` is `undefined` for a first build (nothing to carry forward — every
+ * leaf compiles fresh, identical to a full `buildValidatorModuleSource` call
+ * modulo cosmetic formatting; see `assembleValidatorModule`'s doc comment).
+ */
+export function buildValidatorModuleSourceIncremental(
+  entryFile: string,
+  outFile: string | undefined,
+  shouldShare: ShouldShare | undefined,
+  program: ts.Program | undefined,
+  prior: ValidatorCarryForwardState | undefined,
+): ValidatorIncrementalResult {
+  const resolveImport =
+    outFile === undefined ? undefined : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile)
+  const programOpt = program === undefined ? {} : { program }
+
+  const { types, defs } =
+    shouldShare === undefined
+      ? { types: extractRouteTypeRefs(entryFile, programOpt), defs: {} }
+      : extractRouteTypeRefs(entryFile, { shouldShare, ...programOpt })
+
+  const defsBlock = compileDefsBlock(defs)
+  const defNamesFingerprint = computeDefNamesFingerprint(defsBlock.defNames)
+  const defNamesUnchanged = prior !== undefined && prior.defNamesFingerprint === defNamesFingerprint
+
+  const leafFingerprints: Record<string, string> = {}
+  const leafArtifacts: Record<string, CompiledEntryFragment> = {}
+  const changedLeaves: string[] = []
+  const entries = Object.entries(types).map(([name, info]) => ({ name, ref: info.input }))
+
+  for (const { name, ref } of entries) {
+    const fingerprint = computeLeafFingerprint(entryFile, { input: ref })
+    leafFingerprints[name] = fingerprint
+
+    const priorArtifact = prior?.leafArtifacts[name]
+    const reusable =
+      defNamesUnchanged && prior !== undefined && prior.leafFingerprints[name] === fingerprint && isCompiledFragment(priorArtifact)
+
+    if (reusable && priorArtifact !== undefined && isCompiledFragment(priorArtifact)) {
+      leafArtifacts[name] = priorArtifact
+    } else {
+      leafArtifacts[name] = compileEntryFragment(ref, resolveImport, defsBlock.defNames)
+      changedLeaves.push(name)
+    }
+  }
+
+  const source = assembleValidatorModule(entries, leafArtifacts, defsBlock.lines)
+  return { source, leafFingerprints, leafArtifacts, defNamesFingerprint, changedLeaves }
+}
+
+// ============================================================================
 // Cached variants — see cache.ts's module doc for the content-addressed
 // caching design (key granularity, toolchain-version signal, cache-file
-// location) this wraps `buildValidatorModuleSource`/`writeValidatorModule`
-// with. A cache HIT skips both the `ts.Program` construction and the
-// extraction/compile walk entirely — the whole reason this exists, since a
-// batch caller (busiless's `codegen-fractal-validators.ts`) re-running with
-// no source changes should cost roughly what re-hashing a few dozen files
-// costs, not what re-parsing the whole dependency closure costs.
+// location) this wraps `buildValidatorModuleSourceIncremental`/
+// `writeValidatorModule` with. A Tier-1 HIT skips the `ts.Program`
+// construction AND the extraction/compile walk entirely; a Tier-1 MISS falls
+// through to Tier 2 (above), which still skips recompiling any leaf whose
+// fingerprint didn't move.
 // ============================================================================
 
 /**
  * `buildValidatorModuleSource`, cached: skips the build (and the `program`
  * construction it would otherwise need) when nothing the last successful
- * build for `outFile` depended on has changed — see cache.ts's `withCache`.
+ * build for `outFile` depended on has changed (Tier 1) — and, on a Tier-1
+ * miss, recompiles only the leaves whose IR fingerprint actually changed
+ * (Tier 2) — see `buildValidatorModuleSourceIncremental` above.
  * `options.program`, when given, is used only on an actual build (a cache
  * hit never touches it) — same batch-sharing use as
  * `buildValidatorModuleSource`'s own `program` parameter. `options.force`
@@ -339,14 +467,22 @@ export function buildValidatorModuleCached(
     readonly shouldShare?: ShouldShare
     readonly program?: ts.Program
     readonly force?: boolean
+    readonly reachable?: ReadonlySet<string>
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
-  return withCache(
-    entryFile,
-    outFile,
-    (program) => buildValidatorModuleSource(entryFile, outFile, options?.shouldShare, program),
-    { ...options, createProgram: createExtractorProgram },
-  )
+  if (!options?.force) {
+    const check = checkCache(entryFile, outFile, options)
+    if (check.hit) return { status: "hit" }
+  }
+  const program = options?.program ?? createExtractorProgram(entryFile)
+  const prior = readCarryForwardState(entryFile, outFile, options)
+  const built = buildValidatorModuleSourceIncremental(entryFile, outFile, options?.shouldShare, program, prior)
+  writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
+    leafFingerprints: built.leafFingerprints,
+    leafArtifacts: built.leafArtifacts,
+    defNamesFingerprint: built.defNamesFingerprint,
+  })
+  return { status: "built", result: built.source, program }
 }
 
 /**
@@ -362,6 +498,7 @@ export async function writeValidatorModuleCached(
     readonly shouldShare?: ShouldShare
     readonly program?: ts.Program
     readonly force?: boolean
+    readonly reachable?: ReadonlySet<string>
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
   const outcome = buildValidatorModuleCached(entryFile, outFile, options)
