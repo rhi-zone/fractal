@@ -50,7 +50,7 @@ import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
-import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ServiceStores } from "@rhi-zone/fractal-api-tree"
 import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, ThrownErrorEncoder } from "./route.ts"
 import { httpProjection } from "./dx.ts"
 import type { HttpProjectionOptions } from "./dx.ts"
@@ -127,10 +127,11 @@ export type PresetOptions<T = unknown> = {
    * works.
    * Every built-in compiler accepts `opts.handlerMiddleware` as its second
    * argument, `opts.detection` as its third, `opts.errorEncoder` as its
-   * fourth, and `opts.thrownErrorEncoder` as its fifth (see below) —
-   * `createFetch` always forwards all four, so a custom compiler wanting to
-   * support handler middleware, detection config, or error encoding should
-   * accept them too.
+   * fourth, `opts.thrownErrorEncoder` as its fifth, and the resolved
+   * `serviceStores` value (`opts.serviceStores ?? {}`, see below) as its
+   * sixth — `createFetch` always forwards all six, so a custom compiler
+   * wanting to support handler middleware, detection config, error encoding,
+   * or registered service stores should accept them too.
    */
   readonly router?: (
     route: HttpRoute,
@@ -138,6 +139,7 @@ export type PresetOptions<T = unknown> = {
     detection?: DetectionOptions,
     errorEncoder?: HttpErrorEncoder,
     thrownErrorEncoder?: ThrownErrorEncoder,
+    serviceStores?: ServiceStores,
   ) => CompiledRouter
   /**
    * Wrap the compiled router so every request runs inside its own
@@ -236,6 +238,37 @@ export type PresetOptions<T = unknown> = {
    * handler.
    */
   readonly openapi?: boolean | OpenApiPresetOptions
+  /**
+   * The deployment's registered service-store values (docs/design/
+   * typed-store-spec.md §4) — a deployment-provided, long-lived capability
+   * (a tabular-read adapter, a domain read-model, …) declared as a REQUIRED
+   * member on the merged `StoreRegistry` (api-tree's input.ts). `createFetch`
+   * threads whatever is supplied here (default `{}`) through to whichever
+   * router compiler `opts.router` resolves to (every built-in compiler
+   * accepts it as a sixth argument, see `router`'s own doc above), which
+   * merges it into the per-request `stores` bag each dispatched request
+   * builds (`httpStores`, decode.ts) — landing the threading docs/design/
+   * typed-store-spec.md §8 deferred and TODO.md tracked.
+   *
+   * Deliberately ALWAYS optional here, not conditionally required via the
+   * `HasRequiredKeys` technique `op()`/`api()` use for meta contributions
+   * (node.ts) — `StoreRegistry` declaration-merging is GLOBAL to a
+   * compilation, so a conditionally-required field on `PresetOptions` would
+   * force EVERY `createFetch` call across a deployment's ENTIRE tree of
+   * mounted sub-apps to supply it, not just the ones whose handlers actually
+   * read it (verified directly: api-tree's own `auth.test.ts`/`context.test.ts`
+   * — which never touch service stores — failed to typecheck once this field
+   * was made conditionally required, purely because api-tree's own test
+   * fixture merges an unrelated required member into the same `ts.Program`).
+   * §4's "one registration object... checked once" is instead satisfied by
+   * the deployment's OWN single `const serviceStores: ServiceStores = {...}`
+   * assignment at its composition root (the spec's own §4 worked example) —
+   * THAT assignment is what's exhaustively checked against every required
+   * member; this field just consumes the already-verified result, and a
+   * deployment with several mounted trees passes the SAME verified value only
+   * into the ones that actually need it.
+   */
+  readonly serviceStores?: ServiceStores
 }
 
 /**
@@ -300,7 +333,7 @@ export function createFetch<T = unknown>(
   for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
 
   const compileRouter = opts.router ?? mapCharRouter
-  const router = compileRouter(routes, opts.handlerMiddleware, opts.detection, opts.errorEncoder, opts.thrownErrorEncoder)
+  const router = compileRouter(routes, opts.handlerMiddleware, opts.detection, opts.errorEncoder, opts.thrownErrorEncoder, opts.serviceStores ?? ({} as ServiceStores))
 
   const withContext =
     opts.als !== undefined ? withALS(router, opts.als.storage, opts.als.init) : router

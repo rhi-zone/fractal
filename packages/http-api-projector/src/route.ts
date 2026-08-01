@@ -50,7 +50,7 @@ import {
   isStreamProgress,
   matchKind,
 } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, Page } from "@rhi-zone/fractal-api-tree"
+import type { DetectionOptions, ErrorEncoder, Page, ServiceStores } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective, HttpLeafMeta, HttpSharedMeta } from "./project.ts"
 import { BUILTIN_HTTP_STORE_NAMES, httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
 import type { HttpStoreBag, ParamSource, SourceMap, StandardSchemaV1 } from "./decode.ts"
@@ -921,11 +921,16 @@ function encodeOverride(override: ResponseOverride): Response {
  * threaded into `HttpHandlerMiddleware` (see below), which sees both the
  * assembled input AND the raw pre-assembly stores; the handler itself only
  * ever sees `input`.
+ *
+ * `serviceStores` (default `{}`, sound per `httpStores`' own doc) is threaded
+ * straight through to `httpStores` — this function does no merging of its
+ * own, it only decides WHEN to parse a body.
  */
 async function defaultDecode(
   req: Request,
   slugs: Readonly<Record<string, string>>,
   sources?: Sources,
+  serviceStores: ServiceStores = {} as ServiceStores,
 ): Promise<{ readonly input: unknown; readonly stores: HttpStoreBag }> {
   const url = new URL(req.url)
   const primary = primaryStoreForMethod(req.method)
@@ -937,7 +942,7 @@ async function defaultDecode(
     parsedBody = await parseRequestBody(req)
   }
 
-  const stores = httpStores(req, slugs, parsedBody)
+  const stores = httpStores(req, slugs, parsedBody, serviceStores)
   const pathParamNames = Object.keys(slugs)
   const sourceMap = sources?.sourceMap ?? {}
 
@@ -1147,6 +1152,10 @@ function composeHandlerMiddleware(
  * its parallel for whatever the catch block below actually caught (a thrown
  * error, not a `Result`) — both fall back to their own default (400 / 500
  * respectively) when the encoder is absent or returns `undefined`.
+ * `serviceStores` (default `{}`) is the deployment's registered `ServiceStores`
+ * value (`PresetOptions.serviceStores`, preset.ts) — threaded straight through
+ * to `defaultDecode`/`httpStores` so the per-request `stores` bag a handler
+ * middleware sees has every registered service store already merged in.
  */
 export async function runRoute(
   req: Request,
@@ -1158,13 +1167,14 @@ export async function runRoute(
   detection?: DetectionOptions,
   errorEncoder?: HttpErrorEncoder,
   thrownErrorEncoder?: ThrownErrorEncoder,
+  serviceStores: ServiceStores = {} as ServiceStores,
 ): Promise<Response> {
   const detectStreaming = detection?.streaming ?? true
   const detectResult = detection?.result ?? true
   let input: unknown
   let stores: HttpStoreBag
   try {
-    const decoded = await defaultDecode(req, slugs, sources)
+    const decoded = await defaultDecode(req, slugs, sources, serviceStores)
     input = decoded.input
     stores = decoded.stores
   } catch {
@@ -1383,12 +1393,19 @@ export function checkRouteSourceCoverage(root: HttpRoute, opts?: SourceCoverageO
   if (problems.length > 0) throw new SourceCoverageError(problems)
 }
 
+/**
+ * `serviceStores` (default `{}`) — the deployment's registered `ServiceStores`
+ * value (`PresetOptions.serviceStores`, preset.ts) — is threaded straight
+ * through to every `runRoute` call the returned dispatcher makes, exactly
+ * like `toRouter` (compile.ts) does for the other router compilers.
+ */
 export function makeRouterFromRoute(
   root: HttpRoute,
   handlerMiddleware?: readonly HttpHandlerMiddleware[],
   detection?: DetectionOptions,
   errorEncoder?: HttpErrorEncoder,
   thrownErrorEncoder?: ThrownErrorEncoder,
+  serviceStores: ServiceStores = {} as ServiceStores,
 ): (req: Request) => Promise<Response> {
   // Once, at wire time — not per request. This is the point at which mount
   // position and the codegen'd `paramNames` list both exist, which is exactly
@@ -1400,6 +1417,6 @@ export function makeRouterFromRoute(
     const matched = matchRoute(root, segs, 0, req.method, {})
     if (matched === undefined) return new Response("Not Found", { status: 404 })
 
-    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware, detection, errorEncoder, thrownErrorEncoder)
+    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware, detection, errorEncoder, thrownErrorEncoder, serviceStores)
   }
 }
