@@ -10,6 +10,16 @@
 // (a `touch`-without-edit falsely invalidated; a revert-to-identical-content
 // falsely stayed "stale" until mtime happened to line up).
 //
+// v3 (docs/design/ir-keyed-cache-spec.md): the cache unit is now a LEAF's
+// type-IR fingerprint, not a file. Everything below this point (file-closure
+// hashing, mtime+size tiering, `reachability.ts`'s per-entry closures) is
+// Tier 1 — a cheap "could anything have changed" file-content gate, kept
+// exactly as-is — demoted from "the cache key" to "the pre-filter before
+// Tier 2's leaf-level fingerprint diff", which lives in the "Tier 2
+// primitives" section further down this file plus build.ts's/
+// schema-build.ts's incremental build orchestration. Read that spec before
+// changing either tier.
+//
 // ============================================================================
 // Key-granularity decision — SUPERSEDED 2026-08-02, see reachability.ts.
 // ============================================================================
@@ -230,16 +240,59 @@ type TrackedFileEntry = {
   readonly mtimeMs: number
 }
 
+// ============================================================================
+// v3 — IR-keyed cache (leaf-level Tier 2), see
+// docs/design/ir-keyed-cache-spec.md. Tier 1 (this file's existing
+// file-closure gate, unchanged mechanism) answers "could anything possibly
+// have moved"; Tier 2 (build.ts/schema-build.ts, using the fingerprint/
+// carry-forward primitives below) answers "did any LEAF's resolved type
+// actually change" and re-emits only those leaves' generated code. `files`
+// keeps its v2 role exactly (Tier 1's whole-closure gate); `leafFingerprints`/
+// `bundleFingerprint`/`defNamesFingerprint`/`leafArtifacts` are new, v3-only.
+// ============================================================================
+
 type CacheFileShape = {
-  readonly version: 2
+  readonly version: 3
   readonly tsVersion: string
   readonly typeIrVersion: string
   readonly entryFile: string
   /** Absolute file path -> recorded state, as of the last successful build —
    * the entry file itself is included under its own path, so an edit to the
    * entry file is caught the same way as an edit to anything it transitively
-   * imports. */
+   * imports. Tier 1 only — see the module doc above. */
   readonly files: Record<string, TrackedFileEntry>
+  /** Tier 2: one fingerprint per leaf (keyed however the caller's own
+   * extraction keys leaves — a route path for the validator artifact, an MCP
+   * tool name for the schema artifact), a sha256 of that leaf's canonicalized
+   * resolved input/output IR — see `computeLeafFingerprint`. Empty for a
+   * caller that never engages Tier 2 (e.g. cli.ts's single-shot build/watch/
+   * check, which still writes valid v3 metadata but gets no leaf-level
+   * carry-forward — Tier 1 alone still works unchanged for it). */
+  readonly leafFingerprints: Record<string, string>
+  /** Rollup over `leafFingerprints`, sorted by leaf key (see
+   * `computeBundleFingerprint`) — lets a Tier-2 caller decide "does this
+   * bundle's output need rewriting at all" in one comparison instead of
+   * walking every leaf. */
+  readonly bundleFingerprint: string
+  /** Fingerprint of the SET of shared/recursive def names in scope for this
+   * entry's compile (structural sharing, `shouldShare` — see
+   * from-typescript.ts's `finalizeSharedDefs`), sorted. A leaf's own
+   * generated code depends on which def NAMES are callable (a `ref` node
+   * either resolves to a call or passes through), not on the def bodies
+   * themselves — so this is the second half of a leaf's carry-forward safety
+   * check alongside its own `leafFingerprints` entry (see
+   * `compileEntryFragment`'s doc comment, type-ir/compile.ts). Empty string
+   * for a caller with no sharing/defs concept (the schema artifact, which has
+   * no `ref`/`defs` machinery at all).
+   */
+  readonly defNamesFingerprint: string
+  /** Per-leaf carried-forward artifact — opaque to this module (a caller-
+   * defined JSON value: a compiled validator fragment + its type-import, or a
+   * derived JSON-Schema value). Reused verbatim by a Tier-2 caller for any
+   * leaf whose CURRENT fingerprint (+ `defNamesFingerprint`, for callers that
+   * use it) still matches what's recorded here — never interpreted or
+   * validated by cache.ts itself, only stored/returned. */
+  readonly leafArtifacts: Record<string, unknown>
   /** sha256 of the exact bytes written to `outFile` on the last successful
    * build — lets `checkCache` also catch the case where nothing in the
    * INPUT closure changed but `outFile` itself was hand-edited (or clobbered
@@ -248,9 +301,50 @@ type CacheFileShape = {
   readonly outputHash: string
 }
 
+/** `CacheFileShape`, exported read-only for Tier-2 callers that need the
+ * carry-forward fields (`leafFingerprints`/`leafArtifacts`/
+ * `defNamesFingerprint`) — see `readCarryForwardState`. */
+export type CacheFileShapeV3 = CacheFileShape
+
 export type CacheCheckResult =
   | { readonly hit: true }
   | { readonly hit: false; readonly reason: string }
+
+/** Parse `cacheFile`'s JSON, or `undefined` if missing/unreadable —
+ * shared by `checkCache` (Tier 1) and `readCarryForwardState` (Tier 2), so
+ * the two never drift on how a cache file is located/parsed. */
+function readMeta(outFile: string, opts?: CacheLocationOptions): CacheFileShape | undefined {
+  const cacheFile = resolveCacheFile(outFile, opts)
+  if (!fs.existsSync(cacheFile)) return undefined
+  try {
+    return JSON.parse(fs.readFileSync(cacheFile, "utf8")) as CacheFileShape
+  } catch {
+    return undefined
+  }
+}
+
+/** True when `meta` is a v3 record whose TOOLCHAIN identity (format version,
+ * entry file, TypeScript version, fractal-type-ir version) matches the
+ * current run — the bar `readCarryForwardState` uses to decide whether
+ * `meta`'s per-leaf data is even worth comparing fingerprints against.
+ * Deliberately does NOT check `outputHash`/tracked-file state — a leaf's
+ * carry-forward safety comes from FINGERPRINT equality (see
+ * `compileEntryFragment`'s doc comment, type-ir/compile.ts), not from why an
+ * outer cache tier hit or missed; an output file hand-edited outside the
+ * pipeline, or one tracked source file changed, doesn't invalidate every
+ * OTHER leaf's still-fingerprint-matching carried-forward artifact. A
+ * toolchain change, in contrast, can change what ANY leaf's codegen produces
+ * (a `fractal-type-ir` upgrade can change `compile.ts`'s own templates), so
+ * that specifically disqualifies every leaf's carry-forward, not just the
+ * ones whose fingerprint changed. */
+function toolchainMatches(meta: CacheFileShape, entryFile: string): boolean {
+  return (
+    meta.version === 3 &&
+    meta.entryFile === path.resolve(entryFile) &&
+    meta.tsVersion === ts.version &&
+    meta.typeIrVersion === resolvePackageVersion("@rhi-zone/fractal-type-ir")
+  )
+}
 
 /**
  * Cheap validity check: no `ts.Program` construction, just re-reading (and
@@ -259,19 +353,21 @@ export type CacheCheckResult =
  * cache hit fast — the whole point of caching here is to skip the
  * multi-GB `ts.Program` build entirely when nothing changed, so this check
  * must never itself require building one.
+ *
+ * Tier 1 only (see this file's IR-keyed-cache module doc above): answers
+ * "could anything possibly have changed", never "what changed" — a `hit:
+ * false` here means "fall through to Tier 2", not "re-emit everything". A
+ * caller wanting Tier 2's leaf-level carry-forward data on a miss calls
+ * `readCarryForwardState` separately (see that function's doc comment for
+ * why it's decoupled from this check's hit/miss outcome).
  */
 export function checkCache(entryFile: string, outFile: string, opts?: CacheLocationOptions): CacheCheckResult {
   if (!fs.existsSync(outFile)) return { hit: false, reason: "output missing" }
-  const cacheFile = resolveCacheFile(outFile, opts)
-  if (!fs.existsSync(cacheFile)) return { hit: false, reason: "no cache metadata" }
-
-  let meta: CacheFileShape
-  try {
-    meta = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as CacheFileShape
-  } catch {
-    return { hit: false, reason: "cache metadata unreadable" }
+  const meta = readMeta(outFile, opts)
+  if (meta === undefined) {
+    return { hit: false, reason: fs.existsSync(resolveCacheFile(outFile, opts)) ? "cache metadata unreadable" : "no cache metadata" }
   }
-  if (meta.version !== 2) return { hit: false, reason: "cache format version changed" }
+  if (meta.version !== 3) return { hit: false, reason: "cache format version changed" }
   if (meta.entryFile !== path.resolve(entryFile)) return { hit: false, reason: "entry file path changed" }
   if (meta.tsVersion !== ts.version) return { hit: false, reason: "typescript version changed" }
 
@@ -324,6 +420,14 @@ export function checkCache(entryFile: string, outFile: string, opts?: CacheLocat
  * Uses each source file's already-parsed in-memory text
  * (`sourceFile.getFullText()`) rather than re-reading from disk — the
  * Program already paid that I/O, no reason to pay it twice.
+ *
+ * `leafData`, when given, records Tier 2's per-leaf state (see this file's
+ * IR-keyed-cache module doc above) alongside Tier 1's file closure — a
+ * caller that never engages Tier 2 (cli.ts's single-shot build/watch/check)
+ * omits it and gets empty `leafFingerprints`/`leafArtifacts` + an empty
+ * `bundleFingerprint`/`defNamesFingerprint`: still valid v3 metadata (Tier 1
+ * keeps working exactly as before), just with no leaf-level carry-forward
+ * data for a future Tier-2 caller to use.
  */
 export function writeCacheMetadata(
   entryFile: string,
@@ -332,6 +436,11 @@ export function writeCacheMetadata(
   writtenContent: string,
   opts?: CacheLocationOptions,
   reachable?: ReadonlySet<string>,
+  leafData?: {
+    readonly leafFingerprints: Readonly<Record<string, string>>
+    readonly leafArtifacts: Readonly<Record<string, unknown>>
+    readonly defNamesFingerprint?: string
+  },
 ): void {
   const files: Record<string, TrackedFileEntry> = {}
   const sourceFiles =
@@ -352,17 +461,128 @@ export function writeCacheMetadata(
       mtimeMs: stat?.mtimeMs ?? -1,
     }
   }
+  const leafFingerprints = leafData?.leafFingerprints ?? {}
   const meta: CacheFileShape = {
-    version: 2,
+    version: 3,
     tsVersion: ts.version,
     typeIrVersion: resolvePackageVersion("@rhi-zone/fractal-type-ir"),
     entryFile: path.resolve(entryFile),
     files,
+    leafFingerprints,
+    bundleFingerprint: computeBundleFingerprint(leafFingerprints),
+    defNamesFingerprint: leafData?.defNamesFingerprint ?? "",
+    leafArtifacts: leafData?.leafArtifacts ?? {},
     outputHash: sha256(writtenContent),
   }
   const cacheFile = resolveCacheFile(outFile, opts)
   fs.mkdirSync(path.dirname(cacheFile), { recursive: true })
   fs.writeFileSync(cacheFile, JSON.stringify(meta))
+}
+
+// ============================================================================
+// Tier 2 primitives — leaf fingerprinting + carry-forward read. See this
+// file's IR-keyed-cache module doc above for the two-tier design.
+// ============================================================================
+
+/** Deep-clone `value` (a plain JSON-shaped tree — objects/arrays/primitives,
+ * exactly what a `TypeRef` is), relativizing every string found under a
+ * `declarationFile` key against `rootDir` — POSIX-separated, so the result is
+ * identical regardless of host OS or which absolute checkout path produced
+ * it. General over WHERE in the tree `declarationFile` appears (any object's
+ * own key, at any nesting depth — a leaf's own top-level meta, a nested
+ * field's meta, a shared `defs` entry's meta), not narrowed to one TypeRef
+ * shape kind, so a new shape kind that later carries `declarationFile` is
+ * covered automatically. Values that aren't already absolute paths (already
+ * relative, or simply not a path) round-trip through `path.relative`
+ * unharmed in practice for this codebase's actual producer
+ * (`extract.ts`'s `typeProvenanceOf`, which always reads
+ * `decl.getSourceFile().fileName` — always absolute, by construction of
+ * `ts.Program`), so no separate "is this even a path" guard is needed. */
+function canonicalizeForFingerprint(value: unknown, rootDir: string): unknown {
+  if (Array.isArray(value)) return value.map((item) => canonicalizeForFingerprint(item, rootDir))
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {}
+    for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+      out[key] =
+        key === "declarationFile" && typeof v === "string"
+          ? path.relative(rootDir, v).split(path.sep).join("/")
+          : canonicalizeForFingerprint(v, rootDir)
+    }
+    return out
+  }
+  return value
+}
+
+/**
+ * Fingerprint one leaf's extracted IR: sha256 of the canonical-JSON
+ * serialization of `leaf` (typically `{ input: TypeRef, output?: TypeRef }`,
+ * exactly what `tree.ts`'s `extractRouteTypeRefs`/`extractToolTypeRefs`
+ * already produce per leaf — this function doesn't care about the exact
+ * shape, only that it's JSON-serializable), canonicalized against
+ * `path.dirname(entryFile)` so any `declarationFile` absolute path inside it
+ * becomes a checkout-relative path (see `canonicalizeForFingerprint`) —
+ * portable across two checkouts of the same repo at different absolute
+ * locations, per docs/design/ir-keyed-cache-spec.md §6's determinism finding.
+ *
+ * `JSON.stringify` (not a hand-rolled sorted-keys canonicalizer) is
+ * sufficient here — see the spec's §6 finding: a `TypeRef`'s own key order is
+ * derived from source declaration order (deterministic per source text, not
+ * per-run allocation), confirmed byte-stable across two independent
+ * `ts.Program` builds over identical source, including the structural-
+ * sharing/`defs` path (`uniqueRegistryName` is base-name-derived, not an
+ * encounter-order counter).
+ */
+export function computeLeafFingerprint(entryFile: string, leaf: unknown): string {
+  const rootDir = path.dirname(path.resolve(entryFile))
+  return sha256(JSON.stringify(canonicalizeForFingerprint(leaf, rootDir)))
+}
+
+/** Rollup over every leaf's fingerprint, sorted by leaf key (not encounter
+ * order) so the rollup itself doesn't depend on extraction visiting leaves in
+ * a stable order — see docs/design/ir-keyed-cache-spec.md §3. */
+export function computeBundleFingerprint(leafFingerprints: Readonly<Record<string, string>>): string {
+  const sorted = Object.keys(leafFingerprints).sort()
+  return sha256(sorted.map((key) => leafFingerprints[key]).join(""))
+}
+
+/** Fingerprint of a SET of def names (structural sharing's shared/recursive
+ * names in scope for one entry's compile), sorted — see `CacheFileShape`'s
+ * `defNamesFingerprint` doc comment for why this, not the defs' own bodies,
+ * is what a leaf's carry-forward safety depends on. */
+export function computeDefNamesFingerprint(defNames: ReadonlySet<string> | readonly string[]): string {
+  return sha256([...defNames].sort().join(","))
+}
+
+/**
+ * Read the prior v3 cache metadata's Tier-2 state — `leafFingerprints`,
+ * `leafArtifacts`, `defNamesFingerprint` — for a Tier-2 caller to diff
+ * against freshly-computed fingerprints, or `undefined` if there's nothing
+ * TRUSTWORTHY to diff against (no cache file, unreadable, wrong format
+ * version, or a toolchain signal changed — see `toolchainMatches`).
+ *
+ * Deliberately independent of `checkCache`'s Tier-1 hit/miss outcome (and of
+ * `outputHash`): a leaf's carry-forward safety is proven by FINGERPRINT
+ * equality alone (see `compileEntryFragment`'s doc comment, type-ir/
+ * compile.ts) — a Tier-1 miss (some tracked file's content changed) or an
+ * `outputHash` mismatch (the output file was hand-edited) says nothing about
+ * whether any INDIVIDUAL leaf's resolved type actually moved, so neither
+ * should disqualify carry-forward on its own. Only a toolchain change
+ * (`toolchainMatches`) disqualifies every leaf at once, because that can
+ * change what ANY leaf's codegen produces, not just the ones whose
+ * fingerprint changed.
+ */
+export function readCarryForwardState(
+  entryFile: string,
+  outFile: string,
+  opts?: CacheLocationOptions,
+): Pick<CacheFileShape, "leafFingerprints" | "leafArtifacts" | "defNamesFingerprint"> | undefined {
+  const meta = readMeta(outFile, opts)
+  if (meta === undefined || !toolchainMatches(meta, entryFile)) return undefined
+  return {
+    leafFingerprints: meta.leafFingerprints,
+    leafArtifacts: meta.leafArtifacts,
+    defNamesFingerprint: meta.defNamesFingerprint,
+  }
 }
 
 // ============================================================================

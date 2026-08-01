@@ -436,3 +436,16 @@ export function walkTypeRef(doc: TypeRefDocument, visitor: (node: TypeRef, ctx: 
 // ============================================================================
 
 export { compileValidator, compileValidatorModule, typeRefToString, type ValidationError } from "./compile.ts"
+
+// Per-leaf incremental compilation — the IR-keyed build cache's Tier 2 (see
+// api-tree's cache.ts/build.ts and docs/design/ir-keyed-cache-spec.md).
+// Split out of `compileValidatorModule`'s single-pass codegen so a caller can
+// recompile only the leaves whose IR fingerprint changed and reassemble the
+// module from a mix of freshly-compiled and carried-forward fragments.
+export {
+  assembleValidatorModule,
+  compileDefsBlock,
+  compileEntryFragment,
+  type CompiledDefsBlock,
+  type CompiledEntryFragment,
+} from "./compile.ts"

@@ -1125,3 +1125,141 @@ export function compileValidatorModule(
   lines.push("")
   return lines.join("\n")
 }
+
+// ============================================================================
+// Per-leaf incremental compilation — the IR-keyed build cache's Tier 2
+// (api-tree's cache.ts/build.ts; see fractal's
+// docs/design/ir-keyed-cache-spec.md). `compileValidatorModule` above always
+// recompiles every entry; the functions below split that same codegen into
+// three independently-callable pieces so a caller (api-tree's build.ts) can
+// recompile ONLY the leaves whose IR fingerprint actually changed and carry
+// forward every other leaf's previously-generated fragment VERBATIM (no
+// re-templating, no re-walk) — see `compileEntryFragment`'s doc comment for
+// why a leaf's fragment is safe to reuse across runs purely from IR-fingerprint
+// equality, independent of *why* a whole-entry cache tier missed.
+// ============================================================================
+
+/** One leaf's compiled `{ check, errors, parse }` fragment — everything
+ * `assembleValidatorModule` needs to splice this leaf into a module's
+ * `validators` object, without re-running any codegen for it. */
+export type CompiledEntryFragment = {
+  /** The standalone `(function () { … })()` expression text — see
+   * `compileEntryBody`'s doc comment. Self-contained: references only
+   * module-scope names every entry in the same module shares (the
+   * `__inferTypeRef` helper, and — when this leaf's TypeRef contains a
+   * `ref` node — a `__def_NAME_*` function `assembleValidatorModule`'s
+   * caller must have declared via the SAME `defNames` this fragment was
+   * compiled against; see that doc comment for the correctness argument). */
+  readonly code: string
+  readonly typeImport?: { readonly typeName: string; readonly from: string }
+}
+
+/**
+ * Compile ONE leaf's `ref` to a standalone `CompiledEntryFragment` — the same
+ * codegen `compileValidatorModule`'s per-entry loop runs (`guardAnnotation` +
+ * `compileEntryBody`), split out so a caller can run it for a SINGLE leaf
+ * without touching any other leaf's output.
+ *
+ * Why byte-identical reuse across runs is sound, purely from IR-fingerprint
+ * equality (not from tracking *why* an outer cache tier missed): each leaf
+ * gets its OWN fresh `GenCtx` inside `compileEntryBody` (see that function),
+ * so this fragment's generated variable/const names never depend on any
+ * OTHER leaf's presence, absence, or ordering — the only two inputs that can
+ * change this fragment's text are (a) `ref` itself (exactly what a leaf's IR
+ * fingerprint hashes) and (b) `defNames` — NOT the referenced defs' own
+ * bodies, only which NAMES are callable (`ctx.defNames.has(target)`
+ * decides `ref` codegen vs. no-op passthrough; the def bodies themselves
+ * live in a separately-gated `CompiledDefsBlock`, see below). A caller that
+ * re-derives this fragment only when the leaf's fingerprint OR the current
+ * `defNames` set (as a set, not its members' contents) changed is
+ * guaranteed to get the same text a full recompile would have produced.
+ */
+export function compileEntryFragment(
+  ref: TypeRef,
+  resolveImport: ((declarationFile: string) => string) | undefined,
+  defNames: ReadonlySet<string>,
+): CompiledEntryFragment {
+  const { annotation, typeImport } = guardAnnotation(ref, resolveImport, defNames)
+  const body = compileEntryBody(ref, annotation, false, undefined, defNames)
+  const code = ["(function () {", ...indentLines(body, 2), "})()"].join("\n")
+  return typeImport !== undefined ? { code, typeImport } : { code }
+}
+
+/** The module-scope `defs` block (shared `__def_NAME_check/errors/parse`
+ * function declarations + their own hoisted consts) — declared ONCE per
+ * module, independent of any single leaf, and reused by every leaf whose
+ * `ref` targets one of `defNames`. Gated by the caller on its OWN rollup
+ * (e.g. a hash of `defs`' content) — see cache.ts's `defNamesFingerprint`/
+ * per-entry defs handling — since unlike a leaf's fragment, this block's
+ * generated names (`defCtx`'s sequential counters) depend on the FULL `defs`
+ * record's content and iteration order, not any one def in isolation. */
+export type CompiledDefsBlock = {
+  readonly lines: readonly string[]
+  readonly defNames: ReadonlySet<string>
+}
+
+/** Compile a `defs` record (structural-sharing's shared/recursive named
+ * types — see `finalizeSharedDefs`, from-typescript.ts) to its module-scope
+ * declaration block. Split out from `compileValidatorModule`'s inline
+ * `defCtx`/`defLines` construction so an incremental caller can compile it
+ * once per Tier-2 run (see the module-doc above) independent of per-leaf
+ * fragment compilation. */
+export function compileDefsBlock(defs: Record<string, TypeRef>): CompiledDefsBlock {
+  const defNames = new Set(Object.keys(defs))
+  if (defNames.size === 0) return { lines: [], defNames }
+  const defCtx = new GenCtx()
+  const defLines = compileDefs(defs, defCtx)
+  return { lines: [...defCtx.declarations(), ...defLines], defNames }
+}
+
+/**
+ * Reassemble a complete validator module from already-compiled pieces — the
+ * back half of `compileValidatorModule`'s emission (header, `import type`
+ * collection, `__inferTypeRef` helper, `defs` block, `validators` object
+ * literal), driven by a per-leaf `CompiledEntryFragment` map instead of
+ * compiling each entry inline. `entries` fixes the emission ORDER (and the
+ * complete leaf-name set: every name in `entries` must have a matching
+ * fragment, or this throws — a caller with a stale/incomplete fragment map is
+ * a caller bug, not a value this function should silently paper over).
+ */
+export function assembleValidatorModule(
+  entries: readonly { readonly name: string }[],
+  fragments: Readonly<Record<string, CompiledEntryFragment>>,
+  defsBlockLines: readonly string[],
+): string {
+  const imports = new Map<string, Set<string>>()
+  imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
+  const entryLines: string[] = []
+  for (const { name } of entries) {
+    const frag = fragments[name]
+    if (!frag) throw new Error(`assembleValidatorModule: missing compiled fragment for entry ${JSON.stringify(name)}`)
+    if (frag.typeImport) {
+      const names = imports.get(frag.typeImport.from) ?? new Set<string>()
+      names.add(frag.typeImport.typeName)
+      imports.set(frag.typeImport.from, names)
+    }
+    // `frag.code` is `(function () {\n  …\n})()` at zero indentation (see
+    // `compileEntryFragment`) — re-indent its lines by 2 so a spliced-in
+    // fragment reads exactly like `compileValidatorModule`'s own inline
+    // per-entry formatting, not just equivalent code with a flatter layout.
+    const codeLines = frag.code.split("\n")
+    entryLines.push(`  ${JSON.stringify(name)}: ${codeLines[0]}`, ...indentLines(codeLines.slice(1, -1), 2), `  ${codeLines[codeLines.length - 1]},`)
+  }
+
+  const lines: string[] = []
+  lines.push("// AUTO-GENERATED by @rhi-zone/fractal-type-ir. Do not edit by hand.")
+  lines.push("")
+  for (const [from, names] of imports) {
+    lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`)
+  }
+  if (imports.size > 0) lines.push("")
+  lines.push(INFER_TYPE_REF_SOURCE)
+  lines.push("")
+  lines.push(...defsBlockLines)
+  if (defsBlockLines.length > 0) lines.push("")
+  lines.push("export const validators = {")
+  lines.push(...entryLines)
+  lines.push("}")
+  lines.push("")
+  return lines.join("\n")
+}

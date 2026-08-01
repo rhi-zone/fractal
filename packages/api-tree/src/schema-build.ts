@@ -32,9 +32,18 @@
 // custom control flow per shape; a schema is just data.
 
 import type ts from "typescript"
+import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
 import { createExtractorProgram } from "./extract.ts"
-import { extractToolSchemas, type SchemaMap } from "./tree.ts"
-import { withCache, type CacheLocationOptions, type CachedBuildOutcome } from "./cache.ts"
+import { extractToolSchemas, extractToolTypeRefs, type SchemaMap, type ToolSchema, type ToolTypeInfo } from "./tree.ts"
+import type { JsonSchema } from "./extract.ts"
+import {
+  checkCache,
+  computeLeafFingerprint,
+  readCarryForwardState,
+  writeCacheMetadata,
+  type CacheLocationOptions,
+  type CachedBuildOutcome,
+} from "./cache.ts"
 
 /**
  * Extract every leaf op's derived JSON-Schema from `entryFile` and render it
@@ -75,21 +84,91 @@ export async function writeSchemaModule(entryFile: string, outFile: string): Pro
 }
 
 // ============================================================================
-// Cached variants — same `withCache` (cache.ts) the validator module's
-// `buildValidatorModuleCached`/`writeValidatorModuleCached` use, so a schema
-// artifact's cache metadata lives under its OWN `outFile` (a distinct file
-// from the validator module's), tracked independently: touching only a
-// schema-relevant input (there are none, in practice, that a validator
-// build wouldn't also care about — both walk the same tree) still keys off
-// each artifact's own recorded closure/output hash, never cross-invalidates
-// the other artifact's cache entry.
+// Tier 2 — leaf-level incremental build (see build.ts's own Tier-2 module
+// doc and docs/design/ir-keyed-cache-spec.md). The schema artifact has no
+// `defs`/structural-sharing concept at all (`extractToolSchemas` never opts
+// into `shouldShare` — see this file's header doc), so its Tier 2 is simpler
+// than the validator module's: a leaf's fingerprint alone (no def-name-set
+// half) decides carry-forward.
+// ============================================================================
+
+export type SchemaCarryForwardState = {
+  readonly leafFingerprints: Readonly<Record<string, string>>
+  readonly leafArtifacts: Readonly<Record<string, unknown>>
+}
+
+function isToolSchema(v: unknown): v is ToolSchema {
+  return typeof v === "object" && v !== null && "inputSchema" in v
+}
+
+/** One leaf's derived `ToolSchema` — mirrors `extractToolSchemas`'s own
+ * per-leaf construction (`schemaFromFunctionNode`/`schemaFromReturnType`)
+ * exactly, just from an already-extracted TypeRef pair instead of
+ * re-deriving one — see `buildSchemaModuleSourceIncremental`. */
+function toolSchemaFrom(info: ToolTypeInfo): ToolSchema {
+  return {
+    inputSchema: toJsonSchema(info.input) as JsonSchema,
+    ...(info.output !== undefined ? { outputSchema: toJsonSchema(info.output) as JsonSchema } : {}),
+    ...(info.description !== undefined ? { description: info.description } : {}),
+  }
+}
+
+export type SchemaIncrementalResult = {
+  readonly source: string
+  readonly leafFingerprints: Record<string, string>
+  readonly leafArtifacts: Record<string, ToolSchema>
+  readonly changedLeaves: readonly string[]
+}
+
+/**
+ * `buildSchemaModuleSource`'s Tier-2 sibling: extracts every leaf's TypeRef
+ * via `extractToolTypeRefs` (the same walk `extractToolSchemas` runs
+ * internally, exposed here so this function can fingerprint each leaf's IR
+ * BEFORE projecting it) and reuses `prior`'s `ToolSchema` for any leaf whose
+ * fingerprint is unchanged instead of re-running `toJsonSchema` on it.
+ */
+export function buildSchemaModuleSourceIncremental(
+  entryFile: string,
+  program: ts.Program | undefined,
+  prior: SchemaCarryForwardState | undefined,
+): SchemaIncrementalResult {
+  const programOpt = program === undefined ? {} : { program }
+  const types = extractToolTypeRefs(entryFile, programOpt)
+
+  const leafFingerprints: Record<string, string> = {}
+  const leafArtifacts: Record<string, ToolSchema> = {}
+  const changedLeaves: string[] = []
+
+  for (const [name, info] of Object.entries(types)) {
+    const fingerprint = computeLeafFingerprint(entryFile, { input: info.input, output: info.output })
+    leafFingerprints[name] = fingerprint
+
+    const priorArtifact = prior?.leafArtifacts[name]
+    const reusable = prior !== undefined && prior.leafFingerprints[name] === fingerprint && isToolSchema(priorArtifact)
+
+    leafArtifacts[name] = reusable && priorArtifact !== undefined && isToolSchema(priorArtifact) ? priorArtifact : (() => {
+      changedLeaves.push(name)
+      return toolSchemaFrom(info)
+    })()
+  }
+
+  const source = renderSchemaModule(leafArtifacts)
+  return { source, leafFingerprints, leafArtifacts, changedLeaves }
+}
+
+// ============================================================================
+// Cached variants — Tier 1 (cache.ts's `checkCache`) gates whether a
+// `ts.Program` gets built at all; on a Tier-1 miss, Tier 2 (above) recompiles
+// only the leaves whose fingerprint actually changed. A schema artifact's
+// cache metadata lives under its OWN `outFile` (a distinct file from the
+// validator module's), tracked independently.
 // ============================================================================
 
 /**
  * `buildSchemaModuleSource`, cached — see build.ts's
- * `buildValidatorModuleCached` for the shared cache-hit/-miss contract
- * (`withCache`, cache.ts) this mirrors exactly, just for the schema
- * artifact instead of the validator module.
+ * `buildValidatorModuleCached` for the shared Tier-1/Tier-2 contract this
+ * mirrors exactly, just for the schema artifact instead of the validator
+ * module.
  */
 export function buildSchemaModuleCached(
   entryFile: string,
@@ -97,14 +176,21 @@ export function buildSchemaModuleCached(
   options?: {
     readonly program?: ts.Program
     readonly force?: boolean
+    readonly reachable?: ReadonlySet<string>
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
-  return withCache(
-    entryFile,
-    outFile,
-    (program) => buildSchemaModuleSource(entryFile, program),
-    { ...options, createProgram: createExtractorProgram },
-  )
+  if (!options?.force) {
+    const check = checkCache(entryFile, outFile, options)
+    if (check.hit) return { status: "hit" }
+  }
+  const program = options?.program ?? createExtractorProgram(entryFile)
+  const prior = readCarryForwardState(entryFile, outFile, options)
+  const built = buildSchemaModuleSourceIncremental(entryFile, program, prior)
+  writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
+    leafFingerprints: built.leafFingerprints,
+    leafArtifacts: built.leafArtifacts,
+  })
+  return { status: "built", result: built.source, program }
 }
 
 /**
