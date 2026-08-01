@@ -54,7 +54,7 @@ export type { ParamSource, SourceMap, Store, StoreRegistry, Stores } from "./inp
 // and the source-level api()/op() tree walker (tree.ts) it feeds — lives on
 // "./extract" and "./tree" subpaths, NOT the package root: they pull in the
 // TypeScript compiler, which the base runtime model has no reason to force
-// on every consumer. The `fractal-api-tree` build/watch/stub/check CLI
+// on every consumer. The `fractal-api-tree` build/watch/check CLI
 // (cli.ts) wires them to @rhi-zone/fractal-type-ir's validator codegen.
 
 // ============================================================================

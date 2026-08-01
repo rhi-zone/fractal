@@ -88,6 +88,22 @@ export const TAG_STREAMING = "streaming" as const
  */
 export const TAG_DEPRECATED = "deprecated" as const
 
+/**
+ * `unvalidated`: this leaf is DELIBERATELY exempt from `build.ts`'s
+ * `wrapValidators` loud "every leaf must have a matching generated
+ * validator" check — tag a leaf `op(fn, { tags: { unvalidated: true } })` to
+ * opt it out when no generated validator entry exists (and none is coming)
+ * for its route path, instead of `wrapValidators` throwing
+ * `UnvalidatedLeafError` for it.
+ *
+ * Deliberately NOT part of the implication lattice below (`resolveTags`/
+ * `ResolvedTags` are untouched by this tag): it has no implications, isn't
+ * forwarded to any projector, and is read directly off `meta.tags` by
+ * `wrapValidators` itself — a build-time escape hatch, not a behavioral
+ * fact about the operation the way `readOnly`/`destructive`/etc. are.
+ */
+export const TAG_UNVALIDATED = "unvalidated" as const
+
 // ============================================================================
 // Tags sub-bag — open three-valued dict
 // ============================================================================
@@ -105,6 +121,9 @@ export type Tags = {
   openWorld?: boolean | undefined
   streaming?: boolean | undefined
   deprecated?: boolean | undefined
+  /** See `TAG_UNVALIDATED`'s doc comment above — read directly by
+   * `wrapValidators` (build.ts), not part of the implication lattice below. */
+  unvalidated?: boolean | undefined
   [custom: string]: boolean | undefined
 }
 

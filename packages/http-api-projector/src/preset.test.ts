@@ -254,8 +254,8 @@ describe("OOTB preset — validators", () => {
       widgets: op((input: Record<string, unknown>) => input, {
         http: { directives: [{ kind: "method", value: "GET" }] },
       }),
-      other: op((_: unknown) => ({ ok: true }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+      other: op((_: unknown) => ({ ok: true }), { http: { directives: [{ kind: "method", value: "GET" }] } }, {
+        tags: { unvalidated: true },
       }),
     })
 

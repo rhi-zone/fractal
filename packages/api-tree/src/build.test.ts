@@ -9,7 +9,7 @@ import { describe, expect, it } from "bun:test"
 import {
   buildValidatorModuleSource,
   isValidatorWrapped,
-  stubValidatorModuleSource,
+  UnvalidatedLeafError,
   wrapValidators,
 } from "./build.ts"
 import type { GeneratedEntry } from "./build.ts"
@@ -56,10 +56,6 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     ).toBe(true)
     expect(validators["users/create"]!.check({})).toBe(false)
     expect(validators["users/:userId/get"]!.check({ userId: "u1" })).toBe(true)
-  })
-
-  it("stubValidatorModuleSource emits an empty validators map", () => {
-    expect(evalModule(stubValidatorModuleSource())).toEqual({})
   })
 
   it("without an outFile, a NAMED parameter type inlines its structure (no import, since there's no output location to resolve one against)", () => {
@@ -226,15 +222,62 @@ describe("wrapValidators — Node-level counterpart to route.ts's injectValidato
     ])
   })
 
-  it("a leaf with no matching validator entry passes through with its original handler, untouched", () => {
+  it("a leaf tagged unvalidated with no matching validator entry passes through with its original handler, untouched", () => {
     const handler = (input: { id: number }) => input
-    const tree = api({ get: op(handler), other: op(handler) })
-    const wrapped = wrapValidators(tree, { get: idEntry() }) // no entry for "other"
+    const tree = api({ get: op(handler), other: op(handler, { tags: { unvalidated: true } }) })
+    const wrapped = wrapValidators(tree, { get: idEntry() }) // no entry for "other" — tagged instead
 
     expect(wrapped.children!.other!.handler).toBe(handler) // same reference — untouched
     expect(isValidatorWrapped(wrapped.children!.other!.handler!)).toBe(false)
     expect(wrapped.children!.get!.handler).not.toBe(handler) // wrapped — different reference
     expect(isValidatorWrapped(wrapped.children!.get!.handler!)).toBe(true)
+  })
+
+  it("a leaf with no matching validator entry and no unvalidated tag throws UnvalidatedLeafError", () => {
+    const handler = (input: { id: number }) => input
+    const tree = api({ get: op(handler), other: op(handler) })
+
+    expect(() => wrapValidators(tree, { get: idEntry() })).toThrow(UnvalidatedLeafError)
+    try {
+      wrapValidators(tree, { get: idEntry() })
+      throw new Error("expected wrapValidators to throw")
+    } catch (e) {
+      expect(e).toBeInstanceOf(UnvalidatedLeafError)
+      expect((e as UnvalidatedLeafError).paths).toEqual(["other"])
+    }
+  })
+
+  it("collects ALL offending leaves across a multi-leaf tree, not just the first", () => {
+    const handler = (input: { id: number }) => input
+    const tree = api({
+      a: op(handler),
+      b: op(handler),
+      nested: api({ c: op(handler) }),
+    })
+
+    try {
+      wrapValidators(tree, {})
+      throw new Error("expected wrapValidators to throw")
+    } catch (e) {
+      expect(e).toBeInstanceOf(UnvalidatedLeafError)
+      expect((e as UnvalidatedLeafError).paths).toEqual(["a", "b", "nested/c"])
+      expect((e as UnvalidatedLeafError).message).toContain("a")
+      expect((e as UnvalidatedLeafError).message).toContain("b")
+      expect((e as UnvalidatedLeafError).message).toContain("nested/c")
+    }
+  })
+
+  it("a tree fully covered by a mix of real entries and unvalidated-tagged leaves succeeds", () => {
+    const handler = (input: { id: number }) => input
+    const tree = api({
+      get: op(handler),
+      other: op(handler, { tags: { unvalidated: true } }),
+    })
+
+    const wrapped = wrapValidators(tree, { get: idEntry() })
+    expect(isValidatorWrapped(wrapped.children!.get!.handler!)).toBe(true)
+    expect(isValidatorWrapped(wrapped.children!.other!.handler!)).toBe(false)
+    expect(wrapped.children!.other!.handler).toBe(handler)
   })
 
   it("keys nested children by '/'-joined path, matching extractRouteTypeRefs' convention", async () => {
@@ -279,12 +322,15 @@ describe("wrapValidators — Node-level counterpart to route.ts's injectValidato
     expect(wrapped.children).not.toBe(tree.children)
   })
 
-  it("an empty validators map wraps nothing", () => {
+  it("an empty validators map wraps nothing, for a tree with no leaves to cover", () => {
+    const wrapped = wrapValidators(api({}), {})
+    expect(wrapped.children).toEqual({})
+  })
+
+  it("an empty validators map throws when the tree has an untagged leaf", () => {
     const handler = (input: { id: number }) => input
     const tree = api({ get: op(handler) })
-    const wrapped = wrapValidators(tree, {})
 
-    expect(wrapped.children!.get!.handler).toBe(handler)
-    expect(isValidatorWrapped(wrapped.children!.get!.handler!)).toBe(false)
+    expect(() => wrapValidators(tree, {})).toThrow(UnvalidatedLeafError)
   })
 })

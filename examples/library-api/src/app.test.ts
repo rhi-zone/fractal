@@ -307,13 +307,17 @@ describe("library-api — codegen-generated validators", () => {
     expect(isValidatorWrapped(handler!)).toBe(true)
   })
 
-  it("a leaf with no matching generated validator entry is left untouched", () => {
+  it("a leaf tagged unvalidated, with no matching generated validator entry, is left untouched", () => {
     // Every leaf in the real `api` tree happens to have a generated entry
-    // (see generated/validators.ts) — this proves the no-op passthrough case
-    // on a synthetic tree instead, mirroring the "widgets"/"other" split
-    // preset.test.ts exercises for createFetch's own validators option.
+    // (see generated/validators.ts) — this proves the opt-out passthrough
+    // case on a synthetic tree instead, mirroring the "widgets"/"other"
+    // split preset.test.ts exercises for createFetch's own validators
+    // option. `wrapValidators` is loud (@rhi-zone/fractal-api-tree/build):
+    // an uncovered, untagged leaf now throws `UnvalidatedLeafError` instead
+    // of silently passing through, so this leaf is explicitly tagged
+    // `unvalidated` to opt out.
     const unwrapped = (input: unknown) => input
-    const fixture = api_({ other: op(unwrapped) })
+    const fixture = api_({ other: op(unwrapped, { tags: { unvalidated: true } }) })
     const wrapped = wrapValidators(fixture, generatedValidators)
     expect(wrapped.children?.other?.handler).toBe(unwrapped)
     expect(isValidatorWrapped(wrapped.children!.other!.handler!)).toBe(false)

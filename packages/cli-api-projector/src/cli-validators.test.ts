@@ -45,9 +45,14 @@ function qtyEntry(): GeneratedEntry {
 }
 
 describe("runCli — generated validators (opts.validators) wired via wrapValidators", () => {
+  // Tagged `unvalidated` so the "no matching entry" test below (which omits
+  // a "widgets/create" entry) doesn't trip wrapValidators' loud coverage
+  // check — irrelevant to every other test in this describe block, which
+  // always supplies a real "widgets/create" entry (a real entry wins
+  // regardless of the tag).
   const tree = api({
     widgets: api({
-      create: op((input: { name: string; qty: number }) => input),
+      create: op((input: { name: string; qty: number }) => input, { tags: { unvalidated: true } }),
     }),
   })
 

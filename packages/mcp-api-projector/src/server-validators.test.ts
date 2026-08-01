@@ -32,9 +32,14 @@ function idEntry(): GeneratedEntry {
   }
 }
 
+// Tagged `unvalidated` so the "no matching entry" test below (which omits a
+// "users/get" entry) doesn't trip wrapValidators' loud coverage check —
+// irrelevant to every other test using this shared tree, which either
+// supplies a real "users/get" entry (wins regardless of the tag) or omits
+// `validators` entirely (wrapValidators never runs).
 const tree = api({
   users: api({
-    get: op((input: { id: number }) => ({ id: input.id, name: "Alice" })),
+    get: op((input: { id: number }) => ({ id: input.id, name: "Alice" }), { tags: { unvalidated: true } }),
   }),
 })
 
