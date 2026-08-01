@@ -23,6 +23,8 @@ import type { ParamSource, SourceMap } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective, HttpLeafMeta } from "./project.ts"
 import type { HttpStore } from "./decode.ts"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
+import type { HttpHandlerMiddleware } from "./route.ts"
+import type { Fetch } from "./layers.ts"
 
 // ============================================================================
 // HttpMethods — extensible method union
@@ -394,6 +396,83 @@ export function validate(
 }
 
 // ============================================================================
+// http.middleware(...)/http.handlerMiddleware(...) — subtree-scoped request
+// wrapping. See docs/design/subtree-layers-spec.md and `HttpDirective`'s own
+// `middleware`/`handlerMiddleware` doc comment (project.ts) for the full
+// contract (two phases, ancestor-chain composition, ordering).
+// ============================================================================
+
+/** A `{ kind: "middleware" }` directive carrying one `http.middleware()` argument. */
+type MiddlewareDirective = Extract<HttpDirective, { readonly kind: "middleware" }>
+
+/**
+ * `http.middleware(...fns)` — subtree-scoped, dispatch-around request
+ * wrapping (`Fetch => Fetch`, the same shape `PresetOptions.middleware`
+ * already uses globally, see preset.ts). Attach to a branch to scope every
+ * leaf under it, or to a leaf to scope just that operation. Wraps BEFORE the
+ * router matches, before decode, before `sources.validate` — the same wire
+ * point `PresetOptions.middleware` already runs at, narrowed to a subtree
+ * instead of every request.
+ *
+ * Each argument becomes its OWN `{ kind: "middleware" }` directive entry
+ * (variadic — `http.middleware(a, b)` is `directives: [{...a}, {...b}]`, NOT
+ * one directive holding an array) — same directive-per-call composition
+ * `http.source()`/`http.validate()` above already use, and load-bearing for
+ * the same reason: `getHttpMeta` (project.ts) collects every `middleware`
+ * directive into an ordered wrap list at READ time; a bare (non-array)
+ * function-valued field would lose its call signature through `op()`'s
+ * `FoldMeta` merge when two contributions both set it (see `HttpDirective`'s
+ * doc comment, project.ts, and the regression test in
+ * subtree-layers.test.ts).
+ *
+ * ```ts
+ * api({ webhooks: api({ stripe: op(handleStripe) }) }, {
+ *   meta: { http: middleware(captureRawRequest) },
+ * })
+ * // captureRawRequest now runs only for requests under /webhooks, not the
+ * // whole tree — the motivating case docs/decisions/
+ * // one-root-fractal-tree-2026-08-02.md §3.3/§7 names directly.
+ * ```
+ */
+export function middleware(
+  ...fns: readonly ((inner: Fetch) => Fetch)[]
+): { readonly http: { readonly directives: readonly HttpDirective[] } } {
+  return {
+    http: {
+      directives: fns.map((value): MiddlewareDirective => ({ kind: "middleware", value })),
+    },
+  }
+}
+
+/** A `{ kind: "handlerMiddleware" }` directive carrying one `http.handlerMiddleware()` argument. */
+type HandlerMiddlewareDirective = Extract<HttpDirective, { readonly kind: "handlerMiddleware" }>
+
+/**
+ * `http.handlerMiddleware(...fns)` — subtree-scoped, handler-around request
+ * wrapping (`F => F` where `F = (input, stores) => result`, the same shape
+ * `PresetOptions.handlerMiddleware` already uses globally). Wraps INSIDE
+ * `runRoute` (route.ts) — after decode and `sources.validate`, before the
+ * handler is called — same wire point as the global hook, narrowed to a
+ * subtree. Same directive-per-argument, array-authored composition as
+ * `middleware()` above, for the identical reason (see its doc comment).
+ *
+ * ```ts
+ * api({ admin: api({ ... }) }, {
+ *   meta: { http: handlerMiddleware(requireAdminRole) },
+ * })
+ * ```
+ */
+export function handlerMiddleware(
+  ...fns: readonly HttpHandlerMiddleware[]
+): { readonly http: { readonly directives: readonly HttpDirective[] } } {
+  return {
+    http: {
+      directives: fns.map((value): HandlerMiddlewareDirective => ({ kind: "handlerMiddleware", value })),
+    },
+  }
+}
+
+// ============================================================================
 // Exported namespace
 // ============================================================================
 
@@ -433,6 +512,8 @@ export const http = {
   moveTo,
   source,
   validate,
+  middleware,
+  handlerMiddleware,
 // Every entry is either a verb bundle (a meta contribution VALUE) or a helper
 // that RETURNS one. The parameter is `never[]` rather than a union of the
 // helpers' actual parameter types because `source` is generic (`const M`) —

@@ -1,6 +1,19 @@
 # Subtree layers: per-branch middleware scoping via the meta channel
 
-Status: **design spec, owner-certified direction — not yet implemented.**
+Status: **implemented** (project.ts's `HttpDirective` `middleware`/
+`handlerMiddleware` kinds + `getHttpMeta` resolution, verbs.ts's
+`http.middleware(...)`/`http.handlerMiddleware(...)`, compile.ts's
+`collectRoutes` ancestor-chain composition threaded through `toRouter` and
+all four built-in router compilers — `radixMatcher`, `compiledCharMatcher`,
+`mapMatcher`, `mapCharRouter`). §9's two open questions are resolved below;
+the FoldMeta array-shape hazard (§6/§7/§10.3) has a permanent regression test
+(`subtree-layers.test.ts`), alongside subtree-scoping, nesting-order,
+phase-ordering, and error-semantics coverage. `route.ts`'s
+`makeRouterFromRoute` — an ALTERNATIVE router a deployment can select via
+`PresetOptions.router`, not the default (`mapCharRouter` is) — is
+DELIBERATELY OUT OF SCOPE, matching §5's own text ("every built-in router
+compiler IN COMPILE.TS"): it does not apply subtree layers, a documented,
+tested limitation (`subtree-layers.test.ts`), not a silent gap.
 Scope: `packages/http-api-projector/src/{project,verbs,route,compile,preset}.ts`
 (new `HttpDirective` kinds + `getHttpMeta` resolution + router-compiler
 threading), zero changes to `packages/api-tree/src/node.ts` (core stays
@@ -540,42 +553,55 @@ composed root-to-leaf at that projector's own compile step) without
 prescribing MCP's or CLI's concrete phase names — that is real,
 un-scoped-here future work (§9).
 
-## 9. What this spec does not decide — open questions for the owner
+## 9. What this spec does not decide — open questions, both now closed
 
-- **Whether/how per-subtree caller-context resolution migrates onto this
-  mechanism.** §7's analysis: mechanically possible (a `middleware` entry
-  populating a different `AsyncLocalStorage` value per subtree, exactly like
-  `captureRawRequest` already does for a different concern), but the
-  one-root-tree finding's own evidence (a small per-role declarative table,
-  not per-subtree control flow) points toward extending `meta.scopes`'s
-  existing data-driven shape rather than a function-valued layer. The
-  owner's call, not decided here.
-- **Error semantics when a layer throws.** Neither `middleware` (wraps
-  `runRoute`, so a thrown error there is already inside the
-  `thrownErrorEncoder` catch boundary route.ts's `runRoute` establishes —
-  UNVERIFIED this session whether a `middleware`-layer throw specifically
-  lands inside that same catch or escapes it, since `middleware` wrapping
-  happens OUTSIDE `runRoute`'s own try/catch in today's global-`middleware`
-  placement, `preset.ts`'s composition order) nor `handlerMiddleware` (wraps
-  the handler call INSIDE `runRoute`, so today's existing
-  `thrownErrorEncoder` catch already covers it, unchanged) has this fully
-  traced for the SUBTREE-SCOPED case specifically — flagged as a real
-  implementation-time check, not resolved here: does a subtree's own
-  `middleware` throw get the SAME `thrownErrorEncoder` treatment a global
-  one gets today, or does moving the wrap point (from "outside the whole
-  compiled router" to "around one route's own `runRoute` call," per §5's
-  mechanism) change that? The mechanism in §5 composes `middleware` OUTSIDE
-  each route's `runRoute` call (matching today's semantics, where global
-  `middleware` also wraps outside `runRoute`), so this is EXPECTED to be
-  unchanged — but expected is not verified, and the owner should have this
-  named rather than silently assumed.
+- **CLOSED by owner ruling: per-subtree caller-context resolution stays OFF
+  this mechanism, for now.** §7's analysis stands (mechanically possible, a
+  `middleware` entry populating a different `AsyncLocalStorage` value per
+  subtree) but the owner's call is to NOT migrate onto it — declarative
+  extension of `meta.scopes` is the chosen direction for caller-context
+  resolution, matching the one-root-tree finding's own evidence (a small
+  per-role declarative table, not per-subtree control flow). Not implemented
+  as part of this spec; a future, separate, consumer-side (deployment-level)
+  piece of work.
+- **CLOSED by owner ruling + direct trace: a layer's throw flows through
+  the SAME error-encoding path its EXISTING global (`PresetOptions`)
+  counterpart already uses — traced this session, not assumed.** Two
+  DIFFERENT existing paths, not one uniform "preset-level" path — verified
+  directly (scratch `createFetch` repros, reproduced permanently as
+  `preset.test.ts`'s "a middleware that THROWS propagates uncaught" test and
+  `error-encoder.test.ts`'s existing `thrownErrorEncoder` coverage):
+    - `PresetOptions.middleware` (dispatch-around) wraps OUTSIDE the compiled
+      router entirely, in `createFetch`'s own composition chain — OUTSIDE
+      `runRoute`'s try/catch. A throw from a global `middleware` entry today
+      propagates as an UNCAUGHT exception out of the returned `Fetch`
+      function — loud, but NOT run through `thrownErrorEncoder`, NOT encoded
+      into a `Response` at all.
+    - `PresetOptions.handlerMiddleware` (handler-around) wraps INSIDE
+      `runRoute`, around the handler call — INSIDE the try/catch. A throw
+      from a global `handlerMiddleware` entry today IS caught and encoded
+      via `thrownErrorEncoder` (falling back to the existing 500 default when
+      no encoder is configured or it returns `undefined`).
+  §5's mechanism composes subtree `middleware` OUTSIDE each route's `runRoute`
+  call (`toRouter`, compile.ts) and subtree `handlerMiddleware` INSIDE
+  `runRoute` (via the SAME `handlerMiddleware` parameter `runRoute` already
+  threads a global array through) — so each phase's subtree-scoped throw
+  behavior is now VERIFIED IDENTICAL to its own existing global counterpart,
+  per phase: a subtree `middleware` throw propagates uncaught (same as
+  global); a subtree `handlerMiddleware` throw is caught and encoded (same as
+  global). Never silent, no special channel — satisfies the owner's stated
+  ruling exactly, closing this question. Permanent regression tests:
+  `subtree-layers.test.ts`'s "error semantics" `describe` block.
 - **Cross-protocol phase vocabulary** (§8) — MCP/CLI/JSON-RPC/GraphQL
   analogues of dispatch-around/handler-around are each that projector's own
   future design, not specified here.
-- **Implementation order across `compile.ts`'s four router compilers**
-  (`radixMatcher`, `compiledCharMatcher`, `mapMatcher`/`mapCharRouter`) —
-  §5's mechanism applies to all four uniformly in principle; sequencing the
-  actual edits is not decided here.
+- **RESOLVED by implementation: all four `compile.ts` router compilers were
+  edited together, in one pass**, sharing one `collectRoutes` (the ancestor-
+  chain composition) and one `toRouter` (the per-request wrap-and-dispatch) —
+  `radixMatcher`/`radixDispatch`, `compiledCharMatcher`'s codegen'd object
+  literal, and `buildMapMatcher` each carry `middleware`/`handlerMiddleware`
+  through their own `RouteMatch` construction identically. No sequencing
+  question remained once `CollectedRoute` grew the two fields.
 
 ## 10. Regression checklist
 

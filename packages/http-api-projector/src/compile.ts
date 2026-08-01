@@ -30,6 +30,12 @@ import type {
   Sources,
   ThrownErrorEncoder,
 } from "./route.ts"
+import { getHttpMeta } from "./project.ts"
+// Type-only — `layers.ts` doesn't import this file, so this edge is plain
+// and acyclic (unlike project.ts/verbs.ts's own type-only import of `Fetch`
+// from layers.ts, which breaks a REAL value-import cycle — see their module
+// docs).
+import type { Fetch } from "./layers.ts"
 
 // ============================================================================
 // Shared types
@@ -40,6 +46,15 @@ export type RouteMatch = {
   readonly meta: RouteLeafMeta
   readonly sources?: Sources
   readonly slugs: Record<string, string>
+  /**
+   * This route's fully ancestor-composed `middleware` chain (root-to-leaf,
+   * root's entries outermost) — see `collectRoutes` below and
+   * docs/design/subtree-layers-spec.md §5. Absent/empty when neither this
+   * leaf nor any ancestor declared `http.middleware(...)`.
+   */
+  readonly middleware?: readonly ((inner: Fetch) => Fetch)[]
+  /** This route's fully ancestor-composed `handlerMiddleware` chain — same composition as `middleware` above. */
+  readonly handlerMiddleware?: readonly HttpHandlerMiddleware[]
 }
 
 export type Matcher = (pathname: string, method: string) => RouteMatch | undefined
@@ -51,6 +66,26 @@ export type CompiledRouter = (req: Request) => Promise<Response>
  * `makeRouterFromRoute`. `serviceStores` (default `{}`, see `httpStores`'s own
  * doc in decode.ts for why the empty default is sound) is the deployment's
  * registered `ServiceStores` value, threaded straight through to `runRoute`.
+ *
+ * `handlerMiddleware` here is the GLOBAL `PresetOptions.handlerMiddleware`
+ * array — applies to every route, same as before this package supported
+ * subtree scoping. A matched route's OWN `match.handlerMiddleware` (the
+ * ancestor-composed subtree chain `collectRoutes` builds, see its own doc
+ * below) is concatenated AFTER it, so the global array stays OUTERMOST
+ * (applies first/wraps widest — consistent with it conceptually sitting on
+ * a virtual root above the whole tree) and the subtree chain wraps
+ * progressively tighter beneath it, matching §5's root-to-leaf ordering.
+ *
+ * `match.middleware` (dispatch-around, subtree-scoped only — there is no
+ * global counterpart threaded through this compiler; `PresetOptions
+ * .middleware` wraps the WHOLE compiled router externally, in preset.ts's
+ * `createFetch`, entirely orthogonal to per-route matching) is composed
+ * around the per-route `runRoute` dispatch itself — `reduceRight`, first
+ * entry outermost, the SAME composition `createFetch` already uses for the
+ * global array (preset.ts) — so it wraps AFTER matching has already
+ * happened (subtree scope, no per-request path-prefix check) but BEFORE
+ * `runRoute`'s own decode/validate (dispatch-around, same wire point the
+ * global `middleware` option already runs at).
  */
 export function toRouter(
   matcher: Matcher,
@@ -64,7 +99,11 @@ export function toRouter(
     const pathname = new URL(req.url).pathname
     const match = matcher(pathname, req.method)
     if (match === undefined) return new Response("Not Found", { status: 404 })
-    return runRoute(req, match.handler, match.meta, match.sources, match.slugs, handlerMiddleware, detection, errorEncoder, thrownErrorEncoder, serviceStores)
+    const combinedHandlerMiddleware = [...(handlerMiddleware ?? []), ...(match.handlerMiddleware ?? [])]
+    const dispatch: Fetch = (r) =>
+      runRoute(r, match.handler, match.meta, match.sources, match.slugs, combinedHandlerMiddleware, detection, errorEncoder, thrownErrorEncoder, serviceStores)
+    const wrapped = (match.middleware ?? []).reduceRight<Fetch>((inner, mw) => mw(inner), dispatch)
+    return wrapped(req)
   }
 }
 
@@ -91,26 +130,104 @@ type CollectedRoute = {
   readonly handler: Handler
   readonly meta: RouteLeafMeta
   readonly sources?: Sources
+  /** This route's fully ancestor-composed `middleware` chain — see `collectRoutes`'s own doc below. */
+  readonly middleware: readonly ((inner: Fetch) => Fetch)[]
+  /** This route's fully ancestor-composed `handlerMiddleware` chain — see `collectRoutes`'s own doc below. */
+  readonly handlerMiddleware: readonly HttpHandlerMiddleware[]
 }
 
-function collectRoutes(route: HttpRoute, segs: readonly string[]): CollectedRoute[] {
+/**
+ * Walks `route`, flattening it into one `CollectedRoute` per (path, method) —
+ * same as before subtree layers, PLUS each entry's ancestor-composed
+ * `middleware`/`handlerMiddleware` wrap chain (docs/design/
+ * subtree-layers-spec.md §5). `ancestorMiddleware`/`ancestorHandlerMiddleware`
+ * carry every ANCESTOR node's own resolved directive array, accumulated
+ * root-to-leaf as the walk descends — a plain recursion parameter, not a
+ * runtime ancestor lookup a leaf could see (§10.2's regression guard: this is
+ * ancestor-chain COMPOSITION at compile time, never position-INHERITANCE at
+ * read time).
+ *
+ * This node's OWN resolved `middleware`/`handlerMiddleware` (`getHttpMeta
+ * (route.meta)`) is appended to the accumulated ancestor arrays — `mw`/`hmw`
+ * below — which becomes what's passed to CHILDREN (so a descendant's chain
+ * includes this node's contribution) AND the base every method ENTRY composes
+ * against. A method entry's own further leaf-position directives
+ * (`getHttpMeta(entry.meta)`) are folded on top of `mw`/`hmw`, MINUS any
+ * function VALUE already present in `mw`/`hmw` (`dedupeAppend` below) — not a
+ * plain concatenation. This dedup is load-bearing, not defensive:
+ * `naiveTransform` (route.ts) sets a plain leaf `op()`'s HttpRoute-position
+ * `meta` (`route.meta`) and its sole method entry's `meta` (`route.methods
+ * .POST.meta`) to the literal SAME `node.meta` object — a bare `op()` has no
+ * separate "branch identity" apart from its one method entry — so without
+ * dedup, that leaf's own `http.middleware(...)` would be folded twice (once
+ * via `route.meta` into `mw`, once via `entry.meta` into the entry's own
+ * chain). Reference-equality on the META OBJECT isn't a reliable enough
+ * signal to gate on directly, though: `applyMethods` (route.ts) rewrites a
+ * method entry's meta into a NEW object (via `withoutDirective`, stripping
+ * only the matched `{kind:"method"}` directive) whenever a `method`
+ * directive is present — which every `http.get`/`http.post`/etc. bundle
+ * always carries — so after the standard `httpProjection` pipeline runs,
+ * `entry.meta !== route.meta` even for a plain single-op leaf, despite
+ * neither `applyMethods` nor `applyMoveTo`/`applyResponse` ever touching a
+ * `middleware`/`handlerMiddleware` directive (only `method`/`moveTo`/
+ * `response` kinds are ever stripped) — the actual middleware/
+ * handlerMiddleware FUNCTION VALUES on `entry.meta` after any such rewrite
+ * are the exact same references as on `route.meta`, object identity of the
+ * surrounding meta aside. Deduping by the resolved function VALUE itself
+ * (not the meta object) is therefore the signal that survives every built-in
+ * rewriter: identical for the "same leaf, meta object rebuilt" case (skips
+ * the re-add), distinct for a genuinely separate declaration (a real
+ * branch's own middleware vs. its child leaves' own, or two independently
+ * authored middleware functions) — both compose correctly either way. Root's
+ * entries end up first (index 0) in every leaf's final array — outermost,
+ * per §5's "outer wraps inner" ordering, composed via `reduceRight` at the
+ * point of use (`toRouter` above; the codegen'd char-matcher and radix/map
+ * matchers below apply the SAME arrays, just carried through their own match
+ * structures).
+ *
+ * This is a COMPILE-TIME cost — the tree is walked once, same as
+ * `collectRoutes` already did before this — not a per-request cost: no
+ * router built from the result re-derives ancestry or checks a path prefix
+ * per request, it just carries the already-composed array through to
+ * wherever it dispatches (see `toRouter`, `radixDispatch`, the generated
+ * char-matcher's per-route object literal, `buildMapMatcher`).
+ */
+function dedupeAppend<T>(base: readonly T[], extra: readonly T[] | undefined): readonly T[] {
+  if (extra === undefined || extra.length === 0) return base
+  const seen = new Set(base)
+  const toAppend = extra.filter((v) => !seen.has(v))
+  return toAppend.length === 0 ? base : [...base, ...toAppend]
+}
+
+function collectRoutes(
+  route: HttpRoute,
+  segs: readonly string[],
+  ancestorMiddleware: readonly ((inner: Fetch) => Fetch)[] = [],
+  ancestorHandlerMiddleware: readonly HttpHandlerMiddleware[] = [],
+): CollectedRoute[] {
   const out: CollectedRoute[] = []
+  const { middleware = [], handlerMiddleware = [] } = getHttpMeta(route.meta)
+  const mw = [...ancestorMiddleware, ...middleware]
+  const hmw = [...ancestorHandlerMiddleware, ...handlerMiddleware]
   for (const [method, entry] of Object.entries(route.methods ?? {})) {
+    const leaf = getHttpMeta(entry.meta)
     out.push({
       path: segs.length > 0 ? `/${segs.join("/")}` : "/",
       method,
       handler: entry.handler,
       meta: entry.meta,
+      middleware: dedupeAppend(mw, leaf.middleware),
+      handlerMiddleware: dedupeAppend(hmw, leaf.handlerMiddleware),
       ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
     })
   }
   if (route.children !== undefined) {
     for (const [key, child] of Object.entries(route.children)) {
-      out.push(...collectRoutes(child, [...segs, key]))
+      out.push(...collectRoutes(child, [...segs, key], mw, hmw))
     }
   }
   if (route.fallback !== undefined) {
-    out.push(...collectRoutes(route.fallback.subtree, [...segs, `:${route.fallback.name}`]))
+    out.push(...collectRoutes(route.fallback.subtree, [...segs, `:${route.fallback.name}`], mw, hmw))
   }
   return out
 }
@@ -216,6 +333,8 @@ function radixDispatch(root: RadixNode, pathname: string, method: string): Route
             handler: entry.handler,
             meta: entry.meta,
             ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
+            middleware: entry.middleware,
+            handlerMiddleware: entry.handlerMiddleware,
             slugs,
           }
         : undefined
@@ -338,7 +457,7 @@ function buildCompiledCharMatcher(routes: readonly CollectedRoute[]): Matcher {
       code += `if (i === len) {\n`
       for (const [method, idx] of node.methods) {
         const slugsObj = slugAssigns.length > 0 ? `{ ${slugAssigns.join(", ")} }` : "{}"
-        code += `if (method === ${JSON.stringify(method)}) return { handler: entries[${idx}].handler, meta: entries[${idx}].meta, sources: entries[${idx}].sources, slugs: ${slugsObj} }\n`
+        code += `if (method === ${JSON.stringify(method)}) return { handler: entries[${idx}].handler, meta: entries[${idx}].meta, sources: entries[${idx}].sources, middleware: entries[${idx}].middleware, handlerMiddleware: entries[${idx}].handlerMiddleware, slugs: ${slugsObj} }\n`
       }
       code += `}\n`
     }
@@ -418,6 +537,8 @@ function buildMapMatcher(routes: readonly CollectedRoute[]): Matcher {
           handler: entry.handler,
           meta: entry.meta,
           ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
+          middleware: entry.middleware,
+          handlerMiddleware: entry.handlerMiddleware,
           slugs: {},
         }
       : undefined
