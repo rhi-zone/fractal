@@ -110,7 +110,23 @@ export type JsonSchema = {
   enum?: string[]
   anyOf?: JsonSchema[]
   oneOf?: JsonSchema[]
+  /** Structural intersection (`json-schema.ts`'s `intersection` shape kind
+   * — draft 2020-12 §10.2.1.1: every listed schema must validate). */
+  allOf?: JsonSchema[]
   discriminator?: { propertyName: string }
+  // Vendor-extension keys (`x-`-prefixed, same convention across
+  // `json-schema.ts`'s degrade-honestly shape kinds — a callable/
+  // interface/class-instance/stream/paginated-sequence type has no native
+  // JSON-Schema vocabulary, so each degrades to the closest structural
+  // shape (`object`/`array`/untyped) plus one of these markers so tooling
+  // that cares can still tell what it degraded FROM).
+  "x-function"?: boolean
+  "x-method"?: boolean
+  "x-interface"?: boolean
+  "x-class-name"?: string
+  "x-declaration-file"?: string
+  "x-stream"?: boolean
+  "x-page-style"?: string
   /** Structural-sharing reference (`json-schema.ts`'s `ref`-kind rendering)
    * — `#/$defs/<name>`, resolved against the containing document's
    * `$defs` (see `toJsonSchema`'s own doc comment on how `defs` surfaces
