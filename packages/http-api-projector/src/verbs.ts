@@ -19,7 +19,7 @@
 //
 // See docs/design/router-model.md §"Verb helpers are verb+implied-tags BUNDLES"
 
-import type { ParamSource } from "@rhi-zone/fractal-api-tree"
+import type { ParamSource, SourceMap } from "@rhi-zone/fractal-api-tree"
 import type { HttpDirective, HttpLeafMeta } from "./project.ts"
 import type { HttpStore } from "./decode.ts"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
@@ -252,8 +252,38 @@ export type SourceMapInput = Readonly<
   Record<string, HttpStore | { readonly store: HttpStore; readonly key?: string }>
 >
 
-/** A `{ kind: "source" }` directive carrying a whole `http.source()` call's map. */
-type SourceDirective = Extract<HttpDirective, { readonly kind: "source" }>
+/** A `{ kind: "source" }` directive carrying a whole `http.source()` call's map, `S`. */
+type SourceDirective<S extends SourceMap = SourceMap> = Extract<
+  HttpDirective<string, string, S>,
+  { readonly kind: "source" }
+>
+
+/**
+ * The `SourceMap` a `SourceMapInput` expands to, with each key's own literal
+ * association PRESERVED — the type-level counterpart of the shorthand
+ * expansion `source()` performs at runtime (a bare `"query"` becomes
+ * `{ store: "query", key: <param name> }`).
+ *
+ * Homomorphic over `M`, so a `const`-inferred literal input (`{ year: "query" }`)
+ * yields a literal output (`{ year: { store: "query"; key: "year" } }`) rather
+ * than collapsing to `Readonly<Record<string, ParamSource>>`. That literal
+ * association is exactly what a type-level walk over `meta.http.directives`
+ * needs to answer "which store does param X come from" — see
+ * `FindStoreForParam` (api-tree's input.ts) and
+ * docs/design/typed-store-spec.md §6.
+ *
+ * Both branches are written to be PROVABLY `ParamSource`-shaped for a still-
+ * generic `M` (the shorthand branch by intersecting the store with `string`,
+ * the full-form branch by intersecting the input entry with `ParamSource`
+ * itself) — a conditional type does not narrow `M[K]` in either branch, so
+ * without those intersections `ResolvedSourceMap<M>` cannot satisfy
+ * `HttpDirective`'s own `S extends SourceMap` constraint.
+ */
+export type ResolvedSourceMap<M extends SourceMapInput> = {
+  readonly [K in keyof M]: M[K] extends string
+    ? { readonly store: M[K] & string; readonly key: K & string }
+    : M[K] & ParamSource
+}
 
 /**
  * `http.source(map)` — declares which HTTP store (query, body, path, header,
@@ -304,12 +334,16 @@ type SourceDirective = Extract<HttpDirective, { readonly kind: "source" }>
  * }))
  * ```
  */
-export function source(map: SourceMapInput): { readonly http: { readonly directives: readonly [SourceDirective] } } {
+export function source<const M extends SourceMapInput>(
+  map: M,
+): { readonly http: { readonly directives: readonly [SourceDirective<ResolvedSourceMap<M>>] } } {
   const sourceMap: Record<string, ParamSource> = {}
   for (const [key, value] of Object.entries(map)) {
     sourceMap[key] = typeof value === "string" ? { store: value, key } : value
   }
-  return { http: { directives: [{ kind: "source", map: sourceMap } as SourceDirective] } }
+  return {
+    http: { directives: [{ kind: "source", map: sourceMap } as SourceDirective<ResolvedSourceMap<M>>] },
+  }
 }
 
 // ============================================================================
@@ -399,10 +433,11 @@ export const http = {
   moveTo,
   source,
   validate,
-} as const satisfies Record<
-  string,
-  | VerbBundle
-  | ((path: string) => HttpLeafMeta)
-  | ((map: SourceMapInput) => HttpLeafMeta)
-  | ((schema: StandardSchemaV1) => HttpLeafMeta)
->
+// Every entry is either a verb bundle (a meta contribution VALUE) or a helper
+// that RETURNS one. The parameter is `never[]` rather than a union of the
+// helpers' actual parameter types because `source` is generic (`const M`) —
+// contravariance makes any single-argument function assignable to a
+// `never`-parameter signature, so this keeps checking the part that matters
+// (each entry produces leaf meta) without having to restate a generic
+// signature that would immediately go stale.
+} as const satisfies Record<string, VerbBundle | ((...args: never[]) => HttpLeafMeta)>

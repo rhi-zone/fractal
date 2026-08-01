@@ -192,6 +192,121 @@ export interface ParamSource {
 export type SourceMap = Readonly<Record<string, ParamSource>>
 
 // ============================================================================
+// Static source coverage — the type-level half of the resolution order
+//
+// docs/design/typed-store-spec.md §6 splits "where does this param come from"
+// by how much of it `op()` can see at its own call site. Only ONE of the three
+// resolution steps is statically visible there: the per-param overrides a
+// `source()`-style helper declares, which live in the leaf's own meta as
+// `{ kind: "source", map }` directives. The other two are NOT, and are not
+// papered over here:
+//
+//   - a PATH-param match depends on where the leaf is mounted in the tree, which
+//     is a property of the tree passed to `api()`, not of the leaf's own `op()`
+//     arguments (§6, fourth bullet: a structural block, not an engineering gap);
+//   - the primary-store CONVENTION under a projector's no-`paramNames` fallback
+//     resolves against the live request's own keys, so there is no
+//     compile-time-fixed param set to check at all (§6, fifth bullet).
+//
+// Both of those are covered by a WIRE-TIME runtime check instead — see
+// http-api-projector's `checkRouteSourceCoverage` (route.ts), which runs once
+// when the route tree is built, the first point at which mount position and a
+// codegen'd `paramNames` list both exist.
+//
+// These types are projector-BLIND: they key off the `{ kind: "source", map }`
+// shape, whose vocabulary (`ParamSource`/`SourceMap`) this module already owns,
+// and never off any particular projector's meta namespace — the walk looks for
+// a `directives` tuple under ANY namespace of the folded meta.
+// ============================================================================
+
+/**
+ * A handler's declared input keys. `never` for a handler that takes no input
+ * (and `string` for one typed against an open `Record<string, unknown>`), both
+ * of which make the coverage check below vacuous rather than wrong.
+ */
+export type InputKeys<H> = H extends (input: infer I) => any ? keyof I : never
+
+/** The `directives` tuple(s) carried by any namespace of a folded meta object. */
+type DirectivesOf<Meta> = Meta[keyof Meta] extends infer NS
+  ? NS extends { readonly directives: infer D } ? D : never
+  : never
+
+/**
+ * Resolve which store param `P` reads from, given a tuple of meta directives —
+ * LAST match wins, matching the "later call's keys win on overlap" semantics a
+ * `source()` helper's own doc specifies and `getHttpMeta` implements at read
+ * time. `never` when no `source` directive names `P` at all (i.e. `P` falls
+ * through to the path/convention steps, which are runtime-resolved).
+ *
+ * Walks from the END of the tuple (`[...infer Init, infer Last]`) so the first
+ * hit IS the last-declared one, no accumulator needed.
+ *
+ * Skips any directive whose map is type-ERASED (`string extends keyof M`) for
+ * the same reason `SourceParamsOfDirective` does — and it matters more here,
+ * because `Last` is a naked inferred parameter, so this conditional DISTRIBUTES
+ * over a directive tuple element that is itself a union (a verb bundle types its
+ * elements as the whole directive DU, whose `source` member has an erased map).
+ * Without the guard, every param would "resolve" to `string` via that member.
+ */
+export type FindStoreForParam<D, P extends string> = D extends readonly [...infer Init, infer Last]
+  ? Last extends { readonly kind: "source"; readonly map: infer M }
+    ? string extends keyof M
+      ? FindStoreForParam<Init, P>
+      : P extends keyof M
+        ? M[P] extends { readonly store: infer S } ? S : never
+        : FindStoreForParam<Init, P>
+    : FindStoreForParam<Init, P>
+  : never
+
+/**
+ * The param names ONE directive declares overrides for — `never` for any
+ * directive that isn't a `source`, and `never` for a `source` whose map is
+ * type-ERASED (an index-signature `SourceMap`, i.e. `string extends keyof M`).
+ *
+ * That erased-map guard is load-bearing, not defensive: a verb bundle types its
+ * directives tuple as the whole `HttpDirective` UNION, which structurally
+ * includes the `source` member, so without it every `op(fn, http.get)` would
+ * see a phantom source directive whose `keyof map` is `string` and fail the
+ * coverage check. An erased map carries no per-key information to check
+ * against, so contributing nothing is also the honest answer.
+ *
+ * Distributes over a union of directives (naked `T`), so N `source()` calls
+ * yield the UNION of their declared params — not, as a non-distributed
+ * `keyof (M1 | M2)` would, their intersection.
+ */
+type SourceParamsOfDirective<T> = T extends { readonly kind: "source"; readonly map: infer M }
+  ? string extends keyof M ? never : keyof M & string
+  : never
+
+/** Every param name any `source` directive in `Meta` declares an override for. */
+export type DeclaredSourceParams<Meta> = DirectivesOf<Meta> extends infer D
+  ? D extends readonly unknown[] ? SourceParamsOfDirective<D[number]> : never
+  : never
+
+/**
+ * The `source()`-declared param names a handler does NOT declare as an input —
+ * `never` when coverage is clean. A non-`never` result is a real defect: the
+ * override is assembled into a param the handler never reads, while the param
+ * the author MEANT to override silently falls through to the convention.
+ *
+ * This is the one piece of §6's three-step resolution order that is statically
+ * checkable at `op()`, and it is checked there (see `op()`'s `contributions`).
+ *
+ * Deliberately VACUOUS whenever the handler's input keys are not statically
+ * known — `never` (a handler declaring no input, or one typed against
+ * `unknown`) and `string` (an open `Record<string, unknown>`) both short-
+ * circuit to "no complaint". Without those two guards the check fires on every
+ * handler whose input type is erased, which is a false positive about the
+ * HANDLER's typing rather than a finding about the source override; a check
+ * that only speaks when it actually knows the key set is the one worth having.
+ */
+export type UncoveredSourceParams<H, Meta> = [InputKeys<H>] extends [never]
+  ? never
+  : string extends InputKeys<H>
+    ? never
+    : Exclude<DeclaredSourceParams<Meta>, InputKeys<H>>
+
+// ============================================================================
 // Assembler
 // ============================================================================
 

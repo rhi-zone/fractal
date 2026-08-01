@@ -143,8 +143,20 @@ export function toHttpRoutes(node: Node): HttpRoute {
  * backwards-compatible narrowing, not a breaking change. The other variants
  * (`verb`/`response`) aren't parameterized — nothing in this task's scope
  * constructs them with a literal to preserve.
+ *
+ * `source`'s `map` is generic in `S` for the same reason, added later: a
+ * literal-preserving `http.source()` (verbs.ts) returns a directive whose map
+ * still carries each param's own key and resolved store as literal types, so a
+ * type-level walk over the directive tuple can answer "which store does param X
+ * come from" — the mechanism `op()`'s source-coverage check runs on
+ * (docs/design/typed-store-spec.md §6). The default (`SourceMap`) reproduces
+ * the previous erased field exactly.
  */
-export type HttpDirective<M extends string = string, P extends string = string> =
+export type HttpDirective<
+  M extends string = string,
+  P extends string = string,
+  S extends SourceMap = SourceMap,
+> =
   | { readonly kind: "verb"; readonly value: string }
   | { readonly kind: "method"; readonly value: M }
   | { readonly kind: "moveTo"; readonly path: P }
@@ -160,7 +172,7 @@ export type HttpDirective<M extends string = string, P extends string = string> 
       readonly inputOffsetParam?: string
       readonly inputLimitParam?: string
     }
-  | { readonly kind: "source"; readonly map: SourceMap }
+  | { readonly kind: "source"; readonly map: S }
   | { readonly kind: "validate"; readonly schema: StandardSchemaV1 }
 
 // ============================================================================
