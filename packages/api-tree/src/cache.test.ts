@@ -10,12 +10,15 @@ import { describe, expect, it, beforeEach, afterEach, spyOn } from "bun:test"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as extract from "./extract.ts"
+import { createExtractorProgram } from "./extract.ts"
 import { writeValidatorModuleCached } from "./build.ts"
 import { writeSchemaModuleCached } from "./schema-build.ts"
-import { checkCache } from "./cache.ts"
+import { checkCache, writeCacheMetadata } from "./cache.ts"
+import { computeEntryClosures } from "./reachability.ts"
 
 const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`
 const DEP_FIXTURE = `${import.meta.dir}/__fixtures__/result-reexport.fixture.ts`
+const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing.fixture.ts`
 
 const TMP_DIR = `${import.meta.dir}/__fixtures__/.cache-test-tmp`
 
@@ -178,5 +181,57 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     const source = fs.readFileSync(schemaOut, "utf8")
     expect(source).toContain("export const schemas")
     expect(source).toContain("namedType_search")
+  })
+
+  describe("writeCacheMetadata's `reachable` param — per-entry closures over a SHARED multi-root Program", () => {
+    it("recording with `reachable` tracks only that entry's own closure, not the whole shared Program's file set — touching an UNRELATED entry's dependency stays a hit", async () => {
+      const treeOut = freshOutFile("shared-tree.ts")
+      const sharingOut = freshOutFile("shared-sharing.ts")
+
+      // One Program shared across both entries — the exact shape busiless's
+      // codegen-fractal-validators.ts uses.
+      const program = createExtractorProgram([FIXTURE, SHARING_FIXTURE])
+      const closures = computeEntryClosures([FIXTURE, SHARING_FIXTURE], program)
+      const treeClosure = closures.get(path.resolve(FIXTURE))
+      const sharingClosure = closures.get(path.resolve(SHARING_FIXTURE))
+      expect(treeClosure).toBeDefined()
+      expect(sharingClosure).toBeDefined()
+
+      fs.writeFileSync(treeOut, "tree content")
+      fs.writeFileSync(sharingOut, "sharing content")
+      writeCacheMetadata(FIXTURE, treeOut, program, "tree content", undefined, treeClosure)
+      writeCacheMetadata(SHARING_FIXTURE, sharingOut, program, "sharing content", undefined, sharingClosure)
+
+      expect(checkCache(FIXTURE, treeOut).hit).toBe(true)
+      expect(checkCache(SHARING_FIXTURE, sharingOut).hit).toBe(true)
+
+      // Touch DEP_FIXTURE — reachable from FIXTURE (tree.fixture.ts) but NOT
+      // from SHARING_FIXTURE (sharing.fixture.ts never imports it, see
+      // reachability.test.ts). With the OLD coarse behavior (recording the
+      // whole shared Program's file set for every entry), this touch would
+      // invalidate BOTH entries; with per-entry closures, only the entry
+      // that actually reaches the touched file invalidates.
+      const original = fs.readFileSync(DEP_FIXTURE, "utf8")
+      try {
+        fs.writeFileSync(DEP_FIXTURE, `${original}\n// cache-test perturbation\n`)
+        expect(checkCache(FIXTURE, treeOut).hit).toBe(false)
+        expect(checkCache(SHARING_FIXTURE, sharingOut).hit).toBe(true)
+      } finally {
+        fs.writeFileSync(DEP_FIXTURE, original)
+      }
+    })
+
+    it("omitting `reachable` keeps the old behavior: the whole Program's file set is tracked", async () => {
+      const outFile = freshOutFile("no-reachable.ts")
+      const program = createExtractorProgram([FIXTURE, SHARING_FIXTURE])
+      fs.writeFileSync(outFile, "content")
+      writeCacheMetadata(FIXTURE, outFile, program, "content")
+
+      const meta = JSON.parse(fs.readFileSync(`${outFile}.cache.json`, "utf8")) as { files: Record<string, unknown> }
+      // Without `reachable`, every file in the shared Program (including
+      // sharing.fixture.ts's own unique files) is tracked against FIXTURE's
+      // cache entry — the coarse union behavior.
+      expect(Object.keys(meta.files)).toContain(path.resolve(SHARING_FIXTURE))
+    })
   })
 })

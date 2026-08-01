@@ -58,6 +58,10 @@
       "types": "./dist/cache.d.ts",
       "import": "./dist/cache.js"
     },
+    "./reachability": {
+      "types": "./dist/reachability.d.ts",
+      "import": "./dist/reachability.js"
+    },
     "./discover": {
       "types": "./dist/discover.d.ts",
       "import": "./dist/discover.js"
