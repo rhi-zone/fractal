@@ -11,8 +11,7 @@
 // falsely stayed "stale" until mtime happened to line up).
 //
 // ============================================================================
-// Key-granularity decision (open call, resolved) — READ THIS before changing
-// how `writeCacheMetadata` gets its file list.
+// Key-granularity decision — SUPERSEDED 2026-08-02, see reachability.ts.
 // ============================================================================
 //
 // The precise cache key for one entry file is "this entry file's content +
@@ -21,46 +20,38 @@
 // that entry — `program.getSourceFiles()` on a single-root Program IS
 // exactly that entry's transitive closure, no extra tracking needed.
 //
-// But a batch caller (the sibling codebase's `codegen-fractal-validators.ts`) builds ONE
+// A batch caller (the sibling codebase's `codegen-fractal-validators.ts`) builds ONE
 // shared multi-root Program across many entries specifically to avoid
 // paying a fresh Program's multi-GB cost per entry (see build.ts's
 // `buildValidatorModuleSource` doc comment for the measured before/after).
-// Recomputing a precise per-entry closure from that shared Program would
-// require either (a) building a second, throwaway single-root Program per
-// entry just to enumerate its files — defeats the whole point of sharing —
-// or (b) walking each root's `resolvedModules`/import graph by hand to
-// derive per-entry reachability from the shared Program's already-parsed
-// files. (b) is possible (`ts.Program` exposes `getSourceFile(name)` and each
-// `ts.SourceFile` carries `.resolvedModules`), but is real additional
-// complexity — a second graph-walk implementation to keep correct alongside
-// the extractor's own traversal — for a caching layer whose entire job is to
-// be cheap and boring.
+// The PRIOR design here hashed `program.getSourceFiles()` unchanged for
+// whatever Program the caller passed — precise for the single-entry path
+// (CLI `build`/`check`/`watch`, none of which share a Program), but for a
+// batch caller passing a shared multi-root Program, that file set is the
+// whole BATCH's union closure applied identically to every entry: touching
+// one slice's source invalidated all 34 tracked artifacts (17 slices ×
+// validators+schemas) even though most entries never reach the touched
+// file. That was a deliberate, documented interim tradeoff — see this
+// file's git history for the original doc block — accepted because
+// `writeCacheMetadata`'s cost wasn't the bottleneck at the time; 711dfbb4's
+// warm-check tiering fixed the actually-measured warm-path cost (stat
+// before content-hash) but left this coarse invalidation granularity in
+// place.
 //
-// DECISION: this module hashes `program.getSourceFiles()` UNCHANGED —
-// whichever Program the caller used to build. For the single-entry path
-// (`writeValidatorModule`, the CLI's `build`/`check`/`watch` commands — none
-// of which share a Program across entries), that Program is a fresh
-// single-root one, so the resulting file set IS the precise per-entry
-// closure: no precision lost. For a batch caller that passes an externally
-// shared multi-root Program, the resulting file set is the whole batch's
-// UNION closure, applied identically to every entry in the batch — the
-// documented coarse fallback the task brief names explicitly ("hashing the
-// whole shared Program's file set as one key shared by every entry in the
-// batch, trading precision for simplicity — invalidates everything on any
-// change but is trivially correct and cheap"). Chosen over (b) because: the
-// batch caller ALREADY re-derives its shared Program's root set from
-// scratch on every invocation regardless of caching (see
-// `codegen-fractal-validators.ts`'s `findEntryFiles` + `createExtractorProgram`
-// call, both unconditional), so a change anywhere in that shared closure was
-// already going to force a full re-parse of the whole batch to even LOOK for
-// what changed — the coarse key doesn't cost the batch caller a real
-// incremental-rebuild opportunity it could otherwise have had; it costs it
-// only the (already-fresh) per-entry regeneration once the shared Program
-// is rebuilt. Precise per-entry keys inside a shared batch remain future
-// work if a caller's batch grows large enough that "any file anywhere in the
-// closure invalidates everything" starts mattering in practice — nothing
-// here forecloses adding it later, since `withCache` below takes a
-// caller-supplied Program either way.
+// RESOLVED: `reachability.ts`'s `computeEntryClosures` does the per-entry
+// module-graph walk that decision's option "(b)" named and deferred —
+// starting from `ts.SourceFile.imports` (which TypeScript's own parser
+// already populates per file, so no hand-rolled import-statement AST walker
+// is needed) and `ts.resolveModuleName` against a shared
+// `ts.ModuleResolutionCache`, memoized once across the whole batch so
+// computing every entry's closure costs O(files in the union), not
+// O(entries × files). `writeCacheMetadata` below now accepts an optional
+// `reachable` file-path set; when given, only files in that set are hashed
+// and recorded, instead of every file `program.getSourceFiles()` returns.
+// Omitting `reachable` keeps the old (single-entry-precise,
+// batch-union-coarse) behavior — the CLI's single-entry callers don't need
+// to change, since for a fresh single-root Program the two are identical
+// anyway.
 //
 // One correctness note this key shape depends on: a file's identity is its
 // resolved path. Adding a NEW file to an entry's closure (a fresh import)
@@ -196,7 +187,7 @@ function resolvePackageVersion(pkgName: string): string {
  * extraction-time helper; this is a build-cache-time concern with its own,
  * looser correctness bar: false negatives here just mean "track one file
  * that turns out not to matter", never wrong output). */
-function isTsBuiltinLibFile(fileName: string): boolean {
+export function isTsBuiltinLibFile(fileName: string): boolean {
   return /[\\/]typescript[\\/]lib[\\/]lib\.[a-z0-9.]+\.d\.ts$/i.test(fileName)
 }
 
@@ -312,11 +303,24 @@ export function checkCache(entryFile: string, outFile: string, opts?: CacheLocat
 }
 
 /**
- * Record cache metadata after a successful build: `program`'s current
- * source-file set (see the key-granularity decision at the top of this
- * file for what that set precisely means depending on whether `program` is
- * a fresh single-root Program or an externally shared multi-root one) plus
+ * Record cache metadata after a successful build: by default, `program`'s
+ * current source-file set — the precise per-entry closure for a fresh
+ * single-root Program, or the whole batch's union closure for an externally
+ * shared multi-root one (see the key-granularity doc block above) — plus
  * the toolchain-version signals and the exact bytes written to `outFile`.
+ *
+ * Pass `reachable` (a set of resolved absolute file paths — see
+ * `reachability.ts`'s `computeEntryClosures`) to record only THAT file set
+ * instead: the precise per-entry closure even when `program` is a shared
+ * multi-root Program spanning many entries. Every path in `reachable` must
+ * name a file `program` actually has parsed (i.e. must appear in
+ * `program.getSourceFiles()`) — a path that doesn't is silently skipped
+ * (not an error: `computeEntryClosures` is derived from the same Program by
+ * construction, so a mismatch here would mean a caller passed a
+ * `reachable` set computed against a DIFFERENT Program than `program`,
+ * which is a caller bug worth surfacing as "this file never got tracked",
+ * not a thrown exception at write time).
+ *
  * Uses each source file's already-parsed in-memory text
  * (`sourceFile.getFullText()`) rather than re-reading from disk — the
  * Program already paid that I/O, no reason to pay it twice.
@@ -327,9 +331,14 @@ export function writeCacheMetadata(
   program: ts.Program,
   writtenContent: string,
   opts?: CacheLocationOptions,
+  reachable?: ReadonlySet<string>,
 ): void {
   const files: Record<string, TrackedFileEntry> = {}
-  for (const sourceFile of program.getSourceFiles()) {
+  const sourceFiles =
+    reachable === undefined
+      ? program.getSourceFiles()
+      : program.getSourceFiles().filter((sourceFile) => reachable.has(path.resolve(sourceFile.fileName)))
+  for (const sourceFile of sourceFiles) {
     if (isTsBuiltinLibFile(sourceFile.fileName)) continue
     // `size`/`mtimeMs` come from a fresh `fs.statSync`, not the Program's
     // already-parsed text — the Program doesn't carry filesystem metadata,
@@ -383,6 +392,13 @@ export type CachedBuildOutcome<T> =
  * successful `build`, keyed to whatever bytes `build` returned, so as long
  * as the caller writes those exact same bytes to `outFile`, cache and disk
  * stay consistent.
+ *
+ * `options.reachable`, when given, is passed straight through to
+ * `writeCacheMetadata` — a batch caller sharing one multi-root `program`
+ * across many entries (see `reachability.ts`'s `computeEntryClosures`) uses
+ * this to record each entry's own precise closure instead of the whole
+ * shared Program's file set. Irrelevant (and safe to omit) for the
+ * single-Program-per-entry callers this package's own CLI uses.
  */
 export function withCache<T extends string>(
   entryFile: string,
@@ -392,6 +408,7 @@ export function withCache<T extends string>(
     readonly program?: ts.Program
     readonly force?: boolean
     readonly createProgram: (entryFile: string) => ts.Program
+    readonly reachable?: ReadonlySet<string>
   } & CacheLocationOptions,
 ): CachedBuildOutcome<T> {
   if (!options.force) {
@@ -400,6 +417,6 @@ export function withCache<T extends string>(
   }
   const program = options.program ?? options.createProgram(entryFile)
   const result = build(program)
-  writeCacheMetadata(entryFile, outFile, program, result, options)
+  writeCacheMetadata(entryFile, outFile, program, result, options, options.reachable)
   return { status: "built", result, program }
 }
