@@ -353,19 +353,88 @@ function nameFromPath(path: string, verb: string): string {
 }
 
 // ============================================================================
+// buildPathMap — handler -> tree-relative "/"-joined PATH, for schema
+// correlation (as opposed to buildNameMap's underscore-joined codegen NAME,
+// used for operationId defaults) — see extractRouteSchemas's doc
+// (api-tree/tree.ts) for why these are two genuinely different keyings, not
+// a separator swap of the same string: a bare tool name is unique only
+// within one standalone tree; a tree path stays unique once several files'
+// trees are nested as branches under one composed root, because each
+// file's own path is still relative to ITS OWN subtree, and merging several
+// files' SchemaMaps (each produced by extractRouteSchemas) into one object
+// for a composed root's toOpenApi call only works if the correlation done
+// here uses that SAME path-keyed convention, not the name-keyed one.
+// ============================================================================
+
+function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string>): void {
+  for (const [key, child] of Object.entries(n.children ?? {})) {
+    const seg = [...prefix, key]
+    if (isLeaf(child)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      out.set(child.handler!, seg.join("/"))
+    } else {
+      pathLeaves(child, seg, out)
+    }
+  }
+  if (n.fallback !== undefined) {
+    // `:name` (colon-prefixed), matching extractRouteTypeRefs's own
+    // fallback path segment (api-tree/tree.ts) — the SAME convention
+    // `wrapValidators`'s runtime `path.join("/")` lookup key already uses,
+    // deliberately different from buildNameMap's bare-name fallback segment
+    // (that one feeds operationId defaults, not schema/validator lookup).
+    const seg = [...prefix, `:${n.fallback.name}`]
+    if (isLeaf(n.fallback.subtree)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      out.set(n.fallback.subtree.handler!, seg.join("/"))
+    } else {
+      pathLeaves(n.fallback.subtree, seg, out)
+    }
+  }
+}
+
+/** Build the handler → tree-relative "/"-joined path map for a `Node` tree — see module doc above. */
+function buildPathMap(n: Node): Map<Handler, string> {
+  const out = new Map<Handler, string>()
+  pathLeaves(n, [], out)
+  return out
+}
+
+// ============================================================================
 // listRoutes — public API: HttpRoute walk, one entry per (path, method)
 // ============================================================================
 
 /** One `(path, method)` leaf produced by walking an `HttpRoute` tree — see `listRoutes`. */
 export type RouteEntry = {
-  /** Underscore-joined name (schema-map lookup key + default operationId source) — see `nameFromPath`. */
+  /** Underscore-joined name (default operationId source) — see `nameFromPath`. */
   readonly codenName: string
+  /**
+   * Tree-relative "/"-joined path (schema-map lookup key when the schema
+   * map was built via `extractRouteSchemas`, api-tree/tree.ts) — see
+   * `buildPathMap`'s module doc for why this is a DIFFERENT key from
+   * `codenName`, not the same string with a different separator. Falls
+   * back to a path-derived `"/"`-joined key (mirroring `nameFromPath`'s own
+   * fallback shape) when `pathMap` is omitted or has no entry for a given
+   * handler, the same degrade `codenName` already has for `names`.
+   */
+  readonly schemaKey: string
   /** HTTP path string, e.g. `/books/{bookId}/details`. */
   readonly path: string
   /** HTTP method, in whatever case the route tree's `methods` keys use (uppercase for trees built via `httpProjection`). */
   readonly verb: string
   /** The method entry's own meta bag. */
   readonly meta: LeafMeta & OpenApiLeafMeta
+}
+
+/** Fallback "/"-joined path+verb key, for handlers absent from a `pathMap` — mirrors `nameFromPath`'s shape with `/` instead of `_`. */
+function pathKeyFromPath(path: string, verb: string): string {
+  const base = path === "/"
+    ? ""
+    : path
+        .split("/")
+        .filter((s) => s.length > 0)
+        .map((s) => (s.startsWith("{") && s.endsWith("}") ? `:${s.slice(1, -1)}` : s))
+        .join("/")
+  return base.length > 0 ? `${base}/${verb.toLowerCase()}` : verb.toLowerCase()
 }
 
 /**
@@ -386,28 +455,33 @@ export type RouteEntry = {
  * original `Node` tree (see `toOpenApi`'s internal `buildNameMap`) to recover
  * conventional dotted names.
  *
- * @param route - The (already rewritten) HttpRoute tree to walk.
- * @param path  - Path prefix accumulated so far; omit at the top-level call.
- * @param names - Optional handler → codegen-name map for `codenName`.
+ * @param route   - The (already rewritten) HttpRoute tree to walk.
+ * @param path    - Path prefix accumulated so far; omit at the top-level call.
+ * @param names   - Optional handler → codegen-name map for `codenName`.
+ * @param pathMap - Optional handler → tree-path map for `schemaKey` (see `buildPathMap`).
  */
 export function listRoutes(
   route: HttpRoute,
   path = "",
   names?: ReadonlyMap<Handler, string>,
+  pathMap?: ReadonlyMap<Handler, string>,
 ): RouteEntry[] {
   const out: RouteEntry[] = []
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
     const codenName = names?.get(entry.handler) ?? nameFromPath(path === "" ? "/" : path, verb)
-    out.push({ codenName, path: path === "" ? "/" : path, verb, meta: entry.meta })
+    const schemaKey = pathMap?.get(entry.handler) ?? pathKeyFromPath(path === "" ? "/" : path, verb)
+    out.push({ codenName, schemaKey, path: path === "" ? "/" : path, verb, meta: entry.meta })
   }
 
   for (const [key, child] of Object.entries(route.children ?? {})) {
-    out.push(...listRoutes(child, `${path}/${key}`, names))
+    out.push(...listRoutes(child, `${path}/${key}`, names, pathMap))
   }
 
   if (route.fallback !== undefined) {
-    out.push(...listRoutes(route.fallback.subtree, `${path}/{${route.fallback.name}}`, names))
+    out.push(
+      ...listRoutes(route.fallback.subtree, `${path}/{${route.fallback.name}}`, names, pathMap),
+    )
   }
 
   return out
@@ -444,7 +518,7 @@ export function listRoutes(
  * @param opts  - Options: title, version, sourceFile, schemas.
  */
 export async function toOpenApiFromRoute(route: HttpRoute, opts: OpenApiOpts = {}): Promise<OpenApiDoc> {
-  return buildDoc(route, opts, undefined)
+  return buildDoc(route, opts, undefined, undefined)
 }
 
 // ============================================================================
@@ -466,7 +540,8 @@ export async function toOpenApiFromRoute(route: HttpRoute, opts: OpenApiOpts = {
 export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenApiDoc> {
   const route = httpProjection(n)
   const names = buildNameMap(n)
-  return buildDoc(route, opts, names)
+  const pathMap = buildPathMap(n)
+  return buildDoc(route, opts, names, pathMap)
 }
 
 // ============================================================================
@@ -477,18 +552,23 @@ async function buildDoc(
   route: HttpRoute,
   opts: OpenApiOpts,
   names: ReadonlyMap<Handler, string> | undefined,
+  pathMap: ReadonlyMap<Handler, string> | undefined,
 ): Promise<OpenApiDoc> {
   const title = opts.title ?? "API"
   const version = opts.version ?? "0.1.0"
 
-  // Resolve schema map: caller-supplied > sourceFile > empty
+  // Resolve schema map: caller-supplied > sourceFile > empty. The
+  // auto-discovery path uses extractRouteSchemas (path-keyed), matching
+  // this module's own preferred schemaKey lookup above — a caller-supplied
+  // `opts.schemas` may still be either convention (or a merge of several
+  // files' extractRouteSchemas output), handled by the fallback chain above.
   let schemas: SchemaMap = opts.schemas ?? {}
   if (Object.keys(schemas).length === 0 && opts.sourceFile !== undefined) {
-    const { extractToolSchemas } = await import("@rhi-zone/fractal-api-tree/tree")
-    schemas = extractToolSchemas(opts.sourceFile)
+    const { extractRouteSchemas } = await import("@rhi-zone/fractal-api-tree/tree")
+    schemas = extractRouteSchemas(opts.sourceFile)
   }
 
-  const entries = listRoutes(route, "", names)
+  const entries = listRoutes(route, "", names, pathMap)
 
   // Security schemes: merged from every node in the tree (see
   // collectSecuritySchemes doc above). Only emitted on the doc when at least
@@ -505,10 +585,16 @@ async function buildDoc(
   const paths: Record<string, Record<string, OpenApiOperation>> = {}
 
   for (const entry of entries) {
-    const { codenName, path, verb, meta } = entry
+    const { codenName, schemaKey, path, verb, meta } = entry
     const method = verb.toLowerCase()
     const openApiMeta = getOpenApiMeta(meta)
-    const toolSchema = schemas[codenName]
+    // Path-keyed lookup first (schemas built via extractRouteSchemas — the
+    // convention that stays unique under composition, buildPathMap's module
+    // doc), falling back to the legacy name-keyed lookup (schemas built via
+    // extractToolSchemas, or hand-authored with that convention) — a pure
+    // fallback CHAIN, not a replacement, so every existing caller passing a
+    // name-keyed SchemaMap keeps resolving exactly as before.
+    const toolSchema = schemas[schemaKey] ?? schemas[codenName]
 
     // Derive operationId from meta.openapi.operationId, or from the codegen name
     const operationId = typeof openApiMeta.operationId === "string"

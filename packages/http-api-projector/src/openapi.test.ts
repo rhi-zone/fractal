@@ -8,6 +8,8 @@ import { listRoutes, mergeOpenApiDocs, toOpenApi, type OpenApiDoc } from "./open
 import { httpRoute, type RouteLeafMeta } from "./route.ts"
 import { api } from "../../../examples/library-api/src/tree.ts"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
+import { api as apiC, op } from "@rhi-zone/fractal-api-tree/node"
+import { http } from "./verbs.ts"
 
 const treePath = new URL(
   "../../../examples/library-api/src/tree.ts",
@@ -590,5 +592,70 @@ describe("mergeOpenApiDocs", () => {
       paths: { "/books": { get: { operationId: "books.list", responses: { "200": { description: "ok", content: { "application/json": { schema: {} } } } } } } },
     })
     expect(mergeOpenApiDocs([a])).toEqual(a)
+  })
+})
+
+describe("schema correlation under composition — path-keyed schemas resolve correctly where bare-name-keyed schemas would collide", () => {
+  // Two "slices" that each independently declare a leaf literally named
+  // `list` at their own tree root — exactly the shape busiless's
+  // one-root-fractal-tree migration found colliding across 17 real slices
+  // (docs/decisions/one-root-fractal-tree-2026-08-02.md in the busiless
+  // repo): a naive merge of two `extractToolSchemas`-style (bare-name-keyed)
+  // SchemaMaps would have one slice's `list` schema silently clobber the
+  // other's. A path-keyed SchemaMap (the `extractRouteSchemas` shape) does
+  // not collide, because each slice's own branch position is part of the key.
+  const sliceA = apiC({
+    list: op(() => ({ from: "A" }), http.get),
+  })
+  const sliceB = apiC({
+    list: op(() => ({ from: "B" }), http.get),
+  })
+  const composed = apiC({ a: sliceA, b: sliceB })
+
+  // `outputSchema` is what actually surfaces into the doc (the 200 response
+  // body schema) — `SchemaMap`'s own `description` field is a codegen/MCP
+  // concern, never read by `buildDoc` into the OpenAPI operation itself, so
+  // the marker these tests distinguish on has to be the schema content.
+  function marker200(doc: OpenApiDoc, path: string): unknown {
+    const schema = doc.paths[path]?.get?.responses?.["200"]?.content?.["application/json"]?.schema
+    return (schema as Record<string, unknown> | undefined)?.["title"]
+  }
+
+  it("bare-name-keyed schemas neither collide NOR correlate once composed — both leaves silently degrade to the placeholder schema", async () => {
+    // Simulates today's (pre-fix) merge story: two per-FILE-relative
+    // extractToolSchemas outputs (each independently keyed "list", relative
+    // to that file's OWN un-composed tree root) object-spread into one
+    // map — the spread itself already collapses to a single "list" entry
+    // (busiless found 17-of-141 such collisions across its real 17 files).
+    // Demonstrated here against the COMPOSED root's OWN correlation: neither
+    // `buildNameMap` ("a_list"/"b_list") nor `buildPathMap` ("a/list"/
+    // "b/list") ever produces bare "list" for a leaf nested under a branch,
+    // so a bare-name-keyed map doesn't even reach the wrong entry — it
+    // reaches NOTHING, silently degrading every composed leaf to the
+    // `{ type: "object" }` placeholder. This is the failure this spec's own
+    // note calls out ("silently drops 17 slices' worth of OpenAPI schema
+    // entries") — worse than a same-key collision, and exactly why merging
+    // has to happen on a key convention that a composed root actually
+    // produces (schemaKey / buildPathMap), not the bare per-file name.
+    const bareNameKeyedSchemas = {
+      list: { inputSchema: { type: "object" as const }, outputSchema: { type: "object" as const, title: "A" } },
+    }
+    const doc = await toOpenApi(composed, {
+      title: "t",
+      version: "1",
+      schemas: bareNameKeyedSchemas,
+    })
+    expect(marker200(doc, "/a/list")).toBeUndefined();
+    expect(marker200(doc, "/b/list")).toBeUndefined();
+  })
+
+  it("path-keyed schemas (schemaKey / buildPathMap) resolve each slice's `list` independently, no collision", async () => {
+    const pathKeyedSchemas = {
+      "a/list": { inputSchema: { type: "object" as const }, outputSchema: { type: "object" as const, title: "A" } },
+      "b/list": { inputSchema: { type: "object" as const }, outputSchema: { type: "object" as const, title: "B" } },
+    }
+    const doc = await toOpenApi(composed, { title: "t", version: "1", schemas: pathKeyedSchemas })
+    expect(marker200(doc, "/a/list")).toBe("A")
+    expect(marker200(doc, "/b/list")).toBe("B")
   })
 })
