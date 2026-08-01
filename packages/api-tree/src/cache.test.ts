@@ -6,9 +6,10 @@
 // dependency the extractor reads, not just the entry file" is proven
 // against genuine multi-file extraction, not a synthetic closure list).
 
-import { describe, expect, it, beforeEach, afterEach } from "bun:test"
+import { describe, expect, it, beforeEach, afterEach, spyOn } from "bun:test"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import * as extract from "./extract.ts"
 import { writeValidatorModuleCached } from "./build.ts"
 import { writeSchemaModuleCached } from "./schema-build.ts"
 import { checkCache } from "./cache.ts"
@@ -118,6 +119,48 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     expect(fs.existsSync(`${outFile}.cache.json`)).toBe(false)
     expect(fs.existsSync(path.join(cacheDir, `${path.basename(outFile)}.cache.json`))).toBe(true)
     expect((await writeValidatorModuleCached(FIXTURE, outFile, { cacheDir })).status).toBe("hit")
+  })
+
+  it("a warm hit never constructs a ts.Program — checkCache re-validates off recorded size/mtime/hash only", async () => {
+    const outFile = freshOutFile("v8.ts")
+    await writeValidatorModuleCached(FIXTURE, outFile)
+
+    // Spy on `createExtractorProgram` (extract.ts) — build.ts's ONLY
+    // Program-construction entry point (`buildValidatorModuleCached`'s
+    // `createProgram` option, see build.ts). A warm `checkCache`/cached-build
+    // call must never reach it: the whole point of the tiered stat/hash
+    // re-validation (see cache.ts's warm-check-cost doc block) is to decide
+    // "hit" without ever needing a Program.
+    const createProgramSpy = spyOn(extract, "createExtractorProgram")
+    try {
+      const check = checkCache(FIXTURE, outFile)
+      expect(check.hit).toBe(true)
+      expect(createProgramSpy).not.toHaveBeenCalled()
+
+      const outcome = await writeValidatorModuleCached(FIXTURE, outFile)
+      expect(outcome.status).toBe("hit")
+      expect(createProgramSpy).not.toHaveBeenCalled()
+    } finally {
+      createProgramSpy.mockRestore()
+    }
+  })
+
+  it("touching a tracked file's mtime without changing its content still resolves to a hit (content-hash fallback)", async () => {
+    const outFile = freshOutFile("v9.ts")
+    await writeValidatorModuleCached(FIXTURE, outFile)
+
+    // Bump DEP_FIXTURE's mtime (and only its mtime — content unchanged) far
+    // enough into the future that it can't collide with the recorded value
+    // under any filesystem's timestamp resolution, so the fast size/mtime
+    // path is guaranteed to miss and fall through to the content-hash check.
+    const future = new Date(Date.now() + 60_000)
+    fs.utimesSync(DEP_FIXTURE, future, future)
+
+    const check = checkCache(FIXTURE, outFile)
+    expect(check.hit).toBe(true)
+
+    const outcome = await writeValidatorModuleCached(FIXTURE, outFile)
+    expect(outcome.status).toBe("hit")
   })
 
   it("schema-build.ts's writeSchemaModuleCached uses the SAME cache contract, independently of the validator module's cache entry", async () => {
