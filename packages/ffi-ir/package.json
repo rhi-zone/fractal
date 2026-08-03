@@ -65,6 +65,10 @@
     "./jni": {
       "types": "./dist/jni.d.ts",
       "import": "./dist/jni.js"
+    },
+    "./ctypes": {
+      "types": "./dist/ctypes.d.ts",
+      "import": "./dist/ctypes.js"
     }
   },
   "files": [
