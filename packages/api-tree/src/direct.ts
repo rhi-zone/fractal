@@ -21,11 +21,6 @@
 // object it hands the handler (accumulated slugs first, caller-supplied
 // fields win — same precedence path params take in `assemble`).
 //
-// A node carrying BOTH a handler and children (an uncommon but valid Node
-// shape, see node.ts) becomes a callable function with the child API
-// members attached as properties on it — same pattern the client uses for a
-// route position with co-located methods and children.
-//
 // See:
 //   packages/api-tree/src/node.ts                 — Node, Handler, fallback, isLeaf
 //   packages/http-api-projector/src/client.ts     — the HTTP-backed analogue
@@ -36,47 +31,49 @@ import type { Handler, Node } from "./node.ts"
 
 // A leaf's callable form (`(input?) => Promise<unknown>`) and a branch's
 // object form are structurally incompatible as a TS union for property
-// access (`api.books.list()` needs `AnyApi` to be indexable at every level,
-// including the callable-with-attached-children case) — same shape/tradeoff
-// as `AnyClient` in http-api-projector's client.ts. Callers index into it dynamically;
-// internal builders cast to `AnyApi` at each return site (mirrors
-// `buildClientNode`'s own `as AnyClient` casts).
+// access (`api.books.list()` needs `AnyApi` to be indexable at every level)
+// — same shape/tradeoff as `AnyClient` in http-api-projector's client.ts.
+// Callers index into it dynamically; internal builders cast to `AnyApi` at
+// each return site (mirrors `buildClientNode`'s own `as AnyClient` casts).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyApi = Record<string, any>
 
 /**
  * The fully typed shape of `createDirectApi(tree)`, computed recursively
- * from a `Node` tree's own type. Mirrors the three Node shapes (leaf /
- * branch / both) and the `fallback` capture:
+ * from a `Node` tree's own type. Mirrors the shapes `op()`/`api()` can
+ * actually produce — a node is a leaf (handler, from `op()`) XOR a branch
+ * (children, from `api()`), never both — plus the optional `fallback`
+ * capture, which can accompany either:
  *
  * - Callable part: present only when `N["handler"]` is a concrete function
  *   type (not the optional-absent case) — the handler's parameters pass
  *   through unchanged, its return type is wrapped in `Promise<Awaited<R>>`
  *   so an already-async handler doesn't double-wrap.
- * - Children part: each child key maps to `DirectApi` of that child's own
- *   node type, recursively.
+ * - Children part: only reached when `N` has no callable part; each child
+ *   key maps to `DirectApi` of that child's own node type, recursively.
  * - Fallback part: `fallback.name`'s literal string becomes the key, whose
  *   value is `(slugValue: string) => DirectApi<fallback.subtree>`.
  *
- * The three parts intersect (`&`) rather than union, matching `buildApi`'s
- * runtime behavior for a node carrying more than one part (e.g. a leaf with
- * children becomes callable AND has properties).
+ * The callable and children parts are mutually exclusive (a leaf/branch
+ * choice, not an intersection) — `op()`'s return type never carries a
+ * required `children`, and `api()`'s never carries a required `handler`, so
+ * no real tree node can be both callable and have properties attached. The
+ * fallback part intersects with whichever of the two applies.
  */
 export type DirectApi<N extends Node, Slugs extends string = never> =
-  // Callable part — subtract accumulated slug keys from handler input
   (N extends { readonly handler: infer H extends Handler }
-    ? H extends (input: infer I) => infer R
+    ? // Callable part — subtract accumulated slug keys from handler input
+      H extends (input: infer I) => infer R
       ? keyof Omit<I, Slugs> extends never
         ? () => Promise<Awaited<R>>
         : (input: Omit<I, Slugs>) => Promise<Awaited<R>>
       : H extends () => infer R
         ? () => Promise<Awaited<R>>
         : never
-    : unknown)
-  // Children part — pass slugs through
-  & (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-    ? { readonly [K in keyof C]: DirectApi<C[K], Slugs> }
-    : unknown)
+    : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+      ? // Children part — pass slugs through
+        { readonly [K in keyof C]: DirectApi<C[K], Slugs> }
+      : unknown)
   // Fallback part — accumulate the fallback name into Slugs for the subtree
   & (N extends { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
     ? { readonly [K in Name]: (slugValue: string) => DirectApi<S, Slugs | Name> }
@@ -139,8 +136,6 @@ function buildApi(tree: Node, slugs: Slugs): AnyApi {
  *
  * - Leaf (handler, no children/fallback): an async callable.
  * - Branch (children and/or fallback, no handler): a nested object.
- * - Both handler and children: a callable function with children attached
- *   as properties on it.
  * - `fallback`: a `(slugValue: string) => subApi` function keyed by
  *   `fallback.name`, mirroring the client's wildcard-capture handling. The
  *   slug value is threaded down and merged into every descendant leaf's

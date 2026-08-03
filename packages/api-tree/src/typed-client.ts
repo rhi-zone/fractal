@@ -12,9 +12,10 @@
 // the client (see packages/http-api-projector/src/client.ts's `createClient`,
 // which instantiates `TypedClient<N, CallOptions>`).
 //
-// Mirrors `DirectApi`'s three Node shapes (leaf / branch / both) and its
-// `Slugs` accumulator for fallback-captured params — see that module's doc
-// for the full rationale; repeated here only where the two actually differ.
+// Mirrors `DirectApi`'s leaf/branch shape (mutually exclusive, matching what
+// `op()`/`api()` can actually produce) plus fallback, and its `Slugs`
+// accumulator for fallback-captured params — see that module's doc for the
+// full rationale; repeated here only where the two actually differ.
 //
 // See:
 //   packages/api-tree/src/direct.ts               — DirectApi<N>, the in-process analogue
@@ -42,8 +43,9 @@ import type { Handler, Node } from "./node.ts"
  * - Fallback part: `fallback.name`'s literal string becomes the key, whose
  *   value is `(slugValue: string) => TypedClient<subtree, CallOpts, Slugs | Name>`.
  *
- * The three parts intersect (`&`), matching a co-located node (handler AND
- * children) becoming callable AND carrying child members.
+ * The callable and children parts are mutually exclusive (a leaf/branch
+ * choice, not an intersection) — see `DirectApi`'s doc for why. The
+ * fallback part intersects with whichever of the two applies.
  *
  * `CallOpts` defaults to `never`: with no projector-specific options type
  * supplied, every leaf's optional second parameter can only ever be
@@ -52,18 +54,17 @@ import type { Handler, Node } from "./node.ts"
  * arbitrary junk as a second argument.
  */
 export type TypedClient<N extends Node, CallOpts = never, Slugs extends string = never> =
-  // Callable part — subtract accumulated slug keys from handler input
   (N extends { readonly handler: infer H extends Handler }
-    ? H extends (input: infer I) => infer R
+    ? // Callable part — subtract accumulated slug keys from handler input
+      H extends (input: infer I) => infer R
       ? keyof Omit<I, Slugs> extends never
         ? (input?: undefined, opts?: CallOpts) => Promise<Awaited<R>>
         : (input: Omit<I, Slugs>, opts?: CallOpts) => Promise<Awaited<R>>
       : never
-    : unknown)
-  // Children part — pass CallOpts/slugs through
-  & (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-    ? { readonly [K in keyof C]: TypedClient<C[K], CallOpts, Slugs> }
-    : unknown)
+    : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+      ? // Children part — pass CallOpts/slugs through
+        { readonly [K in keyof C]: TypedClient<C[K], CallOpts, Slugs> }
+      : unknown)
   // Fallback part — accumulate the fallback name into Slugs for the subtree
   & (N extends { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
     ? { readonly [K in Name]: (slugValue: string) => TypedClient<S, CallOpts, Slugs | Name> }

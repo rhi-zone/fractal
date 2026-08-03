@@ -123,22 +123,4 @@ describe("TypedClient type safety", () => {
       (input?: undefined, opts?: TestCallOpts) => Promise<{ itemId: string }>
     >()
   })
-
-  it("a node with both a handler and children is callable AND has typed child properties", () => {
-    const tree = api({
-      root: {
-        handler: (input: { n: number }) => input.n + 1,
-        children: {
-          double: op((input: { n: number }) => input.n * 2),
-        },
-        meta: {},
-      },
-    })
-    type Client = TypedClient<typeof tree, TestCallOpts>
-    expectTypeOf<Client["root"]>().toEqualTypeOf<
-      ((input: { n: number }, opts?: TestCallOpts) => Promise<number>) & {
-        readonly double: (input: { n: number }, opts?: TestCallOpts) => Promise<number>
-      }
-    >()
-  })
 })
