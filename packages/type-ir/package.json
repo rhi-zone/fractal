@@ -280,6 +280,14 @@
       "types": "./src/rust-serde.ts",
       "import": "./src/rust-serde.ts"
     },
+    "./gleam": {
+      "types": "./src/gleam-native.ts",
+      "import": "./src/gleam-native.ts"
+    },
+    "./gleam-native": {
+      "types": "./src/gleam-native.ts",
+      "import": "./src/gleam-native.ts"
+    },
     "./ruby-sorbet": {
       "types": "./src/ruby-sorbet.ts",
       "import": "./src/ruby-sorbet.ts"
