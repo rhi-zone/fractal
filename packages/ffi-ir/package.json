@@ -61,6 +61,10 @@
     "./dotnet": {
       "types": "./dist/dotnet.d.ts",
       "import": "./dist/dotnet.js"
+    },
+    "./jni": {
+      "types": "./dist/jni.d.ts",
+      "import": "./dist/jni.js"
     }
   },
   "files": [
