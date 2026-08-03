@@ -218,8 +218,18 @@ describe("createClientFromRoute", () => {
     const route = httpProjection(api)
     const client = createClientFromRoute(route, { baseUrl: "http://localhost", fetch: createFetch(api) })
 
-    await client.books.add({ title: "Route Test", author: "Someone", genre: "Test" })
-    const books = await client.books.list() as Array<{ title: string }>
+    // Non-null assertions below: `route` is statically the plain, erased
+    // `HttpRoute` (httpProjection's own declared return type includes
+    // `applyMoveTo`, which is deliberately non-generic — see client.ts's
+    // `AnyClient`/`RouteClient` doc), so `createClientFromRoute` returns the
+    // sound-but-unnamed `AnyClient` here, whose index signature (like every
+    // other index signature in this codebase, under `noUncheckedIndexedAccess`)
+    // types each key as possibly absent — same convention as `route.methods![...]!`
+    // elsewhere in this package.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    await client.books!.add!({ title: "Route Test", author: "Someone", genre: "Test" })
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const books = await client.books!.list!() as Array<{ title: string }>
     expect(books.map((b) => b.title)).toContain("Route Test")
   })
 
@@ -228,13 +238,15 @@ describe("createClientFromRoute", () => {
     const serverFetch = createFetch(api)
     const client = createClientFromRoute(route, { baseUrl: "http://localhost", fetch: serverFetch })
 
-    const created = await client.books.add({
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const created = await client.books!.add!({
       title: "Verb Named",
       author: "Someone",
       genre: "Test",
     }) as { id: string }
 
-    const sub = client.books.bookId(created.id) as Record<string, unknown>
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const sub = client.books!.bookId!(created.id) as Record<string, unknown>
     expect(typeof sub.get).toBe("function")
     expect(typeof sub.put).toBe("function")
     expect(typeof sub.delete).toBe("function")
