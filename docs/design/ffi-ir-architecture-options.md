@@ -790,10 +790,16 @@ itself contestable and downstream of Forks A-C:
 
 ---
 
-## 5. Target inventory: LuaJIT/Deno/Bun/JNI/P-Invoke/C++/Go
+## 5. Target inventory: LuaJIT/Deno/Bun/JNI/P-Invoke/C++/Go/Rust
 
 Prompted by the user expanding scope to "comprehensive ffi-gen" and naming seven
-additional candidate targets. This section answers one narrow, factual question per
+additional candidate targets (items 1-7 below). Item 8 (Rust as consumer) was added
+in a later correction pass: the original C++ entry (item 6) had answered a
+different question than this section asks — "can C++ *expose* itself via a stable
+ABI" rather than "does generated C++ *consume* a plain C ABI" — and was rewritten
+in place; Rust-as-consumer was entirely missing from the original inventory (which
+only covered Rust-as-source, `wasm-bindgen.ts`) and is added here as a new entry.
+This section answers one narrow, factual question per
 target — **does it consume a plain, ordinary C ABI dynamic library (the shape a C
 compiler produces from `extern "C"`, no name mangling, no special binary format), or
 does it require its own non-C-ABI-shaped glue/marshaling layer?** — sourced from
@@ -877,25 +883,55 @@ library needs nothing JNI-shaped, and the .NET-side attributes exist to tell the
 how to convert its own managed representations at the boundary, not to describe a
 non-C-ABI target shape.
 
-**6. C++ FFI.**
-[VERIFIED-EXTERNAL: search results including
-oracle.com/technical-resources/articles/it-infrastructure/stable-cplusplus-abi.html
-and docs.rs/cxx, fetched 2026-08-03] — "C is the only de facto ABI-stable lingua
-franca," and name mangling is itself part of the C++ ABI (there is no single,
-cross-compiler-stable C++ ABI covering mangling, struct/class layout for non-POD
-types, or vtable layout). The documented, standard answer is `extern "C"`: "C++ has
-always supported a way to publish an API with a stable binary ABI by resorting to
-the C subset of C++ via `extern "C"`." Tooling confirms this is the actual state of
-practice rather than a workaround of last resort: `cxx` (Rust↔C++ bridging) is
-explicitly framed relative to this — "CXX is a lower level tool than bindgen or
-cbindgen and can be thought of as a replacement for the concept of extern "C"
-signatures," generating shims specifically so hand-written `extern "C"` boilerplate
-isn't needed, not because C++'s own ABI became stable. **Plain-C-ABI consumer: no**
-for arbitrary C++ — "C++ FFI" in practice means exposing a C-compatible subset
-(`extern "C"` functions, POD-layout types) of a C++ API, which is then indistinguishable
-from item's-1-3's plain-C-ABI case once exposed that way; calling into arbitrary
-C++ (templates, overloads, non-POD classes, exceptions across the boundary) directly
-is not a solved, portable problem across compilers/platforms.
+**6. C++ as a consumer of a plain C ABI (idiomatic wrapper-class codegen).**
+This entry was originally scoped backwards — it answered "can arbitrary C++ *expose
+itself* via a stable ABI," which is the wrong direction for this section's actual
+question (item 4's framing: does the target *consume* a plain C ABI library, the
+same direction as LuaJIT/Deno/Bun/cgo/P-Invoke above). The C++-ABI-instability fact
+from the original research is still correct background and is kept: [VERIFIED-
+EXTERNAL: oracle.com/technical-resources/articles/it-infrastructure/stable-
+cplusplus-abi.html and docs.rs/cxx, fetched 2026-08-03] "C is the only de facto
+ABI-stable lingua franca," and name mangling, non-POD struct/class layout, and
+vtable layout are all part of the C++ ABI with no single cross-compiler-stable
+answer — the documented, standard answer for *exposing* a C++ API is `extern "C"`,
+at which point it degenerates to the plain-C-ABI case (item's-1-3 shape). That fact
+answers a different question than the one this section asks, though: the actual
+target-inventory question for C++ is whether generated idiomatic C++ **consumer**
+code — a hand-shaped-looking RAII wrapper class whose constructor calls a C init
+function and whose destructor calls the matching C free function, wrapping an
+opaque pointer or POD struct — can be produced *from* a C-ABI-shaped type-ir
+projection, the same direction as bindgen-for-Rust (item 8 below) or this section's
+loader-stub pattern.
+[VERIFIED-EXTERNAL: github.com/mozilla/cbindgen/blob/main/docs.md, re-checked for
+C++-mode output specifically, fetched 2026-08-03] cbindgen's own C++ language mode
+is the closest existing tool-generated C++ output surveyed, and it answers this
+narrowly: it adds C++ *syntax* over the same C declarations (namespaces, `enum
+class`, operator overloads, opt-in constructors via config) but does not, by
+default, generate an RAII wrapper class that owns and destroys an opaque C
+resource — its opaque-type handling (§1 above) still emits a bare forward
+declaration (`typedef struct Foo Foo;`-equivalent), with no generated constructor/
+destructor pair calling the crate author's init/free functions. **No established,
+broadly-adopted C-header-to-idiomatic-C++-RAII-wrapper generator tool analogous to
+bindgen was found this session** — search results turned up only niche,
+per-project generator scripts (e.g. `wrap-vpp`, a Python script generating one
+RAII wrapper for one specific C API; the `webgpu_raii` project's generator script,
+scoped to `webgpu.h`'s release functions) rather than a general-purpose tool people
+reach for the way they reach for bindgen or cbindgen. **[UNVERIFIED, this session's
+search coverage, not exhaustive]** The actual, widely-documented state of practice
+for C++ consuming a C API is a **hand-written** idiom, not a generated one: either
+a hand-rolled RAII class per resource, or `std::unique_ptr<T, Deleter>` with a
+custom deleter bound to the C free function — a pattern common enough to appear
+directly in cppreference's own `unique_ptr` documentation (e.g. wrapping `FILE*`
+with `fclose` as the deleter). **Plain-C-ABI consumer: yes, but heavier than a
+loader stub** — unlike LuaJIT/Deno/Bun/cgo/P-Invoke (item 9's finding), which only
+need a thin re-declaration of an already-settled C signature in each runtime's own
+syntax, idiomatic C++ wrapper-class generation must additionally know the C API's
+*ownership shape* (which function pairs are init/free, which parameters are
+borrowed vs. owned) to decide what the constructor/destructor should call — the
+same ownership-discipline vocabulary this document's Fork C (§4) already treats as
+a genuinely hard, unsettled question. This makes C++ closer in weight to a real
+codegen target than to a stub, even though — like the other loader-stub cases — it
+consumes the exact same plain C ABI shape at the bottom.
 
 **7. Go (cgo).**
 [VERIFIED-EXTERNAL: go.dev/src/runtime/cgocall.go and related search results on cgo
@@ -917,6 +953,38 @@ stack-switch overhead. **Plain-C-ABI consumer: yes**, with real per-call runtime
 overhead that a codegen target would need to account for (e.g. batching calls,
 avoiding cgo in hot loops) even though the ABI itself requires no special shape.
 
+**8. Rust as a consumer of a plain C ABI (idiomatic binding codegen).** Missing
+from the original inventory, which only covered Rust-as-*source*
+(`packages/type-ir/src/wasm-bindgen.ts`, type-ir → Rust exposing JS — the opposite
+direction). The well-established, real prior art here is `bindgen`
+(rust-lang/rust-bindgen): [VERIFIED-EXTERNAL: WebSearch results for
+rust-lang/rust-bindgen's documented scope and the ecosystem's `*-sys`-crate
+convention, fetched 2026-08-03] bindgen reads a C header and generates `unsafe
+extern "C"` function declarations plus corresponding Rust type declarations
+(structs, enums) directly — this is bindgen's actual, documented job, and (per
+Rust 2024 edition's RFC 3484) those extern blocks are now required to be marked
+`unsafe extern` at the declaration level, not just at each call site. **Confirmed,
+not assumed: bindgen itself does not generate safe wrapper types with `Drop` impls
+for owned resources** — that layer is conventionally hand-written on top, in a
+*separate* crate, following the ecosystem's well-established `-sys` crate
+convention: a `foo-sys` crate holds bindgen's raw unsafe output and links the
+native library, while a plain `foo` crate (e.g. `libgit2-sys` → `git2-rs`, the
+canonical real-world example found this session) hand-writes the idiomatic safe
+surface — replacing raw pointers with `&`/`Box`, null returns with `Option`, and
+adding `Drop` impls that call the C library's free functions, hiding `unsafe` from
+the crate's own users. This is architecturally the same two-layer shape as the C++
+finding above (item 6): an automated tool produces the raw, ownership-unaware
+C-ABI-shaped declarations, and idiomatic-consumer wrapping (RAII-via-`Drop` in
+Rust, RAII-via-constructor/destructor in C++) is where the ownership-shape
+knowledge has to be supplied, hand-written in both ecosystems' actual practice
+rather than inferred by the declaration-generation tool itself. **Plain-C-ABI
+consumer: yes** for bindgen's own scope (it reads and re-declares an ordinary C
+header) — but, like C++, producing the *idiomatic, safe* consumer surface (not
+just the raw unsafe declarations) requires the same ownership-shape information a
+loader stub never needs, making "safe idiomatic Rust bindings" a heavier target
+than the pure loader-stub cases even though bindgen's own raw-declaration output
+is a thin, direct, near-stub-weight re-description of the C header.
+
 ### Classification table
 
 | # | Target | Plain-C-ABI consumer? | Distinguishing factor (verified) |
@@ -926,12 +994,13 @@ avoiding cgo in hot loops) even though the ABI itself requires no special shape.
 | 3 | Bun `bun:ffi` | **Yes** (loading), **partial** (type coverage) | dlopen-based C ABI loader, but no struct type in the documented type table (manual pointer handling required); docs self-describe as experimental with known bugs |
 | 4 | JNI | **No** | Requires `JNIEnv*`/`jobject`/`jclass`-shaped generated glue and a VM-managed reference system; not expressible as an ordinary `extern "C"` signature |
 | 5 | .NET P/Invoke | **Yes, plus a declarative marshaling layer** | `[DllImport]`/`[LibraryImport]` call ordinary C ABI exports directly; `[MarshalAs]`/`CharSet` convert managed↔native representations on the .NET side only — the target library needs no .NET-specific shape |
-| 6 | C++ FFI | **No** (for arbitrary C++) | No cross-compiler-stable ABI (mangling, non-POD layout, vtables all vary); state of the art is exposing an `extern "C"` subset, at which point it degenerates to the plain-C-ABI case |
+| 6 | C++ as consumer (idiomatic RAII wrapper-class codegen) | **Yes, but heavier than a stub** | Underlying ABI is still plain C (`extern "C"`, since C++ itself has no cross-compiler-stable ABI); no established general-purpose C-header-to-C++-RAII-wrapper generator tool found (cbindgen's C++ mode adds only syntax, not ownership-aware wrapper classes) — established practice is hand-rolled RAII (`unique_ptr<T, Deleter>` or a hand-written class), requiring ownership-shape knowledge a loader stub never needs |
 | 7 | Go (cgo) | **Yes** | Links against ordinary C ABI libraries directly; the real cost is per-call runtime overhead (goroutine stack switch onto `g0`, scheduler coordination) and GC-safety bookkeeping, not an ABI shape difference |
+| 8 | Rust as consumer (idiomatic `bindgen`-based binding codegen) | **Yes, but heavier than a stub for the safe layer** | `bindgen` generates raw `unsafe extern "C"` declarations directly from a C header (near-stub-weight); confirmed it does not itself generate safe wrapper types with `Drop` impls — that layer is conventionally hand-written on top in a separate crate (the ecosystem's `-sys`-crate convention, e.g. `libgit2-sys` → `git2-rs`), same ownership-shape burden as item 6 |
 
 ### Finding: implied scope for a fractal FFI backend, not a decision
 
-Of the seven, four (LuaJIT, Deno, Bun, Go/cgo) and one qualified case (.NET
+Of the eight, four (LuaJIT, Deno, Bun, Go/cgo) and one qualified case (.NET
 P/Invoke) all consume the *same* plain C ABI shape that a `cbindgen`-style backend
 (§1 of this document) would already produce — the difference between them is only
 in each runtime's own idiomatic *loader/declaration* code (LuaJIT's `cdef` string,
@@ -942,22 +1011,44 @@ FFI-IR backends with their own ownership/ABI modeling — they would need **one
 plain-C-ABI backend plus five small "loader stub" projectors**, each one
 significantly narrower in scope than the C target itself (no layout/ownership
 decisions of its own to make, since it's just re-describing an already-settled C
-signature in each runtime's declaration syntax). JNI and "arbitrary C++" are the two
-genuine exceptions — JNI has its own non-C-ABI signature shape and reference system
-end to end, and "C++ FFI" only reduces to the plain-C-ABI case once the API is
-already restricted to an `extern "C"` subset (at which point it's not really "a C++
-target" anymore, it's the C target again with a C++ implementation behind it). Bun's
-missing struct support is a narrower, tooling-maturity-shaped exception (a coverage
-gap in an experimental runtime feature, not a structural one).
+signature in each runtime's declaration syntax).
+
+**C++ (item 6) and Rust (item 8) extend this same one-C-ABI-backend hypothesis, as
+two more consumers of it, but not as pure loader stubs.** Both sit underneath the
+same plain C ABI as the five stub cases — a C++ RAII wrapper class and a Rust
+`bindgen`+safe-wrapper crate both ultimately call the identical `extern "C"`
+symbols a cbindgen-style backend would emit — but idiomatic-consumer generation for
+both is real codegen, heavier than a stub, because generating a constructor that
+calls the right init function and a destructor/`Drop` that calls the matching free
+function requires knowing the C API's **ownership shape** (which functions
+allocate, which free, which parameters are borrowed vs. owned) — the same
+vocabulary this document's Fork C (§4) already treats as a genuinely open,
+unsettled design question for fractal's own IR. Rust's raw-declaration half
+(bindgen's actual, verified scope) is closer to stub-weight — a near-mechanical
+re-declaration of the C header, same shape as the five loader stubs — but the safe/
+idiomatic wrapper half that the ecosystem hand-writes on top (`Drop` impls,
+`&`/`Box` in place of raw pointers) is where the ownership-shape burden lands, same
+as C++'s wrapper class as a whole.
+
+JNI remains the clear, categorical exception to the whole hypothesis — it has its
+own non-C-ABI signature shape and VM-managed reference system end to end, not
+reducible to "C ABI plus thin syntax" at any layer, unlike C++ and Rust which both
+bottom out in the same plain C ABI once you get past their respective
+idiomatic-wrapper layers. Bun's missing struct support is a narrower, tooling-
+maturity-shaped exception (a coverage gap in an experimental runtime feature, not a
+structural one).
 
 This reframes the "comprehensive ffi-gen" scope as a question the user has not yet
 weighed in on, presented here as options rather than a pick: **(a)** one C-ABI IR/
 backend (per this document's Forks A-E) plus N narrow loader-stub projectors for
-LuaJIT/Deno/Bun/Go/.NET, with JNI and WIT (§2) as the only targets needing their own
-full boundary-semantics treatment; versus **(b)** treating every named runtime as
-its own independent FFI-IR backend regardless of ABI-shape overlap, trading a larger
-number of backends for not needing to first prove out and stabilize a shared C-ABI
-backend that every loader-stub would then depend on.
+LuaJIT/Deno/Bun/Go/.NET/Rust's-raw-half, plus two heavier-but-still-C-ABI-consuming
+idiomatic-wrapper projectors for C++ and Rust's-safe-half that additionally need
+Fork C's ownership-shape answer, with JNI and WIT (§2) as the only targets needing
+their own full boundary-semantics treatment; versus **(b)** treating every named
+runtime as its own independent FFI-IR backend regardless of ABI-shape overlap,
+trading a larger number of backends for not needing to first prove out and
+stabilize a shared C-ABI backend that every stub and wrapper-generator would then
+depend on.
 
 ---
 
