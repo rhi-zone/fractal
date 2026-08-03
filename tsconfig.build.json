@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/type-ir/tsconfig.build.json" },
+    { "path": "packages/ffi-ir/tsconfig.build.json" },
     { "path": "packages/api-tree/tsconfig.build.json" },
     { "path": "packages/http-api-projector/tsconfig.build.json" },
     { "path": "packages/mcp-api-projector/tsconfig.build.json" },
