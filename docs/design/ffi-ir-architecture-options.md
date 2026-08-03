@@ -540,6 +540,161 @@ not just repeats.
 > explicitly said "need more info," not ready to choose between the named options
 > yet.
 
+#### Fork C, deeper pass (2026-08-03) — ownership mechanics confirmed from primary sources
+
+This subsection is the information the user asked for before deciding among C1-C3
+above. It does not choose among them; it adds four newly-verified data points (one
+correcting a prior [UNVERIFIED] mark) and a representative-case comparison matrix,
+then reframes C1-C3 as four named options explicitly cross-checked per target.
+
+**New verified facts, each fetched directly this session:**
+
+1. **cbindgen: confirmed, not just inferred, to give zero ownership guidance.**
+   [VERIFIED-EXTERNAL: github.com/mozilla/cbindgen/blob/main/docs.md, searched
+   specifically for ownership/free-convention content, 2026-08-03] — the docs
+   contain no discussion of who allocates, who frees, or any allocation/free
+   convention anywhere; they cover type layout, header config, type mappings, and
+   function declarations only. This upgrades §1's earlier `[UNVERIFIED
+   interpretation]` mark on the same claim to directly confirmed: cbindgen is
+   silent on ownership by design, not by an oversight in this document's earlier
+   reading.
+2. **uniffi's real mechanism is `Arc`-based reference counting, not opaque-handle +
+   destroy** — this **corrects** the parent survey's `[UNVERIFIED]` guess (§3
+   there, "opaque handle + generated destructor"). [VERIFIED-EXTERNAL:
+   mozilla.github.io/uniffi-rs/latest/types/interfaces.html, fetched 2026-08-03]:
+   "UniFFI allocates every object instance on the heap using `Arc`... The foreign
+   bindings will typically generate destructors, but regardless of the foreign
+   semantics, they always hold an `Arc<>` to the Rust object, so these destructors
+   will only drop their reference and may not drop the Rust object." A forgotten
+   foreign-side destructor therefore leaks (refcount never reaches zero) rather
+   than double-frees or use-after-frees — the `Arc` makes memory-safety violations
+   structurally unreachable through normal use, at the cost of deferred/possible
+   leaks being the tool's own accepted failure mode.
+   For callbacks/closures held across the boundary: [VERIFIED-EXTERNAL:
+   mozilla.github.io/uniffi-rs/latest/types/callback_interfaces.html, fetched
+   2026-08-03] — UniFFI's newer "foreign traits" mechanism (the legacy "callback
+   interfaces" are documented as soft-deprecated in favor of it) also moved from
+   `Box<dyn Trait>` to `Arc<dyn Trait>` specifically for this case, i.e. the same
+   refcounting answer is reused for callbacks, not a separate mechanism. The docs
+   fetched did not spell out what happens if the *foreign* runtime garbage-collects
+   its side of a callback while Rust still holds the `Arc<dyn Trait>` handle — this
+   specific hazard remains **[UNVERIFIED]**, not found in the fetched pages.
+3. **wasm-bindgen does have a zero-copy path, but it is a separate, unsafe escape
+   hatch outside the safe struct/fn surface `wasm-bindgen.ts` targets** —
+   correcting this document's earlier framing (§0, §3's table) that copying is the
+   *only* path. [VERIFIED-EXTERNAL: docs.rs/js-sys, `Uint8Array::view`/
+   `view_mut_raw`, fetched 2026-08-03]: `js_sys::Uint8Array::view()` returns a
+   typed-array view directly into wasm linear memory with no copy, but its own
+   documented safety warning is explicit: "Views into WebAssembly memory are only
+   valid so long as the backing buffer isn't resized in JS. Once this function is
+   called any future calls to `Box::new` (or malloc of any form) may cause the
+   returned value here to be invalidated," and separately, "the returned object is
+   disconnected from the input slice's lifetime, so there's no guarantee that the
+   data is read at the right time." This is a real borrowed-reference mechanism —
+   not hypothetical — but it is `unsafe`, is invalidated by any subsequent Rust-side
+   allocation with no compiler or runtime check, and is a different code path
+   entirely from the `#[wasm_bindgen(getter_with_clone)]` + `Clone` convention
+   `wasm-bindgen.ts` implements (`wasm-bindgen.ts:20-23, 316-321`) — the projector's
+   existing behavior is accurately described as "the safe subset of wasm-bindgen
+   defaults to copy-only," not "wasm-bindgen itself has no zero-copy option."
+4. **WIT's Canonical ABI resource mechanism confirmed: not reference counting — a
+   per-instance handle table plus a runtime-checked "lending" discipline that traps
+   on violation.** [VERIFIED-EXTERNAL:
+   raw.githubusercontent.com/WebAssembly/component-model, `design/mvp/CanonicalABI.md`,
+   fetched 2026-08-03]. Each component instance has its own growable handle table
+   (`ComponentInstance.handles`); each `ResourceHandle` entry carries an `own` flag
+   (true for an owning handle, false for `borrow<T>`) and, for borrowed handles, a
+   `borrow_scope` tracking which calling task lowered it. Lifetime safety is
+   enforced via a **lend count**, not a reference count: "The `num_lends` field
+   maintains a conservative approximation of the number of live handles that were
+   lent from this handle" — incremented when a borrow is lifted as a call
+   parameter, decremented when that subtask resolves. Critically: "`canon
+   resource.drop`... is ensured to be zero when an `own` handle is dropped" — i.e.
+   **dropping an owning handle while a live borrow still exists is a runtime trap
+   (a caught, safe abort), not undefined behavior.** The actual destruction of the
+   underlying resource is still explicit, guest-supplied code triggered by
+   `resource.drop` — the ABI's contribution is the bookkeeping and the trap-on-
+   violation check around that explicit call, not automatic reclamation the way
+   `Arc` provides. This is the one mechanism among the four surveyed tools with a
+   runtime-detected safety net for ownership misuse rather than silent UB (C) or a
+   leak (uniffi's `Arc`, if never dropped) or an unchecked stale-view read
+   (wasm-bindgen's `Uint8Array::view()`).
+
+**Comparison matrix — representative case: a struct/object with one heap-allocated
+field (e.g. a `Vec<u8>` byte buffer) crossing each system's boundary:**
+
+| System | Who allocates | Who frees | Copy / move / borrow | Failure mode if consumer gets it wrong |
+|---|---|---|---|---|
+| C (cbindgen) | Whichever side the author's hand-written convention says (cbindgen prescribes nothing — §1, confirmed above) | Same — author-defined free function, or raw `free()`/`libc::free` if the convention says so | Either a full value copy (struct passed/returned by value into caller-provided storage) or an opaque pointer decomposed via `slice::from_raw_parts` for the buffer; no compiler-checked distinction | **Undetected UB** — double-free, use-after-free, or leak are all possible and cbindgen has no mechanism to catch any of them; the generated header is silent on which failure a given misuse produces |
+| uniffi | Rust, via `Arc::new` | Rust's own `Arc` drop glue, triggered by the *last* dropped reference (foreign destructors only decrement) | Shared ownership by reference count — the buffer field is not re-copied per access, it lives inside the `Arc`'d object | **Leak only** (bounded, not UB) — a foreign side that never calls its generated destructor keeps the refcount above zero forever; memory-safety (no UAF/double-free) is preserved by construction |
+| wasm-bindgen (safe path, `wasm-bindgen.ts`'s actual behavior) | Rust allocates; JS receives a `Clone`d copy wrapped as a `JsValue`-tracked object | JS's own GC frees the JS-side copy; Rust's original is unaffected/independently dropped | **Full copy**, always, for the `Vec<u8>` field (`getter_with_clone` requires `Clone`) — no sharing | **None, memory-safety-wise** — the two copies are fully independent; cost is duplicated memory/CPU, not a safety bug |
+| wasm-bindgen (unsafe path, `Uint8Array::view()`, not used by `wasm-bindgen.ts`) | Rust allocates the buffer once | Rust frees it (or reallocates it) whenever it chooses | **Zero-copy borrow** — a live typed-array view directly into wasm linear memory | **Use-after-free / read of invalid memory**, undetected — any subsequent allocation on the Rust side can silently invalidate the JS-held view with no error at the point of misuse |
+| WIT (Canonical ABI `resource`) | Guest/host code, via its own constructor, registered under a handle in the per-instance handle table | Explicit guest/host-supplied destructor, invoked by `canon resource.drop` | **Handle** (`own` = ownership transfer, `borrow<T>` = scoped reference) — the underlying buffer is never copied by the ABI itself, only the handle crosses | **Runtime-detected trap** (safe abort) if an `own` handle is dropped while `num_lends > 0`; the underlying allocation is still whatever the guest's destructor implementation is (a bug there is out of the Canonical ABI's coverage) |
+
+**Named options, reframed with this session's per-target evidence (extends,
+does not replace, C1-C3 above — none recommended):**
+
+- **Option 1 — Copy-only, always clone across the boundary** (matches C1's
+  "inline" case narrowed to "never opaque"; matches `wasm-bindgen.ts`'s current,
+  shipped default). *Cross-checked:* **JS** — proven, this is exactly what
+  `wasm-bindgen.ts` does today (`getter_with_clone` + `Clone`, confirmed by direct
+  read). **WIT** — a legitimate native subset: non-`resource` types (`record`,
+  `list`, etc.) already cross the Canonical ABI by value/copy, so "copy-only" is
+  simply "never emit a `resource`," which works but forecloses using WIT's own
+  ownership primitive for anything that needs it. **C** — does *not* fully
+  eliminate the ownership question the way it appears to: per the matrix above,
+  even a pure copy needs an explicit answer for who allocates the copy's backing
+  storage and who frees it (cbindgen supplies no such convention, confirmed
+  above), so "copy-only" only removes *aliasing/sharing* concerns for C, not the
+  alloc/free question itself.
+- **Option 2 — Opaque handle + explicit free-function convention** (= C1's
+  "opaque" case with a bare free-once discipline, no refcounting or lend-tracking
+  on top). *Cross-checked:* **C** — native fit; this is literally cbindgen's own
+  documented opaque-pointer pattern (§1). **JS** — does not map cleanly: JS has no
+  language-enforced "call free once" idiom (GC-managed), so this would need a
+  bolted-on `.free()`/dispose convention with the same "forgotten call" risk
+  uniffi's `Arc` approach was specifically built to avoid (per point 2 above,
+  uniffi *could* have used bare free-once and chose refcounting instead). **WIT**
+  — a strict subset of `resource`'s actual mechanism: WIT already gives an opaque
+  handle + explicit free call, *plus* the lend-count/trap safety net this option
+  omits (point 4 above) — adopting Option 2 for a WIT target means deliberately
+  not using part of what WIT natively offers.
+- **Option 3 — Adopt a resource/borrow-shaped model generally** (own-handle +
+  `borrow<T>`-qualified reference, *including* WIT's actual enforcement mechanism —
+  a generated per-instance handle table with lend-count tracking that traps on
+  violation, not just the naming). *Cross-checked:* **WIT** — native, this is its
+  own shipped model (point 4). **C** — cbindgen's opaque pointer has no equivalent
+  handle-table/lend-count runtime; a C target adopting this option would need
+  fractal to generate that bookkeeping itself as new runtime code shipped
+  alongside the header, since plain C has no host runtime to enforce it the way a
+  Wasm Component host does — real, uncosted implementation work, not a mapping
+  onto anything cbindgen or the C ABI already provides. **JS** — likewise no
+  native equivalent for the Rust-owns/JS-borrows direction; would need a
+  generated handle-table wrapper (e.g. keyed via `Map`/`WeakMap` in the JS glue),
+  distinct from wasm-bindgen's own `JsValue` index-table indirection (which
+  handles the *opposite* direction — JS-owned values Rust holds indices into) —
+  no tool surveyed this session already does this for the Rust-owns direction.
+  *Overall cost:* richest safety guarantee (a trap instead of UB or a silent
+  leak) but the most net-new implementation work for two of the three targets.
+- **Option 4 — Reference counting (`Arc`/`Rc`-shaped shared ownership) as the
+  general primitive**, per uniffi's actual (now-corrected) model. *Cross-checked:*
+  **uniffi's own domain** — proven at scale (Firefox mobile/desktop). **JS** — a
+  genuinely natural fit: JS's `FinalizationRegistry` can decrement a Rust-side
+  `Arc` when a JS wrapper object is collected, giving a real (if not yet
+  implemented in `wasm-bindgen.ts`, which uses the Clone path instead) path to
+  shared rather than copied ownership. **C** — expressible (a manually
+  incremented/decremented count field, freed at zero) but, like Option 2, entirely
+  author-maintained; cbindgen generates and verifies none of it, so C's failure
+  mode stays "leak or worse if the author's hand-written refcount logic has a
+  bug," not the structurally-safe "leak only" uniffi gets from a compiler-checked
+  `Arc`. **WIT** — a confirmed structural mismatch: point 4 above establishes the
+  Canonical ABI's `resource` semantics are explicitly *not* reference counting
+  (they're a lend-count-and-trap discipline); mapping refcounting onto a WIT
+  target means either ignoring `resource`'s native mechanism or building a
+  translation layer between two different safety models — a specific, newly-
+  confirmed mismatch this deeper pass surfaces that was not visible from the
+  surface-level type-vocabulary read alone.
+
 ### Fork D — What's shared across JS/C/WIT vs. genuinely target-specific?
 
 Not a 2-4-option fork in the same shape as A-C — this is a classification
