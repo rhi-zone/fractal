@@ -695,6 +695,50 @@ does not replace, C1-C3 above — none recommended):**
   confirmed mismatch this deeper pass surfaces that was not visible from the
   surface-level type-vocabulary read alone.
 
+#### Fork C, ownership representation: decided (2026-08-03)
+
+A sub-question surfaced after the deeper pass above: independent of *which*
+ownership discipline applies to a given value (Options 1-4, still open — see
+below), how should the chosen discipline be *represented* in the IR itself?
+Two shapes were on the table — metadata on a value (an entry in the existing
+per-TypeRef metadata bag, the same mechanism `optional`/`nullable` already
+use) or a first-class type constructor wrapping any type (mirroring WIT's own
+grammar-level `own<T>`/`borrow<T>` constructors). This is now decided, not a
+lean:
+
+- **Decision: metadata, not a wrapping type constructor.** Ownership
+  discipline is recorded as an entry in a TypeRef node's metadata bag (e.g.
+  something shaped like `meta.ownership: "copy" | "opaque" | "refcount" |
+  "resource"` — the exact key/value shape is implementation detail left for
+  later, not part of this decision).
+- **Reasoning.** type-ir already separates two independent failure surfaces:
+  structural kind-resolution (which has ancestor fallback) and
+  metadata-inspection. If ownership were a wrapping kind, a target unable to
+  support that wrapper kind would have no fallback that preserves the
+  underlying value — the whole node would die even when the inner type would
+  otherwise project fine on that target. Metadata keeps ownership as a
+  separate axis: a target resolves the structural shape independently, then
+  separately decides whether it supports that specific value's ownership
+  requirement, throwing scoped to just that requirement (the same
+  explicit-throw-on-unsupported pattern `wasm-bindgen.ts` already uses for
+  kinds it can't handle) rather than failing the whole type.
+- This reuses the existing per-TypeRef metadata bag mechanism — the same one
+  `optional`/`nullable` already use — rather than introducing new mechanism;
+  there is no new nesting-position ambiguity to solve, since metadata is
+  already scoped per node.
+- **Named cost, not hidden:** a WIT backend must synthesize `own<T>`/
+  `borrow<T>` from `(innerType, meta.ownership)` at emit time, rather than
+  reading it directly off a matching constructor already present in the
+  source IR. This is ordinary projector-side mapping work, not a structural
+  mismatch — but it's worth naming because WIT's own grammar does have
+  ownership as a first-class constructor, and this translation step is one
+  every WIT emission will need.
+
+This decision resolves only the *representation shape* sub-question. It does
+not resolve Fork C's substance — which ownership discipline (Options 1-4,
+per the deeper-pass comparison matrix above) applies to which value, and
+which targets support which disciplines, remain open/unresolved.
+
 ### Fork D — What's shared across JS/C/WIT vs. genuinely target-specific?
 
 Not a 2-4-option fork in the same shape as A-C — this is a classification
