@@ -9,6 +9,7 @@ import {
   resolve,
   resourceRef,
   withOwnership,
+  withProvenance,
   type FfiRef,
 } from "./index.ts"
 
@@ -169,5 +170,48 @@ describe("module construction", () => {
 
     const roundTripped = JSON.parse(JSON.stringify(fsModule))
     expect(roundTripped).toEqual(fsModule)
+  })
+})
+
+describe("withProvenance", () => {
+  test("attaches meta.provenance onto an FfiRef's metadata bag without disturbing other meta", () => {
+    const fsModule = f(boundary.module("fs", {}, {}), { description: "filesystem boundary" })
+    const stamped = withProvenance(fsModule, { source: "wit-file", path: "fs.wit" })
+
+    expect(stamped.meta).toEqual({
+      description: "filesystem boundary",
+      provenance: { source: "wit-file", path: "fs.wit" },
+    })
+    // shape is untouched — provenance is metadata, not a wrapping constructor,
+    // same precedent as `withOwnership` for TypeRef.
+    expect(stamped.shape).toBe(fsModule.shape)
+  })
+
+  test("round-trips through JSON at the module level", () => {
+    const closeMethod = f(boundary.method([], t(types.void), "FileHandle"))
+    const fileHandle = f(boundary.resource("FileHandle", { close: closeMethod }))
+    const fsModule = withProvenance(f(boundary.module("fs", {}, { FileHandle: fileHandle })), {
+      source: "c-header",
+      path: "fs.h",
+    })
+
+    const roundTripped = JSON.parse(JSON.stringify(fsModule))
+    expect(roundTripped).toEqual(fsModule)
+    expect(roundTripped.meta.provenance).toEqual({ source: "c-header", path: "fs.h" })
+  })
+
+  test("coexists with meta.ownership on the same TypeRef/FfiRef without interference", () => {
+    const openParams = [{ name: "path", type: t(types.string) }]
+    const openReturn = withOwnership(resourceRef("FileHandle", "own"), ownership.resource("own"))
+    const openFn = withProvenance(f(boundary.function(openParams, openReturn)), {
+      source: "hand-authored",
+    })
+
+    // provenance sits on the FfiRef's own meta bag...
+    expect(openFn.meta.provenance).toEqual({ source: "hand-authored" })
+    // ...while ownership sits on the nested TypeRef's meta bag, untouched.
+    const shape = openFn.shape as { returnType: { meta: Record<string, unknown> } }
+    expect(shape.returnType.meta.ownership).toEqual({ kind: "resource", mode: "own" })
+    expect(shape.returnType.meta.provenance).toBeUndefined()
   })
 })

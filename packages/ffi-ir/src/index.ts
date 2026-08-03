@@ -280,3 +280,40 @@ export const boundary = {
   module: (name: string, functions: Record<string, FfiRef>, resources: Record<string, FfiRef>) =>
     ({ kind: "module", name, functions, resources }) as const,
 }
+
+// ============================================================================
+// Provenance metadata — lineage of which ingestor/tool produced an FfiRef.
+// ============================================================================
+
+/**
+ * A record of where an `FfiRef` came from — which ingestor (once ingestion
+ * modules exist: a C-header parser, a `.wit` parser, etc.) or, today, which
+ * hand-authored/projector-adjacent source produced it. `source` is an open
+ * string tag, not a fixed union — matching the same "open kind vocabulary"
+ * precedent `FfiKinds` itself uses, since enumerating every ingestor fractal
+ * will ever have here would fix a vocabulary this schema otherwise leaves
+ * open (e.g. `"c-header"`, `"wit-file"`, `"hand-authored"`,
+ * `"wasm-bindgen-source"`). Beyond `source`, the record is an open bag —
+ * callers can add whatever's useful for a given source kind (a file path, a
+ * line number, a parser version, an original identifier) without a schema
+ * change here, the same "conventions over contracts" precedent `FfiRef.meta`
+ * itself already follows.
+ */
+export type Provenance = {
+  readonly source: string
+} & Readonly<Record<string, unknown>>
+
+// `meta.provenance` is the recognized convention key on an `FfiRef`'s open
+// metadata bag (the same bag `meta.ownership` lives in on a type-ir
+// `TypeRef`, and the same bag `meta.description`/`meta.deprecated` are
+// documented as living in on `FfiRef` itself — see the `FfiRef` doc comment
+// above). Its natural attachment point is the `module`-level `FfiRef` — one
+// module is the natural unit of "this came from one ingestion/generation
+// event" — but nothing here restricts it to that level: `meta` exists on
+// every `FfiRef` (function/method/resource/module alike), so a
+// function-level or resource-level override is representable the same way,
+// e.g. when a single module is assembled by hand from pieces stamped by
+// different ingestors.
+export function withProvenance(ref: FfiRef, provenance: Provenance): FfiRef {
+  return { shape: ref.shape, meta: { ...ref.meta, provenance } }
+}
