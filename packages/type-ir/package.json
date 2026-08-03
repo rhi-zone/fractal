@@ -280,6 +280,10 @@
       "types": "./src/rust-serde.ts",
       "import": "./src/rust-serde.ts"
     },
+    "./wasm-bindgen": {
+      "types": "./src/wasm-bindgen.ts",
+      "import": "./src/wasm-bindgen.ts"
+    },
     "./ruby-sorbet": {
       "types": "./src/ruby-sorbet.ts",
       "import": "./src/ruby-sorbet.ts"
