@@ -57,6 +57,13 @@
         "@rhi-zone/fractal-api-tree": "workspace:*",
       },
     },
+    "packages/ffi-ir": {
+      "name": "@rhi-zone/fractal-ffi-ir",
+      "version": "0.1.0-alpha.0",
+      "dependencies": {
+        "@rhi-zone/fractal-type-ir": "workspace:*",
+      },
+    },
     "packages/graphql-api-projector": {
       "name": "@rhi-zone/fractal-graphql-api-projector",
       "version": "0.1.0-alpha.0",
@@ -250,6 +257,8 @@
     "@rhi-zone/fractal-cli-api-projector": ["@rhi-zone/fractal-cli-api-projector@workspace:packages/cli-api-projector"],
 
     "@rhi-zone/fractal-example-library-api": ["@rhi-zone/fractal-example-library-api@workspace:examples/library-api"],
+
+    "@rhi-zone/fractal-ffi-ir": ["@rhi-zone/fractal-ffi-ir@workspace:packages/ffi-ir"],
 
     "@rhi-zone/fractal-graphql-api-projector": ["@rhi-zone/fractal-graphql-api-projector@workspace:packages/graphql-api-projector"],
 
