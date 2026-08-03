@@ -289,6 +289,12 @@ Each fork lists options with costs; none is picked.
   rather than the new kinds being invisible-by-construction the way A2's separate
   package would be.
 
+> **User input (2026-08-03):** Not fully decided, but leaning toward ffi-ir as a
+> separate package depending on type-ir (referencing its TypeRefs for data-shape),
+> reasoning: "modules are not really types" -- i.e. FFI-relevant concepts like
+> modules/interfaces don't belong crammed into type-ir's own type-shape vocabulary.
+> This is a lean, not a final decision.
+
 ### Fork B — Shared boundary IR + N backend projectors, vs. per-pair IRs?
 
 - **B1. One shared "boundary IR," N target projectors** (JS, C, WIT-native, and
@@ -339,6 +345,12 @@ Each fork lists options with costs; none is picked.
   and combinatorial growth if a fourth target (e.g. JNI/Kotlin, per uniffi's
   scope) is added later.
 
+> **User input (2026-08-03):** Not decided. WIT is worth investigating seriously
+> as prior art since a lot of thought went into it, but fractal may have
+> different goals than the Component Model does -- needs a deeper comparison
+> before deciding, not just the surface-level type-vocabulary summary already in
+> the doc.
+
 ### Fork C — How does ownership/lifetime get modeled generally enough for C, JS, and WIT?
 
 - **C1. Binary layout-kind split, IR-level:** every boundary type carries (in
@@ -387,6 +399,10 @@ Each fork lists options with costs; none is picked.
   `wasm-bindgen.ts`'s throw-not-degrade design (§0) was built to avoid for its one
   target).
 
+> **User input (2026-08-03):** Needs more information before any decision --
+> explicitly said "need more info," not ready to choose between the named options
+> yet.
+
 ### Fork D — What's shared across JS/C/WIT vs. genuinely target-specific?
 
 Not a 2-4-option fork in the same shape as A-C — this is a classification
@@ -429,6 +445,15 @@ itself contestable and downstream of Forks A-C:
   pointer" concept distinct from `resource`+methods, which may mean callbacks
   fold into Fork C's resource question, or may not — unconfirmed either way).
 
+> **User input (2026-08-03):** User's own framing, treated as likely correct and
+> worth recording as the working assumption: the full IR vocabulary is shared
+> across all targets, but not every target has to support every construct --
+> individual target projectors can support a subset and reject/error on the rest,
+> same pattern already used by wasm-bindgen.ts today (throws on union/map/tuple/
+> intersection rather than approximating). Not the same as constructs being
+> "target-specific" by design -- it's uniform vocabulary with per-target coverage
+> gaps.
+
 ### Fork E — Sequencing / build-order options
 
 - **E1. C first.** Most universal target (any language with a C FFI can consume
@@ -465,6 +490,11 @@ itself contestable and downstream of Forks A-C:
   questions C and WIT both force explicitly; generalizing from it risks carrying
   forward assumptions ("there's always a `JsValue`-shaped fallback") that are
   false for C.
+
+> **User input (2026-08-03):** Decided: build C, JS, and WIT/Component-Model
+> target support together / interleaved, not one target fully first then the
+> next -- explicit reasoning given: sequencing one target first risks
+> overoptimizing the shared IR for that one target's assumptions.
 
 ---
 
