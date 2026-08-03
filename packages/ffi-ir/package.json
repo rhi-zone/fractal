@@ -25,6 +25,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./c-abi": {
+      "types": "./dist/c-abi.d.ts",
+      "import": "./dist/c-abi.js"
     }
   },
   "files": [
