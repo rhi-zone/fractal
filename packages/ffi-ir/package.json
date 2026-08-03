@@ -45,6 +45,10 @@
     "./gleam": {
       "types": "./dist/gleam.d.ts",
       "import": "./dist/gleam.js"
+    },
+    "./melange": {
+      "types": "./dist/melange.d.ts",
+      "import": "./dist/melange.js"
     }
   },
   "files": [
