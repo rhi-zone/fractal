@@ -120,8 +120,190 @@ export type CallOptions = {
   readonly signal?: AbortSignal
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyClient = Record<string, any>
+// ============================================================================
+// AnyClient / RouteClient — the erased-input client shape, computed WITHOUT
+// `any`.
+//
+// `createClientFromRoute` has no `Node` to lean on (that's its entire
+// reason for existing — see its own doc comment below), so it can't reuse
+// `TypedClient<N, CallOptions>` (api-tree/typed-client.ts) the way
+// `createClient` does. But `HttpRoute<H>` (route.ts) IS itself generic, and
+// `naiveTransform` preserves that genericity via its own recursively-
+// computed return type (`NaiveRoute<N>`, route.ts) — a route tree that's
+// gone through `naiveTransform` ALONE (nothing else) still carries real
+// per-position literal shape (every method key is the fixed literal
+// `"POST"`) when it reaches here.
+//
+// That precision does not survive `applyMethods`, though — and this is
+// true independently of `applyMoveTo`/co-location. `applyMethods` renames a
+// method key by reading a plain runtime `string` out of the open `meta`
+// bag (a `{kind:"method"}` directive), so its own type-level return
+// (`ApplyMethodsRoute<R>`, route.ts) documents widening `methods` to
+// `Record<string, ...>` — the KEY is gone, only the entry's VALUE (handler
+// type) survives. This was verified directly (a throwaway type-level probe
+// against a real `naiveTransform` + `applyMethods` output showed the
+// resolved `methods` type has an index-signature key, not a literal one)
+// after an earlier version of this file's docs incorrectly assumed skipping
+// `applyMoveTo` alone was sufficient. Since real HTTP APIs need GET/PUT/
+// DELETE (not everything staying at `naiveTransform`'s POST default),
+// `applyMethods` runs in essentially every realistic pipeline — so
+// `RouteClient` below bails out to `AnyClient` (sound, but not per-route-
+// named) as soon as it sees a key-erased `methods` map, regardless of
+// whether `applyMoveTo` was also used. `applyMoveTo` is a SEPARATE,
+// independent eraser on top (see its own doc comment, route.ts): a `moveTo`
+// target is also a plain runtime string, so where a subtree ends up is
+// unknowable statically too — a `moveTo`-using pipeline erases even the
+// tree SHAPE (children/fallback positions), not just method-key names.
+//
+// `RouteClient<R, CallOpts>` is therefore generic in the SAME sense
+// `TypedClient<N, CallOpts>` is: it computes real precision when `R`'s own
+// type carries it (the narrow case: `naiveTransform` alone, no method-verb
+// resolution, no co-location), and degrades gracefully — never to `any` —
+// when it doesn't (the realistic case: any pipeline that resolves real HTTP
+// verbs, `httpProjection`'s default included). `createClientFromRoute`
+// below is generic over `R extends HttpRoute` for exactly this reason, even
+// though the common case still lands on `AnyClient`.
+// ============================================================================
+
+/** A leaf callable — what a route position with a resolved method becomes. */
+type ClientLeafFn<CallOpts> = (input?: unknown, callOpts?: CallOpts) => Promise<unknown>
+
+/**
+ * The erased-but-sound client shape: every property is itself an
+ * `AnyClient` — recursively — and `AnyClient` carries BOTH call signatures a
+ * route position can resolve to at runtime: a leaf callable
+ * (`(input?, opts?) => Promise<unknown>`, what `.list()`/`.add(data)`
+ * become) and a fallback callable (`(slugValue: string) => AnyClient`, what
+ * `.bookId(id)` becomes) — exactly the shapes `buildClientNode` can ever
+ * produce (see its own doc comment below), plus direct callability at the
+ * root, since a route tree whose ROOT position happens to be a single-leaf-
+ * method (`isSingleLeafMethod`) collapses to a bare callable rather than an
+ * object (same branch, applied at the root).
+ *
+ * Uniform per-property typing (rather than a union of "nested client OR
+ * leaf fn OR fallback fn") is deliberate: a union would force every chained
+ * access (`client.books.add(...)`, `client.books.bookId(id).read()`) to
+ * narrow first, since not every union member has `.add`/`.read` — but which
+ * shape a given key resolves to is a runtime fact this erased type
+ * genuinely doesn't have (that's what "erased" means), so a real narrowing
+ * requirement at every step would just recreate the friction `any` used to
+ * paper over, one property at a time. `AnyClient` instead stays a single
+ * self-referential type whose TWO call signatures are picked by TypeScript's
+ * normal overload resolution (first match wins) based on the actual call
+ * site's argument shape: a one-`string`-argument call (`bookId("id")`)
+ * resolves via the fallback signature (return type `AnyClient`, so `.read`
+ * chains); a zero/non-string-argument call (`list()`, `add({...})`) falls
+ * through to the leaf signature (return type `Promise<unknown>`). This is a
+ * heuristic, not a proof — a real leaf whose actual input happens to BE a
+ * bare string would mis-resolve to the fallback signature and need an
+ * explicit cast — but it is honestly what's left once the tree's real
+ * per-position shape is unavailable, and it is still strictly sound
+ * (checked call arity/argument types, no arbitrary property/operation
+ * ever silently accepted) versus `any`'s "everything goes."
+ */
+export interface AnyClient<CallOpts = CallOptions> {
+  readonly [key: string]: AnyClient<CallOpts>
+  (slugValue: string): AnyClient<CallOpts>
+  (input?: unknown, opts?: CallOpts): Promise<unknown>
+}
+
+/** A method entry's callable type — precise when the handler's own type is known, erased-but-sound otherwise. */
+type RouteMethodFn<E, CallOpts> = E extends { readonly handler: (input: infer I) => infer Res }
+  ? (input: I, opts?: CallOpts) => Promise<Awaited<Res>>
+  : ClientLeafFn<CallOpts>
+
+/**
+ * True iff `T`'s keys are a single literal (not a union, not `string`) —
+ * the type-level mirror of `isSingleLeafMethod`'s `Object.keys(...).length
+ * === 1`. Distributes `keyof T` over itself (the standard "is this a
+ * union" idiom): for a genuine single key, the one branch evaluates to
+ * `true`; for two or more keys, every branch sees at least one OTHER key
+ * still present after `Exclude`, so every branch is `false` and the
+ * distributed union collapses to plain `false` (a union of identical
+ * `false`s IS `false`) rather than a `true | false` mix.
+ */
+type IsSingleKey<T> = [keyof T] extends [never]
+  ? false
+  : (keyof T extends infer K ? (K extends keyof T ? ([Exclude<keyof T, K>] extends [never] ? true : false) : never) : never) extends true
+    ? true
+    : false
+
+/** Precise per-key methods object — one named callable per method entry, name = lowercased HTTP verb (see `createClientFromRoute`'s own doc: a bare `HttpRoute` has no memory of a co-located handler's authored Node key, only its resolved verb). Only ever invoked once a caller has already confirmed `keyof M` is a literal (not `string`) — see `RouteClient`. */
+type RouteMethodsObject<M, CallOpts> = { readonly [K in keyof M as K extends string ? Lowercase<K> : never]: RouteMethodFn<M[K], CallOpts> }
+
+/**
+ * The precise client shape `buildClientNode` computes for a route tree of
+ * type `R` — see the module doc above for when `R` carries enough literal
+ * shape to make this precise versus when it degrades to `AnyClient`. Mirrors
+ * `buildClientNode`'s own branching exactly: a route position with one
+ * resolved method and no children/fallback (`isSingleLeafMethod`) collapses
+ * to a bare callable; any other position becomes an object whose method
+ * entries are named callables (name = lowercased verb — see
+ * `RouteMethodsObject`), each child recurses under its path-segment key, and
+ * a `fallback` becomes a `(slug) => sub-client` function.
+ *
+ * Every presence check below uses the SAME structural
+ * `R extends { readonly field: infer X } ? ... : ...` idiom `NaiveRoute`/
+ * `ApplyMethodsRoute`/`ApplyResponseRoute` (route.ts) use internally —
+ * deliberately, not indexed access (`R["field"]`): `R` is typically an
+ * INTERSECTION of several conditionally-contributed pieces (each of those
+ * three rewriter types is built as `(...) & (...) & (...) & { meta }`), and
+ * indexed access into an intersection for a field that's absent from every
+ * constituent does not reliably collapse to `undefined` the way it does for
+ * a plain (non-intersection) object type — it was verified (via a throwaway
+ * type-level probe against `naiveTransform`'s real output) to instead widen
+ * back to the field's type on the `HttpRoute` constraint itself, silently
+ * reintroducing the erased shape even for a position that provably has no
+ * fallback/children. The structural-conditional form doesn't have this
+ * failure mode, because it's exactly the form the intersection was built
+ * with in the first place.
+ */
+export type RouteClient<R extends HttpRoute, CallOpts = CallOptions> = R extends {
+  readonly methods?: infer M extends Readonly<Record<string, { readonly handler: Handler }>> | undefined
+}
+  ? [M] extends [undefined]
+    ? RouteChildrenPartOf<R, CallOpts> & RouteFallbackPart<R, CallOpts> // no methods at this position — pure branch
+    : string extends keyof NonNullable<M>
+      ? AnyClient<CallOpts> // methods present but key-erased (e.g. `applyMethods` widens to `Record<string, V>` — see route.ts's `ApplyMethodsRoute` doc — independently of `applyMoveTo`)
+      : IsBareLeaf<R> extends true
+        ? IsSingleKey<NonNullable<M>> extends true
+          ? RouteMethodFn<NonNullable<M>[keyof NonNullable<M>], CallOpts> // bare leaf callable — isSingleLeafMethod's true branch
+          : RouteMethodsObject<NonNullable<M>, CallOpts>
+        : RouteMethodsObject<NonNullable<M>, CallOpts> & RouteChildrenPartOf<R, CallOpts> & RouteFallbackPart<R, CallOpts>
+  : RouteChildrenPartOf<R, CallOpts> & RouteFallbackPart<R, CallOpts>
+
+/** True iff `R` has no children AND no fallback — the other two thirds of `isSingleLeafMethod`'s condition (the `methods` count is checked separately, via `IsSingleKey`, by `RouteClient` itself). */
+type IsBareLeaf<R extends HttpRoute> = R extends {
+  readonly children?: infer C extends Readonly<Record<string, HttpRoute>> | undefined
+}
+  ? [C] extends [undefined]
+    ? R extends { readonly fallback?: infer F extends { readonly name: string; readonly subtree: HttpRoute } | undefined }
+      ? [F] extends [undefined]
+        ? true
+        : false
+      : true
+    : false
+  : true
+
+/** Children part, re-derived from `R` directly (rather than taking an already-extracted `C`) so every call site shares one structural `infer` — matching `RouteClient`'s doc comment on avoiding indexed access. Degrades to `unknown` (a no-op in an intersection) when `R` has no children at all. */
+type RouteChildrenPartOf<R extends HttpRoute, CallOpts> = R extends {
+  readonly children?: infer C extends Readonly<Record<string, HttpRoute>> | undefined
+}
+  ? [C] extends [undefined]
+    ? unknown
+    : string extends keyof NonNullable<C>
+      ? { readonly [key: string]: RouteClient<HttpRoute, CallOpts> }
+      : { readonly [K in keyof NonNullable<C>]: NonNullable<C>[K] extends HttpRoute ? RouteClient<NonNullable<C>[K], CallOpts> : never }
+  : unknown
+
+/** Fallback part — `{ [fallback.name]: (slug) => RouteClient<subtree, CallOpts> }`, or an index signature when the fallback's own name is erased to plain `string`. Degrades to `unknown` (a no-op in an intersection) when `R` has no fallback at all. */
+type RouteFallbackPart<R extends HttpRoute, CallOpts> = R extends {
+  readonly fallback?: { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute } | undefined
+}
+  ? string extends Nm
+    ? { readonly [key: string]: (slugValue: string) => RouteClient<HttpRoute, CallOpts> }
+    : { readonly [K in Nm]: (slugValue: string) => RouteClient<S, CallOpts> }
+  : unknown
 
 type FetchImpl = (req: Request) => Promise<Response>
 
@@ -352,6 +534,17 @@ function isSingleLeafMethod(route: HttpRoute): boolean {
   )
 }
 
+/**
+ * The type `buildClientNode` itself constructs with — deliberately looser
+ * than the public `AnyClient`/`RouteClient<R>` (which carry a call
+ * signature, so a plain object literal like `{}` can't satisfy them). Same
+ * convention as `createClient` below: the builder constructs dynamically,
+ * untyped internally, and the PUBLIC entry point casts the finished value to
+ * the precise static type at the boundary — this function's own return type
+ * is never itself exposed.
+ */
+type ClientNodeBuildResult = Record<string, unknown> | ClientLeafFn<CallOptions>
+
 function buildClientNode(
   route: HttpRoute,
   path: string,
@@ -363,7 +556,7 @@ function buildClientNode(
   baseSignal: AbortSignal | undefined,
   extensions: readonly ClientExtension[] | undefined,
   codegenNames: ReadonlyMap<Handler, string> | undefined,
-): AnyClient | ((input?: unknown, callOpts?: CallOptions) => Promise<unknown>) {
+): ClientNodeBuildResult {
   if (isSingleLeafMethod(route)) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const [verb] = Object.keys(route.methods!)
@@ -383,7 +576,7 @@ function buildClientNode(
     )
   }
 
-  const client: AnyClient = {}
+  const client: Record<string, unknown> = {}
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
     const name = handlerNames?.get(entry.handler) ?? verb.toLowerCase()
@@ -418,7 +611,7 @@ function buildClientNode(
 
   if (route.fallback !== undefined) {
     const { name, subtree } = route.fallback
-    client[name] = (slugValue: string): AnyClient =>
+    client[name] = (slugValue: string): ClientNodeBuildResult =>
       buildClientNode(
         subtree,
         `${path}/${slugValue}`,
@@ -430,7 +623,7 @@ function buildClientNode(
         baseSignal,
         extensions,
         codegenNames,
-      ) as AnyClient
+      )
   }
 
   return client
@@ -453,10 +646,23 @@ function buildClientNode(
  * `createClient(node, opts)` when the original `Node` tree is available to
  * recover the authored names (e.g. `.read()`/`.replace()`/`.remove()`).
  *
+ * The return type is `RouteClient<R, CallOptions>` (see the module doc
+ * above `AnyClient`/`RouteClient`): computed structurally from `route`'s own
+ * type when it carries enough literal shape — in practice, only when
+ * `route` is exactly `naiveTransform(tree)` with no further rewriters (every
+ * method key is still the fixed `"POST"` literal) — and `AnyClient` — sound,
+ * but not per-route-named — otherwise, which in practice means any route
+ * that has gone through `applyMethods` (real GET/PUT/DELETE resolution, not
+ * just the POST default) REGARDLESS of whether `applyMoveTo` was also used;
+ * see the doc above for why `applyMethods` alone already erases method-key
+ * precision. Only the return TYPE is generic here; the runtime proxy
+ * (`buildClientNode`) is unchanged and still built dynamically regardless of
+ * what `R` resolves to.
+ *
  * @param route - The (already rewritten) HttpRoute tree to project.
  * @param opts - Optional: baseUrl (default ""), fetch (default global fetch).
  */
-export function createClientFromRoute(route: HttpRoute, opts: ClientOptions = {}): AnyClient {
+export function createClientFromRoute<R extends HttpRoute>(route: R, opts: ClientOptions = {}): RouteClient<R, CallOptions> {
   const baseUrl = opts.baseUrl ?? ""
   const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions)
   return buildClientNode(
@@ -470,7 +676,7 @@ export function createClientFromRoute(route: HttpRoute, opts: ClientOptions = {}
     opts.signal,
     opts.extensions,
     undefined,
-  ) as AnyClient
+  ) as RouteClient<R, CallOptions>
 }
 
 // ============================================================================
