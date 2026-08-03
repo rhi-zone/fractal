@@ -37,6 +37,10 @@
     "./wasm-bindgen": {
       "types": "./dist/wasm-bindgen.d.ts",
       "import": "./dist/wasm-bindgen.js"
+    },
+    "./rescript": {
+      "types": "./dist/rescript.d.ts",
+      "import": "./dist/rescript.js"
     }
   },
   "files": [
