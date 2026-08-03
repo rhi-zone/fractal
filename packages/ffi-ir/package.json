@@ -41,6 +41,10 @@
     "./rescript": {
       "types": "./dist/rescript.d.ts",
       "import": "./dist/rescript.js"
+    },
+    "./gleam": {
+      "types": "./dist/gleam.d.ts",
+      "import": "./dist/gleam.js"
     }
   },
   "files": [
