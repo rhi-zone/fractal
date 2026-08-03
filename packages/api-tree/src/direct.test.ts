@@ -126,29 +126,6 @@ describe("createDirectApi", () => {
     })
   })
 
-  it("a node with both a handler and children is callable AND has child properties", async () => {
-    const tree = api({
-      root: {
-        handler: (input: { n: number }) => input.n + 1,
-        children: {
-          double: op((input: { n: number }) => input.n * 2),
-        },
-        meta: {},
-      },
-    })
-    const direct = createDirectApi(tree)
-    expectTypeOf(direct.root).toEqualTypeOf<
-      ((input: { n: number }) => Promise<number>) & {
-        readonly double: (input: { n: number }) => Promise<number>
-      }
-    >()
-    expectTypeOf(direct.root.double).toEqualTypeOf<
-      (input: { n: number }) => Promise<number>
-    >()
-    expect(await direct.root({ n: 1 })).toBe(2)
-    expect(await direct.root.double({ n: 5 })).toBe(10)
-  })
-
   it("propagates a synchronous handler error to the caller", async () => {
     const tree = api({
       boom: op(() => {
@@ -285,28 +262,6 @@ describe("DirectApi type safety", () => {
     // bookId is subtracted — read takes no input
     expectTypeOf(direct.bookId("x").read).toEqualTypeOf<
       () => Promise<{ id: string; title: string }>
-    >()
-  })
-
-  it("a node with both a handler and children is callable AND has typed child properties", () => {
-    const tree = api({
-      root: {
-        handler: (input: { n: number }) => input.n + 1,
-        children: {
-          double: op((input: { n: number }) => input.n * 2),
-        },
-        meta: {},
-      },
-    })
-    const direct = createDirectApi(tree)
-
-    expectTypeOf(direct.root).toEqualTypeOf<
-      ((input: { n: number }) => Promise<number>) & {
-        readonly double: (input: { n: number }) => Promise<number>
-      }
-    >()
-    expectTypeOf(direct.root.double).toEqualTypeOf<
-      (input: { n: number }) => Promise<number>
     >()
   })
 })

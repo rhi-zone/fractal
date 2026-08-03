@@ -125,21 +125,4 @@ describe("TreeManifest type safety", () => {
       }
     }>()
   })
-
-  it("a node with both a handler and children contributes its own leaf entry AND its children's", () => {
-    const tree = api({
-      root: {
-        handler: (input: { n: number }) => input.n + 1,
-        children: {
-          double: op((input: { n: number }) => input.n * 2),
-        },
-        meta: {},
-      },
-    })
-    type Manifest = TreeManifest<typeof tree>
-    expectTypeOf<Manifest>().toEqualTypeOf<{
-      readonly root: { readonly input: { n: number }; readonly output: number }
-      readonly "root.double": { readonly input: { n: number }; readonly output: number }
-    }>()
-  })
 })

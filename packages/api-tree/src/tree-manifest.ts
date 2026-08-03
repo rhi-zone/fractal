@@ -90,22 +90,21 @@ type Simplify<T> = { readonly [K in keyof T]: T[K] } & {}
  *   by its authored name, same as an ordinary child key (mirrors
  *   `TypedClient`'s fallback handling: the segment name comes from
  *   authoring, not from any synthesized wildcard token).
- * - A node with both `handler` and `children` (the "both" shape `Node`
- *   allows — see node.ts) contributes its own leaf entry AND its children's
- *   entries; the three parts below intersect exactly like `TypedClient`'s
- *   three parts do.
+ * - A node is a leaf (carries `handler`) XOR a branch (carries `children`),
+ *   matching what `op()`/`api()` can actually produce (see `DirectApi`'s doc,
+ *   direct.ts, for the full rationale) — never both, so the leaf part below
+ *   only applies when there's no children part to recurse into.
  */
 type TreeManifestRaw<N extends Node, Prefix extends string> =
-  // Leaf part — this node's own entry, keyed at Prefix
-  & (N extends { readonly handler: infer H extends Handler }
-      ? H extends (input: infer I) => infer R
-        ? { readonly [K in Prefix]: { readonly input: I; readonly output: Awaited<R> } }
-        : object
-      : object)
-  // Children part — recurse per child, then flatten the resulting union
-  // into one object so every child's path is a sibling key.
-  & (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-      ? UnionToIntersection<
+  (N extends { readonly handler: infer H extends Handler }
+    ? // Leaf part — this node's own entry, keyed at Prefix
+      H extends (input: infer I) => infer R
+      ? { readonly [K in Prefix]: { readonly input: I; readonly output: Awaited<R> } }
+      : object
+    : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+      ? // Children part — recurse per child, then flatten the resulting union
+        // into one object so every child's path is a sibling key.
+        UnionToIntersection<
           { [K in keyof C & string]: TreeManifestRaw<C[K], ExtendPath<Prefix, K>> }[keyof C & string]
         >
       : object)
