@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { quote } from "./codegen-helpers.ts"
 
 // packages/type-ir/src/cpp-simdjson.ts — @rhi-zone/fractal-type-ir/cpp-simdjson
 //
@@ -47,10 +48,6 @@ function pascalCase(name: string): string {
 
 function lowerFirst(name: string): string {
   return name.length === 0 ? name : name[0]!.toLowerCase() + name.slice(1)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
 }
 
 function fallback(ctx: Ctx): string {

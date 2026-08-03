@@ -31,7 +31,8 @@
 //     plus a comment documenting the `RuntimeTypeAdapterFactory`
 //     registration the caller's `GsonBuilder` setup needs, since no
 //     annotation on the type itself can express it.
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA, kotlinDocComment, quote, resolveOptions } from "./codegen-helpers.ts"
 
 export interface KotlinGsonOptions {
   /** Also emit `@Expose` alongside `@SerializedName` on each field/enum
@@ -43,22 +44,6 @@ export interface KotlinGsonOptions {
 }
 
 const defaultOptions: Required<KotlinGsonOptions> = { expose: true }
-
-function resolveOptions(options?: KotlinGsonOptions): Required<KotlinGsonOptions> {
-  return { ...defaultOptions, ...options }
-}
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 // Kotlin enum entries conventionally read SCREAMING_SNAKE_CASE
 // (https://kotlinlang.org/docs/coding-conventions.html#property-names) —
@@ -198,20 +183,6 @@ export function toKotlinType(ref: TypeRef): string {
   return nullable && !type.endsWith("?") ? `${type}?` : type
 }
 
-// KDoc (https://kotlinlang.org/docs/kotlin-doc.html) comment above a
-// declaration — driven by `meta.description`/`meta.deprecated`, same
-// open-metadata-bag convention kotlin-kotlinx.ts's own docComment uses.
-function docComment(meta: Readonly<Record<string, unknown>>, indent: string): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
-  if (description !== undefined && deprecated) {
-    return [`${indent}/**`, `${indent} * ${description}`, `${indent} * @deprecated`, `${indent} */`, ""].join("\n")
-  }
-  if (description !== undefined) return `${indent}/** ${description} */\n`
-  return `${indent}/** @deprecated */\n`
-}
-
 type FieldResult = { type: string; nested: string[] }
 
 /**
@@ -269,14 +240,14 @@ function toDataClass(name: string, ref: TypeRef, options: Required<KotlinGsonOpt
     nestedDecls.push(...nested)
     const readonly = fieldRef.meta.readonly === true
     const optional = fieldRef.meta.optional === true
-    const fieldDoc = docComment(fieldRef.meta, "    ")
+    const fieldDoc = kotlinDocComment(fieldRef.meta, "    ")
     const keyword = readonly ? "val" : "var"
     const suffix = optional ? " = null" : ""
     const exposeAnnotation = options.expose ? " @Expose" : ""
     return `${fieldDoc}    @SerializedName(${quote(fieldName)})${exposeAnnotation} ${keyword} ${fieldName}: ${type}${suffix}`
   })
 
-  const lines = [docComment(ref.meta, ""), `data class ${name}(`, params.join(",\n"), ")"]
+  const lines = [kotlinDocComment(ref.meta, ""), `data class ${name}(`, params.join(",\n"), ")"]
   const decl = lines.filter((l) => l !== "").join("\n")
   return [decl, ...nestedDecls].join("\n\n")
 }
@@ -293,7 +264,7 @@ function toEnumClass(name: string, ref: TypeRef, options: Required<KotlinGsonOpt
   const entries = shape.members.map(
     (member) => `    @SerializedName(${quote(member)})${exposeAnnotation} ${toEnumEntryName(member)}`,
   )
-  const lines = [docComment(ref.meta, ""), `enum class ${name} {`, entries.join(",\n"), "}"]
+  const lines = [kotlinDocComment(ref.meta, ""), `enum class ${name} {`, entries.join(",\n"), "}"]
   return lines.filter((l) => l !== "").join("\n")
 }
 
@@ -380,7 +351,7 @@ function toSealedClass(name: string, ref: TypeRef, options: Required<KotlinGsonO
   for (const n of names) commentLines.push(`//       .registerSubtype(${n}::class.java, ${quote(n)})`)
   commentLines.push("//   val gson = GsonBuilder().registerTypeAdapterFactory(typeFactory).create()")
 
-  const header = [docComment(ref.meta, ""), commentLines.join("\n"), `sealed class ${name}`]
+  const header = [kotlinDocComment(ref.meta, ""), commentLines.join("\n"), `sealed class ${name}`]
   const decl = header.filter((l) => l !== "").join("\n")
   return [decl, ...variantDecls, ...nestedDecls].join("\n\n")
 }
@@ -396,7 +367,7 @@ function toSealedClass(name: string, ref: TypeRef, options: Required<KotlinGsonO
  * identifier.
  */
 export function toKotlinGson(ref: TypeRef, name?: string, options?: KotlinGsonOptions): string {
-  const resolved = resolveOptions(options)
+  const resolved = resolveOptions(defaultOptions, options)
   if (ref.shape.kind === "object" || ref.shape.kind === "union" || ref.shape.kind === "enum") {
     const declName = name ?? "Anonymous"
     if (ref.shape.kind === "object") return toDataClass(declName, ref, resolved)

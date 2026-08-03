@@ -1,4 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA, quote, toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codegen-helpers.ts"
 
 // Rust codegen targeting wasm-bindgen (https://wasm-bindgen.github.io/wasm-bindgen/) —
 // `#[wasm_bindgen]`-annotated structs/enums/functions that JS can call into
@@ -49,25 +50,6 @@ import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
 // forces the caller to make the tradeoff explicitly (add
 // serde-wasm-bindgen, restructure the type, or hand-write the binding).
 
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-// Same conventions as rust-serde.ts (duplicated here — each projector file
-// in this package is self-contained; see e.g. dart-freezed.ts/dart-built-value.ts
-// both carrying their own `toSnakeCase`).
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase()
-}
-
 const RUST_KEYWORDS = new Set([
   "type", "struct", "enum", "fn", "let", "mut", "ref", "self", "super", "crate",
   "mod", "pub", "use", "impl", "trait", "where", "loop", "while", "for", "if",
@@ -79,11 +61,6 @@ const RUST_KEYWORDS = new Set([
 
 function escapeRustIdent(rustName: string): string {
   return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName
-}
-
-function toPascalCase(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9]+(.)?/g, (_m, c: string | undefined) => (c ? c.toUpperCase() : ""))
-  return cleaned.length === 0 ? cleaned : cleaned[0]!.toUpperCase() + cleaned.slice(1)
 }
 
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
@@ -298,10 +275,10 @@ function fieldType(
   fieldRef: TypeRef,
   decls: string[],
 ): { type: string; rustName: string; ident: string; attrs: string[] } {
-  const bare = bareType(toPascalCase(fieldName), fieldRef, decls)
+  const bare = bareType(toPascalCaseStripSeparators(fieldName), fieldRef, decls)
   const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
   const type = optional ? `Option<${bare}>` : bare
-  const rustName = toSnakeCase(fieldName)
+  const rustName = toSnakeCaseStripSeparators(fieldName)
   const ident = escapeRustIdent(rustName)
   const attrs: string[] = []
   if (rustName !== fieldName || ident !== rustName) attrs.push(`js_name = ${quote(fieldName)}`)
@@ -346,7 +323,7 @@ function buildEnum(name: string, ref: TypeRef): string {
   const lines: string[] = [...docComment("", ref.meta), "#[wasm_bindgen]", `pub enum ${name} {`]
 
   for (const member of shape.members) {
-    const variant = toPascalCase(member)
+    const variant = toPascalCaseStripSeparators(member)
     lines.push(`    ${variant} = ${quote(member)},`)
   }
 
@@ -369,22 +346,22 @@ function buildFunction(name: string, ref: TypeRef, decls: string[]): string {
     params: readonly { name: string; type: TypeRef }[]
     returnType: TypeRef
   }
-  const fnName = toSnakeCase(name)
+  const fnName = toSnakeCaseStripSeparators(name)
   const attrs: string[] = []
   if (fnName !== name) attrs.push(`js_name = ${quote(name)}`)
 
   const params = shape.params.map((p) => {
-    const bare = bareType(toPascalCase(p.name), p.type, decls)
+    const bare = bareType(toPascalCaseStripSeparators(p.name), p.type, decls)
     const optional = p.type.meta.optional === true || p.type.meta.nullable === true
     const type = optional ? `Option<${bare}>` : bare
-    const rustName = toSnakeCase(p.name)
+    const rustName = toSnakeCaseStripSeparators(p.name)
     const ident = escapeRustIdent(rustName)
     const rename = rustName !== p.name || ident !== rustName ? `#[wasm_bindgen(js_name = ${quote(p.name)})] ` : ""
     return `${rename}${ident}: ${type}`
   })
 
   const isVoidReturn = shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null"
-  const returnType = isVoidReturn ? "" : ` -> ${bareType(`${toPascalCase(name)}Return`, shape.returnType, decls)}`
+  const returnType = isVoidReturn ? "" : ` -> ${bareType(`${toPascalCaseStripSeparators(name)}Return`, shape.returnType, decls)}`
 
   const lines: string[] = [...docComment("", ref.meta)]
   lines.push(attrs.length > 0 ? `#[wasm_bindgen(${attrs.join(", ")})]` : "#[wasm_bindgen]")

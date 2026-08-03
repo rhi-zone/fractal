@@ -1,4 +1,5 @@
 import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, quote, toSnakeCaseAcronymAware } from "./codegen-helpers.ts"
 
 // Crystal (https://crystal-lang.org/reference/) output projector.
 //
@@ -24,23 +25,6 @@ const leaf =
   (type: string): Converter =>
   () =>
     type
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
-// camelCase (the assumed JSON-wire convention) -> snake_case (Crystal's own
-// property-naming convention, https://crystal-lang.org/reference/conventions/coding_style.html).
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .toLowerCase()
-}
 
 // Crystal enum members are conventionally PascalCase constants
 // (https://crystal-lang.org/reference/syntax_and_semantics/enum.html) —
@@ -227,7 +211,7 @@ function fieldLines(
   fieldName: string,
   fieldRef: TypeRef,
 ): { lines: string[]; nested: string[] } {
-  const propName = toSnakeCase(fieldName)
+  const propName = toSnakeCaseAcronymAware(fieldName)
   const nestedName = `${outerName}${capitalize(fieldName)}`
   const nested: string[] = []
   let fieldType: string

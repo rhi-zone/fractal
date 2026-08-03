@@ -20,30 +20,11 @@
 // *record* types don't need this — Elm supports inline `{ field : T }` types
 // directly — so plain nested objects stay inline.
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { toCamelCaseFromWords, toPascalCaseFromWords } from "./codegen-helpers.ts"
 
 // ============================================================================
 // naming
 // ============================================================================
-
-function splitWords(name: string): string[] {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_\-\s]+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-}
-
-function toPascalCase(name: string): string {
-  return splitWords(name)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join("")
-}
-
-function toCamelCase(name: string): string {
-  const pascal = toPascalCase(name)
-  return pascal.length === 0 ? pascal : pascal.charAt(0).toLowerCase() + pascal.slice(1)
-}
 
 /** Wraps a type expression in parens when used as a type ARGUMENT (`List (Maybe Int)`) —
  * needed whenever the expression is a multi-word application, but not for a
@@ -80,7 +61,7 @@ function newCtx(): Ctx {
 }
 
 function freshName(ctx: Ctx, hint: string): string {
-  const base = toPascalCase(hint) || "Anonymous"
+  const base = toPascalCaseFromWords(hint) || "Anonymous"
   if (!ctx.used.has(base)) {
     ctx.used.add(base)
     return base
@@ -139,9 +120,9 @@ const leaf =
  * caller. */
 function renderFieldTypes(fields: Readonly<Record<string, TypeRef>>, ctx: Ctx, nameHint: string): string[] {
   return Object.entries(fields).map(([fieldName, fieldRef]) => {
-    const fieldType = elmType(fieldRef, ctx, `${nameHint}${toPascalCase(fieldName)}`)
+    const fieldType = elmType(fieldRef, ctx, `${nameHint}${toPascalCaseFromWords(fieldName)}`)
     const type = fieldRef.meta.optional === true ? `Maybe ${parenArg(fieldType)}` : fieldType
-    return `${toCamelCase(fieldName)} : ${type}`
+    return `${toCamelCaseFromWords(fieldName)} : ${type}`
   })
 }
 
@@ -281,10 +262,10 @@ function recordDecoderExpr(
   wrapRecordLiteral: (recordLiteral: string) => string = (r) => r,
 ): string {
   const entries = Object.entries(fields)
-  const decoders = entries.map(([name, ref]) => fieldDecoder(name, ref, ctx, `${nameHint}${toPascalCase(name)}`))
-  const params = entries.map(([name]) => toCamelCase(name))
+  const decoders = entries.map(([name, ref]) => fieldDecoder(name, ref, ctx, `${nameHint}${toPascalCaseFromWords(name)}`))
+  const params = entries.map(([name]) => toCamelCaseFromWords(name))
   const recordLiteral =
-    entries.length === 0 ? "{}" : `{ ${entries.map(([name]) => `${toCamelCase(name)} = ${toCamelCase(name)}`).join(", ")} }`
+    entries.length === 0 ? "{}" : `{ ${entries.map(([name]) => `${toCamelCaseFromWords(name)} = ${toCamelCaseFromWords(name)}`).join(", ")} }`
   const ctor = params.length === 0 ? wrapRecordLiteral(recordLiteral) : `(\\${params.join(" ")} -> ${wrapRecordLiteral(recordLiteral)})`
   return pipelineDecoderBody(ctor, decoders)
 }
@@ -340,8 +321,8 @@ const decoderHandlers: Record<string, TypeConverter> = {
     const s = shape as TypeShape & { kind: "page" }
     return `Decode.list ${parenArg(elmDecoder(s.element, ctx, `${nameHint}Item`))}`
   },
-  union: (_shape, ctx, nameHint) => `${toCamelCase(hoistedName(ctx, currentRef!, nameHint))}Decoder`,
-  enum: (_shape, ctx, nameHint) => `${toCamelCase(hoistedName(ctx, currentRef!, nameHint))}Decoder`,
+  union: (_shape, ctx, nameHint) => `${toCamelCaseFromWords(hoistedName(ctx, currentRef!, nameHint))}Decoder`,
+  enum: (_shape, ctx, nameHint) => `${toCamelCaseFromWords(hoistedName(ctx, currentRef!, nameHint))}Decoder`,
   // Elm has no literal-value type — decodes the underlying JSON primitive and
   // verifies it equals the expected value, succeeding with `()` (the literal
   // carries no information once confirmed).
@@ -354,7 +335,7 @@ const decoderHandlers: Record<string, TypeConverter> = {
       s.value,
     ).replace(/"/g, '\\"')}"))`
   },
-  ref: (shape) => `${toCamelCase((shape as TypeShape & { kind: "ref" }).target)}Decoder`,
+  ref: (shape) => `${toCamelCaseFromWords((shape as TypeShape & { kind: "ref" }).target)}Decoder`,
   intersection: (shape, ctx, nameHint) => {
     const s = shape as TypeShape & { kind: "intersection" }
     if (s.members.every((m) => m.shape.kind === "object")) {
@@ -395,7 +376,7 @@ const encLeaf =
     wrap(valueExpr)
 
 function fieldEncoderEntry(fieldName: string, fieldRef: TypeRef, ctx: Ctx, nameHint: string, valueExpr: string): string {
-  const access = `${valueExpr}.${toCamelCase(fieldName)}`
+  const access = `${valueExpr}.${toCamelCaseFromWords(fieldName)}`
   if (fieldRef.meta.optional === true) {
     ctx.needsEncodeMaybeHelper = true
     const inner = elmEncoderFn(fieldRef, ctx, nameHint)
@@ -413,7 +394,7 @@ function elmEncoderFn(ref: TypeRef, ctx: Ctx, nameHint: string): string {
 
 function recordEncoderExpr(fields: Readonly<Record<string, TypeRef>>, ctx: Ctx, nameHint: string, valueExpr: string): string {
   const entries = Object.entries(fields).map(([name, ref]) =>
-    fieldEncoderEntry(name, ref, ctx, `${nameHint}${toPascalCase(name)}`, valueExpr),
+    fieldEncoderEntry(name, ref, ctx, `${nameHint}${toPascalCaseFromWords(name)}`, valueExpr),
   )
   return `Encode.object\n        [ ${entries.join("\n        , ")}\n        ]`
 }
@@ -468,7 +449,7 @@ const encoderHandlers: Record<string, EncoderConverter> = {
     if (typeof s.value === "boolean") return `Encode.bool ${s.value ? "True" : "False"}`
     return "Encode.null"
   },
-  ref: (shape, _ctx, _nameHint, valueExpr) => `encode${toPascalCase((shape as TypeShape & { kind: "ref" }).target)} ${valueExpr}`,
+  ref: (shape, _ctx, _nameHint, valueExpr) => `encode${toPascalCaseFromWords((shape as TypeShape & { kind: "ref" }).target)} ${valueExpr}`,
   intersection: (shape, ctx, nameHint, valueExpr) => {
     const s = shape as TypeShape & { kind: "intersection" }
     if (s.members.every((m) => m.shape.kind === "object")) {
@@ -513,8 +494,8 @@ function elmEncoder(ref: TypeRef, ctx: Ctx, nameHint: string, valueExpr: string)
 // ============================================================================
 
 function renderEnumLike(typeName: string, members: readonly string[], ctx: Ctx): string {
-  const ctorNames = members.map((m) => toPascalCase(m))
-  const decoderFn = `${toCamelCase(typeName)}Decoder`
+  const ctorNames = members.map((m) => toPascalCaseFromWords(m))
+  const decoderFn = `${toCamelCaseFromWords(typeName)}Decoder`
   const encoderFn = `encode${typeName}`
 
   const typeDecl = [`type ${typeName}`, `    = ${ctorNames.join("\n    | ")}`].join("\n")
@@ -554,7 +535,7 @@ function renderEnumLike(typeName: string, members: readonly string[], ctx: Ctx):
  * the discriminant's literal value, carrying the variant's remaining fields
  * as its payload record. */
 function renderTaggedUnion(typeName: string, discriminator: string, variants: readonly TypeRef[], ctx: Ctx): string | undefined {
-  const decoderFn = `${toCamelCase(typeName)}Decoder`
+  const decoderFn = `${toCamelCaseFromWords(typeName)}Decoder`
   const encoderFn = `encode${typeName}`
 
   const parsed: { tag: string; ctor: string; payload: Record<string, TypeRef> }[] = []
@@ -567,7 +548,7 @@ function renderTaggedUnion(typeName: string, discriminator: string, variants: re
     if (typeof tagValue !== "string") return undefined
     const payload = { ...fields }
     delete payload[discriminator]
-    parsed.push({ tag: tagValue, ctor: toPascalCase(tagValue), payload })
+    parsed.push({ tag: tagValue, ctor: toPascalCaseFromWords(tagValue), payload })
   }
 
   const ctorLines = parsed.map(({ ctor, payload }) => {
@@ -603,7 +584,7 @@ function renderTaggedUnion(typeName: string, discriminator: string, variants: re
 
   const encCases = parsed.map(({ tag, ctor, payload }) => {
     const fieldEntries = Object.entries(payload).map(([name, ref]) =>
-      fieldEncoderEntry(name, ref, ctx, `${typeName}${ctor}${toPascalCase(name)}`, "fields"),
+      fieldEncoderEntry(name, ref, ctx, `${typeName}${ctor}${toPascalCaseFromWords(name)}`, "fields"),
     )
     const payloadPattern = Object.keys(payload).length === 0 ? "" : " fields"
     const tagEntry = `( ${JSON.stringify(discriminator)}, Encode.string ${JSON.stringify(tag)} )`
@@ -628,7 +609,7 @@ function renderTaggedUnion(typeName: string, discriminator: string, variants: re
  * rendered type as a single argument. Decoded via `Decode.oneOf`, tried in
  * variant order. */
 function renderPositionalUnion(typeName: string, variants: readonly TypeRef[], ctx: Ctx): string {
-  const decoderFn = `${toCamelCase(typeName)}Decoder`
+  const decoderFn = `${toCamelCaseFromWords(typeName)}Decoder`
   const encoderFn = `encode${typeName}`
 
   const ctors = variants.map((_, i) => `Variant${i + 1}`)
@@ -680,7 +661,7 @@ function docComment(meta: Readonly<Record<string, unknown>>): string {
  * encoder — for `ref` under `name`. Used both for the top-level `toElm` call
  * and (recursively, via `hoistedName`) for nested unions/enums. */
 function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
-  const typeName = toPascalCase(name)
+  const typeName = toPascalCaseFromWords(name)
   const kind = ref.shape.kind
   const doc = docComment(ref.meta)
 
@@ -712,8 +693,8 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
         ? `type alias ${typeName} =\n    {}`
         : [`type alias ${typeName} =`, `    { ${fields.join("\n    , ")}\n    }`].join("\n")
 
-    const decoderFn = `${toCamelCase(typeName)}Decoder`
-    const fieldDecoders = Object.entries(s.fields).map(([n, r]) => fieldDecoder(n, r, ctx, `${typeName}${toPascalCase(n)}`))
+    const decoderFn = `${toCamelCaseFromWords(typeName)}Decoder`
+    const fieldDecoders = Object.entries(s.fields).map(([n, r]) => fieldDecoder(n, r, ctx, `${typeName}${toPascalCaseFromWords(n)}`))
     const decoder = [`${decoderFn} : Decoder ${typeName}`, `${decoderFn} =`, `    ${pipelineDecoderBody(typeName, fieldDecoders)}`].join(
       "\n",
     )
@@ -730,7 +711,7 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
   // a plain type alias to its rendered type, with matching decoder/encoder
   // aliases.
   const typeDecl = `type alias ${typeName} = ${elmType(ref, ctx, typeName)}`
-  const decoderFn = `${toCamelCase(typeName)}Decoder`
+  const decoderFn = `${toCamelCaseFromWords(typeName)}Decoder`
   const decoder = `${decoderFn} : Decoder ${typeName}\n${decoderFn} =\n    ${elmDecoder(ref, ctx, typeName)}`
   const encoderFn = `encode${typeName}`
   const encoder = `${encoderFn} : ${typeName} -> Encode.Value\n${encoderFn} value =\n    ${elmEncoder(ref, ctx, typeName, "value")}`
@@ -763,7 +744,7 @@ const encodeMaybeHelper = [
  */
 export function toElm(ref: TypeRef, name = "Value"): string {
   const ctx = newCtx()
-  const typeName = toPascalCase(name)
+  const typeName = toPascalCaseFromWords(name)
   ctx.used.add(typeName)
   const main = generateNamedType(ref, typeName, ctx)
   const blocks = [main, ...ctx.decls]

@@ -5,19 +5,8 @@
 // https://kotlinlang.org/docs/data-classes.html,
 // https://kotlinlang.org/docs/sealed-classes.html,
 // https://github.com/Kotlin/kotlinx.serialization
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA, kotlinDocComment, quote } from "./codegen-helpers.ts"
 
 // Kotlin enum entries conventionally read SCREAMING_SNAKE_CASE
 // (https://kotlinlang.org/docs/coding-conventions.html#property-names) —
@@ -160,20 +149,6 @@ export function toKotlinType(ref: TypeRef): string {
   return nullable && !type.endsWith("?") ? `${type}?` : type
 }
 
-// KDoc (https://kotlinlang.org/docs/kotlin-doc.html) comment above a
-// declaration — driven by `meta.description`/`meta.deprecated`, same
-// open-metadata-bag convention typescript.ts's docComment/jsdoc.ts use.
-function docComment(meta: Readonly<Record<string, unknown>>, indent: string): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
-  if (description !== undefined && deprecated) {
-    return [`${indent}/**`, `${indent} * ${description}`, `${indent} * @deprecated`, `${indent} */`, ""].join("\n")
-  }
-  if (description !== undefined) return `${indent}/** ${description} */\n`
-  return `${indent}/** @deprecated */\n`
-}
-
 type FieldResult = { type: string; nested: string[] }
 
 /**
@@ -231,13 +206,13 @@ function toDataClass(name: string, ref: TypeRef): string {
     nestedDecls.push(...nested)
     const readonly = fieldRef.meta.readonly === true
     const optional = fieldRef.meta.optional === true
-    const fieldDoc = docComment(fieldRef.meta, "    ")
+    const fieldDoc = kotlinDocComment(fieldRef.meta, "    ")
     const keyword = readonly ? "val" : "var"
     const suffix = optional ? " = null" : ""
     return `${fieldDoc}    @SerialName(${quote(fieldName)}) ${keyword} ${fieldName}: ${type}${suffix}`
   })
 
-  const lines = [docComment(ref.meta, ""), "@Serializable", `data class ${name}(`, params.join(",\n"), ")"]
+  const lines = [kotlinDocComment(ref.meta, ""), "@Serializable", `data class ${name}(`, params.join(",\n"), ")"]
   const decl = lines.filter((l) => l !== "").join("\n")
   return [decl, ...nestedDecls].join("\n\n")
 }
@@ -248,7 +223,7 @@ function toDataClass(name: string, ref: TypeRef): string {
 function toEnumClass(name: string, ref: TypeRef): string {
   const shape = ref.shape as TypeShape & { kind: "enum" }
   const entries = shape.members.map((member) => `    @SerialName(${quote(member)}) ${toEnumEntryName(member)}`)
-  const lines = [docComment(ref.meta, ""), "@Serializable", `enum class ${name} {`, entries.join(",\n"), "}"]
+  const lines = [kotlinDocComment(ref.meta, ""), "@Serializable", `enum class ${name} {`, entries.join(",\n"), "}"]
   return lines.filter((l) => l !== "").join("\n")
 }
 
@@ -320,7 +295,7 @@ function toSealedClass(name: string, ref: TypeRef): string {
     return `@Serializable\ndata class ${variantName}(val value: ${type}) : ${name}()`
   })
 
-  const header = [docComment(ref.meta, ""), "@Serializable", `sealed class ${name}`]
+  const header = [kotlinDocComment(ref.meta, ""), "@Serializable", `sealed class ${name}`]
   const decl = header.filter((l) => l !== "").join("\n")
   return [decl, ...variantDecls, ...nestedDecls].join("\n\n")
 }

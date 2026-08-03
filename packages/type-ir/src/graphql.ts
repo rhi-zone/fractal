@@ -1,8 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA } from "./codegen-helpers.ts"
 
 // GraphQL SDL spec: https://spec.graphql.org/October2021/
 //

@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, dartDeprecatedAnnotation, dartDocComment, quoteDart, toSnakeCaseAcronymAware } from "./codegen-helpers.ts"
 
 // freezed (https://pub.dev/packages/freezed) is Dart's code-generation
 // package for immutable data classes and Dart 3 sealed-class unions. Unlike
@@ -49,20 +50,6 @@ const leaf =
   () =>
     type
 
-// Dart string literals (https://dart.dev/language/built-in-types#strings) use
-// single quotes by convention (Effective Dart: prefer_single_quotes); `$`
-// additionally needs escaping since it's Dart's own string-interpolation
-// marker and this quotes arbitrary content (JSON field names, enum member
-// text, literal discriminant values) that may contain it.
-function quote(value: string): string {
-  const escaped = value.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\$/g, "\\$")
-  return `'${escaped}'`
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
 // Dart style (https://dart.dev/effective-dart/style#identifiers): fields and
 // variables are lowerCamelCase. Converts snake_case/kebab-case/SCREAMING_SNAKE
 // source field/enum-member/variant names; leaves an already-camel/Pascal name
@@ -83,37 +70,8 @@ function toLowerCamel(name: string): string {
   return name.length === 0 ? name : name[0]!.toLowerCase() + name.slice(1)
 }
 
-// The `part 'x.freezed.dart'`/`part 'x.g.dart'` filenames freezed's
-// build_runner step writes and reads are the snake_case spelling of the
-// source file's own basename — by convention (not a hard requirement) that
-// basename matches the top-level declaration's name, so this projector
-// derives it from `name` the same way `dart_test`-adjacent tooling would.
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .toLowerCase()
-}
-
 function isNullable(ref: TypeRef): boolean {
   return ref.meta.optional === true || ref.meta.nullable === true
-}
-
-function docComment(meta: Readonly<Record<string, unknown>>, indent = ""): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  if (description === undefined) return ""
-  return `${indent}/// ${description}\n`
-}
-
-// `@Deprecated('reason')` (https://api.dart.dev/stable/dart-core/Deprecated-class.html) —
-// Dart's native deprecation annotation. `Deprecated`'s constructor requires a
-// message argument, so a bare `meta.deprecated === true` (no reason given)
-// falls back to a generic one.
-function deprecatedAnnotation(meta: Readonly<Record<string, unknown>>, indent = ""): string {
-  const deprecated = meta.deprecated
-  if (deprecated === true) return `${indent}@Deprecated('deprecated')\n`
-  if (typeof deprecated === "string") return `${indent}@Deprecated(${quote(deprecated)})\n`
-  return ""
 }
 
 // Scalar/collection type name — https://dart.dev/language/built-in-types.
@@ -205,10 +163,10 @@ function fieldParam(fieldName: string, fieldRef: TypeRef, ctx: Ctx, hintBase: st
   const fieldType = dartType(fieldRef, ctx, fieldHint)
 
   const lines: string[] = []
-  lines.push(docComment(fieldRef.meta, indent))
+  lines.push(dartDocComment(fieldRef.meta, indent))
   if (dartName !== fieldName) {
     ctx.usesJsonKey = true
-    lines.push(`${indent}@JsonKey(name: ${quote(fieldName)})\n`)
+    lines.push(`${indent}@JsonKey(name: ${quoteDart(fieldName)})\n`)
   }
   lines.push(`${indent}${nullable ? "" : "required "}${fieldType} ${dartName},\n`)
   return lines.filter((l) => l.length > 0).join("")
@@ -244,7 +202,7 @@ function emitClass(name: string, ref: TypeRef, ctx: Ctx): string {
   const params = factoryParams(shape, ctx, capitalize(name))
 
   const lines: string[] = []
-  lines.push(`${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}@freezed`)
+  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}@freezed`)
   lines.push(`abstract class ${name} with _$${name} {`)
   lines.push(`  const factory ${name}${params} = _${name};`)
   lines.push("")
@@ -265,9 +223,9 @@ function emitEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   ctx.declaredNames.add(name)
 
   const shape = ref.shape as TypeShape & { kind: "enum" }
-  const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quote(member)})`).join(",\n")
+  const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quoteDart(member)})`).join(",\n")
 
-  const decl = `${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}enum ${name} {
+  const decl = `${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}enum ${name} {
 ${members};
 
   final String value;
@@ -338,15 +296,15 @@ function emitUnion(name: string, ref: TypeRef, ctx: Ctx): string {
     const params = factoryParams(objectShape, ctx, `${capitalize(name)}${className}`, excludeField)
 
     const overrideAnnotation =
-      discValue !== undefined && discValue !== ctorName ? `  @FreezedUnionValue(${quote(String(discValue))})\n` : ""
+      discValue !== undefined && discValue !== ctorName ? `  @FreezedUnionValue(${quoteDart(String(discValue))})\n` : ""
 
     return `${overrideAnnotation}  const factory ${name}.${ctorName}${params} = ${className};`
   })
 
-  const classAnnotation = discriminator !== undefined ? `@Freezed(unionKey: ${quote(discriminator)})` : "@freezed"
+  const classAnnotation = discriminator !== undefined ? `@Freezed(unionKey: ${quoteDart(discriminator)})` : "@freezed"
 
   const lines: string[] = []
-  lines.push(`${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}${classAnnotation}`)
+  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}${classAnnotation}`)
   lines.push(`sealed class ${name} with _$${name} {`)
   lines.push(...variantLines)
   lines.push("")
@@ -379,7 +337,7 @@ export function toFreezed(ref: TypeRef, name = "GeneratedType"): string {
   }
 
   const body = ctx.declarations.join("\n\n")
-  const fileBase = toSnakeCase(name)
+  const fileBase = toSnakeCaseAcronymAware(name)
   const imports = [
     ctx.usesFreezed ? "import 'package:freezed_annotation/freezed_annotation.dart';" : "",
     ctx.usesJsonKey && !ctx.usesFreezed ? "import 'package:json_annotation/json_annotation.dart';" : "",

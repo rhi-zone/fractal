@@ -42,6 +42,7 @@
 //     all have to degrade or synthesize accordingly (see their handlers
 //     below).
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codegen-helpers.ts"
 
 // ============================================================================
 // naming — Gleam requires snake_case for field labels/values, PascalCase for
@@ -56,19 +57,6 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 // wire-format name in sync with — the converted identifier is simply the
 // declaration.
 // ============================================================================
-
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase()
-}
-
-function toPascalCase(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9]+(.)?/g, (_m, c: string | undefined) => (c ? c.toUpperCase() : ""))
-  return cleaned.length === 0 ? cleaned : cleaned[0]!.toUpperCase() + cleaned.slice(1)
-}
 
 // Gleam's reserved words (collected from the Gleam Language Tour's keyword
 // usages — `type`, `pub`, `fn`, `let`, `case`, `if`, `use`, `import`, `as`,
@@ -87,7 +75,7 @@ function escapeGleamIdent(snakeName: string): string {
 }
 
 function fieldLabel(name: string): string {
-  return escapeGleamIdent(toSnakeCase(name))
+  return escapeGleamIdent(toSnakeCaseStripSeparators(name))
 }
 
 // ============================================================================
@@ -153,9 +141,9 @@ const handlers: Record<string, Converter> = {
   // No naming context here — see the `bareType`/hoisting path below for the
   // real (named) declaration-generating case used inside field/element
   // positions that DO carry a name hint.
-  object: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCase(meta.typeName) : "Dynamic"),
-  enum: (_shape, meta) => (typeof meta.enumName === "string" ? toPascalCase(meta.enumName) : "Dynamic"),
-  union: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCase(meta.typeName) : "Dynamic"),
+  object: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic"),
+  enum: (_shape, meta) => (typeof meta.enumName === "string" ? toPascalCaseStripSeparators(meta.enumName) : "Dynamic"),
+  union: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic"),
   // Gleam has no literal-value type — degrades to the literal's base type,
   // the same lossy convention rust-serde.ts's `literal` handler uses.
   literal: (shape) => {
@@ -165,7 +153,7 @@ const handlers: Record<string, Converter> = {
     if (typeof s.value === "boolean") return "Bool"
     return Number.isInteger(s.value) ? "Int" : "Float"
   },
-  ref: (shape) => toPascalCase((shape as TypeShape & { kind: "ref" }).target),
+  ref: (shape) => toPascalCaseStripSeparators((shape as TypeShape & { kind: "ref" }).target),
   // No struct-merge/mixin construct in Gleam, and (unlike elm-json.ts, which
   // can splice merged fields into an INLINE anonymous record) no anonymous
   // record syntax to splice a merge into even if the field types were
@@ -200,7 +188,7 @@ const handlers: Record<string, Converter> = {
   // a record of function-typed fields is a faithful (if unenforced —
   // there's no vtable/dispatch, just a plain value) rendering rather than an
   // opaque degrade. Hoisted like `object` — see `bareType` below.
-  interface: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCase(meta.typeName) : "Dynamic"),
+  interface: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic"),
 }
 
 /** `meta.optional` (may be absent from the wire) and `meta.nullable` (present
@@ -229,7 +217,7 @@ export function toGleamType(ref: TypeRef): string {
 
 function bareType(nameHint: string, ref: TypeRef, decls: string[]): string {
   const kind = ref.shape.kind
-  const name = toPascalCase(nameHint)
+  const name = toPascalCaseStripSeparators(nameHint)
   if (kind === "object") {
     decls.push(buildRecord(name, ref, decls))
     return name
@@ -292,7 +280,7 @@ function buildRecord(name: string, ref: TypeRef, decls: string[]): string {
   if (entries.length === 0) {
     lines.push(`  ${name}`)
   } else {
-    const fields = entries.map(([fieldName, fieldRef]) => `${fieldLabel(fieldName)}: ${fieldType(`${name}${toPascalCase(fieldName)}`, fieldRef, decls)}`)
+    const fields = entries.map(([fieldName, fieldRef]) => `${fieldLabel(fieldName)}: ${fieldType(`${name}${toPascalCaseStripSeparators(fieldName)}`, fieldRef, decls)}`)
     lines.push(`  ${name}(${fields.join(", ")})`)
   }
   lines.push("}")
@@ -315,7 +303,7 @@ function buildEnum(name: string, ref: TypeRef): string {
   const shape = ref.shape as TypeShape & { kind: "enum" }
   const lines = [...docComment(ref.meta), `pub type ${name} {`]
   for (const member of shape.members) {
-    lines.push(`  ${toPascalCase(member)}`)
+    lines.push(`  ${toPascalCaseStripSeparators(member)}`)
   }
   lines.push("}")
   return lines.join("\n")
@@ -349,13 +337,13 @@ function buildTaggedUnion(name: string, ref: TypeRef, decls: string[]): string {
       tagField !== undefined && tagField.shape.kind === "literal" && typeof (tagField.shape as { value: unknown }).value === "string"
         ? ((tagField.shape as { value: string }).value as string)
         : `Variant${i}`
-    const ctorName = toPascalCase(tagValue)
+    const ctorName = toPascalCaseStripSeparators(tagValue)
     const otherFields = Object.entries(variantShape.fields).filter(([k]) => k !== discriminator)
     if (otherFields.length === 0) {
       lines.push(`  ${ctorName}`)
       return
     }
-    const fields = otherFields.map(([fieldName, fieldRef]) => `${fieldLabel(fieldName)}: ${fieldType(`${name}${ctorName}${toPascalCase(fieldName)}`, fieldRef, decls)}`)
+    const fields = otherFields.map(([fieldName, fieldRef]) => `${fieldLabel(fieldName)}: ${fieldType(`${name}${ctorName}${toPascalCaseStripSeparators(fieldName)}`, fieldRef, decls)}`)
     lines.push(`  ${ctorName}(${fields.join(", ")})`)
   })
 
@@ -400,7 +388,7 @@ export function toGleam(ref: TypeRef, name?: string): string {
   if (name === undefined) return toGleamType(ref)
 
   const decls: string[] = []
-  const typeName = toPascalCase(name)
+  const typeName = toPascalCaseStripSeparators(name)
   const kind = ref.shape.kind
   let mainDecl: string
   if (kind === "object") {

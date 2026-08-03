@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { flowTsDocComment, quote } from "./codegen-helpers.ts"
 
 // Flow (https://flow.org/) type-annotation projector — structurally very
 // close to typescript.ts (see that file for the shared derivation pattern:
@@ -36,10 +37,6 @@ const leaf =
   (type: string): Converter =>
   () =>
     type
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 // Wraps `type` in Flow's prefix maybe-type (`?T`). `?` binds tighter than
 // `|`/`&`, so a type built from a top-level union/intersection needs explicit
@@ -172,21 +169,6 @@ export function toFlowType(ref: TypeRef): string {
   return ref.meta.nullable === true ? maybe(type) : type
 }
 
-// Same TSDoc-shaped comment convention typescript.ts's `docComment` uses,
-// driven by `meta.description`/`meta.deprecated` — Flow reads ordinary JSDoc
-// comments the same way TS does, so no Flow-specific format is needed.
-function docComment(meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
-
-  if (description !== undefined && deprecated) {
-    return ["/**", ` * ${description}`, " * @deprecated", " */", ""].join("\n")
-  }
-  if (description !== undefined) return `/** ${description} */\n`
-  return "/** @deprecated */\n"
-}
-
 /**
  * `toFlow(ref)` returns the bare Flow type expression for `ref` (same as
  * `toFlowType`). `toFlow(ref, name)` returns a complete, standalone Flow
@@ -197,5 +179,5 @@ function docComment(meta: Readonly<Record<string, unknown>>): string {
 export function toFlow(ref: TypeRef, name?: string): string {
   const type = toFlowType(ref)
   if (name === undefined) return type
-  return `// @flow\n${docComment(ref.meta)}export type ${name} = ${type};`
+  return `// @flow\n${flowTsDocComment(ref.meta)}export type ${name} = ${type};`
 }

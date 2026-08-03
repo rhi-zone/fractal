@@ -1,4 +1,5 @@
 import { ancestors, resolve, type TypeRef, type TypeRefDocument, type TypeShape } from "./index.ts"
+import { quote } from "./codegen-helpers.ts"
 
 // ============================================================================
 // MkDocs-Material reference-page projector — TypeRefDocument -> one Markdown
@@ -13,10 +14,6 @@ import { ancestors, resolve, type TypeRef, type TypeRefDocument, type TypeShape 
 // kinds resolve to `[Name](name-kebab.md)`) rather than inlining the
 // referenced type's structure.
 // ============================================================================
-
-function quote(value: unknown): string {
-  return JSON.stringify(value)
-}
 
 // Converts an arbitrary def name (PascalCase, camelCase, snake_case, ...)
 // into the kebab-case stem used for both the page's filename and every

@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-helpers.ts"
 
 // ============================================================================
 // Java projector — TypeRef -> idiomatic Java 16+ source (records by default,
@@ -42,10 +43,6 @@ const defaultOptions: Required<JavaOptions> = {
   packageName: "",
 }
 
-function resolveOptions(options?: JavaOptions): Required<JavaOptions> {
-  return { ...defaultOptions, ...options }
-}
-
 // JSpecify (https://jspecify.dev/) is the JSR-305 successor endorsed by
 // Google/JetBrains/Spring as the common `@Nullable` all tooling is
 // converging on — used here rather than `javax.annotation.Nullable` (JSR-305,
@@ -72,10 +69,6 @@ const leaf =
   (boxed: string, primitive?: string, imports: readonly string[] = []): Converter =>
   () =>
     primitive === undefined ? { boxed, imports } : { boxed, primitive, imports }
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
 
 // Turns an arbitrary field/property name into a valid, idiomatic Java
 // identifier (camelCase, alphanumeric) — used both for record
@@ -286,17 +279,6 @@ function javaFieldType(ref: TypeRef, ctx: Ctx): FieldRendering {
   return { type: rendering.boxed, annotations: ["@Nullable"] }
 }
 
-function docComment(meta: Readonly<Record<string, unknown>>, indent: string): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
-  const lines = ["/**"]
-  if (description !== undefined) lines.push(`${indent} * ${description}`)
-  if (deprecated) lines.push(`${indent} * @deprecated`)
-  lines.push(`${indent} */`)
-  return `${lines.join("\n")}\n${indent}`
-}
-
 /** Detects a discriminated union's shared discriminant field name, following
  * the same open-metadata-bag convention `zod.ts`'s `union` handler reads
  * (`meta.discriminator: string` on the union TypeRef itself) rather than
@@ -322,7 +304,7 @@ function renderRecordOrClass(name: string, ref: TypeRef, ctx: Ctx, implementsLis
   const shape = ref.shape as TypeShape & { kind: "object" }
   const fields = Object.entries(shape.fields)
   const implementsClause = implementsList.length === 0 ? "" : ` implements ${implementsList.join(", ")}`
-  const doc = docComment(ref.meta, "")
+  const doc = javaDocComment(ref.meta, "")
 
   if (ctx.options.style === "record") {
     const components = fields.map(([fieldName, fieldRef]) => {
@@ -373,10 +355,6 @@ function renderRecordOrClass(name: string, ref: TypeRef, ctx: Ctx, implementsLis
   return lines.join("\n")
 }
 
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
 /** Renders a union as a Java 17+ sealed interface (https://openjdk.org/jeps/409)
  * whose `permits` clause lists one record per variant — the idiomatic
  * closed-hierarchy encoding of a sum type in modern Java (pattern-matching
@@ -397,7 +375,7 @@ function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
   const names = shape.variants.map((v, i) => variantName(v, name, i))
 
   const lines: string[] = []
-  const doc = docComment(ref.meta, "")
+  const doc = javaDocComment(ref.meta, "")
   if (doc) lines.push(doc.trimEnd())
   if (ctx.options.jackson && discriminator !== undefined) {
     lines.push('@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY,')
@@ -419,7 +397,7 @@ function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
       // a scalar variant needs to stay a valid `implements` target.
       const inner = javaFieldType(variantRef, ctx)
       const annotationPrefix = inner.annotations.length > 0 ? `${inner.annotations.join(" ")} ` : ""
-      return `${docComment(variantRef.meta, "")}public record ${names[i]}(${annotationPrefix}${inner.type} value) implements ${name} {}`
+      return `${javaDocComment(variantRef.meta, "")}public record ${names[i]}(${annotationPrefix}${inner.type} value) implements ${name} {}`
     }
     return renderVariantRecord(names[i]!, name, variantRef, ctx)
   })
@@ -429,7 +407,7 @@ function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
 
 function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "enum" }
-  const doc = docComment(ref.meta, "")
+  const doc = javaDocComment(ref.meta, "")
   const constants = shape.members.map((member) => ({ member, constant: javaEnumConstant(member) }))
   const needsBackingValue = constants.some(({ member, constant }) => member !== constant)
   // Even when constant names round-trip cleanly to the original string,
@@ -495,7 +473,7 @@ function assembleSource(body: string, ctx: Ctx, options: Required<JavaOptions>):
  * construct the way TypeScript's `type X = ...` does.
  */
 export function toJavaDeclaration(name: string, ref: TypeRef, options?: JavaOptions): string {
-  const resolved = resolveOptions(options)
+  const resolved = resolveOptions(defaultOptions, options)
   const ctx: Ctx = { options: resolved, imports: new Set(resolved.jackson ? JACKSON_IMPORTS : []) }
 
   let body: string
@@ -512,13 +490,13 @@ export function toJavaDeclaration(name: string, ref: TypeRef, options?: JavaOpti
       const { type } = javaFieldType(element, ctx)
       return `${type} ${ordinals[i] ?? `field${i + 1}`}`
     })
-    body = `${docComment(ref.meta, "")}public record ${name}(${components.join(", ")}) {}`
+    body = `${javaDocComment(ref.meta, "")}public record ${name}(${components.join(", ")}) {}`
   } else {
     // A wrapper class is the closest Java equivalent to a bare type alias
     // over a scalar/collection type (Java has no `type X = ...` construct).
     const { type, annotations } = javaFieldType(ref, ctx)
     const annotationLine = annotations.length > 0 ? `${annotations.join(" ")} ` : ""
-    const doc = docComment(ref.meta, "")
+    const doc = javaDocComment(ref.meta, "")
     body =
       resolved.style === "record"
         ? `${doc}public record ${name}(${annotationLine}${type} value) {}`
@@ -549,7 +527,7 @@ export function toJavaDeclaration(name: string, ref: TypeRef, options?: JavaOpti
  */
 export function toJava(ref: TypeRef, name?: string, options?: JavaOptions): string {
   if (name !== undefined) return toJavaDeclaration(name, ref, options)
-  const resolved = resolveOptions(options)
+  const resolved = resolveOptions(defaultOptions, options)
   const ctx: Ctx = { options: resolved, imports: new Set() }
   const { type } = javaFieldType(ref, ctx)
   return type

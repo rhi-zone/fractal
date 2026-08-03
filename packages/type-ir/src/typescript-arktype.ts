@@ -2,14 +2,11 @@
 // Spec: https://arktype.io/ (string-based type syntax, object/array/tuple literals, unions,
 // literals, optional keys, `.matching()`, `type.or`/`type.array` fallbacks for non-string forms).
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { quoteKey } from "./codegen-helpers.ts"
 
 type Mode = "word" | "literal" | "expr"
 
 type Emitted = { text: string; mode: Mode }
-
-function quoteKey(name: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name)
-}
 
 function regexLiteral(pattern: string): string {
   return `/${pattern.replace(/\//g, "\\/")}/`

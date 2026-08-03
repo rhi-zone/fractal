@@ -1,8 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA } from "./codegen-helpers.ts"
 
 // Proto3 language spec: https://protobuf.dev/programming-guides/proto3/
 export type ProtoField = {
@@ -191,10 +188,6 @@ export function toProtoField(ref: TypeRef): ProtoField {
   // read documentation, so `meta.description` renders as one.
   if (typeof ref.meta.description === "string") field.description = ref.meta.description
   return field
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
 }
 
 export function toProtoMessage(name: string, ref: TypeRef): ProtoMessage {

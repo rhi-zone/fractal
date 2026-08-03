@@ -1,8 +1,5 @@
 import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
+import { quote } from "./codegen-helpers.ts"
 
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
 

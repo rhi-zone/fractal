@@ -3,10 +3,7 @@
 // Object, Array, Tuple, Record, Union, Literal, Ref; Options object as trailing constructor
 // argument; Nullable via Type.Union([T, Type.Null()])).
 import { childTypeRefs, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function quoteKey(name: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name)
-}
+import { quoteKey } from "./codegen-helpers.ts"
 
 function literalValue(value: string | number | boolean | null): string {
   return JSON.stringify(value)

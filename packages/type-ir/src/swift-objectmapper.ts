@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, indentLines, quote, swiftDocComment, toCamelCaseStripSeparators } from "./codegen-helpers.ts"
 
 // packages/type-ir/src/swift-objectmapper.ts — @rhi-zone/fractal-type-ir/swift-objectmapper
 //
@@ -18,29 +19,11 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 // construct something before `mapping(map:)` runs" — while optional/nullable
 // fields are plain `T?`, matching `<-`'s own optional-property overload.
 
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
-function toCamelCase(name: string): string {
-  const camel = name.replace(/[-_\s]+(.)?/g, (_, c: string | undefined) => (c ? c.toUpperCase() : ""))
-  return camel.length === 0 ? camel : camel[0]!.toLowerCase() + camel.slice(1)
-}
-
 function swiftIdentifier(name: string): string {
-  let ident = toCamelCase(name).replace(/[^A-Za-z0-9_]/g, "")
+  let ident = toCamelCaseStripSeparators(name).replace(/[^A-Za-z0-9_]/g, "")
   if (ident.length === 0) ident = "_"
   if (/^[0-9]/.test(ident)) ident = `_${ident}`
   return ident
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-function indent(text: string, spaces: number): string[] {
-  const pad = " ".repeat(spaces)
-  return text.split("\n").map((line) => (line.length === 0 ? line : `${pad}${line}`))
 }
 
 // Every leaf/primitive kind's underlying Swift property type — ObjectMapper
@@ -183,22 +166,6 @@ function propertyType(ref: TypeRef, hint: string, ctx: Ctx): string {
   return optional ? type : `${type}!`
 }
 
-function docComment(ref: TypeRef): string[] {
-  const description = typeof ref.meta.description === "string" ? ref.meta.description : undefined
-  const deprecatedMessage = typeof ref.meta.deprecated === "string" ? ref.meta.deprecated : undefined
-  const isDeprecated = ref.meta.deprecated === true || deprecatedMessage !== undefined
-  const lines: string[] = []
-  if (description !== undefined) lines.push(`/// ${description}`)
-  if (isDeprecated) {
-    lines.push(
-      deprecatedMessage !== undefined
-        ? `@available(*, deprecated, message: ${quote(deprecatedMessage)})`
-        : "@available(*, deprecated)",
-    )
-  }
-  return lines
-}
-
 /** The `<- map[...]` mapping line for one field, or a degrade comment for a
  * kind ObjectMapper's operator has no overload for (tuple — see fieldType's
  * `tuple` branch). Enum-typed fields lean on ObjectMapper's own
@@ -231,7 +198,7 @@ function structDecl(name: string, ref: TypeRef): string {
   }
 
   const lines = [
-    ...docComment(ref),
+    ...swiftDocComment(ref),
     `struct ${name}: Mappable {`,
     ...propLines,
     "",
@@ -243,7 +210,7 @@ function structDecl(name: string, ref: TypeRef): string {
   ]
   if (ctx.nested.length > 0) {
     lines.push("")
-    for (const decl of ctx.nested) lines.push(...indent(decl, 4))
+    for (const decl of ctx.nested) lines.push(...indentLines(decl, 4))
   }
   lines.push("}")
   return lines.join("\n")
@@ -251,7 +218,7 @@ function structDecl(name: string, ref: TypeRef): string {
 
 function enumDecl(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "enum" }
-  const lines = [...docComment(ref), `enum ${name}: String, CaseIterable {`]
+  const lines = [...swiftDocComment(ref), `enum ${name}: String, CaseIterable {`]
   for (const member of s.members) {
     const ident = swiftIdentifier(member)
     lines.push(ident === member ? `    case ${ident}` : `    case ${ident} = ${quote(member)}`)
@@ -288,7 +255,7 @@ function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[]
     isMappable: variant.shape.kind === "object" || variant.shape.kind === "union",
   }))
 
-  const lines = [...docComment(ref), `enum ${name} {`]
+  const lines = [...swiftDocComment(ref), `enum ${name} {`]
   for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
   lines.push("", `    static func from(map: Map) -> ${name}? {`)
   const mappableCases = cases.filter((c) => c.isMappable)
@@ -307,7 +274,7 @@ function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[]
   }
   lines.push("        return nil", "    }", "}")
   if (ctx.nested.length > 0) {
-    return [...lines.slice(0, -1), "", ...ctx.nested.flatMap((decl) => indent(decl, 4)), "}"].join("\n")
+    return [...lines.slice(0, -1), "", ...ctx.nested.flatMap((decl) => indentLines(decl, 4)), "}"].join("\n")
   }
   return lines.join("\n")
 }
@@ -343,7 +310,7 @@ function discriminatedUnionDecl(
     return { tag, caseName: swiftIdentifier(tag), typeName }
   })
 
-  const lines = [...docComment(ref), `enum ${name} {`]
+  const lines = [...swiftDocComment(ref), `enum ${name} {`]
   for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
   lines.push(
     "",
@@ -359,7 +326,7 @@ function discriminatedUnionDecl(
   lines.push("        default: return nil", "        }", "    }")
   if (nested.length > 0) {
     lines.push("")
-    for (const decl of nested) lines.push(...indent(decl, 4))
+    for (const decl of nested) lines.push(...indentLines(decl, 4))
   }
   lines.push("}")
   return lines.join("\n")
