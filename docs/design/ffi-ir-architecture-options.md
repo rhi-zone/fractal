@@ -289,11 +289,11 @@ Each fork lists options with costs; none is picked.
   rather than the new kinds being invisible-by-construction the way A2's separate
   package would be.
 
-> **User input (2026-08-03):** Not fully decided, but leaning toward ffi-ir as a
-> separate package depending on type-ir (referencing its TypeRefs for data-shape),
-> reasoning: "modules are not really types" -- i.e. FFI-relevant concepts like
-> modules/interfaces don't belong crammed into type-ir's own type-shape vocabulary.
-> This is a lean, not a final decision.
+> **User input (2026-08-03, confirmed as decided):** Decided: ffi-ir as a
+> separate package depending on type-ir (referencing its TypeRefs for the
+> data-shape portion), reasoning: "modules are not really types" -- i.e.
+> FFI-relevant concepts like modules/interfaces don't belong crammed into
+> type-ir's own type-shape vocabulary.
 
 ### Fork B — Shared boundary IR + N backend projectors, vs. per-pair IRs?
 
