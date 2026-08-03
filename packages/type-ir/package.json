@@ -296,6 +296,14 @@
       "types": "./dist/rust-serde.d.ts",
       "import": "./dist/rust-serde.js"
     },
+    "./gleam": {
+      "types": "./src/gleam-native.ts",
+      "import": "./src/gleam-native.ts"
+    },
+    "./gleam-native": {
+      "types": "./src/gleam-native.ts",
+      "import": "./src/gleam-native.ts"
+    },
     "./ruby-sorbet": {
       "types": "./dist/ruby-sorbet.d.ts",
       "import": "./dist/ruby-sorbet.js"
