@@ -288,6 +288,14 @@
       "types": "./dist/swift-objectmapper.d.ts",
       "import": "./dist/swift-objectmapper.js"
     },
+    "./rescript": {
+      "types": "./src/rescript-native.ts",
+      "import": "./src/rescript-native.ts"
+    },
+    "./rescript-native": {
+      "types": "./src/rescript-native.ts",
+      "import": "./src/rescript-native.ts"
+    },
     "./rust": {
       "types": "./dist/rust-serde.d.ts",
       "import": "./dist/rust-serde.js"
