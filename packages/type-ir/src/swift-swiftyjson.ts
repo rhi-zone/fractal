@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, quote, swiftDocComment, toCamelCaseStripSeparators } from "./codegen-helpers.ts"
 
 // packages/type-ir/src/swift-swiftyjson.ts — @rhi-zone/fractal-type-ir/swift-swiftyjson
 //
@@ -22,24 +23,11 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 // plainUnionDecl/discriminatedUnionDecl take for Codable's lack of a native
 // union construct.
 
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
-function toCamelCase(name: string): string {
-  const camel = name.replace(/[-_\s]+(.)?/g, (_, c: string | undefined) => (c ? c.toUpperCase() : ""))
-  return camel.length === 0 ? camel : camel[0]!.toLowerCase() + camel.slice(1)
-}
-
 function swiftIdentifier(name: string): string {
-  let ident = toCamelCase(name).replace(/[^A-Za-z0-9_]/g, "")
+  let ident = toCamelCaseStripSeparators(name).replace(/[^A-Za-z0-9_]/g, "")
   if (ident.length === 0) ident = "_"
   if (/^[0-9]/.test(ident)) ident = `_${ident}`
   return ident
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
 }
 
 // Swift type + SwiftyJSON accessor pair for every leaf/primitive kind this
@@ -265,22 +253,6 @@ function accessorExpr(ref: TypeRef, jsonExpr: string, hint: string): string {
   return optional ? `${jsonExpr}.${a.optional}` : `${jsonExpr}.${a.required}`
 }
 
-function docComment(ref: TypeRef): string[] {
-  const description = typeof ref.meta.description === "string" ? ref.meta.description : undefined
-  const deprecatedMessage = typeof ref.meta.deprecated === "string" ? ref.meta.deprecated : undefined
-  const isDeprecated = ref.meta.deprecated === true || deprecatedMessage !== undefined
-  const lines: string[] = []
-  if (description !== undefined) lines.push(`/// ${description}`)
-  if (isDeprecated) {
-    lines.push(
-      deprecatedMessage !== undefined
-        ? `@available(*, deprecated, message: ${quote(deprecatedMessage)})`
-        : "@available(*, deprecated)",
-    )
-  }
-  return lines
-}
-
 // `struct Name { let/var field: Type; init(json: JSON) { self.field = ... } }`
 // — the SwiftyJSON analogue of swift-codable.ts's structDecl, minus
 // CodingKeys (SwiftyJSON has no keyed-container concept; the JSON field name
@@ -300,7 +272,7 @@ function structDecl(name: string, ref: TypeRef, ctx: Ctx): string {
   }
 
   const lines = [
-    ...docComment(ref),
+    ...swiftDocComment(ref),
     `struct ${name} {`,
     ...propLines,
     "",
@@ -318,7 +290,7 @@ function structDecl(name: string, ref: TypeRef, ctx: Ctx): string {
 // swift-codable.ts's automatic `RawRepresentable` conformance.
 function enumDecl(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "enum" }
-  const lines = [...docComment(ref), `enum ${name}: String, CaseIterable {`]
+  const lines = [...swiftDocComment(ref), `enum ${name}: String, CaseIterable {`]
   for (const member of s.members) {
     const ident = swiftIdentifier(member)
     lines.push(ident === member ? `    case ${ident}` : `    case ${ident} = ${quote(member)}`)
@@ -367,7 +339,7 @@ function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[]
     expr: accessorExpr(variant, "json", capitalize(variantCaseName(variant, i))),
   }))
 
-  const lines = [...docComment(ref), `enum ${name} {`]
+  const lines = [...swiftDocComment(ref), `enum ${name} {`]
   for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
   lines.push("", "    init(json: JSON) {", "        switch json.type {")
   for (const c of cases) {
@@ -410,7 +382,7 @@ function discriminatedUnionDecl(
     return { tag, caseName: swiftIdentifier(tag), typeName }
   })
 
-  const lines = [...docComment(ref), `enum ${name} {`]
+  const lines = [...swiftDocComment(ref), `enum ${name} {`]
   for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
   lines.push(
     "",

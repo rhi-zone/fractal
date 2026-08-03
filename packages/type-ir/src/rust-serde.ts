@@ -1,27 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-// Rust identifiers are conventionally snake_case (fields) / PascalCase
-// (types, enum variants). IR field/member names are wire-format strings
-// (arbitrary camelCase/kebab-case/whatever the source used) — converting to
-// idiomatic Rust casing and emitting a `#[serde(rename = "...")]` whenever
-// the converted form doesn't round-trip is the standard serde convention
-// (https://serde.rs/field-attrs.html#rename) for keeping the Rust identifier
-// idiomatic while the wire representation stays byte-for-byte unchanged.
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase()
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA, quote, toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codegen-helpers.ts"
 
 // Rust 2018+ reserved/strict keywords (https://doc.rust-lang.org/reference/keywords.html)
 // that cannot appear as a plain identifier. A field whose snake_case name
@@ -41,11 +19,6 @@ const RUST_KEYWORDS = new Set([
  * using raw-identifier syntax (`r#type`); passes non-keyword identifiers through. */
 function escapeRustIdent(rustName: string): string {
   return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName
-}
-
-function toPascalCase(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9]+(.)?/g, (_m, c: string | undefined) => (c ? c.toUpperCase() : ""))
-  return cleaned.length === 0 ? cleaned : cleaned[0]!.toUpperCase() + cleaned.slice(1)
 }
 
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
@@ -211,7 +184,7 @@ function bareType(nameHint: string, ref: TypeRef, decls: string[]): string {
  * way the IR's two flags do, so both collapse onto one `Option` wrap rather
  * than `Option<Option<T>>`. */
 function fieldType(fieldName: string, fieldRef: TypeRef, decls: string[]): { type: string; skip: boolean } {
-  const bare = bareType(toPascalCase(fieldName), fieldRef, decls)
+  const bare = bareType(toPascalCaseStripSeparators(fieldName), fieldRef, decls)
   const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
   return optional ? { type: `Option<${bare}>`, skip: true } : { type: bare, skip: false }
 }
@@ -229,7 +202,7 @@ function buildStruct(name: string, ref: TypeRef, decls: string[]): string {
   lines.push(DERIVE, `pub struct ${name} {`)
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const rustName = toSnakeCase(fieldName)
+    const rustName = toSnakeCaseStripSeparators(fieldName)
     const ident = escapeRustIdent(rustName)
     const { type, skip } = fieldType(fieldName, fieldRef, decls)
     lines.push(...docComment("    ", fieldRef.meta))
@@ -248,7 +221,7 @@ function buildEnum(name: string, ref: TypeRef): string {
   const lines: string[] = [...docComment("", ref.meta), DERIVE, `pub enum ${name} {`]
 
   for (const member of shape.members) {
-    const variant = toPascalCase(member)
+    const variant = toPascalCaseStripSeparators(member)
     if (variant !== member) lines.push(`    #[serde(rename = ${quote(member)})]`)
     lines.push(`    ${variant},`)
   }
@@ -282,7 +255,7 @@ function buildTaggedEnum(name: string, ref: TypeRef, decls: string[]): string {
       tagField !== undefined && tagField.shape.kind === "literal" && typeof (tagField.shape as { value: unknown }).value === "string"
         ? ((tagField.shape as { value: string }).value as string)
         : `Variant${i}`
-    const variantName = toPascalCase(tagValue)
+    const variantName = toPascalCaseStripSeparators(tagValue)
     const otherFields = Object.entries(variantShape.fields ?? {}).filter(([k]) => k !== discriminator)
 
     if (variantName !== tagValue) lines.push(`    #[serde(rename = ${quote(tagValue)})]`)
@@ -292,7 +265,7 @@ function buildTaggedEnum(name: string, ref: TypeRef, decls: string[]): string {
     }
     lines.push(`    ${variantName} {`)
     for (const [fieldName, fieldRef] of otherFields) {
-      const rustName = toSnakeCase(fieldName)
+      const rustName = toSnakeCaseStripSeparators(fieldName)
       const ident = escapeRustIdent(rustName)
       const { type, skip } = fieldType(fieldName, fieldRef, decls)
       if (rustName !== fieldName || ident !== rustName) lines.push(`        #[serde(rename = ${quote(fieldName)})]`)

@@ -1,8 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA } from "./codegen-helpers.ts"
 
 // Cap'n Proto schema language: https://capnproto.org/language.html
 // `deprecated` mirrors `description`'s shape: `true` (no reason given) or a
@@ -155,10 +152,6 @@ function readDeprecated(meta: Readonly<Record<string, unknown>>): Deprecated | u
 export function toCapnpType(ref: TypeRef): string {
   const converter = resolve(ref.shape.kind, handlers)
   return converter === undefined ? "AnyPointer" : converter(ref.shape, ref.meta)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
 }
 
 // Cap'n Proto style (§ "Naming"): enumerants are lowerCamelCase.

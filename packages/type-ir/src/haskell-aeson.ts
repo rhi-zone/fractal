@@ -11,15 +11,8 @@
 // sibling declaration (named from its enclosing type + field name), collected
 // into an out-param array as the tree is walked, and rendered before the
 // declaration that references it.
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA, quote } from "./codegen-helpers.ts"
 
 function lowerFirst(name: string): string {
   return name.length === 0 ? name : name[0]!.toLowerCase() + name.slice(1)
@@ -32,14 +25,6 @@ function sanitizeIdent(value: string): string {
   const cleaned = value.replace(/[^A-Za-z0-9_']/g, "")
   if (cleaned.length === 0) return "X"
   return /^[0-9]/.test(cleaned) ? `X${cleaned}` : cleaned
-}
-
-// Haskell string literal — double-quoted with backslash/quote escaping.
-// JSON.stringify's escaping is a superset compatible with Haskell's for the
-// ASCII range this projector actually emits (identifiers, enum members,
-// discriminator tag values).
-function quote(value: string): string {
-  return JSON.stringify(value)
 }
 
 // A type used as a type-application ARGUMENT (e.g. `Maybe T`, `[T]`,

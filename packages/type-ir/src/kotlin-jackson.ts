@@ -9,19 +9,8 @@
 // https://kotlinlang.org/docs/sealed-classes.html,
 // https://github.com/FasterXML/jackson-module-kotlin,
 // https://github.com/FasterXML/jackson-annotations
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA, kotlinDocComment, quote } from "./codegen-helpers.ts"
 
 // jackson-module-kotlin resolves a data class's primary constructor via
 // Kotlin reflection without needing @JsonCreator (unlike the classic Java
@@ -196,20 +185,6 @@ export function toKotlinType(ref: TypeRef): string {
   return nullable && !type.endsWith("?") ? `${type}?` : type
 }
 
-// KDoc (https://kotlinlang.org/docs/kotlin-doc.html) comment above a
-// declaration — driven by `meta.description`/`meta.deprecated`, same
-// open-metadata-bag convention typescript.ts's docComment/jsdoc.ts use.
-function docComment(meta: Readonly<Record<string, unknown>>, indent: string): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
-  if (description !== undefined && deprecated) {
-    return [`${indent}/**`, `${indent} * ${description}`, `${indent} * @deprecated`, `${indent} */`, ""].join("\n")
-  }
-  if (description !== undefined) return `${indent}/** ${description} */\n`
-  return `${indent}/** @deprecated */\n`
-}
-
 // Unlike kotlin-kotlinx.ts (which only surfaces `meta.deprecated` in the KDoc
 // `@deprecated` tag), Jackson output additionally carries Kotlin's own
 // `@Deprecated` annotation — the compiler-enforced warning kotlinx's variant
@@ -303,7 +278,7 @@ function toDataClass(name: string, ref: TypeRef): string {
     const optional = fieldRef.meta.optional === true
     const kotlinName = toKotlinIdentifier(fieldName)
     const jsonProperty = kotlinName !== fieldName ? `@JsonProperty(${quote(fieldName)}) ` : ""
-    const fieldDoc = docComment(fieldRef.meta, "    ")
+    const fieldDoc = kotlinDocComment(fieldRef.meta, "    ")
     const deprecated = deprecatedAnnotation(fieldRef.meta, "    ")
     const keyword = readonly ? "val" : "var"
     const literal = "default" in fieldRef.meta ? defaultLiteral(fieldRef.meta.default) : undefined
@@ -312,7 +287,7 @@ function toDataClass(name: string, ref: TypeRef): string {
   })
 
   const lines = [
-    docComment(ref.meta, ""),
+    kotlinDocComment(ref.meta, ""),
     deprecatedAnnotation(ref.meta, ""),
     "@JsonIgnoreProperties(ignoreUnknown = true)",
     `data class ${name}(`,
@@ -333,7 +308,7 @@ function toDataClass(name: string, ref: TypeRef): string {
 function toEnumClass(name: string, ref: TypeRef): string {
   const shape = ref.shape as TypeShape & { kind: "enum" }
   const entries = shape.members.map((member) => `    @JsonProperty(${quote(member)}) ${toEnumEntryName(member)}`)
-  const lines = [docComment(ref.meta, ""), deprecatedAnnotation(ref.meta, ""), `enum class ${name} {`, entries.join(",\n"), "}"]
+  const lines = [kotlinDocComment(ref.meta, ""), deprecatedAnnotation(ref.meta, ""), `enum class ${name} {`, entries.join(",\n"), "}"]
   return lines.filter((l) => l !== "").join("\n")
 }
 
@@ -411,7 +386,7 @@ function toSealedClass(name: string, ref: TypeRef): string {
     return `@JsonIgnoreProperties(ignoreUnknown = true)\ndata class ${variantName}(val value: ${type}) : ${name}()`
   })
 
-  const header = [docComment(ref.meta, ""), deprecatedAnnotation(ref.meta, "")]
+  const header = [kotlinDocComment(ref.meta, ""), deprecatedAnnotation(ref.meta, "")]
   if (discriminator !== undefined) {
     header.push(
       `@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = ${quote(discriminator)})`,

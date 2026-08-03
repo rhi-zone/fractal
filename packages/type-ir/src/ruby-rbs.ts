@@ -1,4 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA, quote } from "./codegen-helpers.ts"
 
 // RBS (https://github.com/ruby/rbs, bundled with Ruby 3+) — Ruby's own type
 // signature-file format. Unlike ruby-sorbet.ts's Sorbet mode (inline `sig`
@@ -45,18 +46,6 @@ import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
 // literal types, function `^(...) -> R` syntax) is IDENTICAL to
 // ruby-sorbet.ts's RBS mode — RBS's own type-expression grammar doesn't
 // change based on which projector emits it.
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
 
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
 

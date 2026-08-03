@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, quote } from "./codegen-helpers.ts"
 
 // ============================================================================
 // attrs projector — TypeRef -> `attrs.define`-decorated class definitions.
@@ -144,14 +145,6 @@ const leaf =
   (type: string): Converter =>
   () =>
     type
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 // Python `Enum` member names must be valid identifiers — sanitize a member
 // value (which may be an arbitrary string, e.g. "in-progress") into one,

@@ -1,4 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA, quote } from "./codegen-helpers.ts"
 
 // ============================================================================
 // Elixir projector — TypeRef -> idiomatic Elixir 1.17+ struct/typespec source,
@@ -129,14 +130,6 @@ const leaf =
   (type: string): Converter =>
   () =>
     type
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 // A valid BARE Elixir atom/identifier: lowercase-or-underscore leading
 // character, alphanumerics/underscores after, optional trailing `?`/`!`.

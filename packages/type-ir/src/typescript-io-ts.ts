@@ -4,15 +4,8 @@
 // Note: unlike Zod/Valibot, io-ts's primitive codecs are *values*, not factory calls
 // (`t.string`, not `t.string()`) — only the combinator codecs (`t.type`, `t.array`, …)
 // are function calls.
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quoteKey(name: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA, quoteKey } from "./codegen-helpers.ts"
 
 type Expr = { readonly code: string; readonly note?: string }
 type Converter = (shape: TypeShape) => Expr

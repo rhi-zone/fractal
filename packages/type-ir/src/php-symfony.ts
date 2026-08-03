@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { phpDocComment, quote } from "./codegen-helpers.ts"
 
 // ============================================================================
 // PHP/Symfony Serializer projector — TypeRef -> idiomatic PHP 8.1+ source
@@ -49,10 +50,6 @@ type Converter = (shape: TypeShape) => PhpType
 const leaf =
   (type: string): Converter =>
   () => ({ type })
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 // PHP 8.1 enum case names must be valid identifiers — member strings (often
 // lowercase/kebab/snake wire values) are PascalCased and sanitized into one.
@@ -199,21 +196,6 @@ export function toPhpType(ref: TypeRef): PhpType {
   return nullable ? applyNullable(base) : base
 }
 
-// PHPDoc block (https://docs.phpdoc.org/guide/guides/docblocks.html) —
-// `/** ... */` immediately above the declaration it documents, driven by
-// `meta.description`/`meta.deprecated`, same open-metadata-bag convention
-// php-native.ts's own doc-comment helper uses. `meta.deprecated` becomes an
-// `@deprecated` tag — with its reason text when `deprecated` is a string,
-// bare otherwise.
-function docComment(meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated
-  const deprecatedTag = deprecated === true ? "@deprecated" : typeof deprecated === "string" ? `@deprecated ${deprecated}` : undefined
-  if (description === undefined && deprecatedTag === undefined) return ""
-  const lines = [description, deprecatedTag].filter((line): line is string => line !== undefined)
-  return ["/**", ...lines.map((line) => ` * ${line}`), " */\n"].join("\n")
-}
-
 /** Reads `meta.serializationGroups: string[]` — an out-of-band hint (same
  * open-metadata-bag convention every projector in this package uses for its
  * own extension points) naming the Symfony serialization groups a field
@@ -236,7 +218,7 @@ function serializationGroupsOf(meta: Readonly<Record<string, unknown>>): string[
 export function toSymfonyEnum(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "enum" }
   const cases = s.members.map((member) => `    case ${caseName(member)} = ${quote(member)};`)
-  return docComment(ref.meta) + [`enum ${name}: string`, "{", ...cases, "}"].join("\n")
+  return phpDocComment(ref.meta) + [`enum ${name}: string`, "{", ...cases, "}"].join("\n")
 }
 
 /**
@@ -274,7 +256,7 @@ export function toSymfonyClass(name: string, ref: TypeRef): string {
   const docBlock = docParams.length === 0 ? "" : ["    /**", ...docParams, "     */"].join("\n") + "\n"
 
   return [
-    docComment(ref.meta) + `final readonly class ${name}`,
+    phpDocComment(ref.meta) + `final readonly class ${name}`,
     "{",
     docBlock + "    public function __construct(",
     ...paramLines,
@@ -336,7 +318,7 @@ export function toSymfonyDiscriminatedUnion(name: string, ref: TypeRef): string 
   })
 
   const header = [
-    docComment(ref.meta),
+    phpDocComment(ref.meta),
     `#[DiscriminatorMap(typeProperty: ${quote(discriminator)}, mapping: [${mapping}])]`,
     `abstract class ${name}`,
     "{",

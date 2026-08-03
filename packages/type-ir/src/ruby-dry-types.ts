@@ -1,4 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA, quote } from "./codegen-helpers.ts"
 
 // Ruby/dry-types projector — a second Ruby target alongside ruby-sorbet.ts,
 // but a different convention entirely: dry-types (https://dry-rb.org/gems/
@@ -30,18 +31,6 @@ import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
 // started/#basic-usage) — `dryTypesPreamble()` below is that boilerplate,
 // exported so a caller assembling a full file emits it once rather than this
 // projector re-emitting it per type.
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
 
 /**
  * The `module Types; include Dry.Types(); end` boilerplate every generated

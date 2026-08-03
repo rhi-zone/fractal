@@ -1,4 +1,5 @@
 import { ancestors, resolve, type TypeRef, type TypeRefDocument, type TypeShape } from "./index.ts"
+import { quote } from "./codegen-helpers.ts"
 import { toTypeScript } from "./typescript-native.ts"
 
 // ============================================================================
@@ -79,10 +80,6 @@ const leaf =
   (text: string): LinkedConverter =>
   () =>
     code(text)
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 const linkedHandlers: Record<string, LinkedConverter> = {
   boolean: leaf("boolean"),

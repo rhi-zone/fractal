@@ -1,4 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA, quote } from "./codegen-helpers.ts"
 
 // Ruby projector — two independent output modes:
 //
@@ -18,18 +19,6 @@ import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
 // Sorbet nor RBS can express natively (`interface`, a callable in field
 // position, an unnamed nested `object`/`enum` with nowhere to hang a class
 // name) degrades to `T.untyped`/`untyped` rather than fabricating syntax.
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
 
 // T::Enum convention: constants are SCREAMING_SNAKE_CASE identifiers bound to
 // `new(<serialized value>)` — the constant name need not match the

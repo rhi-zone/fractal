@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { quote } from "./codegen-helpers.ts"
 
 // packages/type-ir/src/cpp-glaze.ts — @rhi-zone/fractal-type-ir/cpp-glaze
 //
@@ -42,10 +43,6 @@ function pascalCase(name: string): string {
   const words = name.split(/[^a-zA-Z0-9]+/).filter((w) => w.length > 0)
   if (words.length === 0) return "Value"
   return words.map((w) => w[0]!.toUpperCase() + w.slice(1)).join("")
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
 }
 
 function fallback(ctx: Ctx): string {

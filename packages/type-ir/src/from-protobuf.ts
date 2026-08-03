@@ -33,6 +33,7 @@
 
 import protobuf from "protobufjs"
 import { t, types, typeRefDocument, type TypeRef, type TypeRefDocument } from "./index.ts"
+import { capitalize } from "./codegen-helpers.ts"
 import { bytes, datetime, duration, float32, float64, int32, int64, uint32, uint64 } from "./kinds/common.ts"
 
 // ============================================================================
@@ -430,10 +431,6 @@ function resolveTokenType(token: string): { type: ProtoFieldType; typeName?: str
   const scalar = protoKeywordToType[token]
   if (scalar !== undefined) return { type: scalar }
   return { type: "TYPE_MESSAGE", typeName: token }
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
 }
 
 function fieldOptionsOf(options: { readonly [k: string]: unknown } | undefined): { deprecated?: boolean } | undefined {

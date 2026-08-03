@@ -5,13 +5,10 @@
 // url, isoDateTime, isoDate, isoTime, base64): https://valibot.dev/api/#actions
 // optional/nullable wrappers: https://valibot.dev/api/optional/ , https://valibot.dev/api/nullable/
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { quote } from "./codegen-helpers.ts"
 
 type Expr = { schema: string; actions: readonly string[] }
 type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => Expr
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 const leaf =
   (schema: string): Converter =>

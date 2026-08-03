@@ -3,15 +3,8 @@
 // Superstruct has no native string-format validators (uuid, time, duration, base64) — those
 // fall back to `s.string()` with a trailing comment naming the intended format. `s.date()` IS
 // native, so datetime/date (domain type `Date` — see kinds/date-time.ts) use it directly.
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quoteKey(name: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA, quoteKey } from "./codegen-helpers.ts"
 
 function regexLiteral(pattern: string): string {
   return `/${pattern.replace(/\//g, "\\/")}/`

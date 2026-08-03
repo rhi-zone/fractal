@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, indentLines, quote, swiftDocComment, toCamelCaseStripSeparators } from "./codegen-helpers.ts"
 
 // packages/type-ir/src/swift-codable.ts — @rhi-zone/fractal-type-ir/swift-codable
 //
@@ -14,36 +15,15 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 // enum/union branches, which push onto `Ctx.nested` and return just the new
 // type's name for the enclosing field to reference.
 
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
-// snake_case / kebab-case / space-separated -> lowerCamelCase (Swift's
-// idiomatic property-name casing). `structDecl` compares the result against
-// the original JSON key to decide whether a `CodingKeys` enum is needed.
-function toCamelCase(name: string): string {
-  const camel = name.replace(/[-_\s]+(.)?/g, (_, c: string | undefined) => (c ? c.toUpperCase() : ""))
-  return camel.length === 0 ? camel : camel[0]!.toLowerCase() + camel.slice(1)
-}
-
 // A Swift identifier: camelCase, stripped of characters Swift doesn't allow
 // bare, and never leading with a digit (an enum member/case name derived
 // from arbitrary IR string data — e.g. `enum.members`, a discriminator's
 // literal tag value — has none of Swift's identifier guarantees).
 function swiftIdentifier(name: string): string {
-  let ident = toCamelCase(name).replace(/[^A-Za-z0-9_]/g, "")
+  let ident = toCamelCaseStripSeparators(name).replace(/[^A-Za-z0-9_]/g, "")
   if (ident.length === 0) ident = "_"
   if (/^[0-9]/.test(ident)) ident = `_${ident}`
   return ident
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-function indent(text: string, spaces: number): string[] {
-  const pad = " ".repeat(spaces)
-  return text.split("\n").map((line) => (line.length === 0 ? line : `${pad}${line}`))
 }
 
 // Every built-in leaf kind (plus the pre-1.0 extension kinds — int/float
@@ -165,27 +145,6 @@ function fieldType(ref: TypeRef, hint: string, ctx: Ctx): string {
   return base
 }
 
-// Swift doc comments (`///`, https://www.swift.org/documentation/docc/) from
-// `meta.description`, plus `@available(*, deprecated, ...)` — Swift's native
-// compiler-recognized deprecation attribute (a warning at every use site) —
-// from `meta.deprecated` (`true` for a bare marker, or a string that becomes
-// the attribute's `message:` argument).
-function docComment(ref: TypeRef): string[] {
-  const description = typeof ref.meta.description === "string" ? ref.meta.description : undefined
-  const deprecatedMessage = typeof ref.meta.deprecated === "string" ? ref.meta.deprecated : undefined
-  const isDeprecated = ref.meta.deprecated === true || deprecatedMessage !== undefined
-  const lines: string[] = []
-  if (description !== undefined) lines.push(`/// ${description}`)
-  if (isDeprecated) {
-    lines.push(
-      deprecatedMessage !== undefined
-        ? `@available(*, deprecated, message: ${quote(deprecatedMessage)})`
-        : "@available(*, deprecated)",
-    )
-  }
-  return lines
-}
-
 function structDecl(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "object" }
   const ctx: Ctx = { nested: [] }
@@ -202,13 +161,13 @@ function structDecl(name: string, ref: TypeRef): string {
     codingKeyLines.push(swiftName === fieldName ? `        case ${swiftName}` : `        case ${swiftName} = ${quote(fieldName)}`)
   }
 
-  const lines = [...docComment(ref), `struct ${name}: Codable {`, ...propLines]
+  const lines = [...swiftDocComment(ref), `struct ${name}: Codable {`, ...propLines]
   if (needsCodingKeys) {
     lines.push("", "    enum CodingKeys: String, CodingKey {", ...codingKeyLines, "    }")
   }
   if (ctx.nested.length > 0) {
     lines.push("")
-    for (const decl of ctx.nested) lines.push(...indent(decl, 4))
+    for (const decl of ctx.nested) lines.push(...indentLines(decl, 4))
   }
   lines.push("}")
   return lines.join("\n")
@@ -216,7 +175,7 @@ function structDecl(name: string, ref: TypeRef): string {
 
 function enumDecl(name: string, ref: TypeRef): string {
   const s = ref.shape as TypeShape & { kind: "enum" }
-  const lines = [...docComment(ref), `enum ${name}: String, Codable, CaseIterable {`]
+  const lines = [...swiftDocComment(ref), `enum ${name}: String, Codable, CaseIterable {`]
   for (const member of s.members) {
     const ident = swiftIdentifier(member)
     lines.push(ident === member ? `    case ${ident}` : `    case ${ident} = ${quote(member)}`)
@@ -252,7 +211,7 @@ function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[]
     typeName: fieldType(variant, capitalize(variantCaseName(variant, i)), ctx),
   }))
 
-  const lines = [...docComment(ref), `enum ${name}: Codable {`]
+  const lines = [...swiftDocComment(ref), `enum ${name}: Codable {`]
   for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
   lines.push("", "    init(from decoder: Decoder) throws {", "        let container = try decoder.singleValueContainer()")
   for (const c of cases) {
@@ -275,7 +234,7 @@ function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[]
   lines.push("        }", "    }")
   if (ctx.nested.length > 0) {
     lines.push("")
-    for (const decl of ctx.nested) lines.push(...indent(decl, 4))
+    for (const decl of ctx.nested) lines.push(...indentLines(decl, 4))
   }
   lines.push("}")
   return lines.join("\n")
@@ -314,7 +273,7 @@ function discriminatedUnionDecl(name: string, ref: TypeRef, variants: readonly T
     return { tag, caseName: swiftIdentifier(tag), typeName }
   })
 
-  const lines = [...docComment(ref), `enum ${name}: Codable {`]
+  const lines = [...swiftDocComment(ref), `enum ${name}: Codable {`]
   for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
   lines.push(
     "",
@@ -340,7 +299,7 @@ function discriminatedUnionDecl(name: string, ref: TypeRef, variants: readonly T
   lines.push("        }", "    }")
   if (ctx.nested.length > 0) {
     lines.push("")
-    for (const decl of ctx.nested) lines.push(...indent(decl, 4))
+    for (const decl of ctx.nested) lines.push(...indentLines(decl, 4))
   }
   lines.push("}")
   return lines.join("\n")

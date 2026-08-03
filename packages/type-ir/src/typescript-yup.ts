@@ -5,15 +5,8 @@
 // record/map, union, or literal-set type — `.oneOf()` on `mixed()` approximates
 // literals/enums (value-based, not schema-based), and `yup.lazy()` approximates
 // schema unions via a runtime type guard per variant (best-effort, lossy).
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quoteKey(name: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA, quoteKey } from "./codegen-helpers.ts"
 
 function regexLiteral(pattern: string): string {
   return `/${pattern.replace(/\//g, "\\/")}/`

@@ -10,18 +10,11 @@
 // and the polymorphism strategy differ, since Newtonsoft has no built-in
 // `[JsonPolymorphic]`/`[JsonDerivedType]` equivalent (see emitUnionType
 // below for the custom-converter fallback this drives).
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { indent4, isA, quote } from "./codegen-helpers.ts"
 
 interface Ctx {
   readonly decls: string[]
-}
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
 }
 
 /** camelCase/snake_case/kebab-case (or already-PascalCase) -> PascalCase —
@@ -31,13 +24,6 @@ function pascalCase(raw: string): string {
   const parts = raw.split(/[^A-Za-z0-9]+/).filter((p) => p.length > 0)
   if (parts.length === 0) return raw
   return parts.map((p) => p[0]!.toUpperCase() + p.slice(1)).join("")
-}
-
-function indent(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => (line.length === 0 ? line : `    ${line}`))
-    .join("\n")
 }
 
 // Render a `meta.default` value (JSON-ish: string/number/boolean/null/array/
@@ -415,7 +401,7 @@ export function toCSharpNewtonsoft(ref: TypeRef, name = "Root", options?: CSharp
   if (/\bJObject\b/.test(body)) usings.push("using Newtonsoft.Json.Linq;")
 
   const withNamespace =
-    options?.namespace === undefined ? body : `namespace ${options.namespace}\n{\n${indent(body)}\n}`
+    options?.namespace === undefined ? body : `namespace ${options.namespace}\n{\n${indent4(body)}\n}`
 
   return usings.length === 0 ? `${withNamespace}\n` : `${usings.join("\n")}\n\n${withNamespace}\n`
 }

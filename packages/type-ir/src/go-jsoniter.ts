@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { goDocComment, goFieldIdent, quote } from "./codegen-helpers.ts"
 
 // packages/type-ir/src/go-jsoniter.ts — @rhi-zone/fractal-type-ir/go-jsoniter
 //
@@ -23,10 +24,6 @@ const leaf =
   (type: string): Converter =>
   () =>
     type
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 // Same primitive vocabulary as go-encoding-json.ts — jsoniter decodes into
 // the identical Go types encoding/json does, dispatched via `resolve` so
@@ -103,71 +100,44 @@ interface Ctx {
 /** Sanitize an arbitrary field/type/enum-member name into an exported Go
  * identifier: split on non-alphanumeric runs, capitalize each part, and
  * prefix a leading digit (Go identifiers can't start with one). */
-function ident(raw: string): string {
-  const parts = raw.split(/[^A-Za-z0-9]+/).filter((p) => p.length > 0)
-  const joined = parts.map((p) => p[0]!.toUpperCase() + p.slice(1)).join("")
-  if (joined.length === 0) return "Field"
-  return /^[0-9]/.test(joined) ? `_${joined}` : joined
-}
 
 function uniqueLabel(base: string, used: Set<string>): string {
-  let label = ident(base)
+  let label = goFieldIdent(base)
   let i = 2
   while (used.has(label)) {
-    label = `${ident(base)}${i}`
+    label = `${goFieldIdent(base)}${i}`
     i++
   }
   used.add(label)
   return label
 }
 
-// Go doc-comment convention (https://go.dev/doc/comment): a comment
-// immediately preceding a declaration IS its doc comment, and godoc/golint
-// expect the first line to begin with the declared identifier's name.
-// Deprecation notices follow the standard "Deprecated: ..." paragraph
-// convention (https://go.dev/wiki/Deprecated), set off from the description
-// by a blank comment line when both are present. Identical to
-// go-encoding-json.ts's docComment — jsoniter doesn't change doc-comment
-// conventions.
-function docComment(name: string, meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecatedMessage = typeof meta.deprecated === "string" ? meta.deprecated : undefined
-  const isDeprecated = meta.deprecated === true || deprecatedMessage !== undefined
-  const lines: string[] = []
-  if (description !== undefined) lines.push(`// ${name} ${description}`)
-  if (isDeprecated) {
-    if (lines.length > 0) lines.push("//")
-    lines.push(`// Deprecated: ${deprecatedMessage ?? `${name} is deprecated.`}`)
-  }
-  return lines.length === 0 ? "" : `${lines.join("\n")}\n`
-}
-
 function fieldLine(name: string, jsonName: string, goFieldType: string, optional: boolean): string {
   const jsonTag = optional ? `${jsonName},omitempty` : jsonName
-  return `\t${ident(name)} ${goFieldType} \`json:${quote(jsonTag)}\``
+  return `\t${goFieldIdent(name)} ${goFieldType} \`json:${quote(jsonTag)}\``
 }
 
 function objectDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "object" }
-  const name = ident(hint)
+  const name = goFieldIdent(hint)
   const fields = Object.entries(shape.fields).map(([fieldName, fieldRef]) => {
     const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
-    const baseType = goType(fieldRef, `${name}${ident(fieldName)}`, ctx)
+    const baseType = goType(fieldRef, `${name}${goFieldIdent(fieldName)}`, ctx)
     const goFieldType = optional && !referenceKinds.has(fieldRef.shape.kind) ? `*${baseType}` : baseType
     return fieldLine(fieldName, fieldName, goFieldType, optional)
   })
-  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`)
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`)
   return name
 }
 
 function tupleDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "tuple" }
-  const name = ident(hint)
+  const name = goFieldIdent(hint)
   const fields = shape.elements.map((element, i) => {
     const fieldType = goType(element, `${name}F${i}`, ctx)
     return fieldLine(`F${i}`, String(i), fieldType, false)
   })
-  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`)
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`)
   return name
 }
 
@@ -177,13 +147,13 @@ function tupleDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
 // unmarshal needs to see.
 function enumDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "enum" }
-  const name = ident(hint)
+  const name = goFieldIdent(hint)
   const used = new Set<string>()
   const constLines = shape.members.map((member) => {
-    const memberName = uniqueLabel(`${name}${ident(member)}`, used)
+    const memberName = uniqueLabel(`${name}${goFieldIdent(member)}`, used)
     return `\t${memberName} ${name} = ${quote(member)}`
   })
-  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} string`)
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} string`)
   ctx.decls.push(`const (\n${constLines.join("\n")}\n)`)
   return name
 }
@@ -197,9 +167,9 @@ function enumDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
 // approach does for its generator.
 function unionDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "union" }
-  const name = ident(hint)
+  const name = goFieldIdent(hint)
   const markerMethod = `is${name}`
-  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} interface {\n\t${markerMethod}()\n}`)
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} interface {\n\t${markerMethod}()\n}`)
 
   const used = new Set<string>()
   for (const variant of shape.variants) {
@@ -210,7 +180,7 @@ function unionDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
       // `rendered` is already the freshly-declared named type from goType above.
       ctx.decls.push(`func (${rendered}) ${markerMethod}() {}`)
     } else {
-      const wrapperName = ident(variantHint)
+      const wrapperName = goFieldIdent(variantHint)
       ctx.decls.push(`type ${wrapperName} ${rendered}`)
       ctx.decls.push(`func (${wrapperName}) ${markerMethod}() {}`)
     }
@@ -224,7 +194,7 @@ function unionDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
 // construct directly — same as go-encoding-json.ts.
 function interfaceDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "interface" }
-  const name = ident(hint)
+  const name = goFieldIdent(hint)
   const methods = Object.entries(shape.methods).map(([methodName, methodRef]) => {
     const m = methodRef.shape as TypeShape & {
       kind: "method" | "function"
@@ -232,13 +202,13 @@ function interfaceDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
       returnType: TypeRef
     }
     const paramTypes = m.params.map((p, i) =>
-      goType(p.type, `${name}${ident(methodName)}Param${i}`, ctx),
+      goType(p.type, `${name}${goFieldIdent(methodName)}Param${i}`, ctx),
     )
     const isVoid = m.returnType.shape.kind === "void"
-    const returnType = isVoid ? "" : ` ${goType(m.returnType, `${name}${ident(methodName)}Result`, ctx)}`
-    return `\t${ident(methodName)}(${paramTypes.join(", ")})${returnType}`
+    const returnType = isVoid ? "" : ` ${goType(m.returnType, `${name}${goFieldIdent(methodName)}Result`, ctx)}`
+    return `\t${goFieldIdent(methodName)}(${paramTypes.join(", ")})${returnType}`
   })
-  ctx.decls.push(`${docComment(name, ref.meta)}type ${name} interface {\n${methods.join("\n")}\n}`)
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} interface {\n${methods.join("\n")}\n}`)
   return name
 }
 
@@ -253,7 +223,7 @@ function goType(ref: TypeRef, hint: string, ctx: Ctx): string {
       // source is responsible for the type actually existing/being imported.
       return (shape as TypeShape & { kind: "instance" }).className
     case "ref":
-      return ident((shape as TypeShape & { kind: "ref" }).target)
+      return goFieldIdent((shape as TypeShape & { kind: "ref" }).target)
     case "literal": {
       const s = shape as TypeShape & { kind: "literal" }
       if (s.value === null) return "interface{}"
@@ -327,7 +297,7 @@ function goType(ref: TypeRef, hint: string, ctx: Ctx): string {
  */
 export function toJsoniter(ref: TypeRef, name = "Root"): string {
   const ctx: Ctx = { decls: [] }
-  const rootName = ident(name)
+  const rootName = goFieldIdent(name)
   const topType = goType(ref, name, ctx)
   if (topType !== rootName) {
     ctx.decls.push(`type ${rootName} = ${topType}`)

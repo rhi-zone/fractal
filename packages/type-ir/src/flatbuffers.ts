@@ -1,8 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA } from "./codegen-helpers.ts"
 
 // FlatBuffers schema language (.fbs): https://flatbuffers.dev/schema/
 export type FbField = {
@@ -162,10 +159,6 @@ const handlers: Record<string, Converter> = {
 export function toFlatBuffers(ref: TypeRef): string {
   const converter = resolve(ref.shape.kind, handlers)
   return converter === undefined ? "[ubyte]" : converter(ref.shape, ref.meta)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
 }
 
 // FlatBuffers table fields are optional-by-default (unlike structs, § "Tables

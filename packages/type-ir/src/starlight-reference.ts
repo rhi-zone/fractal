@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeRefDocument, type TypeShape } from "./index.ts"
+import { quote } from "./codegen-helpers.ts"
 import { toJsonSchema } from "./json-schema.ts"
 
 // ============================================================================
@@ -34,9 +35,6 @@ function toKebabCase(name: string): string {
 /** YAML/JSX-safe double-quoted string literal — JSON's quoting rules are a
  * strict subset of YAML flow-scalar quoting and valid inside a JSX
  * expression, so a single helper covers both frontmatter and MDX body use. */
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 function defTitle(name: string, ref: TypeRef | undefined): string {
   if (ref !== undefined && typeof ref.meta.title === "string") return ref.meta.title

@@ -18,19 +18,12 @@
 // instead typed `NSNumber *` (boxed) so a missing/null value can be
 // represented as `nil` — the raw C scalar types (`BOOL`, `NSInteger`, ...)
 // have no nil representation.
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, isA } from "./codegen-helpers.ts"
 
 export interface ObjCOutput {
   readonly header: string
   readonly implementation: string
-}
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
 }
 
 /** Turn an arbitrary enum-member string (`"in_progress"`, `"IN-PROGRESS"`, …)

@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, dartDeprecatedAnnotation, dartDocComment, quoteDart, toSnakeCaseAcronymAware } from "./codegen-helpers.ts"
 
 // built_value (https://pub.dev/packages/built_value) is Dart's older
 // code-generation package for immutable value types built around the
@@ -60,20 +61,6 @@ const leaf =
   () =>
     type
 
-// Dart string literals (https://dart.dev/language/built-in-types#strings) use
-// single quotes by convention (Effective Dart: prefer_single_quotes); `$`
-// additionally needs escaping since it's Dart's own string-interpolation
-// marker and this quotes arbitrary content (enum member text) that may
-// contain it.
-function quote(value: string): string {
-  const escaped = value.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\$/g, "\\$")
-  return `'${escaped}'`
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
-}
-
 // Dart style (https://dart.dev/effective-dart/style#identifiers): fields and
 // variables are lowerCamelCase. Converts snake_case/kebab-case/SCREAMING_SNAKE
 // source field/enum-member names; leaves an already-camel/Pascal name alone
@@ -95,34 +82,8 @@ function toLowerCamel(name: string): string {
   return name.length === 0 ? name : name[0]!.toLowerCase() + name.slice(1)
 }
 
-// The generated `_$foo.g.dart` `part` filename built_value's build_runner
-// step reads/writes is the snake_case spelling of the source file's own
-// basename — identical convention to dart-freezed.ts's `toSnakeCase`.
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .toLowerCase()
-}
-
 function isNullable(ref: TypeRef): boolean {
   return ref.meta.optional === true || ref.meta.nullable === true
-}
-
-function docComment(meta: Readonly<Record<string, unknown>>, indent = ""): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  if (description === undefined) return ""
-  return `${indent}/// ${description}\n`
-}
-
-// `@Deprecated('reason')` (https://api.dart.dev/stable/dart-core/Deprecated-class.html) —
-// Dart's native deprecation annotation, identical to dart-freezed.ts's
-// `deprecatedAnnotation`.
-function deprecatedAnnotation(meta: Readonly<Record<string, unknown>>, indent = ""): string {
-  const deprecated = meta.deprecated
-  if (deprecated === true) return `${indent}@Deprecated('deprecated')\n`
-  if (typeof deprecated === "string") return `${indent}@Deprecated(${quote(deprecated)})\n`
-  return ""
 }
 
 // Scalar type name — identical to dart-freezed.ts's table (freezed and
@@ -216,7 +177,7 @@ function fieldGetter(fieldName: string, fieldRef: TypeRef, ctx: Ctx, hintBase: s
   const dartName = toLowerCamel(fieldName)
   const fieldHint = `${hintBase}${capitalize(dartName)}`
   const fieldType = dartType(fieldRef, ctx, fieldHint)
-  return `${docComment(fieldRef.meta, "  ")}  ${fieldType} get ${dartName};\n`
+  return `${dartDocComment(fieldRef.meta, "  ")}  ${fieldType} get ${dartName};\n`
 }
 
 /**
@@ -239,7 +200,7 @@ function emitClass(name: string, ref: TypeRef, ctx: Ctx): string {
   const serializerName = `_$${toLowerCamel(name)}Serializer`
 
   const lines: string[] = []
-  lines.push(`${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}abstract class ${name} implements Built<${name}, ${name}Builder> {`)
+  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}abstract class ${name} implements Built<${name}, ${name}Builder> {`)
   if (getters.length > 0) {
     lines.push("")
     lines.push(getters.trimEnd())
@@ -266,9 +227,9 @@ function emitEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   ctx.declaredNames.add(name)
 
   const shape = ref.shape as TypeShape & { kind: "enum" }
-  const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quote(member)})`).join(",\n")
+  const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quoteDart(member)})`).join(",\n")
 
-  const decl = `${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}enum ${name} {
+  const decl = `${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}enum ${name} {
 ${members};
 
   final String value;
@@ -317,12 +278,12 @@ function emitUnion(name: string, ref: TypeRef, ctx: Ctx): string {
 
   const comment =
     discriminator !== undefined
-      ? ` // discriminated by ${quote(discriminator)} — built_value has no native sealed-union support;` +
+      ? ` // discriminated by ${quoteDart(discriminator)} — built_value has no native sealed-union support;` +
         ` dispatch manually on this field across the variant classes below (or model as a single class with a nullable field per variant)`
       : " // built_value has no native union support; the variant classes below share no common supertype"
 
   const uniqueNames = [...new Set(variantNames)]
-  const decl = `${docComment(ref.meta)}typedef ${name} = ${uniqueNames.length === 1 ? uniqueNames[0] : "Object"};${comment}`
+  const decl = `${dartDocComment(ref.meta)}typedef ${name} = ${uniqueNames.length === 1 ? uniqueNames[0] : "Object"};${comment}`
   ctx.declarations.push(decl)
   return name
 }
@@ -348,7 +309,7 @@ export function toBuiltValue(ref: TypeRef, name = "GeneratedType"): string {
   }
 
   const body = ctx.declarations.join("\n\n")
-  const fileBase = toSnakeCase(name)
+  const fileBase = toSnakeCaseAcronymAware(name)
   const imports = [
     ctx.usesBuiltValue ? "import 'package:built_value/built_value.dart';" : "",
     ctx.usesBuiltValue ? "import 'package:built_value/serializer.dart';" : "",

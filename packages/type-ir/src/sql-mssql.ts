@@ -1,4 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA } from "./codegen-helpers.ts"
 
 type Converter = (shape: TypeShape) => string
 
@@ -80,10 +81,6 @@ export function toMssqlType(ref: TypeRef): string {
 function enumCheckConstraint(members: readonly string[]): string {
   const values = members.map((m) => sqlLiteral(m)).join(", ")
   return `CHECK ({name} IN (${values}))`
-}
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
 }
 
 // Builds CHECK constraint clause templates from the same open-metadata constraint

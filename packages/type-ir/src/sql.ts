@@ -1,4 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { isA } from "./codegen-helpers.ts"
 
 export type SqlColumn = {
   type: string
@@ -123,10 +124,6 @@ function sqlLiteral(value: unknown): string {
   if (value === null) return "NULL"
   if (typeof value === "string") return `'${value.replace(/'/g, "''")}'`
   return String(value)
-}
-
-function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
 }
 
 // Builds CHECK constraint clause templates from the same open-metadata constraint

@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { flowTsDocComment, quote } from "./codegen-helpers.ts"
 
 // `defNames` — the set of shared/recursive `defs` entry names in scope for
 // this render (see type-ir's `TypeRefDocument.defs`/compile.ts's
@@ -14,10 +15,6 @@ const leaf =
   (type: string): Converter =>
   () =>
     type
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
 
 /** A bare (unquoted) identifier is only valid TS/JS member-name syntax for
  * names matching this shape — anything else (a hyphen, a leading digit, …)
@@ -244,25 +241,8 @@ function toTypeScriptAsCompoundMember(ref: TypeRef, defNames: ReadonlySet<string
   return isCompound ? `(${text})` : text
 }
 
-// TSDoc (https://tsdoc.org/) comment above a declaration — driven by
-// `meta.description` (the summary text) and `meta.deprecated` (the
-// `@deprecated` block tag), same open-metadata-bag convention the jsdoc.ts
-// projector uses. A single line renders as `/** ... */`; both together render
-// as a multi-line block.
-function docComment(meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
-
-  if (description !== undefined && deprecated) {
-    return ["/**", ` * ${description}`, " * @deprecated", " */", ""].join("\n")
-  }
-  if (description !== undefined) return `/** ${description} */\n`
-  return "/** @deprecated */\n"
-}
-
 export function toTypeDeclaration(name: string, ref: TypeRef): string {
-  return `${docComment(ref.meta)}type ${name} = ${toTypeScript(ref)};`
+  return `${flowTsDocComment(ref.meta)}type ${name} = ${toTypeScript(ref)};`
 }
 
 export function toTypeDeclarations(registry: Record<string, TypeRef>): string {

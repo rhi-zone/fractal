@@ -1,4 +1,5 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { capitalize, dartDeprecatedAnnotation, dartDocComment, quoteDart } from "./codegen-helpers.ts"
 
 // Dart language tour: https://dart.dev/language — this projector emits
 // idiomatic null-safe Dart 3 source: data classes with hand-written
@@ -26,26 +27,12 @@ const leaf =
   () =>
     type
 
-// Dart string literals (https://dart.dev/language/built-in-types#strings) use
-// single quotes by convention (Effective Dart: prefer_single_quotes); `$`
-// additionally needs escaping since it's Dart's own string-interpolation
-// marker (`'$foo'`/`'${expr}'`) and this quotes arbitrary content (JSON field
-// names, enum member text, literal values) that may contain it.
-function quote(value: string): string {
-  const escaped = value.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\$/g, "\\$")
-  return `'${escaped}'`
-}
-
 // A discriminant literal used as a Dart `switch`/`case` label: strings get
 // `quote`d, everything else (number/boolean/null) renders as its Dart literal
 // spelling directly.
 function quoteLiteral(value: string | number | boolean | null): string {
-  if (typeof value === "string") return quote(value)
+  if (typeof value === "string") return quoteDart(value)
   return String(value)
-}
-
-function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
 }
 
 // Dart style (https://dart.dev/effective-dart/style#identifiers): fields and
@@ -74,24 +61,6 @@ function toLowerCamel(name: string): string {
 
 function isNullable(ref: TypeRef): boolean {
   return ref.meta.optional === true || ref.meta.nullable === true
-}
-
-function docComment(meta: Readonly<Record<string, unknown>>, indent = ""): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  if (description === undefined) return ""
-  return `${indent}/// ${description}\n`
-}
-
-// `@Deprecated('reason')` (https://api.dart.dev/stable/dart-core/Deprecated-class.html) —
-// Dart's native deprecation annotation, analyzer-recognized (unlike a doc
-// comment's own free text). Dart's `Deprecated` constructor requires a
-// message argument, so a bare `meta.deprecated === true` (no reason given)
-// falls back to a generic one.
-function deprecatedAnnotation(meta: Readonly<Record<string, unknown>>, indent = ""): string {
-  const deprecated = meta.deprecated
-  if (deprecated === true) return `${indent}@Deprecated('deprecated')\n`
-  if (typeof deprecated === "string") return `${indent}@Deprecated(${quote(deprecated)})\n`
-  return ""
 }
 
 // A type "needs custom (de)serialization" when its own or an element/value's
@@ -292,20 +261,20 @@ function emitClass(name: string, ref: TypeRef, ctx: Ctx, extendsName?: string): 
     const fieldHint = `${capitalize(name)}${capitalize(dartName)}`
     const fieldType = dartType(fieldRef, ctx, fieldHint)
 
-    fieldLines.push(docComment(fieldRef.meta, "  "))
+    fieldLines.push(dartDocComment(fieldRef.meta, "  "))
     if (dartName !== fieldName) {
       ctx.usesJsonKey = true
-      fieldLines.push(`  @JsonKey(name: ${quote(fieldName)})\n`)
+      fieldLines.push(`  @JsonKey(name: ${quoteDart(fieldName)})\n`)
     }
     fieldLines.push(`  final ${fieldType} ${dartName};\n`)
 
     ctorParams.push(nullable ? `this.${dartName}` : `required this.${dartName}`)
 
-    const jsonExpr = `json[${quote(fieldName)}]`
+    const jsonExpr = `json[${quoteDart(fieldName)}]`
     fromJsonFields.push(`    ${dartName}: ${fromJsonExpr(fieldRef, jsonExpr, ctx, fieldHint)},`)
 
     const toExpr = toJsonExpr(fieldRef, dartName, ctx, fieldHint)
-    toJsonFields.push(nullable ? `    if (${dartName} != null) ${quote(fieldName)}: ${toExpr},` : `    ${quote(fieldName)}: ${toExpr},`)
+    toJsonFields.push(nullable ? `    if (${dartName} != null) ${quoteDart(fieldName)}: ${toExpr},` : `    ${quoteDart(fieldName)}: ${toExpr},`)
   }
 
   const isVariant = extendsName !== undefined
@@ -314,7 +283,7 @@ function emitClass(name: string, ref: TypeRef, ctx: Ctx, extendsName?: string): 
   const ctorLine = `  ${isVariant ? "const " : ""}${name}(${ctorArgs})${isVariant ? " : super()" : ""};`
 
   const lines: string[] = []
-  lines.push(`${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}class ${name}${extendsClause} {`)
+  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}class ${name}${extendsClause} {`)
   lines.push(...fieldLines.filter((l) => l.length > 0))
   lines.push("")
   lines.push(ctorLine)
@@ -340,9 +309,9 @@ function emitEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   ctx.declaredNames.add(name)
 
   const shape = ref.shape as TypeShape & { kind: "enum" }
-  const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quote(member)})`).join(",\n")
+  const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quoteDart(member)})`).join(",\n")
 
-  const decl = `${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}enum ${name} {
+  const decl = `${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}enum ${name} {
 ${members};
 
   final String value;
@@ -419,9 +388,9 @@ function emitUnion(name: string, ref: TypeRef, ctx: Ctx): string {
         return `      case ${quoteLiteral(discValue)}: return ${variantName}.fromJson(json);`
       })
       .join("\n")
-    fromJsonBody = `    switch (json[${quote(discriminator)}]) {
+    fromJsonBody = `    switch (json[${quoteDart(discriminator)}]) {
 ${cases}
-      default: throw ArgumentError('Unknown ${name} variant: \${json[${quote(discriminator)}]}');
+      default: throw ArgumentError('Unknown ${name} variant: \${json[${quoteDart(discriminator)}]}');
     }`
   } else {
     const attempts = variantInfo
@@ -433,7 +402,7 @@ ${cases}
     throw ArgumentError('No variant of ${name} matched the given JSON');`
   }
 
-  const decl = `${docComment(ref.meta)}${deprecatedAnnotation(ref.meta)}sealed class ${name} {
+  const decl = `${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}sealed class ${name} {
   const ${name}();
 
   factory ${name}.fromJson(Map<String, dynamic> json) {

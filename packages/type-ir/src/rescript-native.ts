@@ -36,25 +36,11 @@
 // union/enum is (elm-json.ts didn't need this because Elm's `{ field : T }`
 // IS a valid anonymous inline type).
 import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { toPascalCaseFromWords } from "./codegen-helpers.ts"
 
 // ============================================================================
 // naming
 // ============================================================================
-
-function splitWords(name: string): string[] {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_\-\s]+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-}
-
-function toPascalCase(name: string): string {
-  return splitWords(name)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join("")
-}
 
 // ReScript field/variant-payload label rules: identifiers must start with a
 // lowercase letter or underscore. A wire field name that isn't a valid bare
@@ -105,7 +91,7 @@ function newCtx(): Ctx {
 }
 
 function freshName(ctx: Ctx, hint: string): string {
-  const base = toPascalCase(hint) || "Anonymous"
+  const base = toPascalCaseFromWords(hint) || "Anonymous"
   if (!ctx.used.has(base)) {
     ctx.used.add(base)
     return base
@@ -165,7 +151,7 @@ const leaf =
 function renderFields(fields: Readonly<Record<string, TypeRef>>, ctx: Ctx, nameHint: string): string[] {
   return Object.entries(fields).map(([fieldName, fieldRef]) => {
     const { label, asAttr } = fieldLabel(fieldName)
-    const fieldType = rescriptType(fieldRef, ctx, `${nameHint}${toPascalCase(fieldName)}`)
+    const fieldType = rescriptType(fieldRef, ctx, `${nameHint}${toPascalCaseFromWords(fieldName)}`)
     const type = fieldRef.meta.optional === true ? `option<${fieldType}>` : fieldType
     return `${asAttr}${label}: ${type}`
   })
@@ -244,7 +230,7 @@ const typeHandlers: Record<string, Converter> = {
   // uses (the literal's actual value only matters at the JSON boundary,
   // which this projector doesn't generate).
   literal: () => "unit",
-  ref: (shape) => toPascalCase((shape as TypeShape & { kind: "ref" }).target),
+  ref: (shape) => toPascalCaseFromWords((shape as TypeShape & { kind: "ref" }).target),
   // ReScript has no structural intersection-type operator. Object members
   // merge fields (mirroring elm-json.ts's/flow-native.ts's own intersection
   // handling, hoisted as a merged record); anything else degrades to the
@@ -320,7 +306,7 @@ function decapitalize(name: string): string {
 // (`"active"` -> `Active`) needs no `@as`: decapitalizing the constructor
 // name alone recovers the original.
 function renderCtor(member: string): string {
-  const name = toPascalCase(member)
+  const name = toPascalCaseFromWords(member)
   return decapitalize(name) === member ? name : `@as(${JSON.stringify(member)}) ${name}`
 }
 
@@ -347,7 +333,7 @@ function renderTaggedUnion(typeName: string, discriminator: string, variants: re
     if (typeof tagValue !== "string") return undefined
     const payload = { ...fields }
     delete payload[discriminator]
-    parsed.push({ tagValue, ctor: toPascalCase(tagValue), payload })
+    parsed.push({ tagValue, ctor: toPascalCaseFromWords(tagValue), payload })
   }
 
   const ctorLines = parsed.map(({ tagValue, ctor, payload }) => {
@@ -393,7 +379,7 @@ function deprecatedAttr(meta: Readonly<Record<string, unknown>>): string {
  * else. Used both for the top-level `toReScript` call and (recursively, via
  * `hoistedName`) for nested objects/unions/enums/intersections. */
 function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
-  const typeName = toPascalCase(name)
+  const typeName = toPascalCaseFromWords(name)
   const kind = ref.shape.kind
   const header = docComment(ref.meta) + deprecatedAttr(ref.meta)
 
@@ -464,7 +450,7 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
  */
 export function toReScript(ref: TypeRef, name = "Value"): string {
   const ctx = newCtx()
-  const typeName = toPascalCase(name)
+  const typeName = toPascalCaseFromWords(name)
   ctx.used.add(typeName)
   const main = generateNamedType(ref, typeName, ctx)
   return [main, ...ctx.decls].join("\n\n")
