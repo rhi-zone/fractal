@@ -739,6 +739,51 @@ not resolve Fork C's substance — which ownership discipline (Options 1-4,
 per the deeper-pass comparison matrix above) applies to which value, and
 which targets support which disciplines, remain open/unresolved.
 
+#### Fork C, discipline-per-target: decided (2026-08-03)
+
+The remaining open question from the subsection above — which discipline
+applies to which target — is now decided.
+
+- **Decision: each target implements only the ownership discipline(s) its own
+  native tooling actually supports.** Not a subjective pick among Options 1-4;
+  it's reading off which of those options each target's own tooling can
+  realize natively, per the deeper-pass comparison matrix above, and declining
+  to build new fractal-maintained runtime scaffolding to force-fit a
+  discipline a target has no native support for.
+  - **C:** Option 1 (copy, value semantics) + Option 2 (opaque handle plus
+    explicit free-function). cbindgen's own documented opaque-pointer pattern
+    (§1) is the closest thing to a "native" C convention, even though cbindgen
+    itself prescribes no specific alloc/free discipline — fractal adopts that
+    pattern as its convention rather than inventing a different one.
+    Explicitly **not** Option 4 (refcounting): no native mechanism: it would
+    be entirely fractal/author-maintained bookkeeping cbindgen doesn't
+    generate or verify. Explicitly **not** Option 3 (resource/lend-count): no
+    host runtime exists for plain C to enforce it — would require fractal to
+    generate a full handle-table runtime from scratch, real uncosted work,
+    excluded.
+  - **JS/wasm-bindgen:** Option 1 (copy) — already shipped in
+    `wasm-bindgen.ts` via `Clone` — + Option 4 (`Arc`-refcounting via
+    `FinalizationRegistry`), not yet implemented but a natural, native-feeling
+    fit: `FinalizationRegistry` is a real JS-native GC hook. Explicitly
+    **not** Option 2 (opaque-handle+free-fn) as a distinct mechanism: JS has
+    no manual-free idiom; if shared ownership is needed the refcount path
+    already covers it. Explicitly **not** Option 3 (resource/lend-count): no
+    native support.
+  - **WIT:** Option 3 (`resource` + `own`/`borrow`) — native, this is WIT's
+    own shipped mechanism, and it already subsumes Option 1 (copy-by-value)
+    for all non-`resource` types for free. Explicitly **not** Option 4
+    (refcounting): confirmed structural mismatch from the deeper-pass matrix
+    above — WIT's Canonical ABI does lend-count-and-trap, not refcounting.
+- **Reasoning.** This directly follows Fork D's already-decided "shared
+  vocabulary, per-target coverage gaps" pattern (below): the IR can still
+  express all four disciplines in its vocabulary (per the
+  representation-as-metadata decision above), but each target's projector
+  only implements the subset it can realize, and errors explicitly — same
+  pattern as `wasm-bindgen.ts` today — on ownership metadata values it can't
+  support.
+- With both the representation-shape decision and this per-target discipline
+  decision made, **Fork C as a whole is now resolved.**
+
 ### Fork D — What's shared across JS/C/WIT vs. genuinely target-specific?
 
 Not a 2-4-option fork in the same shape as A-C — this is a classification
