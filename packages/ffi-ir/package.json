@@ -69,6 +69,10 @@
     "./ctypes": {
       "types": "./dist/ctypes.d.ts",
       "import": "./dist/ctypes.js"
+    },
+    "./ruby-ffi": {
+      "types": "./dist/ruby-ffi.d.ts",
+      "import": "./dist/ruby-ffi.js"
     }
   },
   "files": [
