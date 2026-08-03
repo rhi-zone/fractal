@@ -49,6 +49,10 @@
     "./melange": {
       "types": "./dist/melange.d.ts",
       "import": "./dist/melange.js"
+    },
+    "./deno": {
+      "types": "./dist/deno.d.ts",
+      "import": "./dist/deno.js"
     }
   },
   "files": [
