@@ -389,3 +389,14 @@ source), the project's own relevant precedent (§2, §4-Q7), and the external
 landscape this session was able to research (§3, with unverified claims flagged
 inline) as raw material for a scoping conversation the user would need to have
 before any design work starts.
+
+## 6. Follow-on document
+
+[`ffi-ir-architecture-options.md`](./ffi-ir-architecture-options.md) (written in a
+later session) extends this survey with two more pieces of prior art (cbindgen,
+the WASM Component Model / WIT) and reorganizes the combined evidence — this
+document's §3 plus that one's — into named architectural forks (where a general
+FFI-IR lives relative to type-ir, shared-IR-vs-per-pair-IR, how ownership is
+modeled generally, what's shared vs. target-specific across JS/C/WIT, and build
+sequencing). It does not resolve Q1-Q7 above; read it alongside this document, not
+in place of it.
