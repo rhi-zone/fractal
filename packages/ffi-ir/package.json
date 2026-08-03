@@ -57,6 +57,10 @@
     "./bun": {
       "types": "./dist/bun.d.ts",
       "import": "./dist/bun.js"
+    },
+    "./dotnet": {
+      "types": "./dist/dotnet.d.ts",
+      "import": "./dist/dotnet.js"
     }
   },
   "files": [
