@@ -351,6 +351,143 @@ Each fork lists options with costs; none is picked.
 > before deciding, not just the surface-level type-vocabulary summary already in
 > the doc.
 
+#### Fork B follow-up: deeper WIT/Component-Model comparison (2026-08-03)
+
+Additional research session, going past §2's type-vocabulary summary into WIT's
+composition model, its design intent, and whether it is actually usable as a
+plain-C-ABI-mediating layer. Sources fetched this session:
+**[VERIFIED-EXTERNAL: component-model.bytecodealliance.org/design/worlds.html,
+/design/wit.html, /design/why-component-model.html,
+/language-support/building-a-simple-component/c.html — all fetched 2026-08-03]**,
+plus WebSearch results for the Canonical ABI and wit-bindgen's C backend (marked
+`[VERIFIED-EXTERNAL, via search snippet]` below where the primary spec page
+itself 404'd — `component-model.bytecodealliance.org/advanced/canonical-abi.html`
+is the correct current URL per search results but was not itself fetched this
+session, so Canonical ABI claims here rest on search-snippet text, not a direct
+primary-source read).
+
+**1. Composition model.** A **package** groups interfaces/worlds across files in
+one directory, optionally semver-versioned (`package ns:name@1.0.1;`)
+**[VERIFIED-EXTERNAL, wit.html]**. An **interface** is a named collection of
+types+functions. A **world** is the unit that actually binds a component's
+contract: "a world describes the functionality a component provides, and the
+functionality it requires in order to work," expressed as `import`/`export`
+declarations of interfaces, with composition being the act of connecting one
+component's exports to another's (or a host's) imports so "its imports must be
+fulfilled, by a host or by other components" **[VERIFIED-EXTERNAL,
+worlds.html]**. (The fetch of worlds.html did not surface `include` mechanics
+specifically — flagged as not confirmed rather than assumed absent.) This is a
+real module/service system, not a flat `defs` map — it answers "what does this
+component need and provide," a question type-ir's own `TypeRefDocument`/`defs`
+layer does not ask at all (type-ir has no import/export/binding concept, only a
+flat namespace of type definitions).
+
+**2. Is WIT a target format or a toolchain's source-of-truth grammar? —
+the central question the user asked to resolve.** The spec is explicit about
+its own scope: **"WIT isn't a general-purpose programming language and doesn't
+define behaviour; it defines only *contracts* between components"**
+**[VERIFIED-EXTERNAL, wit.html, direct quote]**. This settles the question in a
+specific, narrow way: WIT is neither "a target you'd project into, full stop"
+(like OpenAPI) nor "a general shared IR that could sit *underneath* C and JS
+projectors the way type-ir sits underneath OpenAPI/protobuf/JSON-Schema
+projectors today." It is the **authoring/source format of one specific
+ecosystem** — the WASM Component Model — that its own bindings generator
+(`wit-bindgen`) reads to emit per-guest-language glue code. Evidence for this
+being ecosystem-bound rather than a neutral grammar: the Component Model's own
+motivation page frames it as fundamentally WASM-scoped, not a general
+cross-language FFI mechanism independent of WASM — "WebAssembly core modules
+are already portable across different architectures and operating systems;
+components retain these benefits and... add portability across different
+programming languages" **[VERIFIED-EXTERNAL, why-component-model.html, direct
+quote]** — the value proposition is stated as *built on top of* WASM's
+sandboxing and portability, not as a standalone interface-description layer
+that happens to also support a WASM backend among others.
+
+Concretely, for fractal's Fork B framing this means: **"WIT as a target
+format" (project type-ir's data-shape IR out into a `.wit` file, the way
+type-ir already projects into OpenAPI text) is the framing WIT's own
+self-description actually supports** — a `.wit` emission projector is a
+plausible, bounded addition alongside the other ~120. **"WIT's grammar as
+fractal's own internal shared boundary IR" (B2, replacing or sitting beneath
+what C and JS projectors both consume) is not well-supported by this
+research** — WIT's grammar is not a neutral data-shape+ownership vocabulary
+that happens to also serialize to WASM; it *is* the Component Model's contract
+language, inseparable in its own docs from WASM portability/sandboxing framing.
+Adopting it as fractal's internal IR would mean every C and JS projector reads
+an IR whose vocabulary was designed for, and is documented as being for,
+components-that-run-on-WASM — a framing neither C nor plain JS/wasm-bindgen
+targets share.
+
+**3. Concrete tooling check: does routing C through WIT actually work with
+existing tooling? — No, not for a plain C-ABI target.** `wit-bindgen` does have
+a C backend, but the worked example
+**[VERIFIED-EXTERNAL, building-a-simple-component/c.html]** compiles C source
+**to** `wasm32-wasip2` (target triple `wasm32-wasip2-clang`), producing a
+`.wasm` binary that is then run via `wasmtime --invoke` or embedded through a
+Wasmtime host — i.e. `wit-bindgen`'s "C" output is C source for a **WASM guest
+compiled to wasm32**, consumed by a WASM runtime, not a native `.so`/`.a` with
+a plain `extern "C"` ABI callable from arbitrary C code the way cbindgen's
+output is. This directly confirms the concern already on record in B2's cost-
+against paragraph and Fork C2's cost-against paragraph — WIT's Canonical ABI
+lowers values into WASM linear memory and its "C" bindings exist to let
+wasm32-compiled guest code speak that ABI, not to give a non-WASM C caller a
+plain-C-ABI header. A WIT-mediated path to fractal's plain-C-ABI target (the
+one §1's cbindgen research describes — arbitrary C callers, no WASM engine
+required) would need a hand-written WIT→plain-C-ABI backend built from
+scratch; it would gain nothing from `wit-bindgen`'s existing C support, because
+that support solves a different problem (WASM-guest C, not native-C-ABI C).
+
+**4. Philosophy alignment/divergence with fractal's own conventions.**
+- **Open metadata bag vs. fixed spec:** WIT has no analogue to type-ir's
+  `meta: Record<string, unknown>` extension point. Its vocabulary is fixed by
+  the spec itself (`record`/`variant`/`resource`/`flags`/...); extensibility
+  happens by the *spec evolving* (e.g. WASI 0.3 adding `stream`/`future`, per
+  §2 above) not by a downstream consumer attaching arbitrary conventions to
+  existing nodes. This is a direct divergence from "open metadata bag over
+  fixed schema" — WIT is, structurally, the fixed-schema side of that design
+  axis, not the open-bag side.
+- **Closed/complete vs. incremental partial support:** nothing in the fetched
+  pages suggests a WIT consumer is expected to handle "this construct isn't
+  supported, throw" the way `wasm-bindgen.ts` explicitly does for
+  union/tuple/map/intersection/method/interface. WIT's own model is that a
+  `.wit` file is a complete, closed contract — every construct in it is
+  meaningful to every conforming `wit-bindgen` backend (modulo that backend's
+  own language-target limitations), not a superset grammar where each backend
+  is expected to reject a subset. This is a different shape of "partial
+  support" than fractal's per-projector throw-on-unsupported-kind pattern: WIT
+  pushes incompleteness to *which backends exist*, not to *which constructs a
+  given backend accepts from an otherwise-shared document*.
+- **Hierarchy via subtyping vs. fixed vocabulary:** type-ir's kind
+  extensibility (new `TypeKinds` entries via declaration merging, ancestor
+  fallback for projectors that don't recognize a kind) has no counterpart in
+  WIT — there is no ancestor-fallback or subtyping mechanism visible in what
+  was fetched; a WIT backend either implements a construct or the spec adds it
+  centrally. This reinforces the metadata-bag divergence above: both of
+  fractal's two extensibility mechanisms (open metadata, kind-hierarchy
+  fallback) are answered differently, or not answered at all, by WIT's design.
+
+**Net finding, stated plainly (not a recommendation):** the evidence gathered
+this session supports **WIT functioning far more naturally as one more
+target/output format** (a `.wit` emission projector, analogous to fractal's
+existing OpenAPI/protobuf/JSON-Schema projectors) **than as a replacement for,
+or the shared substrate beneath, fractal's own internal boundary IR.** The
+"one shared IR, N projectors" architecture (B1) and "WIT is just another
+target" are not in tension with each other — WIT-as-a-target is compatible
+with B1's own N-projector shape, it just means WIT is one of the N rather than
+the IR itself. B2 specifically (WIT's grammar *as* the shared IR) is the
+option this research weighs against most directly, on three independent
+grounds: WIT's own stated scope ("only contracts between components," an
+ecosystem-bound authoring format, not a neutral shared grammar), the concrete
+tooling gap (no existing WIT→plain-C-ABI backend; `wit-bindgen`'s C output is
+WASM-guest-only), and the philosophy mismatch (fixed spec + closed-contract
+assumption vs. fractal's open-metadata-bag + incremental-partial-support
+conventions). None of this forecloses B2 outright — a hand-built
+WIT→plain-C-ABI backend is possible, just unproven and not free the way B2's
+original cost paragraph's "near-zero-cost" framing for a WIT-native target
+assumed — but the user's own instinct going in ("fractal may have different
+goals than the Component Model does") is what this deeper pass corroborates,
+not just repeats.
+
 ### Fork C — How does ownership/lifetime get modeled generally enough for C, JS, and WIT?
 
 - **C1. Binary layout-kind split, IR-level:** every boundary type carries (in
