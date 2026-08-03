@@ -790,7 +790,178 @@ itself contestable and downstream of Forks A-C:
 
 ---
 
-## 5. What this document does not do
+## 5. Target inventory: LuaJIT/Deno/Bun/JNI/P-Invoke/C++/Go
+
+Prompted by the user expanding scope to "comprehensive ffi-gen" and naming seven
+additional candidate targets. This section answers one narrow, factual question per
+target — **does it consume a plain, ordinary C ABI dynamic library (the shape a C
+compiler produces from `extern "C"`, no name mangling, no special binary format), or
+does it require its own non-C-ABI-shaped glue/marshaling layer?** — sourced from
+official docs fetched this session. It does not propose an architecture, does not
+choose among Forks A-E, and does not decide how many fractal backends this implies;
+that classification is left as a finding for the user to weigh, consistent with this
+document's own (§6) disposition against picking among options.
+
+**1. LuaJIT `ffi.C`/`ffi.load`.**
+[VERIFIED-EXTERNAL: luajit.org/ext_ffi_semantics.html, fetched 2026-08-03] —
+`ffi.cdef`'s C parser's "only purpose is to parse C declarations, as found e.g. in C
+header files"; it is explicitly "not a C compiler." Symbols are resolved by name
+against "shared libraries or the default symbol namespace," with the resulting
+symbol/type/address binding cached. Platform calling-convention handling is
+automatic and C-ABI-native (e.g. `__stdcall` vs `__cdecl` detection on Windows/x86).
+No intermediate compiled format, no custom binary layer — `cdef` is purely a
+declaration syntax describing an ordinary C ABI library. **Plain-C-ABI consumer:
+yes.**
+
+**2. Deno FFI (`Deno.dlopen`).**
+[VERIFIED-EXTERNAL: docs.deno.com/runtime/fundamentals/ffi/, fetched 2026-08-03] —
+`Deno.dlopen` "loads dynamic libraries and creates JavaScript bindings to the
+functions they export," i.e. a standard `dlopen`-based C ABI consumer, described via
+a type-signature object, not a special format. **Struct passing:** supported by
+value via a `{ struct: [...] }` field-list, with padding matching C compiler
+behavior; passed as a `TypedArray`, returned as `Uint8Array`. [VERIFIED-EXTERNAL, via
+WebSearch snippet, not independently re-confirmed by direct fetch of the FFI struct
+page] struct-by-value functions are currently incompatible with Deno's "Turbocall"
+fast-path optimization (V8 Fast API) — a performance limitation, not a
+correctness/coverage one. **Callback support:** exists via `Deno.UnsafeCallback`,
+letting native code call back into JS; not auto-freed (must call `.close()`) to
+avoid use-after-free. **Plain-C-ABI consumer: yes**, with one documented
+performance-path limitation for structs (not a capability gap).
+
+**3. Bun FFI (`bun:ffi`).**
+[VERIFIED-EXTERNAL: bun.com/docs/runtime/ffi, fetched 2026-08-03] — "It works with
+any language that supports the C ABI, including Zig, Rust, C/C++, C#, Nim, and
+Kotlin"; `dlopen()` loads a library by name/path with platform-specific suffix
+handling (`.so`/`.dylib`/`.dll`). **Struct passing: not supported** — the documented
+FFI type table covers only primitives (integers, floats, booleans, pointers,
+strings, buffers) and function pointers; no composite/struct type is listed, meaning
+struct data must be handled manually via raw pointers. **Callback support:** present
+via `JSCallback` (including an experimental thread-safe mode with a performance
+cost), but async functions are explicitly not supported as callbacks. The docs
+themselves state `bun:ffi` "is **experimental**, with known bugs and limitations,
+and should not be relied on in production." **Plain-C-ABI consumer: yes** for the
+underlying loading mechanism, but with a **real capability gap** (no struct support,
+not just a performance caveat) relative to LuaJIT/Deno — distinguishing it from
+"partial" in a different way than Deno's Turbocall caveat.
+
+**4. JNI (Java Native Interface).**
+[VERIFIED-EXTERNAL: docs.oracle.com/en/java/javase/12/docs/specs/jni/design.html and
+related Oracle JNI spec pages, fetched via search 2026-08-03] — native methods
+require generated glue functions whose first parameter is the `JNIEnv*` interface
+pointer (a struct of function pointers in C; a C++ class instance in C++, where the
+`JNIEnv` argument is then implicit), with `jobject`/`jclass` and friends as JNI's own
+reference-type system. Local references are VM-managed and freed automatically when
+the native method returns; the VM must track every object handed to native code so
+the GC doesn't collect it prematurely. The underlying call itself does follow the
+platform's native calling convention (C convention on Unix, `__stdcall` on Win32),
+but the *signature shape* — `JNIEnv*`, opaque `jobject`/`jclass` handles, VM-managed
+reference lifetime — has no analogue in a plain `extern "C"` function signature.
+**Plain-C-ABI consumer: no.** Categorically different from items 1-3: it is not "a
+C-ABI library plus a loader," it is a distinct glue-generation target requiring
+JNI-shaped function signatures compiled specifically for the JVM's own
+reference/type system.
+
+**5. .NET P/Invoke.**
+[VERIFIED-EXTERNAL: learn.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke
+and related Microsoft Learn P/Invoke pages, fetched via search 2026-08-03] — a
+`[DllImport]`-attributed `static extern` method declaration (or, since .NET 7, the
+source-generator-based `[LibraryImport]`) is the mechanism; `[MarshalAs]` and
+`DllImport`'s `CharSet` control how managed types (e.g. `string`) are marshaled to
+native representations, and simple blittable types (numeric widths, etc.) pass
+through with no marshaling step at all. This does not require the target library to
+be built for .NET or contain any .NET-specific glue — a signature declared with the
+correct native layout and marshaling attributes calls directly into an ordinary C
+ABI export. **Plain-C-ABI consumer: yes, with an additional declarative marshaling
+layer on the .NET-caller side** — structurally different from JNI: the target
+library needs nothing JNI-shaped, and the .NET-side attributes exist to tell the CLR
+how to convert its own managed representations at the boundary, not to describe a
+non-C-ABI target shape.
+
+**6. C++ FFI.**
+[VERIFIED-EXTERNAL: search results including
+oracle.com/technical-resources/articles/it-infrastructure/stable-cplusplus-abi.html
+and docs.rs/cxx, fetched 2026-08-03] — "C is the only de facto ABI-stable lingua
+franca," and name mangling is itself part of the C++ ABI (there is no single,
+cross-compiler-stable C++ ABI covering mangling, struct/class layout for non-POD
+types, or vtable layout). The documented, standard answer is `extern "C"`: "C++ has
+always supported a way to publish an API with a stable binary ABI by resorting to
+the C subset of C++ via `extern "C"`." Tooling confirms this is the actual state of
+practice rather than a workaround of last resort: `cxx` (Rust↔C++ bridging) is
+explicitly framed relative to this — "CXX is a lower level tool than bindgen or
+cbindgen and can be thought of as a replacement for the concept of extern "C"
+signatures," generating shims specifically so hand-written `extern "C"` boilerplate
+isn't needed, not because C++'s own ABI became stable. **Plain-C-ABI consumer: no**
+for arbitrary C++ — "C++ FFI" in practice means exposing a C-compatible subset
+(`extern "C"` functions, POD-layout types) of a C++ API, which is then indistinguishable
+from item's-1-3's plain-C-ABI case once exposed that way; calling into arbitrary
+C++ (templates, overloads, non-POD classes, exceptions across the boundary) directly
+is not a solved, portable problem across compilers/platforms.
+
+**7. Go (cgo).**
+[VERIFIED-EXTERNAL: go.dev/src/runtime/cgocall.go and related search results on cgo
+call overhead, fetched 2026-08-03] — cgo does link against and call plain C ABI
+functions/libraries directly; no bespoke binary format is involved. The real,
+verified gotchas are operational rather than ABI-shaped: each cgo call switches the
+calling goroutine off its own stack onto the OS thread's `g0` stack and coordinates
+with the Go scheduler (`entersyscall`, signaling "this M is blocked in foreign code,
+run other goroutines elsewhere"), which is real, measured per-call overhead — search
+results cited a "30-40x" penalty relative to a native Go call in one comparison, and
+Go 1.26 is reported to have reduced this overhead by roughly 30% versus earlier
+versions (this specific figure is **[UNVERIFIED — via WebSearch snippet, not
+independently confirmed against a primary Go release-notes source this session]**).
+GC interaction: arguments passed into C live in a stack-local frame of `uintptr`
+fields the GC treats as non-pointer data, and the foreign call runs on `g0`'s stack
+so the calling goroutine's own stack stays in a GC-scannable state throughout — i.e.
+the mechanism is designed to keep the ABI boundary GC-safe, at the cost of the
+stack-switch overhead. **Plain-C-ABI consumer: yes**, with real per-call runtime
+overhead that a codegen target would need to account for (e.g. batching calls,
+avoiding cgo in hot loops) even though the ABI itself requires no special shape.
+
+### Classification table
+
+| # | Target | Plain-C-ABI consumer? | Distinguishing factor (verified) |
+|---|---|---|---|
+| 1 | LuaJIT `ffi.C`/`ffi.load` | **Yes** | `cdef` is pure C-declaration parsing, not a compiler or custom format; symbols resolved by name against an ordinary shared library |
+| 2 | Deno `Deno.dlopen` | **Yes** | Struct-by-value and callbacks (`UnsafeCallback`) both supported; one performance-only caveat (struct args disable the V8 Fast-API "Turbocall" path), not a capability gap |
+| 3 | Bun `bun:ffi` | **Yes** (loading), **partial** (type coverage) | dlopen-based C ABI loader, but no struct type in the documented type table (manual pointer handling required); docs self-describe as experimental with known bugs |
+| 4 | JNI | **No** | Requires `JNIEnv*`/`jobject`/`jclass`-shaped generated glue and a VM-managed reference system; not expressible as an ordinary `extern "C"` signature |
+| 5 | .NET P/Invoke | **Yes, plus a declarative marshaling layer** | `[DllImport]`/`[LibraryImport]` call ordinary C ABI exports directly; `[MarshalAs]`/`CharSet` convert managed↔native representations on the .NET side only — the target library needs no .NET-specific shape |
+| 6 | C++ FFI | **No** (for arbitrary C++) | No cross-compiler-stable ABI (mangling, non-POD layout, vtables all vary); state of the art is exposing an `extern "C"` subset, at which point it degenerates to the plain-C-ABI case |
+| 7 | Go (cgo) | **Yes** | Links against ordinary C ABI libraries directly; the real cost is per-call runtime overhead (goroutine stack switch onto `g0`, scheduler coordination) and GC-safety bookkeeping, not an ABI shape difference |
+
+### Finding: implied scope for a fractal FFI backend, not a decision
+
+Of the seven, four (LuaJIT, Deno, Bun, Go/cgo) and one qualified case (.NET
+P/Invoke) all consume the *same* plain C ABI shape that a `cbindgen`-style backend
+(§1 of this document) would already produce — the difference between them is only
+in each runtime's own idiomatic *loader/declaration* code (LuaJIT's `cdef` string,
+Deno's `dlopen` type-signature object, Bun's `dlopen` type table, cgo's `import "C"`
+preamble, a C#/.NET `[DllImport]` signature block), not in the shape of the library
+itself. If that observation holds, those five would not need five independent
+FFI-IR backends with their own ownership/ABI modeling — they would need **one
+plain-C-ABI backend plus five small "loader stub" projectors**, each one
+significantly narrower in scope than the C target itself (no layout/ownership
+decisions of its own to make, since it's just re-describing an already-settled C
+signature in each runtime's declaration syntax). JNI and "arbitrary C++" are the two
+genuine exceptions — JNI has its own non-C-ABI signature shape and reference system
+end to end, and "C++ FFI" only reduces to the plain-C-ABI case once the API is
+already restricted to an `extern "C"` subset (at which point it's not really "a C++
+target" anymore, it's the C target again with a C++ implementation behind it). Bun's
+missing struct support is a narrower, tooling-maturity-shaped exception (a coverage
+gap in an experimental runtime feature, not a structural one).
+
+This reframes the "comprehensive ffi-gen" scope as a question the user has not yet
+weighed in on, presented here as options rather than a pick: **(a)** one C-ABI IR/
+backend (per this document's Forks A-E) plus N narrow loader-stub projectors for
+LuaJIT/Deno/Bun/Go/.NET, with JNI and WIT (§2) as the only targets needing their own
+full boundary-semantics treatment; versus **(b)** treating every named runtime as
+its own independent FFI-IR backend regardless of ABI-shape overlap, trading a larger
+number of backends for not needing to first prove out and stabilize a shared C-ABI
+backend that every loader-stub would then depend on.
+
+---
+
+## 6. What this document does not do
 
 It does not choose among Forks A-E's options, does not pick a target sequencing,
 and does not propose a concrete IR schema. §1 and §2's tool findings are marked
