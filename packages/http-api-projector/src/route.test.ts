@@ -5,8 +5,6 @@
 
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import { UnvalidatedLeafError, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
-import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import {
   applyMethods,
   applyMoveTo,
@@ -855,88 +853,15 @@ describe("runRoute — per-route sources", () => {
 })
 
 // ============================================================================
-// wrapValidators (@rhi-zone/fractal-api-tree/build) — Node-level validation,
-// wired before naiveTransform runs, exercised through the real HTTP dispatch
-// (makeRouterFromRoute). This is the mechanism that replaced the retired
-// route-tree-level `createApplyValidation`/`pipeline.validate` slot.
-// ============================================================================
-
-describe("wrapValidators — HTTP dispatch", () => {
-  /** A synthetic GeneratedEntry: requires `name` to be a non-empty string. */
-  function nameEntry(): GeneratedEntry {
-    return {
-      parse: (value: unknown) => {
-        if (typeof value !== "object" || value === null) {
-          return { kind: "err", errors: [{ kind: "type", path: [], expected: "object", actual: value }] }
-        }
-        const v = value as Record<string, unknown>
-        if (typeof v.name !== "string" || v.name.length === 0) {
-          return { kind: "err", errors: [{ kind: "type", path: ["name"], expected: "non-empty string", actual: v.name }] }
-        }
-        return { kind: "ok", value: v }
-      },
-    }
-  }
-
-  it("valid input → handler is called with the parsed value", async () => {
-    let capturedInput: unknown
-    const tree = api_({
-      greet: op((input: { name: string }) => {
-        capturedInput = input
-        return { greeting: `hi ${input.name}` }
-      }, { http: { directives: [{ kind: "method", value: "GET" }] } }),
-    })
-    const wrapped = wrapValidators(tree, { greet: nameEntry() })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(wrapped)))
-    const res = await router(new Request("http://localhost/greet?name=Alice"))
-    expect(res.status).toBe(200)
-    expect(capturedInput).toEqual({ name: "Alice" })
-    expect(await res.json()).toEqual({ greeting: "hi Alice" })
-  })
-
-  it("invalid input → 400 (wrapped handler returns an err Result, no throw)", async () => {
-    const tree = api_({
-      greet: op((input: { name: string }) => ({ greeting: `hi ${input.name}` }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
-      }),
-    })
-    const wrapped = wrapValidators(tree, { greet: nameEntry() })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(wrapped)))
-    const res = await router(new Request("http://localhost/greet"))
-    // No `name` query param → wrapValidators' wrapped handler returns an
-    // `err(validationErrors)` Result before the original handler runs;
-    // runRoute's Result-unwrapping (a discriminated-union check on the
-    // return value, not a catch block) maps it to 400 with the structured
-    // errors as the JSON body.
-    expect(res.status).toBe(400)
-    const body = (await res.json()) as { error: unknown }
-    expect(Array.isArray(body.error)).toBe(true)
-  })
-
-  it("a leaf tagged unvalidated with no matching validator entry passes through untouched", async () => {
-    const tree = api_({
-      ping: op((_: unknown) => ({ pong: true }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
-        tags: { unvalidated: true },
-      }),
-    })
-    const wrapped = wrapValidators(tree, { greet: nameEntry() })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(wrapped)))
-    const res = await router(new Request("http://localhost/ping"))
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ pong: true })
-  })
-
-  it("a leaf with no matching validator entry and no unvalidated tag makes wrapValidators throw UnvalidatedLeafError", () => {
-    const tree = api_({
-      ping: op((_: unknown) => ({ pong: true }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
-      }),
-    })
-    expect(() => wrapValidators(tree, { greet: nameEntry() })).toThrow(UnvalidatedLeafError)
-  })
-})
-
+// wrapValidators (Node-level, applied before naiveTransform) is deleted
+// (phase 3) — validation for HTTP dispatch is now `applyValidation`, applied
+// onto the PROJECTED `HttpRoute` via `createFetch`'s `rewriters` option; see
+// preset.test.ts's "OOTB preset — validation via applyValidation + rewriters"
+// describe block for the equivalent end-to-end coverage (valid/rejected
+// input, the unvalidated leaf passthrough, and the uncovered-leaf case —
+// `applyValidation` is permissive by default rather than loud like
+// `wrapValidators` was; `assertValidationCoverage`, api-tree/apply-validation.ts,
+// is the opt-in loud build-mode check).
 // ============================================================================
 // runRoute — handler-level middleware (makeRouterFromRoute's second param).
 // Distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/

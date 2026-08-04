@@ -15,10 +15,9 @@
 // ops, including the `books` subtree below (also authored via api()).
 
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
-import { validators as generatedValidators } from "./generated/validators.ts"
+import { applyValidation } from "./generated/apply-validation.ts"
 
 // ============================================================================
 // Domain types + in-memory store
@@ -222,25 +221,41 @@ export const api = api_({
   })
 
 // ============================================================================
-// Validator wiring — `wrapValidators` (@rhi-zone/fractal-api-tree/build)
-// wraps the codegen-generated validators
-// (examples/library-api/src/generated/validators.ts, produced by
-// `bun run codegen`, see package.json) directly onto `api`'s leaf handlers,
-// keyed by `"/"`-joined route path — the Node-level mechanism shared by
-// HTTP, MCP, and CLI (see build.ts's module doc). A leaf with no matching
-// entry in `generatedValidators` keeps its original handler untouched.
+// Validator wiring — `applyValidation("books", api)`
+// (@rhi-zone/fractal-api-tree/apply-validation), the call-site-anchored
+// mechanism `bun run codegen` (package.json) compiles this exact call
+// against: it scans THIS file for `applyValidation(key, treeExpr)`
+// invocations and emits `examples/library-api/src/generated/apply-validation.ts`
+// — one `Record<path, entry>` per key, `path` "/"-joined and tree-relative
+// (a `fallback` segment as `:name`), regrouped into the
+// `Record<key, Record<path, entry>>` `createApplyValidation` (the generated
+// module's own runtime import) wants.
+//
+// Applied to `api` (the raw Node), BEFORE any protocol-specific projection —
+// the same "validate once, share across every projector" shape
+// `wrapValidators` (deleted, phase 3) used, and it still works for HTTP
+// despite `read`/`replace`/`remove` below being `moveTo`-relocated onto the
+// fallback's own root during HTTP projection: `applyValidation` wraps each
+// leaf's HANDLER (a function reference), and the wrap travels with that
+// reference wherever `httpProjection`'s `applyMoveTo` later moves it — the
+// path keys this call's own walk uses (matching what codegen extracted) never
+// need to agree with HTTP's post-projection dispatch paths. A leaf with no
+// matching generated entry keeps its original handler untouched (permissive
+// by default — `assertValidationCoverage` is the opt-in loud check, not run
+// here).
 // ============================================================================
 
-export const validatedApi = wrapValidators(api, generatedValidators)
+export const validatedApi = applyValidation("books", api)
 
 // ============================================================================
 // HttpRoute projection — the pre-composed pipeline (naiveTransform +
 // applyMethods + applyMoveTo + applyResponse, see
 // docs/design/routing-and-transforms.md and packages/http-api-projector/src/dx.ts),
-// over the validator-wrapped tree. This is the actual route tree
+// over the validated tree. This is the actual route tree
 // `createFetch(validatedApi, ...)` (see app.test.ts) dispatches against —
-// `createFetch` itself has no `validators` option; the tree passed in is
-// already `wrapValidators`-wrapped, here, before HTTP/MCP/CLI ever project it.
+// `createFetch` itself has no dedicated validation option; the tree passed in
+// is already `applyValidation`-wrapped, here, before HTTP/MCP/CLI ever
+// project it.
 // ============================================================================
 
 export const httpRoutes = httpProjection(validatedApi)

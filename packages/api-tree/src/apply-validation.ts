@@ -6,15 +6,16 @@
 // separate projected type) rather than to the raw `api()` `Node` tree the way
 // `build.ts`'s `wrapValidators` does.
 //
-// PHASE 1: this mechanism exists ALONGSIDE `wrapValidators` (build.ts) and is
-// consumed by nothing in production code yet — no projector calls it, and
-// `wrapValidators` remains the mechanism `createFetch`/`createMcpServer`/
-// `runCli` actually use. See docs/design/routing-and-transforms.md's
-// "Dispatch is not an interceptable multi-stage pipeline" section for the
-// history: an earlier `createApplyValidation` (removed in 670e0dd) injected
-// validators into a per-method `pipeline.validate` array on `HttpRoute`; this
-// one wraps a leaf's HANDLER (exactly as `wrapValidators` does), so it
-// carries none of the retired stage-array machinery.
+// SETTLED (phase 3): this is now the ONLY validation mechanism — `createFetch`
+// (phase 2), `createMcpServer`/`runCli`/`createGraphQLServer` (phase 3) all
+// wire validation through `applyValidation`, and `wrapValidators` (build.ts)
+// is deleted. See docs/design/routing-and-transforms.md's "Dispatch is not an
+// interceptable multi-stage pipeline" section for the full history: an
+// earlier `createApplyValidation` (removed in 670e0dd) injected validators
+// into a per-method `pipeline.validate` array on `HttpRoute`; a node-level
+// `wrapValidators` interlude followed; this mechanism wraps a leaf's HANDLER
+// (the same contract `wrapValidators` used), so it carries none of the
+// retired stage-array machinery.
 //
 // Why keyed, and why anchored on the call site: codegen owns a NAMESPACE of
 // path -> validator per key, so several independent trees (and several
@@ -86,17 +87,28 @@ export type ApplyValidation = {
 type AnyHandler = (input: unknown) => unknown
 
 /**
- * Runtime brand for a handler wrapped by this mechanism — the same pattern
- * as `build.ts`'s `wrappedHandlerBrand`/`isValidatorWrapped` (a projector
- * checks it to skip its own fallback coercion for a leaf whose validation is
- * already generated). A SEPARATE brand rather than build.ts's, because
- * build.ts's set is module-private and phase 1 does not modify build.ts; a
- * later phase that migrates a projector onto this mechanism has to make that
- * projector's check consider both brands (or unify them).
+ * Runtime brand for a handler wrapped by this mechanism — a projector
+ * (CLI/MCP) checks it via `isApplyValidationWrapped` to skip its own fallback
+ * coercion/validation step for a leaf whose validation is already generated,
+ * while still running that fallback for a leaf this mechanism didn't touch.
+ * Same pattern `route.ts`'s `routeBrand`/`isHttpRoute` uses.
+ *
+ * UNIFICATION (phase 3): `build.ts` used to carry its own SEPARATE brand
+ * (`wrappedHandlerBrand`/`isValidatorWrapped`) for `wrapValidators`' identical
+ * wrapping — kept apart in phase 1 only because build.ts was off-limits then.
+ * `wrapValidators` and its brand are deleted now that every projector wires
+ * validation through `applyValidation` instead, so this is the SOLE brand a
+ * projector's fallback-skip check needs to consult — no dual-brand check was
+ * ever needed in the end.
  */
 const appliedHandlerBrand = new WeakSet<object>()
 
-/** True when `handler` was wrapped by `applyValidation` — see the brand doc above. */
+/** True when `handler` was wrapped by `applyValidation` — see the brand doc
+ * above. A projector's fallback coercion/validation step (CLI's
+ * `coerceInput`/`validateRequired`, MCP's `validateAgainstSchema`) checks
+ * this per-leaf, AFTER any `rewriters`-style hook has applied
+ * `applyValidation` to the tree the projector dispatches against, to decide
+ * whether that leaf's generated validator already covers it. */
 export function isApplyValidationWrapped(handler: unknown): boolean {
   return typeof handler === "function" && appliedHandlerBrand.has(handler)
 }

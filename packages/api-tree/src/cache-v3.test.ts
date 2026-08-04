@@ -21,16 +21,17 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import {
-  buildValidatorModuleSourceIncremental,
-  writeValidatorModuleCached,
-  type ValidatorCarryForwardState,
-} from "./build.ts"
+  buildApplyValidationModuleSourceIncremental,
+  writeApplyValidationModuleCached,
+  type ApplyValidationCarryForwardState,
+} from "./apply-validation-build.ts"
 import { checkCache, computeLeafFingerprint, readCarryForwardState } from "./cache.ts"
 import { createExtractorProgram, defaultShouldShare } from "./extract.ts"
 import { extractRouteTypeRefs } from "./tree.ts"
 
 const TMP_DIR = `${import.meta.dir}/__fixtures__/.cache-v3-test-tmp`
 const NODE_TS = path.resolve(`${import.meta.dir}/node.ts`)
+const APPLY_VALIDATION_TS = path.resolve(`${import.meta.dir}/apply-validation.ts`)
 
 function importSpecifier(fromDir: string, targetAbs: string): string {
   const rel = path.relative(fromDir, targetAbs).split(path.sep).join("/")
@@ -55,9 +56,10 @@ function thingTypeSource(extraField?: string): string {
   ].join("\n")
 }
 
-function entryASource(nodeImport: string, typesImport: string, marker: string): string {
+function entryASource(nodeImport: string, typesImport: string, avImport: string, marker: string): string {
   return `import { api, op } from "${nodeImport}"
 import type { Thing } from "${typesImport}"
+import { createApplyValidation } from "${avImport}"
 
 // leafOne: input is the named, imported Thing type.
 const leafOne = op((input: Thing) => {
@@ -70,22 +72,27 @@ const leafTwo = op((input: { q?: string }) => {
   return { ok: true }
 })
 
-export const tree = api({ leafOne, leafTwo })
+const tree = api({ leafOne, leafTwo })
+const applyValidation = createApplyValidation({})
+export const validated = applyValidation("bundle", tree)
 `
 }
 
-function entryBSource(nodeImport: string): string {
+function entryBSource(nodeImport: string, avImport: string): string {
   return `import { api, op } from "${nodeImport}"
+import { createApplyValidation } from "${avImport}"
 
 const leafThree = op((input: { n: number }) => {
   return { doubled: input.n * 2 }
 })
 
-export const tree = api({ leafThree })
+const tree = api({ leafThree })
+const applyValidation = createApplyValidation({})
+export const validated = applyValidation("bundle", tree)
 `
 }
 
-async function readCarryForward(entryFile: string, outFile: string): Promise<ValidatorCarryForwardState> {
+async function readCarryForward(entryFile: string, outFile: string): Promise<ApplyValidationCarryForwardState> {
   const prior = readCarryForwardState(entryFile, outFile)
   if (prior === undefined) throw new Error("expected carry-forward state to be readable")
   return prior
@@ -104,11 +111,11 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
     const typesFile = writeSource("types.ts", thingTypeSource())
     const entryFile = writeSource(
       "entry-a.ts",
-      entryASource(importSpecifier(TMP_DIR, NODE_TS), importSpecifier(TMP_DIR, typesFile), "v1"),
+      entryASource(importSpecifier(TMP_DIR, NODE_TS), importSpecifier(TMP_DIR, typesFile), importSpecifier(TMP_DIR, APPLY_VALIDATION_TS), "v1"),
     )
     const outFile = path.join(TMP_DIR, "entry-a.validators.ts")
 
-    const first = await writeValidatorModuleCached(entryFile, outFile)
+    const first = await writeApplyValidationModuleCached(entryFile, outFile)
     expect(first.status).toBe("built")
     const sourceBefore = fs.readFileSync(outFile, "utf8")
 
@@ -119,6 +126,7 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
       entryASource(
         importSpecifier(TMP_DIR, NODE_TS),
         importSpecifier(TMP_DIR, typesFile),
+        importSpecifier(TMP_DIR, APPLY_VALIDATION_TS),
         "v2, a much longer comment describing nothing type-relevant",
       ),
     )
@@ -130,7 +138,7 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
     // (b) Tier 2 determines zero leaves' fingerprints changed.
     const prior = await readCarryForward(entryFile, outFile)
     const program = createExtractorProgram(entryFile)
-    const incremental = buildValidatorModuleSourceIncremental(entryFile, outFile, undefined, program, prior)
+    const incremental = buildApplyValidationModuleSourceIncremental(entryFile, { outFile, program, prior })
     expect(incremental.changedLeaves).toEqual([])
     // Every leaf's generated code is byte-identical to before — carried
     // forward verbatim, not re-templated.
@@ -139,7 +147,7 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
     // The disk-facing cached API agrees: still reports "built" (a Program
     // WAS constructed, since Tier 1 missed) but the bytes it writes are the
     // same bytes already on disk.
-    const rebuilt = await writeValidatorModuleCached(entryFile, outFile)
+    const rebuilt = await writeApplyValidationModuleCached(entryFile, outFile)
     expect(rebuilt.status).toBe("built")
     expect(fs.readFileSync(outFile, "utf8")).toEqual(sourceBefore)
   })
@@ -148,13 +156,13 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
     const typesFile = writeSource("types.ts", thingTypeSource())
     const entryFile = writeSource(
       "entry-a.ts",
-      entryASource(importSpecifier(TMP_DIR, NODE_TS), importSpecifier(TMP_DIR, typesFile), "v1"),
+      entryASource(importSpecifier(TMP_DIR, NODE_TS), importSpecifier(TMP_DIR, typesFile), importSpecifier(TMP_DIR, APPLY_VALIDATION_TS), "v1"),
     )
     const outFile = path.join(TMP_DIR, "entry-a.validators.ts")
 
-    await writeValidatorModuleCached(entryFile, outFile)
+    await writeApplyValidationModuleCached(entryFile, outFile)
     const priorBaseline = await readCarryForward(entryFile, outFile)
-    const leafTwoFragmentBefore = priorBaseline.leafArtifacts["tree/leafTwo"]
+    const leafTwoFragmentBefore = priorBaseline.leafArtifacts["bundle\u0000leafTwo"]
 
     // Change reached ONLY through the import — Thing gains a field. The
     // entry file's own text is untouched.
@@ -164,34 +172,34 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
 
     const prior = await readCarryForward(entryFile, outFile)
     const program = createExtractorProgram(entryFile)
-    const incremental = buildValidatorModuleSourceIncremental(entryFile, outFile, undefined, program, prior)
+    const incremental = buildApplyValidationModuleSourceIncremental(entryFile, { outFile, program, prior })
 
-    expect(incremental.changedLeaves).toEqual(["tree/leafOne"])
-    expect(incremental.leafArtifacts["tree/leafOne"]).not.toEqual(prior.leafArtifacts["tree/leafOne"])
+    expect(incremental.changedLeaves).toEqual(["bundle\u0000leafOne"])
+    expect(incremental.leafArtifacts["bundle\u0000leafOne"]).not.toEqual(prior.leafArtifacts["bundle\u0000leafOne"])
     // leafTwo's fragment is byte-identical to the pre-edit baseline — carried
     // forward from the (JSON-round-tripped) cache record, never recompiled.
-    expect(incremental.leafArtifacts["tree/leafTwo"]).toEqual(leafTwoFragmentBefore as never)
+    expect(incremental.leafArtifacts["bundle\u0000leafTwo"]).toEqual(leafTwoFragmentBefore as never)
   })
 
   it("3. bundle rollup: one member leaf changing re-emits its bundle; a sibling bundle (different entry, no shared leaf) is byte-identical to before", async () => {
     const typesFile = writeSource("types.ts", thingTypeSource())
     const entryA = writeSource(
       "entry-a.ts",
-      entryASource(importSpecifier(TMP_DIR, NODE_TS), importSpecifier(TMP_DIR, typesFile), "v1"),
+      entryASource(importSpecifier(TMP_DIR, NODE_TS), importSpecifier(TMP_DIR, typesFile), importSpecifier(TMP_DIR, APPLY_VALIDATION_TS), "v1"),
     )
-    const entryB = writeSource("entry-b.ts", entryBSource(importSpecifier(TMP_DIR, NODE_TS)))
+    const entryB = writeSource("entry-b.ts", entryBSource(importSpecifier(TMP_DIR, NODE_TS), importSpecifier(TMP_DIR, APPLY_VALIDATION_TS)))
     const outA = path.join(TMP_DIR, "entry-a.validators.ts")
     const outB = path.join(TMP_DIR, "entry-b.validators.ts")
 
-    await writeValidatorModuleCached(entryA, outA)
-    await writeValidatorModuleCached(entryB, outB)
+    await writeApplyValidationModuleCached(entryA, outA)
+    await writeApplyValidationModuleCached(entryB, outB)
     const outBBefore = fs.readFileSync(outB, "utf8")
     const cacheBBefore = fs.readFileSync(`${outB}.cache.json`, "utf8")
 
     // Real type change reached through entry-a's import only.
     writeSource("types.ts", thingTypeSource("newField: boolean"))
 
-    const rebuiltA = await writeValidatorModuleCached(entryA, outA)
+    const rebuiltA = await writeApplyValidationModuleCached(entryA, outA)
     expect(rebuiltA.status).toBe("built")
     const outAAfter = fs.readFileSync(outA, "utf8")
     expect(outAAfter).toContain("newField")
@@ -199,17 +207,17 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
     // Sibling bundle (entry-b) shares no leaf with entry-a and never reaches
     // types.ts at all — its cache stays a hit, its output untouched on disk.
     expect(checkCache(entryB, outB).hit).toBe(true)
-    const rebuiltB = await writeValidatorModuleCached(entryB, outB)
+    const rebuiltB = await writeApplyValidationModuleCached(entryB, outB)
     expect(rebuiltB.status).toBe("hit")
     expect(fs.readFileSync(outB, "utf8")).toEqual(outBBefore)
     expect(fs.readFileSync(`${outB}.cache.json`, "utf8")).toEqual(cacheBBefore)
   })
 
   it("4. v2 -> v3 migration: a v2-format cache file is an unconditional miss; a rebuild writes a fresh v3 file", async () => {
-    const entryFile = writeSource("entry-b.ts", entryBSource(importSpecifier(TMP_DIR, NODE_TS)))
+    const entryFile = writeSource("entry-b.ts", entryBSource(importSpecifier(TMP_DIR, NODE_TS), importSpecifier(TMP_DIR, APPLY_VALIDATION_TS)))
     const outFile = path.join(TMP_DIR, "entry-b.validators.ts")
 
-    await writeValidatorModuleCached(entryFile, outFile)
+    await writeApplyValidationModuleCached(entryFile, outFile)
     const v3Meta = JSON.parse(fs.readFileSync(`${outFile}.cache.json`, "utf8")) as { version: number }
     expect(v3Meta.version).toBe(3)
 
@@ -234,7 +242,7 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
     // No carry-forward data is trusted from a v2-shaped file either.
     expect(readCarryForwardState(entryFile, outFile)).toBeUndefined()
 
-    const rebuilt = await writeValidatorModuleCached(entryFile, outFile)
+    const rebuilt = await writeApplyValidationModuleCached(entryFile, outFile)
     expect(rebuilt.status).toBe("built")
     const freshMeta = JSON.parse(fs.readFileSync(`${outFile}.cache.json`, "utf8")) as { version: number }
     expect(freshMeta.version).toBe(3)

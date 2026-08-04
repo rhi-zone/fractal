@@ -200,3 +200,104 @@ describe("caching", () => {
     expect(incremental.source).toBe(oneShot)
   })
 })
+
+// ============================================================================
+// Extraction/compile edge-case regressions — ported from build.test.ts's
+// "build orchestrator" describe block (deleted phase 3 along with
+// `buildValidatorModuleSource`, which this same plumbing — extraction via
+// `walkNodeType`/`typeRefFromFunctionNode`, compilation via type-ir's
+// `compileValidatorModule`/`compileEntryFragment` — is equally exposed to).
+// Fixtures wrap the SAME rich tree.fixture.ts/sharing-input.fixture.ts
+// build.test.ts used, in a single `applyValidation` call site
+// (__fixtures__/apply-validation-tree.fixture.ts,
+// __fixtures__/apply-validation-sharing-input.fixture.ts) — keys are now
+// tree-relative under the call site's own key ("tree"), not treeId-prefixed.
+// ============================================================================
+
+describe("generated module — extraction/compile edge cases (ported from build.test.ts)", () => {
+  const TREE_FIXTURE = `${import.meta.dir}/__fixtures__/apply-validation-tree.fixture.ts`
+  const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/apply-validation-sharing-input.fixture.ts`
+
+  it("keys leaves tree-relatively under the call site's key, matching the rich fixture's shape", () => {
+    const { byKey } = extractApplyValidationTypeRefs(TREE_FIXTURE)
+    const paths = Object.keys(byKey["tree"]!)
+    expect(paths).toContain("users/create")
+    expect(paths).toContain("users/:userId/get")
+  })
+
+  it("without an outFile, a NAMED parameter type inlines its structure (no import)", () => {
+    const source = buildApplyValidationModuleSource(TREE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    expect(source.split("\n").filter((line) => line.startsWith("import type"))).toEqual([
+      'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
+    ])
+    expect(source).toContain("value is { q?: string }")
+  })
+
+  it("given an outFile, a NAMED parameter type (BookQuery, tree.fixture.ts) is imported relative to outFile, not inlined", () => {
+    const outFile = `${import.meta.dir}/generated/apply-validation.ts`
+    const source = buildApplyValidationModuleSource(TREE_FIXTURE, { outFile, runtimeImport: "../apply-validation.ts" })
+    expect(source).toContain('import type { BookQuery } from "../__fixtures__/tree.fixture.ts"')
+    expect(source).toContain("value is BookQuery")
+    expect(source).not.toContain("value is { q?: string }")
+  })
+
+  it("given an outFile, a builtin/global TS utility type (Record) inlines structurally — no import to a TS lib .d.ts file", () => {
+    const outFile = `${import.meta.dir}/generated/apply-validation.ts`
+    const source = buildApplyValidationModuleSource(TREE_FIXTURE, { outFile, runtimeImport: "../apply-validation.ts" })
+    expect(source).not.toContain("import type { Record }")
+    expect(source).not.toMatch(/import type \{[^}]*\} from "[^"]*lib\.[a-z0-9.]*\.d\.ts"/i)
+    expect(source).toContain("value is Record<string, string>")
+  })
+
+  it("a leaf reaching into a TS/DOM builtin's structure (Response, via its return type) compiles to syntactically valid TS", () => {
+    const source = buildApplyValidationModuleSource(TREE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    expect(source).not.toContain("__@")
+    const withoutImports = source.split("\n").filter((line) => !line.startsWith("import ")).join("\n")
+    expect(() => new Bun.Transpiler({ loader: "ts" }).transformSync(withoutImports)).not.toThrow()
+  })
+
+  it("without shouldShare, no defs are emitted — every route's input inlines its full structure", () => {
+    const source = buildApplyValidationModuleSource(SHARING_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    expect(source).not.toContain("__def_Address_check")
+  })
+
+  it("with shouldShare, a type reused across routes' inputs compiles to ONE shared def, called from every ref site", async () => {
+    const source = buildApplyValidationModuleSource(SHARING_FIXTURE, {
+      shouldShare: defaultShouldShare,
+      runtimeImport: "../apply-validation.ts",
+    })
+    expect(source.match(/function __def_Address_check\(/g) ?? []).toHaveLength(1)
+
+    const { applyValidation } = evalModule(source)
+    const tree = {
+      meta: {},
+      children: {
+        setBilling: { meta: {}, handler: (input: unknown) => ({ echoed: input }) },
+        setShipping: { meta: {}, handler: (input: unknown) => ({ echoed: input }) },
+      },
+    }
+    const wired = applyValidation("tree", tree) as typeof tree
+    const validAddress = { street: "Main", city: "X", zip: "1", country: "Y", region: "Z", landmark: "L" }
+    await expect(
+      wired.children.setBilling.handler({ userId: "u1", billing: validAddress }),
+    ).resolves.toEqual({ echoed: { userId: "u1", billing: validAddress } })
+    const rejected = (await wired.children.setBilling.handler({ userId: "u1", billing: {} })) as unknown
+    expect((rejected as { kind: string }).kind).toBe("err")
+  })
+
+  it("passing a pre-built program (createExtractorProgram) produces byte-identical output to the default per-call program", () => {
+    const withoutProgram = buildApplyValidationModuleSource(TREE_FIXTURE)
+    const program = createExtractorProgram(TREE_FIXTURE)
+    const withProgram = buildApplyValidationModuleSource(TREE_FIXTURE, { program })
+    expect(withProgram).toEqual(withoutProgram)
+  })
+
+  it("a program shared across TWO different entry files (multi-root) extracts each correctly", () => {
+    const program = createExtractorProgram([TREE_FIXTURE, SHARING_FIXTURE])
+    const treeSource = buildApplyValidationModuleSource(TREE_FIXTURE, { program })
+    const sharingSource = buildApplyValidationModuleSource(SHARING_FIXTURE, { shouldShare: defaultShouldShare, program })
+
+    expect(treeSource).toEqual(buildApplyValidationModuleSource(TREE_FIXTURE))
+    expect(sharingSource).toEqual(buildApplyValidationModuleSource(SHARING_FIXTURE, { shouldShare: defaultShouldShare }))
+  })
+})

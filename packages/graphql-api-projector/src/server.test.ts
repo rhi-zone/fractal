@@ -9,7 +9,8 @@ import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
 import type { ExecutionResult } from "graphql"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
+import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation"
+import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/apply-validation"
 import { err, ok } from "@rhi-zone/fractal-api-tree"
 import { t, types } from "@rhi-zone/fractal-type-ir"
 import type { FieldTypeMap } from "./project.ts"
@@ -235,11 +236,12 @@ describe("createGraphQLServer — validators", () => {
     return { parse: (value) => ({ kind: "ok", value: { ...(value as Record<string, unknown>), validated: true } }) }
   }
 
-  it("wraps the tree via wrapValidators before projection", async () => {
+  it("wraps the tree via opts.rewriters' applyValidation before projection", async () => {
     const tree = api_({
       widgets: op((input: Record<string, unknown>) => input),
     })
-    const server = createGraphQLServer(tree, { validators: { widgets: okEntry() } })
+    const applyValidation = createApplyValidation({ gen: { widgets: okEntry() } })
+    const server = createGraphQLServer(tree, { rewriters: [(t) => applyValidation("gen", t)] })
     const result = await server.execute(`mutation { widgets }`)
     expect(result.data?.widgets).toMatchObject({ validated: true })
   })
@@ -248,7 +250,8 @@ describe("createGraphQLServer — validators", () => {
     const tree = api_({
       widgets: op((input: Record<string, unknown>) => input),
     })
-    const server = createGraphQLServer(tree, { validators: { widgets: rejectingEntry() } })
+    const applyValidation = createApplyValidation({ gen: { widgets: rejectingEntry() } })
+    const server = createGraphQLServer(tree, { rewriters: [(t) => applyValidation("gen", t)] })
     const result = await server.execute(`mutation { widgets }`)
     expect(result.errors).toBeDefined()
   })

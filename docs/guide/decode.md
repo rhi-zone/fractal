@@ -174,7 +174,7 @@ been removed (see `route.ts`'s module doc: "Dispatch ... is NOT an
 interceptable multi-stage pipeline ... nothing in this codebase used those
 hooks outside of tests exercising the mechanism itself"). Validation is
 handled separately, one level down, by wrapping a leaf's handler directly —
-see `docs/guide/codegen-cli.md`'s `wrapValidators` section.
+see `docs/guide/codegen-cli.md`'s `applyValidation` section.
 
 ---
 

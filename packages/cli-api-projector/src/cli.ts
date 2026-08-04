@@ -95,8 +95,7 @@ export interface CliStores {
  */
 export type CliStoreBag = ProjectorStores & CliStores
 
-import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
-import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
+import { isApplyValidationWrapped } from "@rhi-zone/fractal-api-tree/apply-validation"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import { generateCompletions, isShellName } from "./completions.ts"
 
@@ -206,21 +205,32 @@ export type CliOpts<T = unknown> = {
    */
   readonly version?: string
   /**
-   * Generated validators (from `buildValidatorModuleSource` /
-   * `compileValidatorModule`, keyed by `"/"`-joined route path — see
-   * `wrapValidators` in `@rhi-zone/fractal-api-tree/build`). When provided,
-   * `n` is wrapped via `wrapValidators` before dispatch: any leaf with a
-   * matching entry has its handler run through the generated `parse()`
-   * (coercion + validation in one pass), and `coerceInput`/`applyDefaults`/
-   * `validateRequired` are skipped for that leaf — the generated validator
-   * takes over. `wrapValidators` is LOUD — every leaf reachable from `n`
-   * must either have a matching entry here or be tagged
-   * `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError` (see
-   * `@rhi-zone/fractal-api-tree/build`'s own doc for the exact contract).
-   * Omitting `validators` entirely skips the wrap (and the check) — the
-   * right choice pre-codegen.
+   * Additional `Node => Node` passes, applied in array order, to `rootNode`
+   * before dispatch — CLI's counterpart to HTTP's `PresetOptions.rewriters`
+   * (`packages/http-api-projector/src/preset.ts`). This is also where
+   * generated VALIDATION wires in, via `applyValidation(key, tree)`
+   * (`@rhi-zone/fractal-api-tree/apply-validation`) — there is no dedicated
+   * `validators` option (removed, phase 3): `applyValidation`'s call site
+   * must live in the CONSUMER's own entry file for codegen to anchor on it
+   * (see that module's doc comment), so `runCli` itself can never own the
+   * call.
+   *
+   * ```ts
+   * import { applyValidation } from "./generated/apply-validation.ts"
+   * await runCli(node, argv, io, {
+   *   rewriters: [(tree) => applyValidation("books", tree)],
+   * })
+   * ```
+   *
+   * Unlike HTTP's `HttpRoute` projection, CLI dispatches directly off the
+   * `Node` tree it's given — there is no separate "projected" shape for
+   * `rewriters` to run after, so a rewrite here applies to `rootNode`
+   * itself, before any subcommand resolution. A leaf a generated validator
+   * covers has `coerceInput`/`applyDefaults`/`validateRequired` skipped for
+   * it (see `isApplyValidationWrapped` below) — a leaf it doesn't cover
+   * keeps using that fallback path exactly as before.
    */
-  readonly validators?: Readonly<Record<string, GeneratedEntry>>
+  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>
   /**
    * Wrap the handler call so it runs inside its own `AsyncLocalStorage`
    * context. `init` computes the per-invocation context value from
@@ -1028,8 +1038,8 @@ const defaultIO: CliIO = {
  * the caller (a real main() entry point) is responsible for actually exiting.
  * This keeps bun test alive when errors occur.
  *
- * @param rootNode - The root Node to dispatch into. Wrapped via `wrapValidators`
- *   first when `opts.validators` is provided (see `CliOpts.validators`).
+ * @param rootNode - The root Node to dispatch into. Passed through
+ *   `opts.rewriters` first, in array order (see `CliOpts.rewriters`).
  * @param argv - Arguments after program name.
  * @param io   - Injectable IO (stdout, stderr, confirm). Defaults to process streams.
  * @param opts - Options: schemas map from codegen.
@@ -1043,12 +1053,12 @@ export async function runCli<T = unknown>(
   const ioResolved: CliIO = { ...defaultIO, ...io }
   const schemas: SchemaMap = opts.schemas ?? {}
   const programName = opts.programName ?? "cli"
-  // Wire generated validators onto the tree BEFORE any dispatch — see
-  // `CliOpts.validators`. wrapValidators is loud: every leaf reachable from
-  // `rootNode` must have a matching entry or be tagged
-  // `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError`. Omitting
-  // `opts.validators` entirely (the pre-codegen default) skips the wrap.
-  const n = opts.validators !== undefined ? wrapValidators(rootNode, opts.validators) : rootNode
+  // Apply any consumer-supplied Node => Node rewriters BEFORE any dispatch —
+  // see `CliOpts.rewriters`. This is where generated validation wires in
+  // (`applyValidation`), same integration point HTTP's `PresetOptions.
+  // rewriters` provides.
+  let n = rootNode
+  for (const rewrite of opts.rewriters ?? []) n = rewrite(n)
 
   // Split argv into subcommand-path segments vs flag tokens.
   // Strategy: consume leading non-flag tokens as path segments; everything
@@ -1161,12 +1171,13 @@ export async function runCli<T = unknown>(
   const inputSchema = schemas[schemaName]?.inputSchema
   const sourceMap = getCliMeta(target.leafMeta as CliLeafMeta).sourceMap ?? {}
   const { input: rawInput, stores } = buildInput(flags, target.slugs, sourceMap)
-  // A generated validator (see CliOpts.validators) already wraps
-  // target.handler to run parse() — coercion + validation + defaults in one
-  // pass — so the schema-derived fallback path below is skipped for this
-  // leaf specifically. Uncovered leaves (no matching generated validator, or
-  // opts.validators omitted entirely) keep using it exactly as before.
-  const generatedValidatorHandlesThis = isValidatorWrapped(target.handler)
+  // A generated validator, wired via `opts.rewriters`' `applyValidation`
+  // call (see CliOpts.rewriters), already wraps target.handler to run
+  // parse() — coercion + validation + defaults in one pass — so the
+  // schema-derived fallback path below is skipped for this leaf
+  // specifically. Uncovered leaves (no matching generated validator, or no
+  // `applyValidation` rewriter at all) keep using it exactly as before.
+  const generatedValidatorHandlesThis = isApplyValidationWrapped(target.handler)
   let input: Record<string, unknown> = rawInput
   if (!generatedValidatorHandlesThis) {
     try {

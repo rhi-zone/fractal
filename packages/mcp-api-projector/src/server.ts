@@ -108,8 +108,7 @@ export interface McpStores {
  */
 export type McpStoreBag = ProjectorStores & McpStores
 
-import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
-import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
+import { isApplyValidationWrapped } from "@rhi-zone/fractal-api-tree/apply-validation"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import { projectPrompts, projectResources, projectTools } from "./project.ts"
 import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "./project.ts"
@@ -778,22 +777,35 @@ export type CreateMcpServerOptions<T = unknown> = {
   /** Prompt projection options (see `projectPrompts`). Forwarded as-is. */
   readonly prompts?: ProjectPromptsOptions
   /**
-   * Generated validators (from `buildValidatorModuleSource` /
-   * `compileValidatorModule`, keyed by `"/"`-joined route path — see
-   * `wrapValidators` in `@rhi-zone/fractal-api-tree/build`). When provided,
-   * `tree` is wrapped via `wrapValidators` before `projectTools`/
-   * `projectResources`/`projectPrompts` build their dispatch maps: any leaf
-   * with a matching entry has its handler run through the generated
-   * `parse()` (coercion + validation in one pass), and the manual
-   * `validateAgainstSchema` check for that tool is skipped — the generated
-   * validator takes over. `wrapValidators` is LOUD — every leaf reachable
-   * from `tree` must either have a matching entry here or be tagged
-   * `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError` (see
-   * `@rhi-zone/fractal-api-tree/build`'s own doc for the exact contract).
-   * Omitting `validators` entirely skips the wrap (and the check) — the
-   * right choice pre-codegen.
+   * Additional `Node => Node` passes, applied in array order, to `tree`
+   * BEFORE `projectTools`/`projectResources`/`projectPrompts` build their
+   * dispatch maps — MCP's counterpart to HTTP's `PresetOptions.rewriters`
+   * (`packages/http-api-projector/src/preset.ts`). This is also where
+   * generated VALIDATION wires in, via `applyValidation(key, tree)`
+   * (`@rhi-zone/fractal-api-tree/apply-validation`) — there is no dedicated
+   * `validators` option (removed, phase 3): `applyValidation`'s call site
+   * must live in the CONSUMER's own entry file for codegen to anchor on it
+   * (see that module's doc comment), so `createMcpServer` itself can never
+   * own the call.
+   *
+   * ```ts
+   * import { applyValidation } from "./generated/apply-validation.ts"
+   * const server = createMcpServer(tree, {
+   *   name: "my-api",
+   *   version: "1.0.0",
+   *   rewriters: [(t) => applyValidation("books", t)],
+   * })
+   * ```
+   *
+   * Unlike HTTP's `HttpRoute` projection, MCP dispatches off the SAME `Node`
+   * shape it's given — there is no separate "projected" shape for
+   * `rewriters` to run after, so a rewrite here applies to `tree` itself,
+   * before any of the three projection walks. A tool a generated validator
+   * covers has the manual `validateAgainstSchema` check skipped for it (see
+   * `isApplyValidationWrapped` below) — a tool it doesn't cover keeps going
+   * through it exactly as before.
    */
-  readonly validators?: Readonly<Record<string, GeneratedEntry>>
+  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>
   /**
    * Additional capabilities to advertise beyond `{ tools: {} }` (always
    * included — this preset always registers tool handlers), `{ resources: {} }`
@@ -923,17 +935,16 @@ export type CreateMcpServerOptions<T = unknown> = {
  * tool error result (`isError: true`) rather than crashing the request —
  * that is the protocol's own error-signaling channel, distinct from a
  * transport-level failure. A generated validator's rejection (see
- * `CreateMcpServerOptions.validators`) is surfaced the same way but via a
+ * `CreateMcpServerOptions.rewriters`) is surfaced the same way but via a
  * different mechanism — the wrapped handler returns an err Result rather
  * than throwing, so it's caught by a return-value check, not the try/catch.
  */
 export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOptions<T>): Server {
-  // Wire generated validators onto the tree BEFORE any projection walk — see
-  // `CreateMcpServerOptions.validators`. wrapValidators is loud: every leaf
-  // reachable from `tree` must have a matching entry or be tagged
-  // `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError`. Omitting
-  // `opts.validators` entirely (the pre-codegen default) skips the wrap.
-  const workingTree = opts.validators !== undefined ? wrapValidators(tree, opts.validators) : tree
+  // Apply any consumer-supplied Node => Node rewriters BEFORE any projection
+  // walk — see `CreateMcpServerOptions.rewriters`. This is where generated
+  // validation wires in (`applyValidation`), same integration point HTTP's
+  // `PresetOptions.rewriters` provides.
+  const workingTree = (opts.rewriters ?? []).reduce((t, rewrite) => rewrite(t), tree)
 
   const { tools, handlers } = projectTools(workingTree, opts.schemas !== undefined ? { schemas: opts.schemas } : {})
   const {
@@ -1044,13 +1055,14 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       }
     }
 
-    // A generated validator (see CreateMcpServerOptions.validators) already
-    // wraps dispatch.handler to run parse() — coercion + validation in one
-    // pass — so the schema-derived fallback check below is skipped for this
-    // tool specifically. Uncovered tools (no matching generated validator, or
-    // opts.validators omitted entirely) keep going through it as before.
+    // A generated validator, wired via `opts.rewriters`' `applyValidation`
+    // call (see CreateMcpServerOptions.rewriters), already wraps
+    // dispatch.handler to run parse() — coercion + validation in one pass —
+    // so the schema-derived fallback check below is skipped for this tool
+    // specifically. Uncovered tools (no matching generated validator, or no
+    // `applyValidation` rewriter at all) keep going through it as before.
     const tool = toolsByName.get(name)
-    const generatedValidatorHandlesThis = isValidatorWrapped(dispatch.handler)
+    const generatedValidatorHandlesThis = isApplyValidationWrapped(dispatch.handler)
     if (tool !== undefined && !generatedValidatorHandlesThis) {
       const result = validateAgainstSchema(tool.inputSchema, args ?? {})
       if (!result.valid) {
