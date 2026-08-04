@@ -50,6 +50,14 @@
       "types": "./dist/build.d.ts",
       "import": "./dist/build.js"
     },
+    "./apply-validation": {
+      "types": "./dist/apply-validation.d.ts",
+      "import": "./dist/apply-validation.js"
+    },
+    "./apply-validation-build": {
+      "types": "./dist/apply-validation-build.d.ts",
+      "import": "./dist/apply-validation-build.js"
+    },
     "./schema-build": {
       "types": "./dist/schema-build.d.ts",
       "import": "./dist/schema-build.js"

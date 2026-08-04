@@ -174,7 +174,7 @@ function mcpMetaOverride(
  * the convention `build.ts`'s `wrapValidators` uses at runtime over the
  * `Node` tree.
  */
-type OnLeaf = (
+export type OnLeaf = (
   name: string,
   path: readonly string[],
   fn: ts.Node,
@@ -191,8 +191,16 @@ type OnLeaf = (
  * `nodeType` is the resolved type of a Node value (root export or any
  * descendant) — tree structure, including the fallback's own name, comes
  * entirely from it; no source declaration is needed.
+ *
+ * Exported (alongside `OnLeaf`) so a walk anchored on something OTHER than
+ * this file's exported-tree scan can reuse it unchanged —
+ * `apply-validation-build.ts` anchors on `applyValidation(key, treeExpr)`
+ * CALL SITES and seeds `path` with `[]` (its keys are tree-relative; the
+ * `key` argument, not a `treeId` path prefix, is what scopes one tree). The
+ * export adds no behavior here: `walkTree` below still calls it exactly as
+ * before.
  */
-function walkNodeType(
+export function walkNodeType(
   nodeType: ts.Type,
   prefix: string,
   path: readonly string[],
