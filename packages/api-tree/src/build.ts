@@ -177,7 +177,22 @@ export class UnvalidatedLeafError extends Error {
  * Keyed the same way `extractRouteTypeRefs` (tree.ts) keys its map: `"/"`-
  * joined path segments, with a `fallback` segment rendered as `:name` (e.g.
  * `"books/:bookId"`) — so a validator module built by
- * `buildValidatorModuleSource` plugs into `wrapValidators` with no re-keying.
+ * `buildValidatorModuleSource` plugs into `wrapValidators` with no re-keying,
+ * PROVIDED the caller's initial `path` argument matches. `extractRouteTypeRefs`
+ * prefixes every key with the exporting tree's own binding name (`treeId` —
+ * the `const`'s identifier, or the factory function's) to disambiguate two
+ * trees exported from the same entry file that happen to share a relative
+ * leaf path (tree.ts's `forEachTreeCandidate`/`walkTree` doc comments) — so a
+ * caller wiring `wrapValidators(someExportedTree, validators)` for a
+ * multi-tree entry file MUST pass that tree's own export name as `path`'s
+ * initial element (`wrapValidators(someExportedTree, validators,
+ * ["someExportedTree"])`), matching the identifier `extractRouteTypeRefs`
+ * used when it built `validators`. Omitting it (the pre-fix default,
+ * `path = []`) now looks up an UNPREFIXED key that no longer exists in a
+ * generated module — a loud `UnvalidatedLeafError` (not a silent
+ * wrong-schema wiring) for a file with more than one exported tree; for a
+ * file with exactly one, the caller can pass that tree's own binding name
+ * just as safely, since there is nothing else it could collide with.
  *
  * LOUD by design: before wrapping anything, `wrapValidators` walks the WHOLE
  * tree and collects every leaf whose path has no matching entry in

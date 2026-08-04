@@ -154,7 +154,7 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
 
     await writeValidatorModuleCached(entryFile, outFile)
     const priorBaseline = await readCarryForward(entryFile, outFile)
-    const leafTwoFragmentBefore = priorBaseline.leafArtifacts.leafTwo
+    const leafTwoFragmentBefore = priorBaseline.leafArtifacts["tree/leafTwo"]
 
     // Change reached ONLY through the import — Thing gains a field. The
     // entry file's own text is untouched.
@@ -166,11 +166,11 @@ describe("IR-keyed build cache (v3) — Tier 2 leaf-level carry-forward", () => 
     const program = createExtractorProgram(entryFile)
     const incremental = buildValidatorModuleSourceIncremental(entryFile, outFile, undefined, program, prior)
 
-    expect(incremental.changedLeaves).toEqual(["leafOne"])
-    expect(incremental.leafArtifacts.leafOne).not.toEqual(prior.leafArtifacts.leafOne)
+    expect(incremental.changedLeaves).toEqual(["tree/leafOne"])
+    expect(incremental.leafArtifacts["tree/leafOne"]).not.toEqual(prior.leafArtifacts["tree/leafOne"])
     // leafTwo's fragment is byte-identical to the pre-edit baseline — carried
     // forward from the (JSON-round-tripped) cache record, never recompiled.
-    expect(incremental.leafArtifacts.leafTwo).toEqual(leafTwoFragmentBefore as never)
+    expect(incremental.leafArtifacts["tree/leafTwo"]).toEqual(leafTwoFragmentBefore as never)
   })
 
   it("3. bundle rollup: one member leaf changing re-emits its bundle; a sibling bundle (different entry, no shared leaf) is byte-identical to before", async () => {
