@@ -28,11 +28,12 @@ Schema (draft 04/07, 2020-12) or OpenAPI 3.0 schema objects.
 The build-time extractor (`createExtractorProgram`, `typeRefFromType`,
 `schemaFromType`, `extractJsDoc`, ...), the whole-tree walkers
 (`extractToolSchemas`, `extractRouteTypeRefs`, `extractToolTypeRefs`), the
-build orchestrator (`buildValidatorModuleSource`, `writeValidatorModule`),
-and the `fractal-api-tree` CLI (`build`/`watch`/`stub`/`check`) live in
-`@rhi-zone/fractal-api-tree` (`./tree`, `./extract`) — they walk `api()`/
-`op()` AUTHORING source, which is api-tree's concern. `compile.ts` (this
-package) is the projector they hand `TypeRef`s to.
+call-site-anchored build orchestrator (`buildApplyValidationModuleSource`,
+`writeApplyValidationModule`), and the `fractal-api-tree` CLI
+(`build`/`watch`/`check`) live in `@rhi-zone/fractal-api-tree` (`./tree`,
+`./extract`, `./apply-validation-build`) — they walk `api()`/`op()`
+AUTHORING source, which is api-tree's concern. `compile.ts` (this package)
+is the projector they hand `TypeRef`s to.
 
 ## Full export surface
 

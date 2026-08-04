@@ -69,8 +69,6 @@ import {
 } from "graphql"
 import type { DocumentNode, ExecutionResult, GraphQLFieldResolver, GraphQLSchema } from "graphql"
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
-import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
 import { getGraphQLMeta, projectGraphQL } from "./project.ts"
@@ -112,16 +110,30 @@ export type CreateGraphQLServerOptions<T = unknown> = {
   /** Named type declarations referenced by any supplied `FieldTypeInfo`. Forwarded to `projectGraphQL`. */
   readonly namedTypes?: Readonly<Record<string, TypeRef>>
   /**
-   * Generated validators (from `buildValidatorModuleSource` /
-   * `compileValidatorModule`, keyed by `"/"`-joined route path — see
-   * `wrapValidators` in `@rhi-zone/fractal-api-tree/build`). When provided,
-   * `tree` is wrapped via `wrapValidators` BEFORE `projectGraphQL` runs — the
-   * same mechanism `createFetch`'s and `createMcpServer`'s own `validators`
-   * option use, so one generated module wires validation into HTTP, MCP, and
-   * GraphQL alike. Leaves with no matching entry keep their original handler
-   * untouched.
+   * Additional `Node => Node` passes, applied in array order, to `tree`
+   * BEFORE `projectGraphQL` runs — GraphQL's counterpart to HTTP's
+   * `PresetOptions.rewriters` (`packages/http-api-projector/src/preset.ts`).
+   * This is also where generated VALIDATION wires in, via
+   * `applyValidation(key, tree)` (`@rhi-zone/fractal-api-tree/apply-validation`)
+   * — there is no dedicated `validators` option (removed, phase 3):
+   * `applyValidation`'s call site must live in the CONSUMER's own entry file
+   * for codegen to anchor on it (see that module's doc comment), so
+   * `createGraphQLServer` itself can never own the call.
+   *
+   * ```ts
+   * import { applyValidation } from "./generated/apply-validation.ts"
+   * const server = createGraphQLServer(tree, {
+   *   rewriters: [(t) => applyValidation("books", t)],
+   * })
+   * ```
+   *
+   * Unlike HTTP's `HttpRoute` projection, GraphQL dispatches off the SAME
+   * `Node` shape it's given — there is no separate "projected" shape for
+   * `rewriters` to run after, so a rewrite here applies to `tree` itself,
+   * before `projectGraphQL` runs. Leaves with no matching generated entry
+   * keep their original handler untouched.
    */
-  readonly validators?: Readonly<Record<string, GeneratedEntry>>
+  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>
   /**
    * Around-hooks wrapping each field's handler call — `F => F` where
    * `F = (input, stores) => result` (see
@@ -231,9 +243,11 @@ export function createGraphQLServer<T = unknown>(
   tree: Node,
   opts: CreateGraphQLServerOptions<T> = {},
 ): GraphQLServer {
-  // Wire generated validators onto the tree BEFORE any projection walk — see
-  // CreateGraphQLServerOptions.validators.
-  const workingTree = opts.validators !== undefined ? wrapValidators(tree, opts.validators) : tree
+  // Apply any consumer-supplied Node => Node rewriters BEFORE any projection
+  // walk — see CreateGraphQLServerOptions.rewriters. This is where generated
+  // validation wires in (`applyValidation`), same integration point HTTP's
+  // `PresetOptions.rewriters` provides.
+  const workingTree = (opts.rewriters ?? []).reduce((t, rewrite) => rewrite(t), tree)
 
   const projection = projectGraphQL(workingTree, {
     ...(opts.types !== undefined ? { types: opts.types } : {}),

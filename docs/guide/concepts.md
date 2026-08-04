@@ -114,8 +114,8 @@ Node --naiveTransform--> HttpRoute --applyMethods, applyMoveTo, applyResponse-->
 `httpProjection(tree)` (`packages/http-api-projector/src/dx.ts`) is the one-call preset
 composing all three rewriters over `naiveTransform`'s output; `crud(handlers)` is the
 convention constructor for the standard 5-op REST resource, wiring `http.*` bundles for
-you. `createFetch(node, opts?)` (`preset.ts`) is the full OOTB pipeline: optional
-`wrapValidators`, `httpProjection`, user rewriters, router compilation
+you. `createFetch(node, opts?)` (`preset.ts`) is the full OOTB pipeline:
+`httpProjection`, user rewriters (including, optionally, `applyValidation`), router compilation
 (`mapCharRouter` by default — static routes in a prebuilt `Map`, dynamic routes through a
 compiled char-matcher function, `compile.ts`; swap in `makeRouterFromRoute`,
 `radixRouter`, or `compiledCharRouter` for a different build-cost/dispatch-cost

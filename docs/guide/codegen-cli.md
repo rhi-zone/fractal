@@ -2,14 +2,15 @@
 
 `@rhi-zone/fractal-api-tree` includes a CLI (`packages/api-tree/src/cli.ts`,
 bin name `fractal-api-tree`) that generates a standalone, AOT (ahead-of-time)
-validator module from a tree's leaf op input types — extracted via the
-TypeScript compiler API — so route validation doesn't depend on a runtime
-type-reflection library. It orchestrates api-tree's own extractor/tree-walker
-(`extract.ts`/`tree.ts`) into `@rhi-zone/fractal-type-ir`'s validator codegen
+`applyValidation` module from an entry file's `applyValidation(key, tree)`
+call sites — extracted via the TypeScript compiler API — so route validation
+doesn't depend on a runtime type-reflection library. It orchestrates
+api-tree's own call-site scanner/extractor (`apply-validation-build.ts`,
+`extract.ts`) into `@rhi-zone/fractal-type-ir`'s validator codegen
 (`compileValidatorModule`).
 
 ```
-entry file (op tree) --extract input types--> compile --> validator module source
+entry file (applyValidation(key, tree) call sites) --extract input types--> compile --> applyValidation module source
 ```
 
 ---
@@ -36,25 +37,25 @@ Both forms accept the same subcommands and flags.
 
 ### `build <entry> -o <output>`
 
-Generates the validator module for `<entry>` and writes it to `<output>`.
+Generates the applyValidation module for `<entry>` and writes it to `<output>`.
 Skips the (potentially expensive) TypeScript-compiler extraction when the
 output is already newer than the entry file's mtime:
 
 ```sh
-bun packages/api-tree/src/cli.ts build src/api.ts -o src/generated/validators.ts
+bun packages/api-tree/src/cli.ts build src/api.ts -o src/generated/apply-validation.ts
 ```
 
 Force a rebuild even when the output looks up to date:
 
 ```sh
-bun packages/api-tree/src/cli.ts build src/api.ts -o src/generated/validators.ts --force
+bun packages/api-tree/src/cli.ts build src/api.ts -o src/generated/apply-validation.ts --force
 ```
 
 Output on a skip vs. a real build:
 
 ```
-up to date: src/generated/validators.ts
-built src/generated/validators.ts in 42.3ms
+up to date: src/generated/apply-validation.ts
+built src/generated/apply-validation.ts in 42.3ms
 ```
 
 ### `watch <entry> -o <output>`
@@ -65,21 +66,21 @@ one rebuild). Each rebuild diffs the newly generated source against what's
 on disk and skips the write (`no changes`) when nothing actually changed:
 
 ```sh
-bun packages/api-tree/src/cli.ts watch src/api.ts -o src/generated/validators.ts
+bun packages/api-tree/src/cli.ts watch src/api.ts -o src/generated/apply-validation.ts
 ```
 
 `Ctrl-C` (`SIGINT`) shuts the watcher down cleanly.
 
 ### `check <entry> -o <output>`
 
-Regenerates the validator module source in memory and compares it byte-for-
+Regenerates the applyValidation module source in memory and compares it byte-for-
 byte against `<output>` on disk. Prints `up to date` and exits 0 when they
 match; prints `stale: ... needs regeneration` to stderr and exits 1
 otherwise. Intended for CI — fails the build when someone changed an op's
 input type without re-running `build`:
 
 ```sh
-bun packages/api-tree/src/cli.ts check src/api.ts -o src/generated/validators.ts
+bun packages/api-tree/src/cli.ts check src/api.ts -o src/generated/apply-validation.ts
 ```
 
 ---
@@ -99,57 +100,76 @@ generated file by hand will show up as `stale` on the next CI run.
 
 ---
 
-## Connecting to `wrapValidators`
+## Connecting to `applyValidation`
 
-The generated module exports a `validators: Record<routePath, GeneratedEntry>`
-map (per entry-file), where each `GeneratedEntry` carries a `parse(value)`
-function performing coercion + validation + narrowing in one pass.
-`wrapValidators(node, validators)` (in `packages/api-tree/src/build.ts`) walks
-a `Node` tree and, for every leaf whose tree position (path segments joined
-by `/`, a `fallback` segment rendered as `:name`, e.g. `"books/:bookId"`)
-matches a path in `validators`, wraps that leaf's handler to run the
-generated `parse()` first — success calls the original handler with the
-parsed value; failure returns `Result.err(validationErrors)` without ever
-reaching it. `wrapValidators` is LOUD, not a silent passthrough: before
-wrapping anything, it walks the whole tree and requires every leaf to either
-have a matching `validators` entry or be tagged `meta.tags.unvalidated` —
-uncovered, untagged leaves make it throw `UnvalidatedLeafError` (naming every
-offending path at once) instead of quietly leaving them unvalidated. Tag a
-leaf `op(fn, { tags: { unvalidated: true } })` to opt it out deliberately.
-`wrapValidators` never mutates the input tree — it returns a fresh one.
-
-This happens at the `Node` level, **before** any protocol-specific
-projection runs, so one generated module wires validation into HTTP, MCP,
-and CLI alike:
+Codegen anchors on `applyValidation(key, treeExpr)` CALL SITES in the entry
+file, not on exported trees — you write the call yourself:
 
 ```ts
-import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
-import { validators } from "./generated/validators.ts"
+import { applyValidation } from "./generated/apply-validation.ts"
 
-const validated = wrapValidators(apiTree, validators)
+export const validatedApi = applyValidation("books", apiTree)
 ```
 
-In practice you rarely call `wrapValidators` directly — each projector's OOTB
-preset takes a `validators` option and wires it in for you:
-`createFetch(node, { validators })`
-(`packages/http-api-projector/src/preset.ts`), `createMcpServer(node, { validators })`,
-and `runCli(node, { validators })` all wrap the tree with `wrapValidators`
-before their own projection/dispatch runs.
+The generated module (`./generated/apply-validation.ts` above) exports
+`validatorsByKey: Record<key, Record<routePath, GeneratedEntry>>` — one
+`Record<routePath, GeneratedEntry>` per call-site key, each `GeneratedEntry`
+carrying a `parse(value)` function that performs coercion + validation +
+narrowing in one pass — plus the already-composed
+`applyValidation = createApplyValidation(validatorsByKey)`, which is what the
+call site above actually imports and calls. For every leaf whose tree
+position (path segments joined by `/`, a `fallback` segment rendered as
+`:name`, e.g. `"books/:bookId"`) matches a path under that call's `key`,
+`applyValidation` wraps that leaf's handler to run the generated `parse()`
+first — success calls the original handler with the parsed value; failure
+returns `Result.err(validationErrors)` without ever reaching it. Unlike the
+retired `wrapValidators`, `applyValidation` is PERMISSIVE by default: an
+unknown key or an uncovered leaf just passes through unchanged, not an
+opt-out you have to tag — the pre-codegen stub (`applyValidationStubSource`)
+relies on exactly this so a project compiles and runs before codegen has
+ever run at all. `assertValidationCoverage(key, tree, validatorsByKey)`
+(`@rhi-zone/fractal-api-tree/apply-validation`) is the separate, explicitly-
+called LOUD build-mode check — call it yourself where you want "every leaf
+covered or tagged `meta.tags.unvalidated`" enforced, throwing
+`UncoveredLeafError` (naming every offending path at once) otherwise.
+`applyValidation` never mutates the input tree — it returns a fresh one.
+
+The call site's `key` scopes one tree — apply it to the `Node` tree directly
+(shared across HTTP/MCP/CLI/GraphQL, before any protocol-specific projection
+runs) when one tree serves more than one protocol, or apply it to a single
+protocol's own projected shape (HTTP's `HttpRoute`) when a preset's own
+`rewriters` hook is the more natural integration point:
+
+```ts
+// Shared across every protocol that dispatches off the same Node — MCP/CLI/
+// GraphQL, and HTTP too if httpProjection runs on the ALREADY-wrapped tree.
+const validatedApi = applyValidation("books", apiTree)
+
+// Or, per-protocol, via each preset's own rewriters option:
+const fetch = createFetch(node, { rewriters: [(routes) => applyValidation("books", routes)] })
+await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books", t)] })
+const server = createMcpServer(node, { rewriters: [(t) => applyValidation("books", t)] })
+```
+
+No preset has a dedicated validation option — `applyValidation`'s call site
+has to live in YOUR entry file for codegen to anchor on it, so a preset can
+never own the call on your behalf. Each `key` may be used at most once per
+generated `applyValidation` function; validating the same tree separately
+per protocol needs one call site (and one key) per protocol.
 
 ---
 
 ## Workflow
 
-1. **Dev / first checkout** — omit the `validators` option entirely on
-   `createFetch`/`createMcpServer`/`runCli` (all three already treat it as
-   fully optional) until real codegen has run. Downstream code that doesn't
-   reference the not-yet-generated validator module compiles and runs fine;
-   wiring validation in is a deliberate step once real types exist to
-   extract, not something a placeholder empty module should paper over —
-   `wrapValidators` now throws on an uncovered leaf rather than silently
-   letting it through.
+1. **Dev / first checkout** — the pre-codegen stub (checked in, or produced
+   by a first `build` run against an entry file with no call sites yet) is a
+   pass-through `applyValidation` over an empty map, so your one
+   `import { applyValidation } from "./generated/apply-validation.ts"` and
+   call site compile and run before real codegen has produced anything.
+   Wiring validation in is then automatic the moment codegen runs for
+   real — there's no separate option to remember to add.
 2. **Local development** — run `watch <entry> -o <output>` alongside your
-   dev server; the validator module regenerates as you change op input
+   dev server; the applyValidation module regenerates as you change op input
    types.
 3. **One-shot regeneration** — run `build <entry> -o <output>` in a
    pre-commit hook, build script, or manual step; `--force` when you need to

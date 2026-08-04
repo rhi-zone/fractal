@@ -1,16 +1,17 @@
 // packages/cli-api-projector/src/cli-validators.test.ts — @rhi-zone/fractal-cli-api-projector
 //
-// Node-level generated-validator wiring: `runCli`'s `opts.validators` wraps
-// the tree via `wrapValidators` (@rhi-zone/fractal-api-tree/build) before
-// dispatch — the leaf's generated `parse()` runs instead of (not alongside)
-// `coerceInput`/`applyDefaults`/`validateRequired` for any leaf a generated
-// validator covers; leaves it doesn't cover keep using the schema-derived
-// fallback path exactly as before (see cli-coercion.test.ts).
+// Generated-validator wiring: `runCli`'s `opts.rewriters` runs
+// `applyValidation(key, tree)` (@rhi-zone/fractal-api-tree/apply-validation)
+// on `rootNode` before dispatch — the leaf's generated `parse()` runs instead
+// of (not alongside) `coerceInput`/`applyDefaults`/`validateRequired` for any
+// leaf a generated validator covers; leaves it doesn't cover keep using the
+// schema-derived fallback path exactly as before (see cli-coercion.test.ts).
 
 import { describe, it, expect } from "bun:test"
 import { runCli, CliError } from "./cli.ts"
 import { api, op } from "@rhi-zone/fractal-api-tree/node"
-import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
+import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation"
+import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/apply-validation"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 
 function makeMockIO() {
@@ -44,25 +45,21 @@ function qtyEntry(): GeneratedEntry {
   }
 }
 
-describe("runCli — generated validators (opts.validators) wired via wrapValidators", () => {
-  // Tagged `unvalidated` so the "no matching entry" test below (which omits
-  // a "widgets/create" entry) doesn't trip wrapValidators' loud coverage
-  // check — irrelevant to every other test in this describe block, which
-  // always supplies a real "widgets/create" entry (a real entry wins
-  // regardless of the tag).
+describe("runCli — generated validators wired via opts.rewriters' applyValidation", () => {
   const tree = api({
     widgets: api({
-      create: op((input: { name: string; qty: number }) => input, { tags: { unvalidated: true } }),
+      create: op((input: { name: string; qty: number }) => input),
     }),
   })
 
   it("routes input through the generated validator's parse() instead of coerceInput", async () => {
     const mock = makeMockIO()
+    const applyValidation = createApplyValidation({ gen: { "widgets/create": qtyEntry() } })
     await runCli(
       tree,
       ["widgets", "create", "--name", "Widget", "--qty", "3"],
       mock.io,
-      { validators: { "widgets/create": qtyEntry() } },
+      { rewriters: [(t) => applyValidation("gen", t)] },
     )
     const result = JSON.parse(mock.out.join(""))
     expect(result).toEqual({ name: "Widget", qty: 3 })
@@ -79,12 +76,13 @@ describe("runCli — generated validators (opts.validators) wired via wrapValida
       }),
     })
     const mock = makeMockIO()
+    const applyValidation = createApplyValidation({ gen: { "widgets/create": qtyEntry() } })
     await expect(
       runCli(
         trackedTree,
         ["widgets", "create", "--name", "Widget", "--qty", "not-a-number"],
         mock.io,
-        { validators: { "widgets/create": qtyEntry() } },
+        { rewriters: [(t) => applyValidation("gen", t)] },
       ),
     ).rejects.toThrow(CliError)
     expect(handlerCalled).toBe(false)
@@ -103,19 +101,20 @@ describe("runCli — generated validators (opts.validators) wired via wrapValida
       },
     }
     const mock = makeMockIO()
+    // A validator IS wired, but keyed under a DIFFERENT path — this leaf
+    // isn't covered, so it must fall back to schema-derived coercion.
+    const applyValidation = createApplyValidation({ gen: { "other/path": qtyEntry() } })
     await runCli(
       tree,
       ["widgets", "create", "--name", "Widget", "--qty", "3"],
       mock.io,
-      // `validators` provided, but keyed under a DIFFERENT path — this leaf
-      // isn't covered, so it must fall back to schema-derived coercion.
-      { schemas, validators: { "other/path": qtyEntry() } },
+      { schemas, rewriters: [(t) => applyValidation("gen", t)] },
     )
     const result = JSON.parse(mock.out.join(""))
     expect(result).toEqual({ name: "Widget", qty: 3 })
   })
 
-  it("without opts.validators at all, behavior is unchanged from the pre-existing coerceInput path", async () => {
+  it("without opts.rewriters at all, behavior is unchanged from the pre-existing coerceInput path", async () => {
     const schemas: SchemaMap = {
       widgets_create: {
         inputSchema: {

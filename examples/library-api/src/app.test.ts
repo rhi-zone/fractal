@@ -27,11 +27,11 @@ import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import { isValidatorWrapped, wrapValidators } from "@rhi-zone/fractal-api-tree/build"
+import { createApplyValidation, isApplyValidationWrapped } from "@rhi-zone/fractal-api-tree/apply-validation"
 import { isResultShape } from "@rhi-zone/fractal-api-tree"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
-import { validators as generatedValidators } from "./generated/validators.ts"
+import { validatorsByKey } from "./generated/apply-validation.ts"
 
 /** Candidate methods reachable at `path` in the library-api's HttpRoute tree. */
 function methodsAt(path: string): string[] {
@@ -291,36 +291,42 @@ describe("library-api — verb-helper bundles (http.*)", () => {
 })
 
 // ============================================================================
-// Codegen validators — Node-level `wrapValidators` wiring (tree.ts's
-// `validatedApi`/`httpRoutes`, wired via generated/validators.ts, see
-// src/generated/validators.ts and package.json's `codegen` script). This is
-// the mechanism that replaced the retired route-tree-level
-// `createApplyValidation`/`pipeline.validate` slot — validation now happens
-// on the `Node` handler itself, before HttpRoute projection ever runs, so
-// the same generated module wires HTTP, MCP, and CLI alike.
+// Codegen validators — `applyValidation("books", api)` wiring (tree.ts's
+// `validatedApi`/`httpRoutes`, wired via generated/apply-validation.ts, see
+// src/generated/apply-validation.ts and package.json's `codegen` script).
+// Applied to the raw `Node` before HttpRoute projection ever runs, so the
+// same generated module wires HTTP, MCP, and CLI alike (see tree.ts's own
+// doc comment for why this still keys correctly for HTTP despite
+// `read`/`replace`/`remove`'s `moveTo` relocation).
 // ============================================================================
 
 describe("library-api — codegen-generated validators", () => {
-  it("httpRoutes' catalog/search GET handler is wrapValidators-wrapped", () => {
+  it("httpRoutes' catalog/search GET handler is applyValidation-wrapped", () => {
     const handler = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.handler
     expect(handler).toBeDefined()
-    expect(isValidatorWrapped(handler!)).toBe(true)
+    expect(isApplyValidationWrapped(handler!)).toBe(true)
   })
 
   it("a leaf tagged unvalidated, with no matching generated validator entry, is left untouched", () => {
     // Every leaf in the real `api` tree happens to have a generated entry
-    // (see generated/validators.ts) — this proves the opt-out passthrough
-    // case on a synthetic tree instead, mirroring the "widgets"/"other"
-    // split preset.test.ts exercises for createFetch's own validators
-    // option. `wrapValidators` is loud (@rhi-zone/fractal-api-tree/build):
-    // an uncovered, untagged leaf now throws `UnvalidatedLeafError` instead
-    // of silently passing through, so this leaf is explicitly tagged
-    // `unvalidated` to opt out.
+    // (see generated/apply-validation.ts) — this proves the pass-through
+    // case on a synthetic tree instead, mirroring the "widgets"/"other" split
+    // preset.test.ts exercises for createFetch's own applyValidation wiring.
+    // Unlike the retired `wrapValidators`, `applyValidation` itself is
+    // PERMISSIVE by default (an uncovered leaf just passes through
+    // unwrapped) — the tag here is illustrative, not load-bearing for this
+    // test; `assertValidationCoverage` is the opt-in loud check.
+    // A fresh `createApplyValidation` (not the generated singleton — that
+    // one already consumed key "books" in tree.ts, and a key can only be
+    // used once per created function) over the SAME `validatorsByKey.books`
+    // map, so this exercises the real generated data without re-using the
+    // shared instance.
     const unwrapped = (input: unknown) => input
     const fixture = api_({ other: op(unwrapped, { tags: { unvalidated: true } }) })
-    const wrapped = wrapValidators(fixture, generatedValidators)
+    const applyValidation = createApplyValidation({ books: validatorsByKey.books })
+    const wrapped = applyValidation("books", fixture)
     expect(wrapped.children?.other?.handler).toBe(unwrapped)
-    expect(isValidatorWrapped(wrapped.children!.other!.handler!)).toBe(false)
+    expect(isApplyValidationWrapped(wrapped.children!.other!.handler!)).toBe(false)
   })
 
   // `catalog/search`'s generated schema is `{ q?: string }` — every value a
@@ -463,9 +469,9 @@ describe("library-api — createFetch preset options against the real tree", () 
   })
 
   it("codegen-generated validators still run when combined with cors + a custom router", async () => {
-    // `createFetch` no longer has its own `validators` option (see
-    // http-api-projector's preset.ts module doc) — the tree passed in is
-    // already `wrapValidators`-wrapped (`validatedApi`, tree.ts), the same
+    // `createFetch` has no dedicated validation option (see http-api-
+    // projector's preset.ts module doc) — the tree passed in is already
+    // `applyValidation`-wrapped (`validatedApi`, tree.ts), the same
     // Node-level wiring MCP/CLI share, applied BEFORE it ever reaches
     // `createFetch`.
     const combined = createFetch(validatedApi, {
