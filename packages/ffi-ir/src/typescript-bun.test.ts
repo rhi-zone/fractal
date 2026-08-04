@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toBun, toBunFfiType } from "./bun.ts"
+import { toBun, toBunFfiType } from "./typescript-bun.ts"
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts"
 
 /** The C-target convention for referencing an opaque resource by pointer —

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toGleamFfi } from "./gleam.ts"
+import { toGleamFfi } from "./gleam-external.ts"
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts"
 
 describe("toGleamFfi — function", () => {

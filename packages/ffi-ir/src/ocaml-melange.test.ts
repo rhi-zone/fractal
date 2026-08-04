@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toMelangeFfi } from "./melange.ts"
+import { toMelangeFfi } from "./ocaml-melange.ts"
 import { boundary, f, ownership, resourceRef, withOwnership, type FfiRef } from "./index.ts"
 
 describe("toMelangeFfi — function", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types, withMeta } from "./index.ts"
 import { bytes, int32, int64, uint32 } from "./kinds/common.ts"
-import { toWasmBindgen, toWasmBindgenType } from "./wasm-bindgen.ts"
+import { toWasmBindgen, toWasmBindgenType } from "./rust-wasm-bindgen.ts"
 
 describe("primitives", () => {
   test("boolean -> bool", () => {
