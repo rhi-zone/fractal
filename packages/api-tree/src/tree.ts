@@ -341,12 +341,17 @@ function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefine
  * `path` it hands `onLeaf`, which is what lets `extractRouteTypeRefs`/
  * `extractRouteSchemas` disambiguate two trees in the same file that happen
  * to share a relative leaf path (see those functions' own doc comments for
- * why bare `path.join("/")` collided). An anonymous `export default
- * function(...) { ... }` factory (the one shape with no binding identifier)
- * falls back to the literal id `"default"` — sound because a module can only
- * have one default export, so it can collide with another NAMED tree's own
- * id only in the (pathological, untested) case a file also has a `const`
- * literally named `default`, which isn't valid JS anyway.
+ * why bare `path.join("/")` collided). Two shapes have no binding identifier
+ * of their own and both fall back to the literal id `"default"`: an
+ * anonymous `export default function(...) { ... }` factory, and a bare
+ * `export default api(...)` (the tree expression exported directly, no
+ * function wrapper, no variable binding — parses as `ts.ExportAssignment`).
+ * The fallback is sound for both — a module can only have one default
+ * export, so it can collide with another NAMED tree's own id only in the
+ * (pathological, untested) case a file also has a `const` literally named
+ * `default`, which isn't valid JS anyway. `export =` (`stmt.isExportEquals`
+ * true, a TS-only construct distinct from a plain default export) is
+ * deliberately NOT handled here — left unrecognized, same as before.
  */
 function forEachTreeCandidate(
   source: ts.SourceFile,
@@ -362,6 +367,19 @@ function forEachTreeCandidate(
   }
 
   for (const stmt of source.statements) {
+    // A bare `export default <expr>` parses as ts.ExportAssignment, which
+    // carries its own "export"/"default" tokens directly (not as modifiers
+    // ts.getModifiers can see) — checked ahead of the modifier-based
+    // isExported guard below, which doesn't apply to this node kind.
+    // `stmt.isExportEquals` true means `export =` (a TS-only construct,
+    // different export mechanism entirely) — deliberately left unhandled.
+    if (ts.isExportAssignment(stmt)) {
+      if (!stmt.isExportEquals) {
+        visitIfTree(checker.getTypeAtLocation(stmt.expression), stmt.expression, "default")
+      }
+      continue
+    }
+
     const isExported =
       ts.canHaveModifiers(stmt) &&
       (ts.getModifiers(stmt)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false)

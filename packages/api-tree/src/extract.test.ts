@@ -10,7 +10,13 @@ import { describe, expect, it } from "bun:test"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import { extractRouteSchemas, extractRouteTypeRefs, extractToolSchemas, extractToolTypeRefs } from "./tree.ts"
+import {
+  extractRouteSchemas,
+  extractRouteTypeRefs,
+  extractToolSchemas,
+  extractToolTypeRefs,
+  hasTreeExport,
+} from "./tree.ts"
 import {
   createExtractorProgram,
   createSharingRegistry,
@@ -239,6 +245,54 @@ describe("walkTree recognizes trees returned from an exported factory function",
 
   it("skips an exported factory that doesn't return a tree", () => {
     expect(Object.keys(factorySchemas)).not.toContain("plain")
+  })
+})
+
+// ============================================================================
+// 3a-default-export. A bare `export default api(...)` — the tree expression
+// exported directly, no function wrapper, no variable binding. Parses as
+// ts.ExportAssignment, a shape forEachTreeCandidate didn't recognize before
+// this regression fix (matched neither the export-const nor the
+// export-function branch, so the candidate was silently skipped — no error,
+// leaves just absent everywhere). treeId falls back to "default", same as
+// the anonymous `export default function(...)` factory case.
+// ============================================================================
+
+describe("walkTree recognizes a bare `export default api(...)` (no function wrapper, no binding)", () => {
+  const DEFAULT_EXPORT_FIXTURE = `${import.meta.dir}/__fixtures__/default-export.fixture.ts`
+
+  it("hasTreeExport returns true for a file using this pattern", () => {
+    expect(hasTreeExport(DEFAULT_EXPORT_FIXTURE)).toBe(true)
+  })
+
+  it("extractToolSchemas discovers the leaf under the underscore-joined default name", () => {
+    const toolSchemas = extractToolSchemas(DEFAULT_EXPORT_FIXTURE)
+    expect(toolSchemas["ping"]).toBeDefined()
+    expect(toolSchemas["ping"]!.inputSchema).toEqual({
+      type: "object",
+      properties: { count: { type: "number" } },
+      required: ["count"],
+    })
+    expect(toolSchemas["ping"]!.description).toBe("Ping the default-exported tree.")
+  })
+
+  it("extractRouteSchemas keys the leaf under the \"default\" treeId prefix", () => {
+    const routeSchemas = extractRouteSchemas(DEFAULT_EXPORT_FIXTURE)
+    expect(Object.keys(routeSchemas)).toEqual(["default/ping"])
+    expect(routeSchemas["default/ping"]!.inputSchema).toEqual({
+      type: "object",
+      properties: { count: { type: "number" } },
+      required: ["count"],
+    })
+  })
+
+  it("extractRouteTypeRefs keys the leaf under the \"default\" treeId prefix too", () => {
+    const routeTypeRefs = extractRouteTypeRefs(DEFAULT_EXPORT_FIXTURE)
+    expect(Object.keys(routeTypeRefs)).toEqual(["default/ping"])
+    const input = routeTypeRefs["default/ping"]!.input
+    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(fields)).toEqual(["count"])
+    expect(fields.count!.shape.kind).toBe("number")
   })
 })
 
