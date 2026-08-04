@@ -1,0 +1,340 @@
+// packages/api-tree/src/apply-validation.ts — @rhi-zone/fractal-api-tree
+//
+// `applyValidation(key, projectedTree)` — the KEYED, call-site-anchored way
+// to wire generated validators onto a tree, applied to the PROJECTED tree
+// (HTTP's `HttpRoute`, or the `Node` tree itself for CLI/MCP, which have no
+// separate projected type) rather than to the raw `api()` `Node` tree the way
+// `build.ts`'s `wrapValidators` does.
+//
+// PHASE 1: this mechanism exists ALONGSIDE `wrapValidators` (build.ts) and is
+// consumed by nothing in production code yet — no projector calls it, and
+// `wrapValidators` remains the mechanism `createFetch`/`createMcpServer`/
+// `runCli` actually use. See docs/design/routing-and-transforms.md's
+// "Dispatch is not an interceptable multi-stage pipeline" section for the
+// history: an earlier `createApplyValidation` (removed in 670e0dd) injected
+// validators into a per-method `pipeline.validate` array on `HttpRoute`; this
+// one wraps a leaf's HANDLER (exactly as `wrapValidators` does), so it
+// carries none of the retired stage-array machinery.
+//
+// Why keyed, and why anchored on the call site: codegen owns a NAMESPACE of
+// path -> validator per key, so several independent trees (and several
+// independent codegen runs) each register their own set without colliding —
+// the key is the disambiguator that `wrapValidators` instead has to encode
+// as a `treeId` prefix inside every path (see `extractRouteTypeRefs`'s
+// `${treeId}/${path}` keying and `wrapValidators`'s `path` argument). Under
+// this mechanism the inner path keys are TREE-RELATIVE (no `treeId` prefix):
+//
+//   const applyValidation = createApplyValidation(generatedValidators)
+//   const routes = applyValidation("books", httpProjection(apiTree))
+//
+// SHAPE-AGNOSTIC BY CONSTRUCTION: the walk below matches structurally, never
+// against an imported route type. `@rhi-zone/fractal-api-tree` cannot import
+// `@rhi-zone/fractal-http-api-projector` — the dependency runs the other way
+// (http-api-projector depends on api-tree; api-tree lists it only as a
+// devDependency), so a structural walk is the only way one mechanism covers
+// both projected shapes. Two leaf shapes are recognized at any tree position:
+//   - a direct `handler` field (a `Node` leaf), and
+//   - a `methods` record whose entries each carry `handler` (an `HttpRoute`
+//     leaf — handlers nested one level deeper, under `methods.<VERB>`),
+// plus the `children` / `fallback` recursion both shapes share. A position
+// carrying both is handled too; neither shape is assumed.
+
+import { err } from "./index.ts"
+import { TAG_UNVALIDATED } from "./tags.ts"
+import type { GeneratedEntry } from "./build.ts"
+
+/** Re-exported for convenience: the generated-entry shape this mechanism
+ * consumes is EXACTLY `wrapValidators`' own (build.ts) — one generated
+ * validator module can feed either mechanism. Type-only import, so this file
+ * pulls in none of build.ts's codegen machinery at runtime. */
+export type { GeneratedEntry }
+
+/**
+ * outer key = the string key passed to `applyValidation(key, tree)`.
+ * inner key = the tree-relative path (segments joined with `/`; a fallback
+ * segment rendered as `:name` — e.g. `"books/:bookId"`), the same path
+ * convention `wrapValidators`/`extractRouteTypeRefs` use, minus the `treeId`
+ * prefix (the outer key already scopes one tree).
+ */
+export type ValidatorMap = Readonly<Record<string, Readonly<Record<string, GeneratedEntry>>>>
+
+/**
+ * The property name a `createApplyValidation` result carries at the TYPE
+ * level (never at runtime — it's an optional, never-assigned field). This is
+ * how `apply-validation-build.ts`'s call-site scan identifies a genuine
+ * `applyValidation(key, tree)` invocation: it asks the checker whether the
+ * CALLEE's type has this property, so an unrelated local function that merely
+ * happens to be named `applyValidation` is never matched, and a genuine one
+ * IS matched no matter what it was renamed to or how many re-export hops sit
+ * between the generated module and the call site.
+ */
+export const APPLY_VALIDATION_BRAND = "__fractalApplyValidation" as const
+
+/** `createApplyValidation`'s return type — see `APPLY_VALIDATION_BRAND` for
+ * why it carries a phantom brand property. Generic in the tree type: the
+ * walk is structural, and whatever shape goes in comes back out (a rebuilt
+ * value, never the same object). */
+export type ApplyValidation = {
+  <T>(key: string, tree: T): T
+  /** Phantom — never present at runtime. See `APPLY_VALIDATION_BRAND`. */
+  readonly __fractalApplyValidation?: true
+}
+
+/** A handler in either recognized position — a `Node`'s own `handler`, or an
+ * `HttpRoute` method entry's. Deliberately not `Handler` from node.ts: this
+ * walk never assumes the value it found came from this package's model. */
+type AnyHandler = (input: unknown) => unknown
+
+/**
+ * Runtime brand for a handler wrapped by this mechanism — the same pattern
+ * as `build.ts`'s `wrappedHandlerBrand`/`isValidatorWrapped` (a projector
+ * checks it to skip its own fallback coercion for a leaf whose validation is
+ * already generated). A SEPARATE brand rather than build.ts's, because
+ * build.ts's set is module-private and phase 1 does not modify build.ts; a
+ * later phase that migrates a projector onto this mechanism has to make that
+ * projector's check consider both brands (or unify them).
+ */
+const appliedHandlerBrand = new WeakSet<object>()
+
+/** True when `handler` was wrapped by `applyValidation` — see the brand doc above. */
+export function isApplyValidationWrapped(handler: unknown): boolean {
+  return typeof handler === "function" && appliedHandlerBrand.has(handler)
+}
+
+/**
+ * Wrap one handler: run `entry.parse(input)` first — `ok` calls the original
+ * handler with the parsed (coerced, validated, narrowed) value, `err` returns
+ * this package's `Result` error (`err(errors)`, index.ts) without the handler
+ * ever running. Identical contract to `build.ts`'s `wrapHandler`, and
+ * deliberately so: a dispatcher already checks a returned `Result`'s `kind`
+ * (see that function's doc comment for why a returned Result beats a thrown
+ * error class here).
+ */
+function wrapHandler(handler: AnyHandler, entry: GeneratedEntry): AnyHandler {
+  const wrapped: AnyHandler = async (input: unknown) => {
+    const result = entry.parse(input)
+    if (result.kind === "err") return err(result.errors)
+    return handler(result.value)
+  }
+  appliedHandlerBrand.add(wrapped)
+  return wrapped
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/** True when `meta` (a node's, or an `HttpRoute` method entry's) is tagged
+ * `tags.unvalidated === true` — see `TAG_UNVALIDATED` (tags.ts). */
+function isTaggedUnvalidated(meta: unknown): boolean {
+  if (!isRecord(meta)) return false
+  const tags = meta["tags"]
+  return isRecord(tags) && tags[TAG_UNVALIDATED] === true
+}
+
+/** The fallback segment's rendering in a path key — `:name`, matching
+ * `wrapValidators`/`extractRouteTypeRefs`. */
+function fallbackSegment(fallback: Record<string, unknown>): string | undefined {
+  const name = fallback["name"]
+  return typeof name === "string" ? `:${name}` : undefined
+}
+
+/**
+ * The structural walk both `injectValidators` and `collectUncoveredLeaves`
+ * share: visit this position, then recurse into `children` and
+ * `fallback.subtree`. `visit` returns the (possibly rewritten) shallow copy
+ * of this position; the recursion writes `children`/`fallback` back onto it.
+ *
+ * Every position is rebuilt as a shallow copy with unrecognized fields
+ * preserved verbatim — an `HttpRoute` method entry's `sources`, a node's
+ * `meta`, anything a projector added — so this never has to know the full
+ * shape of what it's walking.
+ */
+function rewriteTree(
+  node: unknown,
+  path: readonly string[],
+  visit: (node: Record<string, unknown>, path: readonly string[]) => Record<string, unknown>,
+): unknown {
+  if (!isRecord(node)) return node
+  const out = visit(node, path)
+  const children = node["children"]
+  if (isRecord(children)) {
+    out["children"] = Object.fromEntries(
+      Object.entries(children).map(([key, child]) => [key, rewriteTree(child, [...path, key], visit)]),
+    )
+  }
+  const fallback = node["fallback"]
+  if (isRecord(fallback)) {
+    const segment = fallbackSegment(fallback)
+    if (segment !== undefined) {
+      out["fallback"] = { ...fallback, subtree: rewriteTree(fallback["subtree"], [...path, segment], visit) }
+    }
+  }
+  return out
+}
+
+/**
+ * Read-only sibling of `rewriteTree` — same structural recursion, no rebuild.
+ */
+function walkTreePositions(
+  node: unknown,
+  path: readonly string[],
+  visit: (node: Record<string, unknown>, path: readonly string[]) => void,
+): void {
+  if (!isRecord(node)) return
+  visit(node, path)
+  const children = node["children"]
+  if (isRecord(children)) {
+    for (const [key, child] of Object.entries(children)) walkTreePositions(child, [...path, key], visit)
+  }
+  const fallback = node["fallback"]
+  if (isRecord(fallback)) {
+    const segment = fallbackSegment(fallback)
+    if (segment !== undefined) walkTreePositions(fallback["subtree"], [...path, segment], visit)
+  }
+}
+
+/**
+ * Wire `forKey`'s entries onto every matching position of `tree`.
+ *
+ * A position's validator is looked up by its own path — NOT per HTTP method:
+ * an `HttpRoute` position's methods all sit at the same tree path, and all
+ * project from the same `Node` leaf, so they share one generated validator
+ * (the same one a `Node`-shaped tree would get at that path). This matches
+ * the removed `injectValidators` (ad8b921), which likewise applied one
+ * path-keyed validator to every method entry at the position.
+ */
+function injectValidators(
+  tree: unknown,
+  forKey: Readonly<Record<string, GeneratedEntry>>,
+): unknown {
+  return rewriteTree(tree, [], (node, path) => {
+    const entry = forKey[path.join("/")]
+    const out: Record<string, unknown> = { ...node }
+    if (entry === undefined) return out
+    if (typeof node["handler"] === "function") {
+      out["handler"] = wrapHandler(node["handler"] as AnyHandler, entry)
+    }
+    const methods = node["methods"]
+    if (isRecord(methods)) {
+      out["methods"] = Object.fromEntries(
+        Object.entries(methods).map(([verb, methodEntry]) => {
+          if (!isRecord(methodEntry) || typeof methodEntry["handler"] !== "function") return [verb, methodEntry]
+          return [verb, { ...methodEntry, handler: wrapHandler(methodEntry["handler"] as AnyHandler, entry) }]
+        }),
+      )
+    }
+    return out
+  })
+}
+
+/**
+ * Build an `applyValidation(key, tree)` rewriter over a fixed `ValidatorMap`.
+ *
+ * - `key` not present in `validators` → `tree` is returned unchanged. This is
+ *   the PASS-THROUGH / pre-codegen case: a freshly scaffolded project's stub
+ *   generated module is `createApplyValidation({})` (see
+ *   `applyValidationStubSource`, apply-validation-build.ts), so the consumer's
+ *   one import compiles and runs before codegen has ever produced validators.
+ *   Deliberately SILENT — coverage is enforced by codegen and by the explicit
+ *   `assertValidationCoverage` build-mode check below, never by the stub.
+ * - Otherwise the tree is walked structurally and every leaf whose path
+ *   matches an entry gets its handler(s) wrapped (see `injectValidators`).
+ * - Each `key` may be used at most once per returned function — a second
+ *   `applyValidation(sameKey, …)` throws, catching double registration of one
+ *   generated set (codegen run twice, two trees claiming one key). Mirrors the
+ *   removed runtime's `usedKeys` Set (ad8b921).
+ *
+ * Never mutates `tree`; always returns a freshly rebuilt structure.
+ */
+export function createApplyValidation(validators: ValidatorMap): ApplyValidation {
+  const usedKeys = new Set<string>()
+  const applyValidation = <T,>(key: string, tree: T): T => {
+    if (usedKeys.has(key)) {
+      throw new Error(`applyValidation: key ${JSON.stringify(key)} has already been used`)
+    }
+    usedKeys.add(key)
+    const forKey = validators[key]
+    if (forKey === undefined) return tree
+    return injectValidators(tree, forKey) as T
+  }
+  return applyValidation
+}
+
+/**
+ * Thrown by `assertValidationCoverage` when one or more leaves of the tree
+ * have neither a matching validator entry under `key` nor a
+ * `meta.tags.unvalidated` opt-out. Mirrors `build.ts`'s `UnvalidatedLeafError`
+ * in shape (`paths` carries EVERY offending path, not just the first) and in
+ * remediation messaging; a separate class because phase 1 does not touch
+ * build.ts and because the message names this mechanism's own remediation
+ * (a `key`-scoped codegen run).
+ */
+export class UncoveredLeafError extends Error {
+  readonly key: string
+  readonly paths: readonly string[]
+  constructor(key: string, paths: readonly string[]) {
+    super(
+      `applyValidation: under key ${JSON.stringify(key)}, the following leaves have no ` +
+        `matching generated validator entry and aren't tagged unvalidated:\n${paths.join("\n")}\n\n` +
+        `Fix by either regenerating this key's validators (re-run codegen — see ` +
+        `@rhi-zone/fractal-api-tree's build/watch/check CLI), or tagging the leaf to ` +
+        `opt it out explicitly: op(fn, { tags: { unvalidated: true } }).`,
+    )
+    this.name = "UncoveredLeafError"
+    this.key = key
+    this.paths = paths
+  }
+}
+
+/**
+ * Every leaf path in `tree` that is neither covered by `forKey` nor tagged
+ * `meta.tags.unvalidated`. Both leaf shapes are checked:
+ *   - a direct `handler` — the position's own `meta` carries the tag;
+ *   - a `methods` record — each entry carries its OWN `meta` (that's where an
+ *     `HttpRoute` keeps leaf meta), so a position counts as opted out only
+ *     when every handler-bearing method entry is tagged (or the position's own
+ *     `meta` is). A position is reported ONCE, by path: methods at one
+ *     position share one validator (see `injectValidators`).
+ */
+function collectUncoveredLeaves(
+  tree: unknown,
+  forKey: Readonly<Record<string, GeneratedEntry>>,
+): string[] {
+  const out: string[] = []
+  walkTreePositions(tree, [], (node, path) => {
+    const key = path.join("/")
+    if (forKey[key] !== undefined) return
+    if (isTaggedUnvalidated(node["meta"])) return
+    if (typeof node["handler"] === "function") {
+      out.push(key)
+      return
+    }
+    const methods = node["methods"]
+    if (!isRecord(methods)) return
+    const handlerEntries = Object.values(methods).filter(
+      (entry) => isRecord(entry) && typeof entry["handler"] === "function",
+    )
+    if (handlerEntries.length === 0) return
+    const allTagged = handlerEntries.every(
+      (entry) => isRecord(entry) && isTaggedUnvalidated(entry["meta"]),
+    )
+    if (!allTagged) out.push(key)
+  })
+  return out
+}
+
+/**
+ * LOUD build-mode coverage check: throws `UncoveredLeafError` listing EVERY
+ * leaf of `tree` that `validators[key]` doesn't cover and that isn't tagged
+ * `meta.tags.unvalidated` — the same total-coverage guarantee `wrapValidators`
+ * enforces inline, kept as a separate, explicitly-called function here so the
+ * pass-through stub (`createApplyValidation({})`) stays silently permissive
+ * pre-codegen. An unknown `key` means "nothing generated for this tree", so
+ * every leaf is uncovered — that is exactly what a build-mode caller wants to
+ * hear, and exactly what the stub must NOT say at runtime.
+ */
+export function assertValidationCoverage(key: string, tree: unknown, validators: ValidatorMap): void {
+  const uncovered = collectUncoveredLeaves(tree, validators[key] ?? {})
+  if (uncovered.length > 0) throw new UncoveredLeafError(key, uncovered)
+}

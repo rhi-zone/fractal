@@ -180,6 +180,14 @@ failure short-circuiting with `Result.err(...)`. `createFetch`'s
 wires validation into MCP (`createMcpServer`'s `validators` option) and CLI
 (`runCli`'s `validators` option) — see `docs/guide/codegen-cli.md`.
 
+> **Forward pointer (phase 1, 2026-08):** a keyed, call-site-anchored
+> `applyValidation(key, projectedTree)` mechanism now exists at
+> `packages/api-tree/src/apply-validation.ts` (runtime) and
+> `apply-validation-build.ts` (codegen). It wraps leaf HANDLERS the way
+> `wrapValidators` does — it does NOT reinstate the removed stage arrays — and
+> is wired into no projector: everything described above is still the current
+> state.
+
 ## DX — constructor sugar
 
 ### `api(children, opts?)`
