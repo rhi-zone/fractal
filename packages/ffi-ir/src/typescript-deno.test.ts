@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts"
-import { denoFfiType, toDenoFfi } from "./deno.ts"
+import { denoFfiType, toDenoFfi } from "./typescript-deno.ts"
 
 function handleRef(resourceName: string, freeFn?: string): ReturnType<typeof withOwnership> {
   return withOwnership({ shape: { kind: "ref", target: resourceName }, meta: {} }, ownership.opaqueHandle(freeFn))

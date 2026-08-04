@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toWasmBindgenFfi } from "./wasm-bindgen.ts"
+import { toWasmBindgenFfi } from "./rust-wasm-bindgen.ts"
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts"
 
 describe("toWasmBindgenFfi — function", () => {

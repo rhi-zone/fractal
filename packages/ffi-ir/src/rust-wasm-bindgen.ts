@@ -7,7 +7,7 @@ import { t, type TypeRef } from "@rhi-zone/fractal-type-ir"
 // edge — type-ir's own `wasm-bindgen.test.ts` establishes the same
 // convention for the same reason (see `@rhi-zone/fractal-type-ir/kinds/common`).
 import "@rhi-zone/fractal-type-ir/kinds/common"
-import { toWasmBindgen, toWasmBindgenType } from "@rhi-zone/fractal-type-ir/wasm-bindgen"
+import { toWasmBindgen, toWasmBindgenType } from "@rhi-zone/fractal-type-ir/rust-wasm-bindgen"
 import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts"
 
 // Rust codegen targeting wasm-bindgen for ffi-ir's boundary layer —

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toReScriptFfi } from "./rescript.ts"
+import { toReScriptFfi } from "./rescript-external.ts"
 import { boundary, f, ownership, resourceRef, withOwnership, type FfiRef } from "./index.ts"
 
 describe("toReScriptFfi — function", () => {

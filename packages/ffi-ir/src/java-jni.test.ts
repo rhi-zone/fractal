@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toJniFfi, toJniType } from "./jni.ts"
+import { toJniFfi, toJniType } from "./java-jni.ts"
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts"
 
 /** The JNI-target convention for referencing a native-owned resource by its

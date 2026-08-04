@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toCtypes, toCtypesShape, toCtypesType } from "./ctypes.ts"
+import { toCtypes, toCtypesShape, toCtypesType } from "./python-ctypes.ts"
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts"
 
 /** The C-target convention for referencing an opaque resource by pointer:

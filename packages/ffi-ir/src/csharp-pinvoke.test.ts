@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toDotNet, toDotNetType } from "./dotnet.ts"
+import { toDotNet, toDotNetType } from "./csharp-pinvoke.ts"
 import { boundary, f, ownership, withOwnership, type FfiRef, type OwnershipDiscipline } from "./index.ts"
 
 /** The C-target convention for referencing an opaque resource by pointer:

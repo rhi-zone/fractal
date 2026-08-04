@@ -34,41 +34,41 @@
       "types": "./dist/wit.d.ts",
       "import": "./dist/wit.js"
     },
-    "./wasm-bindgen": {
-      "types": "./dist/wasm-bindgen.d.ts",
-      "import": "./dist/wasm-bindgen.js"
+    "./rust-wasm-bindgen": {
+      "types": "./dist/rust-wasm-bindgen.d.ts",
+      "import": "./dist/rust-wasm-bindgen.js"
     },
-    "./rescript": {
-      "types": "./dist/rescript.d.ts",
-      "import": "./dist/rescript.js"
+    "./rescript-external": {
+      "types": "./dist/rescript-external.d.ts",
+      "import": "./dist/rescript-external.js"
     },
-    "./gleam": {
-      "types": "./dist/gleam.d.ts",
-      "import": "./dist/gleam.js"
+    "./gleam-external": {
+      "types": "./dist/gleam-external.d.ts",
+      "import": "./dist/gleam-external.js"
     },
-    "./melange": {
-      "types": "./dist/melange.d.ts",
-      "import": "./dist/melange.js"
+    "./ocaml-melange": {
+      "types": "./dist/ocaml-melange.d.ts",
+      "import": "./dist/ocaml-melange.js"
     },
-    "./deno": {
-      "types": "./dist/deno.d.ts",
-      "import": "./dist/deno.js"
+    "./typescript-deno": {
+      "types": "./dist/typescript-deno.d.ts",
+      "import": "./dist/typescript-deno.js"
     },
-    "./bun": {
-      "types": "./dist/bun.d.ts",
-      "import": "./dist/bun.js"
+    "./typescript-bun": {
+      "types": "./dist/typescript-bun.d.ts",
+      "import": "./dist/typescript-bun.js"
     },
-    "./dotnet": {
-      "types": "./dist/dotnet.d.ts",
-      "import": "./dist/dotnet.js"
+    "./csharp-pinvoke": {
+      "types": "./dist/csharp-pinvoke.d.ts",
+      "import": "./dist/csharp-pinvoke.js"
     },
-    "./jni": {
-      "types": "./dist/jni.d.ts",
-      "import": "./dist/jni.js"
+    "./java-jni": {
+      "types": "./dist/java-jni.d.ts",
+      "import": "./dist/java-jni.js"
     },
-    "./ctypes": {
-      "types": "./dist/ctypes.d.ts",
-      "import": "./dist/ctypes.js"
+    "./python-ctypes": {
+      "types": "./dist/python-ctypes.d.ts",
+      "import": "./dist/python-ctypes.js"
     },
     "./ruby-ffi": {
       "types": "./dist/ruby-ffi.d.ts",
