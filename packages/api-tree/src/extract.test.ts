@@ -10,7 +10,7 @@ import { describe, expect, it } from "bun:test"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import { extractRouteTypeRefs, extractToolSchemas, extractToolTypeRefs } from "./tree.ts"
+import { extractRouteSchemas, extractRouteTypeRefs, extractToolSchemas, extractToolTypeRefs } from "./tree.ts"
 import {
   createExtractorProgram,
   createSharingRegistry,
@@ -119,10 +119,10 @@ describe("fallback.subtree as a bare op() leaf", () => {
     })
   })
 
-  it("extractRouteTypeRefs keys it exactly as build.ts's wrapValidators/collectUnvalidatedLeaves would at runtime — \"widgetById/:widgetId\", not an extra trailing segment", () => {
+  it("extractRouteTypeRefs keys it exactly as build.ts's wrapValidators/collectUnvalidatedLeaves would at runtime — \"tree/widgetById/:widgetId\" (treeId-prefixed), not an extra trailing segment", () => {
     const routes = extractRouteTypeRefs(FIXTURE)
-    expect(routes["widgetById/:widgetId"]).toBeDefined()
-    expect(routes["widgetById/widgetId"]).toBeUndefined()
+    expect(routes["tree/widgetById/:widgetId"]).toBeDefined()
+    expect(routes["tree/widgetById/widgetId"]).toBeUndefined()
   })
 })
 
@@ -239,6 +239,58 @@ describe("walkTree recognizes trees returned from an exported factory function",
 
   it("skips an exported factory that doesn't return a tree", () => {
     expect(Object.keys(factorySchemas)).not.toContain("plain")
+  })
+})
+
+// ============================================================================
+// 3a-collision. Two trees in ONE file sharing a relative leaf path
+// ("list") — the same-file collision the treeId prefix (tree.ts's
+// `forEachTreeCandidate`/`walkTree`) exists to fix. Regression coverage for
+// the bug: extractRouteTypeRefs/extractRouteSchemas used to key both
+// trees' "list" leaf as bare "list" in the SAME flat output map, so the
+// second tree silently overwrote the first — collectUnvalidatedLeaves
+// (build.ts) can't catch this class of bug (it only detects an undefined
+// lookup, not a leaf resolved against the WRONG tree's validator/schema).
+// ============================================================================
+
+describe("two trees in one file with a colliding leaf path — treeId disambiguates them", () => {
+  const COLLISION_FIXTURE = `${import.meta.dir}/__fixtures__/collision.fixture.ts`
+  const routes = extractRouteTypeRefs(COLLISION_FIXTURE)
+  const routeSchemas = extractRouteSchemas(COLLISION_FIXTURE)
+
+  it("keys each tree's \"list\" leaf under its own treeId prefix, not one bare \"list\" key that the second tree would overwrite", () => {
+    expect(Object.keys(routes).sort()).toEqual(["catalogTree/list", "inventoryTree/list"])
+    expect(routes["list"]).toBeUndefined()
+  })
+
+  it("extractRouteTypeRefs: catalogTree's leaf keeps its OWN input type (limit: number), not inventoryTree's", () => {
+    const input = routes["catalogTree/list"]!.input
+    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(fields)).toEqual(["limit"])
+    expect(fields.limit!.shape.kind).toBe("number")
+  })
+
+  it("extractRouteTypeRefs: inventoryTree's leaf keeps its OWN input type (warehouseId: string), not catalogTree's", () => {
+    const input = routes["inventoryTree/list"]!.input
+    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    expect(Object.keys(fields)).toEqual(["warehouseId"])
+    expect(fields.warehouseId!.shape.kind).toBe("string")
+  })
+
+  it("extractRouteSchemas: same disambiguation, JSON-Schema-keyed — each tree's own inputSchema and description survive independently", () => {
+    expect(Object.keys(routeSchemas).sort()).toEqual(["catalogTree/list", "inventoryTree/list"])
+    expect(routeSchemas["catalogTree/list"]!.inputSchema).toEqual({
+      type: "object",
+      properties: { limit: { type: "number" } },
+      required: ["limit"],
+    })
+    expect(routeSchemas["catalogTree/list"]!.description).toBe("List items in the catalog.")
+    expect(routeSchemas["inventoryTree/list"]!.inputSchema).toEqual({
+      type: "object",
+      properties: { warehouseId: { type: "string" } },
+      required: ["warehouseId"],
+    })
+    expect(routeSchemas["inventoryTree/list"]!.description).toBe("List warehouse inventory rows.")
   })
 })
 
@@ -1542,9 +1594,9 @@ describe("structural sharing", () => {
     expect(Object.keys(defs).sort()).toEqual(["Address", "Category"])
   })
 
-  it("extractRouteTypeRefs supports the same shouldShare opt-in, keyed by route path", () => {
+  it("extractRouteTypeRefs supports the same shouldShare opt-in, keyed by treeId-prefixed route path", () => {
     const { types: shared, defs } = extractRouteTypeRefs(SHARING_FIXTURE, { shouldShare: defaultShouldShare })
-    expect(Object.keys(shared)).toEqual(["getUser", "getOrder", "getProduct"])
+    expect(Object.keys(shared)).toEqual(["tree/getUser", "tree/getOrder", "tree/getProduct"])
     expect(Object.keys(defs)).toContain("Address")
   })
 

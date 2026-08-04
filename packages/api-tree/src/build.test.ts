@@ -41,21 +41,21 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
   const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`
   const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing-input.fixture.ts`
 
-  it("builds a validator module from the tree fixture, keyed by route path", () => {
+  it("builds a validator module from the tree fixture, keyed by treeId-prefixed route path", () => {
     const source = buildValidatorModuleSource(FIXTURE)
-    expect(source).toContain('"users/create"')
-    expect(source).toContain('"users/:userId/get"')
+    expect(source).toContain('"tree/users/create"')
+    expect(source).toContain('"tree/users/:userId/get"')
 
     const validators = evalModule(source)
     expect(
-      validators["users/create"]!.check({
+      validators["tree/users/create"]!.check({
         name: "Alice",
         roles: ["admin"],
         address: { street: "Main" },
       }),
     ).toBe(true)
-    expect(validators["users/create"]!.check({})).toBe(false)
-    expect(validators["users/:userId/get"]!.check({ userId: "u1" })).toBe(true)
+    expect(validators["tree/users/create"]!.check({})).toBe(false)
+    expect(validators["tree/users/:userId/get"]!.check({ userId: "u1" })).toBe(true)
   })
 
   it("without an outFile, a NAMED parameter type inlines its structure (no import, since there's no output location to resolve one against)", () => {
@@ -77,8 +77,8 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     expect(source).not.toContain("value is { q?: string }")
 
     const validators = evalModule(source)
-    expect(validators["namedType/search"]!.check({ q: "x" })).toBe(true)
-    expect(validators["namedType/search"]!.check({})).toBe(true)
+    expect(validators["tree/namedType/search"]!.check({ q: "x" })).toBe(true)
+    expect(validators["tree/namedType/search"]!.check({})).toBe(true)
   })
 
   // Regression: a handler input typed directly as a TS builtin/global
@@ -104,8 +104,8 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
     expect(source).toContain("value is Record<string, string>")
 
     const validators = evalModule(source)
-    expect(validators["builtinNamedInput/merge"]!.check({ a: "x" })).toBe(true)
-    expect(validators["builtinNamedInput/merge"]!.check({ a: 1 })).toBe(false)
+    expect(validators["tree/builtinNamedInput/merge"]!.check({ a: "x" })).toBe(true)
+    expect(validators["tree/builtinNamedInput/merge"]!.check({ a: 1 })).toBe(false)
   })
 
   // Regression, end-to-end: a leaf whose RETURN type reaches into a TS/DOM
@@ -144,9 +144,9 @@ describe("build orchestrator — entryFile -> compiled module, end-to-end", () =
 
     const validators = evalModule(source)
     const validAddress = { street: "Main", city: "X", zip: "1", country: "Y", region: "Z", landmark: "L" }
-    expect(validators["setBilling"]!.check({ userId: "u1", billing: validAddress })).toBe(true)
-    expect(validators["setBilling"]!.check({ userId: "u1", billing: {} })).toBe(false)
-    expect(validators["setShipping"]!.check({ userId: "u1", shipping: validAddress })).toBe(true)
+    expect(validators["tree/setBilling"]!.check({ userId: "u1", billing: validAddress })).toBe(true)
+    expect(validators["tree/setBilling"]!.check({ userId: "u1", billing: {} })).toBe(false)
+    expect(validators["tree/setShipping"]!.check({ userId: "u1", shipping: validAddress })).toBe(true)
   })
 
   // Regression: a caller doing BATCH extraction across many entry files (e.g.

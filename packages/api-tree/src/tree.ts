@@ -333,18 +333,32 @@ function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefine
  * a `meta` property) — plain re-exported types, unrelated constants, and a
  * factory whose body doesn't return a tree are filtered out here, not left
  * for `visit` to re-check.
+ *
+ * `visit` also receives `treeId` — the candidate's own exported binding name
+ * (the `const`'s identifier, or the factory function's identifier) — the one
+ * piece of per-candidate identity this scan already has on hand while it's
+ * iterating exports one at a time. `walkTree` (below) folds it into the leaf
+ * `path` it hands `onLeaf`, which is what lets `extractRouteTypeRefs`/
+ * `extractRouteSchemas` disambiguate two trees in the same file that happen
+ * to share a relative leaf path (see those functions' own doc comments for
+ * why bare `path.join("/")` collided). An anonymous `export default
+ * function(...) { ... }` factory (the one shape with no binding identifier)
+ * falls back to the literal id `"default"` — sound because a module can only
+ * have one default export, so it can collide with another NAMED tree's own
+ * id only in the (pathological, untested) case a file also has a `const`
+ * literally named `default`, which isn't valid JS anyway.
  */
 function forEachTreeCandidate(
   source: ts.SourceFile,
   checker: ts.TypeChecker,
-  visit: (nodeType: ts.Type, loc: ts.Node) => void,
+  visit: (nodeType: ts.Type, loc: ts.Node, treeId: string) => void,
 ): void {
   // A Node value always carries `meta`; skip candidates that aren't trees
   // (plain re-exported types, unrelated constants, a factory that doesn't
   // return a tree, …).
-  const visitIfTree = (nodeType: ts.Type, loc: ts.Node): void => {
+  const visitIfTree = (nodeType: ts.Type, loc: ts.Node, treeId: string): void => {
     if (!checker.getPropertyOfType(nodeType, "meta")) return
-    visit(nodeType, loc)
+    visit(nodeType, loc, treeId)
   }
 
   for (const stmt of source.statements) {
@@ -356,14 +370,14 @@ function forEachTreeCandidate(
     if (ts.isVariableStatement(stmt)) {
       for (const decl of stmt.declarationList.declarations) {
         if (!ts.isIdentifier(decl.name) || !decl.initializer) continue
-        visitIfTree(checker.getTypeAtLocation(decl.name), decl.name)
+        visitIfTree(checker.getTypeAtLocation(decl.name), decl.name, decl.name.text)
       }
       continue
     }
 
     if (ts.isFunctionDeclaration(stmt) && stmt.body) {
       const returnExpr = returnExpressionOfFactoryBody(stmt.body)
-      if (returnExpr) visitIfTree(checker.getTypeAtLocation(returnExpr), returnExpr)
+      if (returnExpr) visitIfTree(checker.getTypeAtLocation(returnExpr), returnExpr, stmt.name?.text ?? "default")
     }
   }
 }
@@ -374,6 +388,15 @@ function forEachTreeCandidate(
  * leaf found. See `forEachTreeCandidate` above for how exports are found and
  * filtered to genuine tree candidates; this just additionally descends into
  * each one via `walkNodeType`.
+ *
+ * Each candidate's own `treeId` (its exported binding name, from
+ * `forEachTreeCandidate`) seeds `path` — NOT `prefix` — so it flows into the
+ * raw path-segment array `onLeaf` receives (and therefore into
+ * `extractRouteTypeRefs`/`extractRouteSchemas`'s `path.join("/")` keys)
+ * without touching the underscore-joined MCP tool `name` (`prefix` still
+ * starts at `""`, exactly as before) — a tool name is scoped by convention to
+ * ONE standalone tree already (`extractToolSchemas`'s own doc comment), so
+ * leaving it unprefixed is deliberate, not an oversight.
  */
 function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program): void {
   const program = sharedProgram ?? createExtractorProgram(entryFile)
@@ -381,8 +404,8 @@ function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program)
   const source = program.getSourceFile(entryFile)
   if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
 
-  forEachTreeCandidate(source, checker, (nodeType, loc) =>
-    walkNodeType(nodeType, "", [], loc, checker, onLeaf),
+  forEachTreeCandidate(source, checker, (nodeType, loc, treeId) =>
+    walkNodeType(nodeType, "", [treeId], loc, checker, onLeaf),
   )
 }
 
@@ -448,12 +471,25 @@ export function extractToolSchemas(entryFile: string, options?: { program?: ts.P
 /**
  * Extract the tree-PATH → schema map for every exported `api(children,
  * opts?)` tree in a source file — same walk and same JSON-Schema derivation
- * as `extractToolSchemas`, keyed by `path.join("/")` instead of the
- * underscore-joined tool name. Mirrors `extractRouteTypeRefs`'s own
+ * as `extractToolSchemas`, keyed by `${treeId}/${path.join("/")}` instead of
+ * the underscore-joined tool name (`treeId` is the exporting tree's own
+ * binding name — the `const`'s identifier, or the factory function's — see
+ * `forEachTreeCandidate`'s doc comment). Mirrors `extractRouteTypeRefs`'s own
  * path-keying (this file) — that function already made this exact choice
  * for validator codegen (`build.ts`'s `wrapValidators` looks its
- * `GeneratedEntry` map up by `path.join("/")` at runtime, matching this
- * key format 1:1).
+ * `GeneratedEntry` map up by the same `"/"`-joined key at runtime, matching
+ * this key format 1:1 — see that function's doc comment for how a caller
+ * supplies the matching `treeId` as `wrapValidators`'s initial `path`).
+ *
+ * The `treeId` prefix (not just the leaf's tree-relative path) is required
+ * because a source file may export MULTIPLE trees (`tree-factory.fixture.ts`
+ * has two) — without it, two trees sharing a relative leaf path (e.g. both
+ * have a top-level `"list"` leaf) would silently collide in the flat `out`
+ * map this function builds across ALL of the file's trees, with the second
+ * tree's entry overwriting the first's — a wrong-schema-silently-applied bug
+ * at `wrapValidators` consumption time, not a missing-entry error
+ * `collectUnvalidatedLeaves` could ever catch (see `extract.test.ts`'s "two
+ * trees, colliding leaf path" coverage).
  *
  * Exists ALONGSIDE `extractToolSchemas`, not as a replacement — a bare tool
  * NAME is unique only within one standalone tree (fine for a single-tree
@@ -466,10 +502,11 @@ export function extractToolSchemas(entryFile: string, options?: { program?: ts.P
  * across up to 7 unrelated slices). A caller merging several files' schema
  * maps into one for a composed root should call THIS function per file and
  * merge the results — each file's own keys are already path-relative to
- * that file's own tree root, so no additional per-file prefixing is needed
- * as long as the composed root's `toOpenApi` call correlates schemas via
- * the SAME path-keyed mechanism (see `openapi.ts`'s `buildPathMap`) rather
- * than the underscore-joined `codenName`.
+ * that file's own tree root (now `treeId`-prefixed too), so no additional
+ * per-file prefixing is needed as long as the composed root's `toOpenApi`
+ * call correlates schemas via the SAME path-keyed mechanism (see
+ * `openapi.ts`'s `buildPathMap`) rather than the underscore-joined
+ * `codenName`.
  */
 export function extractRouteSchemas(entryFile: string, options?: { program?: ts.Program }): SchemaMap {
   const out: SchemaMap = {}
@@ -543,10 +580,15 @@ export function extractToolTypeRefs(
 /**
  * Extract the ROUTE-PATH → TypeRef map for every exported `api(children,
  * opts?)` tree in a source file — same walk as `extractToolTypeRefs`, but
- * keyed by the `"/"`-joined path-segment string `build.ts`'s
- * `wrapValidators` uses (fallback segments rendered as `:name`) instead of
- * the underscore-joined MCP tool name. This is the key shape
- * `wrapValidators`'s generated-entry map expects.
+ * keyed by `${treeId}/${path.join("/")}` (`treeId` = the exporting tree's own
+ * binding name; fallback segments rendered as `:name`) instead of the
+ * underscore-joined MCP tool name. This is the key shape `build.ts`'s
+ * `wrapValidators` expects its generated-entry map to use — see that
+ * function's doc comment for how a caller supplies the matching `treeId` via
+ * `wrapValidators`'s initial `path` argument, and `extractRouteSchemas`'s doc
+ * comment (above) for why the `treeId` prefix is load-bearing: without it,
+ * two trees exported from the same file with a colliding relative leaf path
+ * silently overwrite each other in this function's flat output map.
  *
  * Same `options.shouldShare`/`options.program` opt-ins as `extractToolTypeRefs`
  * — see its doc comment.
