@@ -129,7 +129,7 @@ describe("toJniFfi — resource", () => {
     expect(src).toContain("public native byte[] read();")
     expect(src).toContain("public native void close();")
     // no invented constructor — ffi-ir's `resource` kind has no constructor
-    // field, only a methods map (same gap c-abi.ts/rescript.ts/
+    // field, only a methods map (same gap rust-c-abi.ts/rescript.ts/
     // wasm-bindgen.ts already document and decline to paper over).
     expect(src).not.toMatch(/FileHandle\s*\(/)
   })

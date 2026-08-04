@@ -6,7 +6,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 // counterpart of ReScript's `external`/Gleam's `@external`/C-ABI's `extern
 // "C" fn`, NOT the auto-generated `JNIEnv*`/`jobject`-shaped C glue header.
 //
-// Why JNI needs its own file rather than reusing c-abi.ts (verified this
+// Why JNI needs its own file rather than reusing rust-c-abi.ts (verified this
 // session, not assumed): [VERIFIED-EXTERNAL:
 // docs.oracle.com/en/java/javase/17/docs/specs/jni/design.html, fetched
 // 2026-08-03] a native method is declared in Java as `native ReturnType
@@ -29,7 +29,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 // declarations — [VERIFIED-EXTERNAL, via search: docs.oracle.com javah
 // history + JDK 8 `javac -h` documentation, cross-checked against multiple
 // independent tutorial/reference sources, fetched 2026-08-03]. Exactly like
-// `c-abi.ts` not emitting the cbindgen-generated C header (that file's own
+// `rust-c-abi.ts` not emitting the cbindgen-generated C header (that file's own
 // header comment: "a header would be a downstream artifact of this file's
 // output, not something fractal emits directly"), this file emits ONLY the
 // Java-side `native` declarations — the `javac -h` header is a downstream
@@ -56,7 +56,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 // semantics (which the IR's `OwnershipDiscipline` vocabulary was never
 // modeling in the first place; see the ownership note below).
 //
-// Ownership discipline coverage — mirrors c-abi.ts's decided split exactly,
+// Ownership discipline coverage — mirrors rust-c-abi.ts's decided split exactly,
 // for closely related reasons:
 //   - `"copy"` (or no ownership meta at all) — plain by-value primitive/
 //     String/byte[], via `toJniType` below.
@@ -67,7 +67,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 //     ts`'s `*mut T` -> raw pointer mapping, just wearing a fixed-width
 //     integer instead of a pointer type, per the Android-documented
 //     convention.
-//   - `"refcount"` — throws, same as `c-abi.ts`. No native JNI/JVM
+//   - `"refcount"` — throws, same as `rust-c-abi.ts`. No native JNI/JVM
 //     mechanism performs shared reference counting at the boundary; Java's
 //     own GC-triggered cleanup facilities (`finalize()`, `java.lang.ref.
 //     Cleaner`) are a single-owner "run this when the JVM decides to
@@ -80,7 +80,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 //     mechanism (see `./index.ts`'s doc comment on `OwnershipDiscipline`);
 //     nothing in the JNI spec or the Android NDK docs verified this session
 //     enforces an own/borrow distinction or traps on a lend-count
-//     violation — same "no native mechanism" reasoning `c-abi.ts` already
+//     violation — same "no native mechanism" reasoning `rust-c-abi.ts` already
 //     applies to this exact discipline. A `resourceRef(...)`-built
 //     TypeRef (which sets `ownership.resource(mode)` by convention, per
 //     `./index.ts`) is therefore NOT the right constructor to reach for
@@ -98,7 +98,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 // extension kinds, `@rhi-zone/fractal-type-ir/kinds/int-widths` and
 // `.../float-widths`) map to their exact-width Java counterpart when used.
 //
-// Naming: unlike `c-abi.ts` (free to rewrite an exported symbol's spelling
+// Naming: unlike `rust-c-abi.ts` (free to rewrite an exported symbol's spelling
 // to `snake_case` with no external constraint) or `rescript.ts` (whose
 // `external` syntax keeps the ReScript-side identifier and the JS-side
 // string-literal target independently spellable), a JNI `native` method's
@@ -213,7 +213,7 @@ type FfiFunctionLike = {
  * free function (`public static native`, no receiver) from a resource
  * method (`public native`, no `static` — the receiver is JNI's own implicit
  * `jobject this`, requiring NO explicit handle parameter in the Java-side
- * declaration, unlike `c-abi.ts`'s synthesized `handle: *mut T` first
+ * declaration, unlike `rust-c-abi.ts`'s synthesized `handle: *mut T` first
  * parameter for the same case: JNI supplies the receiver itself, per the
  * Oracle spec's documented native-function signature shape verified in the
  * file header).
@@ -236,7 +236,7 @@ function buildDecl(javaName: string, ref: FfiRef, shape: FfiFunctionLike, isStat
  *
  * Deliberately does NOT synthesize a constructor: ffi-ir's `resource` kind
  * (`./index.ts`) carries only a `methods` map, no separate constructor
- * field — the same gap `c-abi.ts`/`rescript.ts`/`wasm-bindgen.ts` already
+ * field — the same gap `rust-c-abi.ts`/`rescript.ts`/`wasm-bindgen.ts` already
  * document and decline to invent one for, rather than guessing at a
  * constructor signature the schema does not express.
  */
@@ -315,12 +315,12 @@ function buildModule(
  *     the implicit `jobject this`).
  *   - `resource` -> the wrapper-class-with-long-field group (see
  *     `buildResource`; `name` argument, if given, is ignored in favor of the
- *     shape's own `name` field, matching `c-abi.ts`'s identical precedent).
+ *     shape's own `name` field, matching `rust-c-abi.ts`'s identical precedent).
  *   - `module` -> the class-plus-loadLibrary group (see `buildModule`).
  *
  * Throws for `refcount`/`resource`-discipline ownership metadata anywhere in
  * a crossed `TypeRef` (see `toJniType`) — same explicit-throw-on-unsupported
- * pattern `c-abi.ts` already uses for disciplines it can't realize on its
+ * pattern `rust-c-abi.ts` already uses for disciplines it can't realize on its
  * own target.
  */
 export function toJniFfi(ref: FfiRef, name?: string): string {

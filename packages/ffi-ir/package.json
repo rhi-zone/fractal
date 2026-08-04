@@ -15,7 +15,7 @@
     "codegen",
     "wasm-bindgen",
     "wit",
-    "c-abi"
+    "rust-c-abi"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -26,9 +26,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./c-abi": {
-      "types": "./dist/c-abi.d.ts",
-      "import": "./dist/c-abi.js"
+    "./rust-c-abi": {
+      "types": "./dist/rust-c-abi.d.ts",
+      "import": "./dist/rust-c-abi.js"
     },
     "./wit": {
       "types": "./dist/wit.d.ts",

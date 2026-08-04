@@ -24,7 +24,7 @@ describe("toBunFfiType", () => {
     expect(toBunFfiType(handleRef("FileHandle"))).toBe("ptr")
   })
 
-  test("refcount discipline ALSO becomes \"ptr\" — not gated, unlike c-abi.ts: the dlopen symbol-level " +
+  test("refcount discipline ALSO becomes \"ptr\" — not gated, unlike rust-c-abi.ts: the dlopen symbol-level " +
     "representation of a refcounted handle and an opaque handle are identical (both raw pointers); only the " +
     "free-side bookkeeping differs, which this signature-only generator doesn't emit either way", () => {
     expect(toBunFfiType(withOwnership(t(types.integer), ownership.refcount()))).toBe("ptr")
@@ -102,7 +102,7 @@ describe("toBun — resource", () => {
     expect(src).toContain("export function FileHandle_read(handle: number")
     expect(src).toContain('return symbols["file_handle_read"](handle)')
 
-    // paired free function, matching c-abi.ts's `<resource>_free` convention
+    // paired free function, matching rust-c-abi.ts's `<resource>_free` convention
     expect(src).toContain('"file_handle_free": { args: ["ptr"], returns: "void" },')
     expect(src).toContain("export function FileHandle_free(handle: number) {")
     expect(src).toContain('return symbols["file_handle_free"](handle)')

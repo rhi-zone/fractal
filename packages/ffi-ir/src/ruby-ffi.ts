@@ -1,7 +1,7 @@
 import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 
-// Ruby `ffi` gem projector — the consumer side of `c-abi.ts`: where c-abi.ts
+// Ruby `ffi` gem projector — the consumer side of `rust-c-abi.ts`: where rust-c-abi.ts
 // emits the Rust source implementing a plain C ABI, this file emits the
 // Ruby-side loader code that calls INTO a compiled C-ABI shared library
 // through the `ffi` gem (https://github.com/ffi/ffi). This is a different
@@ -25,7 +25,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 //     :ruby_name, :c_symbol, [...], :return`) when the Ruby-side method name
 //     should differ from the C symbol — not used here since this projector
 //     always derives both from the same ffi-ir name via the same snake_case
-//     convention `c-abi.ts` already uses for its Rust exports, so the two
+//     convention `rust-c-abi.ts` already uses for its Rust exports, so the two
 //     names always coincide.
 //   - Types (github.com/ffi/ffi/wiki/Types): confirmed type-symbol
 //     vocabulary includes `:bool`, `:string`, `:pointer`, `:void`, and the
@@ -61,13 +61,13 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 // type-symbol list itself distinguishes. So this is the "declaration is
 // identical regardless of discipline" case for three of the four, not a
 // throw — there is no unsupported case here at all, since every discipline
-// maps onto something the gem can genuinely express (unlike c-abi.ts, which
+// maps onto something the gem can genuinely express (unlike rust-c-abi.ts, which
 // throws for refcount/resource because plain C itself has no refcounting or
 // lend-count runtime).
 //
 // Resource -> free function: since this projector's stated purpose is
-// calling into a c-abi.ts-produced shared library specifically, it mirrors
-// that file's own `<resource>_free` naming convention (see c-abi.ts's
+// calling into a rust-c-abi.ts-produced shared library specifically, it mirrors
+// that file's own `<resource>_free` naming convention (see rust-c-abi.ts's
 // `buildFreeFunction`/`buildResource`) by attaching that same paired free
 // function as an ordinary `attach_function` alongside the resource's own
 // methods — the Ruby-side counterpart callers need to actually release a
@@ -106,7 +106,7 @@ function docComment(meta: Readonly<Record<string, unknown>>): string[] {
  * `ref`, ...) would require synthesizing an `FFI::Struct` subclass or a
  * richer per-shape convention this task didn't ask for, so it throws
  * explicitly rather than guessing at one — same throw-not-degrade precedent
- * `c-abi.ts`/`wasm-bindgen.ts` already use for shapes/disciplines they don't
+ * `rust-c-abi.ts`/`wasm-bindgen.ts` already use for shapes/disciplines they don't
  * implement.
  */
 function toBaseRubyFfiType(ref: TypeRef): string {
@@ -152,12 +152,12 @@ type FfiFunctionLike = {
 
 /** One `attach_function :name, [:type, ...], :returntype` declaration.
  * `handleParam`, when given, is prepended as the receiver parameter — a
- * resource method's implicit `self`, synthesized the same way `c-abi.ts`'s
+ * resource method's implicit `self`, synthesized the same way `rust-c-abi.ts`'s
  * `buildFunction` synthesizes its `handle: *mut T` parameter, since ffi-ir's
  * `method` kind names its receiver by resource name only and carries no
  * parameter of its own. Body: `attach_function` binds directly against the
  * loaded shared library — there is no Ruby-side stub body to write, unlike
- * `c-abi.ts`'s `todo!()` (this file emits only the binding declaration, not
+ * `rust-c-abi.ts`'s `todo!()` (this file emits only the binding declaration, not
  * an implementation, since the C-ABI side already carries the implementation
  * this loader calls into). */
 function buildAttachFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, handleParam?: string): string {
@@ -239,11 +239,11 @@ function buildModule(name: string, ref: FfiRef, shape: FfiShape & { kind: "modul
 /**
  * Lower one ffi-ir `FfiRef` to `ffi`-gem Ruby source.
  *   - `function` -> a single `attach_function` declaration (requires `name`,
- *     mirroring `c-abi.ts`'s/`wasm-bindgen.ts`'s identical requirement — a
+ *     mirroring `rust-c-abi.ts`'s/`wasm-bindgen.ts`'s identical requirement — a
  *     free function's name lives as the key in the enclosing
  *     `module.functions` map, not on the shape itself). Emitted BARE (no
  *     enclosing `extend FFI::Library`/`ffi_lib`) when called directly on a
- *     `function` outside a `module` context — same as `c-abi.ts`'s bare
+ *     `function` outside a `module` context — same as `rust-c-abi.ts`'s bare
  *     `#[no_mangle] fn`, since `attach_function` is only meaningful inside a
  *     module/class that has already called `ffi_lib`, which this projector
  *     cannot synthesize without a `meta.libPath` — call `toRubyFfi` on the
@@ -254,10 +254,10 @@ function buildModule(name: string, ref: FfiRef, shape: FfiShape & { kind: "modul
  *     `attach_function` has no receiver/method syntax of its own (verified:
  *     Basic-Usage/Structs show only flat free-function bindings), so a
  *     method degrades to a free function taking the handle explicitly, the
- *     same flattening `c-abi.ts` already does for the same reason.
+ *     same flattening `rust-c-abi.ts` already does for the same reason.
  *   - `resource` -> its methods plus the paired `<resource>_free` binding
  *     (`name` argument, if given, is ignored — the shape carries its own
- *     `name` field, matching `c-abi.ts`'s identical behavior).
+ *     `name` field, matching `rust-c-abi.ts`'s identical behavior).
  *   - `module` -> a `module Name; extend FFI::Library; ffi_lib '...'; ...;
  *     end` block (requires `meta.libPath` on the module `FfiRef` — see
  *     `libPathOf`).

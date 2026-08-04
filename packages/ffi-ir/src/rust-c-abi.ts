@@ -2,8 +2,10 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import { toRustType } from "@rhi-zone/fractal-type-ir/rust-serde"
 import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 
-// C ABI projector — Rust source (`#[repr(C)]` structs, `#[no_mangle] pub
-// extern "C" fn` functions) as the emission side of a plain-C FFI boundary.
+// rust-c-abi: Rust source (`#[repr(C)]` structs, `#[no_mangle] pub
+// extern "C" fn` functions) as the emission side of a plain-C FFI boundary —
+// named, like this package's sibling projectors, after what it emits (Rust
+// implementing a C ABI), not after the ABI/boundary itself.
 // Rust-as-source matches the established precedent in this monorepo
 // (type-ir's `wasm-bindgen.ts` emits Rust targeting a *different* consumer,
 // JS via wasm-bindgen; this file emits Rust targeting a C consumer via
@@ -84,12 +86,12 @@ function quote(value: string): string {
  *     unsupported for this target (see file header) — throws rather than
  *     silently approximating as a pointer or a copy.
  */
-export function toCAbiType(ref: TypeRef): string {
+export function toRustCAbiType(ref: TypeRef): string {
   const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
   if (discipline === undefined || discipline.kind === "copy") return toRustType(ref)
   if (discipline.kind === "opaque-handle") return `*mut ${toRustType(ref)}`
   throw new Error(
-    `toCAbi: unsupported ownership discipline "${discipline.kind}" for C target — the C backend implements only "copy" and "opaque-handle" ` +
+    `toRustCAbi: unsupported ownership discipline "${discipline.kind}" for C target — the C backend implements only "copy" and "opaque-handle" ` +
       '(docs/design/ffi-ir-architecture-options.md, Fork C "discipline-per-target: decided": no native C mechanism for refcounting or a resource/lend-count handle table; both are explicitly out of scope for this target, not an oversight)',
   )
 }
@@ -108,7 +110,7 @@ type FfiFunctionLike = {
  * resource method's implicit `self` — ffi-ir's `method` kind names its
  * receiver by resource name only, carrying no parameter of its own, so the
  * pointer parameter is synthesized here using the same `opaque-handle`
- * pointer convention `toCAbiType` uses for any other opaque handle
+ * pointer convention `toRustCAbiType` uses for any other opaque handle
  * position). Body is a `todo!()` stub — ffi-ir carries only the signature,
  * matching wasm-bindgen.ts's identical stub-body convention for the same
  * reason (no implementation in the IR to emit). */
@@ -117,11 +119,11 @@ function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, self
   if (selfParam !== undefined) params.push(`handle: *mut ${selfParam}`)
   for (const p of shape.params) {
     const ident = escapeRustIdent(toSnakeCase(p.name))
-    params.push(`${ident}: ${toCAbiType(p.type)}`)
+    params.push(`${ident}: ${toRustCAbiType(p.type)}`)
   }
 
   const isVoidReturn = shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null"
-  const returnType = isVoidReturn ? "" : ` -> ${toCAbiType(shape.returnType)}`
+  const returnType = isVoidReturn ? "" : ` -> ${toRustCAbiType(shape.returnType)}`
 
   const lines: string[] = [...docComment("", ref.meta)]
   lines.push("#[no_mangle]")
@@ -202,16 +204,16 @@ function buildResource(
  *     this is the "no special module wrapper" case the task calls out.
  *
  * Throws for `refcount`/`resource`-discipline ownership metadata anywhere in
- * a crossed `TypeRef` (see `toCAbiType`) — same explicit-throw-on-unsupported
+ * a crossed `TypeRef` (see `toRustCAbiType`) — same explicit-throw-on-unsupported
  * pattern `wasm-bindgen.ts` already uses for kinds/values it can't realize on
  * its own target.
  */
-export function toCAbi(ref: FfiRef, name?: string): string {
+export function toRustCAbi(ref: FfiRef, name?: string): string {
   const kind = ref.shape.kind
 
   if (kind === "function") {
     if (name === undefined) {
-      throw new Error('toCAbi: "function" requires a name — a C export is a named symbol, not an anonymous inline type')
+      throw new Error('toRustCAbi: "function" requires a name — a C export is a named symbol, not an anonymous inline type')
     }
     const shape = ref.shape as FfiShape & { kind: "function" }
     return buildFunction(toSnakeCase(name), ref, shape)
@@ -219,7 +221,7 @@ export function toCAbi(ref: FfiRef, name?: string): string {
 
   if (kind === "method") {
     if (name === undefined) {
-      throw new Error('toCAbi: "method" requires a name — the method\'s own key in its resource\'s methods map')
+      throw new Error('toRustCAbi: "method" requires a name — the method\'s own key in its resource\'s methods map')
     }
     const shape = ref.shape as FfiShape & { kind: "method" }
     const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`
@@ -239,11 +241,11 @@ export function toCAbi(ref: FfiRef, name?: string): string {
       resources: Readonly<Record<string, FfiRef>>
     }
     const decls: string[] = [
-      ...Object.entries(shape.functions).map(([fnName, fnRef]) => toCAbi(fnRef, fnName)),
-      ...Object.entries(shape.resources).map(([resName, resRef]) => toCAbi(resRef, resName)),
+      ...Object.entries(shape.functions).map(([fnName, fnRef]) => toRustCAbi(fnRef, fnName)),
+      ...Object.entries(shape.resources).map(([resName, resRef]) => toRustCAbi(resRef, resName)),
     ]
     return decls.join("\n\n")
   }
 
-  throw new Error(`toCAbi: unhandled ffi-ir kind "${kind}" — no C-ABI mapping implemented for this backend`)
+  throw new Error(`toRustCAbi: unhandled ffi-ir kind "${kind}" — no C-ABI mapping implemented for this backend`)
 }

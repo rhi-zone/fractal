@@ -2,12 +2,12 @@ import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir"
 import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 
 // Bun (`bun:ffi`) consumer projector — the JS-side counterpart to
-// `c-abi.ts`: where `c-abi.ts` emits the Rust *producer* of a plain C ABI
+// `rust-c-abi.ts`: where `rust-c-abi.ts` emits the Rust *producer* of a plain C ABI
 // (`extern "C"`, `#[repr(C)]`), this file emits the TypeScript *consumer*
 // loader code that calls INTO that same shared library from a Bun process,
 // via `bun:ffi`'s `dlopen`. Both files target the identical wire boundary —
 // a plain, non-WIT, non-wasm-bindgen C ABI — so the ownership-discipline
-// scope decisions below are made relative to `c-abi.ts`'s own decisions
+// scope decisions below are made relative to `rust-c-abi.ts`'s own decisions
 // (documented there), not re-derived from scratch.
 //
 // `bun:ffi` API surface, verified two ways (not carried over from memory):
@@ -42,17 +42,17 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 //     shape that would require struct-by-value (or any other
 //     non-token-representable encoding) rather than guessing a lossy one.
 //
-// Ownership-discipline scope for this target (mirrors `c-abi.ts`'s own
+// Ownership-discipline scope for this target (mirrors `rust-c-abi.ts`'s own
 // "discipline-per-target: decided" reasoning, applied to the SAME C ABI
-// `c-abi.ts` targets, viewed from the calling side rather than the producer
+// `rust-c-abi.ts` targets, viewed from the calling side rather than the producer
 // side):
 //   - `undefined` (no `meta.ownership`) or `"copy"` — plain by-value,
 //     `toBunFfiType` maps the underlying primitive kind directly.
 //   - `"opaque-handle"` — `"ptr"`, regardless of the referenced TypeRef's own
-//     structural kind (mirrors `toCAbiType`'s `*mut <T>` — at the raw ABI,
+//     structural kind (mirrors `toRustCAbiType`'s `*mut <T>` — at the raw ABI,
 //     the pointee's Rust-side layout is invisible to a JS caller either way).
 //   - `"refcount"` — ALSO `"ptr"`, and deliberately NOT gated the way
-//     `c-abi.ts` gates it. `c-abi.ts` throws on `refcount` because that file
+//     `rust-c-abi.ts` gates it. `rust-c-abi.ts` throws on `refcount` because that file
 //     has to *generate the free-function/bookkeeping implementation itself*,
 //     and plain C has no native refcount mechanism to generate correct code
 //     for. This file generates no implementation at all — only a `dlopen`
@@ -61,7 +61,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 //     pointer (e.g. `Arc::into_raw`/`Box::into_raw` are both `*const/*mut T`
 //     at the ABI). The loader code is genuinely identical regardless of
 //     which of these two disciplines a given handle uses; forcing a
-//     `c-abi.ts`-style throw here would be gating on a distinction that
+//     `rust-c-abi.ts`-style throw here would be gating on a distinction that
 //     doesn't exist at this layer, not preserving a real one. (This is the
 //     same "same reasoning, different conclusion per file" latitude
 //     `gleam.ts`/`rescript.ts` already took relative to `wasm-bindgen.ts`/
@@ -72,13 +72,13 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 //     index into a per-instance table with lend-count tracking, NOT a raw
 //     memory pointer — a fundamentally different wire representation than
 //     anything a plain `dlopen`'d C shared library (which never speaks the
-//     Canonical ABI) can produce or consume. This matches `c-abi.ts`'s own
+//     Canonical ABI) can produce or consume. This matches `rust-c-abi.ts`'s own
 //     scope decision for the identical discipline, for the identical reason
 //     (no such mechanism exists on this wire boundary) — not a new gate
 //     invented for this file.
 
-// Duplicated across every projector file in this package (see `c-abi.ts`'s
-// identical copy) — `toSnakeCase` here MUST match `c-abi.ts`'s symbol-naming
+// Duplicated across every projector file in this package (see `rust-c-abi.ts`'s
+// identical copy) — `toSnakeCase` here MUST match `rust-c-abi.ts`'s symbol-naming
 // convention exactly, since this file's whole job is binding against symbols
 // that convention actually produced in the compiled library.
 function toSnakeCase(name: string): string {
@@ -108,7 +108,7 @@ function quote(value: string): string {
 /**
  * The `bun:ffi` `FFIType` string token for one boundary position (a
  * parameter's or return's `TypeRef`), applying the same C-ABI ownership rule
- * `toCAbiType` (`c-abi.ts`) applies, from the consumer side — see the
+ * `toRustCAbiType` (`rust-c-abi.ts`) applies, from the consumer side — see the
  * file-level doc comment for the full reasoning on each discipline.
  */
 export function toBunFfiType(ref: TypeRef): string {
@@ -119,7 +119,7 @@ export function toBunFfiType(ref: TypeRef): string {
       `toBunFfiType: unsupported ownership discipline "resource" (own/borrow) for the bun:ffi target — ` +
         "that is WIT's Canonical ABI handle-table mechanism (an i32 index with lend-count tracking), not a raw " +
         "C-ABI pointer; a plain dlopen'd shared library (what bun:ffi loads) never speaks that ABI, matching " +
-        "c-abi.ts's identical scope decision for the same discipline on the same wire boundary",
+        "rust-c-abi.ts's identical scope decision for the same discipline on the same wire boundary",
     )
   }
   // discipline is undefined or "copy" beyond this point — plain by-value.
@@ -179,7 +179,7 @@ type FfiFunctionLike = {
 /** One symbol-table entry (`name: { args: [...], returns: ... }`, the value
  * half of `dlopen`'s second argument) for a `function`/`method` shape.
  * `selfParam`, when true, prepends the synthesized `"ptr"` receiver
- * parameter — mirrors `c-abi.ts`'s `buildFunction`'s identical `selfParam`
+ * parameter — mirrors `rust-c-abi.ts`'s `buildFunction`'s identical `selfParam`
  * handling for a resource method's implicit handle. */
 function buildSymbolEntry(symbolName: string, shape: FfiFunctionLike, selfParam: boolean): string {
   const args: string[] = []
@@ -203,7 +203,7 @@ function buildSymbolEntry(symbolName: string, shape: FfiFunctionLike, selfParam:
 
 /** The thin exported wrapper function calling through `symbols.<symbolName>`
  * — `wrapperName` is the ffi-ir map key (already an idiomatic JS
- * identifier), `symbolName` is the raw C-ABI export name `c-abi.ts` actually
+ * identifier), `symbolName` is the raw C-ABI export name `rust-c-abi.ts` actually
  * produced (may differ, e.g. snake_case vs camelCase). */
 function buildWrapper(wrapperName: string, symbolName: string, ref: FfiRef, shape: FfiFunctionLike, selfParam?: string): string {
   const params: string[] = []
@@ -253,7 +253,7 @@ function collect(ref: FfiRef, name: string): { entries: string[]; wrappers: stri
       wrappers.push(buildWrapper(`${shape.name}_${methodName}`, symbolName, methodRef, methodShape, shape.name))
     }
 
-    // The paired free function `c-abi.ts`'s `buildResource` always emits
+    // The paired free function `rust-c-abi.ts`'s `buildResource` always emits
     // (`buildFreeFunction`, `<resource>_free`) — a real exported symbol in
     // the compiled library this file's whole job is to bind against, so
     // omitting it would leave callers with no way to ever release a handle.
@@ -286,7 +286,7 @@ function collect(ref: FfiRef, name: string): { entries: string[]; wrappers: stri
  *   - `method` -> `toBun` requires it be reached via its enclosing
  *     `resource` (a bare `method` names a `receiver` by string but carries
  *     no way to know that resource's *other* methods or its free function,
- *     so — mirroring `c-abi.ts`'s `method`-requires-`name` precedent — a
+ *     so — mirroring `rust-c-abi.ts`'s `method`-requires-`name` precedent — a
  *     bare `method` here throws, directing the caller to project the whole
  *     `resource` instead).
  *   - `resource` -> opaque-handle pointer passthrough for every method's
