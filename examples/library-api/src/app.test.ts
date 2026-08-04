@@ -13,7 +13,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks"
 import { beforeEach, describe, expect, it } from "bun:test"
-import { api, clearStore, httpRoutes } from "./tree.ts"
+import { api, clearStore, httpRoutes, validatedApi } from "./tree.ts"
 import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
 import {
   httpRoute,
@@ -463,10 +463,14 @@ describe("library-api — createFetch preset options against the real tree", () 
   })
 
   it("codegen-generated validators still run when combined with cors + a custom router", async () => {
-    const combined = createFetch(api, {
+    // `createFetch` no longer has its own `validators` option (see
+    // http-api-projector's preset.ts module doc) — the tree passed in is
+    // already `wrapValidators`-wrapped (`validatedApi`, tree.ts), the same
+    // Node-level wiring MCP/CLI share, applied BEFORE it ever reaches
+    // `createFetch`.
+    const combined = createFetch(validatedApi, {
       cors: true,
       router: radixRouter,
-      validators: generatedValidators,
     })
 
     const withQuery = await combined(

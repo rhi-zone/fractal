@@ -3,22 +3,16 @@
 // OOTB preset: composes the full HTTP stack into a ready-to-use fetch handler.
 //
 // Stages (in order, each independently droppable):
-//   1. validators         — wrapValidators(node, opts.validators)
-//                          (@rhi-zone/fractal-api-tree/build), applied to the
-//                          `Node` tree BEFORE projection (opt-in). Same
-//                          mechanism `createMcpServer`/`runCli` use — a leaf
-//                          with a matching generated entry gets its handler
-//                          wrapped to run the generated `parse()` first;
-//                          leaves with no matching entry pass through
-//                          untouched.
-//   2. httpProjection     — Node => HttpRoute (naiveTransform + applyMethods +
+//   1. httpProjection     — Node => HttpRoute (naiveTransform + applyMethods +
 //                          applyMoveTo + applyResponse, see dx.ts).
 //                          `directives: false` drops the directive rewriters,
 //                          leaving the naive-transform baseline (every
 //                          handler POST at its own path-segment key).
-//   3. rewriters          — user-supplied HttpRoute => HttpRoute passes,
+//   2. rewriters          — user-supplied HttpRoute => HttpRoute passes,
 //                          applied last, right before router compilation.
-//   4. router             — HttpRoute => CompiledRouter. Defaults to
+//                          This is also where generated VALIDATION wires in
+//                          (see below) — no dedicated preset option for it.
+//   3. router             — HttpRoute => CompiledRouter. Defaults to
 //                          `mapCharRouter` (compile.ts) — static routes in a
 //                          prebuilt Map, dynamic routes through a compiled
 //                          char-matcher function; best build cost among the
@@ -29,13 +23,34 @@
 //                          function of that shape. Deliberately a function,
 //                          not a string enum: the built-ins are just values
 //                          of this same type.
-//   5. als                — withALS (compile.ts), wraps the compiled router
+//   4. als                — withALS (compile.ts), wraps the compiled router
 //                          so every request runs inside its own
 //                          AsyncLocalStorage context. Opt-in.
-//   6. autoMethodLayer    — HEAD-from-GET, OPTIONS→204+Allow, 405+Allow.
+//   5. autoMethodLayer    — HEAD-from-GET, OPTIONS→204+Allow, 405+Allow.
 //
 // Optional (opt-in, off by default):
-//   7. corsLayer          — CORS preflight + origin headers.
+//   6. corsLayer          — CORS preflight + origin headers.
+//
+// Validation — `applyValidation(key, projectedTree)`
+// (@rhi-zone/fractal-api-tree/apply-validation), NOT a dedicated preset
+// option: `applyValidation`'s call site must live in the CONSUMER's own
+// entry file for codegen to anchor on it (see that module's doc comment) —
+// `createFetch` itself can never own the call, since it would then be the
+// one calling `applyValidation`, not the user's file. Wire it in via
+// `rewriters`, applied to the already-projected `HttpRoute`:
+//
+//   import { applyValidation } from "./generated/apply-validation.ts"
+//   const fetch = createFetch(node, {
+//     rewriters: [(routes) => applyValidation("books", routes)],
+//   })
+//
+// A rejected leaf's generated `parse()` returns `Result.err(...)`, which
+// `runRoute` (route.ts) already encodes as a 400 with the structured errors
+// — the same Result-unwrap path a plain handler's own `Result.err` return
+// takes, not a special case. Superseded by this: `createFetch`'s former
+// `validators`/`wrapValidators` option, which wrapped the `Node` tree BEFORE
+// projection — see docs/design/routing-and-transforms.md's "Dispatch is not
+// an interceptable multi-stage pipeline" section for the full history.
 //
 // To drop the auto-method layer and use core routing only:
 //   return mapCharRouter(httpProjection(node))
@@ -47,8 +62,6 @@
 //   return corsLayer({ origin: "https://app.example.com" })(methods)
 
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
-import { wrapValidators } from "@rhi-zone/fractal-api-tree/build"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import type { DetectionOptions, ServiceStores } from "@rhi-zone/fractal-api-tree"
 import { encodeThrownError } from "./route.ts"
@@ -95,23 +108,6 @@ export type PresetOptions<T = unknown> = {
    * honored). Ignored when `opts.projection.transforms` is set.
    */
   readonly directives?: boolean
-  /**
-   * Generated validators (from `buildValidatorModuleSource` /
-   * `compileValidatorModule`, keyed by `"/"`-joined route path — see
-   * `wrapValidators` in `@rhi-zone/fractal-api-tree/build`). When provided,
-   * `node` is wrapped via `wrapValidators` BEFORE `httpProjection` runs: any
-   * leaf with a matching entry has its handler run through the generated
-   * `parse()` (coercion + validation in one pass) before the original
-   * handler ever sees the input. `wrapValidators` is LOUD — every leaf
-   * reachable from `node` must either have a matching entry here or be
-   * tagged `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError`
-   * (see `@rhi-zone/fractal-api-tree/build`'s own doc for the exact
-   * contract). Omitting `validators` entirely skips the wrap (and the check)
-   * — the right choice pre-codegen. Same mechanism `createMcpServer`'s and
-   * `runCli`'s `opts.validators` use, so a single generated module wires
-   * validation into HTTP, MCP, and CLI alike.
-   */
-  readonly validators?: Readonly<Record<string, GeneratedEntry>>
   /**
    * Additional `HttpRoute => HttpRoute` passes, applied in array order,
    * after projection and before router compilation.
@@ -323,13 +319,6 @@ export function createFetch<T = unknown>(
   node: Node,
   opts: PresetOptions<T> = {},
 ): CompiledRouter {
-  // Wire generated validators onto the tree BEFORE any projection walk — see
-  // `PresetOptions.validators`. wrapValidators is loud: every leaf reachable
-  // from `node` must have a matching entry or be tagged
-  // `meta.tags.unvalidated`, else it throws `UnvalidatedLeafError`. Omitting
-  // `opts.validators` entirely (the pre-codegen default) skips the wrap.
-  const workingNode = opts.validators !== undefined ? wrapValidators(node, opts.validators) : node
-
   const projectionOpts: HttpProjectionOptions =
     opts.projection?.transforms !== undefined
       ? opts.projection
@@ -337,7 +326,7 @@ export function createFetch<T = unknown>(
         ? { transforms: [] }
         : (opts.projection ?? {})
 
-  let routes = httpProjection(workingNode, projectionOpts)
+  let routes = httpProjection(node, projectionOpts)
 
   for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
 

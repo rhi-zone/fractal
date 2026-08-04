@@ -5,6 +5,8 @@
 
 import { describe, expect, it, beforeAll } from "bun:test"
 import { listRoutes, mergeOpenApiDocs, toOpenApi, type OpenApiDoc } from "./openapi.ts"
+import { widgetsTree } from "./__fixtures__/openapi-single-tree.fixture.ts"
+import { catalogTree, inventoryTree } from "./__fixtures__/openapi-two-trees.fixture.ts"
 import { httpRoute, type RouteLeafMeta } from "./route.ts"
 import { api } from "../../../examples/library-api/src/tree.ts"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
@@ -657,5 +659,62 @@ describe("schema correlation under composition — path-keyed schemas resolve co
     const doc = await toOpenApi(composed, { title: "t", version: "1", schemas: pathKeyedSchemas })
     expect(marker200(doc, "/a/list")).toBe("A")
     expect(marker200(doc, "/b/list")).toBe("B")
+  })
+})
+
+// ============================================================================
+// toOpenApi(n, { sourceFile }) — auto-discovery, treeId resolution
+//
+// TODO.md's "toOpenApi auto-discovery key mismatch" entry: extractRouteSchemas
+// keys every entry `${treeId}/${path}`, but buildPathMap used to build bare,
+// unprefixed keys — every auto-discovered schema silently missed and degraded
+// to the `{ type: "object" }` placeholder. Fixed by resolveTreeId (openapi.ts):
+// infer the sole treeId when a sourceFile exports exactly one tree, otherwise
+// require opts.treeId and throw loudly rather than guessing.
+// ============================================================================
+
+describe("toOpenApi(n, { sourceFile }) — auto-discovery treeId resolution", () => {
+  const singleTreeFixture = new URL(
+    "./__fixtures__/openapi-single-tree.fixture.ts",
+    import.meta.url,
+  ).pathname
+  const twoTreesFixture = new URL(
+    "./__fixtures__/openapi-two-trees.fixture.ts",
+    import.meta.url,
+  ).pathname
+
+  function inputSchemaAt(doc: OpenApiDoc, path: string, method: string): unknown {
+    return (doc.paths[path]?.[method]?.requestBody as { content?: { "application/json"?: { schema?: unknown } } } | undefined)
+      ?.content?.["application/json"]?.schema
+  }
+
+  it("a single-tree file resolves the real schema with no opts.treeId — no silent degrade to the placeholder", async () => {
+    const doc = await toOpenApi(widgetsTree, { sourceFile: singleTreeFixture })
+    const schema = inputSchemaAt(doc, "/widgets", "post") as { properties?: Record<string, unknown> } | undefined
+    expect(schema).toBeDefined()
+    expect(schema?.properties).toBeDefined()
+    expect(Object.keys(schema?.properties ?? {})).toEqual(
+      expect.arrayContaining(["name", "quantity"]),
+    )
+  })
+
+  it("a multi-tree file with no opts.treeId throws rather than silently guessing", async () => {
+    await expect(toOpenApi(catalogTree, { sourceFile: twoTreesFixture })).rejects.toThrow(
+      /exports 2 trees.*catalogTree.*inventoryTree.*opts\.treeId/s,
+    )
+  })
+
+  it("opts.treeId disambiguates — catalogTree resolves its OWN schema, not inventoryTree's", async () => {
+    const doc = await toOpenApi(catalogTree, { sourceFile: twoTreesFixture, treeId: "catalogTree" })
+    const schema = inputSchemaAt(doc, "/widgets", "post") as { properties?: Record<string, unknown> } | undefined
+    expect(Object.keys(schema?.properties ?? {})).toEqual(["catalogName"])
+  })
+
+  it("opts.treeId disambiguates — inventoryTree resolves its OWN schema, not catalogTree's", async () => {
+    const doc = await toOpenApi(inventoryTree, { sourceFile: twoTreesFixture, treeId: "inventoryTree" })
+    const schema = inputSchemaAt(doc, "/widgets", "post") as { properties?: Record<string, unknown> } | undefined
+    expect(Object.keys(schema?.properties ?? {})).toEqual(
+      expect.arrayContaining(["warehouseId", "quantity"]),
+    )
   })
 })
