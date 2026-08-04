@@ -76,6 +76,21 @@ export type OpenApiOpts = {
    * as a second meaning.
    */
   readonly defaultSecurity?: OpenApiSecurityRequirement[]
+  /**
+   * `toOpenApi(n, { sourceFile })` only: the exporting binding name for `n` in
+   * `sourceFile` — the same `treeId` `extractRouteSchemas` (api-tree/tree.ts)
+   * prefixes every key with (`${treeId}/${path}`), and the same value a
+   * caller passes as `wrapValidators`' own initial `path` argument
+   * (build.ts) to line up with that prefix. Required only when `sourceFile`
+   * exports MORE than one tree — `toOpenApi` has no way to tell which export
+   * `n` (a plain runtime value with no reflection back to its binding) came
+   * from, so `resolveTreeId` throws rather than guessing when there's more
+   * than one candidate. Omit it for the common single-tree-per-file case:
+   * the sole `treeId` present in the extracted schema map is inferred
+   * automatically. Ignored when `opts.schemas` is supplied directly (no
+   * `sourceFile` auto-discovery happens, so there is no `treeId` to resolve).
+   */
+  readonly treeId?: string
 }
 
 /** A JSON-Schema-compatible object (open bag — OpenAPI 3.1 allows any $schema). */
@@ -392,11 +407,59 @@ function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string
   }
 }
 
-/** Build the handler → tree-relative "/"-joined path map for a `Node` tree — see module doc above. */
-function buildPathMap(n: Node): Map<Handler, string> {
+/**
+ * Build the handler → tree-relative "/"-joined path map for a `Node` tree —
+ * see module doc above. `prefix` seeds the walk's accumulated path — pass
+ * `[treeId]` to match `extractRouteSchemas`' `${treeId}/${path}` keying (see
+ * `resolveTreeId`/`OpenApiOpts.treeId`); omitted (`[]`) reproduces the prior,
+ * unprefixed behavior for a caller-supplied (non-auto-discovered) schema map.
+ */
+function buildPathMap(n: Node, prefix: readonly string[] = []): Map<Handler, string> {
   const out = new Map<Handler, string>()
-  pathLeaves(n, [], out)
+  pathLeaves(n, prefix, out)
   return out
+}
+
+/**
+ * Every distinct `treeId` prefix present in a `SchemaMap`'s own keys — a
+ * `${treeId}/${path}` key's `treeId` is everything before the first `/`
+ * (`treeId` is a JS binding name, so it never contains one itself). Used only
+ * to INFER the sole `treeId` in the common single-tree-per-file case; see
+ * `resolveTreeId`.
+ */
+function distinctTreeIds(schemas: SchemaMap): string[] {
+  const ids = new Set<string>()
+  for (const key of Object.keys(schemas)) {
+    const slash = key.indexOf("/")
+    ids.add(slash === -1 ? key : key.slice(0, slash))
+  }
+  return [...ids]
+}
+
+/**
+ * Resolve the `treeId` `buildPathMap` needs to line up with
+ * `extractRouteSchemas`' `${treeId}/${path}` keying (tree.ts) — see
+ * `OpenApiOpts.treeId`'s doc comment for the full rationale. An explicit
+ * `treeId` always wins; otherwise inferred from `schemas`' own keys when
+ * exactly one distinct prefix is present. More than one throws — silently
+ * picking one (or trying every prefix and taking the first hit) would risk
+ * correlating `n` against a DIFFERENT tree's schema, exactly the
+ * silent-wrong-schema failure mode `extractRouteSchemas`' `treeId` prefix was
+ * introduced to prevent (see that function's own doc comment). Returns
+ * `undefined` (no prefix) when `schemas` is empty — nothing to correlate
+ * against, so the existing `{ type: "object" }` placeholder degrade still
+ * applies, unchanged.
+ */
+function resolveTreeId(schemas: SchemaMap, explicit: string | undefined): string | undefined {
+  if (explicit !== undefined) return explicit
+  const ids = distinctTreeIds(schemas)
+  if (ids.length > 1) {
+    throw new Error(
+      `toOpenApi: sourceFile exports ${ids.length} trees (${ids.join(", ")}) — schema correlation ` +
+        `can't tell which one "n" is. Pass opts.treeId to disambiguate.`,
+    )
+  }
+  return ids[0]
 }
 
 // ============================================================================
@@ -535,13 +598,31 @@ export async function toOpenApiFromRoute(route: HttpRoute, opts: OpenApiOpts = {
  * supplied; otherwise they degrade to `{ type: "object" }` placeholders.
  *
  * @param n    - The root node to project.
- * @param opts - Options: title, version, sourceFile, schemas.
+ * @param opts - Options: title, version, sourceFile, schemas, treeId.
  */
 export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenApiDoc> {
   const route = httpProjection(n)
   const names = buildNameMap(n)
-  const pathMap = buildPathMap(n)
-  return buildDoc(route, opts, names, pathMap)
+
+  // Auto-discovery (`sourceFile`, no caller-supplied `schemas`) keys every
+  // entry `${treeId}/${path}` (extractRouteSchemas) — `buildPathMap` must be
+  // seeded with the SAME `treeId` or every lookup misses and silently
+  // degrades to the `{ type: "object" }` placeholder (TODO.md's "toOpenApi
+  // auto-discovery key mismatch" entry). Resolved here, once, so both the
+  // schema map and the path map `buildDoc` receives are already correlated
+  // — a caller-supplied `opts.schemas` skips this entirely (no `sourceFile`
+  // extraction to correlate against, `buildPathMap` stays unprefixed exactly
+  // as before this fix).
+  let schemas: SchemaMap = opts.schemas ?? {}
+  let treeId: string | undefined
+  if (Object.keys(schemas).length === 0 && opts.sourceFile !== undefined) {
+    const { extractRouteSchemas } = await import("@rhi-zone/fractal-api-tree/tree")
+    schemas = extractRouteSchemas(opts.sourceFile)
+    treeId = resolveTreeId(schemas, opts.treeId)
+  }
+
+  const pathMap = buildPathMap(n, treeId !== undefined ? [treeId] : [])
+  return buildDoc(route, { ...opts, schemas }, names, pathMap)
 }
 
 // ============================================================================

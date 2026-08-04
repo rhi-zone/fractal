@@ -3,7 +3,8 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/build"
+import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation"
+import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/apply-validation"
 import { createFetch } from "./preset.ts"
 import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts"
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
@@ -202,10 +203,14 @@ describe("OOTB preset — directives: false", () => {
 })
 
 // ============================================================================
-// 6. validators
+// 6. validation — applyValidation, wired onto the PROJECTED tree via
+// `rewriters` (see preset.ts's module doc — `createFetch` has no dedicated
+// `validators` option any more; `applyValidation`'s call site has to live in
+// the consumer's own file for codegen to anchor on it, so `rewriters` is the
+// integration point instead).
 // ============================================================================
 
-describe("OOTB preset — validators", () => {
+describe("OOTB preset — validation via applyValidation + rewriters", () => {
   /** A synthetic GeneratedEntry: coerces/validates via `parse()`. */
   function okEntry(): GeneratedEntry {
     return {
@@ -222,27 +227,33 @@ describe("OOTB preset — validators", () => {
     }
   }
 
-  it("wraps the tree via wrapValidators before projection — matching leaf's handler runs parse() first", async () => {
+  it("applyValidation, wired via a rewriter onto the projected tree, runs parse() before the handler", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
         http: { directives: [{ kind: "method", value: "GET" }] },
       }),
     })
+    const applyValidation = createApplyValidation({ test: { widgets: okEntry() } })
 
-    const f = createFetch(echoNode, { validators: { widgets: okEntry() } })
+    const f = createFetch(echoNode, {
+      rewriters: [(routes) => applyValidation("test", routes)],
+    })
     const res = await f(new Request("http://localhost/widgets"))
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject({ validated: true })
   })
 
-  it("a rejecting generated validator's err Result surfaces as a 400 with the structured errors", async () => {
+  it("a rejecting generated validator's err Result surfaces as a 400 with the structured errors — no dedicated 500 special-case needed", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
         http: { directives: [{ kind: "method", value: "GET" }] },
       }),
     })
+    const applyValidation = createApplyValidation({ test: { widgets: rejectingEntry() } })
 
-    const f = createFetch(echoNode, { validators: { widgets: rejectingEntry() } })
+    const f = createFetch(echoNode, {
+      rewriters: [(routes) => applyValidation("test", routes)],
+    })
     const res = await f(new Request("http://localhost/widgets"))
     expect(res.status).toBe(400)
     const body = (await res.json()) as { error: unknown }
@@ -254,15 +265,34 @@ describe("OOTB preset — validators", () => {
       widgets: op((input: Record<string, unknown>) => input, {
         http: { directives: [{ kind: "method", value: "GET" }] },
       }),
-      other: op((_: unknown) => ({ ok: true }), { http: { directives: [{ kind: "method", value: "GET" }] } }, {
-        tags: { unvalidated: true },
-      }),
+      other: op((_: unknown) => ({ ok: true }), { http: { directives: [{ kind: "method", value: "GET" }] } }),
     })
+    const applyValidation = createApplyValidation({ test: { widgets: okEntry() } })
 
-    const f = createFetch(echoNode, { validators: { widgets: okEntry() } })
+    const f = createFetch(echoNode, {
+      rewriters: [(routes) => applyValidation("test", routes)],
+    })
     const res = await f(new Request("http://localhost/other"))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ ok: true })
+  })
+
+  it("an unknown key is the pre-codegen stub case — the tree passes through unchanged", async () => {
+    const echoNode = api_({
+      widgets: op((input: Record<string, unknown>) => input, {
+        http: { directives: [{ kind: "method", value: "GET" }] },
+      }),
+    })
+    // A stub `createApplyValidation({})` — no key registered yet, matching
+    // `applyValidationStubSource` (api-tree/apply-validation-build.ts).
+    const applyValidation = createApplyValidation({})
+
+    const f = createFetch(echoNode, {
+      rewriters: [(routes) => applyValidation("test", routes)],
+    })
+    const res = await f(new Request("http://localhost/widgets"))
+    expect(res.status).toBe(200)
+    expect(await res.json()).not.toMatchObject({ validated: true })
   })
 })
 

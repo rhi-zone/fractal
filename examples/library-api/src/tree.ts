@@ -238,8 +238,9 @@ export const validatedApi = wrapValidators(api, generatedValidators)
 // applyMethods + applyMoveTo + applyResponse, see
 // docs/design/routing-and-transforms.md and packages/http-api-projector/src/dx.ts),
 // over the validator-wrapped tree. This is the actual route tree
-// `createFetch(api, { validators: generatedValidators })` (see app.test.ts)
-// dispatches against.
+// `createFetch(validatedApi, ...)` (see app.test.ts) dispatches against —
+// `createFetch` itself has no `validators` option; the tree passed in is
+// already `wrapValidators`-wrapped, here, before HTTP/MCP/CLI ever project it.
 // ============================================================================
 
 export const httpRoutes = httpProjection(validatedApi)

@@ -27,9 +27,12 @@
 // outputTransforms/resTransforms, plus per-route `decode`/`encode`
 // overrides) was removed: nothing in this codebase used those hooks outside
 // of tests exercising the mechanism itself. AOT-COMPILED validation happens
-// at the `Node` level, before this file's transforms ever run — see
-// `@rhi-zone/fractal-api-tree/build`'s `wrapValidators`, which wraps a
-// leaf's handler directly. What's left here is `runRoute` (below): decode
+// via `@rhi-zone/fractal-api-tree/apply-validation`'s `applyValidation(key,
+// projectedTree)`, wired onto the ALREADY-PROJECTED `HttpRoute` (typically as
+// a `preset.ts` `rewriters` entry) — the same leaf-handler wrap
+// `@rhi-zone/fractal-api-tree/build`'s `wrapValidators` does (either can
+// still be used at the `Node` level, before this file's transforms ever run,
+// for a tree shared with MCP/CLI). What's left here is `runRoute` (below): decode
 // the request via `sources` (still genuinely per-route — each route has its
 // own parameter names and source overrides), optionally run a Standard
 // Schema validator declared via `http.validate()` (verbs.ts) against the
@@ -1209,9 +1212,10 @@ export async function runRoute(
     // Standard Schema validation (`http.validate()`, verbs.ts) — runs on the
     // freshly-assembled input, after decode/transform and before the
     // handler ever sees it. A rejection short-circuits with a 422 carrying
-    // the validator's own `issues`; the handler never runs (mirrors how a
-    // `wrapValidators`-wrapped handler's `err(...)` Result short-circuits
-    // below, but resolved HERE — before the handler is even called — since a
+    // the validator's own `issues`; the handler never runs (mirrors how an
+    // `applyValidation`/`wrapValidators`-wrapped handler's `err(...)` Result
+    // short-circuits below, but resolved HERE — before the handler is even
+    // called — since a
     // Standard Schema validator isn't wired onto the handler itself, only
     // declared on this route's `sources`). A genuine THROW out of
     // `~standard.validate` (a broken validator, not an expected rejection)
@@ -1248,11 +1252,12 @@ export async function runRoute(
     // Result unwrapping: if the handler returned a Result<T, E>, separate
     // the success and error paths before encoding — a 400, not the catch
     // block's 500, since an err Result is an expected outcome the handler
-    // chose to signal, not an unexpected failure. This is also how a
-    // `wrapValidators`-wrapped handler (@rhi-zone/fractal-api-tree/build)
-    // signals a validation rejection: it returns `err(validationErrors)`
-    // rather than throwing, so it lands here as a discriminated-union check
-    // on the return value, not a catch. The check is exact — typeof + kind
+    // chose to signal, not an unexpected failure. This is also how an
+    // `applyValidation`- or `wrapValidators`-wrapped handler
+    // (@rhi-zone/fractal-api-tree/apply-validation or /build) signals a
+    // validation rejection: it returns `err(validationErrors)` rather than
+    // throwing, so it lands here as a discriminated-union check on the
+    // return value, not a catch. The check is exact — typeof + kind
     // — to avoid false-positives on user data that happens to have a `kind`
     // field with an unrelated value.
     if (detectResult && isResultShape(output)) {

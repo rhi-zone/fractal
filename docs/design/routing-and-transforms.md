@@ -170,23 +170,38 @@ see `docs/design/middleware-and-caller-context.md`) plus the
 `PresetOptions.middleware` `Fetch => Fetch` layers `createFetch` composes
 around the whole router.
 
-**Validation** now happens at the `Node` level, before any HTTP-specific
-transform ever runs: `wrapValidators(node, validators)`
-(`packages/api-tree/src/build.ts`) wraps a leaf's handler directly to run a
-generated `parse()` first, success narrowing into the original handler,
-failure short-circuiting with `Result.err(...)`. `createFetch`'s
-`validators` option (`preset.ts`) calls `wrapValidators` on the tree before
-`httpProjection` runs. The same mechanism (and the same generated module)
-wires validation into MCP (`createMcpServer`'s `validators` option) and CLI
-(`runCli`'s `validators` option) — see `docs/guide/codegen-cli.md`.
+**Validation for HTTP (phase 2, 2026-08)** happens via
+`applyValidation(key, projectedTree)`
+(`packages/api-tree/src/apply-validation.ts`) applied to the ALREADY-PROJECTED
+`HttpRoute`, not to the `Node` tree — the leaf-handler wrap is the same
+contract `wrapValidators` uses (`parse()` first, success narrowing into the
+original handler, failure short-circuiting with `Result.err(...)`), only the
+anchor point moved. `createFetch` has no dedicated validation option:
+`applyValidation`'s call site must live in the CONSUMER's own entry file for
+codegen to anchor on it (see that module's doc comment), so `createFetch`
+itself can never own the call. The integration point is `PresetOptions.
+rewriters` (`preset.ts`) — a plain `HttpRoute => HttpRoute` pass, applied
+right after projection:
+```ts
+import { applyValidation } from "./generated/apply-validation.ts"
+const fetch = createFetch(node, {
+  rewriters: [(routes) => applyValidation("books", routes)],
+})
+```
+A rejected leaf's `err(...)` Result lands on the exact same Result-unwrap path
+below as any handler-returned `err` — a dedicated 400 with the structured
+errors, not the catch block's 500 (see 670e0dd/577659f's history: an earlier
+regression to 500, already fixed for the Node-level mechanism before this
+phase, and never reintroduced here since `applyValidation`'s wrap uses the
+identical Result-returning contract).
 
-> **Forward pointer (phase 1, 2026-08):** a keyed, call-site-anchored
-> `applyValidation(key, projectedTree)` mechanism now exists at
-> `packages/api-tree/src/apply-validation.ts` (runtime) and
-> `apply-validation-build.ts` (codegen). It wraps leaf HANDLERS the way
-> `wrapValidators` does — it does NOT reinstate the removed stage arrays — and
-> is wired into no projector: everything described above is still the current
-> state.
+**MCP (`createMcpServer`'s `validators` option) and CLI (`runCli`'s
+`validators` option) are UNCHANGED** — still `wrapValidators` at the `Node`
+level, phase 3's remaining scope (see TODO.md). A tree shared across
+HTTP/MCP/CLI can still be `wrapValidators`-wrapped once at the `Node` level
+(examples/library-api/src/tree.ts's `validatedApi` does exactly this) and
+handed to `createFetch` as-is — `applyValidation`'s call-site anchoring is
+HTTP-specific tooling, not a hard requirement to use HTTP at all.
 
 ## DX — constructor sugar
 

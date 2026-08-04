@@ -13,8 +13,9 @@
 //
 // Neither layer touches payload SHAPE validation — an inbound webhook is a
 // normal operation with a normal input schema, so the existing
-// `opts.validators` (preset.ts) / `wrapValidators` (api-tree/build) path
-// already covers it. These layers only cover what schema validation can't:
+// `applyValidation` (api-tree/apply-validation), wired via `preset.ts`'s
+// `rewriters`, already covers it. These layers only cover what schema
+// validation can't:
 // proving the body came from the claimed sender, and proving it hasn't been
 // delivered before.
 //
