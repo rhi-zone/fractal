@@ -7,7 +7,7 @@ import { boundary, f, ownership, withOwnership, type FfiRef, type OwnershipDisci
  * a plain `ref` TypeRef carrying ownership metadata — matches
  * `c-abi.test.ts`'s own `handleRef` helper for the exact same reason (this
  * is the consumer-side counterpart to that producer). Defaults to
- * `opaque-handle`, the discipline `c-abi.ts` actually emits; other
+ * `opaque-handle`, the discipline `rust-c-abi.ts` actually emits; other
  * disciplines are passed explicitly where the uniform-IntPtr behavior is
  * under test. */
 function handleRef(resourceName: string, discipline: OwnershipDiscipline = ownership.opaqueHandle()) {

@@ -9,11 +9,11 @@ import "@rhi-zone/fractal-type-ir/kinds/common"
 import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 
 // .NET/P-Invoke consumer-side projector — the CALLER of a C-ABI shared
-// library (the counterpart to `c-abi.ts`'s Rust/`#[no_mangle] pub extern "C"`
+// library (the counterpart to `rust-c-abi.ts`'s Rust/`#[no_mangle] pub extern "C"`
 // PRODUCER side). Named by target platform (`dotnet.ts`), matching this
 // package's established naming split: `rescript.ts`/`gleam.ts`/`melange.ts`
 // name by target language/platform (the file emits a whole language's own
-// idiomatic external-declaration syntax), while `wasm-bindgen.ts`/`c-abi.ts`
+// idiomatic external-declaration syntax), while `wasm-bindgen.ts`/`rust-c-abi.ts`
 // name by technique (a specific binding mechanism inside one language, Rust).
 // P/Invoke is .NET's ONE mechanism for calling native code — there is no
 // second competing technique inside .NET the way wasm-bindgen is one of
@@ -60,7 +60,7 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // `StringMarshalling` (`LibraryImportAttribute.StringMarshalling`), and
 // "ANSI has been removed and UTF-8 is now available as a first-class
 // option" — `StringMarshalling.Utf8`. This is the correct match for the
-// paired `c-abi.ts` producer: its `string` mapping is Rust's `String`/`&str`,
+// paired `rust-c-abi.ts` producer: its `string` mapping is Rust's `String`/`&str`,
 // which is guaranteed-valid UTF-8, not UTF-16 — so `StringMarshalling.Utf8`
 // (not `.Utf16`, `[DllImport]`'s historical default on Windows) is emitted
 // on every declaration whose signature contains a string, keeping the two
@@ -78,7 +78,7 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // `bool` is marshalled to a Windows `BOOL`... a 4-byte value. However, the
 // `_Bool`... type in C... [is] a *single* byte" — silently leaving a C#
 // `bool` unmarshaled against a C/Rust `bool` (both 1 byte, matching Rust's
-// own `bool` that `c-abi.ts`/`rust-serde.ts` emit) risks exactly this
+// own `bool` that `rust-c-abi.ts`/`rust-serde.ts` emit) risks exactly this
 // mismatch. The doc's own Windows-data-types table gives the fix: `BOOLEAN`
 // (an 8-bit Windows bool, the same width as Rust/C's `bool`) maps to
 // `[MarshalAs(UnmanagedType.U1)] bool`. Confirmed the source generator
@@ -88,18 +88,18 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // for a return position), matching this exact documented idiom.
 //
 // ============================================================================
-// Ownership-discipline scope for this target. `c-abi.ts` (the producer this
+// Ownership-discipline scope for this target. `rust-c-abi.ts` (the producer this
 // backend consumes) implements exactly two of the four `OwnershipDiscipline`
 // kinds — `"copy"` (by-value) and `"opaque-handle"` (`*mut T` + a
 // separately-emitted `<resource>_free` function) — and throws explicitly for
 // `"refcount"`/`"resource"` (own/borrow), since plain C has no native
-// mechanism for either (see `c-abi.ts`'s own file header). Every P/Invoke
-// declaration this file emits is meant to pair 1:1 with what `c-abi.ts` can
+// mechanism for either (see `rust-c-abi.ts`'s own file header). Every P/Invoke
+// declaration this file emits is meant to pair 1:1 with what `rust-c-abi.ts` can
 // actually produce, so in practice only `"copy"` and `"opaque-handle"` cross
 // this specific boundary today.
 //
 // That said, this file does NOT throw for `"refcount"`/`"resource"`
-// (own/borrow) the way `c-abi.ts` does — reasoned through explicitly, not
+// (own/borrow) the way `rust-c-abi.ts` does — reasoned through explicitly, not
 // guessed: ownership discipline governs WHO is responsible for freeing a
 // handle and WHEN (call an explicit free-fn once / decrement a refcount /
 // respect a lend-count-and-trap contract) — a caller-side bookkeeping
@@ -111,7 +111,7 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // regardless of which of the three it is, with this reasoning recorded here
 // rather than silently assumed. A caller pairing this against a producer that
 // doesn't yet emit a matching refcount/resource-discipline C ABI (i.e.
-// `c-abi.ts` today) gets a `P/Invoke`-correct `IntPtr` declaration for a
+// `rust-c-abi.ts` today) gets a `P/Invoke`-correct `IntPtr` declaration for a
 // symbol that doesn't yet exist to link against — that mismatch is a
 // producer-side coverage gap, not something this consumer-side backend can
 // detect or should paper over by throwing instead.
@@ -124,13 +124,13 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // etc.). By-value struct marshaling for those would require this backend to
 // also emit `[StructLayout(LayoutKind.Sequential)]` C# struct declarations
 // mirroring the producer's own layout — no such struct-shape projector exists
-// for either side of this pairing yet (`c-abi.ts` itself has no `object`
+// for either side of this pairing yet (`rust-c-abi.ts` itself has no `object`
 // handling of its own; `rust-serde.ts`'s `object` case only degrades to a
 // bare type-name reference, not a real repr(C) layout), so emitting a
 // same-layout C# struct here would be inventing a struct definition with
 // nothing on the producer side to verify it against. Throws explicitly
 // rather than guessing at a layout, matching the throw-not-degrade
-// convention `wasm-bindgen.ts`/`c-abi.ts` already use for kinds/disciplines
+// convention `wasm-bindgen.ts`/`rust-c-abi.ts` already use for kinds/disciplines
 // they can't realize on their own targets.
 
 function toSnakeCase(name: string): string {
@@ -273,7 +273,7 @@ type FfiFunctionLike = {
 /**
  * One `[LibraryImport]`-annotated `internal static partial` method for a
  * `function`/`method` shape. `selfParam`, when given, prepends a synthesized
- * `IntPtr handle` receiver parameter (mirroring `c-abi.ts`'s own
+ * `IntPtr handle` receiver parameter (mirroring `rust-c-abi.ts`'s own
  * `selfParam`-driven receiver synthesis for the exact same reason: ffi-ir's
  * `method` kind names its receiver by resource name only, carrying no
  * parameter of its own).
@@ -282,7 +282,7 @@ type FfiFunctionLike = {
  * (not PascalCased) per "Native interoperability best practices"'s own
  * guidance ("DO use the same naming and capitalization for your methods and
  * parameters as the native method you want to call") — `fnName` here is
- * already the snake_case symbol `c-abi.ts` emits for the paired producer
+ * already the snake_case symbol `rust-c-abi.ts` emits for the paired producer
  * side (see `toSnakeCase` calls at each call site below), so this function
  * does not reformat it. `EntryPoint` is still set explicitly (defensive,
  * doesn't rely on any implicit exact-spelling assumption) even though it
@@ -311,7 +311,7 @@ function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, libr
   return lines.join("\n")
 }
 
-/** The paired free-function declaration for a resource — `c-abi.ts`'s
+/** The paired free-function declaration for a resource — `rust-c-abi.ts`'s
  * `buildResource` ALWAYS emits a `<resource>_free(handle: *mut T)` Rust
  * function for every resource (regardless of whether `OwnershipDiscipline`'s
  * `opaque-handle.freeFn` names one explicitly), so this backend always emits
@@ -384,7 +384,7 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }, library
 
 /**
  * Lower one ffi-ir `FfiRef` to `[LibraryImport]`-annotated C#/.NET P/Invoke
- * source — the consumer side that calls INTO the shared library `c-abi.ts`'s
+ * source — the consumer side that calls INTO the shared library `rust-c-abi.ts`'s
  * Rust output produces (see file header for the full attribute/marshaling
  * rationale).
  *
@@ -392,12 +392,12 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }, library
  *     `name` and `libraryName` — see below).
  *   - `method` -> the same, plus a synthesized `IntPtr handle` first
  *     parameter and a `<receiver>_<method>` entry point, matching
- *     `c-abi.ts`'s own naming (requires `name`, the method's own key, and
+ *     `rust-c-abi.ts`'s own naming (requires `name`, the method's own key, and
  *     `libraryName`).
  *   - `resource` -> a nested `static partial class` grouping the resource's
  *     method declarations plus its always-paired `<resource>_free`
  *     declaration (requires `libraryName`; `name` argument, if given, is
- *     ignored in favor of the shape's own `name` field, matching `c-abi.ts`'s
+ *     ignored in favor of the shape's own `name` field, matching `rust-c-abi.ts`'s
  *     identical "resource carries its own name" convention).
  *   - `module` -> a `static partial class` (PascalCased from the module
  *     name) grouping all contained functions/resources, with the

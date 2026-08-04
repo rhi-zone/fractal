@@ -6,7 +6,7 @@ import type { FfiParam, FfiRef, FfiShape } from "./index.ts"
 // `codegen-helpers.ts` is an internal-only shared module across type-ir's own
 // projector files, not part of type-ir's public package.json `exports` map,
 // so it isn't reachable from this package. Same "each projector file is
-// self-contained" duplication precedent `wasm-bindgen.ts`/`c-abi.ts` already
+// self-contained" duplication precedent `wasm-bindgen.ts`/`rust-c-abi.ts` already
 // use for their own copy of `toSnakeCase` in this package.
 function toSnakeCaseStripSeparators(name: string): string {
   return name
@@ -62,7 +62,7 @@ function toSnakeCaseStripSeparators(name: string): string {
 //
 // Ownership metadata (`meta.ownership`, ffi-ir's `OwnershipDiscipline`):
 // deliberately NOT gated or branched on anywhere in this file, unlike
-// wasm-bindgen.ts/c-abi.ts (both of which throw for disciplines their target
+// wasm-bindgen.ts/rust-c-abi.ts (both of which throw for disciplines their target
 // can't realize). Those two throw because ownership discipline changes the
 // emitted Rust code shape itself (`*mut T` vs a plain value, `Arc<T>`
 // wrapping, a paired free function). Here it doesn't: JS has no
@@ -206,7 +206,7 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }): string
  * Lower an ffi-ir `FfiRef` to Gleam `@external(javascript, ...)` source.
  * `name` is required for every kind (a Gleam `pub fn`/`pub type` is always a
  * named top-level declaration, and `module` uses it as the file-path
- * comment's label) — mirrors wasm-bindgen.ts's/c-abi.ts's identical
+ * comment's label) — mirrors wasm-bindgen.ts's/rust-c-abi.ts's identical
  * requirement.
  */
 export function toGleamFfi(ref: FfiRef, name?: string): string {

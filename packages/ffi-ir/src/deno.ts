@@ -11,10 +11,10 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 import "@rhi-zone/fractal-type-ir/kinds/common"
 import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 
-// ffi-ir -> Deno FFI consumer projector: NOT a producer (unlike c-abi.ts,
+// ffi-ir -> Deno FFI consumer projector: NOT a producer (unlike rust-c-abi.ts,
 // which emits Rust `extern "C"` source implementing a C-ABI library) — this
 // file emits the Deno-SIDE TypeScript loader that calls INTO whatever
-// library c-abi.ts's Rust output compiles to, via `Deno.dlopen`. Consumer
+// library rust-c-abi.ts's Rust output compiles to, via `Deno.dlopen`. Consumer
 // and producer are deliberately separate files/concerns, the same split
 // wasm-bindgen.ts (Rust producer) already has no consumer-side counterpart
 // for in this package — this is the first *consumer*-side backend here.
@@ -51,7 +51,7 @@ import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "
 //     (natural alignment + padding rules) a caller must pack/unpack against
 //     is a separate, nontrivial undertaking (matching rust-serde's
 //     `toRustType` "object" case, which does not target `#[repr(C)]`
-//     layout either — c-abi.ts's own "copy" path for an object TypeRef
+//     layout either — rust-c-abi.ts's own "copy" path for an object TypeRef
 //     inherits whatever non-C-ABI shape `toRustType` gives it, so there is
 //     no established fractal C-ABI struct-layout convention yet to mirror
 //     here) — out of scope for this minimal projector, same "minimal
@@ -67,14 +67,14 @@ import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "
 //     gap this file's judgment can close: crossing a string requires a
 //     concrete encoding decision (null-terminated buffer vs. pointer+length
 //     pair, and who owns/frees the bytes) that neither ffi-ir's schema
-//     (index.ts) nor c-abi.ts's own "copy" path (which just inherits
+//     (index.ts) nor rust-c-abi.ts's own "copy" path (which just inherits
 //     rust-serde's `toRustType` `"string" -> "String"` mapping — itself not
 //     a real `#[repr(C)]`-safe C-ABI string representation) has decided.
 //     `denoFfiType` throws explicitly for `"string"` rather than inventing
 //     an encoding.
 //
 // Ownership-discipline scope for THIS target (mirrors the file-level
-// per-target reasoning c-abi.ts/wit.ts/gleam.ts each give, re-derived here
+// per-target reasoning rust-c-abi.ts/wit.ts/gleam.ts each give, re-derived here
 // since Deno FFI's situation matches neither exactly):
 //
 //   - `"copy"` (or no `meta.ownership` at all) — the primitive/bytes value
@@ -95,7 +95,7 @@ import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "
 //     `"opaque-handle"`'s `freeFn` field (index.ts's `OwnershipDiscipline`)
 //     is the one piece that changes generated code shape — when present (or
 //     for any resource at all, see `buildResourceGroup` below, mirroring
-//     c-abi.ts's own unconditional per-resource free-function emission), an
+//     rust-c-abi.ts's own unconditional per-resource free-function emission), an
 //     explicit `<resource>Free` wrapper calling the paired free symbol is
 //     synthesized. `"refcount"`/`"resource"` carry no equivalent function
 //     name in today's schema (index.ts defines `freeFn` only on the
@@ -237,8 +237,8 @@ type FfiFunctionLike = {
 /** Builds the symbol-table entry and wrapper-function description for one
  * `function`/`method` shape. `selfParam`, when given (a method's receiver
  * resource name), is prepended as a `"pointer"` parameter named `handle` —
- * mirrors c-abi.ts's `buildFunction`'s identical `selfParam` convention
- * exactly, since the native symbol this calls into is the one c-abi.ts
+ * mirrors rust-c-abi.ts's `buildFunction`'s identical `selfParam` convention
+ * exactly, since the native symbol this calls into is the one rust-c-abi.ts
  * emits, which synthesizes that same leading handle parameter for every
  * method. */
 function buildCallable(
@@ -278,7 +278,7 @@ function renderWrapper(libVar: string, w: Wrapper): string {
 }
 
 /** The paired free-function wrapper for a resource — synthesized
- * unconditionally per resource, mirroring c-abi.ts's `buildResource`, which
+ * unconditionally per resource, mirroring rust-c-abi.ts's `buildResource`, which
  * emits `${resourceSnake}_free` unconditionally regardless of which
  * ownership discipline (if any) a given call site attaches to a reference
  * to this resource. `handle`'s Deno type is `"pointer"` unconditionally too
@@ -295,7 +295,7 @@ function buildFreeWrapper(resourceName: string): { symbol: SymbolEntry; wrapper:
       symbolKey,
       params: [{ name: "handle", denoType: "pointer" }],
       resultDenoType: "void",
-      docLines: [`/** Releases a ${resourceName} handle — pairs with c-abi.ts's synthesized \`${symbolKey}\` export. */`],
+      docLines: [`/** Releases a ${resourceName} handle — pairs with rust-c-abi.ts's synthesized \`${symbolKey}\` export. */`],
     },
   }
 }
@@ -344,12 +344,12 @@ function renderModuleOrGroup(libVar: string, libPath: string, symbols: readonly 
  * wrapper — see `buildFreeWrapper`).
  *
  *   - `function` -> its own single-symbol `Deno.dlopen` call plus one
- *     wrapper (requires `name`, mirroring c-abi.ts's/wasm-bindgen.ts's
+ *     wrapper (requires `name`, mirroring rust-c-abi.ts's/wasm-bindgen.ts's
  *     identical requirement — a symbol's name lives as the key in the
  *     enclosing `module.functions` map, not on the shape itself. requires
  *     `meta.libPath`, see `libPathOf`).
  *   - `method` -> the same, plus a synthesized `handle: Pointer` first
- *     parameter matching c-abi.ts's receiver convention (requires `name`
+ *     parameter matching rust-c-abi.ts's receiver convention (requires `name`
  *     and `meta.libPath`).
  *   - `resource` -> one `Deno.dlopen` call grouping every declared method's
  *     symbol plus the paired free-function symbol, with one wrapper per

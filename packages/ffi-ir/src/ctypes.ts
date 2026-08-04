@@ -4,8 +4,8 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 // Python ctypes projector — Python source (a `ctypes.CDLL` load, per-function
 // `.argtypes`/`.restype` declarations, and thin wrapper functions/classes)
 // as the CONSUMER side of a plain-C FFI boundary. This is the mirror image
-// of `c-abi.ts` (which emits the Rust/cbindgen PRODUCER side of the same
-// boundary): where `c-abi.ts` emits the shared library, this file emits the
+// of `rust-c-abi.ts` (which emits the Rust/cbindgen PRODUCER side of the same
+// boundary): where `rust-c-abi.ts` emits the shared library, this file emits the
 // Python code that dlopen()s it and calls in.
 //
 // Every API fact below was verified against Python's own official docs
@@ -38,7 +38,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 //     pass` form — left permanently without `_fields_` — is the documented
 //     shape for a type that is only ever handled behind a pointer, never
 //     dereferenced by name, which is exactly cbindgen/C's own opaque-pointer
-//     convention `c-abi.ts` already emits on the producer side (its
+//     convention `rust-c-abi.ts` already emits on the producer side (its
 //     `#[repr(C)] pub struct Name { _private: [u8; 0] }`). This projector
 //     mirrors that with `class Name(Structure): pass` + `POINTER(Name)` for
 //     the handle type, rather than a bare untyped `c_void_p`, so that two
@@ -57,13 +57,13 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 //     type-level way to express "this pointer is refcounted" or "this
 //     pointer is owned vs. borrowed" — that bookkeeping is either done by
 //     the C library itself (refcount) or simply isn't checked at all
-//     (resource own/borrow, absent a host runtime — same point `c-abi.ts`'s
+//     (resource own/borrow, absent a host runtime — same point `rust-c-abi.ts`'s
 //     own file header makes about plain C generally). This file states that
 //     collapse explicitly rather than inventing three different
 //     declarations for a distinction ctypes cannot see.
 //
 // Python source, not Rust — this is the only projector in this package
-// targeting Python rather than Rust, so none of `c-abi.ts`/`wasm-bindgen.ts`'s
+// targeting Python rather than Rust, so none of `rust-c-abi.ts`/`wasm-bindgen.ts`'s
 // Rust-specific helpers (identifier escaping, snake_case conversion) apply
 // as-is; Python identifier rules and keyword list are re-derived below,
 // self-contained, matching this package's existing per-file duplication
@@ -90,7 +90,7 @@ const PY_KEYWORDS = new Set([
  * trailing underscore (`class_`, `type_`) — PEP 8's own documented
  * convention for this exact situation ("single trailing underscore ... used
  * by convention to avoid conflicts with Python keyword"), the Python
- * analogue of `c-abi.ts`'s raw-identifier (`r#type`) escape. */
+ * analogue of `rust-c-abi.ts`'s raw-identifier (`r#type`) escape. */
 function escapePyIdent(name: string): string {
   return PY_KEYWORDS.has(name) ? `${name}_` : name
 }
@@ -106,14 +106,14 @@ function docComment(indent: string, meta: Readonly<Record<string, unknown>>): st
 /**
  * The ctypes-level ctype expression for one boundary position (a
  * parameter's or return's `TypeRef`), applying the same ownership rule
- * `c-abi.ts`'s `toCAbiType` applies for the producer side, but collapsed to
+ * `rust-c-abi.ts`'s `toRustCAbiType` applies for the producer side, but collapsed to
  * ctypes' own vocabulary (see file header for why every non-`"copy"`
  * discipline collapses to the same pointer form):
  *   - no `meta.ownership` at all, or `{ kind: "copy" }` — the plain by-value
  *     ctypes primitive/struct expression from `toCtypesShape` below.
  *   - `{ kind: "opaque-handle" }` / `{ kind: "refcount" }` /
  *     `{ kind: "resource", mode }` — `POINTER(<T>)`, where `<T>` is the same
- *     base expression, matching `c-abi.ts`'s `*mut <T>` on the producer
+ *     base expression, matching `rust-c-abi.ts`'s `*mut <T>` on the producer
  *     side. ctypes has no construct distinguishing these three at the
  *     type-declaration level (see file header); all three produce this one
  *     form, explicitly, rather than three near-duplicate cases.
@@ -141,7 +141,7 @@ export function toCtypesType(ref: TypeRef): string {
  * marshal; throws — rather than silently degrading — for shapes with no
  * native C-ABI representation ctypes itself defines (`array`/`tuple`/`map`/
  * `union`/`intersection`/`enum`/`stream`/`page`/`instance`/`unknown`/
- * `never`), matching `c-abi.ts`'s own throw-not-degrade convention for
+ * `never`), matching `rust-c-abi.ts`'s own throw-not-degrade convention for
  * shapes outside its target's representable subset.
  */
 export function toCtypesShape(ref: TypeRef): string {
@@ -196,12 +196,12 @@ type FfiFunctionLike = {
  * structure bindings: the raw `CDLL` symbol stays reachable via `lib.*`, and
  * calling code is meant to use the wrapper. `selfParam`, when given, is the
  * synthesized `handle` parameter for a resource method (mirroring
- * `c-abi.ts`'s `buildFunction`'s identical `selfParam` synthesis — ffi-ir's
+ * `rust-c-abi.ts`'s `buildFunction`'s identical `selfParam` synthesis — ffi-ir's
  * `method` kind names its receiver by resource name only, carrying no
  * parameter of its own). The wrapper's body is a genuine call-through (it
  * really does call into the loaded library) — ffi-ir carries only the
  * signature, so there is no library-side implementation to stub, unlike the
- * producer-side `c-abi.ts`/`wasm-bindgen.ts` `todo!()` bodies. */
+ * producer-side `rust-c-abi.ts`/`wasm-bindgen.ts` `todo!()` bodies. */
 function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, selfParam?: string): string {
   const paramNames: string[] = []
   const argtypes: string[] = []
@@ -231,7 +231,7 @@ function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, self
  * header's "Incomplete Types" citation. Permanently incomplete (no
  * `_fields_` ever assigned): calling code only ever holds `POINTER(Name)`,
  * never dereferences the pointee, matching cbindgen's own opaque-pointer
- * convention that `c-abi.ts`'s `buildOpaqueStruct` implements on the
+ * convention that `rust-c-abi.ts`'s `buildOpaqueStruct` implements on the
  * producer side. */
 function buildOpaqueStruct(name: string, ref: FfiRef): string {
   return [...docComment("", ref.meta), `class ${name}(Structure):`, "    pass"].join("\n")
@@ -241,7 +241,7 @@ function buildOpaqueStruct(name: string, ref: FfiRef): string {
  * stores the raw `POINTER(Name)` handle, each method is a bound method
  * delegating to `lib.<resource>_<method>(self._handle, ...)`, and
  * `__del__` calls the paired free function — the free-function-per-resource
- * convention `c-abi.ts`'s `buildFreeFunction` establishes on the producer
+ * convention `rust-c-abi.ts`'s `buildFreeFunction` establishes on the producer
  * side (`<resource>_free`), assumed here by the same fixed-name convention
  * since ffi-ir's `resource` shape carries no `freeFn` of its own (only a
  * *reference's* `OwnershipDiscipline.freeFn` does, and no reference is in
@@ -280,7 +280,7 @@ function buildResource(name: string, ref: FfiRef, shape: FfiShape & { kind: "res
   }
 
   // The paired free function's own argtypes/restype — no ffi-ir shape backs
-  // it directly (same as `c-abi.ts`'s `buildFreeFunction`, which likewise
+  // it directly (same as `rust-c-abi.ts`'s `buildFreeFunction`, which likewise
   // synthesizes it rather than reading one from the IR), so its wiring is
   // emitted inline rather than routed through `buildFunction`.
   decls.push(
@@ -300,13 +300,13 @@ function buildResource(name: string, ref: FfiRef, shape: FfiShape & { kind: "res
 /**
  * Lower one ffi-ir `FfiRef` to Python `ctypes` consumer source.
  *   - `function` -> `.argtypes`/`.restype` wiring + a thin wrapper function
- *     (requires `name`, mirroring `c-abi.ts`'s identical requirement).
+ *     (requires `name`, mirroring `rust-c-abi.ts`'s identical requirement).
  *   - `method` -> the same, plus a synthesized `handle` first parameter
  *     (requires `name`, the method's own key in its resource's methods map).
  *   - `resource` -> the opaque `Structure` declaration, each method's
  *     wiring, the paired free-function wiring, and a Python class wrapping
  *     the handle (`name` argument, if given, is ignored — the shape carries
- *     its own `name`, matching `c-abi.ts`'s identical convention).
+ *     its own `name`, matching `rust-c-abi.ts`'s identical convention).
  *   - `module` -> one `from ctypes import *` + `CDLL(...)` load block,
  *     followed by all contained resources then all contained functions.
  *     `libraryPath` names the shared-library path passed to `CDLL`;
@@ -316,7 +316,7 @@ function buildResource(name: string, ref: FfiRef, shape: FfiShape & { kind: "res
  *
  * Throws for any type-ir kind `toCtypesShape` doesn't implement, anywhere in
  * a crossed `TypeRef` — same explicit-throw-on-unsupported pattern
- * `c-abi.ts` uses for ownership disciplines/kinds it can't realize on its
+ * `rust-c-abi.ts` uses for ownership disciplines/kinds it can't realize on its
  * own target.
  */
 export function toCtypes(ref: FfiRef, name?: string, libraryPath?: string): string {

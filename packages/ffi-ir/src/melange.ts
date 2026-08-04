@@ -30,7 +30,7 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 //     JavaScript" page (fetched 2026-08-03; concrete examples reproduced in
 //     this file's comments below) — structurally the closest analog to
 //     `wasm-bindgen.ts`'s attribute-decorated `external`/`#[wasm_bindgen]`
-//     precedent this package already has two siblings for (c-abi.ts,
+//     precedent this package already has two siblings for (rust-c-abi.ts,
 //     wasm-bindgen.ts) and the one this file follows most directly.
 //
 // Given that structural match, THIS FILE implements Melange only. A

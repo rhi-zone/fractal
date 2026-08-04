@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toCAbi, toCAbiType } from "./c-abi.ts"
+import { toRustCAbi, toRustCAbiType } from "./rust-c-abi.ts"
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts"
 
 /** The C-target convention for referencing an opaque resource by pointer:
@@ -11,33 +11,33 @@ function handleRef(resourceName: string, freeFn?: string): ReturnType<typeof wit
   return withOwnership({ shape: { kind: "ref", target: resourceName }, meta: {} }, ownership.opaqueHandle(freeFn))
 }
 
-describe("toCAbiType", () => {
+describe("toRustCAbiType", () => {
   test("copy discipline (or no ownership meta at all) maps straight through rust-serde's toRustType", () => {
-    expect(toCAbiType(t(types.integer))).toBe("i64")
-    expect(toCAbiType(withOwnership(t(types.boolean), ownership.copy()))).toBe("bool")
+    expect(toRustCAbiType(t(types.integer))).toBe("i64")
+    expect(toRustCAbiType(withOwnership(t(types.boolean), ownership.copy()))).toBe("bool")
   })
 
   test("opaque-handle discipline becomes a raw *mut pointer to the underlying Rust type", () => {
-    expect(toCAbiType(handleRef("FileHandle"))).toBe("*mut FileHandle")
+    expect(toRustCAbiType(handleRef("FileHandle"))).toBe("*mut FileHandle")
   })
 
   test("refcount discipline throws — no native C mechanism, out of scope by design", () => {
-    expect(() => toCAbiType(withOwnership(t(types.integer), ownership.refcount()))).toThrow(
+    expect(() => toRustCAbiType(withOwnership(t(types.integer), ownership.refcount()))).toThrow(
       /unsupported ownership discipline "refcount" for C target/,
     )
   })
 
   test('resource discipline (own/borrow) throws — WIT-only, out of scope for C', () => {
-    expect(() => toCAbiType(withOwnership(t({ kind: "ref", target: "FileHandle" }), ownership.resource("own")))).toThrow(
+    expect(() => toRustCAbiType(withOwnership(t({ kind: "ref", target: "FileHandle" }), ownership.resource("own")))).toThrow(
       /unsupported ownership discipline "resource" for C target/,
     )
-    expect(() => toCAbiType(withOwnership(t({ kind: "ref", target: "FileHandle" }), ownership.resource("borrow")))).toThrow(
+    expect(() => toRustCAbiType(withOwnership(t({ kind: "ref", target: "FileHandle" }), ownership.resource("borrow")))).toThrow(
       /unsupported ownership discipline "resource" for C target/,
     )
   })
 })
 
-describe("toCAbi — function", () => {
+describe("toRustCAbi — function", () => {
   test("a simple free function with copy-discipline params/return", () => {
     const addFn: FfiRef = f(
       boundary.function(
@@ -48,7 +48,7 @@ describe("toCAbi — function", () => {
         withOwnership(t(types.integer), ownership.copy()),
       ),
     )
-    const src = toCAbi(addFn, "add")
+    const src = toRustCAbi(addFn, "add")
 
     expect(src).toContain("#[no_mangle]")
     expect(src).toContain('pub extern "C" fn add(a: i64, b: i64) -> i64 {')
@@ -57,14 +57,14 @@ describe("toCAbi — function", () => {
 
   test("a function requires a name", () => {
     const fn = f(boundary.function([], withOwnership(t(types.void), ownership.copy())))
-    expect(() => toCAbi(fn)).toThrow(/"function" requires a name/)
+    expect(() => toRustCAbi(fn)).toThrow(/"function" requires a name/)
   })
 
   test("a function taking a resource parameter uses the opaque-handle pointer convention", () => {
     const closeFn: FfiRef = f(
       boundary.function([{ name: "handle", type: handleRef("FileHandle", "file_handle_free") }], withOwnership(t(types.void), ownership.copy())),
     )
-    const src = toCAbi(closeFn, "close")
+    const src = toRustCAbi(closeFn, "close")
 
     expect(src).toContain('pub extern "C" fn close(handle: *mut FileHandle) {')
     // void return omits the arrow entirely
@@ -72,7 +72,7 @@ describe("toCAbi — function", () => {
   })
 })
 
-describe("toCAbi — resource", () => {
+describe("toRustCAbi — resource", () => {
   test("a resource with a constructor, methods, and an auto-generated destructor", () => {
     const readMethod: FfiRef = f(
       boundary.method(
@@ -88,7 +88,7 @@ describe("toCAbi — resource", () => {
     )
 
     const fsModule: FfiRef = f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }))
-    const src = toCAbi(fsModule)
+    const src = toRustCAbi(fsModule)
 
     // opaque struct
     expect(src).toContain("#[repr(C)]");
@@ -108,13 +108,13 @@ describe("toCAbi — resource", () => {
 
   test("resource emission ignores an explicit name argument in favor of the shape's own name", () => {
     const fileHandle: FfiRef = f(boundary.resource("FileHandle", {}))
-    const src = toCAbi(fileHandle, "SomeOtherName")
+    const src = toRustCAbi(fileHandle, "SomeOtherName")
     expect(src).toContain("pub struct FileHandle {")
     expect(src).not.toContain("SomeOtherName")
   })
 })
 
-describe("toCAbi — module", () => {
+describe("toRustCAbi — module", () => {
   test("concatenates all contained functions and resources with no module wrapper (C has no module system)", () => {
     const closeMethod: FfiRef = f(boundary.method([], withOwnership(t(types.void), ownership.copy()), "FileHandle"))
     const fileHandle: FfiRef = f(boundary.resource("FileHandle", { close: closeMethod }))
@@ -123,7 +123,7 @@ describe("toCAbi — module", () => {
     )
     const fsModule: FfiRef = f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }))
 
-    const src = toCAbi(fsModule)
+    const src = toRustCAbi(fsModule)
     expect(src).toContain('pub extern "C" fn open(');
     expect(src).toContain("pub struct FileHandle {");
     expect(src).toContain('pub extern "C" fn file_handle_close(');
