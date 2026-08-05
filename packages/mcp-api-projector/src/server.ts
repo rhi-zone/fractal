@@ -108,101 +108,9 @@ export interface McpStores {
  */
 export type McpStoreBag = ProjectorStores & McpStores
 
-import { isApplyValidationWrapped } from "@rhi-zone/fractal-api-tree/apply-validation"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import { projectPrompts, projectResources, projectTools } from "./project.ts"
 import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "./project.ts"
-
-// ============================================================================
-// Minimal JSON Schema validation (required + property types only)
-// ============================================================================
-//
-// Deliberately not a full JSON Schema validator (no $ref, no nested object/array
-// schema recursion, no format/pattern/enum/min/max) — just enough to catch the
-// two most common tool-call mistakes: a missing required field, and a field
-// whose type obviously doesn't match. Anything beyond a bare `{ type: "object" }`
-// (the MCP spec minimum used when no derived schema is available) is checked;
-// that minimum itself is skipped since it carries no constraints.
-
-/** JSON Schema "type" keyword values this checker understands. */
-type JsonSchemaType =
-  | "object"
-  | "array"
-  | "string"
-  | "number"
-  | "integer"
-  | "boolean"
-  | "null"
-
-function matchesJsonSchemaType(value: unknown, type: JsonSchemaType): boolean {
-  switch (type) {
-    case "object":
-      return typeof value === "object" && value !== null && !Array.isArray(value)
-    case "array":
-      return Array.isArray(value)
-    case "string":
-      return typeof value === "string"
-    case "number":
-      return typeof value === "number"
-    case "integer":
-      return typeof value === "number" && Number.isInteger(value)
-    case "boolean":
-      return typeof value === "boolean"
-    case "null":
-      return value === null
-    default:
-      return true
-  }
-}
-
-/** Result of `validateAgainstSchema`: either valid, or a list of human-readable errors. */
-export type ValidationResult = { readonly valid: true } | { readonly valid: false; readonly errors: string[] }
-
-/**
- * Validate `args` against a tool's `inputSchema` — `required` array presence
- * and `properties[key].type` for whichever properties are actually present.
- * Not a general JSON Schema validator (see module comment above); intended to
- * catch the common "forgot a field" / "wrong type" mistakes before a handler
- * runs, without pulling in a schema validation library.
- *
- * A schema that is just `{ type: "object" }` (no `properties`/`required`) is
- * the MCP spec minimum used when no derived schema exists — nothing to check,
- * so it always passes.
- */
-export function validateAgainstSchema(
-  schema: Record<string, unknown>,
-  args: Record<string, unknown>,
-): ValidationResult {
-  const properties = schema.properties as Record<string, Record<string, unknown>> | undefined
-  const required = schema.required as unknown
-
-  const errors: string[] = []
-
-  if (Array.isArray(required)) {
-    for (const key of required) {
-      if (typeof key === "string" && !(key in args)) {
-        errors.push(`missing required field "${key}"`)
-      }
-    }
-  }
-
-  if (properties !== undefined && typeof properties === "object") {
-    for (const [key, propSchema] of Object.entries(properties)) {
-      if (!(key in args)) continue
-      const expectedType = propSchema.type
-      if (typeof expectedType !== "string") continue
-      if (!matchesJsonSchemaType(args[key], expectedType as JsonSchemaType)) {
-        errors.push(
-          `field "${key}" expected type "${expectedType}", got ${
-            args[key] === null ? "null" : Array.isArray(args[key]) ? "array" : typeof args[key]
-          }`,
-        )
-      }
-    }
-  }
-
-  return errors.length === 0 ? { valid: true } : { valid: false, errors }
-}
 
 // ============================================================================
 // Rich content pass-through (tool call results, resource read results)
@@ -781,7 +689,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    * BEFORE `projectTools`/`projectResources`/`projectPrompts` build their
    * dispatch maps — MCP's counterpart to HTTP's `PresetOptions.rewriters`
    * (`packages/http-api-projector/src/preset.ts`). This is also where
-   * generated VALIDATION wires in, via `applyValidation(key, tree)`
+   * generated VALIDATION wires in, via `applyValidation(key, tree, "mcp")`
    * (`@rhi-zone/fractal-api-tree/apply-validation`) — there is no dedicated
    * `validators` option (removed, phase 3): `applyValidation`'s call site
    * must live in the CONSUMER's own entry file for codegen to anchor on it
@@ -793,17 +701,27 @@ export type CreateMcpServerOptions<T = unknown> = {
    * const server = createMcpServer(tree, {
    *   name: "my-api",
    *   version: "1.0.0",
-   *   rewriters: [(t) => applyValidation("books", t)],
+   *   rewriters: [(t) => applyValidation("books", t, "mcp")],
    * })
    * ```
    *
-   * Unlike HTTP's `HttpRoute` projection, MCP dispatches off the SAME `Node`
-   * shape it's given — there is no separate "projected" shape for
-   * `rewriters` to run after, so a rewrite here applies to `tree` itself,
-   * before any of the three projection walks. A tool a generated validator
-   * covers has the manual `validateAgainstSchema` check skipped for it (see
-   * `isApplyValidationWrapped` below) — a tool it doesn't cover keeps going
-   * through it exactly as before.
+   * The third argument, `"mcp"`, opts into wire-profile-driven staged
+   * decode+validate (`docs/design/wire-profiles-and-staged-validation.md`):
+   * MCP's wire is already-typed JSON (numbers are numbers, booleans are
+   * booleans), so the profile applied is identity + JSON-date coercion (the
+   * only thing JSON has no literal for) — no coercion of stringified
+   * numbers/booleans. A stringified number like `"42"` for a numeric field
+   * is a structured `ValidationError`, not silently accepted. This is now
+   * the ONLY validation path: there is no manual JSON-Schema fallback
+   * check — decode and validation run unconditionally on every leaf
+   * `applyValidation` wraps. Unlike HTTP's `HttpRoute` projection, MCP
+   * dispatches off the SAME `Node` shape it's given — there is no separate
+   * "projected" shape for `rewriters` to run after, so a rewrite here
+   * applies to `tree` itself, before any of the three projection walks. A
+   * tool with no matching generated-validator entry (an un-codegen'd leaf,
+   * or no `applyValidation` rewriter at all) gets NO validation — raw wire
+   * args reach the handler directly (the design's stated zero-setup
+   * tradeoff for a pre-codegen checkout).
    */
   readonly rewriters?: ReadonlyArray<(tree: Node) => Node>
   /**
@@ -1042,8 +960,6 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }))
 
-  const toolsByName = new Map(tools.map((t) => [t.name, t] as const))
-
   server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
     const { name, arguments: args } = request.params
     const dispatch = handlers.get(name)
@@ -1052,26 +968,6 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       return {
         isError: true,
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
-      }
-    }
-
-    // A generated validator, wired via `opts.rewriters`' `applyValidation`
-    // call (see CreateMcpServerOptions.rewriters), already wraps
-    // dispatch.handler to run parse() — coercion + validation in one pass —
-    // so the schema-derived fallback check below is skipped for this tool
-    // specifically. Uncovered tools (no matching generated validator, or no
-    // `applyValidation` rewriter at all) keep going through it as before.
-    const tool = toolsByName.get(name)
-    const generatedValidatorHandlesThis = isApplyValidationWrapped(dispatch.handler)
-    if (tool !== undefined && !generatedValidatorHandlesThis) {
-      const result = validateAgainstSchema(tool.inputSchema, args ?? {})
-      if (!result.valid) {
-        return {
-          isError: true,
-          content: [
-            { type: "text", text: `Invalid input for tool "${name}": ${result.errors.join("; ")}` },
-          ],
-        }
       }
     }
 
@@ -1097,12 +993,11 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       // Result unwrapping: applied whenever `detectResult` is on (matching
       // HTTP's `runRoute`, packages/http-api-projector/src/route.ts) — any
       // handler returning `{kind:"err", error}` gets a proper MCP tool
-      // error result,
-      // not just tools wrapped by a generated validator
-      // (`generatedValidatorHandlesThis`, computed above, still only gates
-      // the fallback `validateAgainstSchema` check, a separate concern). A
-      // `kind:"ok"` Result is unwrapped to its `.value` before becoming
-      // content, so an ordinary handler that happens to return this
+      // error result, whether the `err` came from the handler itself or from
+      // a generated validator's rejection (`applyValidation` wraps the
+      // handler with `parse()`, which returns the same `Result` shape on
+      // failure). A `kind:"ok"` Result is unwrapped to its `.value` before
+      // becoming content, so an ordinary handler that happens to return this
       // package's own `Result<T,E>` shape (see
       // @rhi-zone/fractal-api-tree's `ok`/`err`) is treated the same way
       // regardless of validator wiring.
