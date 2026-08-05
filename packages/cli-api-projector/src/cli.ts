@@ -422,14 +422,28 @@ export function getCliMeta(meta: CliLeafMeta): CliLeafMetaProperties {
 // ============================================================================
 
 /**
- * Resolved dispatch target: the leaf handler to call and the accumulated
- * slug values from `fallback` traversal.
+ * Resolved dispatch target: the leaf handler to call, the accumulated slug
+ * values from `fallback` traversal, and a SNAPSHOT of the leaf's `meta.cli`
+ * fields that dispatch itself needs — the CLI counterpart of mcp/graphql/
+ * json-rpc's `Dispatch` type (each built once per leaf, carrying its own
+ * already-parsed `sourceMap` rather than re-parsing it at read time). CLI
+ * has no separate build-once/dispatch-many projection phase the way those
+ * three (and HTTP's `HttpRoute` build) do — a leaf's terminal argv segment
+ * can be a `fallback`-captured slug value only known from THIS invocation's
+ * own argv, so a `Resolved` can't be precomputed ahead of a specific call
+ * the way a whole-tree `Dispatch` map can — but the fields below ARE
+ * resolved exactly once, here, at the point `resolveLeaf` finds the leaf,
+ * rather than being re-derived from `leafMeta` at whichever later point in
+ * `runCli` happens to need them (see `runCli`'s own use of `target.sourceMap`
+ * for the read site this snapshot replaces).
  */
 type Resolved = {
   readonly handler: Handler
   readonly slugs: Record<string, string>
   readonly leafName: string
   readonly leafMeta: LeafMeta
+  /** Snapshot of `getCliMeta(leafMeta).sourceMap`, resolved once, here. */
+  readonly sourceMap: SourceMap
   /**
    * The path used to look up this leaf's schema in a `SchemaMap`, i.e. the
    * same underscore-joined segments `extractToolSchemas` (packages/api-tree/
@@ -495,6 +509,7 @@ function resolveLeaf(
         slugs,
         leafName: key,
         leafMeta: child.meta,
+        sourceMap: getCliMeta(child.meta as CliLeafMeta).sourceMap ?? {},
         schemaPath: [...schemaPath, key],
       }
     }
@@ -514,6 +529,7 @@ function resolveLeaf(
         slugs: { ...slugs, [n.fallback.name]: head },
         leafName: n.fallback.name,
         leafMeta: n.fallback.subtree.meta,
+        sourceMap: getCliMeta(n.fallback.subtree.meta as CliLeafMeta).sourceMap ?? {},
         schemaPath: [...schemaPath, n.fallback.name],
       }
     }
@@ -1169,8 +1185,15 @@ export async function runCli<T = unknown>(
   // `required` field is present — all BEFORE the handler is ever called.
   const schemaName = target.schemaPath.join("_").replace(/-/g, "_")
   const inputSchema = schemas[schemaName]?.inputSchema
-  const sourceMap = getCliMeta(target.leafMeta as CliLeafMeta).sourceMap ?? {}
-  const { input: rawInput, stores } = buildInput(flags, target.slugs, sourceMap)
+  // Snapshot-at-resolution, not a live re-read: `target.sourceMap` was
+  // already resolved once, inside `resolveLeaf`, at the point this leaf was
+  // found — see `Resolved`'s doc comment. Matches mcp/graphql/json-rpc's
+  // `Dispatch.sourceMap` (each populated once when the dispatch table is
+  // built) and HTTP's `meta.http.sourceMap` (resolved once when the
+  // `HttpRoute` tree is built) — CLI's own minimal equivalent of a
+  // projection-time snapshot, given CLI has no separate build-once/
+  // dispatch-many phase (see `Resolved`'s doc for why).
+  const { input: rawInput, stores } = buildInput(flags, target.slugs, target.sourceMap)
   // A generated validator, wired via `opts.rewriters`' `applyValidation`
   // call (see CliOpts.rewriters), already wraps target.handler to run
   // parse() — coercion + validation + defaults in one pass — so the

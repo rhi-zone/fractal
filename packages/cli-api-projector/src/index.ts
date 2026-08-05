@@ -18,3 +18,5 @@ export type {
 } from "./cli.ts"
 export type { CliStoreBag, CliStores } from "./cli.ts"
 export { cliErrors, getCliMeta, runCli, walkCliCommands } from "./cli.ts"
+export { cli, source } from "./source.ts"
+export type { CliStoreName } from "./source.ts"

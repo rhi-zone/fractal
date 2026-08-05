@@ -4,10 +4,30 @@
 
 Design settled in conversation with the user (2026-08). The prerequisite arc
 — meta unification / HTTP directive dissolution, see immediately below — has
-LANDED (2026-08): `meta.http.directives`/`HttpDirective`/the fold-by-`kind`
-`getHttpMeta` read-time switch are deleted; HTTP now authors flat
-`meta.http.*` keys directly, matching cli/mcp/graphql/json-rpc's existing
-shape. The staged decode/validate model itself (wire profiles, the
+LANDED (2026-08), in two phases:
+
+- **Phase 1**: `meta.http.directives`/`HttpDirective`/the fold-by-`kind`
+  `getHttpMeta` read-time switch are deleted; HTTP now authors flat
+  `meta.http.*` keys directly, matching cli/mcp/graphql/json-rpc's existing
+  shape.
+- **Phase 2** (five-protocol convergence): `UncoveredSourceParams`'s static
+  op()-time source-coverage check — previously exercised for HTTP via
+  `http.source()`'s literal-preserving `ResolvedSourceMap` — now has the same
+  literal-preserving authoring path for cli/mcp/graphql/json-rpc too
+  (`cli.source()`/`mcp.source()`/`graphql.source()`/`jsonrpc.source()`, each
+  package's own `source.ts`), built on shared machinery extracted into
+  api-tree's input.ts (`SourceMapInput<Store>`/`ResolvedSourceMap<M>`/
+  `resolveSourceMap`) rather than reimplemented per protocol — HTTP's own
+  `http.source()` now calls this shared machinery too, not a local copy.
+  CLI's resolution lifecycle also unified on snapshot-at-projection (see
+  "Resolution lifecycle unifies on snapshot-at-projection" below). A
+  consistency pass over the four non-HTTP protocols' `meta.<proto>` surfaces
+  found them already shape-conformant (flat scalar/map keys, no envelope) —
+  see `docs/design/directive-contract.md`'s per-protocol tables, updated to
+  the unified story (and gaining a JSON-RPC section that page was missing
+  entirely).
+
+The staged decode/validate model itself (wire profiles, the
 `validateEncoding`/`decode`/`defaults-fill`/`validateConstraints` pipeline)
 is still NOT implemented — this document captures the settled decisions for
 that work and elaborates them.
@@ -176,28 +196,70 @@ explicitly a non-goal** — a user who annotates a contribution's `sourceMap` as
 `Record<string, ParamSource>` themselves (defeating the literal-key inference)
 gets the erased-map behavior back; their foot, their trigger.
 
-### `UncoveredSourceParams` generalizes
+### `UncoveredSourceParams` generalizes — LANDED (2026-08, phase 2)
 
 The static source-coverage check (`UncoveredSourceParams`, api-tree's
-input.ts) generalizes from HTTP-specific `DirectivesOf`/`FindStoreForParam`
+input.ts) generalized from HTTP-specific `DirectivesOf`/`FindStoreForParam`
 tuple-walking to all five protocols, walking `Meta.<proto>.sourceMap` directly
-— simpler than the current directive-tuple walk, since there's no longer an
+— simpler than the pre-migration directive-tuple walk, since there's no
 array of `{kind:"source", map}` entries to fold at the type level, just one
 flat map key per protocol. The type-erased-map guards (`string extends keyof
-M`) stay load-bearing for the same reason they are today — a verb bundle or
-other producer typed as an open DU would otherwise phantom-contribute an
-erased map. The distribution guards that exist to make `DirectivesOf`
-distribute over a directive-tuple union delete along with the phantom
-`HttpDirective` member they exist for.
+M`) stay load-bearing for the same reason they were pre-migration — a verb
+bundle or other producer typed as an open DU would otherwise phantom-
+contribute an erased map. The distribution guards that existed to make
+`DirectivesOf` distribute over a directive-tuple union deleted along with the
+phantom `HttpDirective` member they existed for (phase 1).
 
-### Resolution lifecycle unifies on snapshot-at-projection
+Mechanically, `op()`'s own `CheckedContributions`/`UncoveredSourceParams`
+wiring (node.ts) is protocol-BLIND — it was already checking any leaf's
+folded `Meta`, whichever namespaces happened to contribute a `sourceMap`,
+before phase 2 landed. What phase 2 actually closed was a LATENT gap: cli/
+mcp/graphql/json-rpc had no `http.source()`-equivalent helper, so a
+`sourceMap` value only stayed literal-keyed by the accident of being written
+as a raw object literal directly in an `op()` call — passing it through any
+intermediately-typed variable silently widened it back to the index-
+signature `SourceMap`, defeating the check without any error. Verified: none
+of the four had a regression test proving the check was actually live for
+them before this landed.
 
-CLI's current `getCliMeta` read is live, per-dispatch (`cli.ts:1172`, inside
-`runCli`'s per-request path, not resolved once at build/projection time) —
-verified this is an artifact, not a load-bearing behavior: no test or doc
-relies on meta being re-read per dispatch rather than snapshotted once. CLI
-gains the same snapshot-at-projection shape HTTP already has (`meta.http`
-resolved once when the `HttpRoute` tree is built, not per request).
+The fix: `cli.source()`/`mcp.source()`/`graphql.source()`/`jsonrpc.source()`
+(each protocol's own `source.ts`) — literal-preserving authoring helpers
+mirroring `http.source()`, making literal-preservation the DEFAULT authoring
+path instead of an accident of writing the literal inline. The mapped type
+and shorthand-expansion runtime logic these all share (`SourceMapInput<Store>`/
+`ResolvedSourceMap<M>`/`resolveSourceMap`) now live once, in api-tree's
+input.ts, generic over each protocol's own store-name type — `http.source()`
+itself was rewritten to call this shared machinery rather than keep its own
+copy, so the mechanism genuinely isn't a per-protocol reimplementation.
+Regression tests (`source.test.ts` in each of the four packages, mirroring
+`http-api-projector/src/verbs.test.ts`'s existing `http.source()` coverage)
+confirm the op()-time check now fires for all five protocols, not just HTTP.
+
+### Resolution lifecycle unifies on snapshot-at-projection — LANDED (2026-08, phase 2)
+
+CLI's prior `getCliMeta` read was live, per-dispatch (`cli.ts`'s old
+`runCli`-inline read, not resolved once at build/projection time) — verified
+this was an artifact, not a load-bearing behavior: no test or doc relied on
+meta being re-read per dispatch rather than snapshotted once.
+
+CLI gained a snapshot, but not the SAME shape as mcp/graphql/json-rpc/HTTP:
+those four build a whole-tree dispatch table (`Map<string, Dispatch>`, or
+`HttpRoute` for HTTP) ONCE, ahead of any individual request, precisely
+because their dispatch key (a flat name, or a compiled route) is knowable
+without seeing a specific request's own data. CLI can't do the same —
+`resolveLeaf`'s `fallback` (wildcard-capture) traversal means a leaf's
+terminal argv segment can BE a runtime slug value only knowable from that
+invocation's own argv, so there's no whole-tree `Dispatch` map to precompute
+ahead of a specific call the way the other four have. The minimal equivalent
+CLI actually landed: `Resolved` (cli.ts, the per-invocation leaf-resolution
+result `resolveLeaf` returns) grew a `sourceMap` field, populated once,
+inside `resolveLeaf`, at the exact point a leaf is found — before any
+subsequent per-request step (including an `await` gap, the destructive-
+confirmation prompt) runs. Every later read in `runCli` consumes
+`target.sourceMap` (the snapshot), not a fresh `getCliMeta(...)` call. Same
+"resolved once, not re-derived per read site" property the other four
+protocols' `Dispatch`/`meta.http` snapshots have, scoped to what CLI's
+per-argv dispatch shape actually allows precomputing.
 
 ### Implementation checkpoint — RESOLVED (verified, 2026-08)
 

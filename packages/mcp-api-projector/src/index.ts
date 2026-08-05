@@ -57,3 +57,5 @@ export type { CreateHttpMcpServerOptions, CreateStdioMcpServerOptions } from "./
 export { createHttpMcpServer, createStdioMcpServer } from "./presets.ts"
 export type { AnyMcpClient, McpClientOptions } from "./client.ts"
 export { createMcpClient, McpClientError } from "./client.ts"
+export { mcp, source } from "./source.ts"
+export type { McpStoreName } from "./source.ts"

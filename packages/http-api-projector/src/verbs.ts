@@ -19,7 +19,11 @@
 //
 // See docs/design/router-model.md §"Verb helpers are verb+implied-tags BUNDLES"
 
-import type { ParamSource } from "@rhi-zone/fractal-api-tree"
+import { resolveSourceMap } from "@rhi-zone/fractal-api-tree"
+import type {
+  ResolvedSourceMap,
+  SourceMapInput as ApiTreeSourceMapInput,
+} from "@rhi-zone/fractal-api-tree"
 import type { HttpLeafMeta, HttpLeafMetaProperties } from "./project.ts"
 import type { HttpStore } from "./decode.ts"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
@@ -228,37 +232,16 @@ export function paginated(
  * actually registered compile. Deliberately NOT `string & {}`: that would
  * accept any string literal and defeat the "only registered stores compile"
  * property this type exists for.
- */
-export type SourceMapInput = Readonly<
-  Record<string, HttpStore | { readonly store: HttpStore; readonly key?: string }>
->
-
-/**
- * The `SourceMap` a `SourceMapInput` expands to, with each key's own literal
- * association PRESERVED — the type-level counterpart of the shorthand
- * expansion `source()` performs at runtime (a bare `"query"` becomes
- * `{ store: "query", key: <param name> }`).
  *
- * Homomorphic over `M`, so a `const`-inferred literal input (`{ year: "query" }`)
- * yields a literal output (`{ year: { store: "query"; key: "year" } }`) rather
- * than collapsing to `Readonly<Record<string, ParamSource>>`. That literal
- * association is exactly what a type-level read of `meta.http.sourceMap`
- * needs to answer "which store does param X come from" — see
- * `FindStoreForParam` (api-tree's input.ts) and
- * docs/design/typed-store-spec.md §6.
- *
- * Both branches are written to be PROVABLY `ParamSource`-shaped for a still-
- * generic `M` (the shorthand branch by intersecting the store with `string`,
- * the full-form branch by intersecting the input entry with `ParamSource`
- * itself) — a conditional type does not narrow `M[K]` in either branch, so
- * without those intersections `ResolvedSourceMap<M>` cannot satisfy
- * `SourceMap`'s own index-signature constraint.
+ * `SourceMapInput`/`ResolvedSourceMap`/the shorthand-expansion runtime logic
+ * used to be defined here; both are now shared machinery in api-tree's
+ * input.ts (`SourceMapInput<Store>`/`ResolvedSourceMap<M>`/
+ * `resolveSourceMap`), generalized for every protocol's own `source()`
+ * helper — see that module's doc for the full rationale. This alias just
+ * narrows the shared generic to `HttpStore`, preserving this package's
+ * existing public `SourceMapInput` export shape.
  */
-export type ResolvedSourceMap<M extends SourceMapInput> = {
-  readonly [K in keyof M]: M[K] extends string
-    ? { readonly store: M[K] & string; readonly key: K & string }
-    : M[K] & ParamSource
-}
+export type SourceMapInput = ApiTreeSourceMapInput<HttpStore>
 
 /**
  * `http.source(map)` — declares which HTTP store (query, body, path, header,
@@ -313,11 +296,7 @@ export type ResolvedSourceMap<M extends SourceMapInput> = {
 export function source<const M extends SourceMapInput>(
   map: M,
 ): { readonly http: { readonly sourceMap: ResolvedSourceMap<M> } } {
-  const sourceMap: Record<string, ParamSource> = {}
-  for (const [key, value] of Object.entries(map)) {
-    sourceMap[key] = typeof value === "string" ? { store: value, key } : value
-  }
-  return { http: { sourceMap: sourceMap as ResolvedSourceMap<M> } }
+  return { http: { sourceMap: resolveSourceMap(map) } }
 }
 
 // ============================================================================
