@@ -1198,6 +1198,226 @@ already proved it bug-free for this exact shape.
 
 ---
 
+## Implementation trace (phase E) — LANDED (2026-08-05, session
+https://claude.ai/code/session_011tFKVomiW7x2MkeRg3mw88)
+
+Phase E's mandate: close the one real gap the phase-B trace's "Static-meta-
+read investigation" section documented — `encodingMap`'s FUNCTION-form entry
+(`(w: FieldValidWire) => TField`) had no codegen path at all and was silently
+OMITTED, falling through to the protocol's fused default decode as if no
+override had been declared. This phase wires the function form in end to
+end: static existence detection, per-field hook emission, a runtime wrap-time
+hook injection mechanism, a new `"decode"` error kind, two-directional
+stale-module detection, authoring-site decoder typing (`WireOf`), and tests.
+
+### The function never moves — where the pieces live
+
+Per the settled design: the decoder function is declared in tree meta
+(`meta.<proto>.encodingMap.field = (w) => …`) and stays exactly there — no
+inlining, no import emission, no source re-emission. Codegen only ever
+detects its EXISTENCE (a field name), never its value or body:
+
+- `tree.ts`'s new `readMetaEncodingMapFunctionFields(nodeType, namespace,
+  loc, checker)` — `readMetaEncodingMapProfileNames`'s sibling. Where the
+  string form reads a literal VALUE off a resolved TYPE, this one only
+  checks whether a property's TYPE carries a call signature at all
+  (`checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call).length >
+  0`) — a function value has no literal payload for the checker to hand
+  back, so existence is the only question codegen can (and needs to) answer.
+- `apply-validation-build.ts`'s `extractWireApplyValidationTypeRefs` calls
+  this alongside the existing string-form read (http/cli only, same scope
+  cut the string form already has), producing each leaf's `hookFields:
+  readonly string[]` (sorted, for deterministic fingerprinting) —
+  `WireApplyValidationLeaf` gained this field; `flatWireEntries`/
+  `compileWireLeafFragment`/`fingerprintableDerivation`'s caller all thread
+  it through.
+- `type-ir/compile.ts`'s `wireObjectWithFieldProfiles` gained an optional
+  `hookFields` parameter (default empty — every pre-existing caller
+  unaffected): a hook-covered field still runs its ordinary
+  `genWireEncodeDecode` STATEMENTS (the same `validateEncoding` check every
+  other field gets — reused unmodified, not duplicated) but discards that
+  call's own decoded `outExpr`; if no NEW error was pushed for that field
+  (tracked via an `errs.length` snapshot before/after), the assignment
+  becomes `out[name] = hooks[name](fv)` — `fv` the RAW wire field value,
+  which IS `ValidWire` once `validateEncoding` passed (no existing leaf
+  handler mutates its input before decoding it) — wrapped in try/catch. A
+  missing/non-function hook or a thrown value both become a `"decode"`
+  `ValidationError`, never an uncaught exception from the generated code
+  itself. `compileWireEntryFragmentComposite` threads `hookFields` through
+  and emits a second, optional `hooks` parameter on the generated `parse`
+  (`compileWireEntryFragment`'s uniform-profile path is unaffected — hooks
+  are a per-field-name concept and that path never dispatches per field
+  name, matching the string form's own uniform-protocol scope cut).
+- `CompiledWireEntryFragment` and `build.ts`'s `GeneratedEntry` both gained
+  `hookFields: readonly string[]` (the latter optional, defaulting to
+  absent for every hand-authored entry) — the one static surface both the
+  wrap-time stale-module check and the incremental-build fingerprint need,
+  embedded VERBATIM as a literal property on the generated entry object so
+  it survives into the runtime module with zero extra plumbing.
+- `apply-validation.ts`'s `createApplyValidation`/`injectValidators` now
+  thread the call's own literal `protocol` argument down to a new
+  `resolveHooks` helper, which reads the REAL function values off the
+  actual running tree's `meta.<protocol>.encodingMap` (`readEncodingMapHooks`
+  — the runtime counterpart of `readMetaEncodingMapFunctionFields`) and
+  passes them as `entry.parse`'s second argument. This is the ONE place the
+  real function value is ever touched — at WRAP time, not codegen time,
+  exactly as settled.
+
+### The `"decode"` `ValidationError` kind
+
+Added to both copies of the `ValidationError` DU `type-ir/compile.ts` keeps
+in sync (the internal type and `VALIDATION_ERROR_TYPE_SOURCE`, its
+generated-module string-literal mirror):
+
+```ts
+| { kind: "decode"; path: string[]; message: string }
+```
+
+Chosen over reusing `"encoding"` or `"coerce"`: both of those are
+PRE-decode (a `coerce` failure is a builtin coercion failure; an `encoding`
+failure means the wire wasn't even the right SHAPE for decode to run at
+all). A decoder throw happens strictly AFTER `validateEncoding` already
+passed — the wire value IS shape-valid — so it's a distinct, later failure:
+semantically-invalid CONTENT per the user's OWN decoder, which this
+codebase's own machinery could never have predicted. `message` is always
+`error instanceof Error ? error.message : String(error)` — a decoder can
+throw anything, not just an `Error`.
+
+### Decision 5: the two stale-module-mismatch throws
+
+Both directions throw, LOUDLY, at WRAP time (not deferred to the first
+request that happens to hit the field) — `apply-validation.ts`'s
+`resolveHooks`:
+
+- **(a) generated entry expects a hook the runtime doesn't have**
+  (`entry.hookFields` names a field; `meta.<protocol>.encodingMap[field]`
+  isn't a function on the real tree). Left silent, a request against that
+  field would either crash inside the generated `parse` (the fragment's own
+  defensive "no decoder hook supplied" `"decode"` error — a SECOND, weaker
+  line of defense, not a substitute for this one) or, worse, silently run
+  whatever partial/stale hooks map WAS supplied. Thrown eagerly instead.
+- **(b) the runtime HAS a function-valued `encodingMap` entry the generated
+  entry does NOT declare a hook for** — codegen ran BEFORE this override was
+  authored (or simply hasn't been re-run since). Left unhandled, this is the
+  most dangerous case of the two: the field would silently fall through to
+  the fragment's FUSED default decode instead of the user's own decoder —
+  the WRONG decode, run silently, with no error and no signal anything is
+  off. This is exactly the "ran the wrong decode silently" failure mode the
+  design doc's own loud-by-default posture exists to prevent, so it throws
+  for the same reason (a).
+
+Both throws fire once per wrap (not per request) and name the leaf path,
+the field, the protocol, and the remediation (re-run codegen). No third
+"warn and fall through" option was implemented — the design's own posture
+statement leaves no room for a silent middle ground once BOTH directions of
+drift are detectable, which they are here.
+
+### `WireOf<T, Profile>` and the `op()`-time decoder-typing check
+
+`WireOf<T, P>` (new file, `type-ir/src/wire-of.ts`, re-exported from
+`index.ts`) is the type-level mirror of `wireTypeText`/`WireProfile.
+leafHandlers`, computed over an ordinary TypeScript type rather than a
+`TypeRef` — parameterized by `WireProfileName` (`"identity" | "json" |
+"query" | "argv"`, the four identities `compile.ts`'s own leaf handlers
+distinguish), not by a `WireProfile` VALUE (there is no type-level way to
+pattern-match a value's identity, only a type's). Verified against a scratch
+`tsc` repro for every leaf kind (`number`/`boolean`/`Date`/`string`),
+nullable/optional fields, arrays, and nested objects before being wired in —
+see the session's own scratch files for the exact assertions run.
+
+`api-tree/src/input.ts` gained the per-field store-resolution machinery this
+needs (`HttpNamespaceOf`/`CliNamespaceOf`/`HttpMethodOf`/`HttpDefaultStore`/
+`StoreProfile`/`ExplicitStoreForField`/`FallbackStoresForField`/
+`ResolvedStoresForField`/`EncodingMapWireOf`), scoped to exactly `http`/`cli`
+(the two namespaces with per-field derivation at all — same scope cut the
+string form already has), and `MismatchedEncodingMapDecoders<H, Meta, NS>` —
+the phantom-property-based static check, folded into `node.ts`'s
+`CheckedContributions` alongside `UncoveredSourceParams`, that flags a
+function-form `encodingMap` decoder whose param/return types don't match
+`(w: EncodingMapWireOf<Meta, NS, P, HandlerInput<H>[P]>) => HandlerInput<H>[P]`.
+A mismatch widens `op()`'s own contributions parameter to require an extra
+phantom property the actual call site's literal argument doesn't carry —
+the same mechanism, and the same "the compiler's own error names the
+offending field" property, `UncoveredSourceParams` already has. Tests:
+`api-tree/src/wire-of-check.test.ts` (`@ts-expect-error`-driven, asserted at
+`bun run typecheck` time, mirroring `cli-api-projector/src/source.test.ts`'s
+own convention) — a correct decoder, a wrong-parameter-type decoder, a
+wrong-return-type decoder, a JSON-body-sourced field (no coercion expected),
+CLI's argv profile, the string form staying untouched by this check, and the
+exactness-gap case below.
+
+**Exactness finding (task instructions asked this be verified precisely, not
+hand-waved) — NOT fully exact; the gap is real but narrow.** `op()` cannot
+see the tree a leaf will end up mounted under, so a field with NO explicit
+`sourceMap` entry could, in principle, resolve to either a path-slug match
+(unknowable at `op()` time) or the protocol's own default store. Whether
+that ambiguity forces an actual type-level UNION depends on whether "path"
+and the default store happen to share a wire profile:
+
+- **CLI**: `cliStoreEncoding` is CONSTANT — every store (`flag`/`path`/`env`)
+  maps to `argvProfile`. "path" and CLI's default store (`flag`) ALWAYS
+  agree — never ambiguous, for any field type.
+- **HTTP, GET/HEAD/DELETE** (or no method literal authored at all —
+  `wire-derive.ts`'s own `method ?? "GET"` default): the default store is
+  `"query"`, the SAME profile `"path"` already resolves to. Not ambiguous.
+- **HTTP, any other method** (POST/PUT/PATCH/…): the default store is
+  `"body"` (`jsonProfile`), which genuinely DIFFERS from `"path"`'s
+  `queryProfile` for any coercing leaf kind. Confirmed empirically (scratch
+  `tsc`, not asserted from reasoning alone): `WireOf<number,"query">` is
+  `string`; `WireOf<number,"json">` is `number` — NOT the same type. For
+  exactly this case — a field with no explicit override, under a non-GET
+  method — the computed type is the UNION `WireOf<T,"query"> |
+  WireOf<T,"json">`, precisely the fallback the task instructions
+  themselves anticipated as the likely resolution ("default to the union...
+  when it can't statically rule out a path-slug match").
+
+Concretely, what this MISSES and ALLOWS: it doesn't (can't) tell the author
+which of the two shapes their leaf will actually receive once mounted, so a
+decoder narrower than the full union is rejected even if the leaf's real
+tree position would only ever deliver one of the two shapes (a false
+positive, in the "too strict" direction) — and a decoder that DOES handle
+both shapes is accepted even for a leaf whose real mount position only ever
+delivers one (safe, but not maximally precise). Both are the SOUND-but-
+imprecise side of a genuine "`op()` cannot see the tree" structural block —
+not a bug, and not a gap that widens unsoundly (the union is a real
+over-approximation of the two ACTUAL candidate shapes, never wider than
+that). `input.ts`'s `ResolvedStoresForField`/`EncodingMapWireOf` doc
+comments carry this finding in full, and `wire-of-check.test.ts`'s "the real
+exactness gap" test demonstrates it directly against a real `op()` call.
+
+### Tests added this phase
+
+- `packages/api-tree/src/__fixtures__/wire-apply-validation-hooks.fixture.ts`
+  — http/cli/mixed-protocol/no-hook leaves exercising the "dollars-amount
+  numeric string -> integer cents" decoder (the canonical nontrivial-decode
+  example — see the fixture's own doc comment for why this ISN'T a
+  currency-symbol-prefixed string: a hooked field's `validateEncoding` check
+  still runs unmodified, so under query/argv encoding the wire must already
+  be a bare numeric string before the hook ever sees it).
+- `packages/api-tree/src/wire-apply-validation-hooks.test.ts` — static
+  existence detection, generated-module shape, end-to-end runtime decode
+  (http and cli), a decoder throw surfacing as `"decode"`, a wire-shape-
+  invalid input rejected as `"encoding"` (never reaching the hook), BOTH
+  stale-module-mismatch directions, fused<->hook fingerprint invalidation,
+  and `GeneratedEntry`'s additive-hookFields backward compatibility.
+- `packages/api-tree/src/wire-of-check.test.ts` — the authoring-site typing
+  check (see above).
+
+### What this phase deliberately left as-is
+
+`encodingMap` overrides (either form) applying to the UNIFORM protocols
+(identity/mcp/graphql/jsonrpc) remains the SAME deliberate scope cut the
+string form already made — those protocols have no per-field derivation at
+all, so a function-form entry declared under one of their namespaces has
+nothing to hook into and is silently inert (never read by
+`readMetaEncodingMapFunctionFields`, which only runs for http/cli). No
+dedicated authoring helper (à la `http.source()`) was built for the function
+form either, for the same reason the string form didn't get one: nothing
+about authoring a raw function-valued object-literal property needs
+literal-preservation machinery the way `sourceMap`'s STORE NAMES did.
+
+---
+
 ## Parked: semantic/effectful resolution (not in scope)
 
 Recorded here for cross-reference, tracked as an open item in `TODO.md`

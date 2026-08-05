@@ -65,6 +65,17 @@ export type ValidationError =
   // actually sent, one level below `coerce`, per the design doc's "errors are
   // phrased against what the caller actually sent" requirement.
   | { kind: "encoding"; path: string[]; expected: string; actual: unknown }
+  // Wire-profile custom-decoder (function-form `encodingMap`) failure: the
+  // wire value passed `validateEncoding` (it IS the right wire shape — an
+  // `"encoding"` error would have already fired otherwise) but the user's
+  // own decoder function THREW while turning it into `T`. Neither `coerce`
+  // (a builtin coercion failure) nor `encoding` (wrong wire shape) apply —
+  // this is a distinct, later stage: semantically-invalid CONTENT per the
+  // user's own decoder, not a shape problem this codebase's own machinery
+  // could have caught. `message` carries the thrown value's message
+  // (`error instanceof Error ? error.message : String(error)`) — a decoder
+  // can throw anything, not just an `Error`, so this is never a lossy cast.
+  | { kind: "decode"; path: string[]; message: string }
 
 /** Display string for a TypeRef — reuses the TypeScript projector's rendering. */
 export function typeRefToString(ref: TypeRef): string {
@@ -1084,7 +1095,8 @@ const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
   | { kind: "unexpected"; path: string[] }
   | { kind: "union"; path: string[]; errors: ValidationError[][] }
   | { kind: "coerce"; path: string[]; expected: string; actual: unknown }
-  | { kind: "encoding"; path: string[]; expected: string; actual: unknown };`
+  | { kind: "encoding"; path: string[]; expected: string; actual: unknown }
+  | { kind: "decode"; path: string[]; message: string };`
 
 /** The module-scope `defs` block (shared `__def_NAME_check/errors/parse`
  * function declarations + their own hoisted consts) — declared ONCE per
@@ -1881,6 +1893,18 @@ export type CompiledWireEntryFragment = {
   readonly code: string
   readonly wireType: string
   readonly typeImport?: { readonly typeName: string; readonly from: string }
+  /** Field names this fragment's generated `parse` expects a custom-decoder
+   * HOOK for, supplied at WRAP time (function-form `encodingMap` — see
+   * `wireObjectWithFieldProfiles`'s doc comment). Always `[]` for a fragment
+   * compiled via `compileWireEntryFragment` (the uniform-profile path never
+   * dispatches per field name, so it can never have a hook field); non-empty
+   * only for a `compileWireEntryFragmentComposite` fragment whose caller
+   * passed a non-empty `hookFields`. Embedded VERBATIM into the fragment's
+   * own generated `code` (as a literal property on the returned entry
+   * object), not just carried on this compile-time wrapper — api-tree's
+   * `apply-validation.ts` reads it off the RUNTIME generated entry, which
+   * never sees this TypeScript-only wrapper type. */
+  readonly hookFields: readonly string[]
 }
 
 export function compileWireEntryFragment(
@@ -1909,11 +1933,12 @@ export function compileWireEntryFragment(
   lines.push(`  if (constraintErrs.length > 0) { return { kind: "err" as const, errors: constraintErrs }; }`)
   lines.push(`  return { kind: "ok" as const, value: __decoded };`)
   lines.push(`}`)
-  lines.push(`return { parse: parse } as unknown as {`)
+  lines.push(`return { parse: parse, hookFields: [] } as unknown as {`)
   lines.push(`  parse: (wire: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`)
+  lines.push(`  hookFields: readonly string[];`)
   lines.push(`};`)
   const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n")
-  return typeImport === undefined ? { code, wireType } : { code, wireType, typeImport }
+  return typeImport === undefined ? { code, wireType, hookFields: [] } : { code, wireType, typeImport, hookFields: [] }
 }
 
 /** True when `ref` (accounting for `meta.nullable` and `page`, the same
@@ -1930,7 +1955,32 @@ function isTopLevelObjectRef(ref: TypeRef): boolean {
  * by field NAME instead of using one profile for every field — see
  * `compileWireEntryFragmentComposite`'s doc comment for why this exists as a
  * separate function rather than a parameter added to `wireObject` itself
- * (purely additive: `wireObject`/`genWireEncodeDecode` are untouched). */
+ * (purely additive: `wireObject`/`genWireEncodeDecode` are untouched).
+ *
+ * `hookFields` (default empty — every existing caller is unaffected) names
+ * fields whose decode is a CUSTOM DECODER FUNCTION supplied at WRAP time
+ * (function-form `encodingMap`, see docs/design/
+ * wire-profiles-and-staged-validation.md's implementation-trace addendum for
+ * this phase) rather than this profile's fused default decode. A hook field
+ * still runs its ordinary `genWireEncodeDecode` STATEMENTS — the same
+ * `validateEncoding` check every other field gets, so a wire-shape-invalid
+ * input is rejected exactly as it would be fused — but DISCARDS that call's
+ * own decoded `outExpr`; the assignment instead calls `hooks[name](fv)` with
+ * the RAW wire field value (`fv`/`v` above), which per the staged model IS
+ * `ValidWire` once `validateEncoding` has passed (no existing leaf handler
+ * mutates its input before decoding it — see `numericStringLeaf`/
+ * `strictBoolFromStringLeaf`/`argvBoolLeaf`/`isoDateStringLeaf`/
+ * `defaultWireLeaf`, none of which touch `v` itself). Guarded by `errs.length`
+ * before/after the field's own `validateEncoding` statements — a hook only
+ * runs when THIS field introduced no new error — and wrapped in try/catch:
+ * a throw (or a missing/non-function hook — the wrap-time stale-module check
+ * in api-tree's `apply-validation.ts` is the LOUD, fail-at-wrap-time version
+ * of this same defect; this is the generated code's own defensive fallback
+ * for a caller that invokes `parse` directly without going through that
+ * check) becomes a structured `"decode"` `ValidationError` instead of
+ * propagating or silently producing `undefined`. A field NOT in `hookFields`
+ * is completely unaffected — same fused single-pass emission as before this
+ * parameter existed, zero extra machinery. */
 function wireObjectWithFieldProfiles(
   ref: TypeRef,
   v: string,
@@ -1939,6 +1989,7 @@ function wireObjectWithFieldProfiles(
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
   registry?: WireDefsRegistry,
+  hookFields: ReadonlySet<string> = EMPTY_HOOK_FIELDS,
 ): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "object" }
   const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
@@ -1951,10 +2002,30 @@ function wireObjectWithFieldProfiles(
     const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
     const fieldProfile = fieldProfiles[name] ?? defaultProfile
     const inner = genWireEncodeDecode(field, fv, fpath, ctx, fieldProfile, registry)
+    if (!hookFields.has(name)) {
+      body.push(
+        `if (${fv} !== undefined) {`,
+        ...indentLines(inner.stmts, 2),
+        `  ${out}[${JSON.stringify(name)}] = ${inner.outExpr};`,
+        `}`,
+      )
+      continue
+    }
+    const preErrs = ctx.fresh("preErrs")
+    const hook = ctx.fresh("hook")
     body.push(
       `if (${fv} !== undefined) {`,
+      `  const ${preErrs} = errs.length;`,
       ...indentLines(inner.stmts, 2),
-      `  ${out}[${JSON.stringify(name)}] = ${inner.outExpr};`,
+      `  if (errs.length === ${preErrs}) {`,
+      `    const ${hook} = hooks ? hooks[${JSON.stringify(name)}] : undefined;`,
+      `    if (typeof ${hook} !== "function") {`,
+      `      errs.push({ kind: "decode", path: ${fpath}, message: ${JSON.stringify(`no decoder hook supplied for field ${JSON.stringify(name)}`)} });`,
+      `    } else {`,
+      `      try { ${out}[${JSON.stringify(name)}] = ${hook}(${fv}); }`,
+      `      catch (__e) { errs.push({ kind: "decode", path: ${fpath}, message: __e instanceof Error ? __e.message : String(__e) }); }`,
+      `    }`,
+      `  }`,
       `}`,
     )
   }
@@ -1967,6 +2038,11 @@ function wireObjectWithFieldProfiles(
   stmts.push(...indentLines(body, 2), `}`)
   return { stmts, outExpr: out }
 }
+
+/** Shared empty-set default for `wireObjectWithFieldProfiles`'s `hookFields`
+ * parameter — a single frozen instance rather than allocating a fresh `Set`
+ * per call for the (overwhelmingly common) no-hooks case. */
+const EMPTY_HOOK_FIELDS: ReadonlySet<string> = new Set()
 
 /** Composite-top wrapper: unwraps `meta.nullable`/`page` (mirroring
  * `genWireEncodeDecode`/`genWireEncodeDecodeShape`'s own unwrapping) then
@@ -1983,10 +2059,20 @@ function genWireEncodeDecodeCompositeTop(
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
   registry?: WireDefsRegistry,
+  hookFields: ReadonlySet<string> = EMPTY_HOOK_FIELDS,
 ): ValidateResult {
   if (ref.meta.nullable === true) {
     const out = ctx.fresh("n")
-    const inner = genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry)
+    const inner = genWireEncodeDecodeCompositeTopShape(
+      ref,
+      v,
+      pathExpr,
+      ctx,
+      fieldProfiles,
+      defaultProfile,
+      registry,
+      hookFields,
+    )
     const stmts = [
       `let ${out};`,
       `if (${v} === null) { ${out} = null; } else {`,
@@ -1996,7 +2082,7 @@ function genWireEncodeDecodeCompositeTop(
     ]
     return { stmts, outExpr: out }
   }
-  return genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry)
+  return genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry, hookFields)
 }
 
 function genWireEncodeDecodeCompositeTopShape(
@@ -2007,11 +2093,21 @@ function genWireEncodeDecodeCompositeTopShape(
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
   registry?: WireDefsRegistry,
+  hookFields: ReadonlySet<string> = EMPTY_HOOK_FIELDS,
 ): ValidateResult {
   if (ref.shape.kind === "page") {
-    return genWireEncodeDecodeCompositeTop(pageAsObjectRef(ref), v, pathExpr, ctx, fieldProfiles, defaultProfile, registry)
+    return genWireEncodeDecodeCompositeTop(
+      pageAsObjectRef(ref),
+      v,
+      pathExpr,
+      ctx,
+      fieldProfiles,
+      defaultProfile,
+      registry,
+      hookFields,
+    )
   }
-  return wireObjectWithFieldProfiles(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry)
+  return wireObjectWithFieldProfiles(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry, hookFields)
 }
 
 /** Sibling of `wireTypeTextShape`'s `"object"` branch whose per-field
@@ -2077,7 +2173,24 @@ function wireTypeTextComposite(
  * dispatch per-name over, so this is exactly
  * `compileWireEntryFragment(ref, defaultProfile, ...)` — delegation, not a
  * separate codepath, so the non-object case can never drift from the ordinary
- * one.
+ * one. (Also means a non-empty `hookFields` is silently inert for a non-object
+ * `ref` — there are no named fields to hook here, the same way `fieldProfiles`
+ * is already inert in this branch.)
+ *
+ * `hookFields` (default empty — every pre-existing caller is unaffected)
+ * threads straight through to `genWireEncodeDecodeCompositeTop`/
+ * `wireObjectWithFieldProfiles` (see that function's doc comment for the
+ * full hook-emission contract) and is embedded verbatim into the compiled
+ * fragment's generated entry object AND this function's own return value
+ * (`CompiledWireEntryFragment.hookFields`) — the one static surface a caller
+ * needs to drive both the wrap-time stale-module check (api-tree's
+ * `apply-validation.ts`) and the incremental-build fingerprint (api-tree's
+ * `apply-validation-build.ts`'s `fingerprintableDerivation`). The generated
+ * `parse` function itself gains a second, optional `hooks` parameter
+ * regardless of whether `hookFields` is empty — a stable signature is
+ * simpler than a fragment-shape that varies by whether hooks are in play,
+ * and an ignored extra parameter costs nothing at the (rare, wrap-time-only)
+ * call site.
  */
 export function compileWireEntryFragmentComposite(
   ref: TypeRef,
@@ -2086,6 +2199,7 @@ export function compileWireEntryFragmentComposite(
   constraintsFnName: string,
   resolveImport?: (declarationFile: string) => string,
   registry?: WireDefsRegistry,
+  hookFields: ReadonlySet<string> = EMPTY_HOOK_FIELDS,
 ): CompiledWireEntryFragment {
   if (!isTopLevelObjectRef(ref)) {
     return compileWireEntryFragment(ref, defaultProfile, constraintsFnName, resolveImport, registry)
@@ -2093,11 +2207,21 @@ export function compileWireEntryFragmentComposite(
   const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames)
   const wireType = wireTypeTextComposite(ref, fieldProfiles, defaultProfile, registry)
   const ctx = new GenCtx()
-  const decodeBody = genWireEncodeDecodeCompositeTop(ref, "wire", "path", ctx, fieldProfiles, defaultProfile, registry)
+  const decodeBody = genWireEncodeDecodeCompositeTop(
+    ref,
+    "wire",
+    "path",
+    ctx,
+    fieldProfiles,
+    defaultProfile,
+    registry,
+    hookFields,
+  )
   const fillStmts = genDefaultsFillChildren(ref, "__decoded")
+  const hookFieldsLiteral = JSON.stringify([...hookFields])
 
   const lines: string[] = [...ctx.declarations()]
-  lines.push(`function parse(wire: any) {`)
+  lines.push(`function parse(wire: any, hooks?: Readonly<Record<string, (w: any) => any>>) {`)
   lines.push(`  const path: string[] = [];`)
   lines.push(`  void path;`)
   lines.push(`  const errs: ValidationError[] = [];`)
@@ -2109,11 +2233,17 @@ export function compileWireEntryFragmentComposite(
   lines.push(`  if (constraintErrs.length > 0) { return { kind: "err" as const, errors: constraintErrs }; }`)
   lines.push(`  return { kind: "ok" as const, value: __decoded };`)
   lines.push(`}`)
-  lines.push(`return { parse: parse } as unknown as {`)
-  lines.push(`  parse: (wire: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`)
+  lines.push(`return { parse: parse, hookFields: ${hookFieldsLiteral} } as unknown as {`)
+  lines.push(
+    `  parse: (wire: unknown, hooks?: Readonly<Record<string, (w: unknown) => unknown>>) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`,
+  )
+  lines.push(`  hookFields: readonly string[];`)
   lines.push(`};`)
   const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n")
-  return typeImport === undefined ? { code, wireType } : { code, wireType, typeImport }
+  const hookFieldsArr = [...hookFields]
+  return typeImport === undefined
+    ? { code, wireType, hookFields: hookFieldsArr }
+    : { code, wireType, typeImport, hookFields: hookFieldsArr }
 }
 
 /** The key `assembleWireModule`'s `wireValidators` map uses for one

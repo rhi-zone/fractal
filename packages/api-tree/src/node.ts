@@ -24,7 +24,7 @@
 // ============================================================================
 
 import type { Tags } from "./tags.ts"
-import type { UncoveredSourceParams } from "./input.ts"
+import type { MismatchedEncodingMapDecoders, UncoveredSourceParams } from "./input.ts"
 
 // ============================================================================
 // Core types
@@ -554,11 +554,29 @@ type ExtractErrorKind<H> = H extends (...args: any[]) => infer R
  * The check is vacuously satisfied — never a false positive — when the handler
  * declares no input at all, when it takes an open `Record<string, unknown>`, or
  * when no contribution carries a `source` directive.
+ *
+ * Also folds in `MismatchedEncodingMapDecoders` (input.ts, decision 3 of
+ * docs/design/wire-profiles-and-staged-validation.md's implementation-trace
+ * addendum) — a function-form `meta.http.encodingMap`/`meta.cli.encodingMap`
+ * decoder whose param/return types don't match
+ * `(w: WireOf<FieldType, ResolvedStore>) => FieldType` for its own field.
+ * Checked against `FoldMeta<C>` (the same COMPOSED contribution
+ * `UncoveredSourceParams` above checks against), for the same reason: a
+ * `sourceMap`/`encodingMap`-bearing contribution composed from several
+ * `op()` arguments only has its full field set once folded.
  */
 type CheckedContributions<H, C extends readonly unknown[]> = [
   UncoveredSourceParams<H, FoldMeta<C>>,
 ] extends [never]
-  ? C
+  ? [MismatchedEncodingMapDecoders<H, FoldMeta<C>, "http">] extends [never]
+    ? [MismatchedEncodingMapDecoders<H, FoldMeta<C>, "cli">] extends [never]
+      ? C
+      : C & {
+          readonly __cli_encodingMap_decoder_type_mismatch: MismatchedEncodingMapDecoders<H, FoldMeta<C>, "cli">
+        }
+    : C & {
+        readonly __http_encodingMap_decoder_type_mismatch: MismatchedEncodingMapDecoders<H, FoldMeta<C>, "http">
+      }
   : C & {
       readonly __source_declares_a_param_this_handler_does_not: UncoveredSourceParams<H, FoldMeta<C>>
     }
