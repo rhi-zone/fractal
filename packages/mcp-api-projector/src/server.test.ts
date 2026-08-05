@@ -99,7 +99,16 @@ describe("createMcpServer — tools/call", () => {
 })
 
 // ============================================================================
-// 4. Runtime input validation against inputSchema
+// 4. Runtime input validation — NONE without a wired `applyValidation`
+//
+// `validateAgainstSchema`'s manual, hand-rolled `typeof` gate has been
+// deleted (docs/design/wire-profiles-and-staged-validation.md, "What goes
+// away" item 3) — `opts.schemas` only shapes the `inputSchema` ADVERTISED to
+// MCP clients (project.ts), it is never consulted at dispatch time. The only
+// validation path now is `applyValidation(key, tree, "mcp")` wired through
+// `opts.rewriters` (see server-validators.test.ts's "3-arg
+// applyValidation(...)" describe block for that path's structured-error
+// coverage) — a leaf with no such wiring gets raw wire args, unvalidated.
 // ============================================================================
 
 const validatedTree = api_({
@@ -442,7 +451,7 @@ describe("createMcpServer — resources/read rich content", () => {
   })
 })
 
-describe("createMcpServer — input validation", () => {
+describe("createMcpServer — no runtime input validation without a wired applyValidation", () => {
   it("valid input passes through to the handler", async () => {
     const { client } = await connectedValidatedClient()
     const result = await client.callTool({ name: "users_get", arguments: { id: "42" } })
@@ -452,24 +461,22 @@ describe("createMcpServer — input validation", () => {
     expect(JSON.parse(content[0]!.text)).toEqual({ id: "42", name: "Alice" })
   })
 
-  it("missing required field returns an isError response without invoking the handler", async () => {
+  it("a missing required field is NOT rejected — reaches the handler as undefined (no manual fallback exists)", async () => {
     const { client } = await connectedValidatedClient()
     const result = await client.callTool({ name: "users_get", arguments: {} })
 
-    expect(result.isError).toBe(true)
+    expect(result.isError).toBeFalsy()
     const content = result.content as Array<{ type: string; text: string }>
-    expect(content[0]!.text).toContain("id")
-    expect(content[0]!.text.toLowerCase()).toContain("required")
+    expect(JSON.parse(content[0]!.text)).toEqual({ name: "Alice" })
   })
 
-  it("wrong field type returns an isError response without invoking the handler", async () => {
+  it("a wrong field type is NOT rejected — reaches the handler verbatim (no manual fallback exists)", async () => {
     const { client } = await connectedValidatedClient()
     const result = await client.callTool({ name: "users_get", arguments: { id: 42 } })
 
-    expect(result.isError).toBe(true)
+    expect(result.isError).toBeFalsy()
     const content = result.content as Array<{ type: string; text: string }>
-    expect(content[0]!.text).toContain("id")
-    expect(content[0]!.text.toLowerCase()).toContain("type")
+    expect(JSON.parse(content[0]!.text)).toEqual({ id: 42, name: "Alice" })
   })
 })
 
