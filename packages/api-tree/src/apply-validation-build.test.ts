@@ -352,6 +352,74 @@ describe("wire-profile build path (3-arg applyValidation call sites)", () => {
   })
 })
 
+describe("wire-profile build path — encodingMap overrides (phase B string form + phase E function form)", () => {
+  const WIRE_FIXTURE = `${import.meta.dir}/__fixtures__/wire-apply-validation.fixture.ts`
+
+  it("static read + derivation override: a STRING-form entry (readMetaEncodingMapProfileNames) overrides the derived profile outright; a FUNCTION-form entry on a DIFFERENT field is reported as a hookField instead, never folded into fieldProfiles", () => {
+    const { byKey } = extractWireApplyValidationTypeRefs(WIRE_FIXTURE)
+    const leaf = byKey["wire-http-encoding-map"]!.leaves["byId/:bookId"]!
+    if (!("fieldProfiles" in leaf.derivation)) throw new Error("expected a composite (per-field) derivation")
+    // price: encodingMap: { price: "identity" } wins outright over GET's
+    // derived queryProfile default — exactly the override
+    // extractWireApplyValidationTypeRefs layers on top of deriveFieldProfiles's
+    // own result, via readMetaEncodingMapProfileNames's static read.
+    expect(leaf.derivation.fieldProfiles["price"]?.name).toBe("identity")
+    // bookId carries no encodingMap entry at all — the ordinary
+    // path-segment-name derivation still applies, unaffected by price's
+    // override on a different field.
+    expect(leaf.derivation.fieldProfiles["bookId"]?.name).toBe("query")
+    // qty's entry is a FUNCTION (a custom decoder), not a base-profile-name
+    // string — readMetaEncodingMapProfileNames omits it (per its own doc
+    // comment), so it never touches fieldProfiles; it surfaces separately,
+    // as a hookField, still falling through to defaultProfile for the
+    // (unused, since a hook bypasses fused decode) derivation record.
+    expect(leaf.derivation.fieldProfiles["qty"]).toBeUndefined()
+    expect(leaf.hookFields).toEqual(["qty"])
+  })
+
+  it("end-to-end: the STRING-form override on \"price\" rejects a numeric string that the derived query profile would otherwise coerce; the FUNCTION-form hook on \"qty\" runs its own decoder; \"bookId\" is unaffected by either", async () => {
+    const source = buildWireApplyValidationModuleSource(WIRE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    const { applyValidation: wire } = evalModule(source)
+
+    // The FUNCTION-form entry needs a REAL decoder function on the running
+    // tree's own `meta.http.encodingMap.qty` at WRAP time (`resolveHooks`,
+    // apply-validation.ts) — unlike the STRING form (fully fused at codegen
+    // time, no wrap-time meta read needed), a hooked field's decoder is read
+    // off the tree, not re-derived from the generated module. Mirrors
+    // `priceTree`'s idiom in wire-apply-validation-hooks.test.ts.
+    const qtyDecoder = (w: unknown): number => Number(w as string) * 2
+    const out = wire(
+      "wire-http-encoding-map",
+      {
+        meta: {},
+        children: {
+          byId: {
+            meta: {},
+            fallback: {
+              name: "bookId",
+              subtree: { meta: { http: { encodingMap: { qty: qtyDecoder } } }, handler: (i: unknown) => i },
+            },
+          },
+        },
+      },
+      "http",
+    ) as { children: { byId: { fallback: { subtree: { handler: (i: unknown) => unknown } } } } }
+    const handler = out.children.byId.fallback.subtree.handler
+
+    // price arrives as a numeric STRING — under GET's ordinary derived
+    // queryProfile this would coerce cleanly, but the "identity" override
+    // forbids coercion outright, so this is rejected.
+    const rejected = (await handler({ bookId: "b1", price: "42", qty: "21" })) as unknown
+    expect((rejected as { kind: string }).kind).toBe("err")
+
+    // price as an already-typed number satisfies the identity override;
+    // qty's custom decoder (`(w: string) => Number(w) * 2`) runs instead of
+    // a fused default decode, doubling the numeric string it receives.
+    const accepted = (await handler({ bookId: "b1", price: 42, qty: "21" })) as unknown
+    expect(accepted).toEqual({ bookId: "b1", price: 42, qty: 42 })
+  })
+})
+
 describe("wire-profile build path — shouldShare/defs structural sharing (phase D)", () => {
   const WIRE_SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/wire-apply-validation-sharing-input.fixture.ts`
 
