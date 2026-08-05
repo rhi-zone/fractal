@@ -324,6 +324,89 @@ describe("wire profiles — composite per-field profiles (compileWireEntryFragme
   })
 })
 
+describe("wire profiles — defs/ref recursion (phase D)", () => {
+  // A self-recursive def: Category.parent: Category — per finalizeSharedDefs'
+  // "always shared" rule (from-typescript.ts), a self-recursive type is
+  // ALWAYS shared regardless of `shouldShare`, so this is the concrete shape
+  // that was silently wrong before this phase (a `ref` under a wire profile
+  // fell through as a structural no-op with no coercion/recursion at all).
+  const categoryRef = t(
+    types.object({
+      name: t(types.string),
+      age: t(types.number, { minimum: 0 }),
+      parent: t(types.ref("Category"), { optional: true }),
+    }),
+  )
+  const defs = { Category: categoryRef }
+
+  it("a self-recursive def decodes correctly through a wire profile — argv's numeric-string coercion recurses into `parent`", () => {
+    const source = compileWireModule([{ name: "Category", ref: categoryRef }], [argvProfile], { defs })
+    const mod = evalWireModule(source)
+    const v = mod[wireValidatorKey("Category", "argv")]!
+    const wire = { name: "child", age: "5", parent: { name: "root", age: "10" } }
+    const result = v.parse(wire) as {
+      kind: "ok"
+      value: { name: string; age: number; parent?: { name: string; age: number } }
+    }
+    expect(result.kind).toBe("ok")
+    expect(result.value).toEqual({ name: "child", age: 5, parent: { name: "root", age: 10 } })
+  })
+
+  it("a constraint violation nested inside the shared def's own field is still caught (constraints layer's ref delegation)", () => {
+    const source = compileWireModule([{ name: "Category", ref: categoryRef }], [argvProfile], { defs })
+    const mod = evalWireModule(source)
+    const v = mod[wireValidatorKey("Category", "argv")]!
+    const wire = { name: "child", age: "5", parent: { name: "root", age: "-1" } }
+    const err = v.parse(wire) as { kind: "err"; errors: ValidationError[] }
+    expect(err.kind).toBe("err")
+    expect(err.errors[0]!.kind).toBe("min")
+  })
+
+  it("a type reused across two entries in one compileWireModule call compiles to ONE shared wire-decode function per profile", () => {
+    const entryA = t(types.object({ cat: t(types.ref("Category")) }))
+    const entryB = t(types.object({ cat: t(types.ref("Category")) }))
+    const source = compileWireModule(
+      [
+        { name: "A", ref: entryA },
+        { name: "B", ref: entryB },
+      ],
+      [argvProfile],
+      { defs },
+    )
+    const occurrences = source.split("function __wiredecode_Category_argv(").length - 1
+    expect(occurrences).toBe(1)
+    const mod = evalWireModule(source)
+    const a = mod[wireValidatorKey("A", "argv")]!.parse({ cat: { name: "x", age: "1" } })
+    const b = mod[wireValidatorKey("B", "argv")]!.parse({ cat: { name: "y", age: "2" } })
+    expect(a).toEqual({ kind: "ok", value: { cat: { name: "x", age: 1 } } })
+    expect(b).toEqual({ kind: "ok", value: { cat: { name: "y", age: 2 } } })
+  })
+
+  it("interaction with the GenCtx namespace fix (phase C): two entries + defs in one module doesn't regress the duplicate-const bug", () => {
+    const refA = t(types.object({ age: t(types.number, { minimum: 0 }), cat: t(types.ref("Category")) }))
+    const refB = t(types.object({ age: t(types.number, { minimum: 0 }), cat: t(types.ref("Category")) }))
+    const source = compileWireModule(
+      [
+        { name: "PersonA", ref: refA },
+        { name: "PersonB", ref: refB },
+      ],
+      [argvProfile],
+      { defs },
+    )
+    expect(() => evalWireModule(source)).not.toThrow()
+    const mod = evalWireModule(source)
+    const okA = mod[wireValidatorKey("PersonA", "argv")]!.parse({ age: "5", cat: { name: "x", age: "1" } })
+    const okB = mod[wireValidatorKey("PersonB", "argv")]!.parse({ age: "6", cat: { name: "y", age: "2" } })
+    expect(okA).toEqual({ kind: "ok", value: { age: 5, cat: { name: "x", age: 1 } } })
+    expect(okB).toEqual({ kind: "ok", value: { age: 6, cat: { name: "y", age: 2 } } })
+  })
+
+  it("a bare ref with no defs passed is still a structural no-op (prior behavior preserved)", () => {
+    const v = evalWireEntry("Whatever", t(types.ref("Missing")), argvProfile)
+    expect(v.parse("anything")).toEqual({ kind: "ok", value: "anything" })
+  })
+})
+
 describe("wire profiles — object/array structural decode", () => {
   it("argv: array of numeric strings decodes element-wise", () => {
     const ref = t(types.object({ ids: t(types.array(t(types.number))) }))

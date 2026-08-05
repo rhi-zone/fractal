@@ -343,6 +343,40 @@ describe("wire-profile build path (3-arg applyValidation call sites)", () => {
   })
 })
 
+describe("wire-profile build path — shouldShare/defs structural sharing (phase D)", () => {
+  const WIRE_SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/wire-apply-validation-sharing-input.fixture.ts`
+
+  it("without shouldShare, no defs are emitted — every leaf's input inlines its full structure", () => {
+    const source = buildWireApplyValidationModuleSource(WIRE_SHARING_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    expect(source).not.toContain("__def_Address_check")
+    expect(source).not.toContain("__wiredecode_Address_json")
+  })
+
+  it("with shouldShare, a type reused across the tree's two ops compiles to ONE shared def — one constraints fn AND one wire-decode fn, called from every ref site", async () => {
+    const source = buildWireApplyValidationModuleSource(WIRE_SHARING_FIXTURE, {
+      shouldShare: defaultShouldShare,
+      runtimeImport: "../apply-validation.ts",
+    })
+    expect(source.match(/function __def_Address_check\(/g) ?? []).toHaveLength(1)
+    expect(source.match(/function __wiredecode_Address_json\(/g) ?? []).toHaveLength(1)
+
+    const { applyValidation: wire } = evalModule(source)
+    const treeArg = {
+      meta: {},
+      children: {
+        setBilling: { meta: {}, handler: (input: unknown) => ({ echoed: input }) },
+        setShipping: { meta: {}, handler: (input: unknown) => ({ echoed: input }) },
+      },
+    }
+    const wired = wire("wire-tree", treeArg, "mcp") as typeof treeArg
+    const validAddress = { street: "Main", city: "X", zip: "1", country: "Y", region: "Z", landmark: "L" }
+    const result = await wired.children.setBilling.handler({ userId: "u1", billing: validAddress })
+    expect(result).toEqual({ echoed: { userId: "u1", billing: validAddress } })
+    const rejected = (await wired.children.setBilling.handler({ userId: "u1", billing: {} })) as unknown
+    expect((rejected as { kind: string }).kind).toBe("err")
+  })
+})
+
 describe("wire-profile build path — caching (fingerprint incorporates protocol)", () => {
   const WIRE_FIXTURE = `${import.meta.dir}/__fixtures__/wire-apply-validation.fixture.ts`
 

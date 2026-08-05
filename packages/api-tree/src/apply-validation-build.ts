@@ -70,6 +70,7 @@ import {
   compileConstraintsFn,
   compileWireEntryFragment,
   compileWireEntryFragmentComposite,
+  createWireDefsRegistry,
   identityProfile,
   INFER_TYPE_REF_SOURCE,
   jsonProfile,
@@ -77,6 +78,7 @@ import {
   wireValidatorKey,
   type CompiledConstraintsFn,
   type CompiledWireEntryFragment,
+  type WireDefsRegistry,
   type WireProfile,
 } from "@rhi-zone/fractal-type-ir"
 
@@ -786,6 +788,10 @@ export type WireApplyValidationTypeRefs = {
   readonly byKey: Readonly<
     Record<string, { readonly protocol: ProtocolName; readonly leaves: Readonly<Record<string, WireApplyValidationLeaf>> }>
   >
+  /** Shared/recursive `defs` a `shouldShare` extraction produced (empty
+   * without it) — phase D's closing of this path's own "No `shouldShare`/defs
+   * support" scope cut, mirroring `ApplyValidationTypeRefs.defs`. */
+  readonly defs: Record<string, TypeRef>
 }
 
 /**
@@ -803,16 +809,22 @@ export type WireApplyValidationTypeRefs = {
  * and applied on top for `http`/`cli`; a FUNCTION-form entry is a documented
  * gap (see this section's header comment) and is silently omitted.
  *
- * No `shouldShare`/defs support (scope cut, mirrors type-ir phase A's own "no
- * defs/ref recursion support for wire profiles" cut).
+ * `options.shouldShare` (phase D) opts into structural sharing, mirroring the
+ * 2-arg path's `extractApplyValidationTypeRefs` one-for-one: a
+ * `SharingRegistry`, `finalizeSharedDefs` over the flattened `(key,
+ * leafPath)` roots (same keying convention as `flatRoots` there), and the
+ * resulting `defs` threaded into the returned `WireApplyValidationTypeRefs`.
+ * Without it, `defs` is empty and every leaf's `ref` is exactly what this
+ * function always produced — the closed scope cut only ADDS the opt-in path.
  */
 export function extractWireApplyValidationTypeRefs(
   entryFile: string,
-  options?: { readonly program?: ts.Program },
+  options?: { readonly program?: ts.Program; readonly shouldShare?: ShouldShare },
 ): WireApplyValidationTypeRefs {
   const program = options?.program ?? createExtractorProgram(entryFile)
   const checker = program.getTypeChecker()
   const source = loadSource(entryFile, program)
+  const registry = options?.shouldShare ? createSharingRegistry() : undefined
 
   const byKey: Record<string, { protocol: ProtocolName; leaves: Record<string, WireApplyValidationLeaf> }> = {}
   for (const site of findApplyValidationCallSites(source, checker)) {
@@ -826,7 +838,7 @@ export function extractWireApplyValidationTypeRefs(
       site.loc,
       checker,
       (_name, leafPath, fn, _descriptionSource, leafChecker, nodeType) => {
-        const ref = typeRefFromFunctionNode(fn, leafChecker)
+        const ref = typeRefFromFunctionNode(fn, leafChecker, registry)
         const pathParamNames = leafPath.filter((seg) => seg.startsWith(":")).map((seg) => seg.slice(1))
         let derivation: FieldProfileDerivation
         if (protocol === "http" || protocol === "cli") {
@@ -854,7 +866,28 @@ export function extractWireApplyValidationTypeRefs(
     )
     byKey[site.key] = { protocol, leaves }
   }
-  return { byKey }
+
+  if (!options?.shouldShare || !registry) return { byKey, defs: {} }
+
+  // Same flatten -> finalizeSharedDefs -> reassemble plumbing as
+  // `extractApplyValidationTypeRefs` above, over this path's single `ref` per
+  // leaf (no separate output ref here) instead of `{ input, output }`.
+  const flatRoots: Record<string, TypeRef> = {}
+  for (const [key, { leaves }] of Object.entries(byKey)) {
+    for (const [leafPath, leaf] of Object.entries(leaves)) {
+      flatRoots[flatName(key, leafPath)] = leaf.ref
+    }
+  }
+  const { roots, defs } = finalizeSharedDefs(registry, flatRoots, options.shouldShare)
+  const shared: Record<string, { protocol: ProtocolName; leaves: Record<string, WireApplyValidationLeaf> }> = {}
+  for (const [key, { protocol, leaves }] of Object.entries(byKey)) {
+    const rebuilt: Record<string, WireApplyValidationLeaf> = {}
+    for (const [leafPath, leaf] of Object.entries(leaves)) {
+      rebuilt[leafPath] = { ref: roots[flatName(key, leafPath)]!, derivation: leaf.derivation }
+    }
+    shared[key] = { protocol, leaves: rebuilt }
+  }
+  return { byKey: shared, defs }
 }
 
 /** Flat compiler entries (one per leaf across all wire-profile call sites),
@@ -882,14 +915,18 @@ function compileWireLeafFragment(
   derivation: FieldProfileDerivation,
   constraintsFnName: string,
   resolveImport?: (declarationFile: string) => string,
+  registry?: WireDefsRegistry,
 ): CompiledWireEntryFragment {
-  if ("profile" in derivation) return compileWireEntryFragment(ref, derivation.profile, constraintsFnName, resolveImport)
+  if ("profile" in derivation) {
+    return compileWireEntryFragment(ref, derivation.profile, constraintsFnName, resolveImport, registry)
+  }
   return compileWireEntryFragmentComposite(
     ref,
     derivation.fieldProfiles,
     derivation.defaultProfile,
     constraintsFnName,
     resolveImport,
+    registry,
   )
 }
 
@@ -905,11 +942,19 @@ function indentGenerated(lines: readonly string[], spaces: number): string[] {
  * — so this reassembles from already-compiled fragments directly rather than
  * reusing that function. `wireFragments` is keyed by
  * `wireValidatorKey(name, protocol)`, same convention.
+ *
+ * `defsBlockLines`/`wireDefsLines` (phase D, default `[]`) mirror
+ * `assembleWireModule`'s own two new params — the constraints layer's shared
+ * `__def_NAME_*` block (`compileDefsBlock`) and the decode layer's
+ * `WireDefsRegistry.moduleLines()`, spliced ONCE at module scope regardless
+ * of how many entries/protocols reference them.
  */
 function assembleWireApplyValidationModule(
   entries: readonly { readonly name: string; readonly protocol: ProtocolName }[],
   constraintsFns: Readonly<Record<string, CompiledConstraintsFn>>,
   wireFragments: Readonly<Record<string, CompiledWireEntryFragment>>,
+  defsBlockLines: readonly string[] = [],
+  wireDefsLines: readonly string[] = [],
 ): string {
   const imports = new Map<string, Set<string>>()
   imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
@@ -948,6 +993,10 @@ function assembleWireApplyValidationModule(
   if (imports.size > 0) lines.push("")
   lines.push(INFER_TYPE_REF_SOURCE)
   lines.push("")
+  lines.push(...defsBlockLines)
+  if (defsBlockLines.length > 0) lines.push("")
+  lines.push(...wireDefsLines)
+  if (wireDefsLines.length > 0) lines.push("")
   lines.push(...constraintsLines)
   if (constraintsLines.length > 0) lines.push("")
   lines.push("export const wireValidators = {")
@@ -998,6 +1047,7 @@ export type WireApplyValidationBuildOptions = {
   readonly outFile?: string
   readonly program?: ts.Program
   readonly runtimeImport?: string
+  readonly shouldShare?: ShouldShare
 }
 
 /**
@@ -1015,8 +1065,9 @@ export function buildWireApplyValidationModuleSource(
   entryFile: string,
   options?: WireApplyValidationBuildOptions,
 ): string {
-  const { byKey } = extractWireApplyValidationTypeRefs(entryFile, {
+  const { byKey, defs } = extractWireApplyValidationTypeRefs(entryFile, {
     ...(options?.program !== undefined ? { program: options.program } : {}),
+    ...(options?.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
   })
   const runtimeImport = options?.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
   const entries = flatWireEntries(byKey)
@@ -1028,20 +1079,23 @@ export function buildWireApplyValidationModuleSource(
   const resolveImport =
     outFile === undefined ? undefined : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile)
 
+  const defsBlock = compileDefsBlock(defs)
+  const registry = createWireDefsRegistry(defs)
   const constraintsFns: Record<string, CompiledConstraintsFn> = {}
   const wireFragments: Record<string, CompiledWireEntryFragment> = {}
   for (const { name, ref, protocol, derivation } of entries) {
-    constraintsFns[name] = compileConstraintsFn(name, ref)
+    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames)
     wireFragments[wireValidatorKey(name, protocol)] = compileWireLeafFragment(
       ref,
       derivation,
       constraintsFns[name].fnName,
       resolveImport,
+      registry,
     )
   }
   return (
     runtimeImportLine(runtimeImport) +
-    assembleWireApplyValidationModule(entries, constraintsFns, wireFragments) +
+    assembleWireApplyValidationModule(entries, constraintsFns, wireFragments, defsBlock.lines, registry.moduleLines()) +
     composeWireApplyValidationTail(byKey)
   )
 }
@@ -1065,17 +1119,24 @@ export type WireApplyValidationIncrementalResult = {
   readonly source: string
   readonly leafFingerprints: Record<string, string>
   readonly leafArtifacts: Record<string, CompiledWireEntryFragment>
+  readonly defNamesFingerprint: string
   /** Flat `(leafName, protocol)` keys (via `wireValidatorKey`) actually
    * RECOMPILED this run — everything else was carried forward. */
   readonly changedLeaves: readonly string[]
 }
 
-/** Prior Tier-2 state for one wire-path entry — no `defNamesFingerprint`
- * tracking (this path has no defs/ref-recursion support at all, per this
- * section's header comment's scope cut), unlike `ApplyValidationCarryForwardState`. */
+/** Prior Tier-2 state for one wire-path entry — `defNamesFingerprint`
+ * tracking (phase D closed this path's "no defs/ref-recursion support at all"
+ * scope cut) mirrors `ApplyValidationCarryForwardState` one-for-one: a leaf's
+ * carry-forward reuse must also check the def-name-set fingerprint hasn't
+ * changed, since a `ref`'s generated code (both layers — the constraints
+ * fn's `ctx.defNames`-gated call, and the decode fn's `WireDefsRegistry`
+ * lookup) depends on which def names are callable, not just the leaf's own
+ * IR fingerprint. */
 export type WireApplyValidationCarryForwardState = {
   readonly leafFingerprints: Readonly<Record<string, string>>
   readonly leafArtifacts: Readonly<Record<string, unknown>>
+  readonly defNamesFingerprint: string
 }
 
 function isCompiledWireFragment(value: unknown): value is CompiledWireEntryFragment {
@@ -1101,20 +1162,26 @@ export function buildWireApplyValidationModuleSourceIncremental(
   entryFile: string,
   options: WireApplyValidationBuildOptions & { readonly prior?: WireApplyValidationCarryForwardState },
 ): WireApplyValidationIncrementalResult {
-  const { byKey } = extractWireApplyValidationTypeRefs(entryFile, {
+  const { byKey, defs } = extractWireApplyValidationTypeRefs(entryFile, {
     ...(options.program !== undefined ? { program: options.program } : {}),
+    ...(options.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
   })
   const runtimeImport = options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
   const outFile = options.outFile
   const resolveImport =
     outFile === undefined ? undefined : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile)
 
+  const defsBlock = compileDefsBlock(defs)
+  const registry = createWireDefsRegistry(defs)
+  const defNamesFingerprint = computeDefNamesFingerprint(defsBlock.defNames)
+  const prior = options.prior
+  const defNamesUnchanged = prior !== undefined && prior.defNamesFingerprint === defNamesFingerprint
+
   const entries = flatWireEntries(byKey)
   const leafFingerprints: Record<string, string> = {}
   const leafArtifacts: Record<string, CompiledWireEntryFragment> = {}
   const constraintsFns: Record<string, CompiledConstraintsFn> = {}
   const changedLeaves: string[] = []
-  const prior = options.prior
 
   for (const { name, ref, protocol, derivation } of entries) {
     const fingerprintKey = wireValidatorKey(name, protocol)
@@ -1124,14 +1191,23 @@ export function buildWireApplyValidationModuleSourceIncremental(
       derivation: fingerprintableDerivation(derivation),
     })
     leafFingerprints[fingerprintKey] = fingerprint
-    constraintsFns[name] = compileConstraintsFn(name, ref)
+    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames)
     const priorArtifact = prior?.leafArtifacts[fingerprintKey]
     const reusable =
-      prior !== undefined && prior.leafFingerprints[fingerprintKey] === fingerprint && isCompiledWireFragment(priorArtifact)
+      defNamesUnchanged &&
+      prior !== undefined &&
+      prior.leafFingerprints[fingerprintKey] === fingerprint &&
+      isCompiledWireFragment(priorArtifact)
     if (reusable && isCompiledWireFragment(priorArtifact)) {
       leafArtifacts[fingerprintKey] = priorArtifact
     } else {
-      leafArtifacts[fingerprintKey] = compileWireLeafFragment(ref, derivation, constraintsFns[name].fnName, resolveImport)
+      leafArtifacts[fingerprintKey] = compileWireLeafFragment(
+        ref,
+        derivation,
+        constraintsFns[name].fnName,
+        resolveImport,
+        registry,
+      )
       changedLeaves.push(fingerprintKey)
     }
   }
@@ -1140,19 +1216,17 @@ export function buildWireApplyValidationModuleSourceIncremental(
     entries.length === 0
       ? applyValidationStubSource({ runtimeImport })
       : runtimeImportLine(runtimeImport) +
-        assembleWireApplyValidationModule(entries, constraintsFns, leafArtifacts) +
+        assembleWireApplyValidationModule(entries, constraintsFns, leafArtifacts, defsBlock.lines, registry.moduleLines()) +
         composeWireApplyValidationTail(byKey)
 
-  return { source, leafFingerprints, leafArtifacts, changedLeaves }
+  return { source, leafFingerprints, leafArtifacts, defNamesFingerprint, changedLeaves }
 }
 
 /**
  * `buildWireApplyValidationModuleSource`, cached — same two-tier shape as
- * `buildApplyValidationModuleCached`. No `defNamesFingerprint` tracked (this
- * path has none — see `WireApplyValidationCarryForwardState`'s doc comment);
- * `writeCacheMetadata`'s `defNamesFingerprint` slot gets a stable constant
- * (the empty set's fingerprint) purely so the cache file's shape stays
- * uniform across both build paths, never compared against.
+ * `buildApplyValidationModuleCached`, now WITH real `defNamesFingerprint`
+ * tracking (phase D — see `WireApplyValidationCarryForwardState`'s doc
+ * comment for why a leaf's carry-forward reuse depends on it too).
  */
 export function buildWireApplyValidationModuleCached(
   entryFile: string,
@@ -1162,6 +1236,7 @@ export function buildWireApplyValidationModuleCached(
     readonly runtimeImport?: string
     readonly force?: boolean
     readonly reachable?: ReadonlySet<string>
+    readonly shouldShare?: ShouldShare
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
   if (!options?.force) {
@@ -1171,17 +1246,24 @@ export function buildWireApplyValidationModuleCached(
   const program = options?.program ?? createExtractorProgram(entryFile)
   const priorRaw = readCarryForwardState(entryFile, outFile, options)
   const prior: WireApplyValidationCarryForwardState | undefined =
-    priorRaw === undefined ? undefined : { leafFingerprints: priorRaw.leafFingerprints, leafArtifacts: priorRaw.leafArtifacts }
+    priorRaw === undefined
+      ? undefined
+      : {
+          leafFingerprints: priorRaw.leafFingerprints,
+          leafArtifacts: priorRaw.leafArtifacts,
+          defNamesFingerprint: priorRaw.defNamesFingerprint,
+        }
   const built = buildWireApplyValidationModuleSourceIncremental(entryFile, {
     outFile,
     program,
     ...(options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {}),
+    ...(options?.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
     ...(prior !== undefined ? { prior } : {}),
   })
   writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
     leafFingerprints: built.leafFingerprints,
     leafArtifacts: built.leafArtifacts,
-    defNamesFingerprint: computeDefNamesFingerprint([]),
+    defNamesFingerprint: built.defNamesFingerprint,
   })
   return { status: "built", result: built.source, program }
 }
@@ -1198,6 +1280,7 @@ export async function writeWireApplyValidationModuleCached(
     readonly runtimeImport?: string
     readonly force?: boolean
     readonly reachable?: ReadonlySet<string>
+    readonly shouldShare?: ShouldShare
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
   const outcome = buildWireApplyValidationModuleCached(entryFile, outFile, options)
