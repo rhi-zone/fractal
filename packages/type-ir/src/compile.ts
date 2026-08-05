@@ -54,6 +54,17 @@ export type ValidationError =
   | { kind: "unexpected"; path: string[] }
   | { kind: "union"; path: string[]; errors: ValidationError[][] }
   | { kind: "coerce"; path: string[]; expected: string; actual: unknown }
+  // Wire-profile encoding-stage error (see "Wire profiles + staged
+  // validation" below): the wire value wasn't even the WIRE shape a profile's
+  // `decode` expects at all — e.g. a JSON object where argv only ever hands a
+  // leaf `string | string[] | true`. `expected` is a human-readable WIRE-shape
+  // description ("numeric string", `"true" or "false"`, "ISO date string"),
+  // never a `TypeRef` — this is the encoding-stage counterpart to `coerce`
+  // (right wire type, unparseable content) and `type` (a `T`-shape mismatch,
+  // phrased against `T`): `encoding` is phrased against what the caller
+  // actually sent, one level below `coerce`, per the design doc's "errors are
+  // phrased against what the caller actually sent" requirement.
+  | { kind: "encoding"; path: string[]; expected: string; actual: unknown }
 
 /** Display string for a TypeRef — reuses the TypeScript projector's rendering. */
 export function typeRefToString(ref: TypeRef): string {
@@ -1054,7 +1065,8 @@ const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
   | { kind: "tuple_length"; path: string[]; expected: number; actual: number }
   | { kind: "unexpected"; path: string[] }
   | { kind: "union"; path: string[]; errors: ValidationError[][] }
-  | { kind: "coerce"; path: string[]; expected: string; actual: unknown };`
+  | { kind: "coerce"; path: string[]; expected: string; actual: unknown }
+  | { kind: "encoding"; path: string[]; expected: string; actual: unknown };`
 
 /**
  * Emit a complete, standalone, zero-RUNTIME-dependency TypeScript module
@@ -1262,4 +1274,681 @@ export function assembleValidatorModule(
   lines.push("}")
   lines.push("")
   return lines.join("\n")
+}
+
+// ============================================================================
+// Wire profiles + staged validation
+//
+//   Wire --validateEncoding--> ValidWire --decode (total)--> T
+//     --defaults-fill--> T --validateConstraints--> valid T
+//
+// See docs/design/wire-profiles-and-staged-validation.md for the full design
+// this section implements. `check`/`errors`/`parse` above are UNCHANGED by
+// everything below — they remain exactly the strict, non-coercing path they
+// always were. This section ADDS a second, profile-parameterized entry point
+// (`compileWireEntryFragment`/`compileWireModule`) alongside the existing
+// profile-blind `compileValidator`/`compileValidatorModule` — it does not
+// alter their behavior or output, so every EXISTING caller (api-tree's
+// `apply-validation-build.ts`, and — indirectly, through the generated module
+// it produces — the cli/mcp projectors' `isApplyValidationWrapped`-gated
+// path) keeps working unmodified. Wiring these new exports into that call
+// path, and retiring `isApplyValidationWrapped`/the cli/mcp fallbacks it
+// guards, is phase B/C's job (see the design doc's "What goes away" item 4
+// and this phase's own scope statement: "This phase does NOT touch
+// projectors or api-tree's apply-validation surfaces").
+//
+// Scope cuts made in THIS phase, called out explicitly (not contradictions —
+// none of the settled decisions in the design doc require these, and the
+// phase's own test list doesn't exercise them):
+//   - No `defs`/`ref` recursion support for wire profiles: a `ref` inside a
+//     wire-profile-compiled tree falls through as a structural no-op
+//     (aliasing the wire value), the same carve-out `checkHandlers.ref`/
+//     `validateHandlers.ref` already document for a bare `TypeRef` with no
+//     `defs` passed in. Recursive/shared defs support can be added the same
+//     way `compileDefs` added it for `check`/`errors`/`parse`, if/when a
+//     caller needs it.
+//   - `defaults-fill` recurses into `object` fields and `array` elements only
+//     — matching `meta.default`'s only current authoring site
+//     (`json-schema.ts`'s `withMeta`, always on a field, never on a
+//     tuple/map/union/intersection member).
+// ============================================================================
+
+/** One profile's per-KIND leaf override. Structural recursion (object/array/
+ * tuple/map/union/intersection, below) is IDENTICAL for every profile —
+ * wire profiles only ever change LEAF encoding+decode. A kind with no entry
+ * (every profile-independent kind: `string`, `enum`, `literal`, `uuid`/`uri`/
+ * `email`/…, `null`, `void`, `unknown`, `never`, `instance`, `function`,
+ * `interface`, `ref`) falls back to `defaultWireLeaf` — "the wire value must
+ * already be a valid `T`, no coercion" — which is exactly `identityProfile`'s
+ * definition for every kind (an empty `leafHandlers` map) and every OTHER
+ * profile's definition for whichever kinds IT doesn't override either. */
+export type WireLeafHandler = {
+  /** Fused `validateEncoding` + `decode` for this leaf kind (fusing the two
+   * stages into one traversal is the permitted emission optimization the
+   * design doc calls out — the MODEL still has both, as the two things this
+   * one pass does: push `errs` on a wire-shape mismatch, or produce a valid
+   * `T`-shaped `outExpr`, never both for the same input). */
+  readonly decode: (ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx) => ValidateResult
+  /** The `ValidWire` type text for this leaf kind under this profile — e.g.
+   * `"string"` for a `number` field under `argvProfile`. */
+  readonly wireType: (ref: TypeRef) => string
+}
+
+export type WireProfile = {
+  readonly name: string
+  readonly leafHandlers: Readonly<Record<string, WireLeafHandler>>
+}
+
+function encodingErrorStmt(pathExpr: string, expectedText: string, v: string): string {
+  return `errs.push({ kind: "encoding", path: ${pathExpr}, expected: ${JSON.stringify(expectedText)}, actual: ${v} });`
+}
+
+/** Fallback leaf handling for every kind a profile doesn't override: the
+ * wire value must already satisfy the kind's own `checkHandlers` condition —
+ * no coercion. Reusing `checkHandlers` directly means this automatically
+ * agrees with `check`/`errors` for every kind, present and future (a new
+ * extension kind registered via `registerParent` + a `checkHandlers` entry
+ * gets a correct default wire leaf for free, the same open-registry story
+ * this file's header comment already promises for `check`/`errors`/`parse`).
+ * This IS `identityProfile`'s entire behavior, and any other profile's
+ * behavior for whichever kinds it doesn't list. */
+function defaultWireLeaf(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
+  const handler = resolve(ref.shape.kind, checkHandlers)
+  const cond = handler === undefined ? "true" : handler(ref, v, ctx)
+  return { stmts: [`if (!(${cond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v }
+}
+
+function defaultWireType(ref: TypeRef): string {
+  return toTypeScript({ shape: ref.shape, meta: {} })
+}
+
+/** number/integer/int32/int64/float32/float64 (argv, query): the wire value
+ * is a numeric string. `resolve`s the SAME per-kind `checkHandlers` entry
+ * (e.g. int32's own range+integer-ness check) against the COERCED number, so
+ * an out-of-range/non-integer numeric string is an ENCODING failure, not a
+ * `validateConstraints` one — the same "this IS the right shape" framing
+ * `defaultWireLeaf` uses for every other kind, just reached via a coercion
+ * step first. */
+function numericStringLeaf(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
+  const out = ctx.fresh("n")
+  const ok = ctx.fresh("ok")
+  const kindCheck = resolve(ref.shape.kind, checkHandlers)
+  const wireDesc = `numeric string (${ref.shape.kind})`
+  const rangeCheck = kindCheck === undefined ? "" : ` || !(${kindCheck(ref, out, ctx)})`
+  const stmts = [
+    `let ${out} = ${v};`,
+    `let ${ok} = false;`,
+    `if (typeof ${v} === "string" && ${v}.trim() !== "" && !Number.isNaN(Number(${v}))) { ${out} = Number(${v}); ${ok} = true; }`,
+    `if (!${ok}${rangeCheck}) { ${encodingErrorStmt(pathExpr, wireDesc, v)} }`,
+  ]
+  return { stmts, outExpr: out }
+}
+
+/** boolean (query): strict `"true"`/`"false"` string only — no native
+ * boolean passthrough, matching query-string's always-a-string wire shape. */
+function strictBoolFromStringLeaf(_ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
+  const out = ctx.fresh("b")
+  const stmts = [
+    `let ${out};`,
+    `if (${v} === "true") { ${out} = true; }`,
+    `else if (${v} === "false") { ${out} = false; }`,
+    `else { ${encodingErrorStmt(pathExpr, `"true" or "false"`, v)} ${out} = ${v}; }`,
+  ]
+  return { stmts, outExpr: out }
+}
+
+/** boolean (argv): native `true` (argv's bare-flag-presence sentinel,
+ * `parseFlags`) or `false`, OR the strict `"true"`/`"false"` string (an
+ * explicit `--flag=true`/`--flag=false`) — never a loose set
+ * (`"1"`/`"yes"`/…): see the design doc's "(c) Default argv boolean
+ * encoding" decision (strict, chosen explicitly over loose). */
+function argvBoolLeaf(_ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
+  const out = ctx.fresh("b")
+  const stmts = [
+    `let ${out};`,
+    `if (typeof ${v} === "boolean") { ${out} = ${v}; }`,
+    `else if (${v} === "true") { ${out} = true; }`,
+    `else if (${v} === "false") { ${out} = false; }`,
+    `else { ${encodingErrorStmt(pathExpr, `boolean, "true", or "false"`, v)} ${out} = ${v}; }`,
+  ]
+  return { stmts, outExpr: out }
+}
+
+/** date/datetime (argv, query, json): an ISO-ish string decoded via `new
+ * Date(v)` — the one coercion `jsonProfile` needs too, since "JSON has no
+ * date literal" (design doc). Shared by all three non-identity profiles;
+ * `identityProfile`'s fallback (`defaultWireLeaf`) requires an already-`Date`
+ * wire value instead, with no coercion at all. */
+function isoDateStringLeaf(_ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
+  const out = ctx.fresh("d")
+  const tmp = ctx.fresh("dt")
+  const stmts = [
+    `let ${out};`,
+    `if (typeof ${v} === "string") { const ${tmp} = new Date(${v}); if (!Number.isNaN(${tmp}.getTime())) { ${out} = ${tmp}; } else { ${encodingErrorStmt(pathExpr, "ISO date string", v)} ${out} = ${v}; } }`,
+    `else { ${encodingErrorStmt(pathExpr, "ISO date string", v)} ${out} = ${v}; }`,
+  ]
+  return { stmts, outExpr: out }
+}
+
+/** Trivial encoding check + identity decode, for every kind — no coercion at
+ * all. This IS strict validation: the mcp/graphql in-process/already-typed-
+ * value posture `check`/`errors`/`parse` above have always assumed. An empty
+ * `leafHandlers` map means every kind falls through to `defaultWireLeaf`. */
+export const identityProfile: WireProfile = { name: "identity", leafHandlers: {} }
+
+/** Typed JSON in, except `Date` — JSON has no date literal, so a date/
+ * datetime field arrives as an ISO string even on an otherwise-typed JSON
+ * wire (MCP/GraphQL tool-call arguments, an HTTP JSON body). */
+export const jsonProfile: WireProfile = {
+  name: "json",
+  leafHandlers: {
+    date: { decode: isoDateStringLeaf, wireType: () => "string" },
+    datetime: { decode: isoDateStringLeaf, wireType: () => "string" },
+  },
+}
+
+/** HTTP query/path segments: every leaf arrives as a string (never a native
+ * number/boolean/Date) — strict `"true"`/`"false"` booleans, numeric
+ * strings, ISO date strings. `string` itself needs no override — the wire
+ * value already IS a string, so `defaultWireLeaf`'s fallback is correct
+ * as-is. */
+export const queryProfile: WireProfile = {
+  name: "query",
+  leafHandlers: {
+    number: { decode: numericStringLeaf, wireType: () => "string" },
+    integer: { decode: numericStringLeaf, wireType: () => "string" },
+    int32: { decode: numericStringLeaf, wireType: () => "string" },
+    int64: { decode: numericStringLeaf, wireType: () => "string" },
+    float32: { decode: numericStringLeaf, wireType: () => "string" },
+    float64: { decode: numericStringLeaf, wireType: () => "string" },
+    boolean: { decode: strictBoolFromStringLeaf, wireType: () => `"true" | "false"` },
+    date: { decode: isoDateStringLeaf, wireType: () => "string" },
+    datetime: { decode: isoDateStringLeaf, wireType: () => "string" },
+  },
+}
+
+/** CLI argv: `string | string[] | true` per field (`parseFlags`) — identical
+ * to `queryProfile` except booleans, which additionally accept argv's bare-
+ * flag-presence `true` sentinel (see `argvBoolLeaf`). (`number`'s entry
+ * doesn't strictly need repeating per width — `resolve()`'s ancestor climb
+ * would find `"number"` for `int32`/`int64`/etc. too — but listing them
+ * explicitly keeps this profile's OWN vocabulary self-evident without
+ * relying on a reader already knowing `queryProfile`'s ancestor-climb
+ * behavior.) */
+export const argvProfile: WireProfile = {
+  name: "argv",
+  leafHandlers: {
+    number: { decode: numericStringLeaf, wireType: () => "string" },
+    integer: { decode: numericStringLeaf, wireType: () => "string" },
+    int32: { decode: numericStringLeaf, wireType: () => "string" },
+    int64: { decode: numericStringLeaf, wireType: () => "string" },
+    float32: { decode: numericStringLeaf, wireType: () => "string" },
+    float64: { decode: numericStringLeaf, wireType: () => "string" },
+    boolean: { decode: argvBoolLeaf, wireType: () => `boolean | "true" | "false"` },
+    date: { decode: isoDateStringLeaf, wireType: () => "string" },
+    datetime: { decode: isoDateStringLeaf, wireType: () => "string" },
+  },
+}
+
+const STRUCTURAL_WIRE_KINDS = new Set(["object", "array", "tuple", "map", "union", "intersection", "page"])
+
+/** Structural recursion for the fused `validateEncoding` + `decode` stage.
+ * Every structural kind (object/array/tuple/map/union/intersection/page) is
+ * profile-INDEPENDENT — only leaf kinds vary, via `profile.leafHandlers`
+ * (falling back to `defaultWireLeaf`). Diverges from this file's existing
+ * `genValidate` ("errors"/"parse" traversal) in exactly the ways the staged
+ * model's contract requires:
+ *   - `object`: a field absent from the wire is left absent in the decoded
+ *     output — NEVER a `missing` error here. Required-ness is
+ *     `validateConstraints`'s job (`errors()`, run on the DEFAULTS-FILLED
+ *     value — see "Where defaults-fill sits" in the design doc).
+ *   - `object`'s `additionalProperties: false` unexpected-KEY check DOES
+ *     belong here (not in `validateConstraints`): it's a fact about the
+ *     WIRE's own key set, which decode's per-field copy silently drops (an
+ *     extra wire key is never assigned into the decoded output) — checking
+ *     it post-decode would never fire.
+ *   - no `metaConstraintStmts` anywhere in this traversal — min/max/pattern/
+ *     enum/minLength/maxLength/multipleOf are entirely `validateConstraints`'s
+ *     job, shared unchanged across every profile (see `compileConstraintsFn`
+ *     below). */
+function genWireEncodeDecode(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+  if (ref.meta.nullable === true) {
+    const out = ctx.fresh("n")
+    const inner = genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile)
+    const stmts = [
+      `let ${out};`,
+      `if (${v} === null) { ${out} = null; } else {`,
+      ...indentLines(inner.stmts, 2),
+      `  ${out} = ${inner.outExpr};`,
+      `}`,
+    ]
+    return { stmts, outExpr: out }
+  }
+  return genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile)
+}
+
+function genWireEncodeDecodeShape(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+  const kind = ref.shape.kind
+  if (kind === "page") return genWireEncodeDecode(pageAsObjectRef(ref), v, pathExpr, ctx, profile)
+  if (!STRUCTURAL_WIRE_KINDS.has(kind)) {
+    const handler = resolve(kind, profile.leafHandlers)
+    return handler === undefined ? defaultWireLeaf(ref, v, pathExpr, ctx) : handler.decode(ref, v, pathExpr, ctx)
+  }
+  switch (kind) {
+    case "object":
+      return wireObject(ref, v, pathExpr, ctx, profile)
+    case "array":
+      return wireArray(ref, v, pathExpr, ctx, profile)
+    case "tuple":
+      return wireTuple(ref, v, pathExpr, ctx, profile)
+    case "map":
+      return wireMap(ref, v, pathExpr, ctx, profile)
+    case "union":
+      return wireUnion(ref, v, pathExpr, ctx, profile)
+    case "intersection":
+      return wireIntersection(ref, v, pathExpr, ctx, profile)
+    default:
+      return { stmts: [], outExpr: v }
+  }
+}
+
+function wireObject(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "object" }
+  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
+  const out = ctx.fresh("o")
+  const stmts: string[] = [`let ${out}: Record<string, any> = {};`]
+  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`)
+  const body: string[] = []
+  for (const [name, field] of Object.entries(s.fields)) {
+    const fv = `${v}[${JSON.stringify(name)}]`
+    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
+    const inner = genWireEncodeDecode(field, fv, fpath, ctx, profile)
+    body.push(
+      `if (${fv} !== undefined) {`,
+      ...indentLines(inner.stmts, 2),
+      `  ${out}[${JSON.stringify(name)}] = ${inner.outExpr};`,
+      `}`,
+    )
+  }
+  if (ref.meta.additionalProperties === false) {
+    const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`)
+    body.push(
+      `for (const __k of Object.keys(${v})) { if (!${known}.has(__k)) { errs.push({ kind: "unexpected", path: ${pathExpr}.concat([__k]) }); } }`,
+    )
+  }
+  stmts.push(...indentLines(body, 2), `}`)
+  return { stmts, outExpr: out }
+}
+
+function wireArray(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "array" }
+  const out = ctx.fresh("a")
+  const stmts: string[] = [`let ${out}: any[] = [];`]
+  stmts.push(`if (!Array.isArray(${v})) { ${encodingErrorStmt(pathExpr, "array", v)} } else {`)
+  const idx = ctx.fresh("i")
+  const ev = ctx.fresh("e")
+  const epath = ctx.fresh("p")
+  const inner = genWireEncodeDecode(s.element, ev, epath, ctx, profile)
+  const body = [
+    `for (let ${idx} = 0; ${idx} < ${v}.length; ${idx}++) {`,
+    `  const ${ev} = ${v}[${idx}];`,
+    `  const ${epath} = ${pathExpr}.concat([String(${idx})]);`,
+    ...indentLines(inner.stmts, 2),
+    `  ${out}.push(${inner.outExpr});`,
+    `}`,
+  ]
+  stmts.push(...indentLines(body, 2), `}`)
+  return { stmts, outExpr: out }
+}
+
+function wireTuple(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "tuple" }
+  const out = ctx.fresh("t")
+  const stmts: string[] = [`let ${out}: any[] = [];`]
+  stmts.push(`if (!Array.isArray(${v})) { ${encodingErrorStmt(pathExpr, "array", v)} } else {`)
+  const body: string[] = [
+    `if (${v}.length !== ${s.elements.length}) { errs.push({ kind: "tuple_length", path: ${pathExpr}, expected: ${s.elements.length}, actual: ${v}.length }); }`,
+  ]
+  s.elements.forEach((element, i) => {
+    const ev = `${v}[${i}]`
+    const epath = `${pathExpr}.concat([${JSON.stringify(String(i))}])`
+    const inner = genWireEncodeDecode(element, ev, epath, ctx, profile)
+    body.push(`if (${v}.length > ${i}) {`, ...indentLines(inner.stmts, 2), `  ${out}.push(${inner.outExpr});`, `}`)
+  })
+  stmts.push(...indentLines(body, 2), `}`)
+  return { stmts, outExpr: out }
+}
+
+function wireMap(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "map" }
+  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
+  const out = ctx.fresh("m")
+  const stmts: string[] = [`let ${out}: Record<string, any> = {};`]
+  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`)
+  const key = ctx.fresh("k")
+  const ev = ctx.fresh("e")
+  const epath = ctx.fresh("p")
+  const inner = genWireEncodeDecode(s.value, ev, epath, ctx, profile)
+  const body = [
+    `for (const ${key} of Object.keys(${v})) {`,
+    `  const ${ev} = ${v}[${key}];`,
+    `  const ${epath} = ${pathExpr}.concat([${key}]);`,
+    ...indentLines(inner.stmts, 2),
+    `  ${out}[${key}] = ${inner.outExpr};`,
+    `}`,
+  ]
+  stmts.push(...indentLines(body, 2), `}`)
+  return { stmts, outExpr: out }
+}
+
+/** Union: same "try each variant, keep the first with zero new errors" idiom
+ * as this file's existing `unionValidate` — here, "zero new errors" means
+ * zero ENCODING errors (a variant this profile can't even decode the wire
+ * into), not zero constraint errors (constraints aren't checked until
+ * `validateConstraints`, after a variant has already been picked). */
+function wireUnion(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "union" }
+  const out = ctx.fresh("u")
+  const matched = ctx.fresh("matched")
+  const scratchNames: string[] = []
+  const stmts: string[] = [`let ${out} = ${v};`, `let ${matched} = false;`]
+  for (const _variant of s.variants) {
+    const scratch = ctx.fresh("ue")
+    scratchNames.push(scratch)
+    stmts.push(`const ${scratch}: ValidationError[] = [];`)
+  }
+  s.variants.forEach((variant, i) => {
+    const scratch = scratchNames[i]!
+    const inner = genWireEncodeDecode(variant, v, pathExpr, ctx, profile)
+    stmts.push(`if (!${matched}) {`)
+    stmts.push(`  { const errs = ${scratch};`)
+    stmts.push(...indentLines(inner.stmts, 4))
+    stmts.push(`    if (${scratch}.length === 0) { ${matched} = true; ${out} = ${inner.outExpr}; }`)
+    stmts.push(`  }`)
+    stmts.push(`}`)
+  })
+  stmts.push(`if (!${matched}) { errs.push({ kind: "union", path: ${pathExpr}, errors: [${scratchNames.join(", ")}] }); }`)
+  return { stmts, outExpr: out }
+}
+
+function wireIntersection(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "intersection" }
+  if (s.members.length === 0) return { stmts: [], outExpr: v }
+  const out = ctx.fresh("x")
+  const stmts: string[] = [`let ${out} = ${v};`]
+  const hasObjectMember = s.members.some((m) => m.shape.kind === "object")
+  if (hasObjectMember) stmts.push(`${out} = {};`)
+  for (const member of s.members) {
+    const inner = genWireEncodeDecode(member, v, pathExpr, ctx, profile)
+    stmts.push(...inner.stmts)
+    if (hasObjectMember && member.shape.kind === "object") {
+      stmts.push(`Object.assign(${out}, ${inner.outExpr});`)
+    } else if (!hasObjectMember) {
+      stmts.push(`${out} = ${inner.outExpr};`)
+    }
+  }
+  return { stmts, outExpr: out }
+}
+
+/** `ValidWire`'s TypeScript rendering for `ref` under `profile` — a real,
+ * named-by-the-caller type (see `compileWireEntryFragment`), not a phantom
+ * brand: an object's fields are ALWAYS rendered optional (`?:`) regardless of
+ * `meta.optional`, matching `wireObject`'s "absent field, no error" decode
+ * semantics above — decode only ever produces what the wire actually
+ * carried. */
+export function wireTypeText(ref: TypeRef, profile: WireProfile): string {
+  const base = wireTypeTextShape(ref, profile)
+  return ref.meta.nullable === true ? `${base} | null` : base
+}
+
+function wireTypeTextShape(ref: TypeRef, profile: WireProfile): string {
+  const kind = ref.shape.kind
+  if (kind === "page") return wireTypeTextShape(pageAsObjectRef(ref), profile)
+  if (kind === "object") {
+    const s = ref.shape as TypeShape & { kind: "object" }
+    const fields = Object.entries(s.fields).map(([name, field]) => `${JSON.stringify(name)}?: ${wireTypeText(field, profile)}`)
+    return `{ ${fields.join("; ")} }`
+  }
+  if (kind === "array") {
+    const s = ref.shape as TypeShape & { kind: "array" }
+    return `(${wireTypeText(s.element, profile)})[]`
+  }
+  if (kind === "tuple") {
+    const s = ref.shape as TypeShape & { kind: "tuple" }
+    return `[${s.elements.map((e) => wireTypeText(e, profile)).join(", ")}]`
+  }
+  if (kind === "map") {
+    const s = ref.shape as TypeShape & { kind: "map" }
+    return `Record<string, ${wireTypeText(s.value, profile)}>`
+  }
+  if (kind === "union") {
+    const s = ref.shape as TypeShape & { kind: "union" }
+    return s.variants.map((m) => `(${wireTypeText(m, profile)})`).join(" | ")
+  }
+  if (kind === "intersection") {
+    const s = ref.shape as TypeShape & { kind: "intersection" }
+    return s.members.map((m) => `(${wireTypeText(m, profile)})`).join(" & ")
+  }
+  const override = resolve(kind, profile.leafHandlers)
+  return override === undefined ? defaultWireType(ref) : override.wireType(ref)
+}
+
+/** `defaults-fill` — see "Where defaults-fill sits" in the design doc: runs
+ * AFTER `decode`, BEFORE `validateConstraints`, so a defaulted field is
+ * checked exactly like a caller-supplied one (no separate "missing-but-has-
+ * a-default" carve-out in `validateConstraints`). Profile-INDEPENDENT —
+ * defaults are author-supplied `T`-typed values (`meta.default`, the
+ * convention `json-schema.ts`'s `withMeta` already reads/emits), with no
+ * wire encoding to decode FROM; running them through `decode` would require
+ * `decode` to accept `T` values it never itself produced, breaking its
+ * totality-by-construction guarantee for no benefit. */
+function genDefaultsFillChildren(ref: TypeRef, v: string): string[] {
+  if (ref.shape.kind === "object") {
+    const s = ref.shape as TypeShape & { kind: "object" }
+    const stmts: string[] = []
+    for (const [name, field] of Object.entries(s.fields)) {
+      stmts.push(...genDefaultsFillField(field, `${v}[${JSON.stringify(name)}]`))
+    }
+    return stmts
+  }
+  if (ref.shape.kind === "array") {
+    const s = ref.shape as TypeShape & { kind: "array" }
+    const nested = genDefaultsFillField(s.element, "__el")
+    if (nested.length === 0) return []
+    return [`if (Array.isArray(${v})) { for (const __el of ${v}) {`, ...indentLines(nested, 2), `} }`]
+  }
+  return []
+}
+
+function genDefaultsFillField(field: TypeRef, fv: string): string[] {
+  const stmts: string[] = []
+  if (field.meta.default !== undefined) {
+    stmts.push(`if (${fv} === undefined) { ${fv} = ${JSON.stringify(field.meta.default)}; }`)
+  }
+  const nested = genDefaultsFillChildren(field, fv)
+  if (nested.length > 0) {
+    stmts.push(`if (${fv} !== undefined) {`, ...indentLines(nested, 2), `}`)
+  }
+  return stmts
+}
+
+/** `validateConstraints` — min/max/pattern/enum/minLength/maxLength/
+ * multipleOf/required-field checks on `T`. This IS `errors()`'s existing
+ * codegen (`genValidate(ref, ..., "errors")`, entirely unmodified — the
+ * design doc's identity-profile framing is literal: "what today's
+ * check/errors/parse do for an in-process, already-typed value with no wire
+ * in between"), given its own module-scope function name so every wire
+ * profile's `parse` for the SAME entry calls the SAME compiled function
+ * instead of regenerating it — "compiled ONCE per TypeRef and shared across
+ * all profiles" (design doc). Depends only on `ref`'s own IR fingerprint,
+ * never on any wire profile — the doc's "wire profile as a second
+ * fingerprint input" (see `compileWireEntryFragment`'s doc comment) is
+ * exactly what THIS function does not take. */
+export type CompiledConstraintsFn = { readonly fnName: string; readonly lines: readonly string[] }
+
+export function compileConstraintsFn(name: string, ref: TypeRef): CompiledConstraintsFn {
+  const fnName = `__constraints_${sanitizeDefName(name)}`
+  const ctx = new GenCtx()
+  const body = genValidate(ref, "value", "path", ctx, "errors")
+  const lines = [
+    ...ctx.declarations(),
+    `function ${fnName}(value: any): ValidationError[] {`,
+    `  void value;`,
+    `  const path: string[] = [];`,
+    `  void path;`,
+    `  const errs: ValidationError[] = [];`,
+    ...indentLines(body.stmts, 2),
+    `  return errs;`,
+    `}`,
+  ]
+  return { fnName, lines }
+}
+
+/** One (entry, profile) pair's compiled `{ parse }` — the staged pipeline
+ * fused into one function per the design doc's permitted emission
+ * optimization ("fusing stages into one emitted `parse_profile` function"):
+ * `validateEncoding`+`decode` (this fragment's own codegen, profile-driven),
+ * then `defaults-fill` (profile-independent), then `validateConstraints`
+ * (a call to `constraintsFnName` — NOT regenerated here, see
+ * `compileConstraintsFn`'s doc comment for why sharing it across profiles is
+ * load-bearing, not just an optimization). Self-contained modulo that one
+ * by-name reference — same incremental-caching shape `compileEntryFragment`
+ * already has, with `profile.name` as the doc-noted SECOND fingerprint input
+ * (a caller re-derives this fragment only when `ref`'s own IR fingerprint OR
+ * `profile.name` changed; `constraintsFnName` is a pure naming convention,
+ * not part of the fingerprint, since it's derived from the entry name alone). */
+export type CompiledWireEntryFragment = {
+  readonly code: string
+  readonly wireType: string
+  readonly typeImport?: { readonly typeName: string; readonly from: string }
+}
+
+export function compileWireEntryFragment(
+  ref: TypeRef,
+  profile: WireProfile,
+  constraintsFnName: string,
+  resolveImport?: (declarationFile: string) => string,
+): CompiledWireEntryFragment {
+  const { annotation, typeImport } = guardAnnotation(ref, resolveImport)
+  const wireType = wireTypeText(ref, profile)
+  const ctx = new GenCtx()
+  const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile)
+  const fillStmts = genDefaultsFillChildren(ref, "__decoded")
+
+  const lines: string[] = [...ctx.declarations()]
+  lines.push(`function parse(wire: any) {`)
+  lines.push(`  const path: string[] = [];`)
+  lines.push(`  void path;`)
+  lines.push(`  const errs: ValidationError[] = [];`)
+  lines.push(...indentLines(decodeBody.stmts, 2))
+  lines.push(`  if (errs.length > 0) { return { kind: "err" as const, errors: errs }; }`)
+  lines.push(`  let __decoded: any = ${decodeBody.outExpr};`)
+  lines.push(...indentLines(fillStmts, 2))
+  lines.push(`  const constraintErrs = ${constraintsFnName}(__decoded);`)
+  lines.push(`  if (constraintErrs.length > 0) { return { kind: "err" as const, errors: constraintErrs }; }`)
+  lines.push(`  return { kind: "ok" as const, value: __decoded };`)
+  lines.push(`}`)
+  lines.push(`return { parse: parse } as unknown as {`)
+  lines.push(`  parse: (wire: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`)
+  lines.push(`};`)
+  const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n")
+  return typeImport === undefined ? { code, wireType } : { code, wireType, typeImport }
+}
+
+/** The key `assembleWireModule`'s `wireValidators` map uses for one
+ * (entry, profile) pair — the exact surface the design doc asks for
+ * ("design the emitted module surface so apply-validation-build can request
+ * (key, profile) pairs"). Exported so a caller (phase B/C's
+ * `apply-validation-build.ts`) constructs the SAME key deterministically
+ * rather than re-deriving the joining convention itself. */
+export function wireValidatorKey(name: string, profileName: string): string {
+  return `${name} ${profileName}`
+}
+
+/**
+ * Reassemble a complete wire-validator module from already-compiled pieces —
+ * the wire-profile analogue of `assembleValidatorModule`. `constraintsFns`
+ * (keyed by entry name) is emitted ONCE per entry at module scope,
+ * independent of how many profiles that entry has fragments for — see
+ * `compileConstraintsFn`'s doc comment for why. `wireFragments` is keyed by
+ * `wireValidatorKey(name, profileName)`.
+ */
+export function assembleWireModule(
+  entries: readonly { readonly name: string }[],
+  profileNames: readonly string[],
+  constraintsFns: Readonly<Record<string, CompiledConstraintsFn>>,
+  wireFragments: Readonly<Record<string, CompiledWireEntryFragment>>,
+): string {
+  const imports = new Map<string, Set<string>>()
+  imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
+
+  const constraintsLines: string[] = []
+  for (const { name } of entries) {
+    const fn = constraintsFns[name]
+    if (!fn) throw new Error(`assembleWireModule: missing constraints fn for entry ${JSON.stringify(name)}`)
+    constraintsLines.push(...fn.lines)
+  }
+
+  const entryLines: string[] = []
+  for (const { name } of entries) {
+    for (const profileName of profileNames) {
+      const key = wireValidatorKey(name, profileName)
+      const frag = wireFragments[key]
+      if (!frag) throw new Error(`assembleWireModule: missing wire fragment for ${JSON.stringify(key)}`)
+      if (frag.typeImport) {
+        const names = imports.get(frag.typeImport.from) ?? new Set<string>()
+        names.add(frag.typeImport.typeName)
+        imports.set(frag.typeImport.from, names)
+      }
+      const codeLines = frag.code.split("\n")
+      entryLines.push(
+        `  ${JSON.stringify(key)}: ${codeLines[0]}`,
+        ...indentLines(codeLines.slice(1, -1), 2),
+        `  ${codeLines[codeLines.length - 1]},`,
+      )
+    }
+  }
+
+  const lines: string[] = []
+  lines.push("// AUTO-GENERATED by @rhi-zone/fractal-type-ir. Do not edit by hand.")
+  lines.push("")
+  for (const [from, names] of imports) {
+    lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`)
+  }
+  if (imports.size > 0) lines.push("")
+  lines.push(INFER_TYPE_REF_SOURCE)
+  lines.push("")
+  lines.push(...constraintsLines)
+  if (constraintsLines.length > 0) lines.push("")
+  lines.push("export const wireValidators = {")
+  lines.push(...entryLines)
+  lines.push("}")
+  lines.push("")
+  return lines.join("\n")
+}
+
+/**
+ * Non-incremental convenience wrapper around `compileConstraintsFn`/
+ * `compileWireEntryFragment`/`assembleWireModule` — compiles every entry for
+ * every requested profile in one pass, the wire-profile analogue of
+ * `compileValidatorModule`. Incremental callers (api-tree's build
+ * orchestrator) should use the split functions directly, the same relationship
+ * `compileEntryFragment`/`compileDefsBlock`/`assembleValidatorModule` already
+ * have to `compileValidatorModule`.
+ */
+export function compileWireModule(
+  entries: readonly { readonly name: string; readonly ref: TypeRef }[],
+  profiles: readonly WireProfile[],
+  options?: { resolveImport?: (declarationFile: string) => string },
+): string {
+  const constraintsFns: Record<string, CompiledConstraintsFn> = {}
+  const wireFragments: Record<string, CompiledWireEntryFragment> = {}
+  for (const { name, ref } of entries) {
+    constraintsFns[name] = compileConstraintsFn(name, ref)
+    for (const profile of profiles) {
+      const key = wireValidatorKey(name, profile.name)
+      wireFragments[key] = compileWireEntryFragment(ref, profile, constraintsFns[name].fnName, options?.resolveImport)
+    }
+  }
+  return assembleWireModule(entries, profiles.map((p) => p.name), constraintsFns, wireFragments)
 }
