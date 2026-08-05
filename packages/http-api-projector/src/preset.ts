@@ -31,26 +31,46 @@
 // Optional (opt-in, off by default):
 //   6. corsLayer          — CORS preflight + origin headers.
 //
-// Validation — `applyValidation(key, projectedTree)`
+// Validation — `applyValidation(key, projectedTree, protocol?)`
 // (@rhi-zone/fractal-api-tree/apply-validation), NOT a dedicated preset
 // option: `applyValidation`'s call site must live in the CONSUMER's own
 // entry file for codegen to anchor on it (see that module's doc comment) —
 // `createFetch` itself can never own the call, since it would then be the
 // one calling `applyValidation`, not the user's file. Wire it in via
-// `rewriters`, applied to the already-projected `HttpRoute`:
+// `rewriters`, applied to the already-projected `HttpRoute`. RECOMMENDED —
+// the 3-arg, wire-profile-driven form (docs/design/
+// wire-profiles-and-staged-validation.md):
 //
 //   import { applyValidation } from "./generated/apply-validation.ts"
 //   const fetch = createFetch(node, {
-//     rewriters: [(routes) => applyValidation("books", routes)],
+//     rewriters: [(routes) => applyValidation("books", routes, "http")],
 //   })
 //
-// A rejected leaf's generated `parse()` returns `Result.err(...)`, which
-// `runRoute` (route.ts) already encodes as a 400 with the structured errors
-// — the same Result-unwrap path a plain handler's own `Result.err` return
-// takes, not a special case. Superseded by this: `createFetch`'s former
-// `validators`/`wrapValidators` option, which wrapped the `Node` tree BEFORE
-// projection — see docs/design/routing-and-transforms.md's "Dispatch is not
-// an interceptable multi-stage pipeline" section for the full history.
+// The `"http"` protocol argument buys per-field, wire-shaped decode ahead of
+// constraint checking: a query/path/header field coerces from its raw
+// string per HTTP's `queryProfile` rules (numeric-string, strict
+// `"true"`/`"false"`-string, ISO-date-string), a JSON-body field coerces
+// only its `Date` fields from ISO strings, and everything else in the body
+// arrives already typed with no coercion. Without it — the 2-arg
+// `applyValidation("books", routes)` form — validation still runs (still
+// still supported, still available), but against the RAW value `assemble()`
+// handed back off the wire: a query numeric string like `"3"` is only
+// coerced to `3` if the leaf resolves against a `compileValidatorModule`-
+// generated validator via the OLD 2-arg `ValidatorMap` path (still
+// supported, still available, just not wire-profile-driven) — that
+// validator's `parse()` bakes in a universal, protocol-blind string-coercion
+// rule set (see the design doc's "Problem" section for why that's being
+// superseded), rather than the `WireValidatorMap` entry the 3-arg form
+// resolves against.
+//
+// A rejected leaf's generated `parse()`/wire decoder returns `Result.err(...)`,
+// which `runRoute` (route.ts) already encodes as a 400 with the structured
+// errors — the same Result-unwrap path a plain handler's own `Result.err`
+// return takes, not a special case. Superseded by this: `createFetch`'s
+// former `validators`/`wrapValidators` option, which wrapped the `Node` tree
+// BEFORE projection — see docs/design/routing-and-transforms.md's "Dispatch
+// is not an interceptable multi-stage pipeline" section for the full
+// history.
 //
 // To drop the auto-method layer and use core routing only:
 //   return mapCharRouter(httpProjection(node))

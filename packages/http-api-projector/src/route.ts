@@ -28,7 +28,10 @@
 // overrides) was removed: nothing in this codebase used those hooks outside
 // of tests exercising the mechanism itself. AOT-COMPILED validation happens
 // via `@rhi-zone/fractal-api-tree/apply-validation`'s `applyValidation(key,
-// projectedTree)`, wired onto the ALREADY-PROJECTED `HttpRoute` (typically as
+// projectedTree, "http")` — the recommended, wire-profile-driven 3-arg form
+// (see preset.ts's module doc for what it buys over the still-supported
+// 2-arg `applyValidation(key, projectedTree)` form) — wired onto the
+// ALREADY-PROJECTED `HttpRoute` (typically as
 // a `preset.ts` `rewriters` entry) — the same leaf-handler wrap
 // `@rhi-zone/fractal-api-tree/build`'s `wrapValidators` does (either can
 // still be used at the `Node` level, before this file's transforms ever run,
