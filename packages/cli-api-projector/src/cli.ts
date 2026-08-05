@@ -95,7 +95,6 @@ export interface CliStores {
  */
 export type CliStoreBag = ProjectorStores & CliStores
 
-import { isApplyValidationWrapped } from "@rhi-zone/fractal-api-tree/apply-validation"
 import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
 import { generateCompletions, isShellName } from "./completions.ts"
 
@@ -186,11 +185,14 @@ export type CliIO = {
 
 export type CliOpts<T = unknown> = {
   /**
-   * Pre-computed schema map (from extractToolSchemas). When provided, input
-   * fields are derived from the JSON Schema — both for help text and for
-   * coercing flag values to the schema's declared type before the handler
-   * is called (see `coerceInput`). When absent, flags degrade to parsing
-   * --key value pairs from argv as bare strings (no coercion).
+   * Pre-computed schema map (from extractToolSchemas). Used for HELP TEXT
+   * generation only (`buildHelp`/`buildLeafHelp`) and for generated shell
+   * completions (`generateCompletions`, ./completions.ts) — it derives
+   * per-field flag names/types/required-ness for display. It is NOT
+   * consulted for decode/validation/defaults: that's the generated wire
+   * validator's job now (see `rewriters` below). When `schemas` is absent,
+   * help text just can't list per-field flags for a leaf; dispatch itself is
+   * unaffected.
    */
   readonly schemas?: SchemaMap
   /**
@@ -225,10 +227,30 @@ export type CliOpts<T = unknown> = {
    * Unlike HTTP's `HttpRoute` projection, CLI dispatches directly off the
    * `Node` tree it's given — there is no separate "projected" shape for
    * `rewriters` to run after, so a rewrite here applies to `rootNode`
-   * itself, before any subcommand resolution. A leaf a generated validator
-   * covers has `coerceInput`/`applyDefaults`/`validateRequired` skipped for
-   * it (see `isApplyValidationWrapped` below) — a leaf it doesn't cover
-   * keeps using that fallback path exactly as before.
+   * itself, before any subcommand resolution.
+   *
+   * This is also where a leaf's decode+validate actually comes from, now
+   * that there is no local fallback: pass `"cli"` as `applyValidation`'s
+   * third argument to opt a tree into wire-profile-driven staged decode +
+   * validation for CLI's argv wire shape (`string | string[] | true`,
+   * per-field derived via `@rhi-zone/fractal-api-tree/wire-derive`'s
+   * `deriveFieldProfiles`):
+   *
+   * ```ts
+   * import { applyValidation } from "./generated/apply-validation.ts"
+   * await runCli(node, argv, io, {
+   *   rewriters: [(tree) => applyValidation("books", tree, "cli")],
+   * })
+   * ```
+   *
+   * A leaf with no matching generated validator entry — because no
+   * `applyValidation` rewriter names it, or because codegen hasn't run yet
+   * for this tree (`createApplyValidation`'s stub is pass-through by
+   * design) — gets the raw assembled wire input (see `buildInput`) passed
+   * straight to its handler: no decode, no coercion, no defaults-fill, no
+   * required-field check. There is no other path; that fallback was deleted
+   * (see docs/design/wire-profiles-and-staged-validation.md, "What goes
+   * away").
    */
   readonly rewriters?: ReadonlyArray<(tree: Node) => Node>
   /**
@@ -840,24 +862,13 @@ function buildInput(
 }
 
 // ============================================================================
-// Type coercion from JSON Schema
+// Levenshtein distance — used by `suggestCommand` (below) for "did you mean"
+// unknown-subcommand hints. No decode/coercion runs in this package anymore —
+// that's the generated wire validator's job now, wired via
+// `applyValidation(key, tree, "cli")` (see `CliOpts.rewriters`'s doc comment).
 // ============================================================================
-//
-// Flag values arrive from argv as `string | string[] | true` (see
-// parseFlags). Before the handler is called, coerceInput walks the leaf's
-// input schema (from `opts.schemas`, keyed by `resolved.schemaPath`) and
-// coerces each field present in BOTH the input and the schema's
-// `properties` to the schema's declared type:
-//   number/integer → Number(value), reject NaN (and non-integers for "integer")
-//   boolean        → "true"/"1"/"yes" → true, "false"/"0"/"no" → false
-//   array          → coerce each element against `items`
-//   enum           → validate membership, suggest the closest match on miss
-//   string/other   → left untouched (today's behavior)
-// Fields with no matching schema property pass through unchanged — this is
-// what keeps coercion backward-compatible with schema-less trees (opts.schemas
-// omitted) and with fields a schema doesn't know about.
 
-/** Levenshtein edit distance — used to suggest the closest enum value on a mismatch. */
+/** Levenshtein edit distance. */
 function levenshteinDistance(a: string, b: string): number {
   const rows = a.length + 1
   const cols = b.length + 1
@@ -879,154 +890,6 @@ function levenshteinDistance(a: string, b: string): number {
     }
   }
   return dp[rows - 1]![cols - 1]!
-}
-
-/** The enum member closest (by edit distance) to `value`, or undefined for an empty enum. */
-function closestEnumMatch(value: string, options: readonly string[]): string | undefined {
-  let best: string | undefined
-  let bestDist = Infinity
-  for (const opt of options) {
-    const d = levenshteinDistance(value, opt)
-    if (d < bestDist) {
-      bestDist = d
-      best = opt
-    }
-  }
-  return best
-}
-
-/** Coerce a single scalar value against a (non-array) field schema. */
-function coerceScalar(field: string, value: unknown, schema: JsonSchema): unknown {
-  if (schema.enum !== undefined) {
-    const str = typeof value === "string" ? value : String(value)
-    if (!schema.enum.includes(str)) {
-      const suggestion = closestEnumMatch(str, schema.enum)
-      const hint = suggestion !== undefined ? ` Did you mean "${suggestion}"?` : ""
-      throw new CliError(
-        `--${field}: invalid value "${str}" — expected one of: ${schema.enum.join(", ")}.${hint}`,
-        1,
-      )
-    }
-    return str
-  }
-
-  // `schema.type` is typed as a 5-member literal union, but the extractor's
-  // underlying type-ir->JSON-Schema projection (packages/type-ir/src/json-schema.ts)
-  // legitimately emits "integer" too (cast at the api-tree boundary) — compare
-  // as a plain string so both "number" and "integer" are covered.
-  const rawType = schema.type as string | undefined
-  switch (rawType) {
-    case "number":
-    case "integer": {
-      if (typeof value === "boolean") {
-        throw new CliError(`--${field}: expected a number, got a boolean flag`, 1)
-      }
-      const n = Number(value)
-      if (Number.isNaN(n)) {
-        throw new CliError(`--${field}: expected a number, got "${String(value)}"`, 1)
-      }
-      if (rawType === "integer" && !Number.isInteger(n)) {
-        throw new CliError(`--${field}: expected an integer, got "${String(value)}"`, 1)
-      }
-      return n
-    }
-    case "boolean": {
-      if (typeof value === "boolean") return value
-      const str = String(value)
-      const s = str.toLowerCase()
-      if (s === "true" || s === "1" || s === "yes") return true
-      if (s === "false" || s === "0" || s === "no") return false
-      throw new CliError(`--${field}: expected a boolean, got "${str}"`, 1)
-    }
-    default:
-      // "string", "object", or schema-less — left untouched.
-      return value
-  }
-}
-
-/** Coerce one input field against its schema, handling the `array` wrapper around coerceScalar. */
-function coerceField(field: string, value: unknown, schema: JsonSchema): unknown {
-  if (schema.type === "array") {
-    const items = schema.items
-    const arr = Array.isArray(value) ? value : [value]
-    if (items === undefined || items === false) return arr
-    return arr.map((el) => coerceScalar(field, el, items))
-  }
-  return coerceScalar(field, value, schema)
-}
-
-/**
- * Coerce a raw handler input object against a leaf's input schema, field by
- * field. Fields absent from `schema.properties` (including all fields, when
- * `schema` itself is undefined — no schema was supplied for this leaf) pass
- * through unchanged, so this stays backward-compatible with schema-less
- * trees. Throws CliError on a coercion failure (NaN number, invalid enum
- * member, unparseable boolean).
- */
-export function coerceInput(
-  input: Record<string, unknown>,
-  schema: JsonSchema | undefined,
-): Record<string, unknown> {
-  const props = schema?.properties
-  if (props === undefined) return input
-
-  const out: Record<string, unknown> = { ...input }
-  for (const [field, value] of Object.entries(input)) {
-    const fieldSchema = props[field]
-    if (fieldSchema === undefined) continue
-    out[field] = coerceField(field, value, fieldSchema)
-  }
-  return out
-}
-
-// ============================================================================
-// Defaults + required-field validation
-// ============================================================================
-
-/**
- * Fill in `schema.properties[field].default` for any field absent from
- * `input`. Defaults come from the schema pre-typed (e.g. `default: 0` for a
- * number field) — no coercion is applied to them, unlike argv-sourced string
- * values. A field already present in `input` (including explicit `false`/
- * `0`/`""`) is left alone; "absent" means `undefined`, not falsy.
- */
-export function applyDefaults(
-  input: Record<string, unknown>,
-  schema: JsonSchema | undefined,
-): Record<string, unknown> {
-  const props = schema?.properties
-  if (props === undefined) return input
-
-  const out: Record<string, unknown> = { ...input }
-  for (const [field, fieldSchema] of Object.entries(props)) {
-    if (out[field] === undefined && fieldSchema.default !== undefined) {
-      out[field] = fieldSchema.default
-    }
-  }
-  return out
-}
-
-/**
- * Validate that every field in `schema.required` is present in `input`
- * (post-defaults). Throws CliError listing all missing fields at once
- * (rather than failing on the first) so a user fixing a multi-field miss
- * doesn't have to re-run once per field.
- */
-export function validateRequired(
-  input: Record<string, unknown>,
-  schema: JsonSchema | undefined,
-): void {
-  const required = schema?.required
-  if (required === undefined || required.length === 0) return
-
-  const missing = required.filter((field) => input[field] === undefined)
-  if (missing.length > 0) {
-    const flags = missing.map((field) => `--${field}`).join(", ")
-    throw new CliError(
-      `Missing required field${missing.length > 1 ? "s" : ""}: ${flags}`,
-      1,
-    )
-  }
 }
 
 // ============================================================================
@@ -1178,41 +1041,27 @@ export async function runCli<T = unknown>(
     }
   }
 
-  // Build input: flags + slugs (provenance-blind merge), then coerce against
-  // the leaf's input schema (number/boolean/array/enum → typed values; a
-  // schema-less field, or no schema at all, passes through unchanged), then
-  // fill in schema defaults for absent fields, then validate that every
-  // `required` field is present — all BEFORE the handler is ever called.
-  const schemaName = target.schemaPath.join("_").replace(/-/g, "_")
-  const inputSchema = schemas[schemaName]?.inputSchema
-  // Snapshot-at-resolution, not a live re-read: `target.sourceMap` was
-  // already resolved once, inside `resolveLeaf`, at the point this leaf was
-  // found — see `Resolved`'s doc comment. Matches mcp/graphql/json-rpc's
-  // `Dispatch.sourceMap` (each populated once when the dispatch table is
-  // built) and HTTP's `meta.http.sourceMap` (resolved once when the
-  // `HttpRoute` tree is built) — CLI's own minimal equivalent of a
+  // Build input: flags + slugs (provenance-blind merge) via the shared
+  // resolution pipeline. Snapshot-at-resolution, not a live re-read:
+  // `target.sourceMap` was already resolved once, inside `resolveLeaf`, at
+  // the point this leaf was found — see `Resolved`'s doc comment. Matches
+  // mcp/graphql/json-rpc's `Dispatch.sourceMap` (each populated once when the
+  // dispatch table is built) and HTTP's `meta.http.sourceMap` (resolved once
+  // when the `HttpRoute` tree is built) — CLI's own minimal equivalent of a
   // projection-time snapshot, given CLI has no separate build-once/
   // dispatch-many phase (see `Resolved`'s doc for why).
+  //
+  // No local decode/coercion/defaults/required-field step runs here anymore
+  // — that fallback was deleted (see docs/design/
+  // wire-profiles-and-staged-validation.md, "What goes away"). If this
+  // leaf's tree was passed through `applyValidation(key, tree, "cli")` (see
+  // `CliOpts.rewriters`), `target.handler` is ALREADY wrapped to decode +
+  // validate `rawInput` before running; if not (no rewriter names this leaf,
+  // or codegen hasn't run yet), `rawInput` — raw wire values, `string |
+  // string[] | true` per flag, exactly as `parseFlags`/`buildInput` produced
+  // them — reaches the handler completely unvalidated.
   const { input: rawInput, stores } = buildInput(flags, target.slugs, target.sourceMap)
-  // A generated validator, wired via `opts.rewriters`' `applyValidation`
-  // call (see CliOpts.rewriters), already wraps target.handler to run
-  // parse() — coercion + validation + defaults in one pass — so the
-  // schema-derived fallback path below is skipped for this leaf
-  // specifically. Uncovered leaves (no matching generated validator, or no
-  // `applyValidation` rewriter at all) keep using it exactly as before.
-  const generatedValidatorHandlesThis = isApplyValidationWrapped(target.handler)
-  let input: Record<string, unknown> = rawInput
-  if (!generatedValidatorHandlesThis) {
-    try {
-      input = coerceInput(rawInput, inputSchema)
-      input = applyDefaults(input, inputSchema)
-      validateRequired(input, inputSchema)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      ioResolved.stderr.write(`Error: ${msg}\n`)
-      throw err instanceof CliError ? err : new CliError(msg, 1)
-    }
-  }
+  const input: Record<string, unknown> = rawInput
 
   // Call handler — wrapped (innermost-first) by ALS (see CliOpts.als), then
   // by any configured middleware (outermost-first; see CliOpts.middleware).
@@ -1282,14 +1131,13 @@ export async function runCli<T = unknown>(
 
   // Result unwrapping: applied whenever `detectResult` is on (matching
   // HTTP's `runRoute`, route.ts) — any handler returning
-  // `{kind:"err", error}` gets proper CLI error handling, not just leaves
-  // wrapped by a generated validator (`generatedValidatorHandlesThis`,
-  // computed above, still only gates the fallback
-  // coerceInput/validateRequired step, a separate concern). A `kind:"ok"`
-  // Result is unwrapped to its `.value` before being printed, so an
-  // ordinary handler that happens to return this package's own
-  // `Result<T,E>` shape (see @rhi-zone/fractal-api-tree's `ok`/`err`) is
-  // treated the same way regardless of validator wiring.
+  // `{kind:"err", error}` gets proper CLI error handling, including a
+  // generated validator's own rejection (wrapHandler, api-tree's
+  // apply-validation.ts, returns `err(errors)` on a failed `parse()`,
+  // exactly this shape). A `kind:"ok"` Result is unwrapped to its `.value`
+  // before being printed, so an ordinary handler that happens to return this
+  // package's own `Result<T,E>` shape (see @rhi-zone/fractal-api-tree's
+  // `ok`/`err`) is treated the same way regardless of validator wiring.
   if (detectResult && isResultShape(result)) {
     if (result.kind === "err") {
       const encoded = opts.errorEncoder?.(result.error)

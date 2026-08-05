@@ -1,20 +1,19 @@
 // packages/cli-api-projector/src/cli-gaps.test.ts — @rhi-zone/fractal-cli-api-projector
 //
-// Tests for the mechanical CLI DX gaps closed alongside the coercion/help
-// machinery: --version, required-field validation, schema defaults,
-// CliMeta.alias dispatch + help text, and Levenshtein "did you mean?"
-// suggestions for unknown subcommands.
+// Tests for the mechanical CLI DX gaps closed alongside the help machinery:
+// --version, CliMeta.alias dispatch + help text, and Levenshtein "did you
+// mean?" suggestions for unknown subcommands. Required-field validation and
+// schema-default filling used to be a projector-local fallback
+// (`validateRequired`/`applyDefaults`, tested directly here) — both were
+// deleted (see docs/design/wire-profiles-and-staged-validation.md, "What
+// goes away"): that behavior now lives entirely in the generated wire
+// validator, wired via `applyValidation(key, tree, "cli")` (see
+// cli-validators.test.ts), and a leaf with no such call site gets raw wire
+// values with no required-field/defaults handling at all.
 
 import { describe, it, expect } from "bun:test"
-import {
-  runCli,
-  CliError,
-  coerceInput,
-  applyDefaults,
-  validateRequired,
-} from "./cli.ts"
+import { runCli, CliError } from "./cli.ts"
 import { api, op } from "@rhi-zone/fractal-api-tree/node"
-import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 
 function makeMockIO() {
@@ -65,10 +64,14 @@ describe("--version / -V", () => {
 })
 
 // ============================================================================
-// 2. Missing required field validation
+// 2. No local required-field/defaults handling — `opts.schemas` only drives
+// help text now; a leaf with no `applyValidation(key, tree, "cli")` rewriter
+// gets raw wire values with no required-field check and no defaults-fill,
+// even when a `schemas` map IS supplied (help text and dispatch are
+// independent — see `CliOpts.schemas`'s doc comment).
 // ============================================================================
 
-describe("required field validation", () => {
+describe("no local required-field/defaults fallback", () => {
   const tree = api({
     widgets: api({
       create: op((input: { name: string; qty: number }) => input),
@@ -81,115 +84,31 @@ describe("required field validation", () => {
         type: "object",
         properties: {
           name: { type: "string" },
-          qty: { type: "number" },
+          qty: { type: "number", default: 1 },
         },
         required: ["name", "qty"],
       },
     },
   }
 
-  it("validateRequired passes when all required fields are present", () => {
-    expect(() => validateRequired({ name: "a", qty: 1 }, schemas["widgets_create"]!.inputSchema)).not.toThrow()
-  })
-
-  it("validateRequired throws CliError listing all missing fields", () => {
-    expect(() => validateRequired({}, schemas["widgets_create"]!.inputSchema)).toThrow(CliError)
-    expect(() => validateRequired({}, schemas["widgets_create"]!.inputSchema)).toThrow(/--name/)
-    expect(() => validateRequired({}, schemas["widgets_create"]!.inputSchema)).toThrow(/--qty/)
-  })
-
-  it("validateRequired is a no-op when schema has no `required`", () => {
-    expect(() => validateRequired({}, { type: "object" })).not.toThrow()
-  })
-
-  it("runCli rejects with CliError and never calls the handler when a required flag is missing", async () => {
-    let handlerCalled = false
-    const trackedTree = api({
-      widgets: api({
-        create: op((input: unknown) => { handlerCalled = true; return input }),
-      }),
-    })
-    const mock = makeMockIO()
-    await expect(
-      runCli(trackedTree, ["widgets", "create", "--name", "Widget"], mock.io, { schemas }),
-    ).rejects.toBeInstanceOf(CliError)
-    expect(handlerCalled).toBe(false)
-    expect(mock.err.join("")).toContain("--qty")
-  })
-
-  it("runCli succeeds when all required flags are supplied", async () => {
-    const mock = makeMockIO()
-    await runCli(tree, ["widgets", "create", "--name", "Widget", "--qty", "3"], mock.io, { schemas })
-    expect(JSON.parse(mock.out.join(""))).toEqual({ name: "Widget", qty: 3 })
-  })
-})
-
-// ============================================================================
-// 3. Defaults from schema
-// ============================================================================
-
-describe("schema default values", () => {
-  const schema: JsonSchema = {
-    type: "object",
-    properties: {
-      name: { type: "string" },
-      qty: { type: "number", default: 1 },
-      ready: { type: "boolean", default: false },
-    },
-  }
-
-  it("applyDefaults fills in an absent field from schema.properties[field].default", () => {
-    expect(applyDefaults({ name: "Widget" }, schema)).toEqual({ name: "Widget", qty: 1, ready: false })
-  })
-
-  it("applyDefaults does not override a field already present, even if falsy", () => {
-    expect(applyDefaults({ name: "Widget", qty: 5, ready: true }, schema)).toEqual({
-      name: "Widget",
-      qty: 5,
-      ready: true,
-    })
-  })
-
-  it("applyDefaults is a no-op when schema is undefined", () => {
-    expect(applyDefaults({ a: 1 }, undefined)).toEqual({ a: 1 })
-  })
-
-  it("runCli applies the default for an omitted flag before the handler runs", async () => {
-    const tree = api({
-      widgets: api({
-        create: op((input: { name: string; qty: number }) => input),
-      }),
-    })
-    const schemas: SchemaMap = {
-      widgets_create: { inputSchema: schema },
-    }
+  it("runCli does NOT reject when a required flag is missing — supplying `schemas` doesn't gate dispatch", async () => {
     const mock = makeMockIO()
     await runCli(tree, ["widgets", "create", "--name", "Widget"], mock.io, { schemas })
-    expect(JSON.parse(mock.out.join(""))).toEqual({ name: "Widget", qty: 1, ready: false })
+    // No --qty supplied, no defaults-fill: qty is simply absent from input.
+    expect(JSON.parse(mock.out.join(""))).toEqual({ name: "Widget" })
   })
 
-  it("an explicit --qty flag overrides the schema default", async () => {
-    const tree = api({
-      widgets: api({
-        create: op((input: { name: string; qty: number }) => input),
-      }),
-    })
-    const schemas: SchemaMap = { widgets_create: { inputSchema: schema } }
+  it("runCli does NOT fill in a schema default for an omitted flag", async () => {
+    const mock = makeMockIO()
+    await runCli(tree, ["widgets", "create", "--name", "Widget"], mock.io, { schemas })
+    const result = JSON.parse(mock.out.join(""))
+    expect(result.qty).toBeUndefined()
+  })
+
+  it("an explicit --qty flag reaches the handler as the raw string, not a number", async () => {
     const mock = makeMockIO()
     await runCli(tree, ["widgets", "create", "--name", "Widget", "--qty", "9"], mock.io, { schemas })
-    expect(JSON.parse(mock.out.join(""))).toEqual({ name: "Widget", qty: 9, ready: false })
-  })
-
-  it("coerceInput + applyDefaults compose: a default fills in, then required validation passes", () => {
-    const s: JsonSchema = {
-      type: "object",
-      properties: { qty: { type: "number", default: 2 } },
-      required: ["qty"],
-    }
-    const coerced = coerceInput({}, s)
-    const withDefaults = applyDefaults(coerced, s)
-    expect(() => validateRequired(withDefaults, s)).not.toThrow()
-    expect(withDefaults).toEqual({ qty: 2 })
+    expect(JSON.parse(mock.out.join(""))).toEqual({ name: "Widget", qty: "9" })
   })
 })
 
