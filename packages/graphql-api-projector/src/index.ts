@@ -54,3 +54,5 @@ export type {
 export { createGraphQLClient, GraphQLClientError } from "./client.ts"
 export type { GraphQLCodegenOptions } from "./codegen.ts"
 export { generateGraphQLClient } from "./codegen.ts"
+export { graphql, source } from "./source.ts"
+export type { GraphQLStoreName } from "./source.ts"

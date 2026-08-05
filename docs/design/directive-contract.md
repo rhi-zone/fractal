@@ -9,9 +9,16 @@ any projector may read any key. Two conventions carry the load in practice:
   own meta — no ancestor inheritance. `resolveTags` applies the implication
   lattice (`readOnly ⇒ idempotent`; `readOnly ∧ destructive` → conflict).
 - **`meta.<projector>`** — an open, per-projection override bag
-  (`meta.http`, `meta.cli`, `meta.mcp`, `meta.graphql`, `meta.openapi`).
-  Each projector exports its own `get<X>Meta(meta)` parser. Overrides always
-  win over tag-derived defaults.
+  (`meta.http`, `meta.cli`, `meta.mcp`, `meta.graphql`, `meta.jsonrpc`,
+  `meta.openapi`). Each projector exports its own `get<X>Meta(meta)` parser.
+  Overrides always win over tag-derived defaults. All five dispatch
+  protocols (http/cli/mcp/graphql/jsonrpc) converge on the SAME shape: a
+  flat bag whose cardinality is expressed by value shape, not by a
+  directive-envelope tag — at-most-one → scalar key (last-wins), keyed
+  partial contribution → map key (key-merged), genuinely multiple/ordered →
+  array key (appended). See HTTP's section below for the full rule (the
+  migration all five now share) and `docs/design/wire-profiles-and-staged-
+  validation.md`'s "Prerequisite: meta unification" for the history.
 
 This page is a lookup reference, not a narrative — see
 `docs/design/dispatch-extensibility.md` for the DU + interpreter pattern
@@ -109,14 +116,18 @@ route tree `meta.http`'s flat keys already produced.
 
 ## CLI — `meta.cli`
 
-Read by `packages/cli-api-projector/src/cli.ts` via `getCliMeta`.
+Read by `packages/cli-api-projector/src/cli.ts` via `getCliMeta`. Same flat
+bag, same shape-directed fold semantics as HTTP's `meta.http` (see HTTP's
+section above) — cardinality is by shape, not by an envelope tag, for every
+key below.
 
-| Key | Shape | Controls | Absent |
-|---|---|---|---|
-| `name` | `string` | Subcommand display name in listings/help | Falls back to the tree key |
-| `alias` | `string` | Alternate leaf-lookup name (in addition to the tree key) | No alias |
-| `hidden` | `boolean` | Excludes the leaf/branch from listings and help | Shown |
-| `sourceMap` | `SourceMap` | Per-param source override for input assembly (e.g. pull a field from `env` instead of a flag) | Params resolve via the default flag/slug convention |
+| Key | Shape | Cardinality | Controls | Absent |
+|---|---|---|---|---|
+| `name` | `string` | at-most-one | Subcommand display name in listings/help | Falls back to the tree key |
+| `alias` | `string` | at-most-one | Alternate leaf-lookup name (in addition to the tree key) | No alias |
+| `hidden` | `boolean` | at-most-one | Excludes the leaf/branch from listings and help | Shown |
+| `paginated` | `{ inputCursorParam?; inputOffsetParam? }` | at-most-one | Overrides which flag name `--all-pages` merges the next cursor/offset into | Derived from the leaf's own cursor/offset input field names |
+| `sourceMap` | `SourceMap` | keyed partial contribution | Per-param source override for input assembly (e.g. pull a field from `env` instead of a flag) — see `cli.source()` (`packages/cli-api-projector/src/source.ts`) | Params resolve via the default flag/slug convention |
 
 Also reads the shared `meta.description` (top-level Meta key, not
 `meta.cli`-scoped) as a fallback when `meta.cli.description` isn't set — used
@@ -124,22 +135,36 @@ for command help text. `meta.tags.deprecated`/`destructive`/`readOnly`/`streamin
 drive help annotations and the destructive-confirmation gate (see tags table
 above).
 
+Resolution lifecycle: `meta.cli.sourceMap` is resolved once, into a
+`Resolved.sourceMap` snapshot, at the point `resolveLeaf` finds the dispatched
+leaf — the CLI-shaped equivalent of MCP/GraphQL/JSON-RPC's `Dispatch.sourceMap`
+(each built once per leaf, at projection time) and HTTP's `meta.http.sourceMap`
+(resolved once when the `HttpRoute` tree is built). CLI has no separate
+build-once/dispatch-many projection phase the other four have — a leaf's
+terminal argv segment can be a `fallback`-captured slug value only knowable
+from that invocation's own argv — so the snapshot is taken at leaf-resolution
+time within `runCli`, not ahead of it, but it IS taken exactly once per
+dispatch rather than re-derived at each later point that reads it (see
+`Resolved`'s doc comment, cli.ts).
+
 ## MCP — `meta.mcp`
 
 Read by `packages/mcp-api-projector/src/project.ts` via `getMcpMeta`. One
-leaf may target the tool, resource, or prompt surface via `as`.
+leaf may target the tool, resource, or prompt surface via `as`. Same flat
+bag, same shape-directed fold semantics as HTTP's `meta.http` (see HTTP's
+section above).
 
-| Key | Shape | Controls | Applies to | Absent |
-|---|---|---|---|---|
-| `as` | `"tool" \| "resource" \| "prompt"` | Which MCP surface the leaf projects to | Leaf | `"tool"` (default) |
-| `name` | `string` | Full name/URI override (prefix suppressed when set) | Tool, resource | Underscore-joined tree-position prefix + leaf key |
-| `description` | `string` | Description text override | Tool, resource, prompt | Falls back to `meta.description`, then JSDoc-derived (codegen), then leaf key |
-| `title` | `string` | Emits `annotations.title` | Tool | Omitted |
-| `segment` | `string` | This branch node's contribution to the name/URI prefix | Branch | Tree key used |
-| `annotations` | `McpAnnotations` | Merged over tag-derived hints (override wins per key) | Tool | Tag-derived hints only (`hintsFromTags`) |
-| `uri` | `string` | Full resource URI override | Resource | Derived from tree position |
-| `mimeType` | `string` | Resource MIME type | Resource | `"application/json"` |
-| `sourceMap` | `SourceMap` | Per-param source override for input assembly | Tool, resource template, prompt (not fixed resources — they take no input) | Params resolve via the default argument/URI-variable convention |
+| Key | Shape | Cardinality | Controls | Applies to | Absent |
+|---|---|---|---|---|---|
+| `as` | `"tool" \| "resource" \| "prompt"` | at-most-one | Which MCP surface the leaf projects to | Leaf | `"tool"` (default) |
+| `name` | `string` | at-most-one | Full name/URI override (prefix suppressed when set) | Tool, resource | Underscore-joined tree-position prefix + leaf key |
+| `description` | `string` | at-most-one | Description text override | Tool, resource, prompt | Falls back to `meta.description`, then JSDoc-derived (codegen), then leaf key |
+| `title` | `string` | at-most-one | Emits `annotations.title` | Tool | Omitted |
+| `segment` | `string` | at-most-one | This branch node's contribution to the name/URI prefix | Branch | Tree key used |
+| `annotations` | `McpAnnotations` | at-most-one (merged with tag-derived hints at read time, not folded as a meta contribution) | Merged over tag-derived hints (override wins per key) | Tool | Tag-derived hints only (`hintsFromTags`) |
+| `uri` | `string` | at-most-one | Full resource URI override | Resource | Derived from tree position |
+| `mimeType` | `string` | at-most-one | Resource MIME type | Resource | `"application/json"` |
+| `sourceMap` | `SourceMap` | keyed partial contribution | Per-param source override for input assembly — see `mcp.source()` (`packages/mcp-api-projector/src/source.ts`) | Tool, resource template, prompt (not fixed resources — they take no input) | Params resolve via the default argument/URI-variable convention |
 
 `meta.tags.deprecated` surfaces as `deprecated: true` on the tool/resource/prompt
 descriptor (omitted, not `false`, when unset — three-valued semantics).
@@ -147,16 +172,32 @@ descriptor (omitted, not `false`, when unset — three-valued semantics).
 ## GraphQL — `meta.graphql`
 
 Read by `packages/graphql-api-projector/src/project.ts` via `getGraphQLMeta`.
+Same flat bag, same shape-directed fold semantics as HTTP's `meta.http` (see
+HTTP's section above).
 
-| Key | Shape | Controls | Absent |
-|---|---|---|---|
-| `operation` | `"query" \| "mutation" \| "subscription"` | Overrides tag-derived operation-type inference outright | Derived from tags (see precedence above) |
-| `name` | `string` | Full field-name override (prefix/camelCase-join ignored when set) | Underscore/camelCase-joined tree-position name |
-| `namespace` | `string` | This branch's contribution to the namespace path (Query only) | Tree key used |
-| `description` | `string` | Emitted as an SDL `"""..."""` block | Falls back to `meta.description`, then JSDoc-derived |
-| `deprecated` | `boolean` | Overrides `meta.tags.deprecated`-derived deprecation | Derived from `meta.tags.deprecated` |
-| `deprecatedReason` | `string` | `@deprecated(reason: ...)` text — only meaningful when `deprecated` resolves `true` | Bare `@deprecated` with no reason |
-| `sourceMap` | `SourceMap` | Per-arg source override for input assembly | Args resolve directly from the resolver's flattened `args` bag |
+| Key | Shape | Cardinality | Controls | Absent |
+|---|---|---|---|---|
+| `operation` | `"query" \| "mutation" \| "subscription"` | at-most-one | Overrides tag-derived operation-type inference outright | Derived from tags (see precedence above) |
+| `name` | `string` | at-most-one | Full field-name override (prefix/camelCase-join ignored when set) | Underscore/camelCase-joined tree-position name |
+| `namespace` | `string` | at-most-one | This branch's contribution to the namespace path (Query only) — **declared, currently UNWIRED** (see `GraphQLBranchMetaProperties`'s doc, project.ts) | Tree key used |
+| `description` | `string` | at-most-one | Emitted as an SDL `"""..."""` block | Falls back to `meta.description`, then JSDoc-derived |
+| `deprecated` | `boolean` | at-most-one | Overrides `meta.tags.deprecated`-derived deprecation | Derived from `meta.tags.deprecated` |
+| `deprecatedReason` | `string` | at-most-one | `@deprecated(reason: ...)` text — only meaningful when `deprecated` resolves `true` | Bare `@deprecated` with no reason |
+| `sourceMap` | `SourceMap` | keyed partial contribution | Per-arg source override for input assembly — see `graphql.source()` (`packages/graphql-api-projector/src/source.ts`) | Args resolve directly from the resolver's flattened `args` bag |
+
+## JSON-RPC — `meta.jsonrpc`
+
+Read by `packages/json-rpc-api-projector/src/project.ts` via `getJsonRpcMeta`.
+Same flat bag, same shape-directed fold semantics as HTTP's `meta.http` (see
+HTTP's section above).
+
+| Key | Shape | Cardinality | Controls | Absent |
+|---|---|---|---|---|
+| `name` | `string` | at-most-one | Full method-name override (dot-prefix ignored when set) | Dot-joined tree-position prefix + leaf key |
+| `description` | `string` | at-most-one | Description text override | Falls back to JSDoc-derived text, then leaf key |
+| `errorDataSchema` | `JsonSchema` | at-most-one | Narrows the JSON-RPC error envelope's `data` field (`jsonRpcErrorSchema`) | Unnarrowed error envelope |
+| `segment` | `string` | at-most-one | This branch node's contribution to the dot-joined method-name prefix | Tree key used |
+| `sourceMap` | `SourceMap` | keyed partial contribution | Per-param source override for input assembly — see `jsonrpc.source()` (`packages/json-rpc-api-projector/src/source.ts`) | Params resolve from the single `"params"` store by their own name |
 
 ## Cross-cutting: `meta.description`
 

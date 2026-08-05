@@ -43,3 +43,6 @@ export { createJsonRpcHttpHandler, createJsonRpcWebSocketHandlers, jsonRpcErrors
 
 export type { AnyJsonRpcClient, FetchLike, JsonRpcCall, JsonRpcHttpClientOptions } from "./client.ts"
 export { createJsonRpcClient, createJsonRpcHttpCall, createJsonRpcHttpClient, JsonRpcClientError } from "./client.ts"
+
+export { jsonrpc, source } from "./source.ts"
+export type { JsonRpcStoreName } from "./source.ts"

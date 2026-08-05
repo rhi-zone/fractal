@@ -192,6 +192,86 @@ export interface ParamSource {
 export type SourceMap = Readonly<Record<string, ParamSource>>
 
 // ============================================================================
+// source() authoring helper — shared machinery for every protocol's
+// `<proto>.source(map)`
+//
+// The literal-key-preserving mapped type and the shorthand-expansion runtime
+// logic used to be http-api-projector-only (`verbs.ts`'s `SourceMapInput`/
+// `ResolvedSourceMap`/`source()`, pre-dating this generalization). Extracted
+// here so cli/mcp/graphql/json-rpc can each grow their own thin
+// `<proto>.source()` helper without re-deriving the same mapped type per
+// package — see docs/design/wire-profiles-and-staged-validation.md's
+// "Prerequisite: meta unification" §"UncoveredSourceParams generalizes".
+//
+// Why a helper is needed at all, not just a raw object literal passed to
+// `op()`: raw literals DO stay literal-keyed today (TS's `const C` inference
+// on `op()`'s own `contributions` parameter), but nothing enforces that
+// property against `sourceMap`'s declared type on each protocol's
+// `LeafMetaProperties` — a value passed through any intermediately-typed
+// variable or helper widens `sourceMap` back to the index-signature
+// `SourceMap`, silently defeating `UncoveredSourceParams`/`FindStoreForParam`
+// for that param the same way an un-exact-typed HTTP verb bundle would (see
+// `VerbBundle`'s doc comment, http-api-projector's verbs.ts, for the
+// original hazard this same shape guards against for verb bundles). A
+// `source()` helper makes literal-preservation the DEFAULT authoring path
+// instead of an accidental property of writing the object literal inline.
+// ============================================================================
+
+/**
+ * The shorthand input a `<proto>.source(map)` helper accepts: each key's
+ * value is either a bare store name (shorthand for `{ store, key: <param
+ * name> }`) or a full `ParamSource`-shaped override. Generic in `Store` so
+ * each protocol's own helper can narrow it to that protocol's registered
+ * store names (e.g. HTTP's `HttpStore`, a declaration-mergeable registry —
+ * see http-api-projector's `HttpStoreRegistry`); defaults to plain `string`
+ * for a protocol that has no such registry yet.
+ */
+export type SourceMapInput<Store extends string = string> = Readonly<
+  Record<string, Store | { readonly store: Store; readonly key?: string }>
+>
+
+/**
+ * The `SourceMap` a `SourceMapInput` expands to, with each key's own literal
+ * association PRESERVED — the type-level counterpart of the shorthand
+ * expansion `resolveSourceMap` performs at runtime (a bare `"query"` becomes
+ * `{ store: "query", key: <param name> }`).
+ *
+ * Homomorphic over `M`, so a `const`-inferred literal input (`{ year:
+ * "query" }`) yields a literal output (`{ year: { store: "query"; key:
+ * "year" } }`) rather than collapsing to `Readonly<Record<string,
+ * ParamSource>>`. That literal association is exactly what a type-level read
+ * of a namespace's `sourceMap` needs to answer "which store does param X
+ * come from" — see `FindStoreForParam` above.
+ *
+ * Both branches are written to be PROVABLY `ParamSource`-shaped for a still-
+ * generic `M` (the shorthand branch by intersecting the store with `string`,
+ * the full-form branch by intersecting the input entry with `ParamSource`
+ * itself) — a conditional type does not narrow `M[K]` in either branch, so
+ * without those intersections `ResolvedSourceMap<M>` cannot satisfy
+ * `SourceMap`'s own index-signature constraint.
+ */
+export type ResolvedSourceMap<M extends SourceMapInput> = {
+  readonly [K in keyof M]: M[K] extends string
+    ? { readonly store: M[K] & string; readonly key: K & string }
+    : M[K] & ParamSource
+}
+
+/**
+ * Expands a `SourceMapInput`'s string shorthand to full `ParamSource` entries
+ * — the runtime half of `ResolvedSourceMap`. Shared by every protocol's
+ * `source()` helper so the expansion logic (and the literal-preserving
+ * `const M` inference on the caller's map argument) lives in exactly one
+ * place, not once per protocol.
+ */
+export function resolveSourceMap<const M extends SourceMapInput>(map: M): ResolvedSourceMap<M> {
+  const sourceMap: Record<string, ParamSource> = {}
+  for (const [key, value] of Object.entries(map)) {
+    sourceMap[key] = typeof value === "string" ? { store: value, key } : value
+  }
+  return sourceMap as ResolvedSourceMap<M>
+}
+
+// ============================================================================
 // Static source coverage — the type-level half of the resolution order
 //
 // docs/design/typed-store-spec.md §6 splits "where does this param come from"
