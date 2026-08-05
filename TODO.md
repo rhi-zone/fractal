@@ -122,6 +122,19 @@
 
 ## Design backlog
 
+- **OPEN (parked, 2026-08): semantic/effectful resolution as a possible
+  distinct *resolve* stage** — surfaced while settling
+  `docs/design/wire-profiles-and-staged-validation.md`'s open questions.
+  Turning a validated field into a looked-up domain value (e.g. `uid` → a
+  `User` lookup) is explicitly NOT an encoding-decode concern — wire profiles
+  stay pure (no I/O in `validateEncoding`/`decode`). If ever built, this would
+  be a distinct stage after `validateConstraints`, anchored on branded types.
+  Three shapes were on the table: (1) effectful decoders inside profiles —
+  rejected, breaks decode's totality-by-construction guarantee and profile
+  purity; (2) a separate resolve stage — the favored shape IF this is ever
+  built; (3) handler-level (status quo) — simplest, already how every handler
+  works today, tradeoff is whether centralizing the pattern is worth a new
+  stage. Not scheduled; no owner call made on whether to build it at all.
 - **RESOLVED: `readOnly` vs `safe`** — `readOnly` is the canonical, final tag
   name. `safe` was rejected as too ambiguous (conflates "no side effects"
   with type safety, memory safety, safe-to-retry). See `tags.ts`'s
