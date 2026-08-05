@@ -35,7 +35,7 @@ describe("path dispatch — tree structure determines the address", () => {
             name: "invoiceId",
             subtree: api({
                 checkout: op(createCheckoutSession, {
-                  http: { directives: [{ kind: "method", value: "POST" }] },
+                  http: { method: "POST" },
                 }),
               }),
           } }),
@@ -52,7 +52,7 @@ describe("path dispatch — tree structure determines the address", () => {
   it("uses the static child key as the segment", async () => {
     const tree = api({
         users: api({
-            list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }),
+            list: op((_: unknown) => [], { http: { method: "GET" } }),
           }),
       })
     const router = makeRouter(routes(tree))
@@ -64,7 +64,7 @@ describe("path dispatch — tree structure determines the address", () => {
     const tree = api({
         progressNode: api({
             awardProgress: op((_: unknown) => ({}), {
-              http: { directives: [{ kind: "moveTo", path: "../../progress/award" }] },
+              http: { moveTo: "../../progress/award" },
             }),
           }),
       })
@@ -75,8 +75,8 @@ describe("path dispatch — tree structure determines the address", () => {
 
   it("collects leaves from multiple children", async () => {
     const tree = api({
-        users: api({ list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }) }),
-        orders: api({ list: op((_: unknown) => [], { http: { directives: [{ kind: "method", value: "GET" }] } }) }),
+        users: api({ list: op((_: unknown) => [], { http: { method: "GET" } }) }),
+        orders: api({ list: op((_: unknown) => [], { http: { method: "GET" } }) }),
       })
     const router = makeRouter(routes(tree))
     expect((await router(new Request("http://localhost/users/list"))).status).toBe(200)
@@ -87,7 +87,7 @@ describe("path dispatch — tree structure determines the address", () => {
 // ============================================================================
 // 2. Verb from three-valued tag lattice (verbFromTags — retained utility,
 // used by verb-helper bundles, openapi, and client; NOT consulted by
-// applyMethods, which reads only explicit `{kind:"method"}` directives)
+// applyMethods, which reads only an explicit `meta.http.method`)
 // ============================================================================
 
 describe("verbFromTags — three-valued dispatch", () => {
@@ -121,12 +121,12 @@ describe("verbFromTags — three-valued dispatch", () => {
 
   it("meta.http verb directive wins over all tags", () => {
     expect(
-      verbFromTags({ tags: { readOnly: true }, http: { directives: [{ kind: "verb", value: "POST" }] } }),
+      verbFromTags({ tags: { readOnly: true }, http: { verb: "POST" } }),
     ).toBe("POST")
   })
 
   it("meta.http verb directive is uppercased", () => {
-    expect(verbFromTags({ http: { directives: [{ kind: "verb", value: "delete" }] } })).toBe("DELETE")
+    expect(verbFromTags({ http: { verb: "delete" } })).toBe("DELETE")
   })
 
   it("readOnly = true implies idempotent (lattice: safe ⇒ idempotent)", () => {
@@ -141,7 +141,7 @@ describe("verbFromTags — three-valued dispatch", () => {
 describe("makeRouter — core router (no auto-method layer)", () => {
   const getUser = (_: unknown) => ({ id: 1, name: "Alice" })
   const tree = api({
-      getUser: op(getUser, { http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../user" }] } }),
+      getUser: op(getUser, { http: { method: "GET", moveTo: "../user" } }),
     })
   const router = makeRouter(routes(tree))
 
@@ -187,13 +187,13 @@ describe("method dispatch — several leaves placed at the same path", () => {
     const tree = api({
         books: api({
             read: op((_: { bookId: string }) => ({ op: "read" }), {
-              http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
+              http: { method: "GET", moveTo: "../*" },
             }),
             replace: op((_: { bookId: string }) => ({ op: "replace" }), {
-              http: { directives: [{ kind: "method", value: "PUT" }, { kind: "moveTo", path: "../*" }] },
+              http: { method: "PUT", moveTo: "../*" },
             }),
             remove: op((_: { bookId: string }) => ({ op: "remove" }), {
-              http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "moveTo", path: "../*" }] },
+              http: { method: "DELETE", moveTo: "../*" },
             }),
           }, { fallback: { name: "bookId", subtree: api({}) } }),
       })
@@ -216,7 +216,7 @@ describe("method dispatch — several leaves placed at the same path", () => {
     const tree = api({
         books: api({
             read: op((_: { bookId: string }) => ({ op: "read" }), {
-              http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
+              http: { method: "GET", moveTo: "../*" },
             }),
           }, { fallback: {
             name: "bookId",
@@ -244,13 +244,13 @@ describe("autoMethodLayer — 405 + Allow over the HttpRoute pipeline", () => {
     const tree = api({
         books: api({
             read: op((_: { bookId: string }) => ({}), {
-              http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../*" }] },
+              http: { method: "GET", moveTo: "../*" },
             }),
             replace: op((_: { bookId: string }) => ({}), {
-              http: { directives: [{ kind: "method", value: "PUT" }, { kind: "moveTo", path: "../*" }] },
+              http: { method: "PUT", moveTo: "../*" },
             }),
             remove: op((_: { bookId: string }) => ({}), {
-              http: { directives: [{ kind: "method", value: "DELETE" }, { kind: "moveTo", path: "../*" }] },
+              http: { method: "DELETE", moveTo: "../*" },
             }),
           }, { fallback: { name: "bookId", subtree: api({}) } }),
       })

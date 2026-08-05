@@ -67,9 +67,9 @@ describe("naiveTransform", () => {
     expect(route.fallback?.subtree.methods?.POST).toBeDefined()
   })
 
-  it("reads meta.http's source directives into the method entry's sources.sourceMap", () => {
+  it("reads meta.http.sourceMap into the method entry's sources.sourceMap", () => {
     const api = op((_: unknown) => ({}), {
-      http: { directives: [{ kind: "source", map: { apiKey: { store: "header", key: "x-api-key" } } }] },
+      http: { sourceMap: { apiKey: { store: "header", key: "x-api-key" } } },
     })
     const route = naiveTransform(api)
     expect(route.methods?.POST?.sources?.sourceMap).toEqual({
@@ -77,15 +77,12 @@ describe("naiveTransform", () => {
     })
   })
 
-  it("folds multiple source directives into one sourceMap (later wins per key)", () => {
-    const api = op((_: unknown) => ({}), {
-      http: {
-        directives: [
-          { kind: "source", map: { year: { store: "query", key: "fiscal_year" } } },
-          { kind: "source", map: { year: { store: "header", key: "year" } } },
-        ],
-      },
-    })
+  it("a leaf composed from two source()-style contributions already carries ONE folded sourceMap (later wins per key) by the time naiveTransform reads it — the fold happens at op()'s own mergeMeta, not here", () => {
+    const api = op(
+      (_: unknown) => ({}),
+      { http: { sourceMap: { year: { store: "query", key: "fiscal_year" } } } },
+      { http: { sourceMap: { year: { store: "header", key: "year" } } } },
+    )
     const route = naiveTransform(api)
     expect(route.methods?.POST?.sources?.sourceMap).toEqual({
       year: { store: "header", key: "year" },
@@ -105,7 +102,7 @@ describe("naiveTransform", () => {
 
 describe("applyMethods", () => {
   it("renames POST to the directive's method", () => {
-    const api = op((_: unknown) => ({}), { http: { directives: [{ kind: "method", value: "GET" }] } })
+    const api = op((_: unknown) => ({}), { http: { method: "GET" } })
     const route = applyMethods(naiveTransform(api))
     expect(Object.keys(route.methods ?? {})).toEqual(["GET"])
     expect(route.methods?.GET).toBeDefined()
@@ -113,7 +110,7 @@ describe("applyMethods", () => {
   })
 
   it("uppercases the method value", () => {
-    const api = op((_: unknown) => ({}), { http: { directives: [{ kind: "method", value: "delete" }] } })
+    const api = op((_: unknown) => ({}), { http: { method: "delete" } })
     const route = applyMethods(naiveTransform(api))
     expect(Object.keys(route.methods ?? {})).toEqual(["DELETE"])
   })
@@ -126,23 +123,21 @@ describe("applyMethods", () => {
 
   it("recurses into children and fallback", () => {
     const api = api_({
-        items: op((_: unknown) => ({}), { http: { directives: [{ kind: "method", value: "GET" }] } }),
+        items: op((_: unknown) => ({}), { http: { method: "GET" } }),
       }, { fallback: {
         name: "id",
-        subtree: op((_: unknown) => ({}), { http: { directives: [{ kind: "method", value: "PUT" }] } }),
+        subtree: op((_: unknown) => ({}), { http: { method: "PUT" } }),
       } })
     const route = applyMethods(naiveTransform(api))
     expect(Object.keys(route.children?.items?.methods ?? {})).toEqual(["GET"])
     expect(Object.keys(route.fallback?.subtree.methods ?? {})).toEqual(["PUT"])
   })
 
-  it("preserves sources.sourceMap through a method rename (naiveTransform's sourceMap survives applyMethods rebuilding the entry)", () => {
+  it("preserves sources.sourceMap through a method rename (naiveTransform's sourceMap survives applyMethods)", () => {
     const api = op((_: unknown) => ({}), {
       http: {
-        directives: [
-          { kind: "method", value: "GET" },
-          { kind: "source", map: { apiKey: { store: "header", key: "x-api-key" } } },
-        ],
+        method: "GET",
+        sourceMap: { apiKey: { store: "header", key: "x-api-key" } },
       },
     })
     const route = applyMethods(naiveTransform(api))
@@ -163,7 +158,7 @@ describe("applyMoveTo", () => {
     const api = api_({
         users: api_({
             list: op((_: unknown) => []),
-            get: op(getBook, { http: { directives: [{ kind: "moveTo", path: "../*" }] } }),
+            get: op(getBook, { http: { moveTo: "../*" } }),
           }),
       })
     const route = applyMoveTo(naiveTransform(api))
@@ -184,13 +179,13 @@ describe("applyMoveTo", () => {
             list: op((_: unknown) => []),
             create: op((_: unknown) => ({})),
             get: op(read, {
-              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
+              http: { moveTo: "../*", method: "GET" },
             }),
             update: op(replace, {
-              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "PUT" }] },
+              http: { moveTo: "../*", method: "PUT" },
             }),
             del: op(remove, {
-              http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "DELETE" }] },
+              http: { moveTo: "../*", method: "DELETE" },
             }),
           }),
       })
@@ -212,7 +207,7 @@ describe("applyMoveTo", () => {
 
   it("`.` is identity — node stays at its current position", () => {
     const handler = (_: unknown) => ({})
-    const api = api_({ item: op(handler, { http: { directives: [{ kind: "moveTo", path: "." }] } }) })
+    const api = api_({ item: op(handler, { http: { moveTo: "." } }) })
     const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.item?.methods?.POST?.handler).toBe(handler)
   })
@@ -223,7 +218,7 @@ describe("applyMoveTo", () => {
     const handler = (_: unknown) => ({})
     const api = api_({
         admin: api_({
-            ping: op(handler, { http: { directives: [{ kind: "moveTo", path: "../.." }] } }),
+            ping: op(handler, { http: { moveTo: "../.." } }),
           }),
       })
     const route = applyMoveTo(naiveTransform(api))
@@ -236,7 +231,7 @@ describe("applyMoveTo", () => {
     const api = api_({
         a: api_({
             b: api_({
-                leaf: op(handler, { http: { directives: [{ kind: "moveTo", path: "../../../admin" }] } }),
+                leaf: op(handler, { http: { moveTo: "../../../admin" } }),
               }),
           }),
       })
@@ -248,7 +243,7 @@ describe("applyMoveTo", () => {
   it("mkdir-p: a multi-segment moveTo target creates every missing intermediate node", () => {
     const handler = (_: unknown) => ({})
     const api = api_({
-        leaf: op(handler, { http: { directives: [{ kind: "moveTo", path: "../api/v2/users" }] } }),
+        leaf: op(handler, { http: { moveTo: "../api/v2/users" } }),
       })
     const route = applyMoveTo(naiveTransform(api))
     expect(route.children?.leaf).toBeUndefined()
@@ -258,10 +253,10 @@ describe("applyMoveTo", () => {
   it("throws when two placements converge on the same path AND method", () => {
     const api = api_({
         first: op((_: unknown) => ({ from: "first" }), {
-          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
+          http: { moveTo: "../*", method: "GET" },
         }),
         second: op((_: unknown) => ({ from: "second" }), {
-          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
+          http: { moveTo: "../*", method: "GET" },
         }),
       })
     const transform = composeTransforms(applyMethods, applyMoveTo)
@@ -271,10 +266,10 @@ describe("applyMoveTo", () => {
   it("does NOT throw when two placements converge on the same path with DIFFERENT methods", () => {
     const api = api_({
         first: op((_: unknown) => ({ from: "first" }), {
-          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "GET" }] },
+          http: { moveTo: "../*", method: "GET" },
         }),
         second: op((_: unknown) => ({ from: "second" }), {
-          http: { directives: [{ kind: "moveTo", path: "../*" }, { kind: "method", value: "PUT" }] },
+          http: { moveTo: "../*", method: "PUT" },
         }),
       })
     const transform = composeTransforms(applyMethods, applyMoveTo)
@@ -289,7 +284,7 @@ describe("applyMoveTo", () => {
 describe("applyResponse", () => {
   it("wraps the handler so the router produces the directive's status", async () => {
     const api = op((_: unknown) => ({ created: true }), {
-      http: { directives: [{ kind: "response", status: 201 }] },
+      http: { response: { status: 201 } },
     })
     const route = applyResponse(naiveTransform(api))
     const router = makeRouter(route)
@@ -301,7 +296,7 @@ describe("applyResponse", () => {
 
   it("applies response headers from the directive", async () => {
     const api = op((_: unknown) => ({ ok: true }), {
-      http: { directives: [{ kind: "response", headers: { "X-Custom": "yes" } }] },
+      http: { response: { headers: { "X-Custom": "yes" } } },
     })
     const route = applyResponse(naiveTransform(api))
     const router = makeRouter(route)
@@ -325,7 +320,7 @@ describe("applyResponse", () => {
 describe("composeTransforms", () => {
   it("applies rewriters left-to-right", () => {
     const handler = (_: unknown) => ({})
-    const api = op(handler, { http: { directives: [{ kind: "method", value: "GET" }] } })
+    const api = op(handler, { http: { method: "GET" } })
     const pipeline = composeTransforms(applyMethods, applyResponse, applyMoveTo)
     const route = pipeline(naiveTransform(api))
     expect(Object.keys(route.methods ?? {})).toEqual(["GET"])
@@ -351,21 +346,18 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
     const api = api_({
         books: api_({
             list: op((_: unknown) => [...store.values()], {
-              http: { directives: [{ kind: "method", value: "GET" }] },
+              http: { method: "GET" },
             }),
             create: op((input: { title: string }) => {
               const book = { id: "book-2", title: input.title }
               store.set(book.id, book)
               return book
-            }, { http: { directives: [{ kind: "method", value: "POST" }, { kind: "response", status: 201 }] } }),
+            }, { http: { method: "POST", response: { status: 201 } } }),
             get: op(
               (input: { bookId: string }) => store.get(input.bookId),
               {
                 http: {
-                  directives: [
-                    { kind: "moveTo", path: "../*" },
-                    { kind: "method", value: "GET" },
-                  ],
+                  moveTo: "../*", method: "GET",
                 },
               },
             ),
@@ -373,10 +365,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
               (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
               {
                 http: {
-                  directives: [
-                    { kind: "moveTo", path: "../*" },
-                    { kind: "method", value: "DELETE" },
-                  ],
+                  moveTo: "../*", method: "DELETE",
                 },
               },
             ),
@@ -536,7 +525,7 @@ describe("runRoute — default decode/encode", () => {
 
   it("response override (via applyResponse) still takes effect through runRoute", async () => {
     const api = op((_: unknown) => ({ created: true }), {
-      http: { directives: [{ kind: "response", status: 201 }] },
+      http: { response: { status: 201 } },
     })
     const route = applyResponse(naiveTransform(api))
     const router = makeRouterFromRoute(route)
@@ -671,9 +660,7 @@ describe("runRoute — ResponseOverride body passthrough", () => {
     const bytes = new Uint8Array([1, 2, 3, 4])
     const api = op((_: unknown) => bytes.buffer, {
       http: {
-        directives: [
-          { kind: "response", headers: { "Content-Type": "application/octet-stream" } },
-        ],
+        response: { headers: { "Content-Type": "application/octet-stream" } },
       },
     })
     const route = applyResponse(naiveTransform(api))
@@ -686,7 +673,7 @@ describe("runRoute — ResponseOverride body passthrough", () => {
 
   it("string body with an explicit non-JSON content-type passes through as-is", async () => {
     const api = op((_: unknown) => "<h1>hello</h1>", {
-      http: { directives: [{ kind: "response", headers: { "Content-Type": "text/html" } }] },
+      http: { response: { headers: { "Content-Type": "text/html" } } },
     })
     const route = applyResponse(naiveTransform(api))
     const router = makeRouterFromRoute(route)
@@ -697,7 +684,7 @@ describe("runRoute — ResponseOverride body passthrough", () => {
 
   it("string body WITHOUT an explicit content-type still gets JSON.stringify'd (backwards compat)", async () => {
     const api = op((_: unknown) => "plain string", {
-      http: { directives: [{ kind: "response", status: 200 }] },
+      http: { response: { status: 200 } },
     })
     const route = applyResponse(naiveTransform(api))
     const router = makeRouterFromRoute(route)
@@ -714,7 +701,7 @@ describe("runRoute — ResponseOverride body passthrough", () => {
       },
     })
     const api = op((_: unknown) => stream, {
-      http: { directives: [{ kind: "response", headers: { "Content-Type": "text/plain" } }] },
+      http: { response: { headers: { "Content-Type": "text/plain" } } },
     })
     const route = applyResponse(naiveTransform(api))
     const router = makeRouterFromRoute(route)
@@ -725,7 +712,7 @@ describe("runRoute — ResponseOverride body passthrough", () => {
   it("a full Response object as the override body is returned directly", async () => {
     const inner = new Response("teapot", { status: 418, headers: { "X-Kind": "teapot" } })
     const api = op((_: unknown) => inner, {
-      http: { directives: [{ kind: "response", status: 200 }] },
+      http: { response: { status: 200 } },
     })
     const route = applyResponse(naiveTransform(api))
     const router = makeRouterFromRoute(route)
@@ -737,7 +724,7 @@ describe("runRoute — ResponseOverride body passthrough", () => {
 
   it("existing plain-object JSON override behavior is unchanged", async () => {
     const api = op((_: unknown) => ({ created: true }), {
-      http: { directives: [{ kind: "response", status: 201 }] },
+      http: { response: { status: 201 } },
     })
     const route = applyResponse(naiveTransform(api))
     const router = makeRouterFromRoute(route)
@@ -874,7 +861,7 @@ describe("runRoute — handler-level middleware", () => {
   it("with no middleware configured, the handler is called directly", async () => {
     const tree = api_({
       echo: op((input: { x: string }) => ({ got: input.x }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)))
@@ -897,7 +884,7 @@ describe("runRoute — handler-level middleware", () => {
           subtree: api_({
             echo: op((input: { bookId: string; x: string }) => ({ bookId: input.bookId, got: Number(input.x) }), {
               description: "an echo op",
-              http: { directives: [{ kind: "method", value: "GET" }] },
+              http: { method: "GET" },
             }),
           }),
         },
@@ -917,7 +904,7 @@ describe("runRoute — handler-level middleware", () => {
     // that leaks `stores` through to the handler.
     const tree = api_({
       whatArgs: op((input: unknown) => ({ argCount: Object.keys(input as object).length }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const passStores: HttpHandlerMiddleware = (next) => (input, stores) => next(input, stores)
@@ -942,7 +929,7 @@ describe("runRoute — handler-level middleware", () => {
     }
     const tree = api_({
       echo: op((input: { x: string }) => ({ got: input.x }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [outer, inner])
@@ -960,7 +947,7 @@ describe("runRoute — handler-level middleware", () => {
     }
     const tree = api_({
       echo: op((input: { x: string }) => ({ got: input.x }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [readCaller])
@@ -977,7 +964,7 @@ describe("runRoute — handler-level middleware", () => {
   it("the handler's assembled input does not include caller fields unless explicitly sourceMapped", async () => {
     const tree = api_({
       echo: op((input: { x: string }) => input, {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)))
@@ -993,7 +980,7 @@ describe("runRoute — handler-level middleware", () => {
     const rejecting: HttpHandlerMiddleware = () => async () => ({ kind: "err", error: "rejected by middleware" })
     const tree = api_({
       echo: op((input: { x: string }) => ({ got: input.x }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [rejecting])

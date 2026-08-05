@@ -2,8 +2,15 @@
 
 ## Status
 
-Design settled in conversation with the user (2026-08). Not yet implemented.
-This document captures the settled decisions and elaborates them.
+Design settled in conversation with the user (2026-08). The prerequisite arc
+— meta unification / HTTP directive dissolution, see immediately below — has
+LANDED (2026-08): `meta.http.directives`/`HttpDirective`/the fold-by-`kind`
+`getHttpMeta` read-time switch are deleted; HTTP now authors flat
+`meta.http.*` keys directly, matching cli/mcp/graphql/json-rpc's existing
+shape. The staged decode/validate model itself (wire profiles, the
+`validateEncoding`/`decode`/`defaults-fill`/`validateConstraints` pipeline)
+is still NOT implemented — this document captures the settled decisions for
+that work and elaborates them.
 
 A follow-up conversation (2026-08) settled the three sub-questions that were
 originally left open (see "Settled: profile overrides, wrap-layer idiom, argv
@@ -192,23 +199,34 @@ relies on meta being re-read per dispatch rather than snapshotted once. CLI
 gains the same snapshot-at-projection shape HTTP already has (`meta.http`
 resolved once when the `HttpRoute` tree is built, not per request).
 
-### Implementation checkpoint (not design input)
+### Implementation checkpoint — RESOLVED (verified, 2026-08)
 
-`verbs.ts`'s `source()` doc comment (~296–306) states that `moveTo`/`paginated`
+`verbs.ts`'s `source()` doc comment (~296–306) stated that `moveTo`/`paginated`
 chose directive-array authoring for "literal-type preservation" reasons
 distinct from `source()`'s own index-signature-recursion reason (see
-`VerbBundle`'s doc comment). Flat scalar keys are assumed, in this design, to
+`VerbBundle`'s doc comment). Flat scalar keys were assumed, in this design, to
 fold literal types through `FoldMeta`/`MergeMetaValue` just as cleanly as the
-directive-tuple shape does — reasoning through `MergeMetaValue`'s branches
-(node.ts) supports that assumption (a scalar value doesn't match the array or
-object branches, so it falls to the final `: B` branch, which returns the
-literal value directly with no widening step), but this has NOT been checked
-against an actual `tsc` scratch repro, which is the verification standard this
-codebase's own comments hold themselves to elsewhere (e.g. `Widen`'s doc
-comment, node.ts: "both were verified empirically (scratch `tsc`, not
-asserted from memory)"). Whoever implements the migration should re-verify
-this with a scratch check before relying on it, and flag loudly if flat scalar
-keys turn out NOT to fold literal types cleanly.
+directive-tuple shape does. Re-verified with an actual `tsc` scratch repro
+(not reasoned from memory) before the migration landed: CONFIRMED — flat
+scalar keys fold literal types cleanly through the existing, unmodified
+`FoldMeta`/`MergeTwoMeta`.
+
+A second, related question surfaced during the SAME verification pass: does a
+map-shaped value (`sourceMap`, three levels below `Meta` — `Meta -> http ->
+sourceMap -> { store, key? }`) also fold correctly (keyed, last-wins,
+whole-value-replace, never a partial field-merge) through the EXISTING
+`FoldMeta`/`MergeTwoMeta`, without a dedicated new branch? Also CONFIRMED at
+the TYPE level (the existing depth-2 cap already produces exactly the right
+result) — but the same scratch pass found the RUNTIME counterpart,
+`mergeRecords` (node.ts), did NOT match: it recursed without any depth limit,
+which for a partial `ParamSource` (e.g. a `key`-omitting `http.source()` full
+form) could resurrect a stale field from an earlier composed contribution
+instead of replacing the value wholesale — a genuine, previously-unexercised
+runtime/type divergence, not just a theoretical risk. Fixed by depth-capping
+`mergeRecords` to match `MergeMetaValue`'s own cap exactly (see node.ts's
+`mergeRecords` doc comment for the full trace) — closing the gap for
+`sourceMap` and for any other object nested this deep, not just as a
+`sourceMap`-specific patch.
 
 ---
 
@@ -580,13 +598,13 @@ all).
 
 ## Anything from the settled list worth flagging
 
-Nothing in the settled decisions conflicts with code reality as read, except
-one already-flagged item: the "Implementation checkpoint" under "Prerequisite:
-meta unification" above (whether flat scalar keys fold literal types as
-cleanly as the directive-tuple shape does — reasoned through but not verified
-against a scratch `tsc` check). Three more implementation-relevant facts worth
-surfacing for whoever builds this (not conflicts, just detail the settled
-list assumed but didn't spell out):
+Nothing in the settled decisions conflicts with code reality as read. The one
+previously-flagged item — the "Implementation checkpoint" under "Prerequisite:
+meta unification" above (whether flat scalar keys, and map-shaped values like
+`sourceMap`, fold cleanly through `FoldMeta`/`MergeTwoMeta`) — is now
+RESOLVED (see that section). Three more implementation-relevant facts worth
+surfacing for whoever builds the staged decode/validate work itself (not
+conflicts, just detail the settled list assumed but didn't spell out):
 
 - CLI's live-per-dispatch `getCliMeta` read (`cli.ts`, inside `runCli`'s
   per-request path — e.g. the `getCliMeta` call at `cli.ts:1172`, reading

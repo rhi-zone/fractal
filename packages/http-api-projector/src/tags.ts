@@ -4,8 +4,8 @@
 // override. Extracted from project.ts (the direct tree-walk dispatcher lived
 // there originally; this function outlives that dispatcher — it is also used
 // by the HttpRoute path indirectly (via `http.*` verb bundles in verbs.ts,
-// which set BOTH the legacy `kind:"verb"` directive this function reads and
-// the `kind:"method"` directive `applyMethods` reads) and by other packages'
+// which set BOTH the flat `meta.http.verb` key this function reads and
+// the flat `meta.http.method` key `applyMethods` reads) and by other packages'
 // self-contained tree walks (openapi, client) that need to derive the same
 // HTTP verb a leaf would get without depending on http's dispatch internals.
 //
@@ -19,7 +19,7 @@
 //   idempotent = true, destructive ≠ true  → PUT   (unknown ≠ true)
 //   else (idempotent unknown or false)     → POST  (conservative)
 //
-// A meta.http verb directive always wins — checked before tags.
+// An explicit meta.http.verb always wins — checked before tags.
 // Tags are three-valued: true / false / undefined (unknown ≠ false).
 // Tags are read directly from the node's own meta — there is no ancestor
 // inheritance (see docs/design/router-model.md — "Tags").
@@ -29,18 +29,11 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { LeafMeta } from "@rhi-zone/fractal-api-tree/node"
 import type { HttpLeafMeta } from "./project.ts"
 
-/** Extract the `{ kind: "verb", value }` directive from `meta.http.directives`, if present. */
+/** Read the flat `meta.http.verb` scalar key, if present. */
 function verbDirective(meta: HttpLeafMeta): string | undefined {
   const h = meta.http
   if (typeof h !== "object" || h === null) return undefined
-  const directives = (h as { directives?: unknown }).directives
-  if (!Array.isArray(directives)) return undefined
-  for (const entry of directives as unknown[]) {
-    if (typeof entry !== "object" || entry === null) continue
-    const d = entry as Record<string, unknown>
-    if (d.kind === "verb" && typeof d.value === "string") return d.value
-  }
-  return undefined
+  return typeof h.verb === "string" ? h.verb : undefined
 }
 
 /**

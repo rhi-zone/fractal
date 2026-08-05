@@ -57,7 +57,7 @@ describe("createContext", () => {
     const context = createContext<Ctx>({ http: (req) => ({ source: `http:${new URL(req.url).pathname}` }) })
     const tree = api_({
       whoami: op((_: unknown) => ({ seen: context.getStore()?.source ?? "none" }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const fetchHandler = createFetch(tree, { als: context.http! })
@@ -122,7 +122,7 @@ describe("createContext", () => {
     // HTTP
     const httpTree = api_({
       whoami: op((_: unknown) => ({ seen: context.getStore()?.source }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const fetchHandler = createFetch(httpTree, { als: context.http! })

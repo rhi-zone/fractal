@@ -14,7 +14,7 @@ describe("autoMethodLayer — proves droppable", () => {
   const tree = api_({
       getItem: op((_: unknown) => ({ id: 42 }), {
         tags: { readOnly: true },
-        http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../item" }] },
+        http: { method: "GET", moveTo: "../item" },
       }),
     })
   const api = applyMoveTo(applyMethods(toHttpRoutes(tree)))
@@ -103,11 +103,11 @@ describe("autoMethodLayer — multi-verb routes", () => {
   const tree = api_({
       getItem: op((_: unknown) => ({ id: 1 }), {
         tags: { readOnly: true },
-        http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../item" }] },
+        http: { method: "GET", moveTo: "../item" },
       }),
       updateItem: op((_: unknown) => ({ updated: true }), {
         tags: { idempotent: true },
-        http: { directives: [{ kind: "method", value: "PUT" }, { kind: "moveTo", path: "../item" }] },
+        http: { method: "PUT", moveTo: "../item" },
       }),
     })
   const api = applyMoveTo(applyMethods(toHttpRoutes(tree)))

@@ -1,18 +1,19 @@
 // packages/http-api-projector/src/verbs.test.ts — verb-helper bundle tests
 //
 // Proves:
-//   1. http.put on an op yields BOTH a verb directive PUT AND resolveTags → idempotent
-//   2. http.get on an op yields BOTH a verb directive GET AND resolveTags → readOnly
+//   1. http.put on an op yields BOTH a verb GET/method PUT flat key AND resolveTags → idempotent
+//   2. http.get on an op yields BOTH a verb/method flat key GET AND resolveTags → readOnly
 //   3. http.delete on an op yields verb DELETE + destructive + idempotent
 //   4. http.post / http.patch: verb set, no implied tags
 //   5. Composing op(fn, http.put, { tags: { destructive: false } }) deep-merges:
 //      keeps idempotent from the bundle AND applies the override — NOT a spread
 //      that drops the bundle's tags
-//   6. verbFromTags respects the meta.http verb directive from the bundle (GET, not POST)
+//   6. verbFromTags respects the meta.http.verb flat key from the bundle (GET, not POST)
 //   7. head / options helpers exist and carry readOnly
 //   8. http.source(map): string shorthand expands to a full ParamSource,
 //      full-form values pass through unchanged, and two http.source() calls
-//      compose their sourceMaps via ordinary meta merge (mergeMeta)
+//      compose their sourceMaps via ordinary meta merge (mergeMeta) — key-merged,
+//      not concatenated
 
 import { describe, expect, expectTypeOf, it } from "bun:test"
 import { mergeMeta, op } from "@rhi-zone/fractal-api-tree/node"
@@ -22,7 +23,7 @@ import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
 import type { ParamSource } from "@rhi-zone/fractal-api-tree"
 import { http } from "./verbs.ts"
 import { getHttpMeta, verbFromTags } from "./project.ts"
-import type { HttpDirective, HttpLeafMetaProperties } from "./project.ts"
+import type { HttpLeafMetaProperties } from "./project.ts"
 
 // ============================================================================
 // Helpers
@@ -35,13 +36,13 @@ function tags(n: ReturnType<typeof op>): Tags {
 }
 
 function verbDirective(n: ReturnType<typeof op>): string | undefined {
-  const http_ = n.meta.http as { directives: readonly HttpDirective[] } | undefined
-  return http_?.directives.find((d) => d.kind === "verb")?.value
+  const http_ = n.meta.http as { verb?: string } | undefined
+  return http_?.verb
 }
 
 function methodDirective(n: ReturnType<typeof op>): string | undefined {
-  const http_ = n.meta.http as { directives: readonly HttpDirective[] } | undefined
-  return http_?.directives.find((d) => d.kind === "method")?.value
+  const http_ = n.meta.http as { method?: string } | undefined
+  return http_?.method
 }
 
 // ============================================================================
@@ -51,11 +52,11 @@ function methodDirective(n: ReturnType<typeof op>): string | undefined {
 describe("http.put bundle", () => {
   const n = op(noop, http.put)
 
-  it("verb directive is PUT", () => {
+  it("verb flat key is PUT", () => {
     expect(verbDirective(n)).toBe("PUT")
   })
 
-  it("verbFromTags respects the verb directive → PUT (not tag-derived)", () => {
+  it("verbFromTags respects the verb flat key → PUT (not tag-derived)", () => {
     expect(verbFromTags(n.meta)).toBe("PUT")
   })
 
@@ -81,11 +82,11 @@ describe("http.put bundle", () => {
 describe("http.get bundle", () => {
   const n = op(noop, http.get)
 
-  it("verb directive is GET", () => {
+  it("verb flat key is GET", () => {
     expect(verbDirective(n)).toBe("GET")
   })
 
-  it("verbFromTags respects the verb directive → GET", () => {
+  it("verbFromTags respects the verb flat key → GET", () => {
     expect(verbFromTags(n.meta)).toBe("GET")
   })
 
@@ -111,7 +112,7 @@ describe("http.get bundle", () => {
 describe("http.delete bundle", () => {
   const n = op(noop, http.delete)
 
-  it("verb directive is DELETE", () => {
+  it("verb flat key is DELETE", () => {
     expect(verbDirective(n)).toBe("DELETE")
   })
 
@@ -141,7 +142,7 @@ describe("http.delete bundle", () => {
 describe("http.post bundle", () => {
   const n = op(noop, http.post)
 
-  it("verb directive is POST", () => {
+  it("verb flat key is POST", () => {
     expect(verbDirective(n)).toBe("POST")
   })
 
@@ -156,7 +157,7 @@ describe("http.post bundle", () => {
 describe("http.patch bundle", () => {
   const n = op(noop, http.patch)
 
-  it("verb directive is PATCH", () => {
+  it("verb flat key is PATCH", () => {
     expect(verbDirective(n)).toBe("PATCH")
   })
 
@@ -184,11 +185,11 @@ describe("op multi-contribution merge (bundle + extra)", () => {
     expect(tags(n).destructive).toBe(false)
   })
 
-  it("verb directive from bundle is preserved after merge", () => {
+  it("verb flat key from bundle is preserved after merge", () => {
     expect(verbDirective(n)).toBe("PUT")
   })
 
-  it("verbFromTags still resolves to PUT (verb directive wins)", () => {
+  it("verbFromTags still resolves to PUT (verb flat key wins)", () => {
     expect(verbFromTags(n.meta)).toBe("PUT")
   })
 
@@ -216,8 +217,8 @@ describe("op with no contributions", () => {
 // ============================================================================
 
 describe("http.head bundle", () => {
-  it("verb directive is HEAD", () => {
-    expect(http.head.http.directives.find((d) => d.kind === "verb")?.value).toBe("HEAD")
+  it("verb flat key is HEAD", () => {
+    expect(http.head.http.verb).toBe("HEAD")
   })
 
   it("carries readOnly tag", () => {
@@ -226,8 +227,8 @@ describe("http.head bundle", () => {
 })
 
 describe("http.options bundle", () => {
-  it("verb directive is OPTIONS", () => {
-    expect(http.options.http.directives.find((d) => d.kind === "verb")?.value).toBe("OPTIONS")
+  it("verb flat key is OPTIONS", () => {
+    expect(http.options.http.verb).toBe("OPTIONS")
   })
 
   it("carries readOnly tag", () => {
@@ -236,99 +237,86 @@ describe("http.options bundle", () => {
 })
 
 // ============================================================================
-// 8. `kind: "method"` directives — read by the HttpRoute rewriter pipeline
-// (applyMethods in route.ts), added ALONGSIDE the legacy `kind: "verb"`
-// directive (read by verbFromTags, the direct tree-walk projector) — both
-// describe the same fact for two different projectors, neither clobbers
-// the other.
+// 8. `method` flat key — read by the HttpRoute rewriter pipeline
+// (applyMethods in route.ts), set ALONGSIDE the `verb` flat key (read by
+// verbFromTags, the direct tree-walk projector) — both describe the same
+// fact for two different projectors, neither clobbers the other.
 // ============================================================================
 
-describe("http.* bundles carry a method directive alongside the verb directive", () => {
-  it("http.get: method directive is GET, verb directive is also GET", () => {
+describe("http.* bundles carry a method flat key alongside the verb flat key", () => {
+  it("http.get: method flat key is GET, verb flat key is also GET", () => {
     const n = op(noop, http.get)
     expect(methodDirective(n)).toBe("GET")
     expect(verbDirective(n)).toBe("GET")
   })
 
-  it("http.post: method directive is POST", () => {
+  it("http.post: method flat key is POST", () => {
     expect(methodDirective(op(noop, http.post))).toBe("POST")
   })
 
-  it("http.put: method directive is PUT", () => {
+  it("http.put: method flat key is PUT", () => {
     expect(methodDirective(op(noop, http.put))).toBe("PUT")
   })
 
-  it("http.patch: method directive is PATCH", () => {
+  it("http.patch: method flat key is PATCH", () => {
     expect(methodDirective(op(noop, http.patch))).toBe("PATCH")
   })
 
-  it("http.delete: method directive is DELETE", () => {
+  it("http.delete: method flat key is DELETE", () => {
     expect(methodDirective(op(noop, http.delete))).toBe("DELETE")
   })
 })
 
 // ============================================================================
 // 9. http.moveTo(path) — DX helper returning a plain Meta with a single
-// `moveTo` directive, designed to compose with a verb bundle via mergeMeta
-// (see route.ts § applyMoveTo for the directive itself).
+// `moveTo` flat key, designed to compose with a verb bundle via mergeMeta's
+// last-wins scalar merge (see route.ts § applyMoveTo for the directive itself).
 // ============================================================================
 
 describe("http.moveTo", () => {
   it("returns the expected Meta shape", () => {
     expect(http.moveTo("..")).toEqual({
-      http: { directives: [{ kind: "moveTo", path: ".." }] },
+      http: { moveTo: ".." },
     })
   })
 
-  it("mergeMeta(http.get, http.moveTo('..')) carries verb + method + moveTo directives", () => {
+  it("mergeMeta(http.get, http.moveTo('..')) carries verb + method + moveTo flat keys", () => {
     const merged = mergeMeta(http.get, http.moveTo(".."))
-    const directives = (merged.http as { directives: readonly HttpDirective[] }).directives
-    expect(directives).toEqual([
-      { kind: "verb", value: "GET" },
-      { kind: "method", value: "GET" },
-      { kind: "moveTo", path: ".." },
-    ])
+    expect(merged.http).toEqual({ verb: "GET", method: "GET", moveTo: ".." })
   })
 
-  it("op(fn, http.get, http.moveTo('..')) yields the same meta as manual directive construction", () => {
+  it("op(fn, http.get, http.moveTo('..')) yields the same meta as manual flat-key construction", () => {
     const n = op(noop, http.get, http.moveTo(".."))
     expect(methodDirective(n)).toBe("GET")
     expect(verbDirective(n)).toBe("GET")
-    const directives = (n.meta.http as { directives: readonly HttpDirective[] }).directives
-    expect(directives.find((d) => d.kind === "moveTo")).toEqual({ kind: "moveTo", path: ".." })
+    expect((n.meta.http as { moveTo?: string } | undefined)?.moveTo).toBe("..")
   })
 })
 
 // ============================================================================
-// 10. http.source(map) — per-param HTTP store overrides. A `{ kind: "source",
-// map }` directive (like moveTo/paginated), NOT a plain merged object on
-// meta.http.sourceMap — composing two http.source() calls concatenates their
-// directive entries (mergeMeta's array branch), which getHttpMeta then folds
-// back into one resolved sourceMap, in array order (later wins per key). See
-// verbs.ts's source() doc comment for why: mergeMeta's type-level counterpart
-// can't soundly merge two open Record<string, ParamSource> objects.
+// 10. http.source(map) — per-param HTTP store overrides. A bare, KEY-MERGED
+// `meta.http.sourceMap` map (like moveTo/paginated, a flat key), NOT a
+// directive array — composing two http.source() calls key-merges their maps
+// directly at op()'s own FoldMeta fold (later call's keys win on overlap).
+// See verbs.ts's source() doc comment for the empirical verification this
+// relies on (scratch tsc + bun run, during the http-directive-dissolution
+// migration).
 // ============================================================================
 
 function sourceMapOf(n: ReturnType<typeof op>): Record<string, ParamSource> | undefined {
   return getHttpMeta(n.meta).sourceMap as Record<string, ParamSource> | undefined
 }
 
-function sourceDirectives(meta: HttpLeafMetaProperties): readonly HttpDirective[] {
-  return (meta as { directives?: readonly HttpDirective[] }).directives ?? []
-}
-
 describe("http.source", () => {
   it("expands string shorthand to a full ParamSource, keyed by the param's own name", () => {
     expect(http.source({ year: "query" })).toEqual({
-      http: { directives: [{ kind: "source", map: { year: { store: "query", key: "year" } } }] },
+      http: { sourceMap: { year: { store: "query", key: "year" } } },
     })
   })
 
   it("passes the full form through unchanged", () => {
     expect(http.source({ months: { store: "body", key: "budgetMonths" } })).toEqual({
-      http: {
-        directives: [{ kind: "source", map: { months: { store: "body", key: "budgetMonths" } } }],
-      },
+      http: { sourceMap: { months: { store: "body", key: "budgetMonths" } } },
     })
   })
 
@@ -340,15 +328,10 @@ describe("http.source", () => {
       }),
     ).toEqual({
       http: {
-        directives: [
-          {
-            kind: "source",
-            map: {
-              year: { store: "query", key: "year" },
-              months: { store: "body", key: "budgetMonths" },
-            },
-          },
-        ],
+        sourceMap: {
+          year: { store: "query", key: "year" },
+          months: { store: "body", key: "budgetMonths" },
+        },
       },
     })
   })
@@ -358,15 +341,15 @@ describe("http.source", () => {
     expect(sourceMapOf(n)).toEqual({ year: { store: "query", key: "year" } })
   })
 
-  it("two http.source() calls concatenate as two directive entries", () => {
+  it("two http.source() calls key-merge into one sourceMap object (disjoint keys)", () => {
     const merged = mergeMeta(http.source({ year: "query" }), http.source({ months: "body" }))
-    expect(sourceDirectives(merged.http as HttpLeafMetaProperties)).toEqual([
-      { kind: "source", map: { year: { store: "query", key: "year" } } },
-      { kind: "source", map: { months: { store: "body", key: "months" } } },
-    ])
+    expect((merged.http as HttpLeafMetaProperties).sourceMap).toEqual({
+      year: { store: "query", key: "year" },
+      months: { store: "body", key: "months" },
+    })
   })
 
-  it("getHttpMeta folds two composed http.source() calls into one sourceMap (later wins per key)", () => {
+  it("getHttpMeta reads the already-merged sourceMap straight off meta.http (no read-time fold needed)", () => {
     const merged = mergeMeta(http.source({ year: "query" }), http.source({ months: "body" }))
     expect(getHttpMeta(merged).sourceMap).toEqual({
       year: { store: "query", key: "year" },
@@ -374,7 +357,7 @@ describe("http.source", () => {
     })
   })
 
-  it("a later http.source() call overrides an earlier one's key on overlap, once resolved", () => {
+  it("a later http.source() call overrides an earlier one's key on overlap — WHOLESALE (not field-merged), same key-merge semantics node.ts's mergeRecords depth-cap gives every map-shaped meta value", () => {
     const merged = mergeMeta(
       http.source({ year: { store: "query", key: "fiscal_year" } }),
       http.source({ year: "header" }),
@@ -418,18 +401,19 @@ describe("http.source", () => {
 // ============================================================================
 
 describe("http.source() preserves literal key/store association (§6)", () => {
-  it("a source() map's keys and stores survive as literal types on the directive", () => {
+  it("a source() map's keys and stores survive as literal types on meta.http.sourceMap", () => {
     const getBudget = (input: { year: string; months: string }) => input
     const n = op(getBudget, http.get, http.source({ year: "query" }), http.source({ months: { store: "body", key: "budgetMonths" } }))
 
-    // The literal association is what the type-level walk needs; before the
-    // `const M` redesign this was `Readonly<Record<string, ParamSource>>`.
-    type Directives = typeof n.meta extends { http: { directives: infer D } } ? D : never
-    expectTypeOf<FindStoreForParam<Directives, "year">>().toEqualTypeOf<"query">()
-    expectTypeOf<FindStoreForParam<Directives, "months">>().toEqualTypeOf<"body">()
-    // A param no source() directive names falls through to the path/convention
+    // The literal association is what the type-level read needs — walking
+    // `n.meta` directly (no directive tuple to extract anymore, see
+    // api-tree's input.ts's `FindStoreForParam`).
+    type Meta = typeof n.meta
+    expectTypeOf<FindStoreForParam<Meta, "year">>().toEqualTypeOf<"query">()
+    expectTypeOf<FindStoreForParam<Meta, "months">>().toEqualTypeOf<"body">()
+    // A param no source() call names falls through to the path/convention
     // steps, which are runtime-resolved — `never` is "not statically declared".
-    type NopeUnresolved = [FindStoreForParam<Directives, "nope">] extends [never] ? true : false
+    type NopeUnresolved = [FindStoreForParam<Meta, "nope">] extends [never] ? true : false
     expectTypeOf<NopeUnresolved>().toEqualTypeOf<true>()
 
     // Runtime agrees with the type.
@@ -439,12 +423,12 @@ describe("http.source() preserves literal key/store association (§6)", () => {
     })
   })
 
-  it("the LAST source() directive naming a param wins", () => {
+  it("the LAST source() call naming a param wins", () => {
     const getBudget = (input: { year: string }) => input
     const n = op(getBudget, http.source({ year: "query" }), http.source({ year: "header" }))
 
-    type Directives = typeof n.meta extends { http: { directives: infer D } } ? D : never
-    expectTypeOf<FindStoreForParam<Directives, "year">>().toEqualTypeOf<"header">()
+    type Meta = typeof n.meta
+    expectTypeOf<FindStoreForParam<Meta, "year">>().toEqualTypeOf<"header">()
 
     expect(sourceMapOf(n)).toEqual({ year: { store: "header", key: "year" } })
   })

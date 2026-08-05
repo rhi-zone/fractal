@@ -138,7 +138,7 @@ describe("validation() — createClient integration (in-process, no network)", (
   function makeTree(returnValue: unknown) {
     return api_({
       book: op((_: unknown) => returnValue, {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
   }
@@ -173,7 +173,7 @@ describe("validation() — createClient integration (in-process, no network)", (
 describe("generateClientFromNode — validation() codegen", () => {
   const tree = api_({
     book: op((_: unknown): { title: string; pages: number } => ({ title: "Dune", pages: 412 }), {
-      http: { directives: [{ kind: "method", value: "GET" }] },
+      http: { method: "GET" },
     }),
   })
 
@@ -212,7 +212,7 @@ describe("generateClientFromNode — validation() eval end-to-end against a real
     // against a real server round-trip, not just an in-memory Response.
     const badTree = api_({
       book: op((_: unknown): { title: string; pages: number } => ({ title: "Dune" }) as never, {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const source = generateClientFromNode(badTree, schemas, { extensions: [validation()] })

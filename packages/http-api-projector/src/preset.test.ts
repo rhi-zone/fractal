@@ -16,15 +16,15 @@ import type { Fetch } from "./layers.ts"
 
 const usersNode = api_({
   // `moveTo` with a plain relative segment doubles as a path/segment
-  // rename (see project.ts's HttpDirective docs) — the base position
+  // rename (see route.ts's `applyMoveTo`) — the base position
   // `applyMoveTo` resolves relative to already excludes the node's own
   // key, so a bare token just replaces it.
   listUsers: op((_: unknown) => [{ id: 1, name: "Alice" }], {
     tags: { readOnly: true },
-    http: { directives: [{ kind: "method", value: "GET" }, { kind: "moveTo", path: "../list" }] },
+    http: { method: "GET", moveTo: "../list" },
   }),
   createUser: op((input: { name: string }) => ({ id: 2, name: input.name }), {
-    http: { directives: [{ kind: "moveTo", path: "../create" }] },
+    http: { moveTo: "../create" },
   }),
 })
 
@@ -109,7 +109,7 @@ describe("OOTB preset — slug threading (provenance-blind)", () => {
                     capturedInput = input
                     return { ok: true }
                   },
-                  { tags: { idempotent: true }, http: { directives: [{ kind: "method", value: "PUT" }] } },
+                  { tags: { idempotent: true }, http: { method: "PUT" } },
                 ),
               }),
           } }),
@@ -230,7 +230,7 @@ describe("OOTB preset — validation via applyValidation + rewriters", () => {
   it("applyValidation, wired via a rewriter onto the projected tree, runs parse() before the handler", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const applyValidation = createApplyValidation({ test: { widgets: okEntry() } })
@@ -246,7 +246,7 @@ describe("OOTB preset — validation via applyValidation + rewriters", () => {
   it("a rejecting generated validator's err Result surfaces as a 400 with the structured errors — no dedicated 500 special-case needed", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const applyValidation = createApplyValidation({ test: { widgets: rejectingEntry() } })
@@ -263,9 +263,9 @@ describe("OOTB preset — validation via applyValidation + rewriters", () => {
   it("a leaf with no matching validator entry passes through untouched", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
-      other: op((_: unknown) => ({ ok: true }), { http: { directives: [{ kind: "method", value: "GET" }] } }),
+      other: op((_: unknown) => ({ ok: true }), { http: { method: "GET" } }),
     })
     const applyValidation = createApplyValidation({ test: { widgets: okEntry() } })
 
@@ -280,7 +280,7 @@ describe("OOTB preset — validation via applyValidation + rewriters", () => {
   it("an unknown key is the pre-codegen stub case — the tree passes through unchanged", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     // A stub `createApplyValidation({})` — no key registered yet, matching
@@ -354,7 +354,7 @@ describe("OOTB preset — als", () => {
       whoami: op((_: unknown) => {
         observedInsideHandler = storage.getStore()?.requestId
         return { ok: true }
-      }, { http: { directives: [{ kind: "method", value: "GET" }] } }),
+      }, { http: { method: "GET" } }),
     })
 
     const f = createFetch(alsNode, {
@@ -373,7 +373,7 @@ describe("OOTB preset — als", () => {
       whoami: op((_: unknown) => {
         observedInsideHandler = storage.getStore()?.requestId
         return { ok: true }
-      }, { http: { directives: [{ kind: "method", value: "GET" }] } }),
+      }, { http: { method: "GET" } }),
     })
 
     const f = createFetch(alsNode, {
@@ -393,7 +393,7 @@ describe("OOTB preset — als", () => {
       whoami: op((_: unknown) => {
         observedInsideHandler = storage.getStore()?.userId
         return { ok: true }
-      }, { http: { directives: [{ kind: "method", value: "GET" }] } }),
+      }, { http: { method: "GET" } }),
     })
 
     const lookupUserFromCookie = async (req: Request): Promise<{ userId: string }> => {
@@ -611,7 +611,7 @@ describe("OOTB preset — handlerMiddleware", () => {
 describe("OOTB preset — detection", () => {
   const resultLikeApi = api_({
     getThing: op((_: unknown) => ({ kind: "ok", value: 42 }), {
-      http: { directives: [{ kind: "method", value: "GET" }] },
+      http: { method: "GET" },
     }),
   })
 
@@ -635,7 +635,7 @@ describe("OOTB preset — detection", () => {
   }
   const streamingApi = api_({
     getStream: op((_: unknown) => gen(), {
-      http: { directives: [{ kind: "method", value: "GET" }] },
+      http: { method: "GET" },
     }),
   })
 

@@ -5,11 +5,10 @@ import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
 import { crud, httpProjection } from "./dx.ts"
 import { naiveTransform } from "./route.ts"
-import type { HttpDirective } from "./project.ts"
 
 function methodDirective(n: Node): string | undefined {
-  const http_ = n.meta.http as { directives: readonly HttpDirective[] } | undefined
-  return http_?.directives.find((d) => d.kind === "method")?.value
+  const http_ = n.meta.http as { method?: string } | undefined
+  return http_?.method
 }
 
 // ============================================================================

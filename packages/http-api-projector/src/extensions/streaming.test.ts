@@ -160,7 +160,7 @@ describe("streaming() — createClient integration (in-process, no network)", ()
 
   const streamNode = api_({
     generate: op((_: unknown) => gen(), {
-      http: { directives: [{ kind: "method", value: "GET" }] },
+      http: { method: "GET" },
     }),
   })
 
@@ -201,7 +201,7 @@ describe("streaming() — createClient integration (in-process, no network)", ()
 describe("generateClient — streaming() codegen", () => {
   const tree = api_({
     generate: op((_: unknown): unknown[] => [], {
-      http: { directives: [{ kind: "method", value: "GET" }] },
+      http: { method: "GET" },
     }),
   })
   const route = httpProjection(tree)
@@ -247,7 +247,7 @@ describe("generateClient — streaming() eval end-to-end against a real server",
 
   const streamNode = api_({
     generate: op((_: unknown) => gen(), {
-      http: { directives: [{ kind: "method", value: "GET" }] },
+      http: { method: "GET" },
     }),
   })
 

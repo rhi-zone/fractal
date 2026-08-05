@@ -200,7 +200,7 @@ describe("oidcServer wired through authLayer/authMiddleware", () => {
 
     const tree = api({
       whoami: op((_: unknown) => ({ sub: storage.getStore()?.sub ?? null }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     })
     const fetchHandler = createFetch(tree, {
