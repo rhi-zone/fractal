@@ -1347,12 +1347,24 @@ CLI's argv profile, the string form staying untouched by this check, and the
 exactness-gap case below.
 
 **Exactness finding (task instructions asked this be verified precisely, not
-hand-waved) — NOT fully exact; the gap is real but narrow.** `op()` cannot
-see the tree a leaf will end up mounted under, so a field with NO explicit
-`sourceMap` entry could, in principle, resolve to either a path-slug match
-(unknowable at `op()` time) or the protocol's own default store. Whether
-that ambiguity forces an actual type-level UNION depends on whether "path"
-and the default store happen to share a wire profile:
+hand-waved) — NOT fully exact; the gap is real but narrow.** A field with NO
+explicit `sourceMap` entry could, in principle, resolve to either a
+path-slug match or the protocol's own default store — and `op()` cannot
+resolve which, regardless of `moveTo`. Per 24bd2af (`fix(http-api-projector):
+moveTo no longer affects input binding`, landed the session before this one),
+a leaf's path-slug binding is now a pure function of its AUTHORED ancestry
+(the local, pre-moveTo path segments it's nested under), not of where
+`moveTo` eventually relocates it — `wire-derive.ts`'s codegen can see that
+authored ancestry exactly, because it statically walks the whole call-site
+tree (see that module's own header comment and this doc's phase-B
+supersession note above). `op()`'s own type-level check has no equivalent
+visibility: it type-checks the leaf in isolation, before the leaf is ever
+composed into a tree, so it has no way to know whether the field it's
+declaring will later be nested under a same-named path slug. The ambiguity
+is `op()`'s own ancestry-blindness at invocation time — a structural gap
+distinct from (and unaffected by) moveTo — not a "future mount position"
+question. Whether that ambiguity forces an actual type-level UNION depends
+on whether "path" and the default store happen to share a wire profile:
 
 - **CLI**: `cliStoreEncoding` is CONSTANT — every store (`flag`/`path`/`env`)
   maps to `argvProfile`. "path" and CLI's default store (`flag`) ALWAYS
@@ -1372,18 +1384,19 @@ and the default store happen to share a wire profile:
   when it can't statically rule out a path-slug match").
 
 Concretely, what this MISSES and ALLOWS: it doesn't (can't) tell the author
-which of the two shapes their leaf will actually receive once mounted, so a
-decoder narrower than the full union is rejected even if the leaf's real
-tree position would only ever deliver one of the two shapes (a false
-positive, in the "too strict" direction) — and a decoder that DOES handle
-both shapes is accepted even for a leaf whose real mount position only ever
-delivers one (safe, but not maximally precise). Both are the SOUND-but-
-imprecise side of a genuine "`op()` cannot see the tree" structural block —
-not a bug, and not a gap that widens unsoundly (the union is a real
-over-approximation of the two ACTUAL candidate shapes, never wider than
-that). `input.ts`'s `ResolvedStoresForField`/`EncodingMapWireOf` doc
-comments carry this finding in full, and `wire-of-check.test.ts`'s "the real
-exactness gap" test demonstrates it directly against a real `op()` call.
+which of the two shapes their leaf will actually receive once composed into a
+tree, so a decoder narrower than the full union is rejected even if the
+leaf's authored ancestry would only ever deliver one of the two shapes (a
+false positive, in the "too strict" direction) — and a decoder that DOES
+handle both shapes is accepted even for a leaf whose authored ancestry only
+ever delivers one (safe, but not maximally precise). Both are the SOUND-but-
+imprecise side of a genuine "`op()` cannot see its own authored ancestry at
+invocation time" structural block — not a bug, and not a gap that widens
+unsoundly (the union is a real over-approximation of the two ACTUAL
+candidate shapes, never wider than that). `input.ts`'s
+`ResolvedStoresForField`/`EncodingMapWireOf` doc comments carry this finding
+in full, and `wire-of-check.test.ts`'s "the real exactness gap" test
+demonstrates it directly against a real `op()` call.
 
 ### Tests added this phase
 
