@@ -442,6 +442,28 @@ export { compileValidator, compileValidatorModule, typeRefToString, type Validat
 // Split out of `compileValidatorModule`'s single-pass codegen so a caller can
 // recompile only the leaves whose IR fingerprint changed and reassemble the
 // module from a mix of freshly-compiled and carried-forward fragments.
+// Wire profiles + staged validation (Wire -> ValidWire -> T -> valid T) — see
+// docs/design/wire-profiles-and-staged-validation.md and compile.ts's own
+// "Wire profiles + staged validation" section doc comment. Additive: none of
+// this changes `compileValidator`/`compileValidatorModule`/`compileEntryFragment`
+// above, which remain the strict, profile-blind path they always were.
+export {
+  argvProfile,
+  assembleWireModule,
+  compileConstraintsFn,
+  compileWireEntryFragment,
+  compileWireModule,
+  identityProfile,
+  jsonProfile,
+  queryProfile,
+  type CompiledConstraintsFn,
+  type CompiledWireEntryFragment,
+  type WireLeafHandler,
+  type WireProfile,
+  wireTypeText,
+  wireValidatorKey,
+} from "./compile.ts"
+
 export {
   assembleValidatorModule,
   compileDefsBlock,
