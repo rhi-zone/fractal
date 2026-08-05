@@ -21,7 +21,7 @@
 // first well-factored version of that pipeline, since generalized so CLI and
 // MCP projectors can share it). Re-exported below for backward compat.
 
-export type { Store, Stores, ParamSource, SourceMap } from "@rhi-zone/fractal-api-tree"
+export type { Store, Stores, ParamSource, SourceMap, EncodingMap } from "@rhi-zone/fractal-api-tree"
 export { assemble } from "@rhi-zone/fractal-api-tree"
 
 import type { ServiceStores, Store, Stores } from "@rhi-zone/fractal-api-tree"

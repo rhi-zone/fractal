@@ -58,7 +58,7 @@
 import { makeRouterFromRoute, naiveTransform } from "./route.ts"
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import type { SourceMap, StandardSchemaV1 } from "./decode.ts"
+import type { EncodingMap, SourceMap, StandardSchemaV1 } from "./decode.ts"
 // `Fetch` is layers.ts's own type (`(req: Request) => Promise<Response>`) —
 // reused here, not redeclared (see `HttpSharedMetaProperties`'s `middleware`
 // field doc below). Type-only: layers.ts VALUE-imports `allowHeader` from
@@ -176,6 +176,24 @@ export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
    * own doc comment (verbs.ts) for the empirical verification.
    */
   readonly sourceMap?: SourceMap
+  /**
+   * Keyed partial contribution — per-field wire-encoding overrides layered
+   * on top of `sourceMap`'s per-field STORE choice (phase B/E, docs/design/
+   * wire-profiles-and-staged-validation.md). A flat MAP key: key-merged,
+   * later call's keys win on overlap, same convention `sourceMap` above
+   * follows. Each entry is either a base-profile-name STRING (overriding
+   * that field's derived wire profile outright — `wire-derive.ts`'s
+   * `deriveFieldProfiles` result, overridden per-field by
+   * `extractWireApplyValidationTypeRefs`, api-tree's apply-validation-
+   * build.ts) or a custom decoder FUNCTION run at WRAP time instead of the
+   * fused default decode (`createApplyValidation`, api-tree's
+   * apply-validation.ts). Declared here structurally (see `EncodingMap`'s
+   * own doc comment, api-tree's input.ts) — a function entry's own param/
+   * return types are checked separately, against the literal object passed
+   * to `op()`, by `MismatchedEncodingMapDecoders`/`CheckedContributions`
+   * (api-tree's input.ts/node.ts), not by this declared field type.
+   */
+  readonly encodingMap?: EncodingMap
 }
 
 /** Wraps `HttpLeafMetaProperties` under the `http` key — extend `LeafMeta` with this in a deployment's augmentation file. */

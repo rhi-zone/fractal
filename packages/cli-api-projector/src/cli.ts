@@ -61,7 +61,15 @@ import {
   isStreamProgress,
   matchKind,
 } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, Page, ProjectorStores, SourceMap, Store } from "@rhi-zone/fractal-api-tree"
+import type {
+  DetectionOptions,
+  EncodingMap,
+  ErrorEncoder,
+  Page,
+  ProjectorStores,
+  SourceMap,
+  Store,
+} from "@rhi-zone/fractal-api-tree"
 
 /**
  * CLI's own store-name fragment: an INERT, plain interface naming the stores
@@ -403,6 +411,21 @@ export type CliLeafMetaProperties = CliSharedMetaProperties & {
    * resolve via the normal flag/slug convention.
    */
   readonly sourceMap?: SourceMap
+  /**
+   * Keyed partial contribution — per-field wire-encoding overrides layered
+   * on top of `sourceMap`'s per-field STORE choice (phase B/E, docs/design/
+   * wire-profiles-and-staged-validation.md), mirroring HTTP's own
+   * `encodingMap` (`HttpLeafMetaProperties`, http-api-projector's
+   * project.ts). Each entry is either a base-profile-name STRING
+   * (overriding that field's derived wire profile outright) or a custom
+   * decoder FUNCTION run at WRAP time instead of the fused default decode.
+   * Declared here structurally (see `EncodingMap`'s own doc comment,
+   * api-tree's input.ts) — a function entry's own param/return types are
+   * checked separately, against the literal object passed to `op()`, by
+   * `MismatchedEncodingMapDecoders`/`CheckedContributions` (api-tree's
+   * input.ts/node.ts), not by this declared field type.
+   */
+  readonly encodingMap?: EncodingMap
   /**
    * Overrides the input field names `--all-pages` merges the next cursor/
    * offset into, when this leaf's result is page-shaped (`CursorPage<T>`/

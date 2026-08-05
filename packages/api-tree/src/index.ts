@@ -52,6 +52,7 @@ export type {
   CallerStoreShape,
   CoreStores,
   DeclaredSourceParams,
+  EncodingMap,
   FindStoreForParam,
   InputKeys,
   ParamSource,

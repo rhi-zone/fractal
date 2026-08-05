@@ -18,7 +18,7 @@
 // convention: GET/HEAD/DELETE → "query", POST/PUT/PATCH → "body", with
 // route-slug params always from "path".
 
-import type { WireOf } from "@rhi-zone/fractal-type-ir"
+import type { WireOf, WireProfileName } from "@rhi-zone/fractal-type-ir"
 
 // ============================================================================
 // Store interface
@@ -192,6 +192,34 @@ export interface ParamSource {
  * diverge from the convention; all others follow the primary-store rule.
  */
 export type SourceMap = Readonly<Record<string, ParamSource>>
+
+/**
+ * One `meta.<NS>.encodingMap` entry's two authorable shapes (phase B/E,
+ * docs/design/wire-profiles-and-staged-validation.md): a base-profile-name
+ * STRING (`WireProfileName` — `"identity" | "json" | "query" | "argv"`)
+ * naming one of type-ir's uniform wire profiles outright, or a custom
+ * decoder FUNCTION run at WRAP time (`apply-validation.ts`'s
+ * `createApplyValidation`) instead of the fused default decode — see
+ * `readMetaEncodingMapProfileNames`/`readMetaEncodingMapFunctionFields`
+ * (tree.ts) for how codegen reads each form off a leaf's own `meta`
+ * statically.
+ *
+ * The function arm is typed maximally permissively (`(w: never) =>
+ * unknown`, assignable-from any concrete decoder signature by ordinary
+ * function-type contravariance) rather than pinned to a specific `(w: X) =>
+ * Y` — this field's declared type only needs to answer "is a callable
+ * allowed here at all", the same EXISTENCE-only question
+ * `readMetaEncodingMapFunctionFields` asks of the checker; a REAL decoder's
+ * own param/return types are checked elsewhere, against the literal object
+ * actually passed to `op()`, never against this declared field type (see
+ * `MismatchedEncodingMapDecoders`/`EncodingMapWireOf` below, and
+ * `SourceMapInput`'s own doc comment two sections down for the general
+ * "declared-field-type vs. checked-literal" split this mirrors for
+ * `sourceMap`). Pinning it narrower here would buy nothing (the exactness
+ * check already lives downstream) and would risk exactly the kind of
+ * widening-through-a-typed-intermediate hazard that comment warns about.
+ */
+export type EncodingMap = Readonly<Record<string, WireProfileName | ((w: never) => unknown)>>
 
 // ============================================================================
 // source() authoring helper — shared machinery for every protocol's
