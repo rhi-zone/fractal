@@ -197,9 +197,9 @@ export type SourceMap = Readonly<Record<string, ParamSource>>
 // docs/design/typed-store-spec.md §6 splits "where does this param come from"
 // by how much of it `op()` can see at its own call site. Only ONE of the three
 // resolution steps is statically visible there: the per-param overrides a
-// `source()`-style helper declares, which live in the leaf's own meta as
-// `{ kind: "source", map }` directives. The other two are NOT, and are not
-// papered over here:
+// `source()`-style helper declares, which live in the leaf's own meta as a
+// flat, namespaced `sourceMap` key (`meta.http.sourceMap`, `meta.cli.sourceMap`,
+// …). The other two are NOT, and are not papered over here:
 //
 //   - a PATH-param match depends on where the leaf is mounted in the tree, which
 //     is a property of the tree passed to `api()`, not of the leaf's own `op()`
@@ -213,10 +213,22 @@ export type SourceMap = Readonly<Record<string, ParamSource>>
 // when the route tree is built, the first point at which mount position and a
 // codegen'd `paramNames` list both exist.
 //
-// These types are projector-BLIND: they key off the `{ kind: "source", map }`
+// These types are projector-BLIND: they key off the `{ sourceMap: SourceMap }`
 // shape, whose vocabulary (`ParamSource`/`SourceMap`) this module already owns,
 // and never off any particular projector's meta namespace — the walk looks for
-// a `directives` tuple under ANY namespace of the folded meta.
+// a `sourceMap` field under ANY namespace of the folded meta, unioning every
+// namespace that declares one (a leaf shared across two protocols may carry
+// independent overrides under each protocol's own namespace, e.g. both
+// `meta.http.sourceMap` and `meta.cli.sourceMap`).
+//
+// Simpler than the directive-array-era version this replaces (pre the http-
+// directive-dissolution migration, docs/design/wire-profiles-and-staged-
+// validation.md's "Prerequisite: meta unification" section): there is no
+// tuple to walk and no "last match wins" scan, because `mergeMeta`/`FoldMeta`
+// (node.ts) already resolve N composed `source()`-style contributions into
+// ONE flat `sourceMap` value, last-wins per key, before this module ever sees
+// it (node.ts's `MergeMetaValue`/`mergeRecords` doc comments cover the depth-
+// capped "keyed, whole-value-replace" merge this relies on).
 // ============================================================================
 
 /**
@@ -226,61 +238,91 @@ export type SourceMap = Readonly<Record<string, ParamSource>>
  */
 export type InputKeys<H> = H extends (input: infer I) => any ? keyof I : never
 
-/** The `directives` tuple(s) carried by any namespace of a folded meta object. */
-type DirectivesOf<Meta> = Meta[keyof Meta] extends infer NS
-  ? NS extends { readonly directives: infer D } ? D : never
+/**
+ * `T`'s own EXPLICIT keys only — drops an index signature's own contribution
+ * to `keyof T` (which is exactly the primitive `string`/`number` itself,
+ * never a literal), via a key-remapping `as` clause: for a real literal key
+ * `K` (e.g. `"http"`), `string extends K` is false, so it survives; for the
+ * index signature's own synthetic membership in `keyof T` (`K` = `string`
+ * itself), `string extends K` is true, so it's excluded. Needed because
+ * `Node["meta"]`'s own declared field type (and `op()`'s return type) is
+ * `SharedMeta & { readonly [key: string]: unknown }` (node.ts's `Widen`) —
+ * without this filter, `keyof` a Widened meta object collapses to bare
+ * `string` (the literal keys are absorbed into the wider index signature),
+ * which in turn collapses `T[keyof T]` to `unknown` — verified empirically
+ * (scratch `tsc`) to silently break `SourceMapsOf` below for the exact shape
+ * `typeof someNode.meta` produces, not just some contrived edge case.
+ */
+type OwnKeys<T> = { [K in keyof T as string extends K ? never : K]: T[K] }
+
+/**
+ * The `sourceMap` value(s) carried by any namespace of a folded meta object —
+ * a union across every namespace that declares one (`OwnKeys<Meta>[keyof
+ * OwnKeys<Meta>]` distributes over the namespace-key union, e.g. `http` and
+ * `tags`; only a namespace actually shaped `{ sourceMap: ... }` contributes a
+ * member, everything else resolves to `never` and drops out of the union).
+ * Filtered through `OwnKeys` (above) so this works identically whether `Meta`
+ * is the clean `FoldMeta<C>` `op()`'s own static check uses, or the Widened
+ * `typeof node.meta` a caller might reasonably pass instead.
+ */
+type SourceMapsOf<Meta> = OwnKeys<Meta>[keyof OwnKeys<Meta>] extends infer NS
+  ? NS extends { readonly sourceMap: infer M } ? M : never
   : never
 
 /**
- * Resolve which store param `P` reads from, given a tuple of meta directives —
- * LAST match wins, matching the "later call's keys win on overlap" semantics a
- * `source()` helper's own doc specifies and `getHttpMeta` implements at read
- * time. `never` when no `source` directive names `P` at all (i.e. `P` falls
+ * Resolve which store param `P` reads from, given a folded `Meta` object —
+ * reads each namespace's flat `sourceMap` directly (see module doc above for
+ * why there's no tuple to walk or "last wins" scan anymore: `mergeMeta`
+ * already resolved that before `op()`'s own contributions reach here).
+ * `never` when no namespace's `sourceMap` names `P` at all (i.e. `P` falls
  * through to the path/convention steps, which are runtime-resolved).
  *
- * Walks from the END of the tuple (`[...infer Init, infer Last]`) so the first
- * hit IS the last-declared one, no accumulator needed.
+ * `NS extends unknown` re-distributes over `SourceMapsOf<Meta>`'s own union
+ * (multiple namespaces, e.g. `http` and `cli`, each independently declaring
+ * `P`) so a match under ANY namespace is found, not just the first.
  *
- * Skips any directive whose map is type-ERASED (`string extends keyof M`) for
- * the same reason `SourceParamsOfDirective` does — and it matters more here,
- * because `Last` is a naked inferred parameter, so this conditional DISTRIBUTES
- * over a directive tuple element that is itself a union (a verb bundle types its
- * elements as the whole directive DU, whose `source` member has an erased map).
- * Without the guard, every param would "resolve" to `string` via that member.
+ * Skips any `sourceMap` that is type-ERASED (`string extends keyof M`) for
+ * the same reason `DeclaredSourceParams` does: a producer typed as the open
+ * DU (rather than the exact variant it constructs, see
+ * docs/design/wire-profiles-and-staged-validation.md's "Exact-variant
+ * hygiene") would otherwise phantom-contribute an index-signature map whose
+ * `keyof` is `string`, resolving every param to a false match. An erased map
+ * carries no per-key information to check against, so contributing nothing is
+ * also the honest answer.
  */
-export type FindStoreForParam<D, P extends string> = D extends readonly [...infer Init, infer Last]
-  ? Last extends { readonly kind: "source"; readonly map: infer M }
-    ? string extends keyof M
-      ? FindStoreForParam<Init, P>
-      : P extends keyof M
-        ? M[P] extends { readonly store: infer S } ? S : never
-        : FindStoreForParam<Init, P>
-    : FindStoreForParam<Init, P>
+export type FindStoreForParam<Meta, P extends string> = SourceMapsOf<Meta> extends infer NS
+  ? NS extends unknown
+    ? string extends keyof NS
+      ? never
+      : P extends keyof NS
+        ? NS[P] extends { readonly store: infer S } ? S : never
+        : never
+    : never
   : never
 
 /**
- * The param names ONE directive declares overrides for — `never` for any
- * directive that isn't a `source`, and `never` for a `source` whose map is
- * type-ERASED (an index-signature `SourceMap`, i.e. `string extends keyof M`).
+ * Every param name any namespace's `sourceMap` in `Meta` declares an override
+ * for — `never` for a `sourceMap` that is type-ERASED (an index-signature
+ * `SourceMap`, i.e. `string extends keyof M`).
  *
- * That erased-map guard is load-bearing, not defensive: a verb bundle types its
- * directives tuple as the whole `HttpDirective` UNION, which structurally
- * includes the `source` member, so without it every `op(fn, http.get)` would
- * see a phantom source directive whose `keyof map` is `string` and fail the
- * coverage check. An erased map carries no per-key information to check
- * against, so contributing nothing is also the honest answer.
+ * That erased-map guard is load-bearing, not defensive: a producer typed as
+ * the open DU rather than the exact variant it constructs would otherwise
+ * phantom-contribute a `sourceMap` whose `keyof` is `string`, failing the
+ * coverage check for every param. Exact-variant hygiene (verb bundles and
+ * every other `http.*` producer typed as the precise shape they build, never
+ * the open union) is what keeps this guard from ever firing in practice — see
+ * `VerbBundle`'s doc comment (http-api-projector's verbs.ts).
  *
- * Distributes over a union of directives (naked `T`), so N `source()` calls
- * yield the UNION of their declared params — not, as a non-distributed
- * `keyof (M1 | M2)` would, their intersection.
+ * Distributes over `SourceMapsOf<Meta>`'s own union (naked `NS`), so N
+ * namespaces (or, before folding, N `source()`-style contributions already
+ * folded into one `sourceMap` per namespace) yield the UNION of their
+ * declared params — not, as a non-distributed `keyof (M1 | M2)` would, their
+ * intersection.
  */
-type SourceParamsOfDirective<T> = T extends { readonly kind: "source"; readonly map: infer M }
-  ? string extends keyof M ? never : keyof M & string
-  : never
-
-/** Every param name any `source` directive in `Meta` declares an override for. */
-export type DeclaredSourceParams<Meta> = DirectivesOf<Meta> extends infer D
-  ? D extends readonly unknown[] ? SourceParamsOfDirective<D[number]> : never
+export type DeclaredSourceParams<Meta> = SourceMapsOf<Meta> extends infer NS
+  ? NS extends unknown
+    ? string extends keyof NS ? never : keyof NS & string
+    : never
   : never
 
 /**

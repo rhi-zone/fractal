@@ -38,7 +38,7 @@ import type { UncoveredSourceParams } from "./input.ts"
  * tree position where they're actually meaningful.
  *
  * Two uses co-exist in this bag:
- *   1. Projection namespaces: `meta.http = { dispatch: {...}, directives: [...] }`
+ *   1. Projection namespaces: `meta.http = { method: "GET", sourceMap: {...} }`
  *   2. Agnostic behavioral tags: `meta.tags = { readOnly: true }`
  *
  * Types (+ JSDoc) are the truth for domain data. This bag is ONLY for
@@ -169,6 +169,20 @@ type Widen<T> = T & { readonly [key: string]: unknown }
  * the cap, `MergeMetaValue` takes the plain-override branch (`B` wins) —
  * losing recursive-merge precision for that deep a nesting, never losing the
  * value itself.
+ *
+ * This is also what gives a THREE-level-deep map-shaped value (`Meta -> http
+ * -> sourceMap -> { store, key? }`, e.g. two composed `http.source()` calls
+ * naming the same param) correct "keyed, last-wins, whole-value-replace"
+ * merge semantics FOR FREE, with no separate branch: `sourceMap`'s own keys
+ * (param names) merge via the ordinary `Omit`/`Pick` machinery one level up
+ * (Depth 1, well inside the cap), but the VALUE two overlapping keys carry
+ * (a single param's `ParamSource`) is compared at Depth 2 — the cap — so it
+ * resolves via the plain-override branch (`B` wins WHOLESALE), never a
+ * partial field-by-field merge of `{store, key?}`. Verified empirically
+ * (scratch `tsc`) during the http-directive-dissolution migration, which
+ * first exercised a real 3-level meta object this deep; `mergeRecords`
+ * (below) is depth-capped to match this EXACTLY, closing a latent runtime/
+ * type divergence the same scratch check surfaced (see its own doc comment).
  */
 type MergeMetaValue<A, B, Depth extends readonly unknown[] = []> = B extends undefined
   ? A
@@ -364,10 +378,32 @@ export const isLeaf = (n: Node): boolean => n.handler !== undefined
  * Recursively merge two record-like values with precedence: `value` wins
  * per key. Plain objects merge deeper; arrays concatenate; anything else
  * (including a type mismatch) resolves to `value`.
+ *
+ * `depth` caps object recursion at 2 levels, mirroring `MergeMetaValue`'s own
+ * `Depth` cap (below) EXACTLY — not just in spirit. This parity was verified
+ * empirically (scratch `tsc` + `bun run`, during the http-directive-dissolution
+ * migration that first exercised a THREE-level-deep object merge — `meta.http
+ * .sourceMap`'s own per-param `ParamSource` values, `Meta -> http -> sourceMap
+ * -> { store, key? }`): before this cap existed, an UNBOUNDED runtime
+ * recursion here silently diverged from the type-level fold's already-capped
+ * result. Concretely: composing two `http.source()` calls whose maps both
+ * name the same param, where the LATER call's `ParamSource` omits `key`
+ * (relying on `assemble()`'s own "defaults to param name when omitted"),
+ * merged the two `ParamSource` objects FIELD BY FIELD at runtime — silently
+ * resurrecting the FIRST call's stale `key` — while the type-level fold
+ * (already depth-capped) correctly reported the later call's value winning
+ * WHOLESALE, with no `key` field at all. Capping the runtime recursion here
+ * closes that gap: at depth 2, a later value now replaces an earlier one
+ * WHOLESALE (never field-merged), the same "whole value wins" resolution the
+ * type-level cap already computes — which is also the exact semantics a
+ * keyed map of opaque per-key values (`sourceMap`'s own per-param entries)
+ * needs: union the KEYS (param names), but never partially merge the VALUE
+ * (a single param's `ParamSource`) two contributions both set.
  */
 function mergeRecords(
   existing: Record<string, unknown>,
   value: Record<string, unknown>,
+  depth = 0,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...existing }
   for (const [key, v] of Object.entries(value)) {
@@ -376,10 +412,11 @@ function mergeRecords(
     if (Array.isArray(e) && Array.isArray(v)) {
       out[key] = [...e, ...v]
     } else if (
+      depth < 2 &&
       typeof e === "object" && e !== null && !Array.isArray(e) &&
       typeof v === "object" && v !== null && !Array.isArray(v)
     ) {
-      out[key] = mergeRecords(e as Record<string, unknown>, v as Record<string, unknown>)
+      out[key] = mergeRecords(e as Record<string, unknown>, v as Record<string, unknown>, depth + 1)
     } else {
       out[key] = v
     }
