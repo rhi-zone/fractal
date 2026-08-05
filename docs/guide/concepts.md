@@ -100,16 +100,17 @@ Node --naiveTransform--> HttpRoute --applyMethods, applyMoveTo, applyResponse-->
 
 - **`naiveTransform`** — the mechanical baseline: every child becomes a path-segment
   child, every handler becomes a single `POST` entry in `methods`.
-- **`applyMethods`** — reads `{ kind: "method", value }` directives (set by `http.*`
+- **`applyMethods`** — reads the flat `meta.http.method` scalar key (set by `http.*`
   verb bundles or written by hand) and renames a method entry's key from `POST` to the
   right verb.
-- **`applyMoveTo`** — reads `{ kind: "moveTo", path }` directives and repositions a
+- **`applyMoveTo`** — reads the flat `meta.http.moveTo` scalar key and repositions a
   subtree within the route tree using relative-path algebra (`.`/`..`/`../name`/`*`).
   Leaves that converge on the same target position (the REST-resource pattern: several
   operations at one path, distinguished by verb) merge there; a real verb collision
   throws.
-- **`applyResponse`** — reads `{ kind: "response", status?, headers? }` directives and
-  wraps the handler (function composition, not metadata) to produce the override.
+- **`applyResponse`** — reads the flat `meta.http.response` scalar key
+  (`{ status?, headers? }`) and wraps the handler (function composition, not
+  metadata) to produce the override.
 
 `httpProjection(tree)` (`packages/http-api-projector/src/dx.ts`) is the one-call preset
 composing all three rewriters over `naiveTransform`'s output; `crud(handlers)` is the
@@ -206,9 +207,8 @@ idempotent = true, destructive ≠ true     → PUT
 else                                      → POST  (conservative default)
 ```
 
-An explicit `{ kind: "verb", value }` entry in `meta.http.directives` (set by an
-`http.*` bundle, or by hand) is an escape hatch that overrides the derived verb when
-needed — checked before tags.
+An explicit `meta.http.verb` flat key (set by an `http.*` bundle, or by hand) is an
+escape hatch that overrides the derived verb when needed — checked before tags.
 
 The `http.*` verb helpers (`http.get`, `http.put`, `http.post`, `http.patch`,
 `http.delete`) are **metadata value bundles**: each sets both the verb pin and the

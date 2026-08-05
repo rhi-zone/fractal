@@ -4,8 +4,8 @@
 // `http.delete`, `http.head`, `http.options`.
 //
 // Each helper is a METADATA VALUE (a leaf meta contribution value), NOT a function. It bundles:
-//   - the verb pin (a `{kind:"verb",value}` directive in `meta.http.directives`)
-//     — wins over tag-derived verb in verbFromTags
+//   - the verb pin (flat `meta.http.verb`/`meta.http.method` scalar keys) —
+//     `verb` wins over tag-derived verb in verbFromTags
 //   - the behavioral tags that verb implies (`meta.tags`)
 //
 // Usage:
@@ -19,8 +19,8 @@
 //
 // See docs/design/router-model.md §"Verb helpers are verb+implied-tags BUNDLES"
 
-import type { ParamSource, SourceMap } from "@rhi-zone/fractal-api-tree"
-import type { HttpDirective, HttpLeafMeta } from "./project.ts"
+import type { ParamSource } from "@rhi-zone/fractal-api-tree"
+import type { HttpLeafMeta, HttpLeafMetaProperties } from "./project.ts"
 import type { HttpStore } from "./decode.ts"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
 import type { HttpHandlerMiddleware } from "./route.ts"
@@ -60,39 +60,31 @@ export type Method = keyof HttpMethods
 // ============================================================================
 
 /**
- * A verb-helper bundle: a leaf meta CONTRIBUTION value carrying both a verb
- * directive and implied tags. Attach to a handler via `op(fn, http.put)` or
- * compose with extra contributions via
+ * A verb-helper bundle: a leaf meta CONTRIBUTION value carrying both the verb
+ * (as two flat `meta.http.*` scalar keys, see below) and implied tags. Attach
+ * to a handler via `op(fn, http.put)` or compose with extra contributions via
  * `op(fn, http.put, { tags: { deprecated: true } })`.
  *
  * Generic in `V` (the verb's own literal, e.g. `"GET"`) so `http.get`'s type
- * is `VerbBundle<"GET">` — the `method` directive's `value` carries the
- * literal, not just `string`. Defaults to `string` so a bare `VerbBundle`
- * reference (no type argument) keeps working wherever one already appeared.
+ * is `VerbBundle<"GET">` — `http.verb`/`http.method` carry the literal, not
+ * just `string`. Defaults to `string` so a bare `VerbBundle` reference (no
+ * type argument) keeps working wherever one already appeared.
  *
- * Deliberately NOT `LeafMeta & {...}` (an earlier revision, against the
- * pre-split `Meta`, was) — intersecting a loosely-typed declared `http?`
- * field (an ARRAY type, `directives?: readonly HttpDirective[]`) with this
- * type's own literal 2-tuple produces `readonly HttpDirective[] & readonly
- * [...]`, and TypeScript does not reliably preserve tuple arity when
- * spreading/recursing over an intersection like that (confirmed directly: a
- * `[...A, ...B]` concatenation of two such intersections collapses to a
- * plain, non-tuple array, and `infer`-based rest-decomposition through it can
- * even produce a distributed union of results depending on which conjunct
- * TS's inference draws from at each step) — which silently defeated
- * `HttpManifest<N>`'s method extraction the moment two contributions were
- * merged (`op(fn, http.get, http.moveTo(".."))`, this package's own
- * `examples/library-api/src/tree.ts` pattern). This hazard is structurally
- * gone now that core's `LeafMeta` carries no `http` field of its own at all
- * (projectors never augment core, docs/design/meta-role-split-spec.md §2) —
- * this type still stays a plain, self-contained object literal type on
- * principle: op()'s own `FoldMeta<C>` fold (node.ts) is what has to compose
- * this bundle's literal tuple with another contribution's, not this type's
- * own declaration, so there is nothing to gain from intersecting it with
- * `LeafMeta` here and a real (if now-closed) class of hazard to keep clear of.
+ * Deliberately a plain, self-contained object literal type — NOT `LeafMeta &
+ * {...}` — the EXACT variant this bundle constructs, never the open
+ * `HttpLeafMetaProperties`/DU-shaped surface (docs/design/
+ * wire-profiles-and-staged-validation.md's "Exact-variant hygiene"): a
+ * producer typed against the wide, all-optional properties interface would
+ * widen `V`'s literal to `string` at the call site, and would let a
+ * `sourceMap`/`middleware` field the bundle never actually sets phantom-
+ * contribute an index-signature-erased shape into `op()`'s own static source-
+ * coverage check (`UncoveredSourceParams`, api-tree's input.ts) — the same
+ * hazard this type's own predecessor doc comment (kept in spirit, updated for
+ * the flat shape) already worked around for the now-retired directive-tuple
+ * encoding.
  */
 export type VerbBundle<V extends string = string> = {
-  readonly http: { readonly directives: readonly [HttpDirective<V>, HttpDirective<V>] }
+  readonly http: { readonly verb: V; readonly method: V }
   readonly tags: Record<string, boolean | undefined>
 }
 
@@ -108,13 +100,13 @@ export function httpVerbBundle<const V extends string>(
   verb: V,
   tags: Record<string, boolean | undefined>,
 ): VerbBundle<V> {
-  // Carries BOTH the `kind: "verb"` directive (read by `verbFromTags` in
-  // tags.ts — also used by openapi/client's own self-contained tree walks)
-  // and the `kind: "method"` directive (read by `applyMethods`, the
-  // HttpRoute rewriter in route.ts). Both directives describe the same
-  // fact; two projectors read two shapes.
+  // Sets BOTH `http.verb` (read by `verbFromTags` in tags.ts — also used by
+  // openapi/client's own self-contained tree walks) and `http.method` (read
+  // by `applyMethods`, the HttpRoute rewriter in route.ts). Both flat keys
+  // describe the same fact; two projectors read two names. Both resolve
+  // last-wins, matching every other flat scalar `meta.http.*` key.
   return {
-    http: { directives: [{ kind: "verb", value: verb }, { kind: "method", value: verb }] },
+    http: { verb, method: verb },
     tags,
   }
 }
@@ -166,66 +158,53 @@ const head: VerbBundle<"HEAD"> = httpVerbBundle("HEAD", { readOnly: true })
  */
 const options: VerbBundle<"OPTIONS"> = httpVerbBundle("OPTIONS", { readOnly: true })
 
-/** A `{ kind: "moveTo" }` directive carrying its `path` as literal `P`. */
-type MoveToDirective<P extends string> = Extract<HttpDirective<string, P>, { readonly kind: "moveTo" }>
-
 /**
- * `http.moveTo(path)` — DX helper for the `{ kind: "moveTo", path }` directive
- * (see project.ts § HttpDirective and route.ts § applyMoveTo). Returns a
- * plain contribution (no verb, no tags) so it composes with a verb bundle via
- * `mergeMeta`'s array-concatenation of `http.directives`:
+ * `http.moveTo(path)` — DX helper for the flat `meta.http.moveTo` scalar key
+ * (see route.ts § applyMoveTo for the path algebra). Returns a plain
+ * contribution (no verb, no tags) so it composes with a verb bundle via
+ * `mergeMeta`'s last-wins scalar merge:
  *
  * ```ts
  * op(fn, http.get, http.moveTo(".."))
  * // Equivalent to:
- * op(fn, http.get, { http: { directives: [{ kind: "moveTo", path: ".." }] } })
+ * op(fn, http.get, { http: { moveTo: ".." } })
  * ```
  *
  * `const P` (same technique as `httpVerbBundle`'s `const V`) keeps the
  * argument's literal type — `http.moveTo("..")` returns a bundle whose
- * `directives[0].path` is `".."`, not `string`.
+ * `http.moveTo` is `".."`, not `string`.
  *
  * Deliberately NOT `LeafMeta & {...}` — same reason as `VerbBundle` above
  * (see its doc comment).
  */
-export function moveTo<const P extends string>(
-  path: P,
-): { readonly http: { readonly directives: readonly [MoveToDirective<P>] } } {
-  return {
-    http: { directives: [{ kind: "moveTo", path } as MoveToDirective<P>] },
-  }
+export function moveTo<const P extends string>(path: P): { readonly http: { readonly moveTo: P } } {
+  return { http: { moveTo: path } }
 }
 
-/** A `{ kind: "paginated" }` directive. See `paginated()` below. */
-type PaginatedDirective = Extract<HttpDirective, { readonly kind: "paginated" }>
-
 /**
- * `paginated(options?)` — DX helper for the `{ kind: "paginated" }` directive
- * (see project.ts § HttpDirective and extensions/pagination.ts's client
- * extension). Optional: detection of "is this endpoint paginated at all"
- * already happens by convention — a handler returning `CursorPage<T>`/
- * `OffsetPage<T>` (packages/api-tree/src/page.ts) is recognized at build time
- * by the extractor (extract.ts) and at client runtime by shape
- * (`isPageShape`), the same two-layer convention `AsyncIterable<T>` uses for
- * streaming. Reach for `paginated()` only to override a default the shape
- * convention can't express on its own — a non-default input field name for
- * the cursor/offset/limit, or an explicit style pin when a response
- * genuinely needs one:
+ * `paginated(options?)` — DX helper for the flat `meta.http.paginated` scalar
+ * key (see extensions/pagination.ts's client extension). Optional: detection
+ * of "is this endpoint paginated at all" already happens by convention — a
+ * handler returning `CursorPage<T>`/`OffsetPage<T>`
+ * (packages/api-tree/src/page.ts) is recognized at build time by the
+ * extractor (extract.ts) and at client runtime by shape (`isPageShape`), the
+ * same two-layer convention `AsyncIterable<T>` uses for streaming. Reach for
+ * `paginated()` only to override a default the shape convention can't
+ * express on its own — a non-default input field name for the
+ * cursor/offset/limit, or an explicit style pin when a response genuinely
+ * needs one:
  *
  * ```ts
  * op(listBooks, http.get, paginated({ style: "cursor", inputCursorParam: "after" }))
  * ```
  *
  * Returns a plain contribution (no verb, no tags) so it composes with a verb
- * bundle via `mergeMeta`'s array-concatenation of `http.directives`, same as
- * `moveTo()` above.
+ * bundle via `mergeMeta`'s last-wins scalar merge, same as `moveTo()` above.
  */
 export function paginated(
-  options: Omit<PaginatedDirective, "kind"> = {},
-): { readonly http: { readonly directives: readonly [PaginatedDirective] } } {
-  return {
-    http: { directives: [{ kind: "paginated", ...options } as PaginatedDirective] },
-  }
+  options: NonNullable<HttpLeafMetaProperties["paginated"]> = {},
+): { readonly http: { readonly paginated: NonNullable<HttpLeafMetaProperties["paginated"]> } } {
+  return { http: { paginated: options } }
 }
 
 // ============================================================================
@@ -254,12 +233,6 @@ export type SourceMapInput = Readonly<
   Record<string, HttpStore | { readonly store: HttpStore; readonly key?: string }>
 >
 
-/** A `{ kind: "source" }` directive carrying a whole `http.source()` call's map, `S`. */
-type SourceDirective<S extends SourceMap = SourceMap> = Extract<
-  HttpDirective<string, string, S>,
-  { readonly kind: "source" }
->
-
 /**
  * The `SourceMap` a `SourceMapInput` expands to, with each key's own literal
  * association PRESERVED — the type-level counterpart of the shorthand
@@ -269,7 +242,7 @@ type SourceDirective<S extends SourceMap = SourceMap> = Extract<
  * Homomorphic over `M`, so a `const`-inferred literal input (`{ year: "query" }`)
  * yields a literal output (`{ year: { store: "query"; key: "year" } }`) rather
  * than collapsing to `Readonly<Record<string, ParamSource>>`. That literal
- * association is exactly what a type-level walk over `meta.http.directives`
+ * association is exactly what a type-level read of `meta.http.sourceMap`
  * needs to answer "which store does param X come from" — see
  * `FindStoreForParam` (api-tree's input.ts) and
  * docs/design/typed-store-spec.md §6.
@@ -279,7 +252,7 @@ type SourceDirective<S extends SourceMap = SourceMap> = Extract<
  * the full-form branch by intersecting the input entry with `ParamSource`
  * itself) — a conditional type does not narrow `M[K]` in either branch, so
  * without those intersections `ResolvedSourceMap<M>` cannot satisfy
- * `HttpDirective`'s own `S extends SourceMap` constraint.
+ * `SourceMap`'s own index-signature constraint.
  */
 export type ResolvedSourceMap<M extends SourceMapInput> = {
   readonly [K in keyof M]: M[K] extends string
@@ -293,39 +266,40 @@ export type ResolvedSourceMap<M extends SourceMapInput> = {
  * method-derived convention (`primaryStoreForMethod`, decode.ts) for just the
  * params listed here.
  *
- * Returns a `{ kind: "source", map }` DIRECTIVE (like `moveTo`/`paginated`
- * above) — appended to `meta.http.directives` — rather than setting a plain
- * merged object directly on `meta.http.sourceMap`. This is NOT the same
- * choice `moveTo`/`paginated` made for their own reasons (literal-type
- * preservation, see `VerbBundle`'s doc comment in this file): here it's
- * because `mergeMeta`'s TYPE-LEVEL counterpart (`FoldMeta`/`MergeTwoMeta`,
- * node.ts) cannot soundly merge two open `Record<string, ParamSource>`
- * index-signature objects — recursing into a keyed mapped type over an
- * index-signature-only type is a genuine TypeScript limitation, surfacing a
- * spurious `| undefined` on every merged entry. Arrays dodge this class of
- * problem entirely (`MergeMetaValue`'s array branch concatenates without
- * recursing into elements), so composing TWO `http.source()` calls produces
- * TWO directive entries instead of one type-level-merged object:
+ * Returns a bare `{ http: { sourceMap: M } }` contribution — a KEY-MERGED map
+ * key, not a directive. Composing TWO `http.source()` calls now merges their
+ * maps directly at `op()`'s own `FoldMeta<C>` fold (last-wins per key), the
+ * same way `mergeMeta` already merges every other meta sub-bag:
  *
  * ```ts
  * op(fn, http.source({ year: "query" }), http.source({ months: "body" }))
- * // → meta.http.directives === [
- * //     { kind: "source", map: { year: {store:"query",key:"year"} } },
- * //     { kind: "source", map: { months: {store:"body",key:"months"} } },
- * //   ]
+ * // → meta.http.sourceMap === {
+ * //     year: {store:"query",key:"year"},
+ * //     months: {store:"body",key:"months"},
+ * //   }
  * ```
  *
- * `getHttpMeta` (project.ts) resolves the array of `source` directives back
- * into a single `sourceMap`, in array order (later call's keys win on
- * overlap — same "later wins per key" semantics as every other meta merge,
- * just resolved at READ time instead of at merge time). `naiveTransform`
- * (route.ts) reads that resolved map into the matched route's
- * `sources.sourceMap`, which `defaultDecode` (route.ts) then consults during
- * request assembly.
+ * Before the http-directive-dissolution migration (docs/design/
+ * wire-profiles-and-staged-validation.md's "Prerequisite: meta unification"
+ * section), this composed as a directive-ARRAY entry instead, specifically to
+ * dodge a suspected TypeScript limitation merging two open `Record<string,
+ * ParamSource>` index-signature objects at the type level. That limitation
+ * does not apply to a LITERAL-keyed map like `ResolvedSourceMap<M>` (this
+ * function's own return type, below): `FoldMeta`/`MergeTwoMeta`'s existing
+ * depth-capped object merge (node.ts) already resolves two literal-keyed maps
+ * correctly — verified empirically (scratch `tsc` + `bun run`) during this
+ * migration, which also surfaced and fixed a genuine (if previously
+ * unexercised) runtime/type parity gap in `mergeRecords`'s own recursion depth
+ * — see node.ts's `mergeRecords`/`MergeMetaValue` doc comments for the full
+ * finding. `getHttpMeta` (project.ts) no longer resolves an array at read
+ * time at all — `meta.http.sourceMap` IS the resolved map the moment `op()`'s
+ * fold completes; `naiveTransform` (route.ts) reads it straight into the
+ * matched route's `sources.sourceMap`, which `defaultDecode` (route.ts) then
+ * consults during request assembly.
  *
  * String shorthand values are expanded to a full `ParamSource` HERE, eagerly,
  * at the value level — not left for `naiveTransform`/`assemble` (route.ts) to
- * interpret two shapes — so each directive's `map` is always a uniform
+ * interpret two shapes — so `meta.http.sourceMap` is always a uniform
  * `SourceMap`, the same shape CLI's `meta.cli.sourceMap` and MCP's own
  * sourceMap field already store.
  *
@@ -338,37 +312,30 @@ export type ResolvedSourceMap<M extends SourceMapInput> = {
  */
 export function source<const M extends SourceMapInput>(
   map: M,
-): { readonly http: { readonly directives: readonly [SourceDirective<ResolvedSourceMap<M>>] } } {
+): { readonly http: { readonly sourceMap: ResolvedSourceMap<M> } } {
   const sourceMap: Record<string, ParamSource> = {}
   for (const [key, value] of Object.entries(map)) {
     sourceMap[key] = typeof value === "string" ? { store: value, key } : value
   }
-  return {
-    http: { directives: [{ kind: "source", map: sourceMap } as SourceDirective<ResolvedSourceMap<M>>] },
-  }
+  return { http: { sourceMap: sourceMap as ResolvedSourceMap<M> } }
 }
 
 // ============================================================================
 // http.validate(schema) — attach a Standard Schema validator to a route
 // ============================================================================
 
-/** A `{ kind: "validate" }` directive carrying a `http.validate()` call's Standard Schema. */
-type ValidateDirective = Extract<HttpDirective, { readonly kind: "validate" }>
-
 /**
  * `http.validate(schema)` — attaches a Standard Schema
  * (https://standardschema.dev/) validator to a leaf: any object exposing
  * `~standard.validate` (Zod, Valibot, ArkType, and other Standard
  * Schema–compliant libraries all implement this out of the box). Returns a
- * `{ kind: "validate", schema }` DIRECTIVE (like `moveTo`/`paginated`/
- * `source` above) — appended to `meta.http.directives` — rather than a plain
- * merged field, following the same directive-array composition every other
- * `http.*` helper here uses.
+ * bare `{ http: { validate: schema } }` contribution — a flat, last-wins
+ * scalar key, same as `moveTo`/`paginated` above.
  *
- * `naiveTransform` (route.ts) resolves the LAST `validate` directive on a
- * leaf's meta into that leaf's `sources.validate` (single-valued — later
- * call wins, same convention `getHttpMeta`, project.ts, already applies to
- * `verb`/`method`/`moveTo`/`response`). `runRoute` (route.ts) then runs the
+ * `naiveTransform` (route.ts) reads `meta.http.validate` straight into the
+ * leaf's `sources.validate` (single-valued — later call wins, same
+ * convention every other flat scalar `meta.http.*` key already follows).
+ * `runRoute` (route.ts) then runs the
  * schema — via `runStandardSchema`, decode.ts — against the request's
  * ALREADY-DECODED input bag (after stores → assembled input, before the
  * handler ever sees it): on success the handler receives the validator's own
@@ -389,21 +356,16 @@ type ValidateDirective = Extract<HttpDirective, { readonly kind: "validate" }>
  * })))
  * ```
  */
-export function validate(
-  schema: StandardSchemaV1,
-): { readonly http: { readonly directives: readonly [ValidateDirective] } } {
-  return { http: { directives: [{ kind: "validate", schema } as ValidateDirective] } }
+export function validate(schema: StandardSchemaV1): { readonly http: { readonly validate: StandardSchemaV1 } } {
+  return { http: { validate: schema } }
 }
 
 // ============================================================================
 // http.middleware(...)/http.handlerMiddleware(...) — subtree-scoped request
-// wrapping. See docs/design/subtree-layers-spec.md and `HttpDirective`'s own
-// `middleware`/`handlerMiddleware` doc comment (project.ts) for the full
+// wrapping. See docs/design/subtree-layers-spec.md and `HttpSharedMetaProperties`'s
+// own `middleware`/`handlerMiddleware` doc comment (project.ts) for the full
 // contract (two phases, ancestor-chain composition, ordering).
 // ============================================================================
-
-/** A `{ kind: "middleware" }` directive carrying one `http.middleware()` argument. */
-type MiddlewareDirective = Extract<HttpDirective, { readonly kind: "middleware" }>
 
 /**
  * `http.middleware(...fns)` — subtree-scoped, dispatch-around request
@@ -414,16 +376,22 @@ type MiddlewareDirective = Extract<HttpDirective, { readonly kind: "middleware" 
  * point `PresetOptions.middleware` already runs at, narrowed to a subtree
  * instead of every request.
  *
- * Each argument becomes its OWN `{ kind: "middleware" }` directive entry
- * (variadic — `http.middleware(a, b)` is `directives: [{...a}, {...b}]`, NOT
- * one directive holding an array) — same directive-per-call composition
- * `http.source()`/`http.validate()` above already use, and load-bearing for
- * the same reason: `getHttpMeta` (project.ts) collects every `middleware`
- * directive into an ordered wrap list at READ time; a bare (non-array)
- * function-valued field would lose its call signature through `op()`'s
- * `FoldMeta` merge when two contributions both set it (see `HttpDirective`'s
- * doc comment, project.ts, and the regression test in
- * subtree-layers.test.ts).
+ * Returns a bare `{ http: { middleware: fns } }` contribution — a plain
+ * ARRAY under a flat key, not a directive-per-argument encoding. This is
+ * still load-bearing, not incidental: `MergeMetaValue`'s array branch
+ * (node.ts) concatenates two `middleware` arrays without recursing into their
+ * elements, so a function VALUE living inside the array is never merged as an
+ * object and keeps its call signature — exactly the hazard a BARE
+ * (non-array) function-valued field would hit (two contributions both
+ * setting the same bare key strip its call signature through `FoldMeta`'s
+ * object-merge branch; see the regression test in subtree-layers.test.ts).
+ * `http.middleware(a, b)` on ONE call already produces one array
+ * (`[a, b]`); composing two SEPARATE `middleware()` contributions
+ * concatenates their arrays the same way (`[a]` ++ `[b]` = `[a, b]`) — either
+ * path lands on the identical ordered wrap list `getHttpMeta` (project.ts)
+ * now reads straight off `meta.http.middleware`, no read-time collection
+ * needed (the array IS the resolved list, the moment `op()`'s fold
+ * completes).
  *
  * ```ts
  * api({ webhooks: api({ stripe: op(handleStripe) }) }, {
@@ -436,16 +404,9 @@ type MiddlewareDirective = Extract<HttpDirective, { readonly kind: "middleware" 
  */
 export function middleware(
   ...fns: readonly ((inner: Fetch) => Fetch)[]
-): { readonly http: { readonly directives: readonly HttpDirective[] } } {
-  return {
-    http: {
-      directives: fns.map((value): MiddlewareDirective => ({ kind: "middleware", value })),
-    },
-  }
+): { readonly http: { readonly middleware: readonly ((inner: Fetch) => Fetch)[] } } {
+  return { http: { middleware: fns } }
 }
-
-/** A `{ kind: "handlerMiddleware" }` directive carrying one `http.handlerMiddleware()` argument. */
-type HandlerMiddlewareDirective = Extract<HttpDirective, { readonly kind: "handlerMiddleware" }>
 
 /**
  * `http.handlerMiddleware(...fns)` — subtree-scoped, handler-around request
@@ -453,8 +414,8 @@ type HandlerMiddlewareDirective = Extract<HttpDirective, { readonly kind: "handl
  * `PresetOptions.handlerMiddleware` already uses globally). Wraps INSIDE
  * `runRoute` (route.ts) — after decode and `sources.validate`, before the
  * handler is called — same wire point as the global hook, narrowed to a
- * subtree. Same directive-per-argument, array-authored composition as
- * `middleware()` above, for the identical reason (see its doc comment).
+ * subtree. Same plain-array-under-a-flat-key shape as `middleware()` above,
+ * for the identical reason (see its doc comment).
  *
  * ```ts
  * api({ admin: api({ ... }) }, {
@@ -464,12 +425,8 @@ type HandlerMiddlewareDirective = Extract<HttpDirective, { readonly kind: "handl
  */
 export function handlerMiddleware(
   ...fns: readonly HttpHandlerMiddleware[]
-): { readonly http: { readonly directives: readonly HttpDirective[] } } {
-  return {
-    http: {
-      directives: fns.map((value): HandlerMiddlewareDirective => ({ kind: "handlerMiddleware", value })),
-    },
-  }
+): { readonly http: { readonly handlerMiddleware: readonly HttpHandlerMiddleware[] } } {
+  return { http: { handlerMiddleware: fns } }
 }
 
 // ============================================================================

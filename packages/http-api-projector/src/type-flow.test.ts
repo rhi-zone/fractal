@@ -75,7 +75,7 @@ describe("HttpRoute layer: naiveTransform preserves the concrete handler type", 
 describe("applyMethods preserves the handler's concrete type across the rename", () => {
   it("a single-method entry's handler type survives even though the method KEY is dynamic", () => {
     const getBook = (input: { id: string }) => ({ title: "x", id: input.id })
-    const leaf = op(getBook, { http: { directives: [{ kind: "method", value: "GET" }] } })
+    const leaf = op(getBook, { http: { method: "GET" } })
     const route = applyMethods(naiveTransform(leaf))
 
     expect(Object.keys(route.methods)).toEqual(["GET"])
@@ -87,7 +87,7 @@ describe("applyMethods preserves the handler's concrete type across the rename",
 describe("applyResponse widens the handler type to a union (wrapped or not)", () => {
   it("the resulting handler type is 'original | response-wrapped', not erased to any", () => {
     const getBook = (input: { id: string }) => ({ title: "x", id: input.id })
-    const leaf = op(getBook, { http: { directives: [{ kind: "response", status: 201 }] } })
+    const leaf = op(getBook, { http: { response: { status: 201 } } })
     const route = applyResponse(naiveTransform(leaf))
 
     type ExpectedHandler = typeof getBook | ((input: unknown) => Promise<ResponseOverride>)
@@ -98,7 +98,7 @@ describe("applyResponse widens the handler type to a union (wrapped or not)", ()
 describe("applyMoveTo is the deliberate erasure boundary", () => {
   it("moveTo repositions subtrees based on a runtime string, so the result is the plain erased HttpRoute", () => {
     const getBook = (input: { id: string }) => ({ title: "x", id: input.id })
-    const tree = api({ getBook: op(getBook, { http: { directives: [{ kind: "moveTo", path: "../book" }] } }) })
+    const tree = api({ getBook: op(getBook, { http: { moveTo: "../book" } }) })
     const route = applyMoveTo(naiveTransform(tree))
 
     // Statically only the erased HttpRoute shape is known — no children/

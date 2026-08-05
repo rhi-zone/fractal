@@ -39,7 +39,7 @@ describe("authLayer", () => {
     const storage = new AsyncLocalStorage<User | null>();
     const tree = api({
       whoami: op((_: unknown) => ({ id: storage.getStore()?.id ?? null }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     });
     const fetchHandler = createFetch(tree, { als: { storage, init: authLayer(adapter) } });
@@ -60,7 +60,7 @@ describe("authMiddleware", () => {
     const storage = new AsyncLocalStorage<User | null>();
     const tree = api({
       secret: op((_: unknown) => ({ ok: true }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     });
     const fetchHandler = createFetch(tree, {
@@ -91,7 +91,7 @@ describe("authMiddleware", () => {
     const storage = new AsyncLocalStorage<User | null>();
     const tree = api({
       whoami: op((_: unknown) => ({ id: storage.getStore()?.id ?? null }), {
-        http: { directives: [{ kind: "method", value: "GET" }] },
+        http: { method: "GET" },
       }),
     });
     const fetchHandler = createFetch(tree, {

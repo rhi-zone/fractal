@@ -268,9 +268,9 @@ describe("library-api — verb-helper bundles (http.*)", () => {
     expect(resolved.idempotent).toBe(true)
     // destructive:false from extra contribution is applied
     expect(resolved.destructive).toBe(false)
-    // verb directive from bundle is preserved
-    const httpMeta = n.meta.http as { directives: readonly { kind: string; value?: string }[] }
-    expect(httpMeta.directives.find((d) => d.kind === "verb")?.value).toBe("PUT")
+    // verb flat key from bundle is preserved
+    const httpMeta = n.meta.http as { verb?: string }
+    expect(httpMeta.verb).toBe("PUT")
   })
 
   // end-to-end: verb-helper-authored reserve op dispatches correctly

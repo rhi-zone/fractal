@@ -64,7 +64,7 @@ describe("wrapTracing — cross-projector integration", () => {
           sawSpanInsideHandler = getActiveSpan()
           return { ok: true }
         },
-        { http: { directives: [{ kind: "method", value: "GET" }] } },
+        { http: { method: "GET" } },
       ),
     })
     const traced = wrapTracing(tree, integration, { projectorType: "http" })

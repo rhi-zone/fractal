@@ -16,15 +16,15 @@
 //      open question 2 — see preset.test.ts's own baseline test for the
 //      global case this compares against).
 //
-// Leaf-position directives are attached the real way (`op(fn, http.get,
+// Leaf-position contributions are attached the real way (`op(fn, http.get,
 // middleware(mw))`) — `op()`'s meta-contribution check is vacuous against
 // core's (unaugmented) `LeafMeta`, since it declares no required keys, so
 // this typechecks without a deployment-level `declare module` merge.
-// Branch-position directives are attached by constructing the `HttpRoute`
+// Branch-position contributions are attached by constructing the `HttpRoute`
 // tree directly via `httpRoute()` (route.ts) — `api()`'s `opts.meta` is
 // typed `M extends BranchMeta` (core's, unaugmented), which genuinely can't
 // accept an `http` field without that same deployment-level merge; every
-// existing branch-directive test in this package (route.test.ts,
+// existing branch-level meta test in this package (route.test.ts,
 // compile.test.ts) already follows this same `httpRoute()`-direct pattern
 // for exactly this reason.
 
@@ -66,7 +66,7 @@ function webhooksFixture(log: string[]): HttpRoute {
     meta: {},
     children: {
       webhooks: httpRoute({
-        meta: { http: { directives: [{ kind: "middleware", value: trackingMiddleware("webhooksMw", log) }] } },
+        meta: { http: { middleware: [trackingMiddleware("webhooksMw", log)] } },
         children: {
           stripe: httpRoute({
             meta: {},
@@ -123,13 +123,13 @@ describe("nesting order — root outermost, leaf innermost, declaration order wi
   it("root(mwR) -> admin(mwA) -> webhooks(mwW) -> leaf composes as mwR[mwA[mwW[leaf]]] (§5's worked example)", async () => {
     const log: string[] = []
     const tree = httpRoute({
-      meta: { http: { directives: [{ kind: "middleware", value: trackingMiddleware("root", log) }] } },
+      meta: { http: { middleware: [trackingMiddleware("root", log)] } },
       children: {
         admin: httpRoute({
-          meta: { http: { directives: [{ kind: "middleware", value: trackingMiddleware("admin", log) }] } },
+          meta: { http: { middleware: [trackingMiddleware("admin", log)] } },
           children: {
             webhooks: httpRoute({
-              meta: { http: { directives: [{ kind: "middleware", value: trackingMiddleware("webhooks", log) }] } },
+              meta: { http: { middleware: [trackingMiddleware("webhooks", log)] } },
               methods: { POST: { handler: () => ({ ok: true }), meta: {} } },
             }),
           },
@@ -155,10 +155,7 @@ describe("nesting order — root outermost, leaf innermost, declaration order wi
     const tree = httpRoute({
       meta: {
         http: {
-          directives: [
-            { kind: "middleware", value: trackingMiddleware("first", log) },
-            { kind: "middleware", value: trackingMiddleware("second", log) },
-          ],
+          middleware: [trackingMiddleware("first", log), trackingMiddleware("second", log)],
         },
       },
       methods: { POST: { handler: () => ({ ok: true }), meta: {} } },
@@ -207,10 +204,8 @@ describe("middleware (dispatch-around) vs handlerMiddleware (handler-around) —
     const tree = httpRoute({
       meta: {
         http: {
-          directives: [
-            { kind: "middleware", value: dispatchMw("root") },
-            { kind: "handlerMiddleware", value: handlerMw("root") },
-          ],
+          middleware: [dispatchMw("root")],
+          handlerMiddleware: [handlerMw("root")],
         },
       },
       methods: {
@@ -323,19 +318,21 @@ describe("OpenAPI / listRoutes over a layered tree — no leakage, route surface
 // 5. FoldMeta array-shape hazard — type-level regression test (§6/§7/§10.3)
 // ============================================================================
 
-describe("FoldMeta array-shape hazard — why middleware/handlerMiddleware are directive-array-authored, never a bare field", () => {
-  it("two http.middleware() contributions on the SAME op() compose — the folded directive array's `value` stays callable", () => {
+describe("FoldMeta array-shape hazard — why middleware/handlerMiddleware are plain-array-authored under a flat key, never a bare field", () => {
+  it("two http.middleware() contributions on the SAME op() compose — the folded array's elements stay callable", () => {
     const mw1: (inner: Fetch) => Fetch = (inner) => inner
     const mw2: (inner: Fetch) => Fetch = (inner) => inner
     const leaf = op((input: unknown) => input, middleware(mw1), middleware(mw2))
 
-    expect(leaf.meta.http?.directives?.length).toBe(2)
+    expect(leaf.meta.http?.middleware?.length).toBe(2)
 
-    // Type-level: each directive's own `value` field is still a real,
-    // callable `(inner: Fetch) => Fetch` — NOT stripped to `{}` the way a
-    // bare (non-array) function-valued field would be (see the next test).
-    type Dir = NonNullable<NonNullable<typeof leaf.meta.http>["directives"]>[number]
-    type MiddlewareValue = Extract<Dir, { readonly kind: "middleware" }>["value"]
+    // Type-level: the array's element type is still a real, callable
+    // `(inner: Fetch) => Fetch` — NOT stripped to `{}` the way a bare
+    // (non-array) function-valued field would be (see the next test).
+    // `MergeMetaValue`'s array branch (node.ts) concatenates without
+    // recursing into elements, so composing two `middleware()` contributions
+    // (or one `http.middleware(a, b)` call) both land here unchanged.
+    type MiddlewareValue = NonNullable<NonNullable<typeof leaf.meta.http>["middleware"]>[number]
     expectTypeOf<MiddlewareValue>().toEqualTypeOf<(inner: Fetch) => Fetch>()
     const callable: MiddlewareValue = (inner) => inner
     expect(typeof callable).toBe("function")
@@ -386,7 +383,7 @@ describe("error semantics — a subtree layer's throw matches its global counter
       throw new Error("subtree middleware boom")
     }
     const tree = httpRoute({
-      meta: { http: { directives: [{ kind: "middleware", value: throwingMw }] } },
+      meta: { http: { middleware: [throwingMw] } },
       methods: { POST: { handler: () => ({ ok: true }), meta: {} } },
     })
     const router = mapCharRouter(tree)
@@ -400,7 +397,7 @@ describe("error semantics — a subtree layer's throw matches its global counter
       throw { kind: "explosive", message: "kaboom" }
     }
     const tree = httpRoute({
-      meta: { http: { directives: [{ kind: "middleware", value: throwingMw }] } },
+      meta: { http: { middleware: [throwingMw] } },
       methods: { POST: { handler: () => ({ ok: true }), meta: {} } },
     })
     const router = mapCharRouter(tree, undefined, undefined, undefined, (error) => {
@@ -419,7 +416,7 @@ describe("error semantics — a subtree layer's throw matches its global counter
       throw new Error("subtree handlerMiddleware boom")
     }
     const tree = httpRoute({
-      meta: { http: { directives: [{ kind: "handlerMiddleware", value: throwingHmw }] } },
+      meta: { http: { handlerMiddleware: [throwingHmw] } },
       methods: { POST: { handler: () => ({ ok: true }), meta: {} } },
     })
 
@@ -436,7 +433,7 @@ describe("error semantics — a subtree layer's throw matches its global counter
       throw { kind: "explosive", message: "kaboom" }
     }
     const tree = httpRoute({
-      meta: { http: { directives: [{ kind: "handlerMiddleware", value: throwingHmw }] } },
+      meta: { http: { handlerMiddleware: [throwingHmw] } },
       methods: { POST: { handler: () => ({ ok: true }), meta: {} } },
     })
 

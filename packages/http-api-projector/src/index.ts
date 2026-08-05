@@ -20,7 +20,6 @@ export { crud, httpProjection } from "./dx.ts"
 export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
 export { getHttpMeta } from "./project.ts"
 export type {
-  HttpDirective,
   HttpLeafMetaProperties,
   HttpSharedMetaProperties,
   ParamSource,

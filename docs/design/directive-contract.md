@@ -31,7 +31,7 @@ directives drive.
 | `deprecated` | Operation slated for removal | CLI (`[DEPRECATED]` prefix in listings/help), MCP (`deprecated: true` on tool/resource/prompt descriptors), GraphQL (`@deprecated` SDL directive, unless `meta.graphql.deprecated` overrides), HTTP/OpenAPI (`OpenApiOperation.deprecated`, unless `meta.openapi.deprecated` overrides) | Not deprecated |
 
 Verb derivation precedence in HTTP (`verbFromTags`, `packages/http-api-projector/src/tags.ts`):
-1. `meta.http` directive `{ kind: "verb" }` (see below) — always wins.
+1. `meta.http.verb` (see below) — always wins.
 2. `readOnly === true` → `GET`.
 3. `idempotent === true && destructive === true` → `DELETE`.
 4. `idempotent === true` → `PUT`.
@@ -46,29 +46,56 @@ Operation-type derivation precedence in GraphQL (`deriveOperationType`,
 
 ## HTTP — `meta.http`
 
-`meta.http.directives` is an array of tagged `HttpDirective` values
-(`packages/http-api-projector/src/project.ts`). `getHttpMeta` resolves the
-raw bag; last directive of a given `kind` in the array wins.
+`meta.http` is a FLAT bag of scalar/map/array keys — no directive envelope,
+no `kind`-tagged array, no fold-by-`kind` read-time resolution step
+(`packages/http-api-projector/src/project.ts`, `verbs.ts`). Cardinality is
+expressed by shape (docs/design/wire-profiles-and-staged-validation.md's
+"Prerequisite: meta unification (directive dissolution)"):
 
-| `kind` | Shape | Controls | Read by | Absent |
-|---|---|---|---|---|
-| `verb` | `{ value: string }` | Explicit HTTP method override; wins over tag-derived verb | `verbFromTags` (`tags.ts`) | Verb falls through to tag-lattice derivation |
-| `method` | `{ value: string }` | Sets the HTTP method on a route's method entry in the `HttpRoute` tree | `applyMethods` rewriter (`route.ts`) | Route keeps the `naiveTransform` baseline (`POST`) |
-| `moveTo` | `{ path: string }` | Relative node placement in the output route tree (`..`, `../foo`, `*` path algebra) | `applyMoveTo` rewriter (`route.ts`) | Node stays at its tree-derived path |
-| `response` | `{ status?: number; headers?: Record<string,string> }` | Response status/header overrides, materialized into the handler | `applyResponse` rewriter (`route.ts`) | Default response shaping (200, no extra headers) |
-| `segment` | `{ value: string }` | Explicit path-segment rename | **Currently unread** — retired from HTTP's own dispatch along with the direct tree-walk dispatcher; parsed into `HttpMeta.segment` by `getHttpMeta` but no projector (HTTP, OpenAPI, client) consumes it today | n/a |
-| `when` | `{ value: string }` | Per-child match-value override for non-method attribute dispatch | **Currently unread** — same retirement as `segment`; attribute dispatch (header/query/contentType) has no equivalent in the current `HttpRoute` pipeline | n/a |
-| `legacyPath` | `{ value: string }` | [DEBT] Full-path override, bypasses tree-walk address | **Currently unread** — same retirement as `segment` | n/a |
+- **At-most-one** → flat scalar key, last-wins (later `op()` contribution's
+  value overwrites an earlier one — `mergeMeta`'s ordinary scalar-override
+  rule, api-tree's node.ts).
+- **Keyed partial contribution** → flat map key, key-merged (later
+  contribution's keys win on overlap, whole-value replacement per key — see
+  node.ts's `mergeRecords`/`MergeMetaValue` doc comments for the depth-capped
+  merge this relies on).
+- **Genuinely multiple/ordered** → plain array key, append (`MergeMetaValue`'s
+  array-concatenation branch).
 
-`meta.http.dispatch` (a `{ kind: "method" | "header" | "query" | "contentType" }`
-marker, collapsed by `getHttpMeta` to `{ kind: "method" | "attr" }`) is parsed
-but likewise not consumed by the current `HttpRoute` pipeline — a holdover
-from the retired direct tree-walk dispatcher.
+The RESOLVED shape (what a pre-migration `getHttpMeta` used to compute by
+folding a directive array at read time) IS the AUTHORED shape now — the two
+collapsed into one. `getHttpMeta` (project.ts) still exists as a stable,
+typed read-site accessor, but is a thin pass-through: `meta.http` already
+carries every field below by the time any contribution reaches it, since
+`op()`'s own `mergeMeta` fold does all the resolving at compose time.
+
+| Key | Shape | Cardinality | Controls | Read by | Absent |
+|---|---|---|---|---|---|
+| `verb` | `string` | at-most-one | Explicit HTTP method override; wins over tag-derived verb | `verbFromTags` (`tags.ts`) | Verb falls through to tag-lattice derivation |
+| `method` | `string` | at-most-one | Sets the HTTP method on a route's method entry in the `HttpRoute` tree | `applyMethods` rewriter (`route.ts`) | Route keeps the `naiveTransform` baseline (`POST`) |
+| `moveTo` | `string` | at-most-one | Relative node placement in the output route tree (`..`, `../foo`, `*` path algebra) | `applyMoveTo` rewriter (`route.ts`) | Node stays at its tree-derived path |
+| `response` | `{ status?: number; headers?: Record<string,string> }` | at-most-one | Response status/header overrides, materialized into the handler | `applyResponse` rewriter (`route.ts`) | Default response shaping (200, no extra headers) |
+| `paginated` | `{ style?, inputCursorParam?, inputOffsetParam?, inputLimitParam? }` | at-most-one | Pagination hints overriding the client's shape-derived defaults — see `paginated()` (verbs.ts) | `extensions/pagination.ts`'s client extension | Style/field names derived from response shape |
+| `validate` | a Standard Schema | at-most-one | Validator run against the assembled input, after decode and before the handler — see `http.validate()` (verbs.ts) | `runRoute` (route.ts), via `runStandardSchema` (decode.ts) | No validation step |
+| `sourceMap` | `SourceMap` (`Record<string, ParamSource>`) | keyed partial contribution | Per-param HTTP store overrides — see `http.source()` (verbs.ts) | `assemble` (api-tree's input.ts), via `naiveTransform`'s `sources.sourceMap` (route.ts) | Params resolve via the method-derived primary-store convention |
+| `middleware` | `readonly ((inner: Fetch) => Fetch)[]` | genuinely multiple/ordered | Subtree-scoped, dispatch-around request wrapping — see `http.middleware(...)` (verbs.ts) | `collectRoutes` (compile.ts), ancestor-composed root-to-leaf | No wrapping |
+| `handlerMiddleware` | `readonly HttpHandlerMiddleware[]` | genuinely multiple/ordered | Subtree-scoped, handler-around request wrapping — see `http.handlerMiddleware(...)` (verbs.ts) | `collectRoutes` (compile.ts), ancestor-composed root-to-leaf | No wrapping |
+
+Retired along with the directive envelope itself: the `HttpDirective` DU, the
+fold-by-`kind` `getHttpMeta` read-time switch, and the already-`[DEBT]`/
+already-"currently unread" holdovers this dissolution deletes outright rather
+than re-homing — `segment`, `when`, `legacyPath`, and the `dispatch` marker
+(`{ kind: "method" | "header" | "query" | "contentType" }`) all predate the
+`HttpRoute` pipeline (naiveTransform → rewriters → makeRouterFromRoute) and
+were parsed by the pre-migration `getHttpMeta` but consumed by nothing —
+verified read nowhere in the tree before deletion. Attribute dispatch
+(header/query/contentType-based routing at the same path+method) still has no
+equivalent in the current pipeline — an open design question, see TODO.md.
 
 ## OpenAPI — `meta.openapi`
 
 Read by `packages/http-api-projector/src/openapi.ts`, on top of the HTTP
-route tree the `meta.http` directives already produced.
+route tree `meta.http`'s flat keys already produced.
 
 | Key | Shape | Controls | Scope | Absent |
 |---|---|---|---|---|

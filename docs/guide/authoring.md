@@ -217,8 +217,8 @@ its behavior).
 
 `verbFromTags` applies this lattice (checked in order):
 
-1. A `{ kind: "verb", value }` entry in `meta.http.directives` → wins over all
-   inference.
+1. `meta.http.verb` (a flat scalar key, set by `http.*` verb bundles — see
+   below) → wins over all inference.
 2. `readOnly === true` → `GET`
 3. `idempotent === true && destructive === true` → `DELETE`
 4. `idempotent === true` → `PUT`
@@ -230,9 +230,9 @@ its behavior).
 
 `http.get`, `http.post`, `http.put`, `http.patch`, `http.delete`, `http.head`,
 `http.options` are **meta values** (not wrapper functions). Each bundles a
-verb pin (`meta.http.directives`, holding both a `{kind:"verb"}` entry read by
-`verbFromTags` and a `{kind:"method"}` entry read by the `applyMethods`
-rewriter) with the behavioral tags that verb implies:
+verb pin — two flat scalar keys, `meta.http.verb` (read by `verbFromTags`) and
+`meta.http.method` (read by the `applyMethods` rewriter), both set to the same
+value — with the behavioral tags that verb implies:
 
 | Bundle | Verb pin | Bundled tags | MCP hints lit up |
 |--------|----------|--------------|-----------------|
@@ -367,12 +367,12 @@ bags manually — spreading is one level shallow and silently drops sub-keys.
   `http` sub-bag).
 
 ```ts
-// http.put contributes { http: { directives: [{kind:"verb",value:"PUT"},{kind:"method",value:"PUT"}] }, tags: { idempotent: true } }
+// http.put contributes { http: { verb: "PUT", method: "PUT" }, tags: { idempotent: true } }
 // Extra contribution adds { tags: { destructive: false } }
 // mergeMeta deep-merges the tags sub-bag: idempotent:true is preserved
 const n = op(fn, http.put, { tags: { destructive: false } })
 // n.meta.tags → { idempotent: true, destructive: false }
-// n.meta.http.directives → [{kind:"verb",value:"PUT"},{kind:"method",value:"PUT"}]
+// n.meta.http → { verb: "PUT", method: "PUT" }
 ```
 
 This means a verb-helper bundle and extra behavioral annotations compose without

@@ -14,10 +14,10 @@
 //   2. `naiveTransform` — the mechanical `Node => HttpRoute` baseline: every
 //      child becomes a path-segment child, every handler becomes a single
 //      POST entry. No inference, no convention.
-//   3. Rewriters — `HttpRoute => HttpRoute` functions, each reading one kind
-//      of directive from `meta.http.directives` and reshaping the tree:
-//      `applyMethods`, `applyMoveTo`, `applyResponse`. `composeTransforms`
-//      chains them into a single `HttpRoute => HttpRoute`.
+//   3. Rewriters — `HttpRoute => HttpRoute` functions, each reading one flat
+//      `meta.http.*` scalar key and reshaping the tree: `applyMethods`,
+//      `applyMoveTo`, `applyResponse`. `composeTransforms` chains them into
+//      a single `HttpRoute => HttpRoute`.
 //   4. `makeRouterFromRoute` — the simple exact-path/method dispatcher over
 //      an `HttpRoute` tree (no attribute dispatch, no match conditions —
 //      those remain the direct tree-walk dispatcher's domain; see project.ts).
@@ -54,11 +54,11 @@ import {
   matchKind,
 } from "@rhi-zone/fractal-api-tree"
 import type { DetectionOptions, ErrorEncoder, Page, ServiceStores } from "@rhi-zone/fractal-api-tree"
-import type { HttpDirective, HttpLeafMeta, HttpSharedMeta } from "./project.ts"
+import type { HttpLeafMeta, HttpSharedMeta } from "./project.ts"
 import { BUILTIN_HTTP_STORE_NAMES, httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
-import type { HttpStoreBag, ParamSource, SourceMap, StandardSchemaV1 } from "./decode.ts"
+import type { HttpStoreBag, SourceMap, StandardSchemaV1 } from "./decode.ts"
 
-// `HttpDirective`/`HttpLeafMeta`/`HttpSharedMeta` are type-only imports from
+// `HttpLeafMeta`/`HttpSharedMeta` are type-only imports from
 // project.ts, which VALUE-imports from this file (`naiveTransform`,
 // `makeRouterFromRoute`, …) — a type-only import here can't create a runtime
 // cycle (TS erases it at emit), so this stays safe despite the value-import
@@ -154,75 +154,27 @@ export function isHttpRoute(v: unknown): v is HttpRoute {
 }
 
 // ============================================================================
-// Directive helpers — shared by the rewriters below
+// Flat-key readers — shared by the rewriters below. Route.ts's OWN copies of
+// these reads (not calls to `getHttpMeta`, project.ts) — route.ts can't
+// import project.ts, since project.ts imports FROM route.ts and a reverse
+// import would cycle. Since the flat design's fold already resolves each key
+// (last-wins scalars, key-merged sourceMap) at `op()`/`mergeMeta` time
+// (api-tree's node.ts), these are now plain field reads, not a directive-
+// array walk — see project.ts's own module doc for the fuller history.
 // ============================================================================
 
-function directivesOf(meta: RouteMeta): readonly HttpDirective[] {
-  const h = meta.http
-  if (typeof h !== "object" || h === null) return []
-  const d = (h as { directives?: unknown }).directives
-  return Array.isArray(d) ? (d as HttpDirective[]) : []
+function sourceMapOf(meta: RouteLeafMeta): SourceMap | undefined {
+  return meta.http?.sourceMap
 }
 
-/**
- * Resolves `meta.http.sourceMap` — the `{ kind: "source", map }` directives
- * `http.source()` (verbs.ts) appends, folded into a single `SourceMap` — back
- * out of a node/entry's meta. Folds in array order: a param name repeated
- * across multiple `http.source()` calls resolves to the LATER call's entry,
- * same "later wins per key" convention `getHttpMeta` (project.ts) applies for
- * its own copy of this same resolution (this function is route.ts's OWN copy,
- * not a call to `getHttpMeta` — route.ts can't import project.ts, since
- * project.ts imports FROM route.ts and a reverse import would cycle).
- */
-function sourceMapOf(meta: RouteMeta): SourceMap | undefined {
-  let merged: Record<string, ParamSource> | undefined
-  for (const d of directivesOf(meta)) {
-    if (d.kind === "source") merged = { ...merged, ...d.map }
-  }
-  return merged
+function validateOf(meta: RouteLeafMeta): StandardSchemaV1 | undefined {
+  return meta.http?.validate
 }
 
-/**
- * Resolves `meta.http`'s `{ kind: "validate", schema }` directive
- * (`http.validate()`, verbs.ts) back out of a node/entry's meta — the LAST
- * such directive wins (single-valued, unlike `sourceMapOf`'s per-key fold
- * above; a leaf attaching more than one validator is replacing the prior
- * one, not composing with it — same "later wins" convention `getHttpMeta`
- * (project.ts) already applies to `verb`/`method`/`moveTo`/`response`).
- */
-function validateOf(meta: RouteMeta): StandardSchemaV1 | undefined {
-  let schema: StandardSchemaV1 | undefined
-  for (const d of directivesOf(meta)) {
-    if (d.kind === "validate") schema = d.schema
-  }
-  return schema
-}
-
-/**
- * Resolves `meta.http`'s `{ kind: "paginated" }` directive (`paginated()`,
- * verbs.ts) back out of a node/entry's meta — the LAST such directive wins,
- * same "later wins" convention `validateOf` above applies. Route.ts's OWN
- * copy of this resolution, not a call to `getHttpMeta` (project.ts) — same
- * reason `sourceMapOf`/`validateOf` above are self-contained: project.ts
- * imports FROM route.ts, so a reverse import would cycle.
- */
 function paginatedDirectiveOf(
-  meta: RouteMeta,
-): Extract<HttpDirective, { readonly kind: "paginated" }> | undefined {
-  let directive: Extract<HttpDirective, { readonly kind: "paginated" }> | undefined
-  for (const d of directivesOf(meta)) {
-    if (d.kind === "paginated") directive = d
-  }
-  return directive
-}
-
-function withoutDirective(meta: RouteMeta, directive: HttpDirective): RouteMeta {
-  const h = meta.http as { directives?: readonly HttpDirective[] } | undefined
-  if (h === undefined) return meta
-  return {
-    ...meta,
-    http: { ...h, directives: (h.directives ?? []).filter((d) => d !== directive) },
-  }
+  meta: RouteLeafMeta,
+): { readonly style?: "cursor" | "offset"; readonly inputCursorParam?: string; readonly inputOffsetParam?: string; readonly inputLimitParam?: string } | undefined {
+  return meta.http?.paginated
 }
 
 // ============================================================================
@@ -343,16 +295,16 @@ export function mapRoute(route: HttpRoute, fn: (node: HttpRoute) => HttpRoute): 
 }
 
 // ============================================================================
-// 2a. applyMethods — reads `{ kind: "method", value }` directives from a
+// 2a. applyMethods — reads the flat `meta.http.method` scalar key off a
 // method entry's own meta and renames the method key accordingly (POST, the
 // naiveTransform default, becomes GET/PUT/DELETE/…).
 // ============================================================================
 
 /**
  * The `HttpRoute` shape after `applyMethods` rewrites a tree of type `R`.
- * The rename target (`directive.value`) comes out of the open `meta` bag as
- * a plain runtime `string` — never a literal type (see `HttpDirective` in
- * project.ts and `SharedMeta`/`LeafMeta` in node.ts) — so the resulting method KEY can't be
+ * The rename target (`meta.http.method`) comes out of the open `meta` bag as
+ * a plain runtime `string` — never a literal type (see `HttpLeafMetaProperties`
+ * in project.ts and `SharedMeta`/`LeafMeta` in node.ts) — so the resulting method KEY can't be
  * tracked statically; only the entry's VALUE (its handler type) survives.
  * `methods` is therefore widened to `Record<string, ...>` over the union of
  * the input methods' entry types — for the common case of a single method
@@ -379,18 +331,20 @@ export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R
       const rebuilt: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> = {}
       let changed = false
       for (const [key, entry] of Object.entries(methods)) {
-        const directive = directivesOf(entry.meta).find(
-          (d): d is Extract<HttpDirective, { kind: "method" }> => d.kind === "method",
-        )
-        const newKey = directive !== undefined ? directive.value.toUpperCase() : key
+        const method = entry.meta.http?.method
+        const newKey = method !== undefined ? method.toUpperCase() : key
         if (newKey !== key) changed = true
-        rebuilt[newKey] = directive !== undefined
-          ? {
-              handler: entry.handler,
-              meta: withoutDirective(entry.meta, directive),
-              ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
-            }
-          : entry
+        // No stripping: `meta.http.method` stays on the entry's meta after
+        // the rename — the flat design's "resolved shape = authored shape"
+        // means this is informational, not a directive to consume (see
+        // project.ts's module doc). A bare `op()` leaf's route-position
+        // `meta` and its sole method entry's `meta` therefore stay the SAME
+        // object reference through this rewriter, same as before any
+        // directive existed to strip — `compile.ts`'s `collectRoutes`
+        // already dedupes by function VALUE, not by meta object identity,
+        // so this doesn't change its correctness (see that function's own
+        // doc comment).
+        rebuilt[newKey] = entry
       }
       methods = changed ? rebuilt : methods
     }
@@ -399,7 +353,7 @@ export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R
 }
 
 // ============================================================================
-// 2b. applyMoveTo — reads `{ kind: "moveTo", path }` directives and moves
+// 2b. applyMoveTo — reads the flat `meta.http.moveTo` scalar key and moves
 // whole route subtrees within the tree, per the relative-path algebra in
 // docs/design/routing-and-transforms.md:
 //
@@ -439,10 +393,6 @@ function resolveMoveTo(itemPath: readonly string[], path: string): string[] {
   return out
 }
 
-function isMoveToDirective(d: HttpDirective): d is Extract<HttpDirective, { kind: "moveTo" }> {
-  return d.kind === "moveTo"
-}
-
 function detach(
   route: HttpRoute,
   path: readonly string[],
@@ -453,11 +403,14 @@ function detach(
     const rebuilt: Record<string, HttpRoute> = {}
     for (const [key, child] of Object.entries(children)) {
       const childPath = [...path, key]
-      const directive = directivesOf(child.meta).find(isMoveToDirective)
-      if (directive !== undefined) {
-        const target = resolveMoveTo(childPath, directive.path)
-        const strippedChild = { ...child, meta: withoutDirective(child.meta, directive) }
-        moves.push({ targetPath: target, subtree: detach(strippedChild, childPath, moves) })
+      const moveTo = child.meta.http?.moveTo
+      if (moveTo !== undefined) {
+        const target = resolveMoveTo(childPath, moveTo)
+        // No stripping: `meta.http.moveTo` stays on the moved subtree's own
+        // meta after the move — informational, not a directive to consume
+        // (see project.ts's module doc / applyMethods's own doc comment for
+        // the same "resolved shape = authored shape" reasoning).
+        moves.push({ targetPath: target, subtree: detach(child, childPath, moves) })
         continue
       }
       rebuilt[key] = detach(child, childPath, moves)
@@ -468,11 +421,10 @@ function detach(
   let fallback = route.fallback
   if (fallback !== undefined) {
     const childPath = [...path, "*"]
-    const directive = directivesOf(fallback.subtree.meta).find(isMoveToDirective)
-    if (directive !== undefined) {
-      const target = resolveMoveTo(childPath, directive.path)
-      const strippedChild = { ...fallback.subtree, meta: withoutDirective(fallback.subtree.meta, directive) }
-      moves.push({ targetPath: target, subtree: detach(strippedChild, childPath, moves) })
+    const moveTo = fallback.subtree.meta.http?.moveTo
+    if (moveTo !== undefined) {
+      const target = resolveMoveTo(childPath, moveTo)
+      moves.push({ targetPath: target, subtree: detach(fallback.subtree, childPath, moves) })
       fallback = undefined
     } else {
       fallback = { name: fallback.name, subtree: detach(fallback.subtree, childPath, moves) }
@@ -552,12 +504,13 @@ function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpR
  *
  * Unlike `naiveTransform`/`applyMethods`/`applyResponse`, this is NOT
  * generic over the input's handler type(s) — deliberately, not by omission.
- * `directive.path` (the move target) is a plain runtime `string` read out of
- * the open `meta` bag; TypeScript has no way to know, for a given input tree
- * type, WHERE a subtree ends up without parsing that string as a type-level
- * template literal and re-deriving the whole tree shape from it. Doing that
- * would need `HttpDirective`/`LeafMeta` to carry a typed, literal directive
- * language instead of today's open `{ [key: string]: unknown }` bag — a
+ * `meta.http.moveTo` (the move target) is a plain runtime `string` read out
+ * of the open `meta` bag; TypeScript has no way to know, for a given input
+ * tree type, WHERE a subtree ends up without parsing that string as a
+ * type-level template literal and re-deriving the whole tree shape from it.
+ * Doing that would need `HttpLeafMetaProperties`/`LeafMeta` to carry a typed,
+ * literal directive language instead of today's open `{ [key: string]:
+ * unknown }` bag — a
  * separate, much larger design question (typed directives), not a narrower
  * fix within this rewriter. `applyMoveTo` returns the erased `HttpRoute`
  * because moved subtrees' positions are genuinely unknowable statically, not
@@ -570,12 +523,12 @@ export function applyMoveTo(route: HttpRoute): HttpRoute {
 }
 
 // ============================================================================
-// 2c. applyResponse — reads `{ kind: "response", status?, headers? }`
-// directives and wraps the handler (function composition, NOT metadata on
-// the route) so it produces a value carrying the response override. The
-// override is materialized into the handler's return value via a branded
-// wrapper that `makeRouterFromRoute` (and any other HttpRoute consumer)
-// recognizes; everything else about the handler is untouched.
+// 2c. applyResponse — reads the flat `meta.http.response` scalar key and
+// wraps the handler (function composition, NOT metadata on the route) so it
+// produces a value carrying the response override. The override is
+// materialized into the handler's return value via a branded wrapper that
+// `makeRouterFromRoute` (and any other HttpRoute consumer) recognizes;
+// everything else about the handler is untouched.
 // ============================================================================
 
 const RESPONSE_OVERRIDE = Symbol("httpResponseOverride")
@@ -638,17 +591,18 @@ export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute
       const rebuilt: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> = {}
       let changed = false
       for (const [key, entry] of Object.entries(methods)) {
-        const directive = directivesOf(entry.meta).find(
-          (d): d is Extract<HttpDirective, { kind: "response" }> => d.kind === "response",
-        )
-        if (directive === undefined) {
+        const response = entry.meta.http?.response
+        if (response === undefined) {
           rebuilt[key] = entry
           continue
         }
         changed = true
         rebuilt[key] = {
-          handler: wrapResponse(entry.handler, directive.status, directive.headers),
-          meta: withoutDirective(entry.meta, directive),
+          handler: wrapResponse(entry.handler, response.status, response.headers),
+          // No stripping: `meta.http.response` stays on the entry's meta
+          // after wrapping — informational, not a directive to consume (see
+          // `applyMethods`'s own doc comment for the same reasoning).
+          meta: entry.meta,
           ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
         }
       }

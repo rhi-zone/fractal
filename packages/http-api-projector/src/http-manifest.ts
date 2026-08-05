@@ -12,16 +12,24 @@
 //     `/`-joined segment (`/books`), each fallback becomes `/:name`
 //     (`/books/:bookId`) — mirroring `naiveTransform`'s own placement
 //     baseline (route.ts), before any rewriter runs — THEN, when the leaf
-//     carries a `moveTo` directive, resolved against that raw position using
-//     the same relative-path algebra `applyMoveTo`'s `resolveMoveTo` (route.ts)
-//     applies at runtime: split the directive's `path` on `/`, `..` drops the
+//     carries a `meta.http.moveTo` value, resolved against that raw position
+//     using the same relative-path algebra `applyMoveTo`'s `resolveMoveTo`
+//     (route.ts) applies at runtime: split `moveTo` on `/`, `..` drops the
 //     current position's last segment, `.` is a no-op, any other token is
 //     pushed as a new segment.
-//   - METHOD comes from the leaf's own `meta.http.directives` — the FIRST
-//     `{ kind: "method" }` directive found (matching `applyMethods`'s own
-//     `.find()`, not `getHttpMeta`'s "last wins" parse — see route.ts), or
-//     `"POST"` when none is present (`naiveTransform`'s own default for a
-//     bare leaf, before `applyMethods` would have renamed it).
+//   - METHOD comes from the leaf's own flat `meta.http.method` scalar key —
+//     already the single, fully-resolved value `op()`'s own `mergeMeta` fold
+//     produces (last-wins; see node.ts's `MergeMetaValue`) — or `"POST"` when
+//     absent (`naiveTransform`'s own default for a bare leaf, before
+//     `applyMethods` would have renamed it). Before the http-directive-
+//     dissolution migration (docs/design/wire-profiles-and-staged-
+//     validation.md's "Prerequisite: meta unification" section), this walked
+//     a `meta.http.directives` TUPLE for the FIRST `{ kind: "method" }` entry
+//     (matching `applyMethods`'s own `.find()`, deliberately NOT
+//     `getHttpMeta`'s "last wins" parse, since no fold had happened yet at
+//     the type level) — the flat design needs no such tuple walk: the fold
+//     already happened, by construction, the moment `op()`'s contributions
+//     composed.
 //
 // This type-level resolution only reproduces the PER-LEAF half of
 // `applyMoveTo` (route.ts): each leaf's OWN target path, computed from its
@@ -50,7 +58,7 @@
 // See:
 //   packages/api-tree/src/tree-manifest.ts        — the protocol-agnostic analogue
 //   packages/api-tree/src/node.ts                 — Node, Handler, SharedMeta, op()'s literal-preserving meta
-//   packages/http-api-projector/src/project.ts    — HttpDirective<M, P>
+//   packages/http-api-projector/src/project.ts    — HttpLeafMetaProperties
 //   packages/http-api-projector/src/verbs.ts      — httpVerbBundle, http.*, moveTo
 //   packages/http-api-projector/src/route.ts      — naiveTransform, applyMethods, applyMoveTo, resolveMoveTo
 
@@ -68,76 +76,50 @@ type UnionToIntersection<U> = (U extends unknown ? (u: U) => void : never) exten
 type Simplify<T> = { readonly [K in keyof T]: T[K] } & {}
 
 /**
- * Scan a directives tuple for the FIRST `{ kind: "method" }` entry's `value`
- * — matching `applyMethods`'s own `.find()` (route.ts), which is what
- * actually determines a leaf's HTTP method at runtime. (`getHttpMeta` in
- * project.ts instead keeps the LAST match when resolving `meta.http` for
- * doc/inspection purposes — a different, already-documented divergence
- * between the two readers; this manifest follows the one that drives
- * dispatch.)
- */
-type FindMethodDirective<D extends readonly unknown[]> = D extends
-  readonly [infer First, ...infer Rest extends readonly unknown[]]
-  ? First extends { readonly kind: "method"; readonly value: infer V extends string }
-    ? V
-    : FindMethodDirective<Rest>
-  : never
-
-/**
- * Resolve a leaf's HTTP method from its own `meta` — `M["http"]["directives"]`
+ * Resolve a leaf's HTTP method from its own `meta` — `M["http"]["method"]`
  * when present and literal (see verbs.ts's `httpVerbBundle`/`http.*` and
- * node.ts's `op()`, which together are what makes a directive's `value`
- * survive as a literal instead of widening to `string`); `"POST"` otherwise,
- * matching `naiveTransform`'s own baseline for a bare leaf with no method
- * directive.
+ * node.ts's `op()`, which together are what makes it survive as a literal
+ * instead of widening to `string`); `"POST"` otherwise, matching
+ * `naiveTransform`'s own baseline for a bare leaf with no method set.
+ *
+ * No tuple walk needed (unlike the pre-http-directive-dissolution version
+ * this replaces, docs/design/wire-profiles-and-staged-validation.md's
+ * "Prerequisite: meta unification" section): `meta.http.method` is already
+ * the single, fully-resolved last-wins value the moment `op()`'s own
+ * `mergeMeta` fold (node.ts) composes a leaf's contributions — there is
+ * nothing left for this type to scan or fold itself.
  */
-type ResolveMethod<M> = M extends { readonly http?: { readonly directives?: infer D } }
-  ? D extends readonly unknown[]
-    ? [FindMethodDirective<D>] extends [never] ? "POST" : FindMethodDirective<D>
+type ResolveMethod<M> = M extends { readonly http: infer H }
+  ? H extends { readonly method: infer V extends string }
+    ? V
     : "POST"
   : "POST"
 
 /**
- * Scan a directives tuple for the FIRST `{ kind: "moveTo" }` entry's `path` —
- * matching `applyMoveTo`'s own `detach()` (route.ts), which reads
- * `directivesOf(meta).find(isMoveToDirective)` — first match, same tuple
- * order as `FindMethodDirective` above. `never` (no match) is distinguished
- * from an ABSENT directives array by the same `[X] extends [never]` idiom
- * `ResolveMethod` uses, since a bare `never` union member disappears silently
- * in an ordinary conditional check.
+ * Resolve a leaf's `meta.http.moveTo` (as a literal, when present — see
+ * verbs.ts's `moveTo()` and node.ts's `op()`), or `undefined` when the leaf
+ * carries none. Same "no tuple walk needed" simplification as `ResolveMethod`
+ * above applies here too — `meta.http.moveTo` is already the resolved,
+ * last-wins value.
  *
- * The `string extends P ? ... : P` guard below is load-bearing, NOT
- * defensive-programming excess: `VerbBundle<V>` (verbs.ts) types BOTH of its
- * tuple slots as the bare `HttpDirective<V>` — the entire 7-variant union,
- * not the specific variant actually stored at runtime — because nothing
- * narrows a tuple SLOT to a single variant positionally. `First extends
- * {kind:"moveTo"; path: infer P}` is therefore a conditional over a naked
- * (unioned) type parameter, which DISTRIBUTES: for a slot that is really a
- * `{kind:"verb"}` or `{kind:"method"}` value at runtime, the check still
- * spuriously matches that same slot's UNUSED `moveTo`-shaped union member,
- * inferring `P` as `HttpDirective`'s default `path: string` — a real but
- * WRONG match, present only because the static type admits a possibility the
- * runtime value doesn't carry. A genuine `http.moveTo(path)` directive
- * (verbs.ts's `moveTo()`) is instead ALREADY narrowed via `Extract<..., {kind
- * :"moveTo"}>` to exactly one variant with `path` bound to a literal — so
- * `string extends P` is true only for the spurious, unnarrowed match (reject,
- * keep scanning) and false for a genuine literal `path` (accept).
+ * Two-step (`M`'s own `http` key, THEN that value's `moveTo` key), both
+ * written as REQUIRED-key patterns (no `?`, even though
+ * `HttpLeafMetaProperties` declares both `http` and `moveTo` optional) —
+ * deliberately: a structural conditional match against a REQUIRED-key
+ * pattern only succeeds when the key is actually PRESENT in the checked
+ * type, which is exactly the "does this leaf carry an `http` bag / a
+ * `moveTo` within it at all" distinction needed. An OPTIONAL-key pattern
+ * (`http?: {...}` or `moveTo?: infer P`) matches trivially against ANY
+ * object type (an optional key is never required to be present) — verified
+ * empirically (scratch `tsc`) to make the whole conditional vacuously true
+ * and infer the constraint itself (`string`) rather than falling through to
+ * this type's own fallback branch, which is why `ResolveMethod` above uses
+ * the identical two-step required-key shape rather than a single optional
+ * chain.
  */
-type FindMoveToDirective<D extends readonly unknown[]> = D extends
-  readonly [infer First, ...infer Rest extends readonly unknown[]]
-  ? First extends { readonly kind: "moveTo"; readonly path: infer P extends string }
-    ? string extends P ? FindMoveToDirective<Rest> : P
-    : FindMoveToDirective<Rest>
-  : never
-
-/**
- * Resolve a leaf's `moveTo` directive path (as a literal, when present —
- * see verbs.ts's `moveTo()` and node.ts's `op()`), or `undefined` when the
- * leaf carries none.
- */
-type ResolveMoveTo<M> = M extends { readonly http?: { readonly directives?: infer D } }
-  ? D extends readonly unknown[]
-    ? [FindMoveToDirective<D>] extends [never] ? undefined : FindMoveToDirective<D>
+type ResolveMoveTo<M> = M extends { readonly http: infer H }
+  ? H extends { readonly moveTo: infer P extends string }
+    ? P
     : undefined
   : undefined
 
