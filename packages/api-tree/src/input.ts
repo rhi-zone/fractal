@@ -458,11 +458,24 @@ export type UncoveredSourceParams<H, Meta> = [InputKeys<H>] extends [never]
 // EXACTNESS FINDING (verified against a scratch `tsc` repro, not asserted
 // from reasoning alone — see this phase's session trace): a field with no
 // explicit `sourceMap` entry could, at `op()` time, either be a PATH-slug
-// match (unknowable here — depends on the tree the leaf ends up mounted
-// under, which `op()` cannot see) or fall through to the protocol's own
-// DEFAULT store. Whether that ambiguity forces a real type-level UNION
-// depends on whether "path" and the default store map to the SAME wire
-// profile:
+// match or fall through to the protocol's own DEFAULT store — and which one
+// is unknowable HERE regardless of `moveTo`. Per 24bd2af (`fix(http-api-
+// projector): moveTo no longer affects input binding`), a leaf's path-slug
+// binding is now a pure function of its AUTHORED ancestry (the local,
+// pre-moveTo path segments it's nested under — `http-api-projector`'s
+// `Sources.authoredPathParams`) rather than of where `moveTo` eventually
+// relocates it; `wire-derive.ts`'s codegen can see that authored ancestry
+// because it statically walks the whole call-site tree, so its own
+// derivation is exact (see that module's header comment). `op()`'s own
+// type-level check has no equivalent visibility: it type-checks the leaf in
+// isolation, before the leaf is ever composed into a tree — that composition
+// (nesting under `path(...)`, establishing the very authored ancestry
+// 24bd2af's binding rule reads) happens only afterward, at the caller's
+// composition site, which `op()`'s own `Meta` argument carries no trace of.
+// So the ambiguity is `op()`'s own ancestry-blindness at invocation time,
+// not a "future mount position" question — moveTo is irrelevant to it either
+// way. Whether that ambiguity forces a real type-level UNION depends on
+// whether "path" and the default store map to the SAME wire profile:
 //   - CLI: `cliStoreEncoding` is CONSTANT (every store -> `argvProfile`) —
 //     "path" and CLI's default store ("flag") always agree. NEVER
 //     ambiguous; `ResolvedStoresForField` below still returns a two-member
@@ -495,11 +508,12 @@ export type UncoveredSourceParams<H, Meta> = [InputKeys<H>] extends [never]
 // reject) a decoder typed narrower than the true union — e.g. one that only
 // handles the numeric-string case and silently mishandles a genuine
 // same-key JSON-body number this leaf might ALSO receive if it turns out NOT
-// to be the path-mounted field after all — and it ALLOWS (does not force) a
-// decoder to handle both shapes even when the leaf's real mount position
-// would only ever deliver one. Both directions are the SOUND-but-imprecise
-// side of a real "op() cannot see the tree" limitation the design doc's own
-// decision 3 flagged as an open question, not a bug in this implementation.
+// to be authored under a same-named path slug after all — and it ALLOWS
+// (does not force) a decoder to handle both shapes even when the leaf's
+// authored ancestry would only ever deliver one. Both directions are the
+// SOUND-but-imprecise side of a real "op() cannot see its own authored
+// ancestry at invocation time" limitation the design doc's own decision 3
+// flagged as an open question, not a bug in this implementation.
 // ============================================================================
 
 /** `Meta["http"]`/`Meta["cli"]`, structurally — `undefined` when that
