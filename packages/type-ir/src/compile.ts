@@ -84,6 +84,17 @@ function indentLines(lines: readonly string[], spaces: number): string[] {
  * named consts declared once (at entry-eval time, not per-call), and mints
  * fresh local variable names for coerced/nested values in parse(). */
 class GenCtx {
+  /** Module-uniqueness namespace, empty by default (every existing single-`GenCtx`-
+   * per-module caller — `compileEntryFragment`'s/`compileWireEntryFragment`'s own
+   * IIFE-scoped `ctx`, `compileDefsBlock`'s single shared `defCtx` — reproduces the
+   * exact `__prefixN` names it always has). Only a caller that splices MULTIPLE
+   * `GenCtx` instances' hoisted consts into ONE shared scope (`compileConstraintsFn`,
+   * whose `fn.lines` land at module scope in `assembleWireModule`/
+   * `assembleWireApplyValidationModule`) needs distinct instances to mint
+   * non-colliding names — passing each instance its own namespace (e.g. the entry
+   * name) is the fix, done once here rather than by post-hoc textual renaming at
+   * every assembly site that splices more than one instance's declarations together. */
+  constructor(private readonly namespace: string = "") {}
   private consts: string[] = []
   private constCounter = 0
   // Keyed by `${prefix}\0${expr}` — check/errors/parse each walk the same
@@ -107,7 +118,7 @@ class GenCtx {
     const cacheKey = `${prefix}\0${expr}`
     const cached = this.constCache.get(cacheKey)
     if (cached !== undefined) return cached
-    const name = `__${prefix}${this.constCounter++}`
+    const name = `__${this.namespace}${prefix}${this.constCounter++}`
     this.consts.push(`const ${name} = ${expr};`)
     this.constCache.set(cacheKey, name)
     return name
@@ -1795,7 +1806,13 @@ export type CompiledConstraintsFn = { readonly fnName: string; readonly lines: r
 
 export function compileConstraintsFn(name: string, ref: TypeRef): CompiledConstraintsFn {
   const fnName = `__constraints_${sanitizeDefName(name)}`
-  const ctx = new GenCtx()
+  // Namespaced by entry name (not the module-shared default `""`) — see `GenCtx`'s
+  // `namespace` doc comment: this function's `.lines` (including its hoisted consts)
+  // get spliced at MODULE scope alongside every other entry's own `compileConstraintsFn`
+  // output (`assembleWireModule`/`assembleWireApplyValidationModule`), so two entries'
+  // consts must never collide on `__ref0`-style names the way two `GenCtx()` instances
+  // both starting their counters at 0 otherwise would.
+  const ctx = new GenCtx(`${sanitizeDefName(name)}_`)
   const body = genValidate(ref, "value", "path", ctx, "errors")
   const lines = [
     ...ctx.declarations(),
@@ -2062,7 +2079,7 @@ export function compileWireEntryFragmentComposite(
  * `apply-validation-build.ts`) constructs the SAME key deterministically
  * rather than re-deriving the joining convention itself. */
 export function wireValidatorKey(name: string, profileName: string): string {
-  return `${name} ${profileName}`
+  return `${name} ${profileName}`
 }
 
 /**

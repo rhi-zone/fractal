@@ -899,47 +899,6 @@ function indentGenerated(lines: readonly string[], spaces: number): string[] {
 }
 
 /**
- * WORKAROUND for a genuine cross-entry naming collision in
- * `compileConstraintsFn` (type-ir compile.ts, Phase A, out of this phase's
- * "do not touch" list's scope but not a function this file owns either) —
- * see the design doc's "Implementation trace (phase B)" section for the full
- * writeup and a minimal repro. `compileConstraintsFn` gives each call its OWN
- * fresh `GenCtx`, whose const-naming counter always starts at 0 — so two
- * DIFFERENT entries' constraints functions each independently hoist consts
- * named `__ref0`, `__ref1`, ... starting from zero. Splicing more than one
- * entry's `fn.lines` into ONE module at shared scope (exactly what
- * `assembleWireModule`, compile.ts, and this function both do) produces a
- * duplicate `const` declaration whenever two entries each need at least one
- * hoisted const — the common case: any plain typed field's `type`-kind error
- * references one (`typeErrorStmt`'s `refLiteral`). No EXISTING test caught
- * this because no existing wire-profile test compiles more than one ENTRY
- * into one module (every multi-profile test uses a single entry across
- * several profiles, whose IIFE-scoped IIFE IS unaffected — this file's own
- * `compileWireEntryFragment`/`compileWireEntryFragmentComposite` fragments
- * are already correctly scoped, only `compileConstraintsFn`'s module-scope
- * consts collide).
- *
- * This mangles ONLY the const names THIS entry's own `fn.lines` actually
- * declares (a per-entry-unique suffix), leaving `compileConstraintsFn`
- * itself, `wireFragments`' own already-correctly-scoped consts, and every
- * other existing caller of that function completely untouched — a pure
- * textual disambiguation at the ASSEMBLY layer, not a fix to the root cause
- * (which lives in `GenCtx`/`compileConstraintsFn`, out of this phase's
- * mandate to modify).
- */
-function disambiguateConstraintsConsts(lines: readonly string[], suffix: string): string[] {
-  const text = lines.join("\n")
-  const declared = new Set<string>()
-  for (const m of text.matchAll(/^const (__\w+) = /gm)) declared.add(m[1]!)
-  if (declared.size === 0) return [...lines]
-  let renamed = text
-  for (const name of declared) {
-    renamed = renamed.replace(new RegExp(`\\b${name}\\b`, "g"), `${name}${suffix}`)
-  }
-  return renamed.split("\n")
-}
-
-/**
  * `assembleWireModule`'s (type-ir) sibling for THIS file's shape: each entry
  * has exactly ONE protocol (a call site names exactly one), not a uniform
  * profile SET shared across every entry the way `assembleWireModule` assumes
@@ -956,10 +915,10 @@ function assembleWireApplyValidationModule(
   imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
 
   const constraintsLines: string[] = []
-  entries.forEach(({ name }, index) => {
+  entries.forEach(({ name }) => {
     const fn = constraintsFns[name]
     if (!fn) throw new Error(`buildWireApplyValidationModuleSource: missing constraints fn for entry ${JSON.stringify(name)}`)
-    constraintsLines.push(...disambiguateConstraintsConsts(fn.lines, `_${index}`))
+    constraintsLines.push(...fn.lines)
   })
 
   const entryLines: string[] = []
