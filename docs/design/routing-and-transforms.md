@@ -201,7 +201,7 @@ the intermediate `Node`):
 ```ts
 import { applyValidation } from "./generated/apply-validation.ts"
 const fetch = createFetch(node, {
-  rewriters: [(routes) => applyValidation("books", routes)],
+  rewriters: [(routes) => applyValidation("books", routes, "http")],
 })
 ```
 A rejected leaf's `err(...)` Result lands on the exact same Result-unwrap path
@@ -219,26 +219,35 @@ a `Node => Node` pass, applied to the tree BEFORE that preset's own
 projection/dispatch-table walk:
 ```ts
 import { applyValidation } from "./generated/apply-validation.ts"
-await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books", t)] })
+await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books", t, "cli")] })
 ```
-A tree that needs validating for MORE than one protocol can apply
-`applyValidation` ONCE, before any protocol-specific projection —
-`examples/library-api/src/tree.ts`'s `validatedApi` does exactly this
-(`applyValidation("books", api)`, shared by `httpRoutes` and, were this
-example to wire MCP/CLI, by those too) — the wrap travels with the handler
-reference regardless of where a later projection (e.g. HTTP's `moveTo`
-directive) relocates it in the tree. A key may be used at most once per
-generated `applyValidation` function, so a tree validated separately per
-protocol (rather than once, shared) needs one call site — and one key — per
+A tree validated for MORE than one protocol that resolve to the SAME wire
+profile (mcp/graphql/jsonrpc, all uniformly typed JSON) can apply
+`applyValidation` ONCE with one shared `protocol` tag, before any
+protocol-specific projection — the wrap travels with the handler reference
+regardless of where a later projection (e.g. HTTP's `moveTo` directive)
+relocates it in the tree. `examples/library-api/src/tree.ts`'s `validatedApi`
+applies it once for its one live dispatch protocol
+(`applyValidation("books", api, "http")`, shared by `httpRoutes`). A key may
+be used at most once per generated `applyValidation` function (regardless of
+`protocol`), so a tree validated separately per DIVERGENT protocol (e.g. HTTP
+vs. CLI, whose wire profiles differ) needs one call site — and one key — per
 protocol instead.
 
 CLI's and MCP's fallback coercion/validation steps (CLI's
 `coerceInput`/`applyDefaults`/`validateRequired`; MCP's
-`validateAgainstSchema`) skip themselves for a leaf `applyValidation` already
-covers, by checking `isApplyValidationWrapped` (`apply-validation.ts`) on the
-resolved handler — the same brand-sniffing shape `wrapValidators`'s own
-`isValidatorWrapped` used, unified onto this mechanism's single brand now
-that `wrapValidators` is gone.
+`validateAgainstSchema`) have both been RETIRED (phase C of the wire-profiles
+arc, per `docs/design/wire-profiles-and-staged-validation.md`'s "What goes
+away" items 2–4): `isApplyValidationWrapped` and its backing
+`appliedHandlerBrand` `WeakSet` are deleted from `apply-validation.ts`, and
+neither `cli.ts`'s `runCli` nor `server.ts`'s `createMcpServer` sniffs it any
+longer — decode+validation now run unconditionally on every leaf
+`applyValidation` wraps, so the exclusivity sniff (generated validator XOR
+fallback) has nothing left to be exclusive with. CLI's validation posture is
+`applyValidation(key, tree, "cli")`; MCP's is `applyValidation(key, tree,
+"mcp")` (identity + JSON-date coercion, no coercion of stringified
+numbers/booleans). A leaf with no matching generated validator gets no
+validation at all, for either protocol.
 
 ## DX — constructor sugar
 

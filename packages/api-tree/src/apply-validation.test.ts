@@ -6,12 +6,7 @@
 // build-mode coverage check.
 
 import { describe, expect, it } from "bun:test"
-import {
-  assertValidationCoverage,
-  createApplyValidation,
-  isApplyValidationWrapped,
-  UncoveredLeafError,
-} from "./apply-validation.ts"
+import { assertValidationCoverage, createApplyValidation, UncoveredLeafError } from "./apply-validation.ts"
 import type { GeneratedEntry, ValidatorMap, WireValidatorMap } from "./apply-validation.ts"
 import { api, op } from "./node.ts"
 import { isResultShape } from "./index.ts"
@@ -74,10 +69,17 @@ describe("createApplyValidation — keyed application", () => {
     const applyValidation = createApplyValidation(validators)
     const treeA = api({ list: op((input: { ok: boolean }) => input) })
     const treeB = api({ list: op((input: { ok: boolean }) => input) })
+    const originalA = treeA.children.list.handler
+    const originalB = treeB.children.list.handler
     const outA = applyValidation("a", treeA)
     const outB = applyValidation("b", treeB)
-    expect(isApplyValidationWrapped(outA.children.list.handler)).toBe(true)
-    expect(isApplyValidationWrapped(outB.children.list.handler)).toBe(false)
+    // "wrapped" is verified by handler identity (a covered leaf's handler is a
+    // freshly-built wrapper, never the original function) rather than a public
+    // brand-check API — `isApplyValidationWrapped` (and the sniff sites it
+    // existed to support) is deleted per phase C, since nothing needs to skip
+    // itself in favor of this mechanism anymore.
+    expect(outA.children.list.handler).not.toBe(originalA)
+    expect(outB.children.list.handler).toBe(originalB)
   })
 })
 
@@ -130,14 +132,17 @@ describe("createApplyValidation — protocol-aware wrap selection (WireValidator
     const validators: ValidatorMap = { books: { list: entry() } }
     const wireValidators: WireValidatorMap = { books: { list: { http: queryLikeEntry() } } }
     const applyValidation = createApplyValidation(validators, wireValidators)
-    const out = applyValidation("books", api({ list: op((input: { ok: boolean }) => input) }))
-    expect(isApplyValidationWrapped(out.children.list.handler)).toBe(true)
+    const source = api({ list: op((input: { ok: boolean }) => input) })
+    const original = source.children.list.handler
+    const out = applyValidation("books", source)
+    expect(out.children.list.handler).not.toBe(original)
   })
 
   it("an omitted `wireValidators` argument defaults to {} — existing single-argument callers are unaffected", () => {
     const applyValidation = createApplyValidation({ books: { list: entry() } })
     const tree = api({ list: op((input: { ok: boolean }) => input) })
-    expect(isApplyValidationWrapped(applyValidation("books", tree).children.list.handler)).toBe(true)
+    const original = tree.children.list.handler
+    expect(applyValidation("books", tree).children.list.handler).not.toBe(original)
   })
 })
 
@@ -158,10 +163,14 @@ describe("structural walker — direct `handler` (Node) shape", () => {
     })
 
   it("wraps only the leaves whose path matches an entry", () => {
-    const out = createApplyValidation(validators)("books", tree())
-    expect(isApplyValidationWrapped(out.children.list.handler)).toBe(true)
-    expect(isApplyValidationWrapped(out.children.unwired.handler)).toBe(false)
-    expect(isApplyValidationWrapped(out.fallback.subtree.children.get.handler)).toBe(true)
+    const source = tree()
+    const originalList = source.children.list.handler
+    const originalUnwired = source.children.unwired.handler
+    const originalGet = source.fallback.subtree.children.get.handler
+    const out = createApplyValidation(validators)("books", source)
+    expect(out.children.list.handler).not.toBe(originalList)
+    expect(out.children.unwired.handler).toBe(originalUnwired)
+    expect(out.fallback.subtree.children.get.handler).not.toBe(originalGet)
   })
 
   it("passes the PARSED value to the handler on success", async () => {
@@ -191,22 +200,26 @@ describe("structural walker — direct `handler` (Node) shape", () => {
 describe("structural walker — `methods`-nested (HttpRoute) shape", () => {
   it("wraps every method entry's handler at a matching path", async () => {
     const seen: string[] = []
-    const out = createApplyValidation({ http: { books: entry() } })("http", routeTree(seen)) as ReturnType<
-      typeof routeTree
-    >
-    expect(isApplyValidationWrapped(out.children.books.methods.GET.handler)).toBe(true)
-    expect(isApplyValidationWrapped(out.children.books.methods.POST.handler)).toBe(true)
+    const source = routeTree(seen)
+    const originalGet = source.children.books.methods.GET.handler
+    const originalPost = source.children.books.methods.POST.handler
+    const out = createApplyValidation({ http: { books: entry() } })("http", source) as ReturnType<typeof routeTree>
+    expect(out.children.books.methods.GET.handler).not.toBe(originalGet)
+    expect(out.children.books.methods.POST.handler).not.toBe(originalPost)
     await expect(out.children.books.methods.GET.handler({ ok: true })).resolves.toEqual({ ok: true, parsed: true })
     expect(seen).toEqual(["books.GET"])
   })
 
   it("keys a fallback position as `:name`, same as the Node shape", () => {
     const seen: string[] = []
-    const out = createApplyValidation({ http: { "books/:bookId": entry() } })("http", routeTree(seen)) as ReturnType<
+    const source = routeTree(seen)
+    const originalFallbackGet = source.children.books.fallback.subtree.methods.GET.handler
+    const originalRootGet = source.children.books.methods.GET.handler
+    const out = createApplyValidation({ http: { "books/:bookId": entry() } })("http", source) as ReturnType<
       typeof routeTree
     >
-    expect(isApplyValidationWrapped(out.children.books.fallback.subtree.methods.GET.handler)).toBe(true)
-    expect(isApplyValidationWrapped(out.children.books.methods.GET.handler)).toBe(false)
+    expect(out.children.books.fallback.subtree.methods.GET.handler).not.toBe(originalFallbackGet)
+    expect(out.children.books.methods.GET.handler).toBe(originalRootGet)
   })
 
   it("preserves fields it doesn't recognize (a method entry's `meta`, a projector's own additions)", () => {

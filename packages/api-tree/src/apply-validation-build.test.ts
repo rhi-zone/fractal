@@ -247,6 +247,25 @@ describe("wire-profile build path (3-arg applyValidation call sites)", () => {
     expect(leaf.derivation).toEqual({ profile: jsonProfile })
   })
 
+  it("graphql/jsonrpc: also uniform jsonProfile — byte-identical derivation to mcp's, for a structurally identical leaf", () => {
+    // This is the fact that makes the design doc's "one key/call can serve
+    // two protocols that resolve to the same base profile" decision safe:
+    // mcp/graphql/jsonrpc derive to the exact same jsonProfile, not merely
+    // to "similar" profiles — so a tree wrapped once under any one of these
+    // three protocol tags decodes/validates identically regardless of which
+    // protocol's server actually dispatches through it at runtime (see the
+    // "shared key/call across protocols resolving to the same jsonProfile"
+    // test below, which exercises this at the runtime level).
+    const { byKey } = extractWireApplyValidationTypeRefs(WIRE_FIXTURE)
+    const mcpLeaf = byKey["wire-mcp"]!.leaves["get"]!
+    const graphqlLeaf = byKey["wire-graphql"]!.leaves["get"]!
+    const jsonrpcLeaf = byKey["wire-jsonrpc"]!.leaves["get"]!
+    expect(graphqlLeaf.derivation).toEqual({ profile: jsonProfile })
+    expect(jsonrpcLeaf.derivation).toEqual({ profile: jsonProfile })
+    expect(graphqlLeaf.derivation).toEqual(mcpLeaf.derivation)
+    expect(jsonrpcLeaf.derivation).toEqual(mcpLeaf.derivation)
+  })
+
   it("emits a syntactically valid module, grouping wireValidatorsByKey by (key, path, protocol)", () => {
     const source = buildWireApplyValidationModuleSource(WIRE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
     expect(source).toContain('"wire-http": {')
@@ -281,6 +300,46 @@ describe("wire-profile build path (3-arg applyValidation call sites)", () => {
     }
     const mcpResult = (await mcpOut.children.get.handler({ count: "3" })) as unknown
     expect((mcpResult as { kind: string }).kind).toBe("err")
+  })
+
+  it("one key/call registered under one protocol tag serves a tree dispatched by a DIFFERENT same-jsonProfile protocol correctly (decision 1's 'share one key/call if the tree itself is one tree for both')", async () => {
+    // Registering "wire-mcp" once with protocol "mcp" produces a wrapped
+    // Node whose handler bakes in jsonProfile decode+validate at WRAP time.
+    // A real deployment sharing one tree across mcp/graphql/jsonrpc servers
+    // (all resolving to jsonProfile) hands that SAME wrapped Node to each
+    // projector's own server constructor — none of them re-derive the wire
+    // profile at dispatch time, so the handler's behavior is identical no
+    // matter which protocol's server actually calls it. Simulated here by
+    // calling the SAME wrapped handler twice, standing in for two different
+    // protocol servers (e.g. createMcpServer and createGraphQLServer) both
+    // dispatching through the one wrapped tree — no separate "wire-graphql"/
+    // "wire-jsonrpc" registration is needed for correctness.
+    const source = buildWireApplyValidationModuleSource(WIRE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    const { applyValidation: wire } = evalModule(source)
+
+    const sharedOut = wire(
+      "wire-mcp",
+      { meta: {}, children: { get: { meta: {}, handler: (i: unknown) => i } } },
+      "mcp",
+    ) as { children: { get: { handler: (i: unknown) => unknown } } }
+    const sharedHandler = sharedOut.children.get.handler
+
+    // "Server A" (e.g. an MCP server) dispatching through the shared handler.
+    const asMcp = (await sharedHandler({ count: 3 })) as unknown
+    expect(asMcp).toEqual({ count: 3 })
+
+    // "Server B" (e.g. a GraphQL/JSON-RPC server, sharing the SAME wrapped
+    // tree) dispatching through the identical handler reference — same
+    // jsonProfile decode+validate runs, unaffected by which "server" called
+    // it, and a prior call's input doesn't leak into this one.
+    const asGraphql = (await sharedHandler({ count: 5 })) as unknown
+    expect(asGraphql).toEqual({ count: 5 })
+
+    // A typed-JSON violation (stringified number) is rejected identically
+    // regardless of which "server" dispatches it — jsonProfile never
+    // coerces, so this isn't protocol-tag-dependent behavior.
+    const rejected = (await sharedHandler({ count: "5" })) as unknown
+    expect((rejected as { kind: string }).kind).toBe("err")
   })
 })
 

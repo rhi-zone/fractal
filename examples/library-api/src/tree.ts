@@ -221,15 +221,20 @@ export const api = api_({
   })
 
 // ============================================================================
-// Validator wiring — `applyValidation("books", api)`
-// (@rhi-zone/fractal-api-tree/apply-validation), the call-site-anchored
-// mechanism `bun run codegen` (package.json) compiles this exact call
-// against: it scans THIS file for `applyValidation(key, treeExpr)`
+// Validator wiring — `applyValidation("books", api, "http")`
+// (@rhi-zone/fractal-api-tree/apply-validation), the call-site-anchored,
+// STAGED wire-profile mechanism (see
+// docs/design/wire-profiles-and-staged-validation.md — phase C, "the doc's
+// end state is staged-only"). `bun run codegen` (package.json, `build-wire`)
+// scans THIS file for 3-arg `applyValidation(key, treeExpr, protocol)`
 // invocations and emits `examples/library-api/src/generated/apply-validation.ts`
-// — one `Record<path, entry>` per key, `path` "/"-joined and tree-relative
-// (a `fallback` segment as `:name`), regrouped into the
-// `Record<key, Record<path, entry>>` `createApplyValidation` (the generated
-// module's own runtime import) wants.
+// via `WireValidatorMap` — the third argument names the wire protocol
+// (`"http"` here) so codegen derives each leaf's PER-FIELD encoding: query/
+// path params decode from numeric/strict-boolean/ISO-date strings
+// (`queryProfile`-style), a JSON body's `Date` fields decode from an ISO
+// string (`jsonProfile`-style), everything else in the body arrives already
+// typed with no coercion at all — see `packages/api-tree/src/wire-derive.ts`'s
+// `deriveFieldProfiles("http", ...)`.
 //
 // Applied to `api` (the raw Node), BEFORE any protocol-specific projection —
 // the same "validate once, share across every projector" shape
@@ -243,9 +248,18 @@ export const api = api_({
 // matching generated entry keeps its original handler untouched (permissive
 // by default — `assertValidationCoverage` is the opt-in loud check, not run
 // here).
+//
+// This tree is only ever DISPATCHED over HTTP in this example (`httpRoutes`
+// below; MCP's own use of `api`, in app.test.ts, is schema-EXTRACTION via
+// `toTools`, not a running MCP server) — so there is only one protocol's key
+// to claim here. A tree genuinely dispatched over two DIVERGENT wires (e.g.
+// HTTP and CLI) would claim one key PER protocol instead (decision 1,
+// wire-profiles-and-staged-validation.md's "Implementation trace" section) —
+// see that doc for the pattern this example would follow if a second live
+// protocol were added.
 // ============================================================================
 
-export const validatedApi = applyValidation("books", api)
+export const validatedApi = applyValidation("books", api, "http")
 
 // ============================================================================
 // HttpRoute projection — the pre-composed pipeline (naiveTransform +
