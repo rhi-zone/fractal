@@ -294,14 +294,14 @@ describe("mergeMeta", () => {
     expect((m as OpenMeta)["b"]).toBe(3)
   })
 
-  it("arrays at depth 2 (e.g. http.directives) concatenate", () => {
-    const a = { kind: "verb", value: "GET" }
-    const b = { kind: "moveTo", path: ".." }
+  it("arrays at depth 2 (e.g. http.middleware) concatenate", () => {
+    const a = (inner: unknown) => inner
+    const b = (inner: unknown) => inner
     const m = mergeMeta(
-      { http: { directives: [a] } } as OpenMeta,
-      { http: { directives: [b] } } as OpenMeta,
+      { http: { middleware: [a] } } as OpenMeta,
+      { http: { middleware: [b] } } as OpenMeta,
     )
-    expect(((m as OpenMeta).http as { directives: unknown[] }).directives).toEqual([a, b])
+    expect(((m as OpenMeta).http as { middleware: unknown[] }).middleware).toEqual([a, b])
   })
 
   it("scalar keys nested in sub-bags still overwrite (later wins)", () => {
@@ -312,18 +312,22 @@ describe("mergeMeta", () => {
     expect((m.tags as Tags).readOnly).toBe(false)
   })
 
-  it("composing a verb bundle with an extra http contribution preserves both directive sets", () => {
+  it("composing a verb bundle with an extra http contribution preserves both flat scalar keys and the array key", () => {
     const verbGet = {
       tags: { readOnly: true },
-      http: { directives: [{ kind: "verb", value: "GET" }, { kind: "method", value: "GET" }] },
+      http: { verb: "GET", method: "GET" },
     } as OpenMeta
-    const m = mergeMeta(verbGet, { http: { directives: [{ kind: "moveTo", path: ".." }] } } as OpenMeta)
-    expect(((m as OpenMeta).http as { directives: unknown[] }).directives).toEqual([
-      { kind: "verb", value: "GET" },
-      { kind: "method", value: "GET" },
-      { kind: "moveTo", path: ".." },
-    ])
+    const m = mergeMeta(verbGet, { http: { moveTo: ".." } } as OpenMeta)
+    expect((m as OpenMeta).http).toEqual({ verb: "GET", method: "GET", moveTo: ".." })
     expect((m.tags as Tags).readOnly).toBe(true)
+  })
+
+  it("map-shaped value at depth 3 (e.g. http.sourceMap's per-param ParamSource) replaces WHOLESALE on key overlap, never field-merges (mergeRecords' depth cap, see its own doc comment)", () => {
+    const m = mergeMeta(
+      { http: { sourceMap: { year: { store: "query", key: "fiscal_year" } } } } as OpenMeta,
+      { http: { sourceMap: { year: { store: "header" } } } } as OpenMeta,
+    )
+    expect((m as OpenMeta).http).toEqual({ sourceMap: { year: { store: "header" } } })
   })
 })
 
