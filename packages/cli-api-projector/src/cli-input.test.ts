@@ -6,10 +6,13 @@
 //   - default behavior unchanged (flags + slugs, slugs win)
 //   - the new "env" store, reachable via a leaf's `meta.cli.sourceMap`
 //   - a sourceMap override taking precedence over the primary "flag" store
-//   - coercion/defaults/validation still running on the assembled bag
+//   - assembly produces raw wire values only — no coercion/defaults/
+//     validation runs locally anymore (see docs/design/
+//     wire-profiles-and-staged-validation.md); that's the generated wire
+//     validator's job, wired via `applyValidation(key, tree, "cli")`
 
 import { describe, it, expect } from "bun:test"
-import { runCli, CliError } from "./cli.ts"
+import { runCli } from "./cli.ts"
 import { api, op } from "@rhi-zone/fractal-api-tree/node"
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 
@@ -107,7 +110,7 @@ describe("input assembly — sourceMap override precedence over primary store", 
   })
 })
 
-describe("input assembly — post-assembly coercion/defaults/validation still apply", () => {
+describe("input assembly — raw wire values only, no local coercion/defaults/validation", () => {
   const schemas: SchemaMap = {
     orders_create: {
       inputSchema: {
@@ -130,23 +133,22 @@ describe("input assembly — post-assembly coercion/defaults/validation still ap
     }),
   })
 
-  it("a numeric flag assembled via the primary store is still coerced to a number", async () => {
+  it("a numeric flag assembled via the primary store reaches the handler as the raw string, not a number", async () => {
     process.env.API_KEY = "k"
     try {
       const mock = makeMockIO()
       await runCli(tree, ["orders", "create", "--qty", "3"], mock.io, { schemas })
-      expect(JSON.parse(mock.out.join(""))).toEqual({ qty: 3, apiKey: "k" })
+      expect(JSON.parse(mock.out.join(""))).toEqual({ qty: "3", apiKey: "k" })
     } finally {
       delete process.env.API_KEY
     }
   })
 
-  it("required-field validation still fires when the sourceMap-declared env var is absent", async () => {
+  it("no required-field validation fires when the sourceMap-declared env var is absent — apiKey is simply absent", async () => {
     delete process.env.API_KEY
     const mock = makeMockIO()
-    await expect(
-      runCli(tree, ["orders", "create", "--qty", "3"], mock.io, { schemas }),
-    ).rejects.toBeInstanceOf(CliError)
-    expect(mock.err.join("")).toContain("--apiKey")
+    await runCli(tree, ["orders", "create", "--qty", "3"], mock.io, { schemas })
+    const result = JSON.parse(mock.out.join(""))
+    expect(result.apiKey).toBeUndefined()
   })
 })
