@@ -1318,13 +1318,15 @@ export function assembleValidatorModule(
 // Scope cuts made in THIS phase, called out explicitly (not contradictions —
 // none of the settled decisions in the design doc require these, and the
 // phase's own test list doesn't exercise them):
-//   - No `defs`/`ref` recursion support for wire profiles: a `ref` inside a
-//     wire-profile-compiled tree falls through as a structural no-op
-//     (aliasing the wire value), the same carve-out `checkHandlers.ref`/
-//     `validateHandlers.ref` already document for a bare `TypeRef` with no
-//     `defs` passed in. Recursive/shared defs support can be added the same
-//     way `compileDefs` added it for `check`/`errors`/`parse`, if/when a
-//     caller needs it.
+//   - [CLOSED, phase D] `defs`/`ref` recursion support for wire profiles: a
+//     `ref` inside a wire-profile-compiled tree now compiles to a real call —
+//     `compileConstraintsFn`'s `externalDefNames` param (constraints layer,
+//     reusing `compileDefs`/`ctx.defNames` unchanged) plus the new
+//     `WireDefsRegistry` (decode layer, one `__wiredecode_NAME_PROFILE`
+//     function per (defName, profile) pair actually referenced — see that
+//     class's doc comment). A `ref` with no `defs`/registry passed in still
+//     falls through as the pre-phase-D structural no-op — the carve-out
+//     itself isn't gone, just no longer the ONLY option.
 //   - `defaults-fill` recurses into `object` fields and `array` elements only
 //     — matching `meta.default`'s only current authoring site
 //     (`json-schema.ts`'s `withMeta`, always on a field, never on a
@@ -1510,6 +1512,114 @@ export const argvProfile: WireProfile = {
 
 const STRUCTURAL_WIRE_KINDS = new Set(["object", "array", "tuple", "map", "union", "intersection", "page"])
 
+/**
+ * Module-scope registry of wire-decode functions + `ValidWire` type aliases
+ * for shared/recursive `defs`, keyed by the (defName, profileName) PAIR — the
+ * decode-layer half of phase D's "close the wire-profile defs/ref scope cut"
+ * work (see this section's header comment). A shared def needs one compiled
+ * wire-decode function PER (defName, profile) pair actually referenced across
+ * a module, not one per defName (unlike the constraints layer's
+ * `__def_NAME_errors`, which is profile-independent) — this registry compiles
+ * each pair LAZILY, the first time `genWireEncodeDecodeShape`'s `ref` case (or
+ * `wireTypeTextShape`'s) encounters it, and memoizes by pair so the SAME def
+ * referenced from multiple entries/fields under the SAME profile compiles
+ * once. The function's own name is reserved in the memo BEFORE its body is
+ * generated, so a self- (or mutually-) recursive def's own body resolves to a
+ * call to that reserved name rather than re-entering compilation.
+ *
+ * One instance is shared across an entire module's compile (constructed by
+ * the caller — `compileWireModule`, or api-tree's `apply-validation-build.ts`
+ * — via `createWireDefsRegistry`, threaded into every `compileWireEntryFragment`/
+ * `compileWireEntryFragmentComposite` call for that module) so dedup spans
+ * every entry, not just one.
+ */
+export class WireDefsRegistry {
+  private readonly defs: Readonly<Record<string, TypeRef>>
+  /** Names with a `defs` entry in scope for this compile — a `ref` whose
+   * target ISN'T in this set has nothing to call (bare `TypeRef`, no `defs`
+   * passed in) and falls through to today's structural no-op, same carve-out
+   * as `checkHandlers.ref`/`validateHandlers.ref`. */
+  readonly defNames: ReadonlySet<string>
+  private readonly decodeFnNames = new Map<string, string>()
+  private readonly typeAliasNames = new Map<string, string>()
+  private readonly lines: string[] = []
+
+  // NOT a parameter property (`private readonly defs: ...` in the
+  // constructor signature): a parameter property's assignment runs AFTER
+  // this class's OWN field initializers (JS class-field-initializer-order
+  // semantics), so `defNames`'s initializer above would have observed
+  // `this.defs` as still `undefined` had it been declared as one — the
+  // explicit assignments below run in the constructor BODY, after every
+  // field initializer, so `this.defs` is guaranteed set first.
+  constructor(defs: Readonly<Record<string, TypeRef>>) {
+    this.defs = defs
+    this.defNames = new Set(Object.keys(defs))
+  }
+
+  /** The wire-decode function name for `(defName, profile.name)`, compiling
+   * `function __wiredecode_NAME_PROFILE(wire, path, errs) { ... }` (decode,
+   * then defaults-fill for this def's OWN subtree — see this section's header
+   * comment for why NOT constraints, which stay the constraints fn's job) on
+   * first request. */
+  decodeFnName(defName: string, profile: WireProfile): string {
+    const key = `${defName}\0${profile.name}`
+    const existing = this.decodeFnNames.get(key)
+    if (existing !== undefined) return existing
+    const fnName = `__wiredecode_${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}`
+    this.decodeFnNames.set(key, fnName)
+    const ref = this.defs[defName]
+    if (ref === undefined) throw new Error(`WireDefsRegistry: unknown def ${JSON.stringify(defName)}`)
+    const ctx = new GenCtx(`${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}_`)
+    const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile, this)
+    const fillStmts = genDefaultsFillChildren(ref, "__decoded")
+    this.lines.push(
+      ...ctx.declarations(),
+      `function ${fnName}(wire: any, path: string[], errs: ValidationError[]): any {`,
+      ...indentLines(decodeBody.stmts, 2),
+      `  let __decoded: any = ${decodeBody.outExpr};`,
+      ...indentLines(fillStmts, 2),
+      `  return __decoded;`,
+      `}`,
+    )
+    return fnName
+  }
+
+  /** The local `ValidWire` type-alias name for `(defName, profile.name)`,
+   * emitting `type __wiretype_NAME_PROFILE = <structural ValidWire text>;`
+   * once. A local alias (not structural inlining, `wireTypeTextShape`'s
+   * default for a `ref` with no def in scope) is required here because
+   * inlining would infinite-loop for a self-recursive def — mirrors
+   * `compileDefs`'s own `type __def_NAME = ...` alias, profile-qualified
+   * since `ValidWire` (unlike `T`) varies per profile. */
+  typeAliasName(defName: string, profile: WireProfile): string {
+    const key = `${defName}\0${profile.name}`
+    const existing = this.typeAliasNames.get(key)
+    if (existing !== undefined) return existing
+    const aliasName = `__wiretype_${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}`
+    this.typeAliasNames.set(key, aliasName)
+    const ref = this.defs[defName]
+    if (ref === undefined) throw new Error(`WireDefsRegistry: unknown def ${JSON.stringify(defName)}`)
+    this.lines.push(`type ${aliasName} = ${wireTypeText(ref, profile, this)};`)
+    return aliasName
+  }
+
+  /** Every wire-decode function + type-alias declaration compiled so far —
+   * spliced ONCE at module scope by the caller (`assembleWireModule`/
+   * `assembleWireApplyValidationModule`), alongside (not instead of) the
+   * constraints layer's own `compileDefsBlock` output. */
+  moduleLines(): readonly string[] {
+    return this.lines
+  }
+}
+
+/** Construct a fresh `WireDefsRegistry` for one module's compile — the
+ * factory a caller outside this file (api-tree's `apply-validation-build.ts`)
+ * uses, since `WireDefsRegistry`'s constructor is otherwise this file's own
+ * implementation detail. */
+export function createWireDefsRegistry(defs: Readonly<Record<string, TypeRef>>): WireDefsRegistry {
+  return new WireDefsRegistry(defs)
+}
+
 /** Structural recursion for the fused `validateEncoding` + `decode` stage.
  * Every structural kind (object/array/tuple/map/union/intersection/page) is
  * profile-INDEPENDENT — only leaf kinds vary, via `profile.leafHandlers`
@@ -1529,10 +1639,17 @@ const STRUCTURAL_WIRE_KINDS = new Set(["object", "array", "tuple", "map", "union
  *     enum/minLength/maxLength/multipleOf are entirely `validateConstraints`'s
  *     job, shared unchanged across every profile (see `compileConstraintsFn`
  *     below). */
-function genWireEncodeDecode(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+function genWireEncodeDecode(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): ValidateResult {
   if (ref.meta.nullable === true) {
     const out = ctx.fresh("n")
-    const inner = genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile)
+    const inner = genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile, registry)
     const stmts = [
       `let ${out};`,
       `if (${v} === null) { ${out} = null; } else {`,
@@ -1542,35 +1659,71 @@ function genWireEncodeDecode(ref: TypeRef, v: string, pathExpr: string, ctx: Gen
     ]
     return { stmts, outExpr: out }
   }
-  return genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile)
+  return genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile, registry)
 }
 
-function genWireEncodeDecodeShape(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+/** `ref`'s own wire-decode handling (phase D): delegates to
+ * `registry.decodeFnName` when the target has a `defs` entry in scope
+ * (a `WireDefsRegistry` was passed in AND knows this target); with no
+ * registry, or a target not in it, this is a structural no-op that aliases
+ * the wire value — the same pre-phase-D carve-out `checkHandlers.ref`/
+ * `validateHandlers.ref` document for a bare `TypeRef` with no `defs`. */
+function wireRefDecode(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry: WireDefsRegistry | undefined,
+): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "ref" }
+  if (registry === undefined || !registry.defNames.has(s.target)) return defaultWireLeaf(ref, v, pathExpr, ctx)
+  const fnName = registry.decodeFnName(s.target, profile)
+  const out = ctx.fresh("d")
+  return { stmts: [`const ${out} = ${fnName}(${v}, ${pathExpr}, errs);`], outExpr: out }
+}
+
+function genWireEncodeDecodeShape(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): ValidateResult {
   const kind = ref.shape.kind
-  if (kind === "page") return genWireEncodeDecode(pageAsObjectRef(ref), v, pathExpr, ctx, profile)
+  if (kind === "page") return genWireEncodeDecode(pageAsObjectRef(ref), v, pathExpr, ctx, profile, registry)
+  if (kind === "ref") return wireRefDecode(ref, v, pathExpr, ctx, profile, registry)
   if (!STRUCTURAL_WIRE_KINDS.has(kind)) {
     const handler = resolve(kind, profile.leafHandlers)
     return handler === undefined ? defaultWireLeaf(ref, v, pathExpr, ctx) : handler.decode(ref, v, pathExpr, ctx)
   }
   switch (kind) {
     case "object":
-      return wireObject(ref, v, pathExpr, ctx, profile)
+      return wireObject(ref, v, pathExpr, ctx, profile, registry)
     case "array":
-      return wireArray(ref, v, pathExpr, ctx, profile)
+      return wireArray(ref, v, pathExpr, ctx, profile, registry)
     case "tuple":
-      return wireTuple(ref, v, pathExpr, ctx, profile)
+      return wireTuple(ref, v, pathExpr, ctx, profile, registry)
     case "map":
-      return wireMap(ref, v, pathExpr, ctx, profile)
+      return wireMap(ref, v, pathExpr, ctx, profile, registry)
     case "union":
-      return wireUnion(ref, v, pathExpr, ctx, profile)
+      return wireUnion(ref, v, pathExpr, ctx, profile, registry)
     case "intersection":
-      return wireIntersection(ref, v, pathExpr, ctx, profile)
+      return wireIntersection(ref, v, pathExpr, ctx, profile, registry)
     default:
       return { stmts: [], outExpr: v }
   }
 }
 
-function wireObject(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+function wireObject(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "object" }
   const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
   const out = ctx.fresh("o")
@@ -1580,7 +1733,7 @@ function wireObject(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, prof
   for (const [name, field] of Object.entries(s.fields)) {
     const fv = `${v}[${JSON.stringify(name)}]`
     const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
-    const inner = genWireEncodeDecode(field, fv, fpath, ctx, profile)
+    const inner = genWireEncodeDecode(field, fv, fpath, ctx, profile, registry)
     body.push(
       `if (${fv} !== undefined) {`,
       ...indentLines(inner.stmts, 2),
@@ -1598,7 +1751,14 @@ function wireObject(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, prof
   return { stmts, outExpr: out }
 }
 
-function wireArray(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+function wireArray(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "array" }
   const out = ctx.fresh("a")
   const stmts: string[] = [`let ${out}: any[] = [];`]
@@ -1606,7 +1766,7 @@ function wireArray(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profi
   const idx = ctx.fresh("i")
   const ev = ctx.fresh("e")
   const epath = ctx.fresh("p")
-  const inner = genWireEncodeDecode(s.element, ev, epath, ctx, profile)
+  const inner = genWireEncodeDecode(s.element, ev, epath, ctx, profile, registry)
   const body = [
     `for (let ${idx} = 0; ${idx} < ${v}.length; ${idx}++) {`,
     `  const ${ev} = ${v}[${idx}];`,
@@ -1619,7 +1779,14 @@ function wireArray(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profi
   return { stmts, outExpr: out }
 }
 
-function wireTuple(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+function wireTuple(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "tuple" }
   const out = ctx.fresh("t")
   const stmts: string[] = [`let ${out}: any[] = [];`]
@@ -1630,14 +1797,21 @@ function wireTuple(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profi
   s.elements.forEach((element, i) => {
     const ev = `${v}[${i}]`
     const epath = `${pathExpr}.concat([${JSON.stringify(String(i))}])`
-    const inner = genWireEncodeDecode(element, ev, epath, ctx, profile)
+    const inner = genWireEncodeDecode(element, ev, epath, ctx, profile, registry)
     body.push(`if (${v}.length > ${i}) {`, ...indentLines(inner.stmts, 2), `  ${out}.push(${inner.outExpr});`, `}`)
   })
   stmts.push(...indentLines(body, 2), `}`)
   return { stmts, outExpr: out }
 }
 
-function wireMap(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+function wireMap(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "map" }
   const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
   const out = ctx.fresh("m")
@@ -1646,7 +1820,7 @@ function wireMap(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile
   const key = ctx.fresh("k")
   const ev = ctx.fresh("e")
   const epath = ctx.fresh("p")
-  const inner = genWireEncodeDecode(s.value, ev, epath, ctx, profile)
+  const inner = genWireEncodeDecode(s.value, ev, epath, ctx, profile, registry)
   const body = [
     `for (const ${key} of Object.keys(${v})) {`,
     `  const ${ev} = ${v}[${key}];`,
@@ -1664,7 +1838,14 @@ function wireMap(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile
  * zero ENCODING errors (a variant this profile can't even decode the wire
  * into), not zero constraint errors (constraints aren't checked until
  * `validateConstraints`, after a variant has already been picked). */
-function wireUnion(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+function wireUnion(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "union" }
   const out = ctx.fresh("u")
   const matched = ctx.fresh("matched")
@@ -1677,7 +1858,7 @@ function wireUnion(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profi
   }
   s.variants.forEach((variant, i) => {
     const scratch = scratchNames[i]!
-    const inner = genWireEncodeDecode(variant, v, pathExpr, ctx, profile)
+    const inner = genWireEncodeDecode(variant, v, pathExpr, ctx, profile, registry)
     stmts.push(`if (!${matched}) {`)
     stmts.push(`  { const errs = ${scratch};`)
     stmts.push(...indentLines(inner.stmts, 4))
@@ -1689,7 +1870,14 @@ function wireUnion(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profi
   return { stmts, outExpr: out }
 }
 
-function wireIntersection(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, profile: WireProfile): ValidateResult {
+function wireIntersection(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "intersection" }
   if (s.members.length === 0) return { stmts: [], outExpr: v }
   const out = ctx.fresh("x")
@@ -1697,7 +1885,7 @@ function wireIntersection(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx
   const hasObjectMember = s.members.some((m) => m.shape.kind === "object")
   if (hasObjectMember) stmts.push(`${out} = {};`)
   for (const member of s.members) {
-    const inner = genWireEncodeDecode(member, v, pathExpr, ctx, profile)
+    const inner = genWireEncodeDecode(member, v, pathExpr, ctx, profile, registry)
     stmts.push(...inner.stmts)
     if (hasObjectMember && member.shape.kind === "object") {
       stmts.push(`Object.assign(${out}, ${inner.outExpr});`)
@@ -1714,38 +1902,45 @@ function wireIntersection(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx
  * `meta.optional`, matching `wireObject`'s "absent field, no error" decode
  * semantics above — decode only ever produces what the wire actually
  * carried. */
-export function wireTypeText(ref: TypeRef, profile: WireProfile): string {
-  const base = wireTypeTextShape(ref, profile)
+export function wireTypeText(ref: TypeRef, profile: WireProfile, registry?: WireDefsRegistry): string {
+  const base = wireTypeTextShape(ref, profile, registry)
   return ref.meta.nullable === true ? `${base} | null` : base
 }
 
-function wireTypeTextShape(ref: TypeRef, profile: WireProfile): string {
+function wireTypeTextShape(ref: TypeRef, profile: WireProfile, registry?: WireDefsRegistry): string {
   const kind = ref.shape.kind
-  if (kind === "page") return wireTypeTextShape(pageAsObjectRef(ref), profile)
+  if (kind === "page") return wireTypeTextShape(pageAsObjectRef(ref), profile, registry)
+  if (kind === "ref") {
+    const s = ref.shape as TypeShape & { kind: "ref" }
+    if (registry === undefined || !registry.defNames.has(s.target)) return defaultWireType(ref)
+    return registry.typeAliasName(s.target, profile)
+  }
   if (kind === "object") {
     const s = ref.shape as TypeShape & { kind: "object" }
-    const fields = Object.entries(s.fields).map(([name, field]) => `${JSON.stringify(name)}?: ${wireTypeText(field, profile)}`)
+    const fields = Object.entries(s.fields).map(
+      ([name, field]) => `${JSON.stringify(name)}?: ${wireTypeText(field, profile, registry)}`,
+    )
     return `{ ${fields.join("; ")} }`
   }
   if (kind === "array") {
     const s = ref.shape as TypeShape & { kind: "array" }
-    return `(${wireTypeText(s.element, profile)})[]`
+    return `(${wireTypeText(s.element, profile, registry)})[]`
   }
   if (kind === "tuple") {
     const s = ref.shape as TypeShape & { kind: "tuple" }
-    return `[${s.elements.map((e) => wireTypeText(e, profile)).join(", ")}]`
+    return `[${s.elements.map((e) => wireTypeText(e, profile, registry)).join(", ")}]`
   }
   if (kind === "map") {
     const s = ref.shape as TypeShape & { kind: "map" }
-    return `Record<string, ${wireTypeText(s.value, profile)}>`
+    return `Record<string, ${wireTypeText(s.value, profile, registry)}>`
   }
   if (kind === "union") {
     const s = ref.shape as TypeShape & { kind: "union" }
-    return s.variants.map((m) => `(${wireTypeText(m, profile)})`).join(" | ")
+    return s.variants.map((m) => `(${wireTypeText(m, profile, registry)})`).join(" | ")
   }
   if (kind === "intersection") {
     const s = ref.shape as TypeShape & { kind: "intersection" }
-    return s.members.map((m) => `(${wireTypeText(m, profile)})`).join(" & ")
+    return s.members.map((m) => `(${wireTypeText(m, profile, registry)})`).join(" & ")
   }
   const override = resolve(kind, profile.leafHandlers)
   return override === undefined ? defaultWireType(ref) : override.wireType(ref)
@@ -1801,10 +1996,25 @@ function genDefaultsFillField(field: TypeRef, fv: string): string[] {
  * all profiles" (design doc). Depends only on `ref`'s own IR fingerprint,
  * never on any wire profile — the doc's "wire profile as a second
  * fingerprint input" (see `compileWireEntryFragment`'s doc comment) is
- * exactly what THIS function does not take. */
+ * exactly what THIS function does not take.
+ *
+ * `externalDefNames` (phase D) is the same seeding `compileEntryBody` does
+ * for `compileValidatorModule`'s module-scope `defs` block: a caller compiles
+ * the shared `__def_NAME_check/errors/parse` functions ONCE at module scope
+ * (`compileDefsBlock`, unchanged) and passes the resulting `defNames` set
+ * here so a `ref` inside `ref`'s own tree resolves to a call into that
+ * shared function (via the existing, unmodified `validateHandlers.ref`)
+ * instead of the pre-phase-D no-op passthrough. This does NOT recompile
+ * `defs`' own bodies — that stays `compileDefsBlock`'s job, shared with the
+ * non-wire `check`/`errors`/`parse` path, so a def reused by BOTH paths in
+ * one module still compiles once. */
 export type CompiledConstraintsFn = { readonly fnName: string; readonly lines: readonly string[] }
 
-export function compileConstraintsFn(name: string, ref: TypeRef): CompiledConstraintsFn {
+export function compileConstraintsFn(
+  name: string,
+  ref: TypeRef,
+  externalDefNames?: ReadonlySet<string>,
+): CompiledConstraintsFn {
   const fnName = `__constraints_${sanitizeDefName(name)}`
   // Namespaced by entry name (not the module-shared default `""`) — see `GenCtx`'s
   // `namespace` doc comment: this function's `.lines` (including its hoisted consts)
@@ -1813,6 +2023,10 @@ export function compileConstraintsFn(name: string, ref: TypeRef): CompiledConstr
   // consts must never collide on `__ref0`-style names the way two `GenCtx()` instances
   // both starting their counters at 0 otherwise would.
   const ctx = new GenCtx(`${sanitizeDefName(name)}_`)
+  // Seed `ctx.defNames` BEFORE walking the body (mirrors `compileEntryBody`'s
+  // own `externalDefNames` seeding) — the def function DECLARATIONS
+  // themselves live in the caller's shared `compileDefsBlock` output, not here.
+  if (externalDefNames !== undefined) for (const defName of externalDefNames) ctx.defNames.add(defName)
   const body = genValidate(ref, "value", "path", ctx, "errors")
   const lines = [
     ...ctx.declarations(),
@@ -1852,11 +2066,12 @@ export function compileWireEntryFragment(
   profile: WireProfile,
   constraintsFnName: string,
   resolveImport?: (declarationFile: string) => string,
+  registry?: WireDefsRegistry,
 ): CompiledWireEntryFragment {
-  const { annotation, typeImport } = guardAnnotation(ref, resolveImport)
-  const wireType = wireTypeText(ref, profile)
+  const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames)
+  const wireType = wireTypeText(ref, profile, registry)
   const ctx = new GenCtx()
-  const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile)
+  const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile, registry)
   const fillStmts = genDefaultsFillChildren(ref, "__decoded")
 
   const lines: string[] = [...ctx.declarations()]
@@ -1901,6 +2116,7 @@ function wireObjectWithFieldProfiles(
   ctx: GenCtx,
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
+  registry?: WireDefsRegistry,
 ): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "object" }
   const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
@@ -1912,7 +2128,7 @@ function wireObjectWithFieldProfiles(
     const fv = `${v}[${JSON.stringify(name)}]`
     const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
     const fieldProfile = fieldProfiles[name] ?? defaultProfile
-    const inner = genWireEncodeDecode(field, fv, fpath, ctx, fieldProfile)
+    const inner = genWireEncodeDecode(field, fv, fpath, ctx, fieldProfile, registry)
     body.push(
       `if (${fv} !== undefined) {`,
       ...indentLines(inner.stmts, 2),
@@ -1944,10 +2160,11 @@ function genWireEncodeDecodeCompositeTop(
   ctx: GenCtx,
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
+  registry?: WireDefsRegistry,
 ): ValidateResult {
   if (ref.meta.nullable === true) {
     const out = ctx.fresh("n")
-    const inner = genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile)
+    const inner = genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry)
     const stmts = [
       `let ${out};`,
       `if (${v} === null) { ${out} = null; } else {`,
@@ -1957,7 +2174,7 @@ function genWireEncodeDecodeCompositeTop(
     ]
     return { stmts, outExpr: out }
   }
-  return genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile)
+  return genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry)
 }
 
 function genWireEncodeDecodeCompositeTopShape(
@@ -1967,11 +2184,12 @@ function genWireEncodeDecodeCompositeTopShape(
   ctx: GenCtx,
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
+  registry?: WireDefsRegistry,
 ): ValidateResult {
   if (ref.shape.kind === "page") {
-    return genWireEncodeDecodeCompositeTop(pageAsObjectRef(ref), v, pathExpr, ctx, fieldProfiles, defaultProfile)
+    return genWireEncodeDecodeCompositeTop(pageAsObjectRef(ref), v, pathExpr, ctx, fieldProfiles, defaultProfile, registry)
   }
-  return wireObjectWithFieldProfiles(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile)
+  return wireObjectWithFieldProfiles(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry)
 }
 
 /** Sibling of `wireTypeTextShape`'s `"object"` branch whose per-field
@@ -1981,10 +2199,11 @@ function wireTypeTextObjectWithFieldProfiles(
   ref: TypeRef,
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
+  registry?: WireDefsRegistry,
 ): string {
   const s = ref.shape as TypeShape & { kind: "object" }
   const fields = Object.entries(s.fields).map(
-    ([name, field]) => `${JSON.stringify(name)}?: ${wireTypeText(field, fieldProfiles[name] ?? defaultProfile)}`,
+    ([name, field]) => `${JSON.stringify(name)}?: ${wireTypeText(field, fieldProfiles[name] ?? defaultProfile, registry)}`,
   )
   return `{ ${fields.join("; ")} }`
 }
@@ -1993,11 +2212,12 @@ function wireTypeTextCompositeTopShape(
   ref: TypeRef,
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
+  registry?: WireDefsRegistry,
 ): string {
   if (ref.shape.kind === "page") {
-    return wireTypeTextCompositeTopShape(pageAsObjectRef(ref), fieldProfiles, defaultProfile)
+    return wireTypeTextCompositeTopShape(pageAsObjectRef(ref), fieldProfiles, defaultProfile, registry)
   }
-  return wireTypeTextObjectWithFieldProfiles(ref, fieldProfiles, defaultProfile)
+  return wireTypeTextObjectWithFieldProfiles(ref, fieldProfiles, defaultProfile, registry)
 }
 
 /** `wireTypeText`'s composite-top analogue: mirrors `wireTypeText`'s own
@@ -2007,8 +2227,9 @@ function wireTypeTextComposite(
   ref: TypeRef,
   fieldProfiles: Readonly<Record<string, WireProfile>>,
   defaultProfile: WireProfile,
+  registry?: WireDefsRegistry,
 ): string {
-  const base = wireTypeTextCompositeTopShape(ref, fieldProfiles, defaultProfile)
+  const base = wireTypeTextCompositeTopShape(ref, fieldProfiles, defaultProfile, registry)
   return ref.meta.nullable === true ? `${base} | null` : base
 }
 
@@ -2042,14 +2263,15 @@ export function compileWireEntryFragmentComposite(
   defaultProfile: WireProfile,
   constraintsFnName: string,
   resolveImport?: (declarationFile: string) => string,
+  registry?: WireDefsRegistry,
 ): CompiledWireEntryFragment {
   if (!isTopLevelObjectRef(ref)) {
-    return compileWireEntryFragment(ref, defaultProfile, constraintsFnName, resolveImport)
+    return compileWireEntryFragment(ref, defaultProfile, constraintsFnName, resolveImport, registry)
   }
-  const { annotation, typeImport } = guardAnnotation(ref, resolveImport)
-  const wireType = wireTypeTextComposite(ref, fieldProfiles, defaultProfile)
+  const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames)
+  const wireType = wireTypeTextComposite(ref, fieldProfiles, defaultProfile, registry)
   const ctx = new GenCtx()
-  const decodeBody = genWireEncodeDecodeCompositeTop(ref, "wire", "path", ctx, fieldProfiles, defaultProfile)
+  const decodeBody = genWireEncodeDecodeCompositeTop(ref, "wire", "path", ctx, fieldProfiles, defaultProfile, registry)
   const fillStmts = genDefaultsFillChildren(ref, "__decoded")
 
   const lines: string[] = [...ctx.declarations()]
@@ -2089,12 +2311,23 @@ export function wireValidatorKey(name: string, profileName: string): string {
  * independent of how many profiles that entry has fragments for — see
  * `compileConstraintsFn`'s doc comment for why. `wireFragments` is keyed by
  * `wireValidatorKey(name, profileName)`.
+ *
+ * `defsBlockLines` (phase D, default `[]`) is the constraints layer's shared
+ * `__def_NAME_check/errors/parse` + `type __def_NAME` declarations —
+ * `compileDefsBlock`'s own output, UNCHANGED, spliced here exactly once (the
+ * same defs record a caller also builds `wireDefsLines` from). `wireDefsLines`
+ * (phase D, default `[]`) is the decode layer's own `__wiredecode_*`/
+ * `__wiretype_*` declarations — `WireDefsRegistry.moduleLines()`. Both are
+ * optional and default to empty so an existing caller passing only the first
+ * four arguments (no `defs` in play) is completely unaffected.
  */
 export function assembleWireModule(
   entries: readonly { readonly name: string }[],
   profileNames: readonly string[],
   constraintsFns: Readonly<Record<string, CompiledConstraintsFn>>,
   wireFragments: Readonly<Record<string, CompiledWireEntryFragment>>,
+  defsBlockLines: readonly string[] = [],
+  wireDefsLines: readonly string[] = [],
 ): string {
   const imports = new Map<string, Set<string>>()
   imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
@@ -2135,6 +2368,10 @@ export function assembleWireModule(
   if (imports.size > 0) lines.push("")
   lines.push(INFER_TYPE_REF_SOURCE)
   lines.push("")
+  lines.push(...defsBlockLines)
+  if (defsBlockLines.length > 0) lines.push("")
+  lines.push(...wireDefsLines)
+  if (wireDefsLines.length > 0) lines.push("")
   lines.push(...constraintsLines)
   if (constraintsLines.length > 0) lines.push("")
   lines.push("export const wireValidators = {")
@@ -2152,20 +2389,36 @@ export function assembleWireModule(
  * orchestrator) should use the split functions directly, the same relationship
  * `compileEntryFragment`/`compileDefsBlock`/`assembleValidatorModule` already
  * have to `compileValidatorModule`.
+ *
+ * `options.defs` (phase D) mirrors `compileValidatorModule`'s own `defs`
+ * option: compiled ONCE at module scope (`compileDefsBlock` for the
+ * constraints layer, one shared `WireDefsRegistry` for the decode layer),
+ * shared across every entry/profile — a def referenced by multiple entries,
+ * or by the same entry under multiple profiles, compiles once per layer.
  */
 export function compileWireModule(
   entries: readonly { readonly name: string; readonly ref: TypeRef }[],
   profiles: readonly WireProfile[],
-  options?: { resolveImport?: (declarationFile: string) => string },
+  options?: { resolveImport?: (declarationFile: string) => string; defs?: Record<string, TypeRef> },
 ): string {
+  const defs = options?.defs ?? {}
+  const defsBlock = compileDefsBlock(defs)
+  const registry = createWireDefsRegistry(defs)
   const constraintsFns: Record<string, CompiledConstraintsFn> = {}
   const wireFragments: Record<string, CompiledWireEntryFragment> = {}
   for (const { name, ref } of entries) {
-    constraintsFns[name] = compileConstraintsFn(name, ref)
+    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames)
     for (const profile of profiles) {
       const key = wireValidatorKey(name, profile.name)
-      wireFragments[key] = compileWireEntryFragment(ref, profile, constraintsFns[name].fnName, options?.resolveImport)
+      wireFragments[key] = compileWireEntryFragment(ref, profile, constraintsFns[name].fnName, options?.resolveImport, registry)
     }
   }
-  return assembleWireModule(entries, profiles.map((p) => p.name), constraintsFns, wireFragments)
+  return assembleWireModule(
+    entries,
+    profiles.map((p) => p.name),
+    constraintsFns,
+    wireFragments,
+    defsBlock.lines,
+    registry.moduleLines(),
+  )
 }

@@ -149,11 +149,14 @@ const VALIDATOR_BUILDER: ArtifactBuilder = (entryFile, outFile, program) =>
  * every 3-arg `applyValidation(key, tree, protocol)` call site in `entryFile`,
  * compiled via `buildWireApplyValidationModuleSource` (apply-validation-build.ts).
  * A SEPARATE artifact/output file from `VALIDATOR_BUILDER`'s: the two
- * mechanisms are additive siblings (see apply-validation.ts's module doc —
- * the 2-arg path is kept for its `shouldShare`/defs structural-sharing
- * capability, which the wire path doesn't support), not a replacement of one
- * by the other, so a tree using BOTH 2-arg and 3-arg call sites needs both
- * `build`/`build-wire` run against it, into two different `-o` outputs. */
+ * mechanisms are additive siblings (see apply-validation.ts's module doc), not
+ * a replacement of one by the other, so a tree using BOTH 2-arg and 3-arg call
+ * sites needs both `build`/`build-wire` run against it, into two different
+ * `-o` outputs. Both paths support `shouldShare`/defs structural sharing as of
+ * phase D (apply-validation-build.ts) — neither is exposed as a CLI flag
+ * here, same as the 2-arg path's own `VALIDATOR_BUILDER` below, which has
+ * never taken one either; this is a pre-existing CLI-surface gap, not
+ * something this comment's own mechanism introduces. */
 const WIRE_VALIDATOR_BUILDER: ArtifactBuilder = (entryFile, outFile, program) =>
   buildWireApplyValidationModuleSource(entryFile, { outFile, program })
 
