@@ -64,4 +64,6 @@ Mirrors the tree the same way the HTTP client does — the client's independentl
 | `createMcpServer(tree, opts)` | Unconnected `Server` |
 | `createStdioMcpServer(tree, opts)` / `createHttpMcpServer(tree, opts)` | Transport-owning one-call presets |
 | `createMcpClient(tree, sdkClient)` | Typed proxy client |
-| `mcpErrors`/`validateAgainstSchema` | Error mapping + input validation helpers |
+| `mcpErrors` | Error mapping helper |
+
+Validation is wired via `applyValidation(key, tree, "mcp")` (`@rhi-zone/fractal-api-tree/apply-validation`), passed through `createMcpServer`'s `rewriters` option — see `docs/design/wire-profiles-and-staged-validation.md`. The `"mcp"` profile is identity + JSON-date coercion (MCP's wire is already-typed JSON: numbers are numbers, booleans are booleans); a stringified number is a structured rejection, not silently coerced. There is no other validation path — a leaf `applyValidation` doesn't cover gets no validation at all.

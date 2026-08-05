@@ -2,16 +2,39 @@
 
 `@rhi-zone/fractal-api-tree` includes a CLI (`packages/api-tree/src/cli.ts`,
 bin name `fractal-api-tree`) that generates a standalone, AOT (ahead-of-time)
-`applyValidation` module from an entry file's `applyValidation(key, tree)`
-call sites — extracted via the TypeScript compiler API — so route validation
-doesn't depend on a runtime type-reflection library. It orchestrates
-api-tree's own call-site scanner/extractor (`apply-validation-build.ts`,
-`extract.ts`) into `@rhi-zone/fractal-type-ir`'s validator codegen
-(`compileValidatorModule`).
+`applyValidation` module from an entry file's `applyValidation(key, tree,
+protocol?)` call sites — extracted via the TypeScript compiler API — so route
+validation doesn't depend on a runtime type-reflection library. It
+orchestrates api-tree's own call-site scanner/extractor
+(`apply-validation-build.ts`, `extract.ts`) into
+`@rhi-zone/fractal-type-ir`'s validator codegen.
+
+Two SEPARATE, additive builder pipelines share that one call-site scan (see
+`docs/design/wire-profiles-and-staged-validation.md` for the full design):
+
+- **`build`/`watch`/`check`** — the older, protocol-BLIND path (2-arg call
+  sites: `applyValidation(key, tree)`), compiled via
+  `@rhi-zone/fractal-type-ir`'s `compileValidatorModule` (the original
+  `check`/`errors`/`parse` engine — universal from-string coercion, one
+  builtin rule set for every wire). Still supported specifically for its
+  `shouldShare`/defs structural-sharing capability, which the staged wire
+  path below doesn't have yet.
+- **`build-wire`/`watch-wire`/`check-wire`** — the STAGED, per-protocol path
+  (3-arg call sites: `applyValidation(key, tree, protocol)`), compiled via
+  `@rhi-zone/fractal-type-ir`'s wire-profile engine
+  (`compileWireEntryFragment`/`compileWireEntryFragmentComposite`). This is
+  the RECOMMENDED path going forward — see "Connecting to `applyValidation`"
+  below for what the third argument buys.
 
 ```
-entry file (applyValidation(key, tree) call sites) --extract input types--> compile --> applyValidation module source
+entry file (applyValidation(key, tree[, protocol]) call sites) --extract input types--> compile --> applyValidation module source
 ```
+
+A `2-arg` and a `3-arg` call site can coexist in the same entry file; run
+whichever subcommand(s) match the call sites you actually wrote, into
+whichever `-o` output(s) your code imports from. `build-wire`/`watch-wire`/
+`check-wire` take the exact same flags as `build`/`watch`/`check` (below) —
+only the compiled artifact differs.
 
 ---
 
@@ -83,6 +106,21 @@ input type without re-running `build`:
 bun packages/api-tree/src/cli.ts check src/api.ts -o src/generated/apply-validation.ts
 ```
 
+### `build-wire`/`watch-wire`/`check-wire <entry> -o <output>`
+
+The staged, per-protocol siblings of `build`/`watch`/`check` above — same
+flags, same caching/watch/diff behavior, same `@generated` header — but
+compiled from 3-arg `applyValidation(key, tree, protocol)` call sites via
+`@rhi-zone/fractal-type-ir`'s wire-profile engine instead of
+`compileValidatorModule`. An entry file with no 3-arg call sites yields the
+same pre-codegen pass-through stub `build`/`watch`/`check` yield for a file
+with no 2-arg call sites.
+
+```sh
+bun packages/api-tree/src/cli.ts build-wire src/api.ts -o src/generated/apply-validation.ts
+bun packages/api-tree/src/cli.ts check-wire src/api.ts -o src/generated/apply-validation.ts
+```
+
 ---
 
 ## The `@generated` header
@@ -102,60 +140,91 @@ generated file by hand will show up as `stale` on the next CI run.
 
 ## Connecting to `applyValidation`
 
-Codegen anchors on `applyValidation(key, treeExpr)` CALL SITES in the entry
-file, not on exported trees — you write the call yourself:
+Codegen anchors on `applyValidation(key, treeExpr, protocol?)` CALL SITES in
+the entry file, not on exported trees — you write the call yourself. The
+STAGED, protocol-aware form (recommended — run `build-wire`/`check-wire`
+against the entry file that has this call):
 
 ```ts
 import { applyValidation } from "./generated/apply-validation.ts"
 
-export const validatedApi = applyValidation("books", apiTree)
+export const validatedApi = applyValidation("books", apiTree, "http")
 ```
 
-The generated module (`./generated/apply-validation.ts` above) exports
-`validatorsByKey: Record<key, Record<routePath, GeneratedEntry>>` — one
-`Record<routePath, GeneratedEntry>` per call-site key, each `GeneratedEntry`
-carrying a `parse(value)` function that performs coercion + validation +
-narrowing in one pass — plus the already-composed
-`applyValidation = createApplyValidation(validatorsByKey)`, which is what the
-call site above actually imports and calls. For every leaf whose tree
-position (path segments joined by `/`, a `fallback` segment rendered as
-`:name`, e.g. `"books/:bookId"`) matches a path under that call's `key`,
-`applyValidation` wraps that leaf's handler to run the generated `parse()`
-first — success calls the original handler with the parsed value; failure
-returns `Result.err(validationErrors)` without ever reaching it. Unlike the
-retired `wrapValidators`, `applyValidation` is PERMISSIVE by default: an
-unknown key or an uncovered leaf just passes through unchanged, not an
-opt-out you have to tag — the pre-codegen stub (`applyValidationStubSource`)
-relies on exactly this so a project compiles and runs before codegen has
-ever run at all. `assertValidationCoverage(key, tree, validatorsByKey)`
-(`@rhi-zone/fractal-api-tree/apply-validation`) is the separate, explicitly-
-called LOUD build-mode check — call it yourself where you want "every leaf
-covered or tagged `meta.tags.unvalidated`" enforced, throwing
-`UncoveredLeafError` (naming every offending path at once) otherwise.
-`applyValidation` never mutates the input tree — it returns a fresh one.
+`protocol` is one of `"http"` | `"cli"` | `"mcp"` | `"graphql"` | `"jsonrpc"` |
+`"identity"`, and picks the WIRE PROFILE codegen derives each leaf's
+decode+validate stage from (see
+`docs/design/wire-profiles-and-staged-validation.md` for the full model):
+`"http"`/`"cli"` decode per field (query/path/header/flag params from
+numeric-string/strict-boolean-string/ISO-date-string encodings, a JSON body's
+`Date` fields from an ISO string, everything else in a JSON body already
+typed with no coercion); `"mcp"`/`"graphql"`/`"jsonrpc"` are uniformly typed
+JSON already (identity + ISO-date-string coercion for `Date` fields only, no
+numeric/boolean coercion — a stringified number is a STRUCTURED rejection,
+not silently accepted); `"identity"` is the strict, no-coercion posture
+(exactly what plain `check`/`errors`/`parse` always were) for an in-process
+value with no wire in between at all.
+
+Omitting `protocol` (the OLDER, still-supported 2-arg form — run
+`build`/`check` against the entry file that has THIS call, into a DIFFERENT
+`-o` output) keeps the original protocol-blind behavior: one universal
+from-string coercion rule set for every field regardless of which wire it
+arrived over. Kept specifically for its `shouldShare`/defs structural-sharing
+capability (a type reused across several leaves' inputs compiles to one
+shared def) — the staged wire path doesn't support that yet. Prefer the 3-arg
+form unless you specifically need defs sharing.
+
+Either form's generated module exports the already-composed
+`applyValidation = createApplyValidation(...)` the call site above actually
+imports and calls (the 2-arg module's `createApplyValidation(validatorsByKey)`;
+the 3-arg module's `createApplyValidation({}, wireValidatorsByKey)` — same
+runtime function, `wireValidatorsByKey` is its second, additive parameter).
+For every leaf whose tree position (path segments joined by `/`, a `fallback`
+segment rendered as `:name`, e.g. `"books/:bookId"`) matches a path under
+that call's `key` (and, for the 3-arg form, `protocol`), `applyValidation`
+wraps that leaf's handler to run the generated `parse()` first — success
+calls the original handler with the parsed value; failure returns
+`Result.err(validationErrors)` without ever reaching it. Unlike the retired
+`wrapValidators`, `applyValidation` is PERMISSIVE by default: an unknown key
+or an uncovered leaf just passes through UNCHANGED — raw wire values, no
+decode, no validation — not an opt-out you have to tag; the pre-codegen stub
+(`applyValidationStubSource`) relies on exactly this so a project compiles
+and runs before codegen has ever run at all. This is the explicitly accepted
+zero-setup tradeoff, not a gap to work around with a projector-local
+fallback — there is no fallback anymore (the old CLI/MCP coercion fallbacks
+this design retired are gone). `assertValidationCoverage(key, tree,
+validatorsByKey)` (`@rhi-zone/fractal-api-tree/apply-validation`) is the
+separate, explicitly-called LOUD build-mode check — call it yourself where
+you want "every leaf covered or tagged `meta.tags.unvalidated`" enforced,
+throwing `UncoveredLeafError` (naming every offending path at once)
+otherwise. `applyValidation` never mutates the input tree — it returns a
+fresh one.
 
 The call site's `key` scopes one tree — apply it to the `Node` tree directly
 (shared across HTTP/MCP/CLI/GraphQL, before any protocol-specific projection
-runs) when one tree serves more than one protocol, or apply it to a single
-protocol's own projected shape (HTTP's `HttpRoute`) when a preset's own
-`rewriters` hook is the more natural integration point:
+runs) when one tree serves more than one protocol AND those protocols share
+the same wire profile (e.g. mcp/graphql/jsonrpc, all uniformly typed JSON —
+one key, one `protocol` tag, dispatched by several servers), or apply it
+per-protocol via each preset's own `rewriters` hook when the protocols'
+wires genuinely diverge (e.g. HTTP vs. CLI):
 
 ```ts
-// Shared across every protocol that dispatches off the same Node — MCP/CLI/
-// GraphQL, and HTTP too if httpProjection runs on the ALREADY-wrapped tree.
-const validatedApi = applyValidation("books", apiTree)
+// Shared across protocols that resolve to the SAME wire profile (mcp/graphql/
+// jsonrpc all uniformly typed JSON) — one key, one call, dispatched by several servers.
+const validatedApi = applyValidation("books", apiTree, "mcp")
 
-// Or, per-protocol, via each preset's own rewriters option:
-const fetch = createFetch(node, { rewriters: [(routes) => applyValidation("books", routes)] })
-await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books", t)] })
-const server = createMcpServer(node, { rewriters: [(t) => applyValidation("books", t)] })
+// Per-protocol, via each preset's own rewriters option, when wires diverge:
+const fetch = createFetch(node, { rewriters: [(routes) => applyValidation("books-http", routes, "http")] })
+await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books-cli", t, "cli")] })
+const server = createMcpServer(node, { rewriters: [(t) => applyValidation("books-mcp", t, "mcp")] })
 ```
 
 No preset has a dedicated validation option — `applyValidation`'s call site
 has to live in YOUR entry file for codegen to anchor on it, so a preset can
 never own the call on your behalf. Each `key` may be used at most once per
-generated `applyValidation` function; validating the same tree separately
-per protocol needs one call site (and one key) per protocol.
+generated `applyValidation` function (regardless of `protocol`); validating
+the same tree separately per DIVERGENT protocol needs one call site (and one
+key) per protocol.
 
 ---
 

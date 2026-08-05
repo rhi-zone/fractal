@@ -29,8 +29,12 @@ LANDED (2026-08), in two phases:
 
 The staged decode/validate model itself (wire profiles, the
 `validateEncoding`/`decode`/`defaults-fill`/`validateConstraints` pipeline)
-is still NOT implemented — this document captures the settled decisions for
-that work and elaborates them.
+has now LANDED, across three phases — **A** (`0cc83f0`, the type-ir
+mechanism), **B** (`80e93d8`, `applyValidation`/codegen plumbing), and **C**
+(below, projector migration + retirement decisions). This document captures
+the settled decisions this work implements; see "Implementation trace (phase
+B)" and "Implementation trace (phase C)" below for the mechanism-level
+write-ups of what actually landed and the binding choices made along the way.
 
 A follow-up conversation (2026-08) settled the three sub-questions that were
 originally left open (see "Settled: profile overrides, wrap-layer idiom, argv
@@ -895,6 +899,154 @@ caller goes through `wireValidatorKey`/`wireValidatorKey`-derived keys
 consistently, so the literal byte value never needs to be a real space), but
 worth a follow-up cleanup pass since it makes the generated key visually
 unreadable and could confuse anyone debugging by printing it directly.
+
+---
+
+## Implementation trace (phase C) — LANDED (2026-08)
+
+Phase C's mandate: fix the two phase-A bugs phase B flagged, migrate every
+projector onto staged validation deleting the legacy layers, retire the old
+universal-coercion path where tenable, migrate `examples/library-api`, and
+bring the docs/tests up to the staged story.
+
+### The two phase-A bugs — fixed at root, not worked around
+
+- `compileConstraintsFn`'s `GenCtx` always started its const-naming counter
+  at 0 per call, so splicing ≥2 entries' constraints fns into one module's
+  shared scope produced duplicate `const` declarations. Fixed at the root:
+  `GenCtx` now takes an optional `namespace` (default `""`, so every
+  existing single-`GenCtx`-per-module caller is byte-identical), and
+  `compileConstraintsFn` passes the entry name as that namespace — every
+  entry's hoisted names are module-unique by construction. Phase B's
+  `disambiguateConstraintsConsts` (a purely textual post-hoc rename at the
+  assembly layer) is deleted; `assembleWireModule`/
+  `assembleWireApplyValidationModule` now just splice `fn.lines` directly.
+- `wireValidatorKey`'s template literal had an actual U+0000 byte where the
+  source visually read as a space. Replaced with a real space; no caller
+  needed a workaround since (per the phase-B trace) every caller went through
+  `wireValidatorKey` consistently, so nothing depended on the byte value.
+
+Regression tests added in `packages/type-ir/src/wire-profiles.test.ts`: a
+two-entry module that previously threw a duplicate-const `SyntaxError` on
+eval, and a byte-level assertion on `wireValidatorKey`'s output.
+
+### Projector migration — legacy layers deleted, staged model wired in
+
+Per protocol, migrated to `applyValidation(key, tree, protocol)`:
+
+- **cli-api-projector**: `coerceInput`/`applyDefaults`/`validateRequired`
+  (including the loose boolean vocabulary `"1"`/`"yes"`/`"0"`/`"no"`) are
+  deleted. `runCli` passes `buildInput`'s raw assembled input straight to the
+  handler unconditionally — a leaf covered by `applyValidation(key, tree,
+  "cli")` gets decode+validate from the generated wire validator; an
+  uncovered leaf gets raw wire values with NO coercion at all (the accepted
+  zero-setup tradeoff — `--flag=1`/`--flag=yes` no longer coerce to a
+  boolean; they pass through as the literal string, or get a structured
+  rejection if the leaf IS wired and its wire profile is strict-boolean).
+- **mcp-api-projector**: `validateAgainstSchema` (the hand-rolled `typeof`
+  gate + its own non-`ValidationError` error strings) is deleted. Args pass
+  straight to the handler unconditionally; a covered leaf gets identity +
+  JSON-date validation via `applyValidation(key, tree, "mcp")` — strict, no
+  coercion of stringified numbers, structured `ValidationError`s on
+  rejection.
+- **graphql-api-projector** / **json-rpc-api-projector**: neither package had
+  grown a coercion fallback in the first place (confirmed by direct search,
+  not assumed) — the design doc's own "History" section only ever named
+  cli/mcp as the two packages that diverged. Both now document
+  `applyValidation(key, tree, "graphql"/"jsonrpc")` as the staged path
+  alongside the still-supported 2-arg form.
+- **http-api-projector**: never had a projector-local coercion fallback
+  either (the old `compileValidatorModule` path already covered HTTP via the
+  2-arg call) — verified `route.ts`'s existing Result→400 mapping already
+  handles a wire-validator-rejected leaf with zero route.ts changes needed.
+  Docs now show `applyValidation(key, routes, "http")` as the recommended
+  form (per-field query/path/header coercion via `queryProfile`, JSON-body
+  `Date` coercion via `jsonProfile`, composite per-field derivation via
+  phase B's `compileWireEntryFragmentComposite`/`wire-derive.ts`), alongside
+  a new end-to-end test proving `?page=3` decodes to the number `3` and
+  `?page=notanumber` gets a 400.
+- Every projector's `isApplyValidationWrapped` sniff site is deleted, along
+  with the export itself and its backing `appliedHandlerBrand` `WeakSet`
+  (`apply-validation.ts`) — decode+validation now run unconditionally on
+  every leaf `applyValidation` wraps; there was nothing left to sniff/skip.
+  Tests that asserted "wrapped" now compare handler IDENTITY (a covered
+  leaf's handler is a freshly-built wrapper, never the original function)
+  instead of calling a brand-check API.
+
+### Retirement of the old universal-coercion path — PARTIAL, by design, not an oversight
+
+The design doc's end state calls this "staged-only." Investigated whether the
+2-arg `applyValidation(key, tree)` route and `compileValidatorModule` could be
+fully deleted in this phase. **Blocked on one real, load-bearing capability
+gap, not inertia**: the 2-arg path supports `shouldShare`/defs structural-
+sharing (a type reused across several leaves' inputs compiles to ONE shared
+def, referenced from every call site —
+`packages/api-tree/src/__fixtures__/apply-validation-sharing-input.fixture.ts`
+exercises this directly against `buildApplyValidationModuleSource`). The
+staged wire path has an explicit, documented scope cut against exactly this
+("No `defs`/`ref` recursion support for wire profiles", compile.ts's
+wire-profiles section header) — deleting the 2-arg path in this phase would
+have silently dropped defs-sharing support for `applyValidation`-based
+codegen entirely, with no replacement. Per this phase's own instructions
+("stop and report... instead of leaving both silently alive"): both paths
+are kept, but NOT silently — `docs/guide/codegen-cli.md`'s "Connecting to
+`applyValidation`" section now states explicitly which capability each path
+buys and recommends the 3-arg form as the default, reserving the 2-arg form
+for the one case (defs sharing) it alone covers.
+
+What DID retire cleanly in this phase (no capability loss): every
+`isApplyValidationWrapped` sniff site (above) — that mechanism had no
+differentiating capability, only an obsolete exclusivity check with nothing
+left to be exclusive with.
+
+`packages/api-tree/src/cli.ts` gained `build-wire`/`watch-wire`/`check-wire`
+subcommands (mirroring `build`/`watch`/`check`, but calling
+`buildWireApplyValidationModuleSource` instead of
+`buildApplyValidationModuleSource`) so the staged path has its own CLI entry
+point — this was a genuine gap (no command invoked the phase-B build
+functions from the actual CLI at all before this phase) rather than a
+retirement decision.
+
+### `examples/library-api` migration
+
+`tree.ts`'s single `applyValidation("books", api)` call became
+`applyValidation("books", api, "http")` — the example's tree is only ever
+DISPATCHED over HTTP (MCP's use of the tree, in `app.test.ts`, is schema
+extraction via `toTools`, not a running MCP server), so there is exactly one
+protocol's key to claim; a tree genuinely dispatched over two divergent wires
+would claim one key per protocol instead (see `docs/guide/codegen-cli.md`).
+`package.json`'s `codegen`/`codegen:check` scripts switched from
+`build`/`check` to `build-wire`/`check-wire`. `app.test.ts`'s
+`isApplyValidationWrapped` uses converted to handler-identity checks; its
+direct `createApplyValidation({...})` construction converted to the 2-arg-map
+form's wire equivalent, `createApplyValidation({}, { books:
+wireValidatorsByKey.books })`.
+
+### Docs and tests
+
+`docs/guide/codegen-cli.md` rewritten to describe both builder pipelines and
+both call-site forms side by side, with the 3-arg form as the recommended
+default. `docs/guide/decode.md`'s `sources.transform` section corrected — the
+"parsing a numeric string" example was stale (that coercion is now upstream,
+in the wire profile, when a leaf is wired through `applyValidation(key, tree,
+"http")`). `docs/design/routing-and-transforms.md`'s `applyValidation`
+integration-point examples updated to the 3-arg form; its CLI/MCP fallback
+history section documents the retirement. Per-package docs
+(`packages/api-tree/README.md`, `docs/reference/framework/cli.md`,
+`docs/reference/framework/mcp.md`) updated by the migrating agents themselves
+(see each package's own git history for that package's specifics).
+
+Test additions beyond the regression tests already listed above: a shared-key
+-across-protocols test (`packages/api-tree/src/apply-validation-build.test.ts`)
+confirming one `applyValidation` call registered under one protocol tag
+produces a wrapped tree that behaves identically regardless of which
+protocol's server later dispatches through it, when the involved protocols
+share a base profile (mcp/graphql/jsonrpc, all `jsonProfile`); an HTTP
+query-param decode end-to-end test (`packages/http-api-projector/src/
+wire-apply-validation.test.ts`) proving `?page=3`/`?page=notanumber` decode/
+reject correctly through a real `fetch` call; per-package tests for CLI's
+raw-passthrough/strict-boolean behavior and MCP's structured stringified-
+number rejection (see each package's own test files).
 
 ---
 

@@ -166,9 +166,16 @@ const sources: Sources = {
 ```
 
 `paramNames`, `sourceMap`, and `transform` all live together on the same
-`Sources` object. Use `transform` for coercions the assembler itself doesn't
-do — splitting a comma-separated query value into an array, parsing a
-numeric string, defaulting an absent field.
+`Sources` object. Use `transform` for reshaping the assembler itself doesn't
+do — splitting a comma-separated query value into an array, or any other
+bespoke bag-level rewrite. Numeric-string/strict-boolean/ISO-date coercion for
+a query/path/header param, or ISO-date coercion for a JSON body field, is now
+handled upstream of the handler by staged wire-profile validation (see
+`docs/design/wire-profiles-and-staged-validation.md` and
+`docs/guide/codegen-cli.md`'s `applyValidation` section, "the staged,
+protocol-aware form") when the leaf's tree is wired through
+`applyValidation(key, tree, "http")` — `transform` is for coercions THAT
+mechanism doesn't cover (e.g. comma-split arrays), not a substitute for it.
 
 There is no further escape hatch below `sources` — the per-route
 `decode`/`encode` override that used to bypass the stores system entirely has

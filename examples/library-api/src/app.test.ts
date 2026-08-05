@@ -27,11 +27,11 @@ import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import { createApplyValidation, isApplyValidationWrapped } from "@rhi-zone/fractal-api-tree/apply-validation"
+import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation"
 import { isResultShape } from "@rhi-zone/fractal-api-tree"
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
-import { validatorsByKey } from "./generated/apply-validation.ts"
+import { wireValidatorsByKey } from "./generated/apply-validation.ts"
 
 /** Candidate methods reachable at `path` in the library-api's HttpRoute tree. */
 function methodsAt(path: string): string[] {
@@ -291,20 +291,29 @@ describe("library-api — verb-helper bundles (http.*)", () => {
 })
 
 // ============================================================================
-// Codegen validators — `applyValidation("books", api)` wiring (tree.ts's
-// `validatedApi`/`httpRoutes`, wired via generated/apply-validation.ts, see
-// src/generated/apply-validation.ts and package.json's `codegen` script).
-// Applied to the raw `Node` before HttpRoute projection ever runs, so the
-// same generated module wires HTTP, MCP, and CLI alike (see tree.ts's own
-// doc comment for why this still keys correctly for HTTP despite
-// `read`/`replace`/`remove`'s `moveTo` relocation).
+// Codegen validators — `applyValidation("books", api, "http")` wiring
+// (tree.ts's `validatedApi`/`httpRoutes`, wired via
+// generated/apply-validation.ts, see src/generated/apply-validation.ts and
+// package.json's `codegen` script, now `build-wire` — see
+// docs/design/wire-profiles-and-staged-validation.md, phase C). Applied to
+// the raw `Node` before HttpRoute projection ever runs (see tree.ts's own doc
+// comment for why this still keys correctly for HTTP despite
+// `read`/`replace`/`remove`'s `moveTo` relocation) — HTTP is the only
+// protocol this tree is actually DISPATCHED over in this example (MCP's own
+// use of `api`, below, is schema-extraction via `toTools`, not a running MCP
+// server), so there is only one protocol's key ("http") to claim.
 // ============================================================================
 
 describe("library-api — codegen-generated validators", () => {
   it("httpRoutes' catalog/search GET handler is applyValidation-wrapped", () => {
     const handler = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.handler
+    const originalHandler = api.children?.catalog?.children?.search?.handler
     expect(handler).toBeDefined()
-    expect(isApplyValidationWrapped(handler!)).toBe(true)
+    // "wrapped" is verified by handler identity, not a brand-check API —
+    // `isApplyValidationWrapped` (and the sniff sites it existed to support)
+    // is deleted per phase C; decode+validation now run unconditionally on
+    // every leaf `applyValidation` covers.
+    expect(handler).not.toBe(originalHandler)
   })
 
   it("a leaf tagged unvalidated, with no matching generated validator entry, is left untouched", () => {
@@ -318,15 +327,14 @@ describe("library-api — codegen-generated validators", () => {
     // test; `assertValidationCoverage` is the opt-in loud check.
     // A fresh `createApplyValidation` (not the generated singleton — that
     // one already consumed key "books" in tree.ts, and a key can only be
-    // used once per created function) over the SAME `validatorsByKey.books`
+    // used once per created function) over the SAME `wireValidatorsByKey.books`
     // map, so this exercises the real generated data without re-using the
     // shared instance.
     const unwrapped = (input: unknown) => input
     const fixture = api_({ other: op(unwrapped, { tags: { unvalidated: true } }) })
-    const applyValidation = createApplyValidation({ books: validatorsByKey.books })
-    const wrapped = applyValidation("books", fixture)
+    const applyValidation = createApplyValidation({}, { books: wireValidatorsByKey.books })
+    const wrapped = applyValidation("books", fixture, "http")
     expect(wrapped.children?.other?.handler).toBe(unwrapped)
-    expect(isApplyValidationWrapped(wrapped.children!.other!.handler!)).toBe(false)
   })
 
   // `catalog/search`'s generated schema is `{ q?: string }` — every value a

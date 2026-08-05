@@ -1,6 +1,6 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { buildApplyValidationModuleSource } from "./apply-validation-build.ts"
+import { buildApplyValidationModuleSource, buildWireApplyValidationModuleSource } from "./apply-validation-build.ts"
 import { buildSchemaModuleSource } from "./schema-build.ts"
 import { createExtractorProgram } from "./extract.ts"
 import { checkCache, writeCacheMetadata, type CacheLocationOptions } from "./cache.ts"
@@ -17,6 +17,12 @@ Commands:
   build <entry> -o <output>          Build the applyValidation module (skip if cached)
   watch <entry> -o <output>          Rebuild on change
   check <entry> -o <output>          Verify output is up to date; exit 1 if stale
+  build-wire <entry> -o <output>     Build the STAGED wire-profile applyValidation module
+                                      (every 3-arg applyValidation(key, tree, protocol)
+                                      call site — see docs/design/wire-profiles-and-
+                                      staged-validation.md) (skip if cached)
+  watch-wire <entry> -o <output>     Rebuild on change
+  check-wire <entry> -o <output>     Verify output is up to date; exit 1 if stale
   build-schema <entry> -o <output>   Build the JSON-Schema module (skip if cached)
   watch-schema <entry> -o <output>   Rebuild on change
   check-schema <entry> -o <output>   Verify output is up to date; exit 1 if stale
@@ -139,6 +145,18 @@ type ArtifactBuilder = (entryFile: string, outFile: string, program: import("typ
 const VALIDATOR_BUILDER: ArtifactBuilder = (entryFile, outFile, program) =>
   buildApplyValidationModuleSource(entryFile, { outFile, program })
 
+/** The wire-profile (staged decode+validate) sibling of `VALIDATOR_BUILDER` —
+ * every 3-arg `applyValidation(key, tree, protocol)` call site in `entryFile`,
+ * compiled via `buildWireApplyValidationModuleSource` (apply-validation-build.ts).
+ * A SEPARATE artifact/output file from `VALIDATOR_BUILDER`'s: the two
+ * mechanisms are additive siblings (see apply-validation.ts's module doc —
+ * the 2-arg path is kept for its `shouldShare`/defs structural-sharing
+ * capability, which the wire path doesn't support), not a replacement of one
+ * by the other, so a tree using BOTH 2-arg and 3-arg call sites needs both
+ * `build`/`build-wire` run against it, into two different `-o` outputs. */
+const WIRE_VALIDATOR_BUILDER: ArtifactBuilder = (entryFile, outFile, program) =>
+  buildWireApplyValidationModuleSource(entryFile, { outFile, program })
+
 const SCHEMA_BUILDER: ArtifactBuilder = (entryFile, _outFile, program) =>
   buildSchemaModuleSource(entryFile, program)
 
@@ -252,6 +270,24 @@ function main(): void {
       const entry = requireEntry(args.positional)
       const output = requireOutput(args.output)
       runCheck(VALIDATOR_BUILDER, entry, output, args)
+      break
+    }
+    case "build-wire": {
+      const entry = requireEntry(args.positional)
+      const output = requireOutput(args.output)
+      runBuild(WIRE_VALIDATOR_BUILDER, entry, output, args)
+      break
+    }
+    case "watch-wire": {
+      const entry = requireEntry(args.positional)
+      const output = requireOutput(args.output)
+      runWatch(WIRE_VALIDATOR_BUILDER, entry, output, args)
+      break
+    }
+    case "check-wire": {
+      const entry = requireEntry(args.positional)
+      const output = requireOutput(args.output)
+      runCheck(WIRE_VALIDATOR_BUILDER, entry, output, args)
       break
     }
     case "build-schema": {

@@ -4,7 +4,9 @@
 
 ## What it does
 
-`runCli` walks the tree following `argv` segments as subcommand names until it reaches a leaf, coerces remaining flags into the leaf's input using codegen'd schemas (`coerceInput`/`applyDefaults`/`validateRequired`), then invokes the handler. A leaf tagged `destructive` (or explicitly not `readOnly`) triggers an interactive confirm prompt before running, via the same tag lattice the MCP annotation hints read.
+`runCli` walks the tree following `argv` segments as subcommand names until it reaches a leaf, assembles the leaf's input from parsed flags/slugs/env (raw wire values — `string | string[] | true` per flag), then invokes the handler. A leaf tagged `destructive` (or explicitly not `readOnly`) triggers an interactive confirm prompt before running, via the same tag lattice the MCP annotation hints read.
+
+Decode and validation are no longer a projector-local fallback — wire `applyValidation(key, tree, "cli")` (`@rhi-zone/fractal-api-tree/apply-validation`) into `opts.rewriters` in your own entry file (codegen anchors on that call site). CLI's default wire profile is **strict**: only the literal strings `"true"`/`"false"` decode to a boolean (no `"1"`/`"yes"`/`"0"`/`"no"`); numeric strings, arrays, enums, defaults, and required-field checks all come from the generated validator too. A leaf with no matching `applyValidation` call (or before codegen has run) gets the raw wire values passed straight to its handler — no decode, no validation, no defaults.
 
 ## Basic usage
 
@@ -47,7 +49,6 @@ import { generateBashCompletion, generateZshCompletion, generateFishCompletion }
 | `runCli(tree, argv, opts?)` | Entry point — dispatches an invocation against the tree as nested subcommands |
 | `walkCliCommands(tree)` | Flat list of `CliCommandEntry` for help text/completion |
 | `cliErrors(mapping)` | Error-to-exit-code/message mapping |
-| `coerceInput`/`applyDefaults`/`validateRequired` | Flag-coercion primitives, reused by `runCli` |
 | `generateBashCompletion`/`generateZshCompletion`/`generateFishCompletion` | Shell completion script generation |
 
-Tag-driven behavior mirrors the other projections: `destructive`/non-`readOnly` ops get a confirm prompt; codegen'd schemas drive argument parsing and coercion.
+Tag-driven behavior mirrors the other projections: `destructive`/non-`readOnly` ops get a confirm prompt. Decode/coercion/defaults/required-field validation are wired in per-tree via `applyValidation(key, tree, "cli")` (`@rhi-zone/fractal-api-tree/apply-validation`) — see `CliOpts.rewriters` — not a `runCli` built-in.
