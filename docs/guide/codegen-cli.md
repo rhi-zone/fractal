@@ -207,6 +207,80 @@ generated `applyValidation` function (regardless of `protocol`); validating
 the same tree separately per DIVERGENT protocol needs one call site (and one
 key) per protocol.
 
+### Per-field encoding overrides — `meta.<protocol>.encodingMap`
+
+For `http`/`cli` — the two protocols with genuinely per-field wire encoding
+(a leaf's own fields can each come from a different store, and stores can
+have different wire shapes) — a field's DEFAULT encoding (numeric-string
+for a `number` under query/argv, strict-`"true"`/`"false"`-string for a
+`boolean`, ISO-string for a `Date`, ...) can be overridden per field, keyed
+by field name, under the SAME per-protocol meta namespace `sourceMap`
+already uses:
+
+```ts
+op(getPrice, {
+  http: {
+    method: "GET",
+    // STRING form: name a base profile ("identity" | "json" | "query" | "argv")
+    // outright, bypassing this leaf's usual derived encoding for this field.
+    encodingMap: { cents: "identity" },
+  },
+})
+```
+
+Or, for a genuinely custom decode no built-in profile leaf handler can
+express, an inline decoder FUNCTION:
+
+```ts
+op(getPrice, {
+  http: {
+    method: "GET",
+    // FUNCTION form: `cents` still has to pass its usual validateEncoding
+    // check (query -> numeric-string) before this ever runs — the hook only
+    // replaces DECODE, not the wire-shape check. Here it interprets a
+    // dollars-and-cents numeric string ("12.34") as integer cents (1234), a
+    // transform no built-in leaf handler does.
+    encodingMap: { cents: (w: string): number => Math.round(Number(w) * 100) },
+  },
+})
+```
+
+Both forms compose the same way `sourceMap` does — keyed, last-wins per
+field, same per-protocol namespace. No dedicated authoring helper (à la
+`http.source()`) exists for either form: a raw object literal, authored
+inline, is what codegen actually reads.
+
+**The function is never inlined, imported, or otherwise moved by codegen.**
+It stays exactly where it's authored — an ordinary closure on the tree's own
+`meta` — and is read off the REAL, running tree by `applyValidation` at WRAP
+time (not codegen time). Codegen's own job is narrower: it only needs to
+know WHICH fields have a function-valued override (via the field's TYPE
+carrying a call signature, never its value), so the generated `parse` can
+emit a hook call-site for that field instead of its usual fused decode. A
+decoder that throws surfaces as a structured `{ kind: "decode", path,
+message }` `ValidationError` — distinct from `"encoding"` (wrong wire
+SHAPE, never reaches the decoder) and `"coerce"` (a builtin coercion
+failure) — never an uncaught exception.
+
+Because the function only exists at runtime, a mismatch between what
+codegen generated and what the tree's `meta` actually carries (a decoder
+authored or removed without re-running codegen since) is a LOUD error at
+`applyValidation`'s wrap time, in BOTH directions: the generated entry
+expecting a hook the tree doesn't have, and the tree carrying a
+function-valued override the generated entry doesn't know to hook —
+re-run codegen to clear either.
+
+At the AUTHORING site, a decoder function's own param/return types are
+checked at `op()` itself against the field's real wire shape
+(`WireOf<FieldType, ResolvedStore>`, `@rhi-zone/fractal-type-ir`) — the same
+family of static check `sourceMap`'s own coverage check already is. When a
+field has no explicit `sourceMap` entry and the leaf's method isn't
+GET/HEAD/DELETE, `op()` can't rule out the field ending up path-mounted once
+the tree is built (a fact only the surrounding `api()` tree knows), so the
+checked type is a UNION of both candidate wire shapes rather than one — see
+`docs/design/wire-profiles-and-staged-validation.md`'s implementation-trace
+addendum for the full exactness writeup.
+
 ---
 
 ## Workflow

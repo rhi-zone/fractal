@@ -286,6 +286,64 @@ export function readMetaEncodingMapProfileNames(
 }
 
 /**
+ * Read `meta.<namespace>.encodingMap`'s FUNCTION-form entries off a resolved
+ * `Node` TYPE — the gap `readMetaEncodingMapProfileNames`'s own doc comment
+ * documents as deliberately NOT closed by that function: a custom-decoder
+ * function value has no literal TYPE the checker can hand back "as a value"
+ * (unlike a string), so there is nothing to READ here — only something to
+ * DETECT. This function answers a strictly narrower question than its
+ * string-form sibling: not "what does this entry say" but "does a callable
+ * live at this entry at all" — existence, via
+ * `checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call)` being
+ * non-empty, never the function's own parameter/return types or its body.
+ *
+ * That narrower question is exactly what codegen needs for the function
+ * form: the generated fragment doesn't need to know WHAT the decoder does
+ * (it never runs at codegen time, never gets inlined, never gets its source
+ * re-emitted — see docs/design/wire-profiles-and-staged-validation.md's
+ * implementation-trace addendum for this phase, "the function never
+ * moves") — only WHICH field names to emit a hook call-site for, so the
+ * actual function (read off the tree's real `meta` at WRAP time, an
+ * ordinary runtime value) can be substituted in later.
+ *
+ * A field present in the RESULT here should never also appear in
+ * `readMetaEncodingMapProfileNames`'s result for the same `(namespace,
+ * field)` — a field is either author-set to a base-profile-name STRING or a
+ * decoder FUNCTION, never both (a single `op()` call composes one
+ * `encodingMap` value per field; a later contribution's key wins outright
+ * over an earlier one, same last-wins convention every other flat meta key
+ * follows) — but this function doesn't assume that; it simply reports every
+ * entry whose type carries a call signature, independent of what the string
+ *-form reader finds.
+ *
+ * Returns `undefined` when `meta.<namespace>.encodingMap` isn't present on
+ * the type at all — same "nothing to report" contract every sibling reader
+ * in this file uses.
+ */
+export function readMetaEncodingMapFunctionFields(
+  nodeType: ts.Type,
+  namespace: string,
+  loc: ts.Node,
+  checker: ts.TypeChecker,
+): ReadonlySet<string> | undefined {
+  const metaProp = checker.getPropertyOfType(nodeType, "meta")
+  if (!metaProp) return undefined
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
+  const nsProp = checker.getPropertyOfType(metaType, namespace)
+  if (!nsProp) return undefined
+  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc)
+  const encodingMapProp = checker.getPropertyOfType(nsType, "encodingMap")
+  if (!encodingMapProp) return undefined
+  const encodingMapType = checker.getTypeOfSymbolAtLocation(encodingMapProp, loc)
+  const out = new Set<string>()
+  for (const fieldProp of checker.getPropertiesOfType(encodingMapType)) {
+    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc)
+    if (checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call).length > 0) out.add(fieldProp.name)
+  }
+  return out
+}
+
+/**
  * `onLeaf` receives both the underscore-joined MCP tool name (`name`, mirrors
  * `toTools`) and the raw path-segment array (`path`) it was built from — a
  * fallback segment appears in `path` as `:name` (e.g. `":bookId"`), matching

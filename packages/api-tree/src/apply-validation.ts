@@ -137,17 +137,28 @@ export type ApplyValidation = {
 type AnyHandler = (input: unknown) => unknown
 
 /**
- * Wrap one handler: run `entry.parse(input)` first — `ok` calls the original
- * handler with the parsed (coerced, validated, narrowed) value, `err` returns
- * this package's `Result` error (`err(errors)`, index.ts) without the handler
- * ever running. Identical contract to `build.ts`'s `wrapHandler`, and
- * deliberately so: a dispatcher already checks a returned `Result`'s `kind`
- * (see that function's doc comment for why a returned Result beats a thrown
- * error class here).
+ * Wrap one handler: run `entry.parse(input, hooks)` first — `ok` calls the
+ * original handler with the parsed (coerced, validated, narrowed) value,
+ * `err` returns this package's `Result` error (`err(errors)`, index.ts)
+ * without the handler ever running. Identical contract to `build.ts`'s
+ * `wrapHandler`, and deliberately so: a dispatcher already checks a returned
+ * `Result`'s `kind` (see that function's doc comment for why a returned
+ * Result beats a thrown error class here).
+ *
+ * `hooks` (see `resolveHooks` below) is `undefined` whenever this leaf has no
+ * function-form `encodingMap` entries — the overwhelmingly common case —
+ * so `entry.parse(input)` (one argument) is what actually runs there; a
+ * `GeneratedEntry.parse` with no hook fields never even looks at its second
+ * parameter, so passing `undefined` explicitly vs. omitting it is behaviorally
+ * identical, this just avoids a redundant `hooks === undefined` branch here.
  */
-function wrapHandler(handler: AnyHandler, entry: GeneratedEntry): AnyHandler {
+function wrapHandler(
+  handler: AnyHandler,
+  entry: GeneratedEntry,
+  hooks: Readonly<Record<string, (w: unknown) => unknown>> | undefined,
+): AnyHandler {
   const wrapped: AnyHandler = async (input: unknown) => {
-    const result = entry.parse(input)
+    const result = entry.parse(input, hooks)
     if (result.kind === "err") return err(result.errors)
     return handler(result.value)
   }
@@ -156,6 +167,110 @@ function wrapHandler(handler: AnyHandler, entry: GeneratedEntry): AnyHandler {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Every function-VALUED `meta.<protocol>.encodingMap` entry on a leaf's own
+ * `meta` — the runtime counterpart of `tree.ts`'s static
+ * `readMetaEncodingMapFunctionFields` (which only detects EXISTENCE, off a
+ * TYPE, at codegen time). This is the real, closed-over decoder VALUE, read
+ * off the actual running tree at WRAP time — the function itself never moved
+ * through codegen (see `build.ts`'s `GeneratedEntry` doc comment: "no
+ * inlining, no source re-emission"). A string-valued `encodingMap` entry
+ * (base-profile-name override, already fused into the generated fragment at
+ * codegen time) is not a function and is correctly skipped here — it has no
+ * hook to supply, the fragment already decodes that field itself.
+ */
+function readEncodingMapHooks(
+  meta: unknown,
+  protocol: ProtocolName,
+): ReadonlyMap<string, (w: unknown) => unknown> {
+  const out = new Map<string, (w: unknown) => unknown>()
+  if (!isRecord(meta)) return out
+  const ns = meta[protocol]
+  if (!isRecord(ns)) return out
+  const encodingMap = ns["encodingMap"]
+  if (!isRecord(encodingMap)) return out
+  for (const [field, value] of Object.entries(encodingMap)) {
+    if (typeof value === "function") out.set(field, value as (w: unknown) => unknown)
+  }
+  return out
+}
+
+/**
+ * Resolve the hooks map to pass into `entry.parse` for one leaf position,
+ * enforcing the two-directional stale-module contract (decision 5, docs/
+ * design/wire-profiles-and-staged-validation.md's implementation-trace
+ * addendum for this phase) — LOUD in both directions, on the theory that a
+ * silent mismatch here means either an outright missing decoder (a request
+ * would crash or decode wrong later, invisibly) or a decoder that was
+ * authored but never actually wired in (the exact class of "ran the wrong
+ * decode silently" bug the design doc's own loud-by-default posture exists
+ * to prevent):
+ *
+ *   (a) `entry.hookFields` names a field, but the real tree's meta has no
+ *       function there — codegen ran against an `encodingMap` that no longer
+ *       matches this tree (a stale generated module, or `meta` built without
+ *       the override at all). Thrown eagerly, at WRAP time, not deferred to
+ *       the first request that happens to hit this field.
+ *   (b) The real tree's meta HAS a function-valued `encodingMap` entry for a
+ *       field `entry.hookFields` does NOT list — codegen ran BEFORE this
+ *       override was authored (or codegen simply wasn't re-run since). Left
+ *       unhandled, this field would silently fall through to the fragment's
+ *       FUSED default decode for that field instead of the user's own
+ *       decoder — the wrong decode, run silently, exactly what this
+ *       mechanism exists to never do. Thrown for the same reason as (a).
+ *
+ * Returns `undefined` (not an empty map) when there is nothing to hook —
+ * `wrapHandler` then calls `entry.parse(input)` with no second argument,
+ * the same call shape every pre-existing (non-hook) leaf already gets.
+ */
+function resolveHooks(
+  leafPath: string,
+  entry: GeneratedEntry,
+  meta: unknown,
+  protocol: ProtocolName | undefined,
+): Readonly<Record<string, (w: unknown) => unknown>> | undefined {
+  const declared = entry.hookFields ?? []
+  if (protocol === undefined) {
+    // A 2-arg `applyValidation(key, tree)` call never derives hook fields at
+    // all (see `apply-validation-build.ts`'s extraction: the http/cli-only
+    // meta read that produces `hookFields` only runs for a LITERAL 3-arg
+    // protocol) — a non-empty `declared` here would itself be the stale-
+    // module signal, just with no real protocol namespace to check against.
+    if (declared.length > 0) {
+      throw new Error(
+        `applyValidation: leaf ${JSON.stringify(leafPath)}'s generated entry expects hook fields ` +
+          `${JSON.stringify(declared)}, but this leaf was wired with no explicit protocol. Custom-decoder ` +
+          `hooks require a 3-arg applyValidation(key, tree, protocol) call — stale generated module?`,
+      )
+    }
+    return undefined
+  }
+  const actual = readEncodingMapHooks(meta, protocol)
+  const declaredSet = new Set(declared)
+  for (const field of declaredSet) {
+    if (!actual.has(field)) {
+      throw new Error(
+        `applyValidation: leaf ${JSON.stringify(leafPath)}'s generated entry expects a decoder hook for field ` +
+          `${JSON.stringify(field)} (protocol ${JSON.stringify(protocol)}), but meta.${protocol}.encodingMap.${field} ` +
+          `is not a function on the running tree. Stale generated module (re-run codegen) or the override was ` +
+          `removed/renamed after the last codegen run.`,
+      )
+    }
+  }
+  for (const field of actual.keys()) {
+    if (!declaredSet.has(field)) {
+      throw new Error(
+        `applyValidation: leaf ${JSON.stringify(leafPath)} has a function-valued ` +
+          `meta.${protocol}.encodingMap.${field}, but its generated entry does not expect a hook for that field ` +
+          `(hookFields: ${JSON.stringify(declared)}). Stale generated module — re-run codegen after authoring or ` +
+          `changing this decoder, or the fused default for that field will run instead of this decoder.`,
+      )
+    }
+  }
+  if (actual.size === 0) return undefined
+  return Object.fromEntries(actual)
 }
 
 /** True when `meta` (a node's, or an `HttpRoute` method entry's) is tagged
@@ -238,23 +353,39 @@ function walkTreePositions(
  * the removed `injectValidators` (ad8b921), which likewise applied one
  * path-keyed validator to every method entry at the position.
  */
+/**
+ * `protocol` (the LITERAL argument `applyValidation(key, tree, protocol?)`
+ * was called with — not the codegen-side "omitted means identity" sugar) is
+ * threaded through so `resolveHooks` knows which `meta.<protocol>` namespace
+ * to read a leaf's function-form `encodingMap` entries off of. A raw `Node`
+ * leaf's hooks come off its own `meta`; an `HttpRoute` position's methods
+ * each carry their OWN `meta` (that's where an HttpRoute keeps leaf meta —
+ * see `collectUncoveredLeaves`'s doc comment for the same fact), so each
+ * method entry is resolved independently even though they all share one
+ * `entry`/`hookFields` (one path, one generated validator, per
+ * `injectValidators`'s own top doc comment).
+ */
 function injectValidators(
   tree: unknown,
   forKey: Readonly<Record<string, GeneratedEntry>>,
+  protocol: ProtocolName | undefined,
 ): unknown {
   return rewriteTree(tree, [], (node, path) => {
     const entry = forKey[path.join("/")]
     const out: Record<string, unknown> = { ...node }
     if (entry === undefined) return out
+    const leafPath = path.join("/")
     if (typeof node["handler"] === "function") {
-      out["handler"] = wrapHandler(node["handler"] as AnyHandler, entry)
+      const hooks = resolveHooks(leafPath, entry, node["meta"], protocol)
+      out["handler"] = wrapHandler(node["handler"] as AnyHandler, entry, hooks)
     }
     const methods = node["methods"]
     if (isRecord(methods)) {
       out["methods"] = Object.fromEntries(
         Object.entries(methods).map(([verb, methodEntry]) => {
           if (!isRecord(methodEntry) || typeof methodEntry["handler"] !== "function") return [verb, methodEntry]
-          return [verb, { ...methodEntry, handler: wrapHandler(methodEntry["handler"] as AnyHandler, entry) }]
+          const hooks = resolveHooks(`${leafPath}[${verb}]`, entry, methodEntry["meta"], protocol)
+          return [verb, { ...methodEntry, handler: wrapHandler(methodEntry["handler"] as AnyHandler, entry, hooks) }]
         }),
       )
     }
@@ -346,7 +477,7 @@ export function createApplyValidation(
     usedKeys.add(key)
     const forKey = resolveForKey(key, protocol, validators, wireValidators)
     if (forKey === undefined) return tree
-    return injectValidators(tree, forKey) as T
+    return injectValidators(tree, forKey, protocol) as T
   }
   return applyValidation
 }

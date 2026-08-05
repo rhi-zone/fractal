@@ -34,7 +34,28 @@
 // keeps working unchanged.
 
 /** One generated entry's public shape — see type-ir/compile.ts's
- * `compileWireEntryFragment`/`compileConstraintsFn`. */
+ * `compileWireEntryFragment`/`compileWireEntryFragmentComposite`/
+ * `compileConstraintsFn`.
+ *
+ * `hooks` (second, optional `parse` argument) and `hookFields` are additive —
+ * see docs/design/wire-profiles-and-staged-validation.md's implementation-
+ * trace addendum for the function-form `encodingMap` phase. A field flagged
+ * as HOOK-COVERED by a leaf's own `encodingMap` (per-protocol meta, function
+ * form) is validated for wire SHAPE by the generated fragment exactly like
+ * any other field, but DECODED by whatever function `hooks[fieldName]`
+ * supplies at call time rather than the fused profile default — the function
+ * itself never moves through codegen (no inlining, no source re-emission);
+ * it's read off the tree's own `meta` at WRAP time
+ * (`apply-validation.ts`'s `createApplyValidation`) and passed in here.
+ * `hookFields` is the fragment's OWN static declaration of which field names
+ * it expects a hook for — every existing hand-authored `GeneratedEntry`
+ * (this package's own runtime tests build these directly, independent of
+ * codegen) simply omits both, which is exactly "no hook fields, call `parse`
+ * with one argument" — zero behavior change for any pre-existing caller. */
 export type GeneratedEntry = {
-  parse: (value: unknown) => { kind: "ok"; value: unknown } | { kind: "err"; errors: unknown[] }
+  parse: (
+    value: unknown,
+    hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
+  ) => { kind: "ok"; value: unknown } | { kind: "err"; errors: unknown[] }
+  readonly hookFields?: readonly string[]
 }

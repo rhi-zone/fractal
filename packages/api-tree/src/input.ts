@@ -18,6 +18,8 @@
 // convention: GET/HEAD/DELETE → "query", POST/PUT/PATCH → "body", with
 // route-slug params always from "path".
 
+import type { WireOf } from "@rhi-zone/fractal-type-ir"
+
 // ============================================================================
 // Store interface
 // ============================================================================
@@ -427,6 +429,210 @@ export type UncoveredSourceParams<H, Meta> = [InputKeys<H>] extends [never]
   : string extends InputKeys<H>
     ? never
     : Exclude<DeclaredSourceParams<Meta>, InputKeys<H>>
+
+// ============================================================================
+// Function-form `encodingMap` decoder typing — decision 3, docs/design/
+// wire-profiles-and-staged-validation.md's implementation-trace addendum for
+// this phase ("Decoder entries in op()'s contributions should type-check as
+// `(w: WireOf<H[K], ResolvedStore>) => H[K]`... following the
+// UncoveredSourceParams/CheckedContributions precedent").
+//
+// Scoped to exactly `http`/`cli` — the two namespaces `wire-derive.ts`'s own
+// `deriveFieldProfiles` hardcodes as the per-field (composite) protocols;
+// mcp/graphql/jsonrpc/identity resolve to one UNIFORM profile for the whole
+// leaf (no per-field store derivation exists for them at all — see
+// `apply-validation-build.ts`'s own header comment: "Applying `encodingMap`
+// overrides to the UNIFORM protocols... is a further, deliberate scope
+// cut"), so a function-form entry under any other namespace has nothing to
+// check against here and is left alone (same silent-omission posture the
+// STRING form already has for those protocols).
+//
+// Hardcoding these two namespace KEYS (not importing `HttpLeafMeta`/
+// `CliLeafMeta`) keeps this file protocol-BLIND in the same sense
+// `SourceMapsOf`/`FindStoreForParam` above already are: api-tree cannot
+// depend on http-api-projector/cli-api-projector (the dependency runs the
+// other way), so this only ever reads `Meta["http"]`/`Meta["cli"]`
+// STRUCTURALLY, by literal key, never by importing either package's own
+// meta-fragment interface.
+//
+// EXACTNESS FINDING (verified against a scratch `tsc` repro, not asserted
+// from reasoning alone — see this phase's session trace): a field with no
+// explicit `sourceMap` entry could, at `op()` time, either be a PATH-slug
+// match (unknowable here — depends on the tree the leaf ends up mounted
+// under, which `op()` cannot see) or fall through to the protocol's own
+// DEFAULT store. Whether that ambiguity forces a real type-level UNION
+// depends on whether "path" and the default store map to the SAME wire
+// profile:
+//   - CLI: `cliStoreEncoding` is CONSTANT (every store -> `argvProfile`) —
+//     "path" and CLI's default store ("flag") always agree. NEVER
+//     ambiguous; `ResolvedStoresForField` below still returns a two-member
+//     union structurally, but `EncodingMapWireOf`'s distribution collapses
+//     it to ONE type after `WireOf` maps both through the same profile.
+//   - HTTP: `httpStoreEncoding` maps `"body"` to `jsonProfile`, everything
+//     else (including `"path"`) to `queryProfile`. The default store is
+//     `primaryStoreForMethod(method)`: `query` for GET/HEAD/DELETE (or an
+//     absent method literal — `wire-derive.ts`'s own `method ?? "GET"`
+//     default), `body` otherwise. So:
+//       - GET/HEAD/DELETE (or no method authored) — default store IS
+//         `"query"`, matching `"path"`'s own profile. NOT ambiguous.
+//       - any other method — default store is `"body"` (`jsonProfile`),
+//         which genuinely DIFFERS from `"path"`'s `queryProfile` for any
+//         coercing kind (`number`/`boolean`/`Date` — confirmed empirically:
+//         `WireOf<number,"query">` is `string`, `WireOf<number,"json">` is
+//         `number`, NOT the same type). For THIS one case, a field with no
+//         explicit override genuinely cannot be resolved to a single store
+//         at `op()` time — the type is the UNION
+//         `WireOf<T,"query"> | WireOf<T,"json">`, exactly the doc's own
+//         suggested fallback ("default to the union... when it can't
+//         statically rule out a path-slug match").
+//
+// Net result: NOT fully exact in general. The gap is real but narrow — it
+// only bites an HTTP field with (a) a non-GET/HEAD/DELETE method authored at
+// `op()` time, (b) no explicit `sourceMap` entry for that field, and (c) a
+// domain type whose query-vs-json wire shapes actually differ (a coercing
+// leaf kind — plain `string` fields are unaffected, since `WireOf<string,
+// P>` is `string` under every profile). Concretely, it MISSES (does not
+// reject) a decoder typed narrower than the true union — e.g. one that only
+// handles the numeric-string case and silently mishandles a genuine
+// same-key JSON-body number this leaf might ALSO receive if it turns out NOT
+// to be the path-mounted field after all — and it ALLOWS (does not force) a
+// decoder to handle both shapes even when the leaf's real mount position
+// would only ever deliver one. Both directions are the SOUND-but-imprecise
+// side of a real "op() cannot see the tree" limitation the design doc's own
+// decision 3 flagged as an open question, not a bug in this implementation.
+// ============================================================================
+
+/** `Meta["http"]`/`Meta["cli"]`, structurally — `undefined` when that
+ * namespace contributed nothing. Hardcoded to these two literal keys (see
+ * this section's header comment for why that's not a protocol-blindness
+ * violation). */
+type HttpNamespaceOf<Meta> = Meta extends { readonly http?: infer NS } ? NS : undefined
+type CliNamespaceOf<Meta> = Meta extends { readonly cli?: infer NS } ? NS : undefined
+
+/** The HTTP method `op()`'s own contributions declared — `meta.http.method`
+ * wins, else `meta.http.verb` (mirroring `extractWireApplyValidationTypeRefs`'s
+ * own `readMetaStringLiteral(..., "method", ...) ?? readMetaStringLiteral(...,
+ * "verb", ...)` read order), else `"GET"` — `wire-derive.ts`'s own
+ * `primaryStoreForMethod(method ?? "GET")` default for an unauthored method. */
+type HttpMethodOf<Meta> = HttpNamespaceOf<Meta> extends { readonly method: infer M extends string }
+  ? M
+  : HttpNamespaceOf<Meta> extends { readonly verb: infer V extends string }
+    ? V
+    : "GET"
+
+/** `wire-derive.ts`'s `primaryStoreForMethod`, at the type level: GET/HEAD/
+ * DELETE -> `"query"`, everything else -> `"body"`. */
+type HttpDefaultStore<Meta> = HttpMethodOf<Meta> extends "GET" | "HEAD" | "DELETE" ? "query" : "body"
+
+/** `wire-derive.ts`'s `httpStoreEncoding`/`cliStoreEncoding`, at the type
+ * level — a store name to a `WireProfileName`. */
+type StoreProfile<NS extends "http" | "cli", Store extends string> = NS extends "http"
+  ? Store extends "body"
+    ? "json"
+    : "query"
+  : "argv"
+
+/** One namespace's `sourceMap` value, structurally (not via `SourceMapsOf`,
+ * which unions EVERY namespace — this needs exactly one, scoped to `NS`). */
+type NamespaceSourceMapOf<Meta, NS extends "http" | "cli"> = NS extends "http"
+  ? HttpNamespaceOf<Meta> extends { readonly sourceMap?: infer M }
+    ? M
+    : never
+  : CliNamespaceOf<Meta> extends { readonly sourceMap?: infer M }
+    ? M
+    : never
+
+/** The single, EXACT store an explicit `sourceMap` entry names for field `P`
+ * under namespace `NS` — `never` when there is no explicit entry (the caller
+ * falls through to `FallbackStoresForField` below), mirroring
+ * `FindStoreForParam`'s own erased-map guard (`string extends keyof M`). */
+type ExplicitStoreForField<Meta, NS extends "http" | "cli", P extends string> =
+  NamespaceSourceMapOf<Meta, NS> extends infer M
+    ? [M] extends [never]
+      ? never
+      : string extends keyof M
+        ? never
+        : P extends keyof M
+          ? M[P] extends { readonly store: infer S }
+            ? S
+            : never
+          : never
+    : never
+
+/** The store(s) a field with NO explicit `sourceMap` entry might resolve to
+ * — `"path"` (an authored local path-slug name match, unknowable from `op()`
+ * alone) UNIONED with the protocol's own default store. See this section's
+ * header comment for when this union is real vs. vacuous. */
+type FallbackStoresForField<Meta, NS extends "http" | "cli"> = NS extends "http"
+  ? "path" | HttpDefaultStore<Meta>
+  : "path" | "flag"
+
+/** Every store field `P` (under namespace `NS`) might resolve to, given
+ * `Meta` — the explicit override when one exists, else the fallback union. */
+type ResolvedStoresForField<Meta, NS extends "http" | "cli", P extends string> = [
+  ExplicitStoreForField<Meta, NS, P>,
+] extends [never]
+  ? FallbackStoresForField<Meta, NS>
+  : ExplicitStoreForField<Meta, NS, P>
+
+/**
+ * The type a function-form `meta.<NS>.encodingMap[P]` decoder's PARAMETER
+ * should accept, given the field's own domain type `T` — a real, computed
+ * `WireOf` union over every store `P` might resolve to (distributes over
+ * `ResolvedStoresForField`'s own union, naturally producing ONE type when
+ * every candidate store maps to the same profile — see this section's
+ * header comment's exactness finding).
+ */
+export type EncodingMapWireOf<Meta, NS extends "http" | "cli", P extends string, T> =
+  ResolvedStoresForField<Meta, NS, P> extends infer S
+    ? S extends string
+      ? WireOf<T, StoreProfile<NS, S>>
+      : never
+    : never
+
+/** `Meta["http"].encodingMap` / `Meta["cli"].encodingMap`, structurally. */
+type NamespaceEncodingMapOf<Meta, NS extends "http" | "cli"> = NS extends "http"
+  ? HttpNamespaceOf<Meta> extends { readonly encodingMap?: infer M }
+    ? M
+    : never
+  : CliNamespaceOf<Meta> extends { readonly encodingMap?: infer M }
+    ? M
+    : never
+
+/** `H`'s single declared input parameter's type — `never` for a handler with
+ * no parameter. */
+type HandlerInput<H> = H extends (input: infer I) => any ? I : never
+
+/**
+ * Every field name, under namespace `NS`, whose `encodingMap` entry is a
+ * FUNCTION whose param/return types do NOT match
+ * `(w: EncodingMapWireOf<Meta, NS, P, HandlerInput<H>[P]>) => HandlerInput<H>[P]`
+ * — `never` when every function-valued entry type-checks (or there are
+ * none). A string-valued entry (base-profile-name override, the phase-B
+ * form) is not a function and is correctly skipped — it has nothing for
+ * this check to validate; codegen fuses it directly.
+ *
+ * Vacuous (never fires) when `HandlerInput<H>` isn't a plain object with
+ * statically known keys (mirrors `UncoveredSourceParams`'s own "no
+ * complaint when the handler's input keys are erased" posture) — a false
+ * positive about the HANDLER's own typing is not this check's job.
+ */
+export type MismatchedEncodingMapDecoders<H, Meta, NS extends "http" | "cli"> =
+  NamespaceEncodingMapOf<Meta, NS> extends infer M
+    ? [M] extends [never]
+      ? never
+      : string extends keyof HandlerInput<H>
+        ? never
+        : {
+            [P in Extract<keyof M, string>]: P extends keyof HandlerInput<H>
+              ? M[P] extends (w: infer W) => infer R
+                ? [(w: W) => R] extends [(w: EncodingMapWireOf<Meta, NS, P, HandlerInput<H>[P]>) => HandlerInput<H>[P]]
+                  ? never
+                  : P
+                : never
+              : never
+          }[Extract<keyof M, string>]
+    : never
 
 // ============================================================================
 // Assembler

@@ -472,3 +472,11 @@ export {
 } from "./compile.ts"
 
 export { compileDefsBlock, type CompiledDefsBlock } from "./compile.ts"
+
+// `WireOf<T, Profile>` — the type-level mirror of the above, for a custom
+// decoder's authoring-site typing (function-form `encodingMap`, decision 3
+// of the wire-profiles design doc's implementation-trace addendum). See
+// wire-of.ts's own module doc for why this is a separate file from
+// compile.ts (profile NAMES, not `WireProfile` VALUES — a purely
+// type-level concern with no runtime counterpart at all).
+export { type WireOf, type WireProfileName } from "./wire-of.ts"

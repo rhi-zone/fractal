@@ -56,7 +56,13 @@ import {
   typeRefFromFunctionNode,
   type ShouldShare,
 } from "./extract.ts"
-import { readMetaEncodingMapProfileNames, readMetaSourceMap, readMetaStringLiteral, walkNodeType } from "./tree.ts"
+import {
+  readMetaEncodingMapFunctionFields,
+  readMetaEncodingMapProfileNames,
+  readMetaSourceMap,
+  readMetaStringLiteral,
+  walkNodeType,
+} from "./tree.ts"
 import { APPLY_VALIDATION_BRAND } from "./apply-validation.ts"
 import {
   checkCache,
@@ -425,25 +431,33 @@ function relativeImportSpecifier(outFile: string, declarationFile: string): stri
 // `option (b)` (`getConstantValue`/partial evaluation) was not needed once
 // (a) panned out and wasn't separately investigated.
 //
-// The gap that remains, and IS real: `encodingMap`'s two authorable shapes
-// (see the design doc's decision-5 discussion) are a base-profile-name STRING
-// (`"identity" | "json" | "query" | "argv"`) or a custom decoder FUNCTION
-// (`(w: FieldValidWire) => TField`). The string form reads exactly like a
-// `sourceMap` entry's `store` (`readMetaEncodingMapProfileNames`, tree.ts) —
-// wired in below. The FUNCTION form has no analogous path: a function value
-// has no literal TYPE for the checker to hand back (unlike a string), so
-// there is nothing to read "as a value" — emitting a reference to it in the
-// generated module would require either (a) the function being a NAMED
-// EXPORT elsewhere that codegen could import (not what the design describes
-// — it's authored inline, per field, in the meta object literal) or (b)
-// copying its source text into the generated module (fragile: closures,
-// scoping, and it isn't what any existing codegen path in this codebase
-// does — `guardAnnotation`'s cross-file `typeName`/`declarationFile`
-// resolution imports a TYPE reference, never re-emits a value's source).
-// Neither is implemented; a function-valued `encodingMap` entry is silently
-// OMITTED by `readMetaEncodingMapProfileNames` (see that function's own doc
-// comment) rather than causing a wrong/silent-fallback result — this is the
-// one part of decision 4/5 left as a documented gap, not "fully wired."
+// `encodingMap`'s two authorable shapes (see the design doc's decision-5
+// discussion) are a base-profile-name STRING (`"identity" | "json" | "query"
+// | "argv"`) or a custom decoder FUNCTION (`(w: FieldValidWire) => TField`).
+// The string form reads exactly like a `sourceMap` entry's `store`
+// (`readMetaEncodingMapProfileNames`, tree.ts) — wired in below.
+//
+// **RESOLVED (2026-08-05, session
+// https://claude.ai/code/session_011tFKVomiW7x2MkeRg3mw88):** the FUNCTION
+// form used to have no analogous path — a function value has no literal
+// TYPE for the checker to hand back (unlike a string), so there was nothing
+// to READ "as a value." The closing move was to stop trying to read it: the
+// function never needs to move through codegen at all (no inlining, no
+// source re-emission, no cross-file import) — it stays exactly where it was
+// authored, an ordinary runtime value on the tree's own `meta`, read at WRAP
+// time (not codegen time) by `apply-validation.ts`'s `createApplyValidation`.
+// What codegen genuinely needs statically is narrower than "the function's
+// value": just WHICH field names have one, so the generated fragment can
+// emit a HOOK call-site for that field instead of its fused default decode.
+// That IS answerable from the TYPE alone — a function value's type still
+// carries a call SIGNATURE, even though it carries no literal payload
+// (`readMetaEncodingMapFunctionFields`, tree.ts, via
+// `checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call)`). See
+// `compileWireLeafFragment`'s call below for how the resulting field-name set
+// threads into `compileWireEntryFragmentComposite`'s `hookFields` parameter,
+// and docs/design/wire-profiles-and-staged-validation.md's implementation-
+// trace addendum for this phase for the full mechanism writeup (runtime hook
+// injection, the `"decode"` error kind, the wrap-time stale-module checks).
 // ============================================================================
 
 /** The base profile a `meta.<proto>.encodingMap` entry's STRING form names —
@@ -456,11 +470,18 @@ const BASE_PROFILE_BY_NAME: Readonly<Record<string, WireProfile>> = {
   argv: argvProfile,
 }
 
-/** One 3-arg call site's leaf: its input `TypeRef` plus the derived wire
- * profile assignment (`wire-derive.ts`). */
+/** One 3-arg call site's leaf: its input `TypeRef`, the derived wire profile
+ * assignment (`wire-derive.ts`), and — http/cli only, see this section's
+ * header comment — the field names whose `encodingMap` entry is a custom
+ * decoder FUNCTION rather than a base-profile-name string, sorted for
+ * deterministic fingerprinting. Empty (never `undefined`) for every
+ * uniform-profile protocol (`identity`/`mcp`/`graphql`/`jsonrpc`), matching
+ * the same scope cut the STRING form already makes (see
+ * `readMetaEncodingMapProfileNames`'s doc comment). */
 export type WireApplyValidationLeaf = {
   readonly ref: TypeRef
   readonly derivation: FieldProfileDerivation
+  readonly hookFields: readonly string[]
 }
 
 /** Per-key wire-profile leaves — one `protocol` per key (a call site names
@@ -500,9 +521,12 @@ export type WireApplyValidationTypeRefs = {
  * mcp/graphql/jsonrpc below), so this costs nothing extra for a 2-arg site.
  *
  * `encodingMap`'s STRING-form entries (base-profile-name overrides) are read
- * and applied on top for `http`/`cli`; a FUNCTION-form entry is a documented
- * gap (see this section's header comment) and is silently omitted.
+ * and applied on top for `http`/`cli`. FUNCTION-form entries are detected
+ * (existence only, per `readMetaEncodingMapFunctionFields`'s doc comment —
+ * see this section's header comment for the full resolution) and threaded
+ * into each leaf's own `hookFields`, consumed by `compileWireLeafFragment`.
  *
+
  * `options.shouldShare` (phase D) opts into structural sharing: a
  * `SharingRegistry`, `finalizeSharedDefs` over the flattened `(key,
  * leafPath)` roots, and the resulting `defs` threaded into the returned
@@ -532,6 +556,7 @@ export function extractWireApplyValidationTypeRefs(
         const ref = typeRefFromFunctionNode(fn, leafChecker, registry)
         const pathParamNames = leafPath.filter((seg) => seg.startsWith(":")).map((seg) => seg.slice(1))
         let derivation: FieldProfileDerivation
+        let hookFields: readonly string[] = []
         if (protocol === "http" || protocol === "cli") {
           const sourceMap = readMetaSourceMap(nodeType, protocol, site.loc, leafChecker)
           const method =
@@ -549,10 +574,12 @@ export function extractWireApplyValidationTypeRefs(
             }
             derivation = { fieldProfiles, defaultProfile: derivation.defaultProfile }
           }
+          const functionFields = readMetaEncodingMapFunctionFields(nodeType, protocol, site.loc, leafChecker)
+          if (functionFields !== undefined && functionFields.size > 0) hookFields = [...functionFields].sort()
         } else {
           derivation = deriveFieldProfiles(protocol, undefined, undefined, [])
         }
-        leaves[leafPath.join("/")] = { ref, derivation }
+        leaves[leafPath.join("/")] = { ref, derivation, hookFields }
       },
     )
     byKey[site.key] = { protocol, leaves }
@@ -574,7 +601,11 @@ export function extractWireApplyValidationTypeRefs(
   for (const [key, { protocol, leaves }] of Object.entries(byKey)) {
     const rebuilt: Record<string, WireApplyValidationLeaf> = {}
     for (const [leafPath, leaf] of Object.entries(leaves)) {
-      rebuilt[leafPath] = { ref: roots[flatName(key, leafPath)]!, derivation: leaf.derivation }
+      rebuilt[leafPath] = {
+        ref: roots[flatName(key, leafPath)]!,
+        derivation: leaf.derivation,
+        hookFields: leaf.hookFields,
+      }
     }
     shared[key] = { protocol, leaves: rebuilt }
   }
@@ -583,30 +614,49 @@ export function extractWireApplyValidationTypeRefs(
 
 /** Flat compiler entries (one per leaf across all call sites), keyed by
  * `flatName(key, leafPath)` — each entry additionally carries its own
- * `protocol` and derived `FieldProfileDerivation`. */
+ * `protocol`, derived `FieldProfileDerivation`, and `hookFields` (function-
+ * form `encodingMap` field names, empty for every uniform-profile
+ * protocol). */
 function flatWireEntries(
   byKey: WireApplyValidationTypeRefs["byKey"],
-): { name: string; ref: TypeRef; protocol: ProtocolName; derivation: FieldProfileDerivation }[] {
-  const entries: { name: string; ref: TypeRef; protocol: ProtocolName; derivation: FieldProfileDerivation }[] = []
+): { name: string; ref: TypeRef; protocol: ProtocolName; derivation: FieldProfileDerivation; hookFields: readonly string[] }[] {
+  const entries: {
+    name: string
+    ref: TypeRef
+    protocol: ProtocolName
+    derivation: FieldProfileDerivation
+    hookFields: readonly string[]
+  }[] = []
   for (const [key, { protocol, leaves }] of Object.entries(byKey)) {
     for (const [leafPath, leaf] of Object.entries(leaves)) {
-      entries.push({ name: flatName(key, leafPath), ref: leaf.ref, protocol, derivation: leaf.derivation })
+      entries.push({
+        name: flatName(key, leafPath),
+        ref: leaf.ref,
+        protocol,
+        derivation: leaf.derivation,
+        hookFields: leaf.hookFields,
+      })
     }
   }
   return entries
 }
 
 /** Compile one leaf's `CompiledWireEntryFragment` — the uniform-profile case
- * (`{ profile }`) goes through `compileWireEntryFragment` directly; the
- * composite case (`{ fieldProfiles, defaultProfile }`) goes through
- * `compileWireEntryFragmentComposite`. Neither is duplicated here — this is
- * just the `FieldProfileDerivation`-shaped dispatch between the two. */
+ * (`{ profile }`) goes through `compileWireEntryFragment` directly (hooks are
+ * out of scope for a uniform protocol — same deliberate cut the STRING form
+ * already makes, see this section's header comment); the composite case
+ * (`{ fieldProfiles, defaultProfile }`) goes through
+ * `compileWireEntryFragmentComposite`, threading `hookFields` through so a
+ * function-form `encodingMap` field gets a hook call-site instead of its
+ * fused default decode. Neither branch is duplicated here — this is just the
+ * `FieldProfileDerivation`-shaped dispatch between the two. */
 function compileWireLeafFragment(
   ref: TypeRef,
   derivation: FieldProfileDerivation,
   constraintsFnName: string,
   resolveImport?: (declarationFile: string) => string,
   registry?: WireDefsRegistry,
+  hookFields: readonly string[] = [],
 ): CompiledWireEntryFragment {
   if ("profile" in derivation) {
     return compileWireEntryFragment(ref, derivation.profile, constraintsFnName, resolveImport, registry)
@@ -618,6 +668,7 @@ function compileWireLeafFragment(
     constraintsFnName,
     resolveImport,
     registry,
+    new Set(hookFields),
   )
 }
 
@@ -774,7 +825,7 @@ export function buildWireApplyValidationModuleSource(
   const registry = createWireDefsRegistry(defs)
   const constraintsFns: Record<string, CompiledConstraintsFn> = {}
   const wireFragments: Record<string, CompiledWireEntryFragment> = {}
-  for (const { name, ref, protocol, derivation } of entries) {
+  for (const { name, ref, protocol, derivation, hookFields } of entries) {
     constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames)
     wireFragments[wireValidatorKey(name, protocol)] = compileWireLeafFragment(
       ref,
@@ -782,6 +833,7 @@ export function buildWireApplyValidationModuleSource(
       constraintsFns[name].fnName,
       resolveImport,
       registry,
+      hookFields,
     )
   }
   return (
@@ -797,7 +849,12 @@ export function buildWireApplyValidationModuleSource(
  * still distinguish most profiles via their surviving keys but needlessly
  * relies on that side effect) — see `computeLeafFingerprint`'s doc comment
  * (cache.ts) and this design's item 7 ("just pass `{ input: ref, profile:
- * profileName }`"). */
+ * profileName }`"). `hookFields` folds in separately (see this function's
+ * caller) rather than here, since it's orthogonal to which PROFILE a field
+ * resolves to — a field can flip between fused and hook-covered without its
+ * profile assignment changing at all, and that flip alone must still
+ * invalidate the leaf's cached artifact (a fused fragment and a hook
+ * fragment for the SAME field/profile emit different code). */
 function fingerprintableDerivation(derivation: FieldProfileDerivation): unknown {
   if ("profile" in derivation) return { profile: derivation.profile.name }
   return {
@@ -874,12 +931,13 @@ export function buildWireApplyValidationModuleSourceIncremental(
   const constraintsFns: Record<string, CompiledConstraintsFn> = {}
   const changedLeaves: string[] = []
 
-  for (const { name, ref, protocol, derivation } of entries) {
+  for (const { name, ref, protocol, derivation, hookFields } of entries) {
     const fingerprintKey = wireValidatorKey(name, protocol)
     const fingerprint = computeLeafFingerprint(entryFile, {
       input: ref,
       protocol,
       derivation: fingerprintableDerivation(derivation),
+      hookFields,
     })
     leafFingerprints[fingerprintKey] = fingerprint
     constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames)
@@ -898,6 +956,7 @@ export function buildWireApplyValidationModuleSourceIncremental(
         constraintsFns[name].fnName,
         resolveImport,
         registry,
+        hookFields,
       )
       changedLeaves.push(fingerprintKey)
     }
