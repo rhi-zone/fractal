@@ -223,6 +223,36 @@ describe("wire profiles — shared constraint validator reused across profiles",
     expect(argvErr.errors).toEqual(jsonErr.errors)
     expect(argvErr.errors[0]!.kind).toBe("min")
   })
+
+  it("two DIFFERENT entries' constraints fns don't collide on hoisted const names when spliced into one module (regression, phase A/B bug)", () => {
+    // Both entries' `age`-shaped field triggers a `type`-kind error referencing a
+    // hoisted `refLiteral` const inside `compileConstraintsFn`'s own GenCtx — before
+    // the fix, two entries' independently-fresh `GenCtx`es both minted `__ref0`,
+    // producing a duplicate `const __ref0 = ...` when spliced into one module's shared
+    // scope (`assembleWireModule`). Evaluating the module (not just generating its
+    // source text) is the real assertion: a duplicate `const` is a SyntaxError at
+    // eval/transpile time.
+    const refA = t(types.object({ age: t(types.number, { minimum: 0 }) }))
+    const refB = t(types.object({ age: t(types.number, { minimum: 0 }) }))
+    const source = compileWireModule(
+      [
+        { name: "PersonA", ref: refA },
+        { name: "PersonB", ref: refB },
+      ],
+      [argvProfile],
+    )
+    expect(() => evalWireModule(source)).not.toThrow()
+    const mod = evalWireModule(source)
+    const okA = mod[wireValidatorKey("PersonA", "argv")]!.parse({ age: "5" })
+    const okB = mod[wireValidatorKey("PersonB", "argv")]!.parse({ age: "5" })
+    expect(okA).toEqual({ kind: "ok", value: { age: 5 } })
+    expect(okB).toEqual({ kind: "ok", value: { age: 5 } })
+  })
+
+  it("wireValidatorKey joins with a real space, not a NUL byte (regression, phase A byte-level bug)", () => {
+    expect(wireValidatorKey("Person", "argv")).toBe("Person argv")
+    expect(wireValidatorKey("Person", "argv")).not.toContain("\u0000")
+  })
 })
 
 describe("wire profiles — error phrasing per stage", () => {
