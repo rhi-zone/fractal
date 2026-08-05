@@ -9,11 +9,13 @@ import {
   applyMethods,
   applyMoveTo,
   applyResponse,
+  checkRouteSourceCoverage,
   composeTransforms,
   httpRoute,
   isHttpRoute,
   makeRouterFromRoute,
   naiveTransform,
+  SourceCoverageError,
 } from "./route.ts"
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import { makeRouter, toHttpRoutes } from "./project.ts"
@@ -89,10 +91,12 @@ describe("naiveTransform", () => {
     })
   })
 
-  it("omits sources entirely when meta.http.sourceMap is absent", () => {
+  it("omits sourceMap/validate but still stamps an empty authoredPathParams when meta.http.sourceMap is absent", () => {
     const api = op((_: unknown) => ({}))
     const route = naiveTransform(api)
-    expect(route.methods?.POST?.sources).toBeUndefined()
+    expect(route.methods?.POST?.sources?.sourceMap).toBeUndefined()
+    expect(route.methods?.POST?.sources?.validate).toBeUndefined()
+    expect(route.methods?.POST?.sources?.authoredPathParams).toEqual([])
   })
 })
 
@@ -278,6 +282,159 @@ describe("applyMoveTo", () => {
 })
 
 // ============================================================================
+// moveTo no longer affects input binding — a leaf's field↔store binding is a
+// pure function of its AUTHORED declarations (local pre-moveTo ancestor
+// fallback names, or an explicit `http.source()`/`meta.http.sourceMap`
+// entry), never of where moveTo happens to relocate it. See route.ts's
+// `Sources.authoredPathParams` doc comment and `defaultDecode`'s own doc
+// comment for the full reasoning.
+// ============================================================================
+
+/**
+ * `sources.paramNames` is codegen-derived (see `findRouteSourceCoverageProblems`'s
+ * own doc comment: "Leaves without `sources.paramNames` are skipped") — nothing
+ * in this package's own `naiveTransform`/rewriter pipeline sets it, so a bare
+ * `op()`-built leaf never triggers the per-param coverage check on its own.
+ * This test-only helper attaches it after the fact (by handler identity),
+ * standing in for whatever codegen step would normally declare it — the same
+ * "wire onto the already-projected `HttpRoute`" layering `applyValidation`/
+ * `wrapValidators` already use (see route.ts's module doc).
+ */
+function withParamNames(route: HttpRoute, handler: unknown, paramNames: readonly string[]): HttpRoute {
+  const rebuildMethods = (methods: HttpRoute["methods"]) => {
+    if (methods === undefined) return methods
+    // biome-ignore lint: test-only helper, erased shape is fine here
+    const rebuilt: Record<string, any> = {}
+    for (const [key, entry] of Object.entries(methods)) {
+      rebuilt[key] = entry.handler === handler
+        ? { ...entry, sources: { ...entry.sources, paramNames } }
+        : entry
+    }
+    return rebuilt
+  }
+  const walk = (node: HttpRoute): HttpRoute =>
+    httpRoute({
+      methods: rebuildMethods(node.methods),
+      children: node.children !== undefined
+        ? Object.fromEntries(Object.entries(node.children).map(([k, c]) => [k, walk(c)]))
+        : undefined,
+      fallback: node.fallback !== undefined ? { name: node.fallback.name, subtree: walk(node.fallback.subtree) } : undefined,
+      meta: node.meta,
+    })
+  return walk(route)
+}
+
+describe("moveTo does not affect input binding", () => {
+  it("an authored local slug survives an UNRELATED moveTo elsewhere in the tree — no coverage problem", () => {
+    const handler = (input: { bookId: string }) => ({ bookId: input.bookId })
+    const api = api_({
+      books: api_(
+        {},
+        {
+          fallback: {
+            name: "bookId",
+            subtree: api_({ get: op(handler) }),
+          },
+        },
+      ),
+      // An unrelated leaf moving elsewhere in the tree must not affect
+      // "books/{bookId}/get"'s own authored bookId binding.
+      unrelated: op((_: unknown) => ({}), { http: { moveTo: "../moved" } }),
+    })
+    const route = withParamNames(applyMoveTo(naiveTransform(api)), handler, ["bookId"])
+    expect(() => checkRouteSourceCoverage(route)).not.toThrow()
+  })
+
+  it("an authored local slug moved AWAY from its wildcard ancestor throws unfillable-path at wire time", () => {
+    // `leaf` is authored NESTED under `books`' fallback (so it authors
+    // "bookId" as a local slug), but moveTo relocates it to a position with
+    // no matching ancestor at all.
+    const handler = (input: { bookId: string }) => ({ bookId: input.bookId })
+    const api = api_({
+      books: api_(
+        {},
+        {
+          fallback: {
+            name: "bookId",
+            subtree: api_({
+              leaf: op(handler, {
+                http: { moveTo: "../../../elsewhere" },
+              }),
+            }),
+          },
+        },
+      ),
+    })
+    const route = withParamNames(applyMoveTo(naiveTransform(api)), handler, ["bookId"])
+    expect(() => checkRouteSourceCoverage(route)).toThrow(SourceCoverageError)
+    try {
+      checkRouteSourceCoverage(route)
+    } catch (e) {
+      const err = e as SourceCoverageError
+      expect(err.problems).toHaveLength(1)
+      expect(err.problems[0]).toMatchObject({ param: "bookId", kind: "unfillable-path" })
+    }
+  })
+
+  it("an explicit path sourceMap with a bogus key at the leaf's final position throws the same unfillable-path kind", () => {
+    const handler = (input: { id: string }) => ({ id: input.id })
+    const api = api_({
+      books: api_(
+        {},
+        {
+          fallback: {
+            name: "bookId",
+            subtree: api_({
+              // Declares `id` as path-sourced, but the live ancestor slug at
+              // this position is named "bookId", not "id" — bogus key.
+              leaf: op(handler, http.source({ id: "path" })),
+            }),
+          },
+        },
+      ),
+    })
+    const route = withParamNames(naiveTransform(api), handler, ["id"])
+    expect(() => checkRouteSourceCoverage(route)).toThrow(SourceCoverageError)
+    try {
+      checkRouteSourceCoverage(route)
+    } catch (e) {
+      const err = e as SourceCoverageError
+      expect(err.problems).toHaveLength(1)
+      expect(err.problems[0]).toMatchObject({ param: "id", kind: "unfillable-path" })
+    }
+  })
+
+  it("a field that only coincidentally matches a live pathParam name post-move falls through to query/body silently — no error, no path binding", async () => {
+    // `get`/`remove` (siblings of the fallback, not nested under it) get
+    // moved onto the same wildcard position as an unrelated resource whose
+    // slug also happens to be named "bookId" — the historical
+    // by-name-collision case this change removes.
+    const api = api_({
+      books: api_(
+        {
+          get: op((input: { bookId?: string }) => ({ bookId: input.bookId ?? null }), {
+            http: { moveTo: "../*", method: "GET" },
+          }),
+        },
+        { fallback: { name: "bookId", subtree: api_({}) } },
+      ),
+    })
+    const route = applyMethods(applyMoveTo(naiveTransform(api)))
+    // No coverage problem — "bookId" isn't authored by `get`, and it has no
+    // explicit sourceMap, so it's an ordinary (optional) query field now.
+    expect(() => checkRouteSourceCoverage(route)).not.toThrow()
+
+    const router = makeRouterFromRoute(route)
+    const res = await router(new Request("http://localhost/books/actual-book-id"))
+    expect(res.status).toBe(200)
+    // The path segment value ("actual-book-id") must NOT leak into `bookId`
+    // via the old by-name-collision path binding — it falls through to the
+    // query store, which has no "bookId" key on this request, so it's null.
+    expect(await res.json()).toEqual({ bookId: null })
+  })
+})
+
+// ============================================================================
 // applyResponse — handler wrapping produces correct status code
 // ============================================================================
 
@@ -353,6 +510,13 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
               store.set(book.id, book)
               return book
             }, { http: { method: "POST", response: { status: 201 } } }),
+            // `get`/`remove` are authored as SIBLINGS of `books`' fallback
+            // (not nested under it) — `moveTo` relocates them onto the
+            // fallback position, but moveTo is purely an address transform
+            // now: it does NOT grant them the `bookId` slug implicitly by
+            // landing on a same-named wildcard. They need an explicit
+            // `http.source()` declaration, same as they would if authored at
+            // any other non-nested position.
             get: op(
               (input: { bookId: string }) => store.get(input.bookId),
               {
@@ -360,6 +524,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
                   moveTo: "../*", method: "GET",
                 },
               },
+              http.source({ bookId: "path" }),
             ),
             remove: op(
               (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
@@ -368,6 +533,7 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
                   moveTo: "../*", method: "DELETE",
                 },
               },
+              http.source({ bookId: "path" }),
             ),
           }, { fallback: { name: "bookId", subtree: api_({}) } }),
       })

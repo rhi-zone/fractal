@@ -53,6 +53,15 @@ encoding.
 Default placement: identity (same position). Metadata (verb, status, parameter
 binding) is separate from structural transforms — just properties on nodes.
 
+(2026-08-05: this used to be aspirational for parameter binding specifically —
+`moveTo` could change which slug a leaf implicitly bound to, by relocating it
+onto a same-named wildcard it never authored under. That gap is closed: a
+leaf's field↔store binding is now a pure function of its own authored
+declarations (local pre-moveTo path-slug ancestry, or an explicit
+`sourceMap`/`http.source()` entry) — `moveTo` is purely an address transform,
+exactly as this line already claimed. See `http-api-projector/src/route.ts`'s
+`Sources.authoredPathParams`.)
+
 ### Motivating example
 
 ```

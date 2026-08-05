@@ -30,10 +30,15 @@ describe("findRouteSourceCoverageProblems", () => {
   })
 
   it("accepts every built-in store, and the method-derived convention", () => {
+    // `a` is deliberately left out of this leaf's paramNames/sourceMap here —
+    // an explicit `store: "path"` override needs a matching live segment at
+    // the leaf's mounted position to be fillable (see the next test); a bare
+    // leaf with no fallback ancestor at all has nothing to supply it, so it's
+    // covered separately below instead of folded into this "every store is
+    // otherwise fine" case.
     const route = leaf("POST", {
-      paramNames: ["a", "b", "c", "d", "e", "viaConvention"],
+      paramNames: ["b", "c", "d", "e", "viaConvention"],
       sourceMap: {
-        a: { store: "path" },
         b: { store: "query" },
         c: { store: "header" },
         d: { store: "body" },
@@ -44,6 +49,19 @@ describe("findRouteSourceCoverageProblems", () => {
     // `viaConvention` has no override, so it resolves to POST's primary store
     // ("body") — a store this package builds, so no problem.
     expect(findRouteSourceCoverageProblems(route)).toEqual([])
+  })
+
+  it("flags a store:\"path\" override whose key has no matching live segment at this leaf's mounted position", () => {
+    // No fallback ancestor at all — nothing ever supplies "a" from "path",
+    // regardless of the override's own store name being a known one.
+    const route = leaf("GET", {
+      paramNames: ["a"],
+      sourceMap: { a: { store: "path" } },
+    })
+
+    const problems = findRouteSourceCoverageProblems(route)
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toMatchObject({ method: "GET", param: "a", kind: "unfillable-path" })
   })
 
   it("resolves a path param from the path store, ahead of any override", () => {

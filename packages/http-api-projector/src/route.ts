@@ -92,6 +92,35 @@ export type Sources = {
   readonly sourceMap?: SourceMap
   /** explicit list of param names to extract (when absent, bulk-collects all available values) */
   readonly paramNames?: readonly string[]
+  /**
+   * The leaf's own pre-moveTo ancestor fallback-name chain, stamped by
+   * `naiveTransform` at the EARLIEST point in the pipeline — before any
+   * rewriter (including `applyMoveTo` and any user-supplied transform) can
+   * relocate the leaf. Empty/absent means the leaf was never nested under any
+   * wildcard in its AUTHORED tree position.
+   *
+   * This is the fix for moveTo's old, unintended effect on input binding: a
+   * leaf's field↔store binding must be a pure function of its authored
+   * declarations (local path-slug ancestry + explicit `sourceMap` entries),
+   * never of where `moveTo` happens to relocate it. `defaultDecode` (below)
+   * intersects this list against whatever the FINAL match actually produces,
+   * instead of trusting the final match's raw slug set wholesale — see that
+   * function's own doc comment for the full reasoning, and
+   * `findRouteSourceCoverageProblems` for the wire-time check that turns a
+   * moveTo relocating a leaf away from its authored slug into a loud error
+   * instead of a silently-empty field.
+   *
+   * `undefined` (as opposed to `[]`) specifically means "this `Sources` value
+   * did not come from `naiveTransform` at all" — a hand-built `HttpRoute`
+   * (many low-level tests in this package construct `httpRoute()` literals
+   * directly, bypassing `naiveTransform` entirely) has no authored-position
+   * history to consult, so `defaultDecode` falls back to its pre-existing
+   * bulk-slug behavior for those. A leaf that DID go through `naiveTransform`
+   * but was never nested under a wildcard gets `[]`, not `undefined` — an
+   * empty authored set, correctly excluding it from any implicit path
+   * binding.
+   */
+  readonly authoredPathParams?: readonly string[]
   /** optional reshape after assembly, before the handler sees the input */
   readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>
   /**
@@ -174,6 +203,23 @@ function validateOf(meta: RouteLeafMeta): StandardSchemaV1 | undefined {
   return meta.http?.validate
 }
 
+/**
+ * Assembles a leaf's `sources` object for `naiveTransformNode` — factored out
+ * so the `sourceMap`/`validate` reads happen exactly once each (inlining this
+ * as a conditional spread loses the narrowing from the presence check to the
+ * value itself across two separate calls to `sourceMapOf`/`validateOf`, since
+ * TypeScript can't know two calls return the same result).
+ */
+function buildSources(meta: RouteLeafMeta, authoredPathParams: readonly string[]): Sources {
+  const sourceMap = sourceMapOf(meta)
+  const validate = validateOf(meta)
+  return {
+    ...(sourceMap !== undefined ? { sourceMap } : {}),
+    ...(validate !== undefined ? { validate } : {}),
+    authoredPathParams,
+  }
+}
+
 function paginatedDirectiveOf(
   meta: RouteLeafMeta,
 ): { readonly style?: "cursor" | "offset"; readonly inputCursorParam?: string; readonly inputOffsetParam?: string; readonly inputLimitParam?: string } | undefined {
@@ -227,34 +273,43 @@ export type NaiveRoute<N extends Node> =
       : {})
   & { readonly meta: RouteMeta }
 
-export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
-  const sourceMap = sourceMapOf(node.meta)
-  const validateSchema = validateOf(node.meta)
-  const sources: Sources | undefined =
-    sourceMap !== undefined || validateSchema !== undefined
-      ? {
-          ...(sourceMap !== undefined ? { sourceMap } : {}),
-          ...(validateSchema !== undefined ? { validate: validateSchema } : {}),
-        }
-      : undefined
+/**
+ * Recursive worker behind `naiveTransform` — threads `authoredAncestors`, the
+ * list of fallback names seen on the path from the tree root down to `node`
+ * (in the AUTHORED tree, before any rewriter runs), so every leaf gets its
+ * own `sources.authoredPathParams` stamped at construction time — the
+ * earliest point in the pipeline, before `applyMoveTo` (or any user-supplied
+ * transform, `dx.ts`'s `opts?.transforms`) can relocate anything. Not part of
+ * `naiveTransform`'s public signature — `NaiveRoute<N>`'s shape is unaffected
+ * (an extra field on the already-optional `sources` object), so the public
+ * entry point below just calls this with `[]`.
+ */
+function naiveTransformNode<N extends Node>(node: N, authoredAncestors: readonly string[]): NaiveRoute<N> {
   const methods = isLeaf(node)
     ? {
         POST: {
           handler: node.handler!,
           meta: node.meta,
-          ...(sources !== undefined ? { sources } : {}),
+          sources: buildSources(node.meta, authoredAncestors),
         },
       }
     : undefined
   const children = node.children !== undefined
     ? Object.fromEntries(
-        Object.entries(node.children).map(([key, child]) => [key, naiveTransform(child)]),
+        Object.entries(node.children).map(([key, child]) => [key, naiveTransformNode(child, authoredAncestors)]),
       )
     : undefined
   const fallback = node.fallback !== undefined
-    ? { name: node.fallback.name, subtree: naiveTransform(node.fallback.subtree) }
+    ? {
+        name: node.fallback.name,
+        subtree: naiveTransformNode(node.fallback.subtree, [...authoredAncestors, node.fallback.name]),
+      }
     : undefined
   return httpRoute({ methods, children, fallback, meta: node.meta }) as NaiveRoute<N>
+}
+
+export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
+  return naiveTransformNode(node, [])
 }
 
 // ============================================================================
@@ -903,7 +958,28 @@ async function defaultDecode(
   }
 
   const stores = httpStores(req, slugs, parsedBody, serviceStores)
-  const pathParamNames = Object.keys(slugs)
+  // moveTo is purely an address transform — it must NOT affect input binding.
+  // `slugs` here are the FINAL (post-moveTo) matched-tree's ancestor-fallback
+  // captures; naively treating every one of them as implicitly path-bound
+  // would let a leaf relocated under a same-named (or coincidentally-named)
+  // wildcard pick up a slug value it never authored under. `authoredPathParams`
+  // (stamped by `naiveTransform`, before any rewriter runs) is the leaf's OWN
+  // pre-moveTo ancestor fallback-name chain — intersecting against it restricts
+  // implicit path-binding to slugs the leaf actually authored itself under.
+  //
+  // `authored === undefined` means this `Sources` value didn't come from
+  // `naiveTransform` at all (a hand-built `HttpRoute`, e.g. many of this
+  // package's own low-level tests construct `httpRoute()` literals directly)
+  // — there is no authored-position history to consult, so this falls back to
+  // the pre-existing bulk-slug behavior for those rather than going strict.
+  // For the dominant naiveTransform-derived case, an unmoved leaf's final
+  // ancestor slugs and its authored slugs are identical, so this filter is a
+  // no-op there — moveTo is the only thing that can make the two sets diverge.
+  const liveSlugNames = Object.keys(slugs)
+  const authored = sources?.authoredPathParams
+  const pathParamNames = authored !== undefined
+    ? liveSlugNames.filter((n) => authored.includes(n))
+    : liveSlugNames
   const sourceMap = sources?.sourceMap ?? {}
 
   const paramNames =
@@ -1261,7 +1337,7 @@ export type SourceCoverageProblem = {
   readonly path: string
   readonly method: string
   readonly param: string
-  readonly kind: "unknown-store" | "unused-override"
+  readonly kind: "unknown-store" | "unused-override" | "unfillable-path"
   /** Human-readable statement of what's wrong with this param. */
   readonly detail: string
 }
@@ -1295,13 +1371,52 @@ export type SourceCoverageOptions = {
  * hold up — the non-throwing form, for a caller that wants to report the
  * problems itself. `checkRouteSourceCoverage` is the throwing form.
  *
- * For each param in a leaf's `sources.paramNames`, resolves its store the same
- * way `assemble` does (path match → `sourceMap` override → primary-store
- * convention) and checks the result is a store something actually builds. Also
- * flags a `sourceMap` entry for a param that is NOT in `paramNames`: `assemble`
- * only ever reads `paramNames`, so such an override is dead — the runtime
- * counterpart of the static check, reaching the cases where the handler's own
- * input type is erased and the static check is therefore vacuous.
+ * For each param in a leaf's `sources.paramNames`, resolves how it will
+ * actually be bound at request time and checks that resolution holds up —
+ * the runtime counterpart of the static check `op()` already runs (see the
+ * module doc above), reaching the cases the static check can't (the handler's
+ * own input type erased, or the binding depending on where the leaf is
+ * MOUNTED — a property of the tree, not of the leaf's own `op()` call).
+ *
+ * moveTo is purely an address transform — it must NOT affect input binding
+ * (see `defaultDecode`'s own doc comment). So each param is resolved by
+ * mirroring `assemble`'s OWN resolution order exactly (path match → override →
+ * primary-store convention), using the same EFFECTIVE (authored-restricted)
+ * path-param set `defaultDecode` computes, then flagging whichever step it
+ * actually lands on when that step doesn't hold up:
+ *
+ *   1. `param` resolves via "path" when it's a LIVE final `pathParams` name
+ *      AND (this leaf came from `naiveTransform`, i.e.
+ *      `sources.authoredPathParams` is defined) it's also in the leaf's
+ *      AUTHORED set — or, when `authoredPathParams` is `undefined` (a
+ *      hand-built `HttpRoute` that bypassed `naiveTransform` — see that
+ *      field's own doc comment), simply being a live final `pathParams` name
+ *      is enough, mirroring `defaultDecode`'s bulk-slug fallback for that
+ *      case. Always fine when it applies — "path" is always a known store,
+ *      and any `sourceMap` override for this param is genuinely dead code at
+ *      that point (exactly as it already was before moveTo's binding effect
+ *      was removed), so it isn't checked.
+ *   2. Otherwise, an explicit `sourceMap[param]` override, if present. When
+ *      its store is `"path"`, its resolved key (`override.key ?? param`) must
+ *      actually be present in this leaf's final `pathParams` — otherwise
+ *      `"unfillable-path"`: the field is declared path-sourced but nothing at
+ *      the leaf's projected position supplies it. Any other store must be one
+ *      `known` builds, or `"unknown-store"`.
+ *   3. Otherwise, if `param` is in the leaf's AUTHORED path-param set but
+ *      didn't resolve via path in step 1 (only possible when
+ *      `authoredPathParams` is defined but the live `pathParams` set doesn't
+ *      contain `param`) — `"unfillable-path"`: the leaf authored this as a
+ *      local slug, but moveTo relocated it away from a matching ancestor.
+ *   4. Otherwise — not authored, not explicit-path-sourced (even if `param`
+ *      happens to coincide with a live final `pathParams` name post-move) —
+ *      falls through to the normal primary-store (query/body) convention,
+ *      checked against `known` same as any other non-path field. This is the
+ *      case that used to bind implicitly by name collision; it no longer
+ *      does, and is correctly NOT an error either — it's just an ordinary
+ *      query/body field now.
+ *
+ * Also flags a `sourceMap` entry for a param that is NOT in `paramNames`:
+ * `assemble` only ever reads `paramNames`, so such an override is dead.
  */
 export function findRouteSourceCoverageProblems(
   root: HttpRoute,
@@ -1316,23 +1431,71 @@ export function findRouteSourceCoverageProblems(
       const sources = entry.sources
       const paramNames = sources?.paramNames
       const sourceMap = sources?.sourceMap ?? {}
+      const authored = sources?.authoredPathParams
       if (paramNames !== undefined) {
         const primary = primaryStoreForMethod(method)
         for (const param of paramNames) {
-          // Same order as `assemble`: a path match wins, then an explicit
-          // override, then the method-derived convention. Only the override
-          // step can name a store nothing builds — the other two resolve to
-          // "path" and to a primary store this package itself defines.
-          if (pathParams.includes(param)) continue
+          const authoredWantsIt = authored !== undefined && authored.includes(param)
+          const resolvesViaPath = authored !== undefined
+            ? authoredWantsIt && pathParams.includes(param)
+            : pathParams.includes(param)
+          if (resolvesViaPath) continue
+
           const override = sourceMap[param]
-          const store = override?.store ?? primary
-          if (!known.has(store)) {
+          if (override !== undefined) {
+            if (override.store === "path") {
+              const key = override.key ?? param
+              if (!pathParams.includes(key)) {
+                problems.push({
+                  path,
+                  method,
+                  param,
+                  kind: "unfillable-path",
+                  detail: `declared as path-sourced (key "${key}") via an explicit source override,`
+                    + ` but nothing at this leaf's projected position (${path}) supplies it`,
+                })
+              }
+              continue
+            }
+            if (!known.has(override.store)) {
+              problems.push({
+                path,
+                method,
+                param,
+                kind: "unknown-store",
+                detail: `reads from store "${override.store}", which no projector builds`
+                  + ` (known: ${[...known].sort().join(", ")})`,
+              })
+            }
+            continue
+          }
+
+          if (authoredWantsIt) {
+            // Authored as a local slug, but `resolvesViaPath` was false —
+            // only reachable here when the live `pathParams` at this leaf's
+            // FINAL position doesn't contain `param`: moveTo relocated the
+            // leaf away from a matching ancestor.
+            problems.push({
+              path,
+              method,
+              param,
+              kind: "unfillable-path",
+              detail: `authored as a local path slug, but moveTo relocated this leaf away from`
+                + ` a matching ancestor — its projected position (${path}) has no "${param}" segment`,
+            })
+            continue
+          }
+
+          // Not authored, not explicit-path-sourced — falls through to the
+          // primary-store convention like any other non-path field, even if
+          // it happens to coincide with a live final pathParams name.
+          if (!known.has(primary)) {
             problems.push({
               path,
               method,
               param,
               kind: "unknown-store",
-              detail: `reads from store "${store}", which no projector builds`
+              detail: `reads from store "${primary}", which no projector builds`
                 + ` (known: ${[...known].sort().join(", ")})`,
             })
           }
