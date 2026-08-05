@@ -43,6 +43,7 @@
 import { err } from "./index.ts"
 import { TAG_UNVALIDATED } from "./tags.ts"
 import type { GeneratedEntry } from "./build.ts"
+import type { ProtocolName } from "./wire-derive.ts"
 
 /** Re-exported for convenience: the generated-entry shape this mechanism
  * consumes is EXACTLY `wrapValidators`' own (build.ts) — one generated
@@ -50,14 +51,46 @@ import type { GeneratedEntry } from "./build.ts"
  * pulls in none of build.ts's codegen machinery at runtime. */
 export type { GeneratedEntry }
 
+/** Re-exported for convenience — the type of `applyValidation`'s optional
+ * third argument. See wire-derive.ts. */
+export type { ProtocolName }
+
 /**
  * outer key = the string key passed to `applyValidation(key, tree)`.
  * inner key = the tree-relative path (segments joined with `/`; a fallback
  * segment rendered as `:name` — e.g. `"books/:bookId"`), the same path
  * convention `wrapValidators`/`extractRouteTypeRefs` use, minus the `treeId`
  * prefix (the outer key already scopes one tree).
+ *
+ * This is the PROTOCOL-BLIND map — a 2-argument `applyValidation(key, tree)`
+ * call site's shape, UNCHANGED since phase 1. See `WireValidatorMap` for the
+ * per-protocol sibling a 3-argument call site (`applyValidation(key, tree,
+ * protocol)`) resolves against instead.
  */
 export type ValidatorMap = Readonly<Record<string, Readonly<Record<string, GeneratedEntry>>>>
+
+/**
+ * The per-(key, path, protocol) sibling of `ValidatorMap` — what a 3-argument
+ * `applyValidation(key, tree, protocol)` call site resolves against (see
+ * decision 1, docs/design/wire-profiles-and-staged-validation.md's
+ * "Implementation trace (phase B)" section, for why this is a SECOND,
+ * OPTIONAL map rather than a change to `ValidatorMap`'s own shape: every
+ * existing single-argument `createApplyValidation(validatorsByKey)` call site
+ * — every already-codegen'd module, every existing test/fixture — keeps
+ * compiling and running with ZERO changes, since this map is additive and
+ * defaults to `{}`).
+ *
+ * outer key = the `applyValidation` call site's `key` argument (same as
+ * `ValidatorMap`). middle key = the leaf's tree-relative path (same
+ * convention). inner key = the protocol named at that call site's third
+ * argument — a leaf validated for two protocols under the SAME key would
+ * carry two entries here, one per protocol (in practice a leaf normally gets
+ * its own key per protocol instead — see decision 1's "one 3-arg call/key
+ * per protocol with a different wire shape" — but nothing here assumes that).
+ */
+export type WireValidatorMap = Readonly<
+  Record<string, Readonly<Record<string, Readonly<Partial<Record<ProtocolName, GeneratedEntry>>>>>>
+>
 
 /**
  * The property name a `createApplyValidation` result carries at the TYPE
@@ -76,7 +109,13 @@ export const APPLY_VALIDATION_BRAND = "__fractalApplyValidation" as const
  * walk is structural, and whatever shape goes in comes back out (a rebuilt
  * value, never the same object). */
 export type ApplyValidation = {
-  <T>(key: string, tree: T): T
+  /**
+   * `protocol` omitted (2-arg call): the COMPLETELY UNCHANGED, protocol-blind
+   * behavior — resolves against `ValidatorMap`. `protocol` given (3-arg
+   * call): resolves against `WireValidatorMap` instead, for THIS `(key,
+   * path, protocol)` triple — see `WireValidatorMap`'s doc comment.
+   */
+  <T>(key: string, tree: T, protocol?: ProtocolName): T
   /** Phantom — never present at runtime. See `APPLY_VALIDATION_BRAND`. */
   readonly __fractalApplyValidation?: true
 }
@@ -240,33 +279,59 @@ function injectValidators(
   })
 }
 
+/** Flatten `wireValidators[key]` (path -> protocol -> entry) down to the
+ * flat `path -> entry` shape `injectValidators`/`collectUncoveredLeaves`
+ * already know how to walk, keeping only the entries for `protocol` — the
+ * bridge that lets a 3-arg call reuse both functions completely unchanged. */
+function flattenWireForKey(
+  forKey: Readonly<Record<string, Readonly<Partial<Record<ProtocolName, GeneratedEntry>>>>> | undefined,
+  protocol: ProtocolName,
+): Readonly<Record<string, GeneratedEntry>> | undefined {
+  if (forKey === undefined) return undefined
+  const flat: Record<string, GeneratedEntry> = {}
+  for (const [leafPath, byProtocol] of Object.entries(forKey)) {
+    const entry = byProtocol[protocol]
+    if (entry !== undefined) flat[leafPath] = entry
+  }
+  return flat
+}
+
 /**
- * Build an `applyValidation(key, tree)` rewriter over a fixed `ValidatorMap`.
+ * Build an `applyValidation(key, tree, protocol?)` rewriter over a fixed
+ * `ValidatorMap` (2-arg calls) plus an optional `WireValidatorMap` (3-arg
+ * calls) — see `ApplyValidation`'s doc comment for the split.
  *
- * - `key` not present in `validators` → `tree` is returned unchanged. This is
- *   the PASS-THROUGH / pre-codegen case: a freshly scaffolded project's stub
- *   generated module is `createApplyValidation({})` (see
+ * - `key` not present in the relevant map → `tree` is returned unchanged.
+ *   This is the PASS-THROUGH / pre-codegen case: a freshly scaffolded
+ *   project's stub generated module is `createApplyValidation({})` (see
  *   `applyValidationStubSource`, apply-validation-build.ts), so the consumer's
  *   one import compiles and runs before codegen has ever produced validators.
  *   Deliberately SILENT — coverage is enforced by codegen and by the explicit
  *   `assertValidationCoverage` build-mode check below, never by the stub.
  * - Otherwise the tree is walked structurally and every leaf whose path
  *   matches an entry gets its handler(s) wrapped (see `injectValidators`).
- * - Each `key` may be used at most once per returned function — a second
- *   `applyValidation(sameKey, …)` throws, catching double registration of one
- *   generated set (codegen run twice, two trees claiming one key). Mirrors the
- *   removed runtime's `usedKeys` Set (ad8b921).
+ * - Each `key` may be used at most once per returned function, regardless of
+ *   `protocol` — a second `applyValidation(sameKey, …)` throws, catching
+ *   double registration of one generated set (codegen run twice, two trees
+ *   claiming one key). Mirrors the removed runtime's `usedKeys` Set
+ *   (ad8b921). A tree shared across two protocols with different wire shapes
+ *   needs its OWN key per protocol (decision 1) — `usedKeys` staying
+ *   key-only, not key+protocol, is exactly what makes reusing one key twice
+ *   under two different protocols an error rather than a silent last-wins.
  *
  * Never mutates `tree`; always returns a freshly rebuilt structure.
  */
-export function createApplyValidation(validators: ValidatorMap): ApplyValidation {
+export function createApplyValidation(
+  validators: ValidatorMap,
+  wireValidators: WireValidatorMap = {},
+): ApplyValidation {
   const usedKeys = new Set<string>()
-  const applyValidation = <T,>(key: string, tree: T): T => {
+  const applyValidation = <T,>(key: string, tree: T, protocol?: ProtocolName): T => {
     if (usedKeys.has(key)) {
       throw new Error(`applyValidation: key ${JSON.stringify(key)} has already been used`)
     }
     usedKeys.add(key)
-    const forKey = validators[key]
+    const forKey = protocol === undefined ? validators[key] : flattenWireForKey(wireValidators[key], protocol)
     if (forKey === undefined) return tree
     return injectValidators(tree, forKey) as T
   }
@@ -346,7 +411,16 @@ function collectUncoveredLeaves(
  * every leaf is uncovered — that is exactly what a build-mode caller wants to
  * hear, and exactly what the stub must NOT say at runtime.
  */
-export function assertValidationCoverage(key: string, tree: unknown, validators: ValidatorMap): void {
-  const uncovered = collectUncoveredLeaves(tree, validators[key] ?? {})
+export function assertValidationCoverage(
+  key: string,
+  tree: unknown,
+  validators: ValidatorMap,
+  options?: { readonly protocol?: ProtocolName; readonly wireValidators?: WireValidatorMap },
+): void {
+  const forKey =
+    options?.protocol === undefined
+      ? validators[key] ?? {}
+      : flattenWireForKey(options.wireValidators?.[key], options.protocol) ?? {}
+  const uncovered = collectUncoveredLeaves(tree, forKey)
   if (uncovered.length > 0) throw new UncoveredLeafError(key, uncovered)
 }

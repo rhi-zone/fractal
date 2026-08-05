@@ -841,7 +841,14 @@ function genValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mod
 // per-branch object-literal type doesn't satisfy `ValidationError`'s
 // `actual: TypeRef` field without reproducing the full recursive `TypeRef`
 // type inline — `any` sidesteps that.
-const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any): any {
+/** Exported (additively — every existing use above is unaffected) so a
+ * caller assembling its OWN module out of individually-compiled
+ * `CompiledWireEntryFragment`s (`apply-validation-build.ts`'s per-protocol
+ * wire build path, whose entries don't share one uniform profile SET the way
+ * `assembleWireModule`'s own per-entry-per-profile loop assumes) can still
+ * emit the shared `__inferTypeRef` helper every fragment's `type`-kind error
+ * path references, without re-deriving its source. */
+export const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any): any {
   if (v === null) return { shape: { kind: "null" }, meta: {} };
   if (v === undefined) return { shape: { kind: "void" }, meta: {} };
   if (Array.isArray(v)) return { shape: { kind: "array", element: { shape: { kind: "unknown" }, meta: {} } }, meta: {} };
@@ -1833,6 +1840,199 @@ export function compileWireEntryFragment(
   const wireType = wireTypeText(ref, profile)
   const ctx = new GenCtx()
   const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile)
+  const fillStmts = genDefaultsFillChildren(ref, "__decoded")
+
+  const lines: string[] = [...ctx.declarations()]
+  lines.push(`function parse(wire: any) {`)
+  lines.push(`  const path: string[] = [];`)
+  lines.push(`  void path;`)
+  lines.push(`  const errs: ValidationError[] = [];`)
+  lines.push(...indentLines(decodeBody.stmts, 2))
+  lines.push(`  if (errs.length > 0) { return { kind: "err" as const, errors: errs }; }`)
+  lines.push(`  let __decoded: any = ${decodeBody.outExpr};`)
+  lines.push(...indentLines(fillStmts, 2))
+  lines.push(`  const constraintErrs = ${constraintsFnName}(__decoded);`)
+  lines.push(`  if (constraintErrs.length > 0) { return { kind: "err" as const, errors: constraintErrs }; }`)
+  lines.push(`  return { kind: "ok" as const, value: __decoded };`)
+  lines.push(`}`)
+  lines.push(`return { parse: parse } as unknown as {`)
+  lines.push(`  parse: (wire: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`)
+  lines.push(`};`)
+  const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n")
+  return typeImport === undefined ? { code, wireType } : { code, wireType, typeImport }
+}
+
+/** True when `ref` (accounting for `meta.nullable` and `page`, the same
+ * unwrapping `genWireEncodeDecodeShape`/`wireTypeTextShape` above already do)
+ * is an `object` at the top level — the only shape
+ * `compileWireEntryFragmentComposite`'s per-field dispatch applies to. */
+function isTopLevelObjectRef(ref: TypeRef): boolean {
+  const kind = ref.shape.kind
+  if (kind === "page") return true
+  return kind === "object"
+}
+
+/** Sibling of `wireObject` (unchanged) whose per-field profile lookup varies
+ * by field NAME instead of using one profile for every field — see
+ * `compileWireEntryFragmentComposite`'s doc comment for why this exists as a
+ * separate function rather than a parameter added to `wireObject` itself
+ * (purely additive: `wireObject`/`genWireEncodeDecode` are untouched). */
+function wireObjectWithFieldProfiles(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  fieldProfiles: Readonly<Record<string, WireProfile>>,
+  defaultProfile: WireProfile,
+): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "object" }
+  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
+  const out = ctx.fresh("o")
+  const stmts: string[] = [`let ${out}: Record<string, any> = {};`]
+  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`)
+  const body: string[] = []
+  for (const [name, field] of Object.entries(s.fields)) {
+    const fv = `${v}[${JSON.stringify(name)}]`
+    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
+    const fieldProfile = fieldProfiles[name] ?? defaultProfile
+    const inner = genWireEncodeDecode(field, fv, fpath, ctx, fieldProfile)
+    body.push(
+      `if (${fv} !== undefined) {`,
+      ...indentLines(inner.stmts, 2),
+      `  ${out}[${JSON.stringify(name)}] = ${inner.outExpr};`,
+      `}`,
+    )
+  }
+  if (ref.meta.additionalProperties === false) {
+    const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`)
+    body.push(
+      `for (const __k of Object.keys(${v})) { if (!${known}.has(__k)) { errs.push({ kind: "unexpected", path: ${pathExpr}.concat([__k]) }); } }`,
+    )
+  }
+  stmts.push(...indentLines(body, 2), `}`)
+  return { stmts, outExpr: out }
+}
+
+/** Composite-top wrapper: unwraps `meta.nullable`/`page` (mirroring
+ * `genWireEncodeDecode`/`genWireEncodeDecodeShape`'s own unwrapping) then
+ * dispatches to `wireObjectWithFieldProfiles` for the top-level object.
+ * `compileWireEntryFragmentComposite` only ever calls this once it has
+ * already confirmed (`isTopLevelObjectRef`) that `ref` unwraps to an object —
+ * this function still has to handle the unwrapping ITSELF because that's the
+ * shape the fields end up dispatched against, not just a delegation check. */
+function genWireEncodeDecodeCompositeTop(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  fieldProfiles: Readonly<Record<string, WireProfile>>,
+  defaultProfile: WireProfile,
+): ValidateResult {
+  if (ref.meta.nullable === true) {
+    const out = ctx.fresh("n")
+    const inner = genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile)
+    const stmts = [
+      `let ${out};`,
+      `if (${v} === null) { ${out} = null; } else {`,
+      ...indentLines(inner.stmts, 2),
+      `  ${out} = ${inner.outExpr};`,
+      `}`,
+    ]
+    return { stmts, outExpr: out }
+  }
+  return genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile)
+}
+
+function genWireEncodeDecodeCompositeTopShape(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  fieldProfiles: Readonly<Record<string, WireProfile>>,
+  defaultProfile: WireProfile,
+): ValidateResult {
+  if (ref.shape.kind === "page") {
+    return genWireEncodeDecodeCompositeTop(pageAsObjectRef(ref), v, pathExpr, ctx, fieldProfiles, defaultProfile)
+  }
+  return wireObjectWithFieldProfiles(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile)
+}
+
+/** Sibling of `wireTypeTextShape`'s `"object"` branch whose per-field
+ * `ValidWire` type varies by field NAME — the `wireTypeText` analogue of
+ * `wireObjectWithFieldProfiles`. */
+function wireTypeTextObjectWithFieldProfiles(
+  ref: TypeRef,
+  fieldProfiles: Readonly<Record<string, WireProfile>>,
+  defaultProfile: WireProfile,
+): string {
+  const s = ref.shape as TypeShape & { kind: "object" }
+  const fields = Object.entries(s.fields).map(
+    ([name, field]) => `${JSON.stringify(name)}?: ${wireTypeText(field, fieldProfiles[name] ?? defaultProfile)}`,
+  )
+  return `{ ${fields.join("; ")} }`
+}
+
+function wireTypeTextCompositeTopShape(
+  ref: TypeRef,
+  fieldProfiles: Readonly<Record<string, WireProfile>>,
+  defaultProfile: WireProfile,
+): string {
+  if (ref.shape.kind === "page") {
+    return wireTypeTextCompositeTopShape(pageAsObjectRef(ref), fieldProfiles, defaultProfile)
+  }
+  return wireTypeTextObjectWithFieldProfiles(ref, fieldProfiles, defaultProfile)
+}
+
+/** `wireTypeText`'s composite-top analogue: mirrors `wireTypeText`'s own
+ * `meta.nullable` handling, then dispatches to
+ * `wireTypeTextCompositeTopShape`/`wireTypeTextObjectWithFieldProfiles`. */
+function wireTypeTextComposite(
+  ref: TypeRef,
+  fieldProfiles: Readonly<Record<string, WireProfile>>,
+  defaultProfile: WireProfile,
+): string {
+  const base = wireTypeTextCompositeTopShape(ref, fieldProfiles, defaultProfile)
+  return ref.meta.nullable === true ? `${base} | null` : base
+}
+
+/**
+ * Per-field composite entry-fragment compiler — `compileWireEntryFragment`'s
+ * sibling for the case where a SINGLE leaf's own params need DIFFERENT wire
+ * profiles per field (HTTP: a query-string field and a JSON-body field on the
+ * same operation; CLI: a flag-store field and a path-slug field). Phase A's
+ * `WireProfile.leafHandlers` dispatches by TypeRef KIND only, which cannot
+ * vary by field NAME — this is the top-level, per-field-NAME dispatch that
+ * closes that gap, WITHOUT touching `compileWireEntryFragment` or anything it
+ * calls: every structural/leaf function above (`wireObject`,
+ * `genWireEncodeDecode`, `wireTypeTextShape`, ...) is reused completely
+ * unchanged, including for every field's OWN sub-structure (a composite
+ * profile only ever varies dispatch at the leaf's own direct fields — a
+ * validated leaf's input is always an object of named params one level deep,
+ * per the design doc; nested structure under one field still resolves via
+ * that field's own single profile, recursing through the ordinary,
+ * profile-blind-to-field-name `genWireEncodeDecode`).
+ *
+ * `ref.shape.kind !== "object"` (after accounting for `meta.nullable`/`page`
+ * the same way `genWireEncodeDecodeShape` does) has no top-level fields to
+ * dispatch per-name over, so this is exactly
+ * `compileWireEntryFragment(ref, defaultProfile, ...)` — delegation, not a
+ * separate codepath, so the non-object case can never drift from the ordinary
+ * one.
+ */
+export function compileWireEntryFragmentComposite(
+  ref: TypeRef,
+  fieldProfiles: Readonly<Record<string, WireProfile>>,
+  defaultProfile: WireProfile,
+  constraintsFnName: string,
+  resolveImport?: (declarationFile: string) => string,
+): CompiledWireEntryFragment {
+  if (!isTopLevelObjectRef(ref)) {
+    return compileWireEntryFragment(ref, defaultProfile, constraintsFnName, resolveImport)
+  }
+  const { annotation, typeImport } = guardAnnotation(ref, resolveImport)
+  const wireType = wireTypeTextComposite(ref, fieldProfiles, defaultProfile)
+  const ctx = new GenCtx()
+  const decodeBody = genWireEncodeDecodeCompositeTop(ref, "wire", "path", ctx, fieldProfiles, defaultProfile)
   const fillStmts = genDefaultsFillChildren(ref, "__decoded")
 
   const lines: string[] = [...ctx.declarations()]
