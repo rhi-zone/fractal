@@ -9,11 +9,18 @@
 // mcp/graphql argument stores identity+json-dates").
 //
 // See docs/design/wire-profiles-and-staged-validation.md's "Implementation
-// trace (phase B)" section for the full derivation write-up, including the
-// documented `http.moveTo` / path-slug-detection limitation this module's
-// HTTP branch has (LOCAL, pre-projection path segments only — the fully
-// projected route's mount position, which `http-api-projector`'s own
-// `assemble` uses and which `moveTo` can change, isn't visible to codegen).
+// trace (phase B)" section for the full derivation write-up. That section's
+// original phase-B trace flagged this module's HTTP branch reading LOCAL,
+// pre-projection path segments only as a "known limitation" relative to a
+// runtime that resolved `moveTo`-relocated leaves' path binding against their
+// FINAL mounted position — that runtime no longer exists: moveTo is now
+// purely an address transform, and a leaf's field<->store binding is defined
+// to be a pure function of its own authored (pre-moveTo) declarations (see
+// http-api-projector's route.ts, `Sources.authoredPathParams`). Local,
+// pre-projection path segments are exactly that authored set, so this
+// module's HTTP branch was already computing the CORRECT thing, under the
+// new definition, without needing any change — see that section's dated note
+// for the supersession.
 
 import {
   argvProfile,
@@ -113,18 +120,19 @@ function primaryStoreForMethod(method: string): "query" | "body" {
  * Object.keys(slugs))` call and `http-api-projector`'s own path-slug
  * convention.
  *
- * KNOWN LIMITATION (HTTP only): the path-param-name set passed in here is
- * this leaf's own LOCAL tree-relative path segments, computed PRE-projection
- * — `http.moveTo` can relocate a leaf elsewhere in the route tree, changing
- * its EFFECTIVE path-param set, which only exists post-`projectRoute`
- * (http-api-projector's `assemble` resolves per-field source against the
- * fully projected route's mount position for exactly this reason). Codegen
- * is a static analysis over the pre-projection call-site tree and cannot see
- * a `moveTo` relocation, so this derivation is correct for the dominant case
- * (no `moveTo` on this leaf) and an approximation when `moveTo` is used —
- * the same class of scope cut `apply-validation-build.ts`'s `traceNodeType`
- * doc comment already documents for same-file-only tree tracing, not a
- * contradiction of it.
+ * HTTP-only note: the path-param-name set passed in here is this leaf's own
+ * LOCAL tree-relative path segments, computed PRE-projection (`http.moveTo`
+ * runs later, over the projected `HttpRoute` tree, and is purely an address
+ * transform — it does not relocate or change which path segments a leaf
+ * AUTHORED itself under). This is exactly `http-api-projector`'s own
+ * `authoredPathParams` definition (route.ts), so this derivation is correct
+ * for every leaf, `moveTo` or not — not an approximation of anything. This
+ * used to be documented as a known limitation relative to an OLDER runtime
+ * behavior where a `moveTo`-relocated leaf's path binding was resolved
+ * against wherever it ended up (see docs/design/
+ * wire-profiles-and-staged-validation.md's dated supersession note in its
+ * phase-B trace); that runtime behavior is gone, and local-authored-path-only
+ * is now the actual definition of path-sourced binding, not a stand-in for it.
  */
 export function deriveFieldProfiles(
   protocol: ProtocolName,

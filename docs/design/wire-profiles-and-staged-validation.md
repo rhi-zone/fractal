@@ -768,17 +768,37 @@ Store→encoding tables:
   fallback-segment name defaults to `"path"` instead, same convention as CLI.
   An explicit `sourceMap` override always wins over either default.
 
-**KNOWN LIMITATION, documented explicitly:** HTTP's real per-field source
-resolution (`http-api-projector`'s `assemble`) uses the FULLY PROJECTED
-route's mount position for path-slug detection, because `http.moveTo` can
-relocate a leaf elsewhere in the route tree, changing its effective
-path-param set — invisible to codegen, a static analysis over the
-PRE-projection call-site tree. `wire-derive.ts`'s HTTP branch therefore uses
-ONLY the leaf's own LOCAL, pre-projection tree-relative path segments for
-path-slug detection — correct for the dominant case (no `moveTo` on that
-leaf), an approximation when `moveTo` relocates it. This mirrors (is not a
-contradiction of) the existing same-file-only scope cut `traceNodeType`'s doc
-comment (`apply-validation-build.ts`) already documents for tree tracing.
+**SUPERSEDED (2026-08-05, session
+https://claude.ai/code/session_011tFKVomiW7x2MkeRg3mw88) — was "KNOWN
+LIMITATION, documented explicitly":** this paragraph originally documented
+HTTP's real per-field source resolution (`http-api-projector`'s `assemble`)
+as using the FULLY PROJECTED route's mount position for path-slug detection,
+with `http.moveTo` able to relocate a leaf and change its EFFECTIVE
+path-param set — invisible to codegen's PRE-projection static analysis, so
+`wire-derive.ts`'s HTTP branch (using only the leaf's own LOCAL, pre-
+projection tree-relative path segments) was correct for the dominant case and
+an approximation when `moveTo` relocated a leaf.
+
+That runtime — where a `moveTo`-relocated leaf's implicit path binding
+depended on where it ended up — no longer exists. `moveTo` is now purely an
+address transform: a leaf's field↔store binding is a pure function of its
+AUTHORED declarations (its own pre-moveTo local path-slug ancestry, plus any
+explicit `sourceMap`/`http.source()` entry), never of where `moveTo`
+relocates it. See `http-api-projector/src/route.ts`'s `Sources.
+authoredPathParams` (stamped by `naiveTransform`, before any rewriter runs)
+for the runtime mechanism, and `findRouteSourceCoverageProblems` for the new
+`"unfillable-path"` wire-time check this enables (a leaf whose authored slug
+or explicit path-sourceMap doesn't survive to its final mounted position now
+fails loudly at router-construction time instead of silently losing the
+field).
+
+`wire-derive.ts`'s HTTP branch needed NO change: reading only the leaf's own
+local, pre-projection path segments IS now the exact definition of
+authored-path-slug detection, not an approximation of a runtime that resolved
+against the final projected position — that runtime is gone. This mirrors
+(is not a contradiction of) the existing same-file-only scope cut
+`traceNodeType`'s doc comment (`apply-validation-build.ts`) already documents
+for tree tracing.
 
 ### Static-meta-read investigation (decision 4/5) — (a) panned out, with one real gap
 
