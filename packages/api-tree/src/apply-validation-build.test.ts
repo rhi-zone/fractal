@@ -6,6 +6,18 @@
 // emitted module (flat compiled validators + nested regrouping + the
 // `createApplyValidation` composition, evaluated end-to-end), the pre-codegen
 // stub, and the two cache tiers.
+//
+// Phase D (docs/design/wire-profiles-and-staged-validation.md) deleted the
+// separate 2-arg-only extraction/build pipeline this file used to test
+// alongside the wire-profile one (`extractApplyValidationTypeRefs`/
+// `buildApplyValidationModuleSource*`, backed by type-ir's now-deleted
+// `compileValidatorModule`) — every `applyValidation` call site, 2-arg or
+// 3-arg, now compiles through the wire-profile pipeline below, with an
+// omitted `protocol` argument sugar for `"identity"` (decision A of the
+// retirement). Tests that used to exercise the 2-arg path specifically are
+// ported onto `extractWireApplyValidationTypeRefs`/
+// `buildWireApplyValidationModuleSource*` against the SAME fixtures, which
+// still use plain 2-arg call sites.
 
 import { afterAll, describe, expect, it } from "bun:test"
 import * as fs from "node:fs"
@@ -14,13 +26,9 @@ import * as path from "node:path"
 import ts from "typescript"
 import {
   applyValidationStubSource,
-  buildApplyValidationModuleCached,
-  buildApplyValidationModuleSource,
-  buildApplyValidationModuleSourceIncremental,
   buildWireApplyValidationModuleCached,
   buildWireApplyValidationModuleSource,
   buildWireApplyValidationModuleSourceIncremental,
-  extractApplyValidationTypeRefs,
   extractWireApplyValidationTypeRefs,
   findApplyValidationCallSites,
 } from "./apply-validation-build.ts"
@@ -88,38 +96,39 @@ describe("call-site scan", () => {
   })
 })
 
-describe("extractApplyValidationTypeRefs", () => {
-  it("keys leaves by TREE-RELATIVE path, grouped under each call site's key", () => {
-    const { byKey } = extractApplyValidationTypeRefs(FIXTURE)
+describe("extractWireApplyValidationTypeRefs — 2-arg call sites (decision A: sugar for protocol \"identity\")", () => {
+  it("keys leaves by TREE-RELATIVE path, grouped under each call site's key, with an omitted protocol defaulting to \"identity\"", () => {
+    const { byKey } = extractWireApplyValidationTypeRefs(FIXTURE)
     expect(Object.keys(byKey).sort()).toEqual(["books", "widgets"])
-    expect(Object.keys(byKey["books"]!).sort()).toEqual(["byId/:bookId", "list"])
-    expect(Object.keys(byKey["widgets"]!)).toEqual(["create"])
+    expect(byKey["books"]!.protocol).toBe("identity")
+    expect(byKey["widgets"]!.protocol).toBe("identity")
+    expect(Object.keys(byKey["books"]!.leaves).sort()).toEqual(["byId/:bookId", "list"])
+    expect(Object.keys(byKey["widgets"]!.leaves)).toEqual(["create"])
   })
 
-  it("carries each leaf's real input TypeRef and JSDoc description", () => {
-    const { byKey } = extractApplyValidationTypeRefs(FIXTURE)
-    expect(byKey["books"]!["list"]!.description).toBe("List every book in the catalog.")
-    expect(byKey["widgets"]!["create"]!.input.shape.kind).toBe("object")
+  it("carries each leaf's real input TypeRef", () => {
+    const { byKey } = extractWireApplyValidationTypeRefs(FIXTURE)
+    expect(byKey["widgets"]!.leaves["create"]!.ref.shape.kind).toBe("object")
   })
 
-  it("supports the structural-sharing opt-in (defs surface, same as build.ts's)", () => {
-    const shared = extractApplyValidationTypeRefs(FIXTURE, { shouldShare: defaultShouldShare })
+  it("supports the structural-sharing opt-in (defs surface)", () => {
+    const shared = extractWireApplyValidationTypeRefs(FIXTURE, { shouldShare: defaultShouldShare })
     expect(Object.keys(shared.byKey).sort()).toEqual(["books", "widgets"])
     expect(typeof shared.defs).toBe("object")
   })
 })
 
-describe("generated module", () => {
-  const source = buildApplyValidationModuleSource(FIXTURE, { runtimeImport: "../apply-validation.ts" })
+describe("generated module — 2-arg call sites (decision A)", () => {
+  const source = buildWireApplyValidationModuleSource(FIXTURE, { runtimeImport: "../apply-validation.ts" })
 
   it("imports createApplyValidation and re-exports a composed applyValidation", () => {
     expect(source).toContain('import { createApplyValidation } from "../apply-validation.ts"')
-    expect(source).toContain("export const applyValidation = createApplyValidation(validatorsByKey)")
+    expect(source).toContain("export const applyValidation = createApplyValidation({}, wireValidatorsByKey)")
   })
 
-  it("regroups the flat compiled validators into Record<key, Record<path, entry>>", () => {
+  it("regroups the flat compiled validators into Record<key, Record<path, Partial<Record<protocol, entry>>>>, tagged \"identity\"", () => {
     expect(source).toContain('"books": {')
-    expect(source).toContain('"byId/:bookId": validators[')
+    expect(source).toContain('"byId/:bookId": { "identity": wireValidators[')
     expect(source).toContain('"widgets": {')
   })
 
@@ -128,7 +137,7 @@ describe("generated module", () => {
     expect((parsed as unknown as { parseDiagnostics?: unknown[] }).parseDiagnostics ?? []).toHaveLength(0)
   })
 
-  it("validates for real, end-to-end, at both call sites' keys", async () => {
+  it("validates for real, end-to-end, at both call sites' keys — via a plain 2-arg applyValidation call", async () => {
     const { applyValidation } = evalModule(source)
     const tree = {
       meta: {},
@@ -173,35 +182,35 @@ describe("pre-codegen stub", () => {
 
   it("is what an entry file with no call sites builds to", () => {
     const noCallSites = `${import.meta.dir}/__fixtures__/tree.fixture.ts`
-    expect(buildApplyValidationModuleSource(noCallSites)).toBe(applyValidationStubSource())
+    expect(buildWireApplyValidationModuleSource(noCallSites)).toBe(applyValidationStubSource())
   })
 })
 
-describe("caching", () => {
+describe("caching — 2-arg call sites (decision A)", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fractal-apply-validation-"))
   afterAll(() => fs.rmSync(tmpDir, { recursive: true, force: true }))
 
   it("Tier 1: a second build for the same entry/output is a cache hit", () => {
     const outFile = path.join(tmpDir, "generated.ts")
-    const first = buildApplyValidationModuleCached(FIXTURE, outFile)
+    const first = buildWireApplyValidationModuleCached(FIXTURE, outFile)
     expect(first.status).toBe("built")
     if (first.status === "built") fs.writeFileSync(outFile, first.result)
-    expect(buildApplyValidationModuleCached(FIXTURE, outFile).status).toBe("hit")
+    expect(buildWireApplyValidationModuleCached(FIXTURE, outFile).status).toBe("hit")
   })
 
   it("Tier 2: carried-forward leaves aren't recompiled, and the source is unchanged", () => {
     const program = createExtractorProgram(FIXTURE)
-    const first = buildApplyValidationModuleSourceIncremental(FIXTURE, { program })
+    const first = buildWireApplyValidationModuleSourceIncremental(FIXTURE, { program })
     expect(first.changedLeaves.length).toBe(3)
-    const second = buildApplyValidationModuleSourceIncremental(FIXTURE, { program, prior: first })
+    const second = buildWireApplyValidationModuleSourceIncremental(FIXTURE, { program, prior: first })
     expect(second.changedLeaves).toEqual([])
     expect(second.source).toBe(first.source)
   })
 
   it("the incremental path emits the same module the one-shot path does", () => {
     const program = createExtractorProgram(FIXTURE)
-    const incremental = buildApplyValidationModuleSourceIncremental(FIXTURE, { program })
-    const oneShot = buildApplyValidationModuleSource(FIXTURE, { program })
+    const incremental = buildWireApplyValidationModuleSourceIncremental(FIXTURE, { program })
+    const oneShot = buildWireApplyValidationModuleSource(FIXTURE, { program })
     expect(incremental.source).toBe(oneShot)
   })
 })
@@ -430,55 +439,55 @@ describe("wire-profile build path — caching (fingerprint incorporates protocol
 // tree-relative under the call site's own key ("tree"), not treeId-prefixed.
 // ============================================================================
 
-describe("generated module — extraction/compile edge cases (ported from build.test.ts)", () => {
+describe("generated module — extraction/compile edge cases (ported from build.test.ts, then from the 2-arg path onto the wire path, phase D)", () => {
   const TREE_FIXTURE = `${import.meta.dir}/__fixtures__/apply-validation-tree.fixture.ts`
   const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/apply-validation-sharing-input.fixture.ts`
 
   it("keys leaves tree-relatively under the call site's key, matching the rich fixture's shape", () => {
-    const { byKey } = extractApplyValidationTypeRefs(TREE_FIXTURE)
-    const paths = Object.keys(byKey["tree"]!)
+    const { byKey } = extractWireApplyValidationTypeRefs(TREE_FIXTURE)
+    const paths = Object.keys(byKey["tree"]!.leaves)
     expect(paths).toContain("users/create")
     expect(paths).toContain("users/:userId/get")
   })
 
   it("without an outFile, a NAMED parameter type inlines its structure (no import)", () => {
-    const source = buildApplyValidationModuleSource(TREE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
-    expect(source.split("\n").filter((line) => line.startsWith("import type"))).toEqual([
+    const source = buildWireApplyValidationModuleSource(TREE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    expect(source.split("\n").filter((line: string) => line.startsWith("import type"))).toEqual([
       'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
     ])
-    expect(source).toContain("value is { q?: string }")
+    expect(source).toContain("value: { q?: string }")
   })
 
   it("given an outFile, a NAMED parameter type (BookQuery, tree.fixture.ts) is imported relative to outFile, not inlined", () => {
     const outFile = `${import.meta.dir}/generated/apply-validation.ts`
-    const source = buildApplyValidationModuleSource(TREE_FIXTURE, { outFile, runtimeImport: "../apply-validation.ts" })
+    const source = buildWireApplyValidationModuleSource(TREE_FIXTURE, { outFile, runtimeImport: "../apply-validation.ts" })
     expect(source).toContain('import type { BookQuery } from "../__fixtures__/tree.fixture.ts"')
-    expect(source).toContain("value is BookQuery")
-    expect(source).not.toContain("value is { q?: string }")
+    expect(source).toContain("value: BookQuery")
+    expect(source).not.toContain("value: { q?: string }")
   })
 
   it("given an outFile, a builtin/global TS utility type (Record) inlines structurally — no import to a TS lib .d.ts file", () => {
     const outFile = `${import.meta.dir}/generated/apply-validation.ts`
-    const source = buildApplyValidationModuleSource(TREE_FIXTURE, { outFile, runtimeImport: "../apply-validation.ts" })
+    const source = buildWireApplyValidationModuleSource(TREE_FIXTURE, { outFile, runtimeImport: "../apply-validation.ts" })
     expect(source).not.toContain("import type { Record }")
     expect(source).not.toMatch(/import type \{[^}]*\} from "[^"]*lib\.[a-z0-9.]*\.d\.ts"/i)
-    expect(source).toContain("value is Record<string, string>")
+    expect(source).toContain("value: Record<string, string>")
   })
 
   it("a leaf reaching into a TS/DOM builtin's structure (Response, via its return type) compiles to syntactically valid TS", () => {
-    const source = buildApplyValidationModuleSource(TREE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    const source = buildWireApplyValidationModuleSource(TREE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
     expect(source).not.toContain("__@")
-    const withoutImports = source.split("\n").filter((line) => !line.startsWith("import ")).join("\n")
+    const withoutImports = source.split("\n").filter((line: string) => !line.startsWith("import ")).join("\n")
     expect(() => new Bun.Transpiler({ loader: "ts" }).transformSync(withoutImports)).not.toThrow()
   })
 
   it("without shouldShare, no defs are emitted — every route's input inlines its full structure", () => {
-    const source = buildApplyValidationModuleSource(SHARING_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    const source = buildWireApplyValidationModuleSource(SHARING_FIXTURE, { runtimeImport: "../apply-validation.ts" })
     expect(source).not.toContain("__def_Address_check")
   })
 
   it("with shouldShare, a type reused across routes' inputs compiles to ONE shared def, called from every ref site", async () => {
-    const source = buildApplyValidationModuleSource(SHARING_FIXTURE, {
+    const source = buildWireApplyValidationModuleSource(SHARING_FIXTURE, {
       shouldShare: defaultShouldShare,
       runtimeImport: "../apply-validation.ts",
     })
@@ -502,18 +511,18 @@ describe("generated module — extraction/compile edge cases (ported from build.
   })
 
   it("passing a pre-built program (createExtractorProgram) produces byte-identical output to the default per-call program", () => {
-    const withoutProgram = buildApplyValidationModuleSource(TREE_FIXTURE)
+    const withoutProgram = buildWireApplyValidationModuleSource(TREE_FIXTURE)
     const program = createExtractorProgram(TREE_FIXTURE)
-    const withProgram = buildApplyValidationModuleSource(TREE_FIXTURE, { program })
+    const withProgram = buildWireApplyValidationModuleSource(TREE_FIXTURE, { program })
     expect(withProgram).toEqual(withoutProgram)
   })
 
   it("a program shared across TWO different entry files (multi-root) extracts each correctly", () => {
     const program = createExtractorProgram([TREE_FIXTURE, SHARING_FIXTURE])
-    const treeSource = buildApplyValidationModuleSource(TREE_FIXTURE, { program })
-    const sharingSource = buildApplyValidationModuleSource(SHARING_FIXTURE, { shouldShare: defaultShouldShare, program })
+    const treeSource = buildWireApplyValidationModuleSource(TREE_FIXTURE, { program })
+    const sharingSource = buildWireApplyValidationModuleSource(SHARING_FIXTURE, { shouldShare: defaultShouldShare, program })
 
-    expect(treeSource).toEqual(buildApplyValidationModuleSource(TREE_FIXTURE))
-    expect(sharingSource).toEqual(buildApplyValidationModuleSource(SHARING_FIXTURE, { shouldShare: defaultShouldShare }))
+    expect(treeSource).toEqual(buildWireApplyValidationModuleSource(TREE_FIXTURE))
+    expect(sharingSource).toEqual(buildWireApplyValidationModuleSource(SHARING_FIXTURE, { shouldShare: defaultShouldShare }))
   })
 })

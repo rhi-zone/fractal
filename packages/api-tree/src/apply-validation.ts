@@ -63,7 +63,15 @@ export type { ProtocolName }
  * prefix (the outer key already scopes one tree).
  *
  * This is the PROTOCOL-BLIND map — a 2-argument `applyValidation(key, tree)`
- * call site's shape, UNCHANGED since phase 1. See `WireValidatorMap` for the
+ * call site's shape, UNCHANGED since phase 1. Phase D retired the 2-arg
+ * CODEGEN route (`apply-validation-build.ts` no longer has an extraction/build
+ * path that populates this map) — every call site, 2-arg or 3-arg, now
+ * compiles through the single staged wire-profile pipeline, with an omitted
+ * `protocol` argument sugar for `"identity"` (see `resolveForKey`'s doc
+ * comment below). This map stays fully live for HAND-AUTHORED validators
+ * built without codegen (as several of this package's own runtime tests do),
+ * and takes precedence over an identity-tagged `WireValidatorMap` entry when
+ * both are present for the same key. See `WireValidatorMap` for the
  * per-protocol sibling a 3-argument call site (`applyValidation(key, tree,
  * protocol)`) resolves against instead.
  */
@@ -110,10 +118,13 @@ export const APPLY_VALIDATION_BRAND = "__fractalApplyValidation" as const
  * value, never the same object). */
 export type ApplyValidation = {
   /**
-   * `protocol` omitted (2-arg call): the COMPLETELY UNCHANGED, protocol-blind
-   * behavior — resolves against `ValidatorMap`. `protocol` given (3-arg
-   * call): resolves against `WireValidatorMap` instead, for THIS `(key,
-   * path, protocol)` triple — see `WireValidatorMap`'s doc comment.
+   * `protocol` given (3-arg call): resolves against `WireValidatorMap`, for
+   * THIS `(key, path, protocol)` triple. `protocol` omitted (2-arg call):
+   * resolves against `ValidatorMap` first (hand-authored maps keep working
+   * unchanged), falling back to `WireValidatorMap` tagged `"identity"`
+   * otherwise — see `resolveForKey`'s doc comment for why (phase D retired
+   * the 2-arg-specific codegen route; an omitted `protocol` is now sugar for
+   * `"identity"` at the codegen layer too).
    */
   <T>(key: string, tree: T, protocol?: ProtocolName): T
   /** Phantom — never present at runtime. See `APPLY_VALIDATION_BRAND`. */
@@ -269,6 +280,36 @@ function flattenWireForKey(
 }
 
 /**
+ * Decision A (phase D retirement of the 2-arg codegen route, see
+ * docs/design/wire-profiles-and-staged-validation.md): a 2-arg call —
+ * `protocol` omitted — resolves against `validators[key]` (the legacy,
+ * hand-authored `ValidatorMap`) FIRST, for backward compatibility with any
+ * caller that builds `createApplyValidation` from a hand-rolled map directly
+ * (as several of this package's own runtime tests do, independent of
+ * codegen). When that's absent, it falls back to `wireValidators[key]`
+ * tagged `"identity"` — because codegen (`apply-validation-build.ts`) no
+ * longer has a 2-arg-specific extraction/build path at all: EVERY call site,
+ * 2-arg or 3-arg, is now compiled through the single staged wire-profile
+ * pipeline, with an omitted third argument treated as sugar for the explicit
+ * `"identity"` protocol (the design doc's own framing: "the identity profile
+ * is `validateEncoding` reduced to a trivial check plus the full
+ * `validateConstraints` pass — i.e. what today's check/errors/parse do for an
+ * in-process, already-typed value with no wire in between"). This keeps every
+ * existing 2-arg call site — including every hand-authored-map test — working
+ * unchanged, while giving a 2-arg call site real generated coverage again
+ * once codegen has run.
+ */
+function resolveForKey(
+  key: string,
+  protocol: ProtocolName | undefined,
+  validators: ValidatorMap,
+  wireValidators: WireValidatorMap,
+): Readonly<Record<string, GeneratedEntry>> | undefined {
+  if (protocol !== undefined) return flattenWireForKey(wireValidators[key], protocol)
+  return validators[key] ?? flattenWireForKey(wireValidators[key], "identity")
+}
+
+/**
  * Build an `applyValidation(key, tree, protocol?)` rewriter over a fixed
  * `ValidatorMap` (2-arg calls) plus an optional `WireValidatorMap` (3-arg
  * calls) — see `ApplyValidation`'s doc comment for the split.
@@ -303,7 +344,7 @@ export function createApplyValidation(
       throw new Error(`applyValidation: key ${JSON.stringify(key)} has already been used`)
     }
     usedKeys.add(key)
-    const forKey = protocol === undefined ? validators[key] : flattenWireForKey(wireValidators[key], protocol)
+    const forKey = resolveForKey(key, protocol, validators, wireValidators)
     if (forKey === undefined) return tree
     return injectValidators(tree, forKey) as T
   }
@@ -389,10 +430,7 @@ export function assertValidationCoverage(
   validators: ValidatorMap,
   options?: { readonly protocol?: ProtocolName; readonly wireValidators?: WireValidatorMap },
 ): void {
-  const forKey =
-    options?.protocol === undefined
-      ? validators[key] ?? {}
-      : flattenWireForKey(options.wireValidators?.[key], options.protocol) ?? {}
+  const forKey = resolveForKey(key, options?.protocol, validators, options?.wireValidators ?? {}) ?? {}
   const uncovered = collectUncoveredLeaves(tree, forKey)
   if (uncovered.length > 0) throw new UncoveredLeafError(key, uncovered)
 }

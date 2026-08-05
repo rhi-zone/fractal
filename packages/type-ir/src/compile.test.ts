@@ -1,23 +1,28 @@
 // packages/type-ir/src/compile.test.ts — AOT validator codegen tests
 //
-// Covers:
-//   1. compileValidator produces standalone JS evaluating to a `{ check,
-//      errors, parse }` triple for a single TypeRef.
-//   2. compileValidatorModule emits a full module whose `validators` map
-//      exposes that triple per entry, and that check()/errors()/parse()
-//      agree with each other across leaf/composite shapes, meta-driven
-//      constraints, and coercion.
+// Covers: compileValidator produces standalone JS evaluating to a `{ check,
+// errors, parse }` triple for a single TypeRef, and check()/errors()/parse()
+// agree with each other across leaf/composite shapes, meta-driven
+// constraints, and coercion.
 //
-// The build orchestrator (entryFile -> compiled module, end-to-end) lives in
-// @rhi-zone/fractal-api-tree's build.test.ts — it wires this package's
-// compileValidatorModule to api-tree's own extractor/tree-walker.
+// Phase D (docs/design/wire-profiles-and-staged-validation.md) deleted
+// `compileValidatorModule`/`compileEntryFragment`/`assembleValidatorModule` —
+// the 2-arg `applyValidation` codegen route's own module-assembly layer,
+// retired once api-tree's staged wire-profile build path
+// (`buildWireApplyValidationModuleSource*`) gained the `shouldShare`/defs
+// capability that was this layer's only remaining reason to exist — along
+// with the tests here that covered them specifically. `compileValidator`
+// (this file's actual subject) is unaffected: it's a separate, still-live,
+// general-purpose "compile one TypeRef to a standalone validator expression"
+// API, used directly by @rhi-zone/fractal-type-ir consumers (see
+// corpora.test.ts/cross-projector.test.ts) and not part of that codegen route.
 
 import { spawnSync } from "node:child_process"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "bun:test"
-import { compileValidator, compileValidatorModule, type ValidationError } from "./compile.ts"
+import { compileValidator, type ValidationError } from "./compile.ts"
 import { t, types } from "./index.ts"
 import { bytes, date, datetime, duration, email, int32, time, uri, uuid } from "./kinds/common.ts"
 import { int64 } from "./kinds/int-widths.ts"
@@ -40,12 +45,6 @@ function stripTypes(source: string): string {
 /** Evaluate a `compileValidator(...)`-produced expression string into its `{ check, errors, parse }` triple. */
 function evalValidator(source: string): Triple {
   return new Function(`return (${stripTypes(source)});`)()
-}
-
-/** Evaluate a `compileValidatorModule(...)`-produced module source into its `validators` map. */
-function evalModule(source: string): Record<string, Triple> {
-  const commonJs = stripTypes(source).replace("export const validators", "const validators") + "\nreturn validators;"
-  return new Function(commonJs)()
 }
 
 describe("compileValidator — check/errors/parse triple", () => {
@@ -361,111 +360,6 @@ describe("compileValidator — composite kinds", () => {
   })
 })
 
-describe("compileValidatorModule — full module emission", () => {
-  it("emits a module whose validators map validates/rejects per entry", () => {
-    const source = compileValidatorModule([
-      { name: "users/create", ref: t(types.object({ name: t(types.string) })) },
-      { name: "users/:userId/get", ref: t(types.object({ userId: t(types.string) })) },
-    ])
-    expect(source).toContain("export const validators")
-    expect(source).toContain('"users/create"')
-    expect(source).toContain('"users/:userId/get"')
-
-    const validators = evalModule(source)
-    expect(Object.keys(validators)).toEqual(["users/create", "users/:userId/get"])
-    expect(validators["users/create"]!.check({ name: "Alice" })).toBe(true)
-    expect(validators["users/create"]!.check({})).toBe(false)
-    expect(validators["users/:userId/get"]!.check({ userId: "u1" })).toBe(true)
-    expect(validators["users/:userId/get"]!.check({ userId: 1 })).toBe(false)
-  })
-
-  it("emits an empty validators map for no entries (the stub case)", () => {
-    const source = compileValidatorModule([])
-    expect(evalModule(source)).toEqual({})
-  })
-
-  it("each entry's guard narrows to the input's inline structural TypeScript rendering when no typeName is carried", () => {
-    const source = compileValidatorModule([{ name: "users/create", ref: t(types.object({ name: t(types.string) })) }])
-    expect(source).toContain("value is { name: string }")
-    // The module always imports `ValidationError` from type-ir (see the
-    // "declares the __inferTypeRef helper..." test below) even with no
-    // typeName-carrying entries — that's the only `import type` line here.
-    expect(source.split("\n").filter((line) => line.startsWith("import type"))).toEqual([
-      'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
-    ])
-  })
-
-  it("imports a NAMED type (meta.typeName + meta.declarationFile) via resolveImport instead of inlining it", () => {
-    const ref = t(types.object({ q: t(types.string, { optional: true }) }), {
-      typeName: "BookQuery",
-      declarationFile: "/repo/src/types.ts",
-    })
-    const source = compileValidatorModule([{ name: "catalog/search", ref }], {
-      resolveImport: (declarationFile) => {
-        expect(declarationFile).toBe("/repo/src/types.ts")
-        return "../types.ts"
-      },
-    })
-    expect(source).toContain('import type { BookQuery } from "../types.ts"')
-    expect(source).toContain("value is BookQuery")
-    expect(source).not.toContain("value is { q")
-
-    // `import type` is type-only — Bun's transpiler elides it entirely, so
-    // the module still evaluates standalone even though "../types.ts" (a
-    // fixture path, not a real file) is never actually resolved at runtime.
-    const validators = evalModule(source)
-    expect(validators["catalog/search"]!.check({ q: "x" })).toBe(true)
-  })
-
-  it("groups multiple entries sharing the same resolved import specifier into one import line", () => {
-    const bookQueryRef = t(types.object({ q: t(types.string) }), {
-      typeName: "BookQuery",
-      declarationFile: "/repo/src/types.ts",
-    })
-    const bookIdRef = t(types.object({ bookId: t(types.string) }), {
-      typeName: "BookIdParam",
-      declarationFile: "/repo/src/types.ts",
-    })
-    const source = compileValidatorModule(
-      [
-        { name: "catalog/search", ref: bookQueryRef },
-        { name: "books/:bookId/read", ref: bookIdRef },
-      ],
-      { resolveImport: () => "../types.ts" },
-    )
-    const importLines = source.split("\n").filter((line) => line.startsWith("import type"))
-    expect(importLines).toEqual([
-      'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
-      'import type { BookIdParam, BookQuery } from "../types.ts"',
-    ])
-  })
-
-  it("without resolveImport, a typeName-carrying TypeRef still inlines its structure rather than referencing an unimported name", () => {
-    const ref = t(types.object({ q: t(types.string, { optional: true }) }), {
-      typeName: "BookQuery",
-      declarationFile: "/repo/src/types.ts",
-    })
-    const source = compileValidatorModule([{ name: "catalog/search", ref }])
-    expect(source).not.toContain("value is BookQuery")
-    expect(source).toContain("value is { q?: string }")
-    // The only import present is the always-emitted `ValidationError` one —
-    // no import was introduced for the (unresolved) typeName.
-    expect(source.split("\n").filter((line) => line.startsWith("import type"))).toEqual([
-      'import type { ValidationError } from "@rhi-zone/fractal-type-ir"',
-    ])
-  })
-
-  it("declares the __inferTypeRef helper exactly once, shared across entries, and imports ValidationError from type-ir instead of redeclaring it", () => {
-    const source = compileValidatorModule([
-      { name: "a", ref: t(types.object({ x: t(types.string) })) },
-      { name: "b", ref: t(types.object({ y: t(types.number) })) },
-    ])
-    expect(source.split("function __inferTypeRef").length - 1).toBe(1)
-    expect(source).toContain('import type { ValidationError } from "@rhi-zone/fractal-type-ir"')
-    expect(source).not.toContain("export type ValidationError")
-  })
-})
-
 describe("compileValidator — map key validation (bug: key type was never checked)", () => {
   it("check rejects a map whose keys don't match the key type (uuid)", () => {
     const ref = t(types.map(uuid(), t(types.number)))
@@ -668,7 +562,7 @@ describe("compileValidator — duplicate const hoisting (quality: enum/known-fie
   })
 })
 
-describe("compileValidator/compileValidatorModule — defs + recursive validator codegen", () => {
+describe("compileValidator — defs + recursive validator codegen", () => {
   // A self-recursive tree: { value: number; children: Tree[] }, where `Tree`
   // (the def) refs itself.
   const treeRef = t(
@@ -711,26 +605,6 @@ describe("compileValidator/compileValidatorModule — defs + recursive validator
     expect(result.value.children[0]).not.toBe(validTree.children[0])
   })
 
-  it("compileValidatorModule: a def declared once at module scope is shared across every entry that refs it", () => {
-    const source = compileValidatorModule(
-      [
-        { name: "a", ref: treeRef },
-        { name: "b", ref: t(types.array(t(types.ref("Tree")))) },
-      ],
-      { defs },
-    )
-    // Exactly one declaration of each def facet — not one per entry.
-    expect(source.match(/function __def_Tree_check\(/g) ?? []).toHaveLength(1)
-    expect(source.match(/function __def_Tree_errors\(/g) ?? []).toHaveLength(1)
-    expect(source.match(/function __def_Tree_parse\(/g) ?? []).toHaveLength(1)
-
-    const validators = evalModule(source)
-    expect(validators.a!.check(validTree)).toBe(true)
-    expect(validators.a!.check(invalidTree)).toBe(false)
-    expect(validators.b!.check([validTree, validTree])).toBe(true)
-    expect(validators.b!.check([invalidTree])).toBe(false)
-  })
-
   it("mutually recursive defs (A refs B, B refs A) validate correctly in both directions", () => {
     const aRef = t(types.object({ kind: t(types.literal("a")), next: t(types.ref("B"), { optional: true }) }))
     const bRef = t(types.object({ kind: t(types.literal("b")), next: t(types.ref("A"), { optional: true }) }))
@@ -768,44 +642,17 @@ describe("compileDefs — a shared/recursive def gets a real static type alias, 
   const invalidValue = { name: "trigger-1", condition: { op: "and", args: [{ op: "ref", ref: 123 }] } }
 
   it("compileDefs emits a `type __def_NAME = <structural>` alias for every def, not just runtime functions", () => {
-    const source = compileValidatorModule([{ name: "condition", ref: conditionRef }], { defs })
-    expect(source).toContain("type __def_Expr =")
+    const expr = compileValidator(conditionRef, defs)
+    expect(expr).toContain("type __def_Expr =")
   })
 
-  it("a nested ref to a shared def renders the local alias name in the entry's guard annotation, not the bare unimported target", () => {
-    const source = compileValidatorModule([{ name: "condition", ref: conditionRef }], { defs })
-    // The generated `value is {...}` annotation for the `condition` entry
-    // must reference the locally-declared `__def_Expr` alias, not a bare
-    // `Expr` that resolves to nothing in the generated module.
-    expect(source).toContain("condition: __def_Expr")
-    expect(source).not.toMatch(/condition:\s*Expr[^_a-zA-Z0-9]/)
-  })
-
-  it("compileValidatorModule's output — a recursive def nested inside an entry's field — typechecks under tsc with no unresolved names", () => {
-    const source = compileValidatorModule([{ name: "condition", ref: conditionRef }], { defs })
-    // The only unresolved-under-`tsc`-in-isolation piece of a real generated
-    // module is the cross-package `import type { ValidationError } from
-    // "@rhi-zone/fractal-type-ir"` — resolvable in a real consumer (which
-    // has the package installed) but not from a bare temp file with no
-    // node_modules, and unrelated to what THIS test covers (the nested
-    // recursive-def alias/annotation, not that unrelated import mechanism —
-    // already exercised by the package's own build). Swapped for a local
-    // shim type so the only names tsc is checking here are the ones this
-    // fix controls.
-    const shimmed = source.replace(
-      /^import type \{ ValidationError \} from "@rhi-zone\/fractal-type-ir"$/m,
-      "type ValidationError = unknown;",
-    )
-    expect(shimmed).not.toBe(source)
-    const dir = mkdtempSync(join(tmpdir(), "compile-defs-nested-ref-tsc-"))
-    const file = join(dir, "module.ts")
-    writeFileSync(file, shimmed)
-    const result = spawnSync(
-      "bunx",
-      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", "--ignoreConfig", file],
-      { encoding: "utf-8" },
-    )
-    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
+  it("a nested ref to a shared def renders the local alias name in the guard annotation, not the bare unimported target", () => {
+    const expr = compileValidator(conditionRef, defs)
+    // The generated `value is {...}` annotation must reference the
+    // locally-declared `__def_Expr` alias, not a bare `Expr` that resolves to
+    // nothing in the generated output.
+    expect(expr).toContain("condition: __def_Expr")
+    expect(expr).not.toMatch(/condition:\s*Expr[^_a-zA-Z0-9]/)
   })
 
   it("compileValidator's standalone output — same nested-recursive-def shape — typechecks under tsc with no unresolved names", () => {
@@ -823,10 +670,10 @@ describe("compileDefs — a shared/recursive def gets a real static type alias, 
   })
 
   it("the recursive def still validates real values correctly through the nested field (runtime behavior unchanged by the type-alias fix)", () => {
-    const validators = evalModule(compileValidatorModule([{ name: "condition", ref: conditionRef }], { defs }))
-    expect(validators.condition!.check(validValue)).toBe(true)
-    expect(validators.condition!.check(invalidValue)).toBe(false)
-    const parsed = validators.condition!.parse(validValue)
+    const v = evalValidator(compileValidator(conditionRef, defs))
+    expect(v.check(validValue)).toBe(true)
+    expect(v.check(invalidValue)).toBe(false)
+    const parsed = v.parse(validValue)
     expect(parsed).toEqual({ kind: "ok", value: validValue })
   })
 })

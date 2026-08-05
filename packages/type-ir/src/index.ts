@@ -435,18 +435,21 @@ export function walkTypeRef(doc: TypeRefDocument, visitor: (node: TypeRef, ctx: 
 // concern, not type-ir's.
 // ============================================================================
 
-export { compileValidator, compileValidatorModule, typeRefToString, type ValidationError } from "./compile.ts"
+export { compileValidator, typeRefToString, type ValidationError } from "./compile.ts"
 
-// Per-leaf incremental compilation — the IR-keyed build cache's Tier 2 (see
-// api-tree's cache.ts/build.ts and docs/design/ir-keyed-cache-spec.md).
-// Split out of `compileValidatorModule`'s single-pass codegen so a caller can
-// recompile only the leaves whose IR fingerprint changed and reassemble the
-// module from a mix of freshly-compiled and carried-forward fragments.
 // Wire profiles + staged validation (Wire -> ValidWire -> T -> valid T) — see
 // docs/design/wire-profiles-and-staged-validation.md and compile.ts's own
 // "Wire profiles + staged validation" section doc comment. Additive: none of
-// this changes `compileValidator`/`compileValidatorModule`/`compileEntryFragment`
-// above, which remain the strict, profile-blind path they always were.
+// this changes `compileValidator` above, which remains the strict,
+// profile-blind path it always was. Phase D deleted the module-assembly layer
+// this used to sit alongside (`compileValidatorModule`/`compileEntryFragment`/
+// `assembleValidatorModule`/`CompiledEntryFragment` — the 2-arg
+// `applyValidation` codegen route's own compiler, retired once this
+// wire-profile path gained the `shouldShare`/defs capability that was its
+// only remaining edge) — `compileDefsBlock`/`CompiledDefsBlock` survive
+// because the wire-profile build path (api-tree's
+// `buildWireApplyValidationModuleSource*`) still uses them for its
+// constraints-layer shared `defs` block.
 export {
   argvProfile,
   assembleWireModule,
@@ -468,10 +471,4 @@ export {
   wireValidatorKey,
 } from "./compile.ts"
 
-export {
-  assembleValidatorModule,
-  compileDefsBlock,
-  compileEntryFragment,
-  type CompiledDefsBlock,
-  type CompiledEntryFragment,
-} from "./compile.ts"
+export { compileDefsBlock, type CompiledDefsBlock } from "./compile.ts"

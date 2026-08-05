@@ -9,7 +9,8 @@
 // codegen paths.
 //
 // Why a SEPARATE artifact from the validator module, not folded into it:
-// `compileValidatorModule` (type-ir) emits COMPILED functions
+// The validator-module compilers (type-ir's `compileWireEntryFragment`/
+// `compileConstraintsFn`) emit COMPILED functions
 // (`check`/`errors`/`parse`) derived from each leaf's TypeRef — those need
 // zero runtime dependencies, which is exactly its point. A `SchemaMap` is
 // plain JSON-Schema DATA (no functions to compile), consumed by
@@ -26,10 +27,10 @@
 // Emission format: plain `JSON.stringify(schemas, null, 2)` — a `SchemaMap`
 // is exactly the kind of value JSON.stringify already renders correctly
 // (nested objects/arrays/strings/numbers/booleans, `$comment` punts
-// included as regular string values), so there's no need for
-// `compileValidatorModule`'s template-per-shape-kind codegen machinery here
-// at all — that machinery exists because compiled validator FUNCTIONS need
-// custom control flow per shape; a schema is just data.
+// included as regular string values), so there's no need for the validator
+// compilers' template-per-shape-kind codegen machinery here at all — that
+// machinery exists because compiled validator FUNCTIONS need custom control
+// flow per shape; a schema is just data.
 
 import type ts from "typescript"
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"

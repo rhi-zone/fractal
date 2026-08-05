@@ -294,8 +294,10 @@ describe("library-api — verb-helper bundles (http.*)", () => {
 // Codegen validators — `applyValidation("books", api, "http")` wiring
 // (tree.ts's `validatedApi`/`httpRoutes`, wired via
 // generated/apply-validation.ts, see src/generated/apply-validation.ts and
-// package.json's `codegen` script, now `build-wire` — see
-// docs/design/wire-profiles-and-staged-validation.md, phase C). Applied to
+// package.json's `codegen` script (`build` — phase D retired the separate
+// `build-wire` subcommand once `build` itself became the only mechanism) —
+// see docs/design/wire-profiles-and-staged-validation.md, phases C and D).
+// Applied to
 // the raw `Node` before HttpRoute projection ever runs (see tree.ts's own doc
 // comment for why this still keys correctly for HTTP despite
 // `read`/`replace`/`remove`'s `moveTo` relocation) — HTTP is the only
