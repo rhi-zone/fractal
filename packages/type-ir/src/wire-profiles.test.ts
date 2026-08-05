@@ -10,7 +10,9 @@
 import { describe, expect, it } from "bun:test"
 import {
   argvProfile,
+  assembleWireModule,
   compileConstraintsFn,
+  compileWireEntryFragmentComposite,
   compileWireModule,
   identityProfile,
   jsonProfile,
@@ -45,6 +47,30 @@ function evalWireModule(source: string): Record<string, WireTriple> {
 function evalWireEntry(name: string, ref: TypeRef, profile: WireProfile): WireTriple {
   const mod = evalWireModule(compileWireModule([{ name, ref }], [profile]))
   return mod[wireValidatorKey(name, profile.name)]!
+}
+
+/** Compile+evaluate one `compileWireEntryFragmentComposite` fragment via
+ * `assembleWireModule` — same realistic, full-module-assembly path
+ * `evalWireEntry` uses for the base (non-composite) fragments, with a single
+ * synthetic profile name ("composite") standing in for the ad-hoc per-field
+ * profile assignment under test (`assembleWireModule` only ever uses a
+ * profile name as a map key — it attaches no meaning to it beyond that). */
+function evalCompositeEntry(
+  name: string,
+  ref: TypeRef,
+  fieldProfiles: Readonly<Record<string, WireProfile>>,
+  defaultProfile: WireProfile,
+): WireTriple {
+  const constraints = compileConstraintsFn(name, ref)
+  const frag = compileWireEntryFragmentComposite(ref, fieldProfiles, defaultProfile, constraints.fnName)
+  const source = assembleWireModule(
+    [{ name }],
+    ["composite"],
+    { [name]: constraints },
+    { [wireValidatorKey(name, "composite")]: frag },
+  )
+  const mod = evalWireModule(source)
+  return mod[wireValidatorKey(name, "composite")]!
 }
 
 describe("wire profiles — per-profile emission", () => {
@@ -219,6 +245,52 @@ describe("wire profiles — error phrasing per stage", () => {
     const v = evalWireEntry("Item", ref, argvProfile)
     const err = v.parse([1, 2, 3]) as { kind: "err"; errors: ValidationError[] }
     expect(err.errors).toEqual([{ kind: "encoding", path: [], expected: "object", actual: [1, 2, 3] }])
+  })
+})
+
+describe("wire profiles — composite per-field profiles (compileWireEntryFragmentComposite)", () => {
+  it("each field's OWN profile encoding applies, and does not leak to the other field", () => {
+    const ref = t(types.object({ count: t(types.number), startedAt: datetime() }))
+    const v = evalCompositeEntry("Mixed", ref, { count: queryProfile, startedAt: jsonProfile }, identityProfile)
+    // `count` under queryProfile: a numeric STRING coerces.
+    const ok = v.parse({ count: "42", startedAt: "2024-01-01T00:00:00.000Z" }) as {
+      kind: "ok"
+      value: { count: number; startedAt: Date }
+    }
+    expect(ok.kind).toBe("ok")
+    expect(ok.value.count).toBe(42)
+    expect(ok.value.startedAt).toBeInstanceOf(Date)
+
+    // `startedAt` under jsonProfile does NOT accept queryProfile's numeric-string
+    // coercion rule leaking over: a non-ISO-string value is an encoding error.
+    const badDate = v.parse({ count: "42", startedAt: 12345 }) as { kind: "err"; errors: ValidationError[] }
+    expect(badDate.kind).toBe("err")
+    expect(badDate.errors[0]!.kind).toBe("encoding")
+
+    // `count` under queryProfile does NOT fall back to jsonProfile/identity's
+    // "must already be a number" rule — a non-numeric string is a (query-shaped)
+    // encoding error, not silently accepted as a string.
+    const badCount = v.parse({ count: "abc", startedAt: "2024-01-01T00:00:00.000Z" }) as {
+      kind: "err"
+      errors: ValidationError[]
+    }
+    expect(badCount.kind).toBe("err")
+    expect(badCount.errors[0]!.kind).toBe("encoding")
+  })
+
+  it("a field absent from fieldProfiles falls back to defaultProfile", () => {
+    const ref = t(types.object({ count: t(types.number), other: t(types.number) }))
+    const v = evalCompositeEntry("Mixed2", ref, { count: queryProfile }, identityProfile)
+    // `other` isn't in fieldProfiles → defaultProfile (identity): no coercion.
+    const err = v.parse({ count: "1", other: "2" }) as { kind: "err"; errors: ValidationError[] }
+    expect(err.kind).toBe("err")
+    expect(err.errors[0]!.kind).toBe("type")
+  })
+
+  it("a non-object top-level ref delegates to compileWireEntryFragment (defaultProfile only)", () => {
+    const ref = t(types.number)
+    const v = evalCompositeEntry("Bare", ref, { irrelevant: queryProfile }, queryProfile)
+    expect(v.parse("7")).toEqual({ kind: "ok", value: 7 })
   })
 })
 

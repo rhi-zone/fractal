@@ -12,7 +12,7 @@ import {
   isApplyValidationWrapped,
   UncoveredLeafError,
 } from "./apply-validation.ts"
-import type { GeneratedEntry, ValidatorMap } from "./apply-validation.ts"
+import type { GeneratedEntry, ValidatorMap, WireValidatorMap } from "./apply-validation.ts"
 import { api, op } from "./node.ts"
 import { isResultShape } from "./index.ts"
 
@@ -78,6 +78,66 @@ describe("createApplyValidation — keyed application", () => {
     const outB = applyValidation("b", treeB)
     expect(isApplyValidationWrapped(outA.children.list.handler)).toBe(true)
     expect(isApplyValidationWrapped(outB.children.list.handler)).toBe(false)
+  })
+})
+
+/** A "query"-shaped entry: `page` coerces from a numeric string, matching
+ * `queryProfile`'s posture. */
+const queryLikeEntry = (): GeneratedEntry => ({
+  parse: (value: unknown) => {
+    const page = (value as { page?: unknown } | undefined)?.page
+    if (typeof page === "string" && page.trim() !== "" && !Number.isNaN(Number(page))) {
+      return { kind: "ok", value: { page: Number(page) } }
+    }
+    return { kind: "err", errors: [{ kind: "encoding", got: value }] }
+  },
+})
+
+/** An "identity"-shaped entry: `page` must already be a number — a numeric
+ * STRING is rejected, matching `identityProfile`'s strict, non-coercing
+ * posture. */
+const identityLikeEntry = (): GeneratedEntry => ({
+  parse: (value: unknown) => {
+    const page = (value as { page?: unknown } | undefined)?.page
+    if (typeof page === "number") return { kind: "ok", value: { page } }
+    return { kind: "err", errors: [{ kind: "type", got: value }] }
+  },
+})
+
+describe("createApplyValidation — protocol-aware wrap selection (WireValidatorMap, 3-arg applyValidation)", () => {
+  it("the SAME key/tree gets its OWN profile's parse per protocol — \"3\" decodes differently", async () => {
+    const wireValidators: WireValidatorMap = {
+      http: { list: { http: queryLikeEntry() } },
+      identity: { list: { identity: identityLikeEntry() } },
+    }
+    const applyValidation = createApplyValidation({}, wireValidators)
+
+    const httpOut = applyValidation("http", api({ list: op((input: { page: number }) => input) }), "http")
+    const httpResult = (await httpOut.children.list.handler({ page: "3" } as never)) as unknown
+    expect(httpResult).toEqual({ page: 3 })
+
+    const identityOut = applyValidation(
+      "identity",
+      api({ list: op((input: { page: number }) => input) }),
+      "identity",
+    )
+    const identityResult = (await identityOut.children.list.handler({ page: "3" } as never)) as unknown
+    expect(isResultShape(identityResult)).toBe(true)
+    expect((identityResult as { kind: string }).kind).toBe("err")
+  })
+
+  it("a 2-arg call is unaffected by an unrelated 3-arg protocol map (old behavior fully preserved)", () => {
+    const validators: ValidatorMap = { books: { list: entry() } }
+    const wireValidators: WireValidatorMap = { books: { list: { http: queryLikeEntry() } } }
+    const applyValidation = createApplyValidation(validators, wireValidators)
+    const out = applyValidation("books", api({ list: op((input: { ok: boolean }) => input) }))
+    expect(isApplyValidationWrapped(out.children.list.handler)).toBe(true)
+  })
+
+  it("an omitted `wireValidators` argument defaults to {} — existing single-argument callers are unaffected", () => {
+    const applyValidation = createApplyValidation({ books: { list: entry() } })
+    const tree = api({ list: op((input: { ok: boolean }) => input) })
+    expect(isApplyValidationWrapped(applyValidation("books", tree).children.list.handler)).toBe(true)
   })
 })
 

@@ -52,7 +52,7 @@ import {
   typeRefFromReturnType,
   type ShouldShare,
 } from "./extract.ts"
-import { walkNodeType } from "./tree.ts"
+import { readMetaEncodingMapProfileNames, readMetaSourceMap, readMetaStringLiteral, walkNodeType } from "./tree.ts"
 import type { TypeRefMap } from "./tree.ts"
 import { APPLY_VALIDATION_BRAND } from "./apply-validation.ts"
 import {
@@ -64,6 +64,29 @@ import {
   type CacheLocationOptions,
   type CachedBuildOutcome,
 } from "./cache.ts"
+import { deriveFieldProfiles, type FieldProfileDerivation, type ProtocolName } from "./wire-derive.ts"
+import {
+  argvProfile,
+  compileConstraintsFn,
+  compileWireEntryFragment,
+  compileWireEntryFragmentComposite,
+  identityProfile,
+  INFER_TYPE_REF_SOURCE,
+  jsonProfile,
+  queryProfile,
+  wireValidatorKey,
+  type CompiledConstraintsFn,
+  type CompiledWireEntryFragment,
+  type WireProfile,
+} from "@rhi-zone/fractal-type-ir"
+
+/** The five wire protocol names an `applyValidation` call site's optional
+ * third argument may name. */
+const PROTOCOL_NAMES: ReadonlySet<string> = new Set(["http", "cli", "mcp", "graphql", "jsonrpc", "identity"])
+
+function isProtocolName(value: string): value is ProtocolName {
+  return PROTOCOL_NAMES.has(value)
+}
 
 /** The module specifier the generated module imports `createApplyValidation`
  * from. Overridable (`options.runtimeImport`) only so this package's own
@@ -84,7 +107,7 @@ const FLAT_KEY_SEPARATOR = "\u0000"
 
 const flatName = (key: string, leafPath: string): string => `${key}${FLAT_KEY_SEPARATOR}${leafPath}`
 
-/** One `applyValidation(key, treeExpr)` call site, resolved. */
+/** One `applyValidation(key, treeExpr, protocol?)` call site, resolved. */
 export type ApplyValidationCallSite = {
   /** The literal first argument. */
   readonly key: string
@@ -93,6 +116,13 @@ export type ApplyValidationCallSite = {
   /** A node in the entry file to resolve types against (checker calls need a
    * location); the traced tree expression itself. */
   readonly loc: ts.Node
+  /** The literal third argument, when present — see decision 1,
+   * docs/design/wire-profiles-and-staged-validation.md's "Implementation
+   * trace (phase B)" section. `undefined` for an ordinary 2-arg call site,
+   * which the EXISTING (unchanged) `extractApplyValidationTypeRefs`/
+   * `buildApplyValidationModuleSource*` path keeps handling exactly as
+   * before. */
+  readonly protocol?: ProtocolName
 }
 
 /** True when the CALLEE of `call` is a `createApplyValidation` result.
@@ -265,7 +295,7 @@ export function findApplyValidationCallSites(
 
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && isApplyValidationCallee(node.expression, checker)) {
-      const [keyArg, treeArg] = node.arguments
+      const [keyArg, treeArg, protocolArg] = node.arguments
       const where = describeLocation(node)
       if (keyArg === undefined || !ts.isStringLiteralLike(keyArg)) {
         const decl = calleeDeclaration(node.expression, checker)
@@ -286,8 +316,24 @@ export function findApplyValidationCallSites(
       if (treeArg === undefined) {
         throw new Error(`applyValidation codegen: missing tree argument for key ${JSON.stringify(key)} at ${where}`)
       }
+      let protocol: ProtocolName | undefined
+      if (protocolArg !== undefined) {
+        if (!ts.isStringLiteralLike(protocolArg) || !isProtocolName(protocolArg.text)) {
+          throw new Error(
+            `applyValidation codegen: the protocol argument at ${where} is not a recognized string literal ` +
+              `(expected one of ${[...PROTOCOL_NAMES].map((p) => JSON.stringify(p)).join(", ")}). Codegen can ` +
+              `only generate per-protocol validators for statically-known protocol names.`,
+          )
+        }
+        protocol = protocolArg.text
+      }
       keyLocations.set(key, where)
-      sites.push({ key, nodeType: traceNodeType(treeArg, checker, JSON.stringify(key)), loc: treeArg })
+      sites.push({
+        key,
+        nodeType: traceNodeType(treeArg, checker, JSON.stringify(key)),
+        loc: treeArg,
+        ...(protocol !== undefined ? { protocol } : {}),
+      })
     }
     ts.forEachChild(node, visit)
   }
@@ -329,6 +375,14 @@ export function extractApplyValidationTypeRefs(
 
   const byKey: Record<string, TypeRefMap> = {}
   for (const site of findApplyValidationCallSites(source, checker)) {
+    // A 3-arg (protocol-naming) call site is handled entirely by the
+    // separate wire-profile path below (`extractWireApplyValidationTypeRefs`)
+    // — skipped here so this function's output (and therefore every existing
+    // caller: `buildApplyValidationModuleSource`/its incremental/cached
+    // siblings) is COMPLETELY UNCHANGED by a 3-arg call site's mere presence
+    // in the same entry file. See decision 1, the design doc's
+    // "Implementation trace (phase B)" section.
+    if (site.protocol !== undefined) continue
     const types: TypeRefMap = {}
     walkNodeType(site.nodeType, "", [], site.loc, checker, (_name, leafPath, fn, descriptionSource, leafChecker) => {
       const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
@@ -661,6 +715,533 @@ export async function writeApplyValidationModuleCached(
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
   const outcome = buildApplyValidationModuleCached(entryFile, outFile, options)
+  if (outcome.status === "built") await Bun.write(outFile, outcome.result)
+  return outcome
+}
+
+// ============================================================================
+// Wire-profile build path — 3-arg `applyValidation(key, tree, protocol)` call
+// sites (decision 1). PARALLEL machinery to everything above: the 2-arg path
+// (`extractApplyValidationTypeRefs`/`buildApplyValidationModuleSource*`) is
+// untouched (see the `site.protocol !== undefined` skip in
+// `extractApplyValidationTypeRefs` above) — a 3-arg call site is invisible to
+// it, and a 2-arg call site is invisible to everything below.
+//
+// STATIC-META-READ INVESTIGATION (decision 4/5's "investigate before
+// assuming"): `walkNodeType`'s existing `mcpMetaOverride` (tree.ts) already
+// reads a scalar STRING-LITERAL meta value off a resolved `Node` TYPE — not
+// just a type shape, an actual authored VALUE (`meta.mcp.name`), via
+// `checker.getPropertyOfType`/`getTypeOfSymbolAtLocation`/`isStringLiteral()`.
+// That IS "a legitimate static-meta-read path" (option (a) from the task):
+// `meta.http.method`/`meta.http.verb` (flat scalars) and `meta.<proto>.
+// sourceMap` (a map of per-field `{ store, key? }` literals — one level
+// deeper, enumerated via `getPropertiesOfType`, the SAME enumeration
+// `walkNodeType` already uses for `children`) generalize the identical
+// technique — see `readMetaStringLiteral`/`readMetaSourceMap` (tree.ts).
+// `option (b)` (`getConstantValue`/partial evaluation) was not needed once
+// (a) panned out and wasn't separately investigated.
+//
+// The gap that remains, and IS real: `encodingMap`'s two authorable shapes
+// (see the design doc's decision-5 discussion) are a base-profile-name STRING
+// (`"identity" | "json" | "query" | "argv"`) or a custom decoder FUNCTION
+// (`(w: FieldValidWire) => TField`). The string form reads exactly like a
+// `sourceMap` entry's `store` (`readMetaEncodingMapProfileNames`, tree.ts) —
+// wired in below. The FUNCTION form has no analogous path: a function value
+// has no literal TYPE for the checker to hand back (unlike a string), so
+// there is nothing to read "as a value" — emitting a reference to it in the
+// generated module would require either (a) the function being a NAMED
+// EXPORT elsewhere that codegen could import (not what the design describes
+// — it's authored inline, per field, in the meta object literal) or (b)
+// copying its source text into the generated module (fragile: closures,
+// scoping, and it isn't what any existing codegen path in this codebase
+// does — `guardAnnotation`'s cross-file `typeName`/`declarationFile`
+// resolution imports a TYPE reference, never re-emits a value's source).
+// Neither is implemented; a function-valued `encodingMap` entry is silently
+// OMITTED by `readMetaEncodingMapProfileNames` (see that function's own doc
+// comment) rather than causing a wrong/silent-fallback result — this is the
+// one part of decision 4/5 left as a documented gap, not "fully wired."
+// ============================================================================
+
+/** The base profile a `meta.<proto>.encodingMap` entry's STRING form names —
+ * see `readMetaEncodingMapProfileNames` (tree.ts) for what this doesn't cover
+ * (a function-valued entry; the documented gap above). */
+const BASE_PROFILE_BY_NAME: Readonly<Record<string, WireProfile>> = {
+  identity: identityProfile,
+  json: jsonProfile,
+  query: queryProfile,
+  argv: argvProfile,
+}
+
+/** One 3-arg call site's leaf: its input `TypeRef` plus the derived wire
+ * profile assignment (`wire-derive.ts`). */
+export type WireApplyValidationLeaf = {
+  readonly ref: TypeRef
+  readonly derivation: FieldProfileDerivation
+}
+
+/** Per-key wire-profile leaves — one `protocol` per key (a call site names
+ * exactly one), each key's leaves keyed by tree-relative path, same
+ * convention as `ApplyValidationTypeRefs`. */
+export type WireApplyValidationTypeRefs = {
+  readonly byKey: Readonly<
+    Record<string, { readonly protocol: ProtocolName; readonly leaves: Readonly<Record<string, WireApplyValidationLeaf>> }>
+  >
+}
+
+/**
+ * Extract every 3-arg `applyValidation(key, treeExpr, protocol)` call site's
+ * leaves from `entryFile`, deriving each leaf's wire-profile assignment along
+ * the way — `identity`/`mcp`/`graphql`/`jsonrpc` need no meta read at all
+ * (`deriveFieldProfiles` returns a uniform base profile unconditionally for
+ * those); `http`/`cli` read that leaf's own `meta.<proto>.sourceMap` (and, for
+ * `http`, `meta.http.method`/`.verb`) via the generalized `mcpMetaOverride`
+ * technique (`readMetaSourceMap`/`readMetaStringLiteral`, tree.ts), plus this
+ * leaf's own tree-relative path's `:name` fallback segments as its path-param
+ * name set (already exactly what `leafPath` carries — no extra read needed).
+ *
+ * `encodingMap`'s STRING-form entries (base-profile-name overrides) are read
+ * and applied on top for `http`/`cli`; a FUNCTION-form entry is a documented
+ * gap (see this section's header comment) and is silently omitted.
+ *
+ * No `shouldShare`/defs support (scope cut, mirrors type-ir phase A's own "no
+ * defs/ref recursion support for wire profiles" cut).
+ */
+export function extractWireApplyValidationTypeRefs(
+  entryFile: string,
+  options?: { readonly program?: ts.Program },
+): WireApplyValidationTypeRefs {
+  const program = options?.program ?? createExtractorProgram(entryFile)
+  const checker = program.getTypeChecker()
+  const source = loadSource(entryFile, program)
+
+  const byKey: Record<string, { protocol: ProtocolName; leaves: Record<string, WireApplyValidationLeaf> }> = {}
+  for (const site of findApplyValidationCallSites(source, checker)) {
+    if (site.protocol === undefined) continue
+    const protocol = site.protocol
+    const leaves: Record<string, WireApplyValidationLeaf> = {}
+    walkNodeType(
+      site.nodeType,
+      "",
+      [],
+      site.loc,
+      checker,
+      (_name, leafPath, fn, _descriptionSource, leafChecker, nodeType) => {
+        const ref = typeRefFromFunctionNode(fn, leafChecker)
+        const pathParamNames = leafPath.filter((seg) => seg.startsWith(":")).map((seg) => seg.slice(1))
+        let derivation: FieldProfileDerivation
+        if (protocol === "http" || protocol === "cli") {
+          const sourceMap = readMetaSourceMap(nodeType, protocol, site.loc, leafChecker)
+          const method =
+            protocol === "http"
+              ? readMetaStringLiteral(nodeType, "http", "method", site.loc, leafChecker) ??
+                readMetaStringLiteral(nodeType, "http", "verb", site.loc, leafChecker)
+              : undefined
+          derivation = deriveFieldProfiles(protocol, sourceMap, method, pathParamNames)
+          const encodingMap = readMetaEncodingMapProfileNames(nodeType, protocol, site.loc, leafChecker)
+          if (encodingMap !== undefined && "fieldProfiles" in derivation) {
+            const fieldProfiles = { ...derivation.fieldProfiles }
+            for (const [field, baseName] of Object.entries(encodingMap)) {
+              const base = BASE_PROFILE_BY_NAME[baseName]
+              if (base !== undefined) fieldProfiles[field] = base
+            }
+            derivation = { fieldProfiles, defaultProfile: derivation.defaultProfile }
+          }
+        } else {
+          derivation = deriveFieldProfiles(protocol, undefined, undefined, [])
+        }
+        leaves[leafPath.join("/")] = { ref, derivation }
+      },
+    )
+    byKey[site.key] = { protocol, leaves }
+  }
+  return { byKey }
+}
+
+/** Flat compiler entries (one per leaf across all wire-profile call sites),
+ * mirroring `flatEntries` above — each entry additionally carries its own
+ * `protocol` and derived `FieldProfileDerivation`. */
+function flatWireEntries(
+  byKey: WireApplyValidationTypeRefs["byKey"],
+): { name: string; ref: TypeRef; protocol: ProtocolName; derivation: FieldProfileDerivation }[] {
+  const entries: { name: string; ref: TypeRef; protocol: ProtocolName; derivation: FieldProfileDerivation }[] = []
+  for (const [key, { protocol, leaves }] of Object.entries(byKey)) {
+    for (const [leafPath, leaf] of Object.entries(leaves)) {
+      entries.push({ name: flatName(key, leafPath), ref: leaf.ref, protocol, derivation: leaf.derivation })
+    }
+  }
+  return entries
+}
+
+/** Compile one leaf's `CompiledWireEntryFragment` — the uniform-profile case
+ * (`{ profile }`) goes through `compileWireEntryFragment` directly; the
+ * composite case (`{ fieldProfiles, defaultProfile }`) goes through
+ * `compileWireEntryFragmentComposite`. Neither is duplicated here — this is
+ * just the `FieldProfileDerivation`-shaped dispatch between the two. */
+function compileWireLeafFragment(
+  ref: TypeRef,
+  derivation: FieldProfileDerivation,
+  constraintsFnName: string,
+  resolveImport?: (declarationFile: string) => string,
+): CompiledWireEntryFragment {
+  if ("profile" in derivation) return compileWireEntryFragment(ref, derivation.profile, constraintsFnName, resolveImport)
+  return compileWireEntryFragmentComposite(
+    ref,
+    derivation.fieldProfiles,
+    derivation.defaultProfile,
+    constraintsFnName,
+    resolveImport,
+  )
+}
+
+function indentGenerated(lines: readonly string[], spaces: number): string[] {
+  const pad = " ".repeat(spaces)
+  return lines.map((line) => (line.length === 0 ? line : pad + line))
+}
+
+/**
+ * WORKAROUND for a genuine cross-entry naming collision in
+ * `compileConstraintsFn` (type-ir compile.ts, Phase A, out of this phase's
+ * "do not touch" list's scope but not a function this file owns either) —
+ * see the design doc's "Implementation trace (phase B)" section for the full
+ * writeup and a minimal repro. `compileConstraintsFn` gives each call its OWN
+ * fresh `GenCtx`, whose const-naming counter always starts at 0 — so two
+ * DIFFERENT entries' constraints functions each independently hoist consts
+ * named `__ref0`, `__ref1`, ... starting from zero. Splicing more than one
+ * entry's `fn.lines` into ONE module at shared scope (exactly what
+ * `assembleWireModule`, compile.ts, and this function both do) produces a
+ * duplicate `const` declaration whenever two entries each need at least one
+ * hoisted const — the common case: any plain typed field's `type`-kind error
+ * references one (`typeErrorStmt`'s `refLiteral`). No EXISTING test caught
+ * this because no existing wire-profile test compiles more than one ENTRY
+ * into one module (every multi-profile test uses a single entry across
+ * several profiles, whose IIFE-scoped IIFE IS unaffected — this file's own
+ * `compileWireEntryFragment`/`compileWireEntryFragmentComposite` fragments
+ * are already correctly scoped, only `compileConstraintsFn`'s module-scope
+ * consts collide).
+ *
+ * This mangles ONLY the const names THIS entry's own `fn.lines` actually
+ * declares (a per-entry-unique suffix), leaving `compileConstraintsFn`
+ * itself, `wireFragments`' own already-correctly-scoped consts, and every
+ * other existing caller of that function completely untouched — a pure
+ * textual disambiguation at the ASSEMBLY layer, not a fix to the root cause
+ * (which lives in `GenCtx`/`compileConstraintsFn`, out of this phase's
+ * mandate to modify).
+ */
+function disambiguateConstraintsConsts(lines: readonly string[], suffix: string): string[] {
+  const text = lines.join("\n")
+  const declared = new Set<string>()
+  for (const m of text.matchAll(/^const (__\w+) = /gm)) declared.add(m[1]!)
+  if (declared.size === 0) return [...lines]
+  let renamed = text
+  for (const name of declared) {
+    renamed = renamed.replace(new RegExp(`\\b${name}\\b`, "g"), `${name}${suffix}`)
+  }
+  return renamed.split("\n")
+}
+
+/**
+ * `assembleWireModule`'s (type-ir) sibling for THIS file's shape: each entry
+ * has exactly ONE protocol (a call site names exactly one), not a uniform
+ * profile SET shared across every entry the way `assembleWireModule` assumes
+ * — so this reassembles from already-compiled fragments directly rather than
+ * reusing that function. `wireFragments` is keyed by
+ * `wireValidatorKey(name, protocol)`, same convention.
+ */
+function assembleWireApplyValidationModule(
+  entries: readonly { readonly name: string; readonly protocol: ProtocolName }[],
+  constraintsFns: Readonly<Record<string, CompiledConstraintsFn>>,
+  wireFragments: Readonly<Record<string, CompiledWireEntryFragment>>,
+): string {
+  const imports = new Map<string, Set<string>>()
+  imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
+
+  const constraintsLines: string[] = []
+  entries.forEach(({ name }, index) => {
+    const fn = constraintsFns[name]
+    if (!fn) throw new Error(`buildWireApplyValidationModuleSource: missing constraints fn for entry ${JSON.stringify(name)}`)
+    constraintsLines.push(...disambiguateConstraintsConsts(fn.lines, `_${index}`))
+  })
+
+  const entryLines: string[] = []
+  for (const { name, protocol } of entries) {
+    const key = wireValidatorKey(name, protocol)
+    const frag = wireFragments[key]
+    if (!frag) throw new Error(`buildWireApplyValidationModuleSource: missing wire fragment for ${JSON.stringify(key)}`)
+    if (frag.typeImport) {
+      const names = imports.get(frag.typeImport.from) ?? new Set<string>()
+      names.add(frag.typeImport.typeName)
+      imports.set(frag.typeImport.from, names)
+    }
+    const codeLines = frag.code.split("\n")
+    entryLines.push(
+      `  ${JSON.stringify(key)}: ${codeLines[0]}`,
+      ...indentGenerated(codeLines.slice(1, -1), 2),
+      `  ${codeLines[codeLines.length - 1]},`,
+    )
+  }
+
+  const lines: string[] = []
+  lines.push("// AUTO-GENERATED by @rhi-zone/fractal-api-tree (wire-profile path). Do not edit by hand.")
+  lines.push("")
+  for (const [from, names] of imports) {
+    lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`)
+  }
+  if (imports.size > 0) lines.push("")
+  lines.push(INFER_TYPE_REF_SOURCE)
+  lines.push("")
+  lines.push(...constraintsLines)
+  if (constraintsLines.length > 0) lines.push("")
+  lines.push("export const wireValidators = {")
+  lines.push(...entryLines)
+  lines.push("}")
+  lines.push("")
+  return lines.join("\n")
+}
+
+/**
+ * The tail appended to the compiled wire module: regroup the flat
+ * `wireValidators` record into the nested `Record<key, Record<path,
+ * Partial<Record<protocol, entry>>>>` `createApplyValidation`'s SECOND
+ * argument wants, and export a standalone `applyValidation`.
+ *
+ * An entry file mixing 2-arg and 3-arg call sites gets TWO separately built
+ * modules (this one, and the 2-arg path's) — each exports its own usable
+ * `applyValidation`, but a consumer that wants ONE shared function (so
+ * `usedKeys` is tracked across both kinds of call in one file) composes
+ * manually: `createApplyValidation(validatorsByKey, wireValidatorsByKey)`,
+ * importing `validatorsByKey`/`wireValidatorsByKey` from each generated
+ * module respectively. Documented here as a scope note, not a contradiction —
+ * the same class of explicit scope cut this file already makes elsewhere
+ * (e.g. same-file-only tree tracing, `traceNodeType`'s doc comment).
+ */
+function composeWireApplyValidationTail(byKey: WireApplyValidationTypeRefs["byKey"]): string {
+  const lines: string[] = []
+  lines.push("")
+  lines.push("/** Generated wire validators, grouped by (key, tree-relative path, protocol). */")
+  lines.push("export const wireValidatorsByKey = {")
+  for (const [key, { protocol, leaves }] of Object.entries(byKey)) {
+    lines.push(`  ${JSON.stringify(key)}: {`)
+    for (const leafPath of Object.keys(leaves)) {
+      const entryRef = wireValidatorKey(flatName(key, leafPath), protocol)
+      lines.push(`    ${JSON.stringify(leafPath)}: { ${JSON.stringify(protocol)}: wireValidators[${JSON.stringify(entryRef)}] },`)
+    }
+    lines.push("  },")
+  }
+  lines.push("}")
+  lines.push("")
+  lines.push("/** Pass this as `createApplyValidation`'s SECOND argument. */")
+  lines.push("export const applyValidation = createApplyValidation({}, wireValidatorsByKey)")
+  lines.push("")
+  return lines.join("\n")
+}
+
+export type WireApplyValidationBuildOptions = {
+  readonly outFile?: string
+  readonly program?: ts.Program
+  readonly runtimeImport?: string
+}
+
+/**
+ * Build the complete wire-profile `applyValidation` module source for
+ * `entryFile` — every 3-arg call site's leaves compiled via
+ * `compileWireLeafFragment`/`compileConstraintsFn`, assembled by
+ * `assembleWireApplyValidationModule`, followed by the nested regrouping and
+ * `createApplyValidation` composition (`composeWireApplyValidationTail`).
+ *
+ * An entry file with no 3-arg call sites yields the SAME stub module the
+ * 2-arg path yields (`applyValidationStubSource`) — nothing to generate, and
+ * a consumer's import must still resolve.
+ */
+export function buildWireApplyValidationModuleSource(
+  entryFile: string,
+  options?: WireApplyValidationBuildOptions,
+): string {
+  const { byKey } = extractWireApplyValidationTypeRefs(entryFile, {
+    ...(options?.program !== undefined ? { program: options.program } : {}),
+  })
+  const runtimeImport = options?.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
+  const entries = flatWireEntries(byKey)
+  if (entries.length === 0) {
+    const stubOpt = options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {}
+    return applyValidationStubSource(stubOpt)
+  }
+  const outFile = options?.outFile
+  const resolveImport =
+    outFile === undefined ? undefined : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile)
+
+  const constraintsFns: Record<string, CompiledConstraintsFn> = {}
+  const wireFragments: Record<string, CompiledWireEntryFragment> = {}
+  for (const { name, ref, protocol, derivation } of entries) {
+    constraintsFns[name] = compileConstraintsFn(name, ref)
+    wireFragments[wireValidatorKey(name, protocol)] = compileWireLeafFragment(
+      ref,
+      derivation,
+      constraintsFns[name].fnName,
+      resolveImport,
+    )
+  }
+  return (
+    runtimeImportLine(runtimeImport) +
+    assembleWireApplyValidationModule(entries, constraintsFns, wireFragments) +
+    composeWireApplyValidationTail(byKey)
+  )
+}
+
+/** JSON-serializable fingerprint input for one leaf's derivation — profile
+ * NAMES, not the `WireProfile` objects themselves (whose `leafHandlers`
+ * values are functions; `JSON.stringify` silently drops them, which would
+ * still distinguish most profiles via their surviving keys but needlessly
+ * relies on that side effect) — see `computeLeafFingerprint`'s doc comment
+ * (cache.ts) and this design's item 7 ("just pass `{ input: ref, profile:
+ * profileName }`"). */
+function fingerprintableDerivation(derivation: FieldProfileDerivation): unknown {
+  if ("profile" in derivation) return { profile: derivation.profile.name }
+  return {
+    defaultProfile: derivation.defaultProfile.name,
+    fieldProfiles: Object.fromEntries(Object.entries(derivation.fieldProfiles).map(([field, p]) => [field, p.name])),
+  }
+}
+
+export type WireApplyValidationIncrementalResult = {
+  readonly source: string
+  readonly leafFingerprints: Record<string, string>
+  readonly leafArtifacts: Record<string, CompiledWireEntryFragment>
+  /** Flat `(leafName, protocol)` keys (via `wireValidatorKey`) actually
+   * RECOMPILED this run — everything else was carried forward. */
+  readonly changedLeaves: readonly string[]
+}
+
+/** Prior Tier-2 state for one wire-path entry — no `defNamesFingerprint`
+ * tracking (this path has no defs/ref-recursion support at all, per this
+ * section's header comment's scope cut), unlike `ApplyValidationCarryForwardState`. */
+export type WireApplyValidationCarryForwardState = {
+  readonly leafFingerprints: Readonly<Record<string, string>>
+  readonly leafArtifacts: Readonly<Record<string, unknown>>
+}
+
+function isCompiledWireFragment(value: unknown): value is CompiledWireEntryFragment {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { code?: unknown }).code === "string" &&
+    typeof (value as { wireType?: unknown }).wireType === "string"
+  )
+}
+
+/**
+ * `buildWireApplyValidationModuleSource`'s Tier-2 sibling — identical
+ * extraction/derivation and identical codegen, except a leaf whose
+ * `(input ref, protocol, derivation)` fingerprint matches
+ * `prior.leafFingerprints` reuses `prior.leafArtifacts`'s fragment verbatim
+ * instead of recompiling. Mirrors `buildApplyValidationModuleSourceIncremental`
+ * one-for-one, keyed by `wireValidatorKey(name, protocol)` instead of bare
+ * `name` (this path's fingerprint/artifact keys fold `protocol` in — see item
+ * 7: "the profile identity is already folded into the fingerprint for free").
+ */
+export function buildWireApplyValidationModuleSourceIncremental(
+  entryFile: string,
+  options: WireApplyValidationBuildOptions & { readonly prior?: WireApplyValidationCarryForwardState },
+): WireApplyValidationIncrementalResult {
+  const { byKey } = extractWireApplyValidationTypeRefs(entryFile, {
+    ...(options.program !== undefined ? { program: options.program } : {}),
+  })
+  const runtimeImport = options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
+  const outFile = options.outFile
+  const resolveImport =
+    outFile === undefined ? undefined : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile)
+
+  const entries = flatWireEntries(byKey)
+  const leafFingerprints: Record<string, string> = {}
+  const leafArtifacts: Record<string, CompiledWireEntryFragment> = {}
+  const constraintsFns: Record<string, CompiledConstraintsFn> = {}
+  const changedLeaves: string[] = []
+  const prior = options.prior
+
+  for (const { name, ref, protocol, derivation } of entries) {
+    const fingerprintKey = wireValidatorKey(name, protocol)
+    const fingerprint = computeLeafFingerprint(entryFile, {
+      input: ref,
+      protocol,
+      derivation: fingerprintableDerivation(derivation),
+    })
+    leafFingerprints[fingerprintKey] = fingerprint
+    constraintsFns[name] = compileConstraintsFn(name, ref)
+    const priorArtifact = prior?.leafArtifacts[fingerprintKey]
+    const reusable =
+      prior !== undefined && prior.leafFingerprints[fingerprintKey] === fingerprint && isCompiledWireFragment(priorArtifact)
+    if (reusable && isCompiledWireFragment(priorArtifact)) {
+      leafArtifacts[fingerprintKey] = priorArtifact
+    } else {
+      leafArtifacts[fingerprintKey] = compileWireLeafFragment(ref, derivation, constraintsFns[name].fnName, resolveImport)
+      changedLeaves.push(fingerprintKey)
+    }
+  }
+
+  const source =
+    entries.length === 0
+      ? applyValidationStubSource({ runtimeImport })
+      : runtimeImportLine(runtimeImport) +
+        assembleWireApplyValidationModule(entries, constraintsFns, leafArtifacts) +
+        composeWireApplyValidationTail(byKey)
+
+  return { source, leafFingerprints, leafArtifacts, changedLeaves }
+}
+
+/**
+ * `buildWireApplyValidationModuleSource`, cached — same two-tier shape as
+ * `buildApplyValidationModuleCached`. No `defNamesFingerprint` tracked (this
+ * path has none — see `WireApplyValidationCarryForwardState`'s doc comment);
+ * `writeCacheMetadata`'s `defNamesFingerprint` slot gets a stable constant
+ * (the empty set's fingerprint) purely so the cache file's shape stays
+ * uniform across both build paths, never compared against.
+ */
+export function buildWireApplyValidationModuleCached(
+  entryFile: string,
+  outFile: string,
+  options?: {
+    readonly program?: ts.Program
+    readonly runtimeImport?: string
+    readonly force?: boolean
+    readonly reachable?: ReadonlySet<string>
+  } & CacheLocationOptions,
+): CachedBuildOutcome<string> {
+  if (!options?.force) {
+    const check = checkCache(entryFile, outFile, options)
+    if (check.hit) return { status: "hit" }
+  }
+  const program = options?.program ?? createExtractorProgram(entryFile)
+  const priorRaw = readCarryForwardState(entryFile, outFile, options)
+  const prior: WireApplyValidationCarryForwardState | undefined =
+    priorRaw === undefined ? undefined : { leafFingerprints: priorRaw.leafFingerprints, leafArtifacts: priorRaw.leafArtifacts }
+  const built = buildWireApplyValidationModuleSourceIncremental(entryFile, {
+    outFile,
+    program,
+    ...(options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {}),
+    ...(prior !== undefined ? { prior } : {}),
+  })
+  writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
+    leafFingerprints: built.leafFingerprints,
+    leafArtifacts: built.leafArtifacts,
+    defNamesFingerprint: computeDefNamesFingerprint([]),
+  })
+  return { status: "built", result: built.source, program }
+}
+
+/**
+ * `buildWireApplyValidationModuleCached`, writing the result — mirrors
+ * `writeApplyValidationModuleCached`.
+ */
+export async function writeWireApplyValidationModuleCached(
+  entryFile: string,
+  outFile: string,
+  options?: {
+    readonly program?: ts.Program
+    readonly runtimeImport?: string
+    readonly force?: boolean
+    readonly reachable?: ReadonlySet<string>
+  } & CacheLocationOptions,
+): Promise<CachedBuildOutcome<string>> {
+  const outcome = buildWireApplyValidationModuleCached(entryFile, outFile, options)
   if (outcome.status === "built") await Bun.write(outFile, outcome.result)
   return outcome
 }

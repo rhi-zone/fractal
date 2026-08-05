@@ -168,6 +168,124 @@ function mcpMetaOverride(
 }
 
 /**
+ * Read a string-literal value at `meta.<namespace>.<key>` off a resolved
+ * `Node` TYPE — the SAME technique `mcpMetaOverride` above already uses for
+ * `meta.mcp.name`/`meta.mcp.segment`, generalized to an arbitrary namespace
+ * (`http`, `cli`, ...) and key, for `apply-validation-build.ts`'s wire-
+ * profile build path (`meta.http.method`/`meta.http.verb`, an
+ * `encodingMap` entry's base-profile-name string form). Returns `undefined`
+ * when the namespace/key isn't present on the type at all, or resolves to a
+ * non-literal `string` (e.g. built from a runtime expression) — the same
+ * "falls back to whatever the caller does without an override" contract
+ * `mcpMetaOverride` already documents.
+ */
+export function readMetaStringLiteral(
+  nodeType: ts.Type,
+  namespace: string,
+  key: string,
+  loc: ts.Node,
+  checker: ts.TypeChecker,
+): string | undefined {
+  const metaProp = checker.getPropertyOfType(nodeType, "meta")
+  if (!metaProp) return undefined
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
+  const nsProp = checker.getPropertyOfType(metaType, namespace)
+  if (!nsProp) return undefined
+  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc)
+  const keyProp = checker.getPropertyOfType(nsType, key)
+  if (!keyProp) return undefined
+  const keyType = checker.getTypeOfSymbolAtLocation(keyProp, loc)
+  return keyType.isStringLiteral() ? keyType.value : undefined
+}
+
+/**
+ * Read `meta.<namespace>.sourceMap` off a resolved `Node` TYPE — one level
+ * deeper than `readMetaStringLiteral`: `sourceMap` is itself a map (field
+ * name -> `{ store, key? }`), so this enumerates the map's own literal keys
+ * (`getPropertiesOfType`, the SAME enumeration `walkNodeType` already uses
+ * for `children`) and reads each entry's `store`/`key` as string literals.
+ * A field whose `store` doesn't resolve to a string literal is DROPPED from
+ * the result (silently — same posture as `readMetaStringLiteral` returning
+ * `undefined` for a non-literal single value) rather than failing the whole
+ * read, since `resolveSourceMap`'s "Exact-variant hygiene" contract (see
+ * docs/design/wire-profiles-and-staged-validation.md) is what's SUPPOSED to
+ * keep every entry literal-keyed in the first place — a caller that widened
+ * it themselves already accepted the erased-map behavior for that entry.
+ *
+ * Returns `undefined` when `meta.<namespace>.sourceMap` isn't present on the
+ * type at all (no `sourceMap` contribution for this leaf under this
+ * namespace).
+ */
+export function readMetaSourceMap(
+  nodeType: ts.Type,
+  namespace: string,
+  loc: ts.Node,
+  checker: ts.TypeChecker,
+): Record<string, { readonly store: string; readonly key?: string }> | undefined {
+  const metaProp = checker.getPropertyOfType(nodeType, "meta")
+  if (!metaProp) return undefined
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
+  const nsProp = checker.getPropertyOfType(metaType, namespace)
+  if (!nsProp) return undefined
+  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc)
+  const sourceMapProp = checker.getPropertyOfType(nsType, "sourceMap")
+  if (!sourceMapProp) return undefined
+  const sourceMapType = checker.getTypeOfSymbolAtLocation(sourceMapProp, loc)
+  const out: Record<string, { store: string; key?: string }> = {}
+  for (const fieldProp of checker.getPropertiesOfType(sourceMapType)) {
+    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc)
+    const storeProp = checker.getPropertyOfType(fieldType, "store")
+    if (!storeProp) continue
+    const storeType = checker.getTypeOfSymbolAtLocation(storeProp, loc)
+    if (!storeType.isStringLiteral()) continue
+    const keyProp = checker.getPropertyOfType(fieldType, "key")
+    const keyType = keyProp ? checker.getTypeOfSymbolAtLocation(keyProp, loc) : undefined
+    const key = keyType?.isStringLiteral() ? keyType.value : undefined
+    out[fieldProp.name] = key !== undefined ? { store: storeType.value, key } : { store: storeType.value }
+  }
+  return out
+}
+
+/**
+ * Read `meta.<namespace>.encodingMap`'s STRING-literal (base-profile-name)
+ * entries off a resolved `Node` TYPE — `readMetaSourceMap`'s sibling for
+ * `encodingMap` (see docs/design/wire-profiles-and-staged-validation.md's
+ * "Implementation trace (phase B)" section for the field name decision and
+ * the KNOWN GAP this function deliberately does NOT close: an `encodingMap`
+ * entry may ALSO be a custom decoder FUNCTION, `(w: FieldValidWire) =>
+ * TField` — a function value has no literal TYPE for the checker to hand
+ * back (unlike a string), so there is no analogous way to read one off a
+ * TYPE alone; doing so would require re-emitting the function's own source
+ * into the generated module, which this phase does not attempt (see the
+ * design doc for the full writeup). A function-valued entry is silently
+ * OMITTED from this function's result — exactly like `readMetaSourceMap`
+ * omitting a non-literal `store` — so a caller sees only the entries it CAN
+ * safely act on.
+ */
+export function readMetaEncodingMapProfileNames(
+  nodeType: ts.Type,
+  namespace: string,
+  loc: ts.Node,
+  checker: ts.TypeChecker,
+): Record<string, string> | undefined {
+  const metaProp = checker.getPropertyOfType(nodeType, "meta")
+  if (!metaProp) return undefined
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
+  const nsProp = checker.getPropertyOfType(metaType, namespace)
+  if (!nsProp) return undefined
+  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc)
+  const encodingMapProp = checker.getPropertyOfType(nsType, "encodingMap")
+  if (!encodingMapProp) return undefined
+  const encodingMapType = checker.getTypeOfSymbolAtLocation(encodingMapProp, loc)
+  const out: Record<string, string> = {}
+  for (const fieldProp of checker.getPropertiesOfType(encodingMapType)) {
+    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc)
+    if (fieldType.isStringLiteral()) out[fieldProp.name] = fieldType.value
+  }
+  return out
+}
+
+/**
  * `onLeaf` receives both the underscore-joined MCP tool name (`name`, mirrors
  * `toTools`) and the raw path-segment array (`path`) it was built from — a
  * fallback segment appears in `path` as `:name` (e.g. `":bookId"`), matching
@@ -180,6 +298,18 @@ export type OnLeaf = (
   fn: ts.Node,
   descriptionSource: ts.Node,
   checker: ts.TypeChecker,
+  /** The leaf's own resolved `Node` TYPE (the `op()` return type, BEFORE
+   * descending into `handler`) — additive, appended after every existing
+   * parameter, so every existing `OnLeaf` implementation (none of which
+   * declares this parameter) keeps satisfying the type unchanged: a function
+   * with fewer declared parameters is assignable wherever more are expected
+   * (TypeScript's own function-type compatibility rule; JS itself just
+   * ignores extra call arguments). Exists so a caller that needs a leaf's own
+   * META VALUE (not just its structural TYPE) — `apply-validation-build.ts`'s
+   * wire-profile build path reading `meta.http.sourceMap`/`meta.http.method` —
+   * can read it off THIS type the same way `mcpMetaOverride` already reads
+   * `meta.mcp.name`/`meta.mcp.segment`, without a second tree walk. */
+  nodeType: ts.Type,
 ) => void
 
 /**
@@ -227,7 +357,7 @@ export function walkNodeType(
         // underscore-joined default, matching project.ts's own leaf-name ternary.
         const nameOverride = mcpMetaOverride(childType, "name", loc, checker)
         const name = nameOverride ?? join(prefix, childKey)
-        onLeaf(name, [...path, childKey], fn, descriptionSource, checker)
+        onLeaf(name, [...path, childKey], fn, descriptionSource, checker, childType)
         continue
       }
 
@@ -275,7 +405,7 @@ export function walkNodeType(
             const descriptionSource = subtreeProp.declarations?.[0] ?? fn
             const nameOverride = mcpMetaOverride(subtreeType, "name", loc, checker)
             const name = nameOverride ?? join(prefix, fallbackName)
-            onLeaf(name, subtreePath, fn, descriptionSource, checker)
+            onLeaf(name, subtreePath, fn, descriptionSource, checker, subtreeType)
           }
         } else {
           walkNodeType(

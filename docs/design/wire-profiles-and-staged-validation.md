@@ -704,6 +704,200 @@ see decode.md's own history for the fuller correction.
 
 ---
 
+## Implementation trace (phase B)
+
+Phase A (commit `0cc83f0`) landed the type-ir mechanism (`WireProfile`,
+`compileWireEntryFragment`, `compileConstraintsFn`, `assembleWireModule`,
+`compileWireModule`, `wireValidatorKey`, `wireTypeText`) — purely additive,
+zero change to `check`/`errors`/`parse`. Phase B wires that mechanism onto
+`applyValidation`'s call-site-anchored codegen (`apply-validation-build.ts`)
+and the runtime (`apply-validation.ts`). The design doc above specifies the
+model; several MECHANISM decisions below were not specified and were made by
+this implementer — flagged explicitly as this implementer's binding choice,
+not a re-derivation of anything the doc already settled.
+
+### `protocol` as `applyValidation`'s optional third argument
+
+**Decision (this implementer's, not pre-specified):** `applyValidation(key,
+tree, protocol?)`. Omitting `protocol` is the COMPLETELY UNCHANGED 2-argument
+behavior — same codegen surface (`ValidatorMap`), same runtime shape. A
+3-argument call opts into wire-profile-driven validation for that
+`(key, protocol)` pair, resolved against a SEPARATE, ADDITIVE map
+(`WireValidatorMap`) that `createApplyValidation` takes as an optional SECOND
+argument (default `{}`). This is the smallest change consistent with the
+doc's zero-setup story: every existing codegen'd module, every existing
+test/fixture, keeps compiling and running with ZERO changes — a 3-arg call
+site is purely additive on top.
+
+A tree validated once and shared across two protocols with DIFFERENT wire
+shapes needs one 3-arg call/key per protocol (each protocol claims its own
+key, same as any two independent trees would); two protocols that happen to
+resolve to the SAME base profile (mcp+graphql+jsonrpc, all `jsonProfile`) can
+share one key/call if the tree itself is one tree for both. `usedKeys`
+staying key-only (not key+protocol) is what makes reusing one key across two
+different protocols a loud double-registration error rather than a silent
+last-wins — the same duplicate-key discipline the 2-arg path already has.
+
+### Per-protocol store→encoding derivation (`packages/api-tree/src/wire-derive.ts`)
+
+`deriveFieldProfiles(protocol, sourceMap, method, pathParamNames)` returns
+either `{ profile }` (identity/mcp/graphql/jsonrpc — uniform, no meta read at
+all) or `{ fieldProfiles, defaultProfile }` (http/cli — genuinely per-field).
+Store→encoding tables:
+
+- **cli**: `flag`/`path`/`env` all → `argvProfile`-style encoding (argv is
+  uniform today) — routed through the SAME per-store table lookup as HTTP
+  anyway, not shortcut straight to `argvProfile`, so a future non-uniform CLI
+  store only needs a table entry. Default store `"flag"`, except a field
+  whose name matches the leaf's own tree-relative path's fallback-segment
+  name(s) (the `:name` convention `apply-validation.ts`'s `fallbackSegment`
+  already uses) — those default to `"path"` instead.
+- **http**: `path`/`query`/`header` → `queryProfile`-style encoding;
+  `body` → `jsonProfile`-style encoding. Default store is
+  `primaryStoreForMethod(method)` — REIMPLEMENTED in `wire-derive.ts` (api-tree
+  cannot depend on http-api-projector; the dependency runs the other way),
+  mirroring `http-api-projector/src/decode.ts`'s function of the same name
+  exactly (GET/HEAD/DELETE → query, else → body) — except a field matching a
+  fallback-segment name defaults to `"path"` instead, same convention as CLI.
+  An explicit `sourceMap` override always wins over either default.
+
+**KNOWN LIMITATION, documented explicitly:** HTTP's real per-field source
+resolution (`http-api-projector`'s `assemble`) uses the FULLY PROJECTED
+route's mount position for path-slug detection, because `http.moveTo` can
+relocate a leaf elsewhere in the route tree, changing its effective
+path-param set — invisible to codegen, a static analysis over the
+PRE-projection call-site tree. `wire-derive.ts`'s HTTP branch therefore uses
+ONLY the leaf's own LOCAL, pre-projection tree-relative path segments for
+path-slug detection — correct for the dominant case (no `moveTo` on that
+leaf), an approximation when `moveTo` relocates it. This mirrors (is not a
+contradiction of) the existing same-file-only scope cut `traceNodeType`'s doc
+comment (`apply-validation-build.ts`) already documents for tree tracing.
+
+### Static-meta-read investigation (decision 4/5) — (a) panned out, with one real gap
+
+Task instructions asked to investigate, before assuming, whether reading a
+leaf's declared `meta` as a runtime VALUE (not just its TYPE) via static AST
+analysis had any precedent in this codebase. It does:
+`tree.ts`'s `mcpMetaOverride` already reads `meta.mcp.name`/`meta.mcp.segment`
+as string-literal VALUES off a resolved `Node` TYPE
+(`checker.getPropertyOfType`/`getTypeOfSymbolAtLocation`/`isStringLiteral()`)
+— option (a) from the task ("find a legitimate static-meta-read path").
+Generalized (purely additively — `mcpMetaOverride` itself is untouched) into
+two new exported `tree.ts` functions:
+
+- `readMetaStringLiteral(nodeType, namespace, key, loc, checker)` — the same
+  technique for an arbitrary namespace/key (`meta.http.method`/`.verb`).
+- `readMetaSourceMap(nodeType, namespace, loc, checker)` — one level deeper:
+  enumerates `sourceMap`'s own literal keys (`getPropertiesOfType`, the same
+  enumeration `walkNodeType` already uses for `children`) and reads each
+  entry's `store`/`key` as string literals.
+- `readMetaEncodingMapProfileNames(nodeType, namespace, loc, checker)` — the
+  same enumeration for `encodingMap`'s STRING-form (base-profile-name)
+  entries.
+
+Getting a leaf's own node TYPE into `apply-validation-build.ts`'s hands
+required one additive change to `tree.ts`'s `OnLeaf` callback type: appended
+a trailing `nodeType: ts.Type` parameter. Purely additive by TypeScript's own
+function-type compatibility rule (a callback declaring fewer parameters
+satisfies a type requiring more) — every existing `OnLeaf` implementation
+(`extractRouteTypeRefs`, the unchanged 2-arg `extractApplyValidationTypeRefs`)
+needed zero changes. Option (b) (`getConstantValue`/partial evaluation of
+object literals) was not separately investigated once (a) panned out.
+
+**The one real gap:** `encodingMap`'s FUNCTION-form entry
+(`(w: FieldValidWire) => TField`) has no analogous read. A function value has
+no literal TYPE for the checker to hand back — unlike a string, there is
+nothing to read "as a value." Emitting a reference to it in the generated
+module would need either (a) the function being a named export elsewhere
+codegen could import (not what the design describes — it's authored inline,
+per field, in the meta object literal) or (b) copying its source text into
+the generated module (fragile: closures, scoping; no existing codegen path in
+this codebase does this — `guardAnnotation`'s cross-file resolution imports a
+TYPE reference, never re-emits a VALUE's source). Neither is implemented. A
+function-valued `encodingMap` entry is silently OMITTED by
+`readMetaEncodingMapProfileNames` — the field falls through to whatever the
+protocol's own derivation would otherwise assign, exactly as if no override
+had been declared, rather than producing a wrong or silently-inconsistent
+result. This is the one part of decision 4/5 left as a documented gap, not
+"fully wired."
+
+`encodingMap`'s STRING-form (base-profile-name) entries ARE fully wired for
+`http`/`cli` (the two protocols with per-field derivation at all) in
+`extractWireApplyValidationTypeRefs`. Applying `encodingMap` overrides to the
+UNIFORM protocols (identity/mcp/graphql/jsonrpc) is a further, deliberate
+scope cut — it would require those protocols to also go through the
+composite (per-field) derivation path, which their base wire shape doesn't
+otherwise need; left for a future phase if a real need for it surfaces.
+
+### `encodingMap` field name
+
+Used exactly `encodingMap`, as specified — sibling of `sourceMap` in the same
+per-protocol meta namespace, same keyed-merge (last-wins per key) semantics.
+No dedicated authoring helper (à la `http.source()`) was built: given the
+static-meta-read gap above only lets the STRING-form entries be read at all,
+and reading a raw literal directly (the same "accident of writing the object
+literal inline" `sourceMap` itself relies on pre-`http.source()`) is
+sufficient for that form, a helper would only buy literal-preservation for
+the FUNCTION form this phase can't read anyway. Revisit if/when the function
+form gets a real read path.
+
+### `ValidatorMap`/`createApplyValidation` shape
+
+**Decision (this implementer's):** a SECOND, OPTIONAL parameter —
+`createApplyValidation(validators, wireValidators = {})` — rather than
+reshaping `ValidatorMap` itself. This is exactly the "buys backward
+compatibility for free" shape the task flagged as likely: every existing
+single-argument call site (every already-codegen'd module, every existing
+test/fixture) keeps compiling and running unchanged. `WireValidatorMap` is
+`Record<key, Record<path, Partial<Record<ProtocolName, GeneratedEntry>>>>` —
+one extra nesting level (protocol) versus `ValidatorMap`. `injectValidators`/
+`collectUncoveredLeaves` (the structural walk) are UNCHANGED — a 3-arg call
+flattens `wireValidators[key]` down to the ordinary `path -> entry` shape
+those functions already walk (`flattenWireForKey`), keeping only the entries
+for the call's own `protocol`, so neither function needed to learn about
+protocols at all.
+
+### A genuine, previously-unexercised bug found along the way
+
+`compileConstraintsFn` (compile.ts, Phase A) gives each call its own fresh
+`GenCtx`, whose const-naming counter (`__ref0`, `__ref1`, ...) always starts
+at 0. Splicing more than one ENTRY's `compileConstraintsFn` output into one
+module at shared scope — exactly what `assembleWireModule` (compile.ts) and
+this phase's own `assembleWireApplyValidationModule`
+(`apply-validation-build.ts`) both do — produces a DUPLICATE `const`
+declaration whenever two entries each need at least one hoisted const (the
+common case: any plain typed field's `type`-kind error references one via
+`refLiteral`). Reproduced directly against `compileWireModule` with two
+plain two-field entries (no api-tree involved) — confirmed this is a Phase A
+mechanism issue, not something Phase B introduced, and that no existing test
+exercises more than one ENTRY in one wire module (every existing multi-profile
+test uses a single entry across several profiles, whose fragments are
+correctly IIFE-scoped and unaffected — only the constraints functions'
+module-scope consts collide).
+
+Worked around, NOT fixed at the root (`compileConstraintsFn`/`GenCtx` are out
+of this phase's mandate to modify — see "What not to do"), by a purely
+textual, per-entry disambiguation at the assembly layer in
+`apply-validation-build.ts` (`disambiguateConstraintsConsts`): renames only
+the const names a given entry's OWN `compileConstraintsFn` output declares,
+with a per-entry-unique suffix, before splicing it into the module.
+`assembleWireModule`/`compileWireModule` (compile.ts) still have the
+UNDERLYING bug for any caller that compiles ≥2 entries into one module
+directly — flagged here for whoever picks that up, not silently patched
+there.
+
+A second, unrelated, harmless byte-level oddity found in the same file:
+`wireValidatorKey`'s template literal (`` `${name} ${profileName}` ``, Phase A)
+has an actual U+0000 (NUL) character where the source visually reads as a
+plain space between the two interpolations — confirmed via a raw byte read of
+the committed file, not a rendering artifact. Functionally harmless (every
+caller goes through `wireValidatorKey`/`wireValidatorKey`-derived keys
+consistently, so the literal byte value never needs to be a real space), but
+worth a follow-up cleanup pass since it makes the generated key visually
+unreadable and could confuse anyone debugging by printing it directly.
+
+---
+
 ## Parked: semantic/effectful resolution (not in scope)
 
 Recorded here for cross-reference, tracked as an open item in `TODO.md`

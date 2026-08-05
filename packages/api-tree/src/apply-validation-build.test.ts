@@ -17,11 +17,16 @@ import {
   buildApplyValidationModuleCached,
   buildApplyValidationModuleSource,
   buildApplyValidationModuleSourceIncremental,
+  buildWireApplyValidationModuleCached,
+  buildWireApplyValidationModuleSource,
+  buildWireApplyValidationModuleSourceIncremental,
   extractApplyValidationTypeRefs,
+  extractWireApplyValidationTypeRefs,
   findApplyValidationCallSites,
 } from "./apply-validation-build.ts"
 import { createApplyValidation } from "./apply-validation.ts"
 import { createExtractorProgram, defaultShouldShare } from "./extract.ts"
+import { jsonProfile } from "@rhi-zone/fractal-type-ir"
 
 const FIXTURE = `${import.meta.dir}/__fixtures__/apply-validation.fixture.ts`
 const DUPLICATE_FIXTURE = `${import.meta.dir}/__fixtures__/apply-validation-duplicate-key.fixture.ts`
@@ -198,6 +203,124 @@ describe("caching", () => {
     const incremental = buildApplyValidationModuleSourceIncremental(FIXTURE, { program })
     const oneShot = buildApplyValidationModuleSource(FIXTURE, { program })
     expect(incremental.source).toBe(oneShot)
+  })
+})
+
+describe("wire-profile build path (3-arg applyValidation call sites)", () => {
+  const WIRE_FIXTURE = `${import.meta.dir}/__fixtures__/wire-apply-validation.fixture.ts`
+
+  it("finds the protocol argument on each 3-arg call site", () => {
+    const byKey = new Map(callSitesOf(WIRE_FIXTURE).map((site) => [site.key, site.protocol]))
+    expect(byKey.get("wire-http")).toBe("http")
+    expect(byKey.get("wire-http-override")).toBe("http")
+    expect(byKey.get("wire-cli")).toBe("cli")
+    expect(byKey.get("wire-mcp")).toBe("mcp")
+  })
+
+  it("http (GET, no override): bookId defaults to path-segment encoding, page defaults to the GET->query encoding", () => {
+    const { byKey } = extractWireApplyValidationTypeRefs(WIRE_FIXTURE)
+    const leaf = byKey["wire-http"]!.leaves["byId/:bookId"]!
+    if (!("fieldProfiles" in leaf.derivation)) throw new Error("expected a composite (per-field) derivation")
+    expect(leaf.derivation.fieldProfiles["bookId"]?.name).toBe("query")
+    expect(leaf.derivation.defaultProfile.name).toBe("query")
+  })
+
+  it("http: an explicit sourceMap override to \"body\" wins over the GET->query method default", () => {
+    const { byKey } = extractWireApplyValidationTypeRefs(WIRE_FIXTURE)
+    const leaf = byKey["wire-http-override"]!.leaves["byId/:bookId"]!
+    if (!("fieldProfiles" in leaf.derivation)) throw new Error("expected a composite (per-field) derivation")
+    expect(leaf.derivation.fieldProfiles["page"]?.name).toBe("json")
+    expect(leaf.derivation.fieldProfiles["bookId"]?.name).toBe("query")
+  })
+
+  it("cli: bookId defaults to path-store encoding, still argv (CLI stores are uniform)", () => {
+    const { byKey } = extractWireApplyValidationTypeRefs(WIRE_FIXTURE)
+    const leaf = byKey["wire-cli"]!.leaves["byId/:bookId"]!
+    if (!("fieldProfiles" in leaf.derivation)) throw new Error("expected a composite (per-field) derivation")
+    expect(leaf.derivation.fieldProfiles["bookId"]?.name).toBe("argv")
+    expect(leaf.derivation.defaultProfile.name).toBe("argv")
+  })
+
+  it("mcp: uniform jsonProfile, no per-field derivation at all", () => {
+    const { byKey } = extractWireApplyValidationTypeRefs(WIRE_FIXTURE)
+    const leaf = byKey["wire-mcp"]!.leaves["get"]!
+    expect(leaf.derivation).toEqual({ profile: jsonProfile })
+  })
+
+  it("emits a syntactically valid module, grouping wireValidatorsByKey by (key, path, protocol)", () => {
+    const source = buildWireApplyValidationModuleSource(WIRE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    expect(source).toContain('"wire-http": {')
+    expect(source).toContain('"byId/:bookId": { "http": wireValidators[')
+    expect(source).toContain("export const applyValidation = createApplyValidation({}, wireValidatorsByKey)")
+    const parsed = ts.createSourceFile("generated.ts", source, ts.ScriptTarget.ESNext, true)
+    expect((parsed as unknown as { parseDiagnostics?: unknown[] }).parseDiagnostics ?? []).toHaveLength(0)
+  })
+
+  it("http/cli (query/argv-shaped) coerce a numeric-string \"page\"; mcp (json-shaped) rejects it", async () => {
+    const source = buildWireApplyValidationModuleSource(WIRE_FIXTURE, { runtimeImport: "../apply-validation.ts" })
+    const { applyValidation: wire } = evalModule(source)
+
+    const httpOut = wire(
+      "wire-http",
+      { meta: {}, children: { byId: { meta: {}, fallback: { name: "bookId", subtree: { meta: {}, handler: (i: unknown) => i } } } } },
+      "http",
+    ) as { children: { byId: { fallback: { subtree: { handler: (i: unknown) => unknown } } } } }
+    const httpResult = await httpOut.children.byId.fallback.subtree.handler({ bookId: "b1", page: "3" })
+    expect(httpResult).toEqual({ bookId: "b1", page: 3 })
+
+    const cliOut = wire(
+      "wire-cli",
+      { meta: {}, children: { byId: { meta: {}, fallback: { name: "bookId", subtree: { meta: {}, handler: (i: unknown) => i } } } } },
+      "cli",
+    ) as { children: { byId: { fallback: { subtree: { handler: (i: unknown) => unknown } } } } }
+    const cliResult = await cliOut.children.byId.fallback.subtree.handler({ bookId: "b1", page: "3" })
+    expect(cliResult).toEqual({ bookId: "b1", page: 3 })
+
+    const mcpOut = wire("wire-mcp", { meta: {}, children: { get: { meta: {}, handler: (i: unknown) => i } } }, "mcp") as {
+      children: { get: { handler: (i: unknown) => unknown } }
+    }
+    const mcpResult = (await mcpOut.children.get.handler({ count: "3" })) as unknown
+    expect((mcpResult as { kind: string }).kind).toBe("err")
+  })
+})
+
+describe("wire-profile build path — caching (fingerprint incorporates protocol)", () => {
+  const WIRE_FIXTURE = `${import.meta.dir}/__fixtures__/wire-apply-validation.fixture.ts`
+
+  it("Tier 1: a second build for the same entry/output is a cache hit", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fractal-wire-apply-validation-"))
+    try {
+      const outFile = path.join(tmpDir, "generated.ts")
+      const first = buildWireApplyValidationModuleCached(WIRE_FIXTURE, outFile)
+      expect(first.status).toBe("built")
+      if (first.status === "built") fs.writeFileSync(outFile, first.result)
+      expect(buildWireApplyValidationModuleCached(WIRE_FIXTURE, outFile).status).toBe("hit")
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it("Tier 2: carried-forward leaves aren't recompiled on an unchanged rebuild", () => {
+    const program = createExtractorProgram(WIRE_FIXTURE)
+    const first = buildWireApplyValidationModuleSourceIncremental(WIRE_FIXTURE, { program })
+    expect(first.changedLeaves.length).toBeGreaterThan(0)
+    const second = buildWireApplyValidationModuleSourceIncremental(WIRE_FIXTURE, { program, prior: first })
+    expect(second.changedLeaves).toEqual([])
+    expect(second.source).toBe(first.source)
+  })
+
+  it("the SAME leaf under two different protocols fingerprints differently (protocol folded into the leaf key)", () => {
+    const program = createExtractorProgram(WIRE_FIXTURE)
+    const built = buildWireApplyValidationModuleSourceIncremental(WIRE_FIXTURE, { program })
+    // "wire-http"'s and "wire-cli"'s "byId/:bookId" leaves are structurally the
+    // SAME TypeRef ({ bookId: string; page: number }) but different protocols —
+    // their fingerprints (and compiled artifacts) must differ.
+    const httpKey = Object.keys(built.leafFingerprints).find((k) => k.startsWith("wire-http\u0000") && k.endsWith("http"))
+    const cliKey = Object.keys(built.leafFingerprints).find((k) => k.startsWith("wire-cli\u0000") && k.endsWith("cli"))
+    expect(httpKey).toBeDefined()
+    expect(cliKey).toBeDefined()
+    expect(built.leafFingerprints[httpKey!]).not.toBe(built.leafFingerprints[cliKey!])
+    expect(built.leafArtifacts[httpKey!]!.code).not.toBe(built.leafArtifacts[cliKey!]!.code)
   })
 })
 
