@@ -114,18 +114,34 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * BEFORE `projectGraphQL` runs — GraphQL's counterpart to HTTP's
    * `PresetOptions.rewriters` (`packages/http-api-projector/src/preset.ts`).
    * This is also where generated VALIDATION wires in, via
-   * `applyValidation(key, tree)` (`@rhi-zone/fractal-api-tree/apply-validation`)
-   * — there is no dedicated `validators` option (removed, phase 3):
-   * `applyValidation`'s call site must live in the CONSUMER's own entry file
-   * for codegen to anchor on it (see that module's doc comment), so
-   * `createGraphQLServer` itself can never own the call.
+   * `applyValidation(key, tree, "graphql")`
+   * (`@rhi-zone/fractal-api-tree/apply-validation`) — there is no dedicated
+   * `validators` option (removed, phase 3): `applyValidation`'s call site
+   * must live in the CONSUMER's own entry file for codegen to anchor on it
+   * (see that module's doc comment), so `createGraphQLServer` itself can
+   * never own the call.
    *
    * ```ts
    * import { applyValidation } from "./generated/apply-validation.ts"
    * const server = createGraphQLServer(tree, {
-   *   rewriters: [(t) => applyValidation("books", t)],
+   *   rewriters: [(t) => applyValidation("books", t, "graphql")],
    * })
    * ```
+   *
+   * The third argument, `"graphql"`, opts into wire-profile-driven staged
+   * decode+validate (`docs/design/wire-profiles-and-staged-validation.md`):
+   * GraphQL's wire is already-typed JSON (variables carry real numbers/
+   * booleans, not strings), so the profile applied is identity + JSON-date
+   * coercion (the only thing JSON has no literal for) — no coercion of
+   * stringified numbers/booleans. A stringified number like `"42"` for a
+   * numeric field is a structured `ValidationError`, not silently accepted.
+   * This is now the ONLY validation path: there is no manual coercion
+   * fallback — decode and validation run unconditionally on every leaf
+   * `applyValidation` wraps. The 2-argument form (`applyValidation("books",
+   * t)`, omitting the protocol) is still supported and still fully
+   * functional — it's kept for an unrelated structural-sharing/defs
+   * capability the wire path doesn't yet support — but it doesn't get
+   * per-protocol wire semantics; prefer the 3-argument form for new code.
    *
    * Unlike HTTP's `HttpRoute` projection, GraphQL dispatches off the SAME
    * `Node` shape it's given — there is no separate "projected" shape for
