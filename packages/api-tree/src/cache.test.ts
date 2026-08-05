@@ -1,25 +1,30 @@
 // packages/api-tree/src/cache.test.ts — content-addressed build cache tests
 //
 // Covers checkCache/writeCacheMetadata (cache.ts) via apply-validation-build.ts's
-// `writeApplyValidationModuleCached`/schema-build.ts's `writeSchemaModuleCached`
+// `writeWireApplyValidationModuleCached`/schema-build.ts's `writeSchemaModuleCached`
 // wrappers end-to-end against a real fixture entry file (so "touching a
 // dependency the extractor reads, not just the entry file" is proven
 // against genuine multi-file extraction, not a synthetic closure list).
 //
-// FIXTURE wraps tree.fixture.ts in a single `applyValidation` call site
-// (__fixtures__/apply-validation-tree.fixture.ts) — phase 3 deleted build.ts's
-// `writeValidatorModuleCached`, this file's prior vehicle for exercising
-// cache.ts. `writeApplyValidationModuleCached` writes the SAME cache-metadata
-// contract (cache.ts tracks the whole `ts.Program`'s file set by default), so
-// touching DEP_FIXTURE — still reachable transitively through
-// tree.fixture.ts, just one hop further from FIXTURE now — still invalidates.
+// FIXTURE wraps tree.fixture.ts in a single 2-arg `applyValidation` call site
+// (__fixtures__/apply-validation-tree.fixture.ts) — phase D deleted the
+// 2-arg-specific `writeApplyValidationModuleCached` this file used as its
+// cache.ts exercise vehicle (docs/design/wire-profiles-and-staged-validation.md);
+// every `applyValidation` call site, 2-arg included, now compiles through the
+// wire-profile build path (an omitted protocol resolves to `"identity"`), so
+// `writeWireApplyValidationModuleCached` against the SAME fixture is the
+// like-for-like replacement. `writeWireApplyValidationModuleCached` writes the
+// SAME cache-metadata contract (cache.ts tracks the whole `ts.Program`'s file
+// set by default), so touching DEP_FIXTURE — still reachable transitively
+// through tree.fixture.ts, just one hop further from FIXTURE now — still
+// invalidates.
 
 import { describe, expect, it, beforeEach, afterEach, spyOn } from "bun:test"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import * as extract from "./extract.ts"
 import { createExtractorProgram } from "./extract.ts"
-import { writeApplyValidationModuleCached } from "./apply-validation-build.ts"
+import { writeWireApplyValidationModuleCached } from "./apply-validation-build.ts"
 import { writeSchemaModuleCached } from "./schema-build.ts"
 import { checkCache, writeCacheMetadata } from "./cache.ts"
 import { computeEntryClosures } from "./reachability.ts"
@@ -46,12 +51,12 @@ describe("cache.ts — content-addressed incremental build cache", () => {
   it("first build is a miss (no cache metadata yet); rebuilding immediately after is a hit", async () => {
     const outFile = freshOutFile("v1.ts")
 
-    const first = await writeApplyValidationModuleCached(FIXTURE, outFile)
+    const first = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
     expect(first.status).toBe("built")
     expect(fs.existsSync(outFile)).toBe(true)
     expect(fs.existsSync(`${outFile}.cache.json`)).toBe(true)
 
-    const second = await writeApplyValidationModuleCached(FIXTURE, outFile)
+    const second = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
     expect(second.status).toBe("hit")
 
     const check = checkCache(FIXTURE, outFile)
@@ -60,8 +65,8 @@ describe("cache.ts — content-addressed incremental build cache", () => {
 
   it("touching a DEPENDENCY the extractor reads (not the entry file itself) invalidates the cache", async () => {
     const outFile = freshOutFile("v2.ts")
-    await writeApplyValidationModuleCached(FIXTURE, outFile)
-    expect((await writeApplyValidationModuleCached(FIXTURE, outFile)).status).toBe("hit")
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
+    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile)).status).toBe("hit")
 
     // Touch result-reexport.fixture.ts — a real transitive dependency of
     // tree.fixture.ts's `ResultFromBarrel` import — via a content change,
@@ -73,7 +78,7 @@ describe("cache.ts — content-addressed incremental build cache", () => {
       expect(check.hit).toBe(false)
       if (!check.hit) expect(check.reason).toContain("result-reexport.fixture.ts")
 
-      const rebuilt = await writeApplyValidationModuleCached(FIXTURE, outFile)
+      const rebuilt = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
       expect(rebuilt.status).toBe("built")
     } finally {
       fs.writeFileSync(DEP_FIXTURE, original)
@@ -98,25 +103,25 @@ describe("cache.ts — content-addressed incremental build cache", () => {
       )
     fs.writeFileSync(entryCopy, rewritten)
 
-    await writeApplyValidationModuleCached(entryCopy, outFile)
-    expect((await writeApplyValidationModuleCached(entryCopy, outFile)).status).toBe("hit")
+    await writeWireApplyValidationModuleCached(entryCopy, outFile)
+    expect((await writeWireApplyValidationModuleCached(entryCopy, outFile)).status).toBe("hit")
 
     fs.appendFileSync(entryCopy, "\n// entry-file perturbation\n")
     const check = checkCache(entryCopy, outFile)
     expect(check.hit).toBe(false)
-    expect((await writeApplyValidationModuleCached(entryCopy, outFile)).status).toBe("built")
+    expect((await writeWireApplyValidationModuleCached(entryCopy, outFile)).status).toBe("built")
   })
 
   it("force bypasses the cache unconditionally, even on a hit", async () => {
     const outFile = freshOutFile("v4.ts")
-    await writeApplyValidationModuleCached(FIXTURE, outFile)
-    expect((await writeApplyValidationModuleCached(FIXTURE, outFile)).status).toBe("hit")
-    expect((await writeApplyValidationModuleCached(FIXTURE, outFile, { force: true })).status).toBe("built")
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
+    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile)).status).toBe("hit")
+    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile, { force: true })).status).toBe("built")
   })
 
   it("hand-editing the output file invalidates the cache even though no input changed", async () => {
     const outFile = freshOutFile("v5.ts")
-    await writeApplyValidationModuleCached(FIXTURE, outFile)
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
     fs.appendFileSync(outFile, "\n// hand edit\n")
     const check = checkCache(FIXTURE, outFile)
     expect(check.hit).toBe(false)
@@ -126,19 +131,19 @@ describe("cache.ts — content-addressed incremental build cache", () => {
   it("cacheFile/cacheDir options relocate cache metadata away from the default <output>.cache.json sibling", async () => {
     const outFile = freshOutFile("v6.ts")
     const cacheDir = freshOutFile("cache-pool")
-    const outcome = await writeApplyValidationModuleCached(FIXTURE, outFile, { cacheDir })
+    const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile, { cacheDir })
     expect(outcome.status).toBe("built")
     expect(fs.existsSync(`${outFile}.cache.json`)).toBe(false)
     expect(fs.existsSync(path.join(cacheDir, `${path.basename(outFile)}.cache.json`))).toBe(true)
-    expect((await writeApplyValidationModuleCached(FIXTURE, outFile, { cacheDir })).status).toBe("hit")
+    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile, { cacheDir })).status).toBe("hit")
   })
 
   it("a warm hit never constructs a ts.Program — checkCache re-validates off recorded size/mtime/hash only", async () => {
     const outFile = freshOutFile("v8.ts")
-    await writeApplyValidationModuleCached(FIXTURE, outFile)
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
 
     // Spy on `createExtractorProgram` (extract.ts) — apply-validation-build.ts's
-    // ONLY Program-construction entry point (`buildApplyValidationModuleCached`'s
+    // Program-construction entry point (`buildWireApplyValidationModuleCached`'s
     // `program` option). A warm `checkCache`/cached-build
     // call must never reach it: the whole point of the tiered stat/hash
     // re-validation (see cache.ts's warm-check-cost doc block) is to decide
@@ -149,7 +154,7 @@ describe("cache.ts — content-addressed incremental build cache", () => {
       expect(check.hit).toBe(true)
       expect(createProgramSpy).not.toHaveBeenCalled()
 
-      const outcome = await writeApplyValidationModuleCached(FIXTURE, outFile)
+      const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
       expect(outcome.status).toBe("hit")
       expect(createProgramSpy).not.toHaveBeenCalled()
     } finally {
@@ -159,7 +164,7 @@ describe("cache.ts — content-addressed incremental build cache", () => {
 
   it("touching a tracked file's mtime without changing its content still resolves to a hit (content-hash fallback)", async () => {
     const outFile = freshOutFile("v9.ts")
-    await writeApplyValidationModuleCached(FIXTURE, outFile)
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
 
     // Bump DEP_FIXTURE's mtime (and only its mtime — content unchanged) far
     // enough into the future that it can't collide with the recorded value
@@ -171,7 +176,7 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     const check = checkCache(FIXTURE, outFile)
     expect(check.hit).toBe(true)
 
-    const outcome = await writeApplyValidationModuleCached(FIXTURE, outFile)
+    const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
     expect(outcome.status).toBe("hit")
   })
 
@@ -184,7 +189,7 @@ describe("cache.ts — content-addressed incremental build cache", () => {
 
     // Building the validator module for the same entry doesn't touch the
     // schema artifact's cache entry (separate outFile, separate metadata).
-    expect((await writeApplyValidationModuleCached(FIXTURE, validatorOut)).status).toBe("built")
+    expect((await writeWireApplyValidationModuleCached(FIXTURE, validatorOut)).status).toBe("built")
     expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("hit")
 
     const source = fs.readFileSync(schemaOut, "utf8")

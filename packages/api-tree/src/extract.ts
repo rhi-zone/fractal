@@ -291,9 +291,10 @@ function typeProvenanceOf(
  * When the parameter type is a NAMED type (alias/interface, not an inline
  * object literal), the returned TypeRef carries `meta.typeName` +
  * `meta.declarationFile` — provenance a codegen consumer (e.g.
- * `@rhi-zone/fractal-type-ir`'s `compileValidatorModule`) can use to `import
- * type { X } from "…"` instead of inlining the type's structure into a
- * generated annotation. See index.ts's meta-bag convention doc comment.
+ * `@rhi-zone/fractal-type-ir`'s `compileWireEntryFragment`, via
+ * `guardAnnotation`) can use to `import type { X } from "…"` instead of
+ * inlining the type's structure into a generated annotation. See index.ts's
+ * meta-bag convention doc comment.
  */
 export function typeRefFromFunctionNode(
   fn: ts.Node,

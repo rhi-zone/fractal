@@ -29,12 +29,15 @@ LANDED (2026-08), in two phases:
 
 The staged decode/validate model itself (wire profiles, the
 `validateEncoding`/`decode`/`defaults-fill`/`validateConstraints` pipeline)
-has now LANDED, across three phases — **A** (`0cc83f0`, the type-ir
-mechanism), **B** (`80e93d8`, `applyValidation`/codegen plumbing), and **C**
-(below, projector migration + retirement decisions). This document captures
-the settled decisions this work implements; see "Implementation trace (phase
-B)" and "Implementation trace (phase C)" below for the mechanism-level
-write-ups of what actually landed and the binding choices made along the way.
+has now LANDED, across four phases — **A** (`0cc83f0`, the type-ir
+mechanism), **B** (`80e93d8`, `applyValidation`/codegen plumbing), **C**
+(projector migration + retirement decisions), and **D** (below — defs/ref
+recursion on the wire path, and the full retirement of the 2-arg
+`applyValidation`/`compileValidatorModule` route phase C had deliberately
+kept). This document captures the settled decisions this work implements;
+see "Implementation trace (phase B)", "(phase C)", and "(phase D)" below for
+the mechanism-level write-ups of what actually landed and the binding
+choices made along the way.
 
 A follow-up conversation (2026-08) settled the three sub-questions that were
 originally left open (see "Settled: profile overrides, wrap-layer idiom, argv
@@ -1047,6 +1050,131 @@ wire-apply-validation.test.ts`) proving `?page=3`/`?page=notanumber` decode/
 reject correctly through a real `fetch` call; per-package tests for CLI's
 raw-passthrough/strict-boolean behavior and MCP's structured stringified-
 number rejection (see each package's own test files).
+
+---
+
+## Implementation trace (phase D) — LANDED (2026-08)
+
+Phase D's mandate: close phase C's one deliberately-kept blocker (the 2-arg
+`applyValidation(key, tree)`/`compileValidatorModule` path, kept only for its
+`shouldShare`/defs structural-sharing capability), then retire the 2-arg path
+now that the gap is closed, migrate every consumer, and bring docs/tests up to
+the single-mechanism story.
+
+**Defs/ref recursion landed on the wire path first** (commit `b5c7254`, this
+same session, prior to the retirement below): `compile.ts`'s
+`compileConstraintsFn` gained an optional `externalDefNames` param (seeding
+`ctx.defNames` so a `ref` resolves via the existing `validateHandlers.ref`
+machinery); the decode layer gained `WireDefsRegistry` (one compiled
+wire-decode function + one `ValidWire` type alias per `(defName, profileName)`
+pair actually referenced, lazily memoized, self-recursive-safe by reserving
+the function name before generating its body); `assembleWireModule`/
+`compileWireModule` gained optional defs-block params; api-tree's
+`extractWireApplyValidationTypeRefs` gained the same `shouldShare`/
+`SharingRegistry`/`finalizeSharedDefs` opt-in the 2-arg path already had, and
+`WireApplyValidationCarryForwardState` gained a real `defNamesFingerprint`
+(previously stubbed to the empty set).
+
+**Retirement.** With that gap closed, the 2-arg path had no capability the
+3-arg path lacked — deleted: `extractApplyValidationTypeRefs`,
+`buildApplyValidationModuleSource`/`buildApplyValidationModuleSourceIncremental`/
+`buildApplyValidationModuleCached`, `writeApplyValidationModule`/
+`writeApplyValidationModuleCached` (`apply-validation-build.ts`), and
+type-ir's module-assembly layer they were backed by —
+`compileValidatorModule`/`compileEntryFragment`/`assembleValidatorModule`/
+`CompiledEntryFragment` (`compile.ts`). `compileDefsBlock`/`CompiledDefsBlock`
+were NOT deleted — the wire path's own build functions use them for the
+constraints layer's shared `defs` block. `compileValidator` (the standalone,
+non-module AOT-compile projector) was NOT touched — a separate, still-live,
+general-purpose API with its own extensive test suite, unrelated to the
+`applyValidation` codegen route.
+
+### Decision A: what a 2-arg `applyValidation(key, tree)` call does now
+
+**Picked: sugar for the explicit `"identity"` protocol**, at both layers:
+
+- **Codegen** (`extractWireApplyValidationTypeRefs`): a call site's absent
+  `protocol` resolves to `"identity"` instead of being skipped — every
+  `applyValidation` call site, 2-arg or 3-arg, is extracted and compiled
+  through this ONE pipeline now.
+- **Runtime** (`apply-validation.ts`'s `createApplyValidation`): a 2-arg call
+  (`protocol` omitted) resolves against the legacy, hand-authored
+  `ValidatorMap` FIRST — so a caller that builds `createApplyValidation` from
+  a hand-rolled map directly (independent of codegen, as several of this
+  package's own runtime tests do) keeps working unchanged — falling back to
+  `WireValidatorMap` tagged `"identity"` when `ValidatorMap` has no entry for
+  that key. `assertValidationCoverage` mirrors the same resolution.
+
+Rejected: making an omitted protocol a build-time/runtime ERROR. The sugar
+reading is non-breaking (every existing 2-arg call site — hand-authored map
+tests, and any codegen'd module — keeps working with zero source changes) and
+is exactly the reading the design's own vocabulary already supports: "the
+identity profile is `validateEncoding` reduced to a trivial check plus the
+full `validateConstraints` pass — i.e. what today's check/errors/parse do for
+an in-process, already-typed value with no wire in between" (see "The staged
+model" above). The pre-codegen stub story is unaffected either way — a leaf
+under an unregistered key still gets no decode/validation, loud only via
+`assertValidationCoverage`.
+
+**One accepted, intentional behavior change**, named here rather than left
+silent: the OLD 2-arg path's `parse()` (`compileValidatorModule`'s output)
+ran through `compileValidator`'s universal, protocol-blind from-string
+coercion (`numberFamilyLeaf`/`booleanLeaf`/`dateLeaf` — coercing ANY numeric
+string regardless of whether it plausibly arrived over a wire). A 2-arg call
+site now resolves to `identityProfile` instead, which is strict — no
+coercion at all. Concretely: a 2-arg `applyValidation("books", httpRoutes)`
+call site that used to silently coerce a query string like `"3"` to the
+number `3` now rejects it as an encoding error, because `identityProfile`
+correctly assumes its input is already the right in-process shape, not a raw
+wire value. This is a CORRECTNESS fix, not a regression — that exact
+accidental universal coercion is the "Problem" this whole design document
+exists to supersede (see "Problem" above: "a single builtin rule set is
+simultaneously too permissive... and not permissive enough"). No production
+call site in this repo was affected: `examples/library-api` moved to the
+3-arg `applyValidation("books", api, "http")` form back in phase C; every
+remaining 2-arg call site in the tree is either a runtime test exercising
+`createApplyValidation`'s hand-authored-map path directly (never touches a
+wire value at all) or a codegen fixture with no HTTP-string-coercion
+expectation.
+
+### Decision B: CLI subcommand naming
+
+**Picked: `build-wire`/`watch-wire`/`check-wire` retired outright, folded
+into `build`/`watch`/`check`** (which now run what `build-wire`/etc. used to)
+— not kept as a deprecated alias. With one mechanism left, a `-wire`
+qualifier that existed only to disambiguate two coexisting pipelines is
+noise, not signal. Matches this repo's own precedent for a "one mechanism
+left" retirement: `wrapValidators`/`isValidatorWrapped`/`isApplyValidationWrapped`
+were all deleted outright (not kept as compatibility shims) once the
+mechanism they existed to disambiguate against had nothing left to be
+exclusive with.
+
+### Migration
+
+`examples/library-api`'s `package.json` `codegen`/`codegen:check` scripts
+switched from `build-wire`/`check-wire` back to `build`/`check` (no source
+change needed in `tree.ts` — it already used the 3-arg form since phase C;
+regenerating `src/generated/apply-validation.ts` produced byte-identical
+output). `docs/guide/codegen-cli.md` collapsed to describe the single
+pipeline. `packages/api-tree/README.md`/`packages/type-ir/README.md` updated.
+Tests: `apply-validation-build.test.ts`'s 2-arg-specific describe blocks
+(extraction, generated-module shape, caching, the ported build.test.ts edge
+cases — named-type import resolution, builtin/DOM structural inlining, defs
+sharing, multi-root Program sharing) ported onto
+`extractWireApplyValidationTypeRefs`/`buildWireApplyValidationModuleSource*`
+against the SAME fixtures (2-arg call sites, now processed as `"identity"`);
+`cache.test.ts`/`cache-v3.test.ts` (which use a 2-arg fixture purely as a
+generic exercise vehicle for `cache.ts`'s own mechanics, not to test
+anything 2-arg-specific) migrated to the wire path's cached/incremental
+functions, with leaf-artifact keys updated to fold the now-implied
+`"identity"` protocol in via `wireValidatorKey`. `type-ir/src/compile.test.ts`
+lost its `compileValidatorModule`-specific tests; the regression coverage
+they existed for (a recursive def's nested-field guard annotation using the
+locally-declared alias, not an unresolved bare name) is preserved by
+asserting the same substrings against `compileValidator`'s (kept) standalone
+output instead — the underlying mechanism (`guardAnnotation`/`compileDefs`)
+is shared code, and `compileValidator`'s own tsc-typecheck regression test
+already proved it bug-free for this exact shape.
 
 ---
 

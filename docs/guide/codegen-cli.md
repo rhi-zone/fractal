@@ -9,32 +9,27 @@ orchestrates api-tree's own call-site scanner/extractor
 (`apply-validation-build.ts`, `extract.ts`) into
 `@rhi-zone/fractal-type-ir`'s validator codegen.
 
-Two SEPARATE, additive builder pipelines share that one call-site scan (see
+There is now ONE builder pipeline (see
 `docs/design/wire-profiles-and-staged-validation.md` for the full design):
-
-- **`build`/`watch`/`check`** — the older, protocol-BLIND path (2-arg call
-  sites: `applyValidation(key, tree)`), compiled via
-  `@rhi-zone/fractal-type-ir`'s `compileValidatorModule` (the original
-  `check`/`errors`/`parse` engine — universal from-string coercion, one
-  builtin rule set for every wire). Still supported specifically for its
-  `shouldShare`/defs structural-sharing capability, which the staged wire
-  path below doesn't have yet.
-- **`build-wire`/`watch-wire`/`check-wire`** — the STAGED, per-protocol path
-  (3-arg call sites: `applyValidation(key, tree, protocol)`), compiled via
-  `@rhi-zone/fractal-type-ir`'s wire-profile engine
-  (`compileWireEntryFragment`/`compileWireEntryFragmentComposite`). This is
-  the RECOMMENDED path going forward — see "Connecting to `applyValidation`"
-  below for what the third argument buys.
+**`build`/`watch`/`check`** compile EVERY `applyValidation` call site in the
+entry file — 2-arg (`applyValidation(key, tree)`) and 3-arg
+(`applyValidation(key, tree, protocol)`) alike — through
+`@rhi-zone/fractal-type-ir`'s wire-profile engine
+(`compileWireEntryFragment`/`compileWireEntryFragmentComposite`/
+`compileConstraintsFn`). An omitted `protocol` argument is sugar for the
+explicit `"identity"` protocol — see "Connecting to `applyValidation`" below
+for what a protocol argument buys and what identity resolves to.
 
 ```
 entry file (applyValidation(key, tree[, protocol]) call sites) --extract input types--> compile --> applyValidation module source
 ```
 
-A `2-arg` and a `3-arg` call site can coexist in the same entry file; run
-whichever subcommand(s) match the call sites you actually wrote, into
-whichever `-o` output(s) your code imports from. `build-wire`/`watch-wire`/
-`check-wire` take the exact same flags as `build`/`watch`/`check` (below) —
-only the compiled artifact differs.
+Phase D (docs/design/wire-profiles-and-staged-validation.md) retired the
+separate, protocol-blind codegen route this used to run alongside
+(`compileValidatorModule`, and the `build-wire`/`watch-wire`/`check-wire`
+subcommands that disambiguated the two mechanisms while both existed) once
+this pipeline gained the `shouldShare`/defs structural-sharing capability
+that was the older route's only remaining reason to exist.
 
 ---
 
@@ -106,21 +101,6 @@ input type without re-running `build`:
 bun packages/api-tree/src/cli.ts check src/api.ts -o src/generated/apply-validation.ts
 ```
 
-### `build-wire`/`watch-wire`/`check-wire <entry> -o <output>`
-
-The staged, per-protocol siblings of `build`/`watch`/`check` above — same
-flags, same caching/watch/diff behavior, same `@generated` header — but
-compiled from 3-arg `applyValidation(key, tree, protocol)` call sites via
-`@rhi-zone/fractal-type-ir`'s wire-profile engine instead of
-`compileValidatorModule`. An entry file with no 3-arg call sites yields the
-same pre-codegen pass-through stub `build`/`watch`/`check` yield for a file
-with no 2-arg call sites.
-
-```sh
-bun packages/api-tree/src/cli.ts build-wire src/api.ts -o src/generated/apply-validation.ts
-bun packages/api-tree/src/cli.ts check-wire src/api.ts -o src/generated/apply-validation.ts
-```
-
 ---
 
 ## The `@generated` header
@@ -142,8 +122,8 @@ generated file by hand will show up as `stale` on the next CI run.
 
 Codegen anchors on `applyValidation(key, treeExpr, protocol?)` CALL SITES in
 the entry file, not on exported trees — you write the call yourself. The
-STAGED, protocol-aware form (recommended — run `build-wire`/`check-wire`
-against the entry file that has this call):
+protocol-aware form (recommended — run `build`/`check` against the entry file
+that has this call):
 
 ```ts
 import { applyValidation } from "./generated/apply-validation.ts"
@@ -165,23 +145,24 @@ not silently accepted); `"identity"` is the strict, no-coercion posture
 (exactly what plain `check`/`errors`/`parse` always were) for an in-process
 value with no wire in between at all.
 
-Omitting `protocol` (the OLDER, still-supported 2-arg form — run
-`build`/`check` against the entry file that has THIS call, into a DIFFERENT
-`-o` output) keeps the original protocol-blind behavior: one universal
-from-string coercion rule set for every field regardless of which wire it
-arrived over. Kept specifically for its `shouldShare`/defs structural-sharing
-capability (a type reused across several leaves' inputs compiles to one
-shared def) — the staged wire path doesn't support that yet. Prefer the 3-arg
-form unless you specifically need defs sharing.
+Omitting `protocol` (the 2-arg form) is sugar for the explicit `"identity"`
+protocol: strict, no coercion at all — exactly what plain `check`/`errors`/
+`parse` always were for an in-process, already-typed value with no wire in
+between. This is a straight, non-breaking read of the "identity" profile's own
+definition, not a separate mechanism — codegen compiles a 2-arg call site
+through the SAME wire-profile pipeline a 3-arg call site does, just with the
+protocol implied instead of spelled. `shouldShare`/defs structural sharing (a
+type reused across several leaves' inputs compiles to one shared def) works
+identically for 2-arg and 3-arg call sites.
 
-Either form's generated module exports the already-composed
-`applyValidation = createApplyValidation(...)` the call site above actually
-imports and calls (the 2-arg module's `createApplyValidation(validatorsByKey)`;
-the 3-arg module's `createApplyValidation({}, wireValidatorsByKey)` — same
-runtime function, `wireValidatorsByKey` is its second, additive parameter).
-For every leaf whose tree position (path segments joined by `/`, a `fallback`
+Every generated module exports the already-composed
+`applyValidation = createApplyValidation({}, wireValidatorsByKey)` the call
+site above actually imports and calls (`wireValidatorsByKey`'s "identity"-
+tagged entries cover a 2-arg call site; a differently-tagged entry covers the
+matching 3-arg call). For every leaf whose tree position (path segments joined by `/`, a `fallback`
 segment rendered as `:name`, e.g. `"books/:bookId"`) matches a path under
-that call's `key` (and, for the 3-arg form, `protocol`), `applyValidation`
+that call's `key` and `protocol` (implied `"identity"` for a 2-arg call),
+`applyValidation`
 wraps that leaf's handler to run the generated `parse()` first — success
 calls the original handler with the parsed value; failure returns
 `Result.err(validationErrors)` without ever reaching it. Unlike the retired

@@ -23,13 +23,14 @@ Schema (draft 04/07, 2020-12) or OpenAPI 3.0 schema objects.
 - `partial`, `required`, `pick`, `omit`, `extend`, `nullable`, `withMeta`, `deepPartial`, `deepRequired` — structural derive helpers
 - `./json-schema`, `./json-schema-07`, `./json-schema-04`, `./openapi30` — target projections
 - `./jsdoc` — JSDoc-derived metadata helpers
-- `buildSchema`, `compileValidator`, `compileValidatorModule` — `TypeRef` → TypeBox validator code, a build-time projector (`./compile`)
+- `buildSchema`, `compileValidator` — `TypeRef` → standalone check/errors/parse validator code, a build-time projector (`./compile`)
+- `compileDefsBlock`, `compileConstraintsFn`, `compileWireEntryFragment`, `compileWireEntryFragmentComposite`, `compileWireModule`, `assembleWireModule`, `argvProfile`/`identityProfile`/`jsonProfile`/`queryProfile`, `createWireDefsRegistry` — the wire-profile engine (`./compile`): a per-protocol `validateEncoding`+`decode` stage compiled per leaf, sharing one profile-independent `validateConstraints` stage across every profile (see `docs/design/wire-profiles-and-staged-validation.md`). `compileValidatorModule`/`compileEntryFragment`/`assembleValidatorModule` — the module-assembly layer backing the api-tree's now-deleted 2-arg-only `applyValidation` codegen route — were deleted (phase D) once this engine gained the `shouldShare`/defs structural-sharing capability that was that route's only remaining reason to exist; `compileDefsBlock`/`CompiledDefsBlock` survive because this engine's own build path still uses them.
 
 The build-time extractor (`createExtractorProgram`, `typeRefFromType`,
 `schemaFromType`, `extractJsDoc`, ...), the whole-tree walkers
 (`extractToolSchemas`, `extractRouteTypeRefs`, `extractToolTypeRefs`), the
-call-site-anchored build orchestrator (`buildApplyValidationModuleSource`,
-`writeApplyValidationModule`), and the `fractal-api-tree` CLI
+call-site-anchored build orchestrator (`buildWireApplyValidationModuleSource`,
+`writeWireApplyValidationModuleCached`), and the `fractal-api-tree` CLI
 (`build`/`watch`/`check`) live in `@rhi-zone/fractal-api-tree` (`./tree`,
 `./extract`, `./apply-validation-build`) — they walk `api()`/`op()`
 AUTHORING source, which is api-tree's concern. `compile.ts` (this package)

@@ -52,16 +52,18 @@
 // `"true"`/`"false"`-string, ISO-date-string), a JSON-body field coerces
 // only its `Date` fields from ISO strings, and everything else in the body
 // arrives already typed with no coercion. Without it — the 2-arg
-// `applyValidation("books", routes)` form — validation still runs (still
-// still supported, still available), but against the RAW value `assemble()`
-// handed back off the wire: a query numeric string like `"3"` is only
-// coerced to `3` if the leaf resolves against a `compileValidatorModule`-
-// generated validator via the OLD 2-arg `ValidatorMap` path (still
-// supported, still available, just not wire-profile-driven) — that
-// validator's `parse()` bakes in a universal, protocol-blind string-coercion
-// rule set (see the design doc's "Problem" section for why that's being
-// superseded), rather than the `WireValidatorMap` entry the 3-arg form
-// resolves against.
+// `applyValidation("books", routes)` form — validation still runs (codegen
+// treats an omitted protocol as sugar for `"identity"`, phase D's decision
+// A), but STRICTLY: `identityProfile` is "already the right shape, no
+// coercion" (the same posture `check`/`errors`/`parse` assume for an
+// in-process, already-typed value), so a query numeric string like `"3"`
+// against an HTTP tree wired with the 2-arg form is an ENCODING ERROR, not a
+// silent coercion — this is a deliberate consequence of the retirement, not
+// an oversight: the OLD 2-arg path's universal, protocol-blind
+// string-coercion (`compileValidatorModule`'s now-deleted `parse()`, which
+// coerced ANY numeric string regardless of whether it plausibly came off a
+// wire) was exactly the "Problem" this whole design superseded. An HTTP tree
+// that needs wire-shaped coercion must spell the 3-arg form.
 //
 // A rejected leaf's generated `parse()`/wire decoder returns `Result.err(...)`,
 // which `runRoute` (route.ts) already encodes as a 400 with the structured

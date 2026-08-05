@@ -225,8 +225,11 @@ export const api = api_({
 // (@rhi-zone/fractal-api-tree/apply-validation), the call-site-anchored,
 // STAGED wire-profile mechanism (see
 // docs/design/wire-profiles-and-staged-validation.md — phase C, "the doc's
-// end state is staged-only"). `bun run codegen` (package.json, `build-wire`)
-// scans THIS file for 3-arg `applyValidation(key, treeExpr, protocol)`
+// end state is staged-only"; phase D retired the separate 2-arg-only
+// pipeline and its `build-wire`/`watch-wire`/`check-wire` subcommands, so
+// `build`/`watch`/`check` are now the ONLY subcommands). `bun run codegen`
+// (package.json, `build`) scans THIS file for 3-arg
+// `applyValidation(key, treeExpr, protocol)`
 // invocations and emits `examples/library-api/src/generated/apply-validation.ts`
 // via `WireValidatorMap` — the third argument names the wire protocol
 // (`"http"` here) so codegen derives each leaf's PER-FIELD encoding: query/

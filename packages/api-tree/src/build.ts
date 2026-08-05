@@ -24,13 +24,17 @@
 //
 // What remains: `GeneratedEntry`, the one type genuinely shared across both
 // mechanisms (and every projector) — it's the type-ir compiler's own output
-// contract (`compileValidatorModule`/`compileEntryFragment`, `@rhi-zone/
-// fractal-type-ir`), not something specific to `wrapValidators`.
+// contract (`compileWireEntryFragment`/`compileConstraintsFn`, `@rhi-zone/
+// fractal-type-ir`), not something specific to `wrapValidators`. (Phase D
+// deleted the module-assembly layer this used to also describe —
+// `compileValidatorModule`/`compileEntryFragment` — once the 2-arg
+// `applyValidation` codegen route they backed was retired.)
 // `apply-validation.ts` re-exports it from here for convenience; every
 // projector's `GeneratedEntry` import (`@rhi-zone/fractal-api-tree/build`)
 // keeps working unchanged.
 
-/** One generated entry's public shape — see compile.ts's `compileValidatorModule`. */
+/** One generated entry's public shape — see type-ir/compile.ts's
+ * `compileWireEntryFragment`/`compileConstraintsFn`. */
 export type GeneratedEntry = {
   parse: (value: unknown) => { kind: "ok"; value: unknown } | { kind: "err"; errors: unknown[] }
 }

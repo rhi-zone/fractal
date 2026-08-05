@@ -13,8 +13,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "codegen": "bun ../../packages/api-tree/src/cli.ts build-wire src/tree.ts -o src/generated/apply-validation.ts",
-    "codegen:check": "bun ../../packages/api-tree/src/cli.ts check-wire src/tree.ts -o src/generated/apply-validation.ts",
+    "codegen": "bun ../../packages/api-tree/src/cli.ts build src/tree.ts -o src/generated/apply-validation.ts",
+    "codegen:check": "bun ../../packages/api-tree/src/cli.ts check src/tree.ts -o src/generated/apply-validation.ts",
     "codegen:client": "bun scripts/generate-client.ts"
   },
   "dependencies": {

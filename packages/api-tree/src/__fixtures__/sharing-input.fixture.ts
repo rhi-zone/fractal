@@ -1,9 +1,11 @@
 // packages/api-tree/src/__fixtures__/sharing-input.fixture.ts
 //
 // Same Address-reuse + Category-recursion shapes as sharing.fixture.ts, but
-// on the INPUT side (build.test.ts's buildValidatorModuleSource only compiles
-// input types) — for testing the shouldShare opt-in end-to-end through the
-// real CLI build pipeline (extractRouteTypeRefs -> compileValidatorModule).
+// on the INPUT side (build.test.ts's now-deleted buildValidatorModuleSource
+// only compiled input types) — for testing the shouldShare opt-in end-to-end
+// through the extraction pipeline (extractRouteTypeRefs), and (via
+// apply-validation-sharing-input.fixture.ts) through the applyValidation
+// codegen pipeline's own shouldShare opt-in.
 
 import { api, op } from "../node.ts"
 

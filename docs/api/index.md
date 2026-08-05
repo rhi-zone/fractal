@@ -55,7 +55,7 @@ of the base model don't pull in the TypeScript compiler:
 | `typeRefFromType` / `typeRefFromFunctionNode` / `typeRefFromReturnType` | (`./extract`) Same, but produce a `TypeRef` instead of raw JSON Schema |
 | `extractJsDoc` | (`./extract`) Pull JSDoc description text off a node |
 | `extractToolSchemas` / `extractRouteTypeRefs` / `extractToolTypeRefs` | (`./tree`) Walk a `Node` tree AT THE SOURCE LEVEL, keying schemas/type-refs by the same underscore-joined name used by MCP/OpenAPI |
-| `fractal-api-tree` CLI | `build`/`watch`/`check` subcommands over a validator module (`./cli.ts`), orchestrating `./tree`'s extraction into `@rhi-zone/fractal-type-ir`'s `compileValidatorModule` (`./build.ts`) |
+| `fractal-api-tree` CLI | `build`/`watch`/`check` subcommands over the applyValidation module (`./cli.ts`), orchestrating a call-site scan (`./apply-validation-build.ts`) into `@rhi-zone/fractal-type-ir`'s wire-profile engine (`compileWireEntryFragment`/`compileConstraintsFn`) |
 | `findEntryFiles` / `hasTreeExport` | (`./discover`, `./tree`) Autodetect a deployment's `api()`/`op()` tree entry files by directory scan + export-shape detection, with `include`/`exclude` overrides — replaces a hand-maintained per-consumer entry-file list |
 
 ## HTTP kit: `@rhi-zone/fractal-http-api-projector`
@@ -95,7 +95,7 @@ A subtyping hierarchy + open metadata bag used as the common target for schema p
 | `ancestors(kind)` / `resolve(kind, handlers)` | Walk/resolve a kind's parent chain (e.g. `int32` → `integer` → `number`) |
 | `registerParent(kind, parent)` | Extend the built-in parent lattice with a custom kind |
 | `partial` / `required` / `pick` / `omit` / `extend` / `nullable` / `withMeta` / `deepPartial` / `deepRequired` | Structural transforms over object `TypeRef`s |
-| `buildSchema` / `compileValidator` / `compileValidatorModule` | Compile a `TypeRef` into a runtime validator |
+| `buildSchema` / `compileValidator` | Compile a `TypeRef` into a runtime validator |
 
 ## MCP projection: `@rhi-zone/fractal-mcp-api-projector`
 

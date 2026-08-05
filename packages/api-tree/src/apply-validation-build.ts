@@ -1,8 +1,8 @@
 // packages/api-tree/src/apply-validation-build.ts — @rhi-zone/fractal-api-tree
 //
-// CALL-SITE-ANCHORED BUILD ORCHESTRATOR for the `applyValidation(key, tree)`
-// mechanism (apply-validation.ts) — the sibling of `build.ts`, which anchors
-// on EXPORTED `api()` trees instead:
+// CALL-SITE-ANCHORED BUILD ORCHESTRATOR for the `applyValidation(key, tree,
+// protocol?)` mechanism (apply-validation.ts) — the sibling of `build.ts`,
+// which anchors on EXPORTED `api()` trees instead:
 //
 //   build.ts:                entryFile --extractRouteTypeRefs (scans exports)-->
 //                            `${treeId}/${path}` -> TypeRef --compile--> module
@@ -12,14 +12,30 @@
 //                            (+ the nested `Record<key, Record<path, entry>>`
 //                             and the `createApplyValidation` composition)
 //
+// PHASE D RETIREMENT (docs/design/wire-profiles-and-staged-validation.md):
+// there used to be TWO parallel extraction/build pipelines here — a 2-arg
+// one (`extractApplyValidationTypeRefs`/`buildApplyValidationModuleSource*`,
+// backed by type-ir's now-deleted `compileValidatorModule`/
+// `compileEntryFragment`/`assembleValidatorModule`) and this one, the
+// staged wire-profile pipeline (`extractWireApplyValidationTypeRefs`/
+// `buildWireApplyValidationModuleSource*`, backed by
+// `compileWireEntryFragment`/`compileConstraintsFn`). The 2-arg pipeline was
+// kept only as long as it alone supported `shouldShare`/defs structural
+// sharing; once that capability landed on this pipeline too (phase D,
+// `b5c7254`), the 2-arg pipeline had nothing left the 3-arg one didn't cover
+// and was deleted. Every `applyValidation` call site — 2-arg or 3-arg — now
+// compiles through THIS pipeline: an omitted `protocol` argument is sugar
+// for `"identity"` (decision A of the retirement — see
+// `extractWireApplyValidationTypeRefs`'s doc comment).
+//
 // The extraction machinery is shared, not reimplemented: each traced tree is
-// descended with `walkNodeType` (tree.ts) and each leaf's TypeRefs come from
-// `typeRefFromFunctionNode`/`typeRefFromReturnType` (extract.ts), exactly as
-// `extractRouteTypeRefs` does. Only the ANCHOR differs (call sites, not
-// exports) and therefore the KEYING: paths here are tree-relative, because
-// `applyValidation`'s own `key` argument already scopes one tree — where
-// `extractRouteTypeRefs` has to prefix every path with a `treeId` to keep two
-// trees in one file from colliding in a single flat map.
+// descended with `walkNodeType` (tree.ts) and each leaf's TypeRef comes from
+// `typeRefFromFunctionNode` (extract.ts), exactly as `extractRouteTypeRefs`
+// does. Only the ANCHOR differs (call sites, not exports) and therefore the
+// KEYING: paths here are tree-relative, because `applyValidation`'s own `key`
+// argument already scopes one tree — where `extractRouteTypeRefs` has to
+// prefix every path with a `treeId` to keep two trees in one file from
+// colliding in a single flat map.
 //
 // Codegen is where the LOUD checks live for this mechanism, since the runtime
 // stub is deliberately permissive (apply-validation.ts):
@@ -29,31 +45,18 @@
 //   - a tree expression whose declaration lives in ANOTHER file throws too:
 //     same-file resolution is this phase's deliberate first cut, and giving
 //     up silently would emit a module missing that call site's whole key.
-//
-// PHASE 1: nothing in production code consumes the generated module yet — see
-// apply-validation.ts's module doc.
 
 import * as path from "node:path"
 import ts from "typescript"
-import {
-  assembleValidatorModule,
-  compileDefsBlock,
-  compileEntryFragment,
-  compileValidatorModule,
-  type CompiledEntryFragment,
-  type TypeRef,
-} from "@rhi-zone/fractal-type-ir"
+import { compileDefsBlock, type TypeRef } from "@rhi-zone/fractal-type-ir"
 import {
   createExtractorProgram,
   createSharingRegistry,
-  extractJsDoc,
   finalizeSharedDefs,
   typeRefFromFunctionNode,
-  typeRefFromReturnType,
   type ShouldShare,
 } from "./extract.ts"
 import { readMetaEncodingMapProfileNames, readMetaSourceMap, readMetaStringLiteral, walkNodeType } from "./tree.ts"
-import type { TypeRefMap } from "./tree.ts"
 import { APPLY_VALIDATION_BRAND } from "./apply-validation.ts"
 import {
   checkCache,
@@ -120,10 +123,11 @@ export type ApplyValidationCallSite = {
   readonly loc: ts.Node
   /** The literal third argument, when present — see decision 1,
    * docs/design/wire-profiles-and-staged-validation.md's "Implementation
-   * trace (phase B)" section. `undefined` for an ordinary 2-arg call site,
-   * which the EXISTING (unchanged) `extractApplyValidationTypeRefs`/
-   * `buildApplyValidationModuleSource*` path keeps handling exactly as
-   * before. */
+   * trace (phase B)" section. `undefined` for an ordinary 2-arg call site —
+   * `extractWireApplyValidationTypeRefs` treats an `undefined` protocol as
+   * sugar for `"identity"` (phase D's decision A), so a 2-arg call site is
+   * NOT skipped by extraction; this field still records the literal source
+   * text (present vs. absent) for diagnostics/tests that care about it. */
   readonly protocol?: ProtocolName
 }
 
@@ -344,130 +348,10 @@ export function findApplyValidationCallSites(
   return sites
 }
 
-/** Per-key leaf TypeRefs, keyed by tree-relative path — plus the shared
- * `defs` a `shouldShare` extraction produced (empty without it). */
-export type ApplyValidationTypeRefs = {
-  readonly byKey: Readonly<Record<string, TypeRefMap>>
-  readonly defs: Record<string, TypeRef>
-}
-
 function loadSource(entryFile: string, program: ts.Program): ts.SourceFile {
   const source = program.getSourceFile(entryFile)
   if (!source) throw new Error(`applyValidation codegen: source not found: ${entryFile}`)
   return source
-}
-
-/**
- * Extract every `applyValidation` call site's leaf TypeRefs from `entryFile`.
- *
- * Same per-leaf derivation as `extractRouteTypeRefs` (tree.ts) — same
- * `walkNodeType` descent, same `typeRefFromFunctionNode`/
- * `typeRefFromReturnType`/`extractJsDoc` — differing only in the anchor (call
- * sites) and the keying (tree-relative paths, grouped under the call site's
- * `key`, instead of one flat `${treeId}/${path}` map).
- */
-export function extractApplyValidationTypeRefs(
-  entryFile: string,
-  options?: { readonly shouldShare?: ShouldShare; readonly program?: ts.Program },
-): ApplyValidationTypeRefs {
-  const program = options?.program ?? createExtractorProgram(entryFile)
-  const checker = program.getTypeChecker()
-  const source = loadSource(entryFile, program)
-  const registry = options?.shouldShare ? createSharingRegistry() : undefined
-
-  const byKey: Record<string, TypeRefMap> = {}
-  for (const site of findApplyValidationCallSites(source, checker)) {
-    // A 3-arg (protocol-naming) call site is handled entirely by the
-    // separate wire-profile path below (`extractWireApplyValidationTypeRefs`)
-    // — skipped here so this function's output (and therefore every existing
-    // caller: `buildApplyValidationModuleSource`/its incremental/cached
-    // siblings) is COMPLETELY UNCHANGED by a 3-arg call site's mere presence
-    // in the same entry file. See decision 1, the design doc's
-    // "Implementation trace (phase B)" section.
-    if (site.protocol !== undefined) continue
-    const types: TypeRefMap = {}
-    walkNodeType(site.nodeType, "", [], site.loc, checker, (_name, leafPath, fn, descriptionSource, leafChecker) => {
-      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
-      types[leafPath.join("/")] = {
-        input: typeRefFromFunctionNode(fn, leafChecker, registry),
-        output: typeRefFromReturnType(fn, leafChecker, registry),
-        ...(description !== undefined ? { description } : {}),
-      }
-    })
-    byKey[site.key] = types
-  }
-
-  if (!options?.shouldShare || !registry) return { byKey, defs: {} }
-
-  // Same flatten -> finalizeSharedDefs -> reassemble plumbing as tree.ts's
-  // `finalizeWithDefs`, over the two-level (key, path) map instead of a flat
-  // one: sharing must span EVERY key's leaves (a type reused across two trees
-  // in one entry file is exactly the case sharing exists for).
-  const flatRoots: Record<string, TypeRef> = {}
-  for (const [key, types] of Object.entries(byKey)) {
-    for (const [leafPath, info] of Object.entries(types)) {
-      flatRoots[`${flatName(key, leafPath)}\u0000input`] = info.input
-      if (info.output !== undefined) flatRoots[`${flatName(key, leafPath)}\u0000output`] = info.output
-    }
-  }
-  const { roots, defs } = finalizeSharedDefs(registry, flatRoots, options.shouldShare)
-  const shared: Record<string, TypeRefMap> = {}
-  for (const [key, types] of Object.entries(byKey)) {
-    const rebuilt: TypeRefMap = {}
-    for (const [leafPath, info] of Object.entries(types)) {
-      rebuilt[leafPath] = {
-        input: roots[`${flatName(key, leafPath)}\u0000input`]!,
-        ...(info.output !== undefined ? { output: roots[`${flatName(key, leafPath)}\u0000output`]! } : {}),
-        ...(info.description !== undefined ? { description: info.description } : {}),
-      }
-    }
-    shared[key] = rebuilt
-  }
-  return { byKey: shared, defs }
-}
-
-/** Flat compiler entries (one per leaf across all keys), in a stable order —
- * the emission order of both the compiled `validators` record and the nested
- * regrouping below. */
-function flatEntries(byKey: Readonly<Record<string, TypeRefMap>>): { name: string; ref: TypeRef }[] {
-  const entries: { name: string; ref: TypeRef }[] = []
-  for (const [key, types] of Object.entries(byKey)) {
-    for (const [leafPath, info] of Object.entries(types)) {
-      entries.push({ name: flatName(key, leafPath), ref: info.input })
-    }
-  }
-  return entries
-}
-
-/**
- * The tail appended to the compiled validator module: regroup the flat
- * `validators` record into the nested `Record<key, Record<path, entry>>`
- * `createApplyValidation` takes, and export the composed `applyValidation`.
- * Emitted as an explicit literal (rather than a runtime regrouping loop) so
- * the generated module stays fully statically typed and the mapping from flat
- * name to (key, path) is readable in the output.
- *
- * The consumer writes exactly one import:
- *   `import { applyValidation } from "./generated"`.
- */
-function composeApplyValidationTail(byKey: Readonly<Record<string, TypeRefMap>>): string {
-  const lines: string[] = []
-  lines.push("")
-  lines.push("/** Generated validators, grouped by the key each applyValidation call site claims. */")
-  lines.push("export const validatorsByKey = {")
-  for (const [key, types] of Object.entries(byKey)) {
-    lines.push(`  ${JSON.stringify(key)}: {`)
-    for (const leafPath of Object.keys(types)) {
-      lines.push(`    ${JSON.stringify(leafPath)}: validators[${JSON.stringify(flatName(key, leafPath))}],`)
-    }
-    lines.push("  },")
-  }
-  lines.push("}")
-  lines.push("")
-  lines.push("/** Pass this to each `applyValidation(key, tree)` call site. */")
-  lines.push("export const applyValidation = createApplyValidation(validatorsByKey)")
-  lines.push("")
-  return lines.join("\n")
 }
 
 const runtimeImportLine = (runtimeImport: string): string =>
@@ -516,218 +400,16 @@ function relativeImportSpecifier(outFile: string, declarationFile: string): stri
   return rel.startsWith(".") ? rel : `./${rel}`
 }
 
-export type ApplyValidationBuildOptions = {
-  readonly outFile?: string
-  readonly shouldShare?: ShouldShare
-  readonly program?: ts.Program
-  readonly runtimeImport?: string
-}
-
-/**
- * Build the complete `applyValidation` module source for `entryFile`: every
- * call site's leaves compiled by `compileValidatorModule` (the SAME AOT
- * compiler `build.ts` uses — parse/coerce/narrow plus the structured error
- * DU), followed by the nested regrouping and the `createApplyValidation`
- * composition.
- *
- * An entry file with NO call sites yields the stub module — there is nothing
- * to generate, and a consumer's import must still resolve.
- */
-export function buildApplyValidationModuleSource(
-  entryFile: string,
-  options?: ApplyValidationBuildOptions,
-): string {
-  const { byKey, defs } = extractApplyValidationTypeRefs(entryFile, {
-    ...(options?.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
-    ...(options?.program !== undefined ? { program: options.program } : {}),
-  })
-  const runtimeImport = options?.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
-  const entries = flatEntries(byKey)
-  if (entries.length === 0) {
-    const stubOpt = options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {}
-    return applyValidationStubSource(stubOpt)
-  }
-  const outFile = options?.outFile
-  const compiled = compileValidatorModule(entries, {
-    ...(outFile !== undefined
-      ? { resolveImport: (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile) }
-      : {}),
-    ...(Object.keys(defs).length > 0 ? { defs } : {}),
-  })
-  return runtimeImportLine(runtimeImport) + compiled + composeApplyValidationTail(byKey)
-}
-
-/** Write `buildApplyValidationModuleSource`'s output to `outFile`. */
-export async function writeApplyValidationModule(
-  entryFile: string,
-  outFile: string,
-  options?: Omit<ApplyValidationBuildOptions, "outFile">,
-): Promise<void> {
-  await Bun.write(outFile, buildApplyValidationModuleSource(entryFile, { ...options, outFile }))
-}
-
 // ============================================================================
-// Cached / incremental variants — the SAME two-tier machinery build.ts uses
-// (cache.ts): Tier 1 (`checkCache`) skips the `ts.Program` build and the whole
-// extraction when nothing this output depended on changed; Tier 2
-// (`readCarryForwardState` + per-leaf fingerprints) recompiles only the leaves
-// whose IR fingerprint actually moved, carrying every other leaf's compiled
-// fragment forward verbatim.
-//
-// Both tiers transplant unchanged because neither is coupled to build.ts's
-// anchor: Tier 1 keys on (entry file, its extraction's source closure,
-// toolchain versions, output path), and Tier 2 keys per LEAF NAME — and a leaf
-// name is opaque to `computeLeafFingerprint`, so this file's `key\0path`
-// composite works exactly as build.ts's `treeId/path` does. The one piece that
-// is NOT cached is this file's own tail (the regrouping + composition): it's
-// derived from the same `byKey` map the fragments were, costs nothing to
-// re-emit, and caching it separately would only add a way for it to drift.
-// ============================================================================
-
-/** Narrow an opaquely-stored cache artifact back to a compiled fragment —
- * same guard, same rationale (cache files are untrusted input) as build.ts's
- * `isCompiledFragment`. */
-function isCompiledFragment(value: unknown): value is CompiledEntryFragment {
-  return typeof value === "object" && value !== null && typeof (value as { code?: unknown }).code === "string"
-}
-
-export type ApplyValidationIncrementalResult = {
-  readonly source: string
-  readonly leafFingerprints: Record<string, string>
-  readonly leafArtifacts: Record<string, CompiledEntryFragment>
-  readonly defNamesFingerprint: string
-  /** Flat leaf names actually RECOMPILED this run — everything else was
-   * carried forward. For tests/observability, not correctness. */
-  readonly changedLeaves: readonly string[]
-}
-
-/** Prior Tier-2 state for one entry — `readCarryForwardState`'s return shape
- * (cache.ts), re-declared here for the same reason build.ts re-declares it. */
-export type ApplyValidationCarryForwardState = {
-  readonly leafFingerprints: Readonly<Record<string, string>>
-  readonly leafArtifacts: Readonly<Record<string, unknown>>
-  readonly defNamesFingerprint: string
-}
-
-/**
- * `buildApplyValidationModuleSource`'s Tier-2 sibling — identical extraction
- * and identical codegen, except a leaf whose fingerprint matches
- * `prior.leafFingerprints` (and whose def-name-set fingerprint still matches)
- * reuses `prior.leafArtifacts`' fragment verbatim instead of recompiling.
- * Mirrors `buildValidatorModuleSourceIncremental` (build.ts) one-for-one.
- */
-export function buildApplyValidationModuleSourceIncremental(
-  entryFile: string,
-  options: ApplyValidationBuildOptions & { readonly prior?: ApplyValidationCarryForwardState },
-): ApplyValidationIncrementalResult {
-  const { byKey, defs } = extractApplyValidationTypeRefs(entryFile, {
-    ...(options.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
-    ...(options.program !== undefined ? { program: options.program } : {}),
-  })
-  const runtimeImport = options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
-  const outFile = options.outFile
-  const resolveImport =
-    outFile === undefined ? undefined : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile)
-
-  const defsBlock = compileDefsBlock(defs)
-  const defNamesFingerprint = computeDefNamesFingerprint(defsBlock.defNames)
-  const prior = options.prior
-  const defNamesUnchanged = prior !== undefined && prior.defNamesFingerprint === defNamesFingerprint
-
-  const entries = flatEntries(byKey)
-  const leafFingerprints: Record<string, string> = {}
-  const leafArtifacts: Record<string, CompiledEntryFragment> = {}
-  const changedLeaves: string[] = []
-
-  for (const { name, ref } of entries) {
-    const fingerprint = computeLeafFingerprint(entryFile, { input: ref })
-    leafFingerprints[name] = fingerprint
-    const priorArtifact = prior?.leafArtifacts[name]
-    const reusable =
-      defNamesUnchanged && prior !== undefined && prior.leafFingerprints[name] === fingerprint && isCompiledFragment(priorArtifact)
-    if (reusable && isCompiledFragment(priorArtifact)) {
-      leafArtifacts[name] = priorArtifact
-    } else {
-      leafArtifacts[name] = compileEntryFragment(ref, resolveImport, defsBlock.defNames)
-      changedLeaves.push(name)
-    }
-  }
-
-  const source =
-    entries.length === 0
-      ? applyValidationStubSource({ runtimeImport })
-      : runtimeImportLine(runtimeImport) +
-        assembleValidatorModule(entries, leafArtifacts, defsBlock.lines) +
-        composeApplyValidationTail(byKey)
-
-  return { source, leafFingerprints, leafArtifacts, defNamesFingerprint, changedLeaves }
-}
-
-/**
- * `buildApplyValidationModuleSource`, cached — Tier 1 hit skips everything
- * (including the `ts.Program` build); a miss falls through to Tier 2 above.
- * Same contract, same options, same `CachedBuildOutcome` as build.ts's
- * `buildValidatorModuleCached`.
- */
-export function buildApplyValidationModuleCached(
-  entryFile: string,
-  outFile: string,
-  options?: {
-    readonly shouldShare?: ShouldShare
-    readonly program?: ts.Program
-    readonly runtimeImport?: string
-    readonly force?: boolean
-    readonly reachable?: ReadonlySet<string>
-  } & CacheLocationOptions,
-): CachedBuildOutcome<string> {
-  if (!options?.force) {
-    const check = checkCache(entryFile, outFile, options)
-    if (check.hit) return { status: "hit" }
-  }
-  const program = options?.program ?? createExtractorProgram(entryFile)
-  const prior = readCarryForwardState(entryFile, outFile, options)
-  const built = buildApplyValidationModuleSourceIncremental(entryFile, {
-    outFile,
-    program,
-    ...(options?.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
-    ...(options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {}),
-    ...(prior !== undefined ? { prior } : {}),
-  })
-  writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
-    leafFingerprints: built.leafFingerprints,
-    leafArtifacts: built.leafArtifacts,
-    defNamesFingerprint: built.defNamesFingerprint,
-  })
-  return { status: "built", result: built.source, program }
-}
-
-/**
- * `writeApplyValidationModule`, cached: writes `outFile` only when
- * `buildApplyValidationModuleCached` actually built something.
- */
-export async function writeApplyValidationModuleCached(
-  entryFile: string,
-  outFile: string,
-  options?: {
-    readonly shouldShare?: ShouldShare
-    readonly program?: ts.Program
-    readonly runtimeImport?: string
-    readonly force?: boolean
-    readonly reachable?: ReadonlySet<string>
-  } & CacheLocationOptions,
-): Promise<CachedBuildOutcome<string>> {
-  const outcome = buildApplyValidationModuleCached(entryFile, outFile, options)
-  if (outcome.status === "built") await Bun.write(outFile, outcome.result)
-  return outcome
-}
-
-// ============================================================================
-// Wire-profile build path — 3-arg `applyValidation(key, tree, protocol)` call
-// sites (decision 1). PARALLEL machinery to everything above: the 2-arg path
-// (`extractApplyValidationTypeRefs`/`buildApplyValidationModuleSource*`) is
-// untouched (see the `site.protocol !== undefined` skip in
-// `extractApplyValidationTypeRefs` above) — a 3-arg call site is invisible to
-// it, and a 2-arg call site is invisible to everything below.
+// Wire-profile build path — the SOLE `applyValidation` codegen pipeline as of
+// phase D (decision 1's 3-arg call sites, PLUS every 2-arg call site, treated
+// as sugar for protocol `"identity"` — see `extractWireApplyValidationTypeRefs`'s
+// doc comment below). This used to be a pipeline PARALLEL to a separate 2-arg
+// one (`extractApplyValidationTypeRefs`/`buildApplyValidationModuleSource*`,
+// deleted in phase D once this pipeline gained the `shouldShare`/defs
+// structural-sharing capability that was the 2-arg pipeline's only remaining
+// reason to exist) — see docs/design/wire-profiles-and-staged-validation.md's
+// "Implementation trace (phase C)"'s retirement-blocker note.
 //
 // STATIC-META-READ INVESTIGATION (decision 4/5's "investigate before
 // assuming"): `walkNodeType`'s existing `mcpMetaOverride` (tree.ts) already
@@ -782,20 +464,21 @@ export type WireApplyValidationLeaf = {
 }
 
 /** Per-key wire-profile leaves — one `protocol` per key (a call site names
- * exactly one), each key's leaves keyed by tree-relative path, same
- * convention as `ApplyValidationTypeRefs`. */
+ * exactly one — an omitted third argument resolves to `"identity"`, see
+ * `extractWireApplyValidationTypeRefs`'s doc comment), each key's leaves
+ * keyed by tree-relative path. */
 export type WireApplyValidationTypeRefs = {
   readonly byKey: Readonly<
     Record<string, { readonly protocol: ProtocolName; readonly leaves: Readonly<Record<string, WireApplyValidationLeaf>> }>
   >
   /** Shared/recursive `defs` a `shouldShare` extraction produced (empty
    * without it) — phase D's closing of this path's own "No `shouldShare`/defs
-   * support" scope cut, mirroring `ApplyValidationTypeRefs.defs`. */
+   * support" scope cut. */
   readonly defs: Record<string, TypeRef>
 }
 
 /**
- * Extract every 3-arg `applyValidation(key, treeExpr, protocol)` call site's
+ * Extract every `applyValidation(key, treeExpr, protocol?)` call site's
  * leaves from `entryFile`, deriving each leaf's wire-profile assignment along
  * the way — `identity`/`mcp`/`graphql`/`jsonrpc` need no meta read at all
  * (`deriveFieldProfiles` returns a uniform base profile unconditionally for
@@ -805,17 +488,26 @@ export type WireApplyValidationTypeRefs = {
  * leaf's own tree-relative path's `:name` fallback segments as its path-param
  * name set (already exactly what `leafPath` carries — no extra read needed).
  *
+ * DECISION A (phase D retirement): a call site whose literal third argument
+ * is absent (`site.protocol === undefined`) is treated as `protocol =
+ * "identity"` — every `applyValidation` call site is now extracted here,
+ * whether or not its source spells a protocol. This is what lets `apply-
+ * validation.ts`'s `createApplyValidation` keep resolving a 2-arg call
+ * against real generated coverage even though the dedicated 2-arg codegen
+ * route (`extractApplyValidationTypeRefs`, deleted) is gone — see that
+ * runtime's `resolveForKey` doc comment for the matching runtime-side half of
+ * this decision. `identity` needs no meta read (same branch as
+ * mcp/graphql/jsonrpc below), so this costs nothing extra for a 2-arg site.
+ *
  * `encodingMap`'s STRING-form entries (base-profile-name overrides) are read
  * and applied on top for `http`/`cli`; a FUNCTION-form entry is a documented
  * gap (see this section's header comment) and is silently omitted.
  *
- * `options.shouldShare` (phase D) opts into structural sharing, mirroring the
- * 2-arg path's `extractApplyValidationTypeRefs` one-for-one: a
+ * `options.shouldShare` (phase D) opts into structural sharing: a
  * `SharingRegistry`, `finalizeSharedDefs` over the flattened `(key,
- * leafPath)` roots (same keying convention as `flatRoots` there), and the
- * resulting `defs` threaded into the returned `WireApplyValidationTypeRefs`.
- * Without it, `defs` is empty and every leaf's `ref` is exactly what this
- * function always produced — the closed scope cut only ADDS the opt-in path.
+ * leafPath)` roots, and the resulting `defs` threaded into the returned
+ * `WireApplyValidationTypeRefs`. Without it, `defs` is empty and every leaf's
+ * `ref` is exactly what this function always produced.
  */
 export function extractWireApplyValidationTypeRefs(
   entryFile: string,
@@ -828,8 +520,7 @@ export function extractWireApplyValidationTypeRefs(
 
   const byKey: Record<string, { protocol: ProtocolName; leaves: Record<string, WireApplyValidationLeaf> }> = {}
   for (const site of findApplyValidationCallSites(source, checker)) {
-    if (site.protocol === undefined) continue
-    const protocol = site.protocol
+    const protocol = site.protocol ?? "identity"
     const leaves: Record<string, WireApplyValidationLeaf> = {}
     walkNodeType(
       site.nodeType,
@@ -869,9 +560,9 @@ export function extractWireApplyValidationTypeRefs(
 
   if (!options?.shouldShare || !registry) return { byKey, defs: {} }
 
-  // Same flatten -> finalizeSharedDefs -> reassemble plumbing as
-  // `extractApplyValidationTypeRefs` above, over this path's single `ref` per
-  // leaf (no separate output ref here) instead of `{ input, output }`.
+  // Flatten -> finalizeSharedDefs -> reassemble, over this path's single
+  // `ref` per leaf (this path never carried a separate output ref or
+  // description — see this function's own doc comment for why).
   const flatRoots: Record<string, TypeRef> = {}
   for (const [key, { leaves }] of Object.entries(byKey)) {
     for (const [leafPath, leaf] of Object.entries(leaves)) {
@@ -890,8 +581,8 @@ export function extractWireApplyValidationTypeRefs(
   return { byKey: shared, defs }
 }
 
-/** Flat compiler entries (one per leaf across all wire-profile call sites),
- * mirroring `flatEntries` above — each entry additionally carries its own
+/** Flat compiler entries (one per leaf across all call sites), keyed by
+ * `flatName(key, leafPath)` — each entry additionally carries its own
  * `protocol` and derived `FieldProfileDerivation`. */
 function flatWireEntries(
   byKey: WireApplyValidationTypeRefs["byKey"],
