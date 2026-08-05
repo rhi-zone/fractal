@@ -3,9 +3,16 @@
 ## Status
 
 Design settled in conversation with the user (2026-08). Not yet implemented.
-This document captures the settled decisions and elaborates them; three
-sub-questions are explicitly left open for the user (see "Open questions"
-below) — do not resolve them by picking a default in code.
+This document captures the settled decisions and elaborates them.
+
+A follow-up conversation (2026-08) settled the three sub-questions that were
+originally left open (see "Settled: profile overrides, wrap-layer idiom, argv
+boolean encoding" below) and added a **prerequisite arc** — meta unification /
+directive dissolution — that has to land before the staged-validation
+implementation, because decision (a) below (profile overrides declared in the
+per-protocol meta namespaces) assumes those namespaces are flat, not the
+directive-array envelope HTTP currently uses. See "Prerequisite: meta
+unification (directive dissolution)" immediately below.
 
 Builds on the `applyValidation` architecture landed in cf89fd0 (phase 1:
 call-site-anchored mechanism), 56deb11 (phase 2: HTTP migration), and 1855c7a
@@ -73,6 +80,135 @@ JSON, both already typed by the time they reach a handler) entered the
 picture: a universal string-coercion rule set is simply the wrong shape for
 an input that was never a string to begin with. This design replaces the
 premise, not just a symptom of it.
+
+---
+
+## Prerequisite: meta unification (directive dissolution)
+
+Settled in the follow-up conversation. This is a PHASE that has to land
+before the staged-validation work below, not an independent cleanup — decision
+(a) (profile overrides declared in the per-protocol meta namespace, same
+surface as `sourceMap`) only holds together if that namespace is a flat bag of
+scalar/map/array keys. HTTP's current `meta.http.directives` — a single array
+of a tagged-union `HttpDirective` value, resolved by `getHttpMeta`'s
+fold-by-`kind` switch — is a different shape, kept that way specifically
+because `FoldMeta`/`MergeTwoMeta` (node.ts) couldn't merge index-signature
+maps or bare functions without losing literal types or call signatures (see
+`VerbBundle`'s and `HttpDirective`'s own doc comments, project.ts/verbs.ts).
+Wire profiles need a flat namespace to declare into; HTTP has to migrate to
+one first.
+
+### The rule: fold semantics follow value shape
+
+Cardinality is expressed by shape, not by a directive `kind` tag:
+
+- **At-most-one** → flat scalar key. Last-wins; the shape structurally
+  precludes multiples — that's a feature (the right fit for scalar directives
+  like a verb pin or a `moveTo` path), not a limitation being worked around.
+- **Keyed partial contribution** → flat map key. Key-merge, later call wins
+  per key — the shape `sourceMap` already has.
+- **Genuinely multiple/ordered** → array key. Append; `MergeMetaValue`'s array
+  branch (node.ts) already concatenates without recursing into elements, which
+  is exactly why arrays already work today for `middleware`/`handlerMiddleware`
+  and don't need to change.
+
+### What dissolves for HTTP
+
+`meta.http.directives` — the whole envelope — dissolves:
+
+- `verb`, `method`, `moveTo`, `response`, `paginated`, `validate` become flat
+  `meta.http.*` scalar keys (last-wins, matching what `getHttpMeta` already
+  resolves them to today — the RESOLVED shape becomes the AUTHORED shape,
+  collapsing the two).
+- `source`'s resolved output, `sourceMap`, becomes a bare `meta.http.sourceMap`
+  key (key-merged map) — no longer assembled from an array of `source`
+  directives at read time; each `http.source()` call key-merges directly.
+- `middleware`/`handlerMiddleware` become plain arrays under flat keys
+  (`meta.http.middleware`, `meta.http.handlerMiddleware`) — same
+  collect-into-ordered-list semantics as today, just authored as an array
+  value instead of assembled from directive entries.
+- `HttpDirective` (the DU), `getHttpMeta`'s fold-by-`kind` switch, and the
+  already-retired holdovers this dissolves along with it — `segment`, `when`,
+  `legacyPath`, and the `dispatch` marker (see `directive-contract.md`'s HTTP
+  table: all four are already "currently unread," parsed but consumed by
+  nothing since the direct tree-walk dispatcher's retirement) — all delete.
+- Overlap/pollution avoidance (keeping `meta.http.*` keys from colliding with
+  a deployment's own augmentation, or with another protocol's namespace) is no
+  longer bought structurally by the directive envelope; it becomes a
+  per-namespace naming-design obligation each protocol's flat-key vocabulary
+  has to observe directly.
+
+### All five protocols converge
+
+http, cli, mcp, graphql, and json-rpc all converge on flat namespaced bags
+with shape-directed folding — json-rpc also carries a `meta.jsonrpc.sourceMap`
+(`packages/json-rpc-api-projector/src/project.ts`), already flat, already the
+target shape. **HTTP is the migration, not the template** — cli/mcp/graphql/
+json-rpc's `meta.<proto>.sourceMap` (see `directive-contract.md`'s per-protocol
+tables) are already flat map keys today; HTTP is the one protocol whose
+directive-array envelope needs to be dissolved to match.
+
+### Exact-variant hygiene
+
+Producer positions — verb bundles (`http.get`, `http.put`, …, verbs.ts) and
+the other `http.*` helpers (`moveTo`, `source`, `validate`, `middleware`,
+`handlerMiddleware`) — must be typed as the EXACT variants they construct,
+never the open DU. This is what already keeps index-signature-widened types
+out of the fold today (`VerbBundle`'s own doc comment, verbs.ts, documents the
+hazard directly: intersecting a loosely-typed declared field with a literal
+tuple type collapses tuple arity under TypeScript's inference). With that
+constraint kept, `FoldMeta`/`MergeMetaValue` (node.ts) grows a new **keyed-
+merge branch for map-shaped values operating on literal types** — a
+`sourceMap`-like value with LITERAL keys (not an index-signature-erased
+`Record<string, ParamSource>`) can be merged as `Omit<A, keyof B> & B`
+(last-wins per key) the same way `MergeTwoMeta` already merges two meta
+objects, without hitting the index-signature recursion limitation `source()`'s
+doc comment (verbs.ts) currently works around by staying directive-array-
+authored. **Soundness against a user's own hand-widened annotation is
+explicitly a non-goal** — a user who annotates a contribution's `sourceMap` as
+`Record<string, ParamSource>` themselves (defeating the literal-key inference)
+gets the erased-map behavior back; their foot, their trigger.
+
+### `UncoveredSourceParams` generalizes
+
+The static source-coverage check (`UncoveredSourceParams`, api-tree's
+input.ts) generalizes from HTTP-specific `DirectivesOf`/`FindStoreForParam`
+tuple-walking to all five protocols, walking `Meta.<proto>.sourceMap` directly
+— simpler than the current directive-tuple walk, since there's no longer an
+array of `{kind:"source", map}` entries to fold at the type level, just one
+flat map key per protocol. The type-erased-map guards (`string extends keyof
+M`) stay load-bearing for the same reason they are today — a verb bundle or
+other producer typed as an open DU would otherwise phantom-contribute an
+erased map. The distribution guards that exist to make `DirectivesOf`
+distribute over a directive-tuple union delete along with the phantom
+`HttpDirective` member they exist for.
+
+### Resolution lifecycle unifies on snapshot-at-projection
+
+CLI's current `getCliMeta` read is live, per-dispatch (`cli.ts:1172`, inside
+`runCli`'s per-request path, not resolved once at build/projection time) —
+verified this is an artifact, not a load-bearing behavior: no test or doc
+relies on meta being re-read per dispatch rather than snapshotted once. CLI
+gains the same snapshot-at-projection shape HTTP already has (`meta.http`
+resolved once when the `HttpRoute` tree is built, not per request).
+
+### Implementation checkpoint (not design input)
+
+`verbs.ts`'s `source()` doc comment (~296–306) states that `moveTo`/`paginated`
+chose directive-array authoring for "literal-type preservation" reasons
+distinct from `source()`'s own index-signature-recursion reason (see
+`VerbBundle`'s doc comment). Flat scalar keys are assumed, in this design, to
+fold literal types through `FoldMeta`/`MergeMetaValue` just as cleanly as the
+directive-tuple shape does — reasoning through `MergeMetaValue`'s branches
+(node.ts) supports that assumption (a scalar value doesn't match the array or
+object branches, so it falls to the final `: B` branch, which returns the
+literal value directly with no widening step), but this has NOT been checked
+against an actual `tsc` scratch repro, which is the verification standard this
+codebase's own comments hold themselves to elsewhere (e.g. `Widen`'s doc
+comment, node.ts: "both were verified empirically (scratch `tsc`, not
+asserted from memory)"). Whoever implements the migration should re-verify
+this with a scratch check before relying on it, and flag loudly if flat scalar
+keys turn out NOT to fold literal types cleanly.
 
 ---
 
@@ -188,8 +324,10 @@ ship a default profile:
   needed for anything except `Date`, which JSON has no literal for).
 
 Users can override per field or per type — precision on demand, zero-setup
-by default. (Exactly where that override is declared is one of the open
-questions below.)
+by default. Where that override is declared: **the per-protocol meta
+namespace, same surface as `sourceMap`** — see "Settled: profile overrides,
+wrap-layer idiom, argv boolean encoding" below for the full resolution and the
+composition rule.
 
 ---
 
@@ -214,6 +352,13 @@ Per the settled decisions:
    and validation run unconditionally on every leaf; nothing overlaps
    because there is exactly one mechanism now, not two racing to skip each
    other.
+5. HTTP's `meta.http.directives` envelope, `HttpDirective` (the DU), and
+   `getHttpMeta`'s fold-by-`kind` switch — superseded by the flat
+   `meta.http.*` keys the prerequisite arc migrates HTTP onto (see
+   "Prerequisite: meta unification" above). This is the mechanism that lets
+   decision (a) below (profile overrides in the per-protocol meta namespace)
+   apply uniformly to HTTP too, not just to cli/mcp/graphql/json-rpc, which
+   already have flat namespaces today.
 
 What stays, unchanged: `applyValidation(key, projectedTree)` itself, the
 declared-key/call-site-anchored codegen model, the generated module + stub
@@ -238,15 +383,39 @@ remains the loud, explicit way to catch an un-codegen'd leaf before runtime.
 
 ---
 
-## Open questions
+## Settled: profile overrides, wrap-layer idiom, argv boolean encoding
 
-The three questions below are genuinely open — options and tradeoffs only,
-no pick.
+The three questions originally left open here were resolved in the follow-up
+conversation. Each subsection below keeps the original tradeoff analysis as
+rationale, then states the pick.
 
-### (a) Where are user profile overrides declared?
+### (a) Where are user profile overrides declared? — RESOLVED: per-protocol meta namespace
 
-Three candidate locations, and they interact with the composition rule
-(protocol default ⊕ override) differently:
+**Decision: option 2** — profiles/overrides are declared in the per-protocol
+meta namespaces, the same surface `sourceMap` already uses (`meta.http.*`
+once the prerequisite migration lands, `meta.cli.*`, `meta.mcp.*`,
+`meta.graphql.*`, `meta.jsonrpc.*`). A wire profile factors as:
+
+```
+field → source        (SourceMap, already exists)
+      ⊕ source → encoding   (per-store encoding table; protocols ship defaults)
+      ⊕ derived per-field encoding
+      ⊕ per-field overrides   (genuine exceptions only)
+```
+
+Protocol default encoding tables: flag store `string | string[] | true`,
+env/query strings, body json+dates, mcp/graphql argument stores
+identity+json-dates.
+
+**Composition**: keyed last-wins, the same rule every other map-shaped meta
+value already follows (matching `sourceMap`'s own "later call's keys win on
+overlap" convention) — not a new composition primitive, just the standard one
+applied to this key too.
+
+Below is the three-option tradeoff analysis that led here, kept for context:
+
+Three candidate locations were considered, and they interact with the
+composition rule (protocol default ⊕ override) differently:
 
 **1. `applyValidation` call-site argument** — e.g.
 `applyValidation("books", tree, { profile: {...} })`.
@@ -272,7 +441,7 @@ Three candidate locations, and they interact with the composition rule
   through this argument, since they share the one call.
 
 **2. Tree/op metadata** — e.g. `meta.wire.*`, colocated with the operation
-the same way `meta.http.*` directives are.
+the same way `meta.http.*` directives are. **← chosen.**
 
 - Matches the existing convention exactly: "Declaration merging by the user
   happens next to the API tree definition so that `meta.http` type-checks
@@ -289,7 +458,13 @@ the same way `meta.http.*` directives are.
   operation), which sidesteps the "shared call site, different protocols"
   problem option 1 has — but a leaf shared across HTTP and CLI via one
   `Node` still has ONE `meta.wire`, not one per protocol, unless the value
-  itself is keyed by protocol.
+  itself is keyed by protocol. Resolved by declaring overrides directly
+  under EACH protocol's own namespace (e.g. `meta.http.*`, `meta.cli.*` —
+  the exact field name for the override, as opposed to its namespace, is
+  not specified by the settled decisions and is left to implementation)
+  rather than a shared `meta.wire`, so a leaf shared across HTTP and CLI
+  gets independent overrides per protocol for free — the same reason
+  `sourceMap` is already namespaced per protocol instead of shared.
 
 **3. A separate codegen config file** — e.g. a `wire-profiles.config.ts`
 read directly by the build orchestrator, independent of any call site.
@@ -306,14 +481,20 @@ read directly by the build orchestrator, independent of any call site.
   thought of as build configuration rather than domain modeling — but that
   framing is itself a design stance, not a given.
 
-**Profile composition** (protocol default ⊕ override), whichever location
-wins: needs its own rule — does an override REPLACE the protocol default's
-entry for a field wholesale, or merge at some finer grain (e.g. override
-just the decode function, keep the default's `validateEncoding`)? Not
-addressed by any of the three location options above; it's a separate
-choice orthogonal to where the override lives.
+### (b) Wrap-layer idiom: raw `Node` everywhere, or projected-where-it-exists? — RESOLVED: dispatch where each projection dispatches
 
-### (b) Wrap-layer idiom: raw `Node` everywhere, or projected-where-it-exists?
+**Decision: keep the existing asymmetry, don't force uniformity.**
+Validation/decode attach where each projection ALREADY dispatches — HTTP on
+the projected `HttpRoute` (its per-field source resolution is
+post-`projectRoute`, unchanged from today's `PresetOptions.rewriters`
+integration point), cli/mcp/graphql/json-rpc at their `Node`-level dispatch
+(also unchanged). Nothing is artificially projected for uniformity's sake —
+this is the natural conclusion the tradeoff analysis below already pointed
+toward (a per-projection profile FORCES projected-layer attachment for HTTP,
+but only FAVORS it, without forcing it, for the other four), made explicit as
+the pick rather than left as an open lean.
+
+Original tradeoff analysis, kept for context:
 
 Today, HTTP's `applyValidation` integration point is `PresetOptions.rewriters`
 on the PROJECTED `HttpRoute` (routing-and-transforms.md: "`applyValidation`
@@ -326,14 +507,16 @@ continue, or just favors it, depends on what a profile needs to know that
 only the projected shape carries:
 
 - HTTP's per-field wire source (query vs. body vs. header) is determined by
-  `sources.sourceMap` — which, per `docs/guide/decode.md`, "attaches to one
-  method entry on the `HttpRoute` tree… there is no `meta`-level directive
-  that wires it in through `op()`/`api()` yet." So TODAY, a wire profile
-  computed at the raw-`Node` level genuinely CANNOT see a field's per-source
-  override for HTTP — that information exists only after projection. This
-  is a real forcing function for HTTP specifically, not just a preference,
-  UNLESS `sourceMap`-equivalent information is lifted into `meta` (a
-  separate, currently out-of-scope change).
+  `sources.sourceMap`. Historically (before `http.source()` landed, commit
+  `9bd373a`), this information existed only after projection, which was a
+  real forcing function for HTTP specifically. `http.source()` now lets a
+  `meta.http.sourceMap` (post the directive-dissolution migration, a flat
+  key) be declared at authoring time — but the RESOLVED per-field source
+  used at decode time is still computed post-`projectRoute` (method-derived
+  primary-store convention + path-slug detection both depend on the route's
+  mount position, which only exists after projection), so HTTP still
+  attaches post-projection even though the override itself is now
+  authorable pre-projection.
 - CLI/MCP/GraphQL have no such asymmetry: every field's wire type is
   uniform for the whole protocol (argv is uniformly stringly, MCP/GraphQL
   uniformly typed JSON) — nothing about their wire profile depends on
@@ -342,16 +525,29 @@ only the projected shape carries:
   unchanged.
 
 So the honest framing: a per-projection profile FORCES projected-layer
-attachment for HTTP (given `sourceMap`'s current placement), but only
-FAVORS (doesn't force) it for CLI/MCP/GraphQL, where Node-level attachment
-already suffices and matches routing-and-transforms.md's
-"apply `applyValidation` ONCE, before any protocol-specific projection"
-shared-tree pattern. A uniform "always wrap the projected shape" idiom
-would need HTTP's asymmetry lifted for the other three protocols too (introducing
-a projected type they don't currently have, or attaching to `Node` with an
-awkward no-op projection step) — a larger change than this design's scope.
+attachment for HTTP, but only FAVORS (doesn't force) it for CLI/MCP/GraphQL,
+where Node-level attachment already suffices and matches
+routing-and-transforms.md's "apply `applyValidation` ONCE, before any
+protocol-specific projection" shared-tree pattern. A uniform "always wrap the
+projected shape" idiom would need HTTP's asymmetry lifted for the other three
+protocols too (introducing a projected type they don't currently have, or
+attaching to `Node` with an awkward no-op projection step) — ruled out as
+larger than this design's scope, which is why the asymmetry stays.
 
-### (c) Default argv boolean encoding: strict vs. loose
+### (c) Default argv boolean encoding: strict vs. loose — RESOLVED: strict
+
+**Decision: strict (`"true"`/`"false"` only).** Consistency over convention —
+chosen explicitly over loose to avoid a yaml-Norway-Problem-class
+inconsistency: YAML 1.1's implicit-typing vocabulary (`y`/`n`/`yes`/`no`/
+`on`/`off`/`true`/`false`, unquoted, all coerce to booleans) is exactly the
+kind of loose membership set this decision avoids — it's why the country code
+`"NO"` (Norway) silently coerces to boolean `false` in YAML 1.1 parsers, a
+real-world case of a loose vocabulary swallowing a legitimate string value
+that was never meant to be boolean-like. A loose CLI boolean set risks the
+same class of collision (a legitimate string argument value that happens to
+match a loose spelling). This is a knowing breaking change: it drops
+`cli-api-projector`'s current `--flag=1`/`--flag=yes` support (see the loose
+option's tradeoff below) for anyone currently relying on it.
 
 - **Strict** (`"true"`/`"false"` only) — smaller surface, no case-sensitivity
   or abbreviation debate (`"y"`/`"yes"`/`"Y"`?), matches JSON boolean
@@ -384,9 +580,22 @@ all).
 
 ## Anything from the settled list worth flagging
 
-Nothing in the settled decisions conflicts with code reality as read.
-Two implementation-relevant facts worth surfacing for whoever builds this
-(not conflicts, just detail the settled list assumed but didn't spell out):
+Nothing in the settled decisions conflicts with code reality as read, except
+one already-flagged item: the "Implementation checkpoint" under "Prerequisite:
+meta unification" above (whether flat scalar keys fold literal types as
+cleanly as the directive-tuple shape does — reasoned through but not verified
+against a scratch `tsc` check). Three more implementation-relevant facts worth
+surfacing for whoever builds this (not conflicts, just detail the settled
+list assumed but didn't spell out):
+
+- CLI's live-per-dispatch `getCliMeta` read (`cli.ts`, inside `runCli`'s
+  per-request path — e.g. the `getCliMeta` call at `cli.ts:1172`, reading
+  `sourceMap` fresh on every dispatch rather than once at projection time) is
+  confirmed, by direct read, to be exactly what the meta-unification arc's
+  "resolution lifecycle unifies on snapshot-at-projection" item describes —
+  no test or doc reference to this being intentional was found in the same
+  pass, consistent with the settled list's own characterization of it as an
+  artifact rather than a load-bearing behavior.
 
 - `compile.ts`'s `numberFamilyLeaf`/`booleanLeaf`/`dateLeaf` already draw
   exactly the `type` vs. `coerce` error distinction the staged model wants
@@ -404,3 +613,43 @@ Two implementation-relevant facts worth surfacing for whoever builds this
   for caching to keep working — a leaf's compiled fragment already caches
   on the leaf's own IR fingerprint; a wire profile becomes a second
   fingerprint input alongside it, not a new caching mechanism.
+
+Two known doc-drift fixes made alongside this update, both stale claims that
+predated `http.source()` landing (commit `9bd373a`): `docs/guide/decode.md`
+said "there is no `meta`-level directive that wires it in through
+`op()`/`api()` yet" (twice — §3 and the closing summary); this design doc's
+own now-superseded open-question (b) section repeated the same stale claim.
+Both fixed to describe `http.source()` as the existing authoring mechanism —
+see decode.md's own history for the fuller correction.
+
+---
+
+## Parked: semantic/effectful resolution (not in scope)
+
+Recorded here for cross-reference, tracked as an open item in `TODO.md`
+(project convention: cross-project/cross-session open items go there, not
+left live only in conversation history) — NOT part of this design.
+
+A possible distinct **resolve** stage — e.g. turning a validated `uid` into a
+looked-up `User` — was discussed and explicitly parked as a separate concern
+from wire profiles: profiles stay pure (encoding ⊕ decoding only, no I/O), and
+this stage would sit AFTER `validateConstraints` if it's ever built, anchored
+on branded types (a `uid: Branded<string, "UserId">` field the resolve stage
+consumes and a `user: User` field it produces). Three shapes were on the
+table, in order of preference:
+
+1. **Effectful decoders in profiles** — rejected. Breaks the staged model's
+   `decode` totality-by-construction guarantee (this doc's "The staged model"
+   section) and the profile-purity property the whole design otherwise holds
+   — decode would need an error/pending path for a lookup that can fail or
+   take time, undoing exactly the simplification splitting `validateEncoding`
+   from `decode` was meant to buy.
+2. **A distinct resolve stage** — favored shape IF this is ever built. Keeps
+   profiles pure; the effectful step is its own named stage after
+   `validateConstraints`, with its own error taxonomy separate from
+   `ValidationError`.
+3. **Handler-level** (status quo) — a handler does its own lookup internally,
+   no framework involvement. Simplest, and already how every handler in the
+   codebase works today; the tradeoff against a resolve stage is purely
+   whether centralizing the pattern (shared caching, consistent error
+   shaping across leaves that all resolve a `uid`) is worth a new stage.

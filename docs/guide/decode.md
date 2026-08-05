@@ -76,9 +76,11 @@ regardless of method.
 `Sources` (`packages/http-api-projector/src/route.ts`) is the declarative
 decode config: `{ sourceMap?, paramNames?, transform? }`. It attaches to one
 method entry on the `HttpRoute` tree (`route.methods[verb].sources`) — set it
-by constructing (or rewriting) `HttpRoute` values directly with `httpRoute()`;
-there is no `meta`-level directive that wires it in through `op()`/`api()`
-yet.
+by constructing (or rewriting) `HttpRoute` values directly with `httpRoute()`,
+or authored at the `op()`/`api()` call site via `http.source()`
+(`packages/http-api-projector/src/verbs.ts`, landed in commit `9bd373a`),
+which resolves into a leaf's `meta.http.sourceMap` and is read by
+`naiveTransform` into the matched route's `sources.sourceMap`.
 
 Sometimes a param needs to come from somewhere other than its method's
 primary store — the textbook case is an API key read from a header on an
@@ -189,6 +191,6 @@ see `docs/guide/codegen-cli.md`'s `applyValidation` section.
 - `sources.paramNames` switches from the computed param list to an explicit,
   declarative param list — the mode codegen is expected to drive.
 - `sources.transform` reshapes the assembled bag as a final step.
-- `sources` lives on an `HttpRoute` method entry, set via `httpRoute()` or a
-  custom rewriter — there is no `meta`-level authoring surface for it yet,
-  and no further escape hatch below it.
+- `sources` lives on an `HttpRoute` method entry, set via `httpRoute()`, a
+  custom rewriter, or `http.source()` at the `op()`/`api()` authoring site
+  (§3) — no further escape hatch below it.
