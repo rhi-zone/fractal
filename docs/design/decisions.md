@@ -250,3 +250,75 @@ across the monorepo (root `package.json` workspaces, README, docs, the
 tsconfig path maps) were updated; `packages/client-api-projector` was
 deleted. `bun run typecheck` and `bun test` pass across the whole workspace
 after the merge.
+
+---
+
+## Umbrella package `@rhi-zone/fractal` (2026-08-07)
+
+**Context:** The five protocol projectors stay five packages for a reason —
+each walks the tree for one protocol's own purpose (`docs/design/tree-lint-spec.md`),
+and each carries that protocol's own runtime dependencies. The two merges above
+(`openapi-api-projector`, `client-api-projector` into `http-api-projector`) were
+the opposite call for the opposite reason: neither has meaning apart from HTTP.
+Nothing about that split is being revisited here.
+
+What the split left unsolved is discovery and install ergonomics for a consumer
+who wants more than one protocol: there was no name to reach for except five
+individual ones, each of which has to be known in advance.
+
+**Decision:** Add `packages/fractal` (`@rhi-zone/fractal`) as a pure re-export
+facade — no runtime code of its own, one module per entry, each a single
+`export * from` line. The package root is the function core (`api-tree`), since
+no projection subpath is usable without `api`/`op`; the five protocols are
+subpaths (`/http`, `/cli`, `/json-rpc`, `/graphql`, `/mcp`). Deeper subpaths of
+the fronted packages are deliberately NOT mirrored — mirroring
+`http-api-projector`'s 23 subpaths would make the umbrella a second copy of
+another package's module layout, which is the maintenance cost the facade
+exists to avoid. Reach for the projector package directly for those.
+
+Dependency policy, which is the whole design question:
+
+- Hard `dependencies`: `api-tree`, `http-api-projector`, `cli-api-projector`,
+  `json-rpc-api-projector` — the core plus every projector that carries NO
+  third-party runtime dependency of its own.
+- Optional `peerDependencies` (`peerDependenciesMeta.optional`):
+  `graphql-api-projector`, `mcp-api-projector` — the two that do
+  (`graphql`, `@modelcontextprotocol/sdk` respectively). Asking for those
+  protocols costs one extra explicit install, and a subpath import without it
+  fails at module resolution naming the missing package. Neither protocol's
+  runtime is loaded by a consumer that does not import its subpath; on the
+  install side, see the measured caveat below — the MCP SDK genuinely stays out
+  of `node_modules`, graphql-js currently does not.
+
+This is the same mechanism `type-ir` already uses to keep `protobufjs` and
+`typescript` off consumers who don't touch those subpaths, applied one level up.
+
+The rejected alternatives: all five as hard dependencies (simplest, but every
+consumer installs the MCP SDK to get an HTTP router — precisely the bloat the
+package split exists to prevent), and all five as optional peers (zero install
+cost, but the consumer still runs five `bun add`s and must still know all five
+names, so the friction the umbrella exists to remove survives intact).
+
+The split criterion is deliberately "does this projector carry a
+protocol-specific third-party runtime dependency", not a measurement of today's
+install graph. Measured at this commit, the marginal install `@rhi-zone/fractal`
+avoids is mostly `@modelcontextprotocol/sdk`: `graphql` and `flow-parser` are
+hard dependencies of `type-ir`, which every projector depends on transitively,
+so graphql-js lands in a consumer's `node_modules` regardless of this policy.
+That is a `type-ir` dependency question (only its `from-graphql`/`graphql`
+subpaths import graphql-js) and is out of scope here; the criterion above stays
+correct if and when `type-ir` tightens it, which a footprint-of-the-day
+criterion would not.
+
+**Evidence:** `packages/fractal/src/module-graph.test.ts` verifies the
+load-bearing property rather than asserting it: it walks the static import
+graph out of each facade module — resolving workspace specifiers through the
+fronted package's own `exports` map and parsing with `Bun.Transpiler.scanImports`,
+which runs the real TS transpiler and so drops erased `import type` edges a
+regex could not distinguish — and asserts that the `.`/`/http`/`/cli`/`/json-rpc`
+closures contain neither `graphql` nor `@modelcontextprotocol/sdk`. Two positive
+controls (`/graphql` does reach graphql-js, `/mcp` does reach the MCP SDK) keep
+those negatives from passing vacuously. Runtime probes import each subpath and
+assert a known export is present, and a purity check fails if any facade module
+ever grows a line that is not a re-export. `bun run typecheck` and `bun run test`
+pass across the workspace.

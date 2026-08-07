@@ -31,6 +31,7 @@ Workspaces (`package.json`):
 
 | Package | Role |
 |---|---|
+| `packages/fractal` | Umbrella facade (`@rhi-zone/fractal`) — no runtime code of its own; re-exports the core on the package root and one subpath per protocol projection |
 | `packages/api-tree` | Core: `api()`/`op()` tree constructors, `Node`/`Handler`/`Meta`, `Result`, the tag lattice, source-level schema extraction, codegen CLI |
 | `packages/type-ir` | Type IR — subtyping hierarchy + open metadata bag; ingests and projects 20+ formats (JSON Schema, OpenAPI, SQL DDL, Protobuf, Zod, per-language serialization libraries, doc-site references, ...) |
 | `packages/http-api-projector` | HTTP projection of the api-tree — router, OpenAPI 3.1, typed client |

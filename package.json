@@ -13,6 +13,7 @@
     "packages/cli-api-projector",
     "packages/graphql-api-projector",
     "packages/auth-oidc",
+    "packages/fractal",
     "examples/library-api"
   ],
   "scripts": {

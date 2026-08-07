@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun-types"],
+    "paths": {
+      "@rhi-zone/fractal-api-tree": ["../api-tree/src/index.ts"],
+      "@rhi-zone/fractal-api-tree/*": ["../api-tree/src/*.ts"],
+      "@rhi-zone/fractal-type-ir": ["../type-ir/src/index.ts"],
+      "@rhi-zone/fractal-type-ir/*": ["../type-ir/src/*.ts"],
+      "@rhi-zone/fractal-cli-api-projector": ["../cli-api-projector/src/index.ts"],
+      "@rhi-zone/fractal-cli-api-projector/*": ["../cli-api-projector/src/*.ts"],
+      "@rhi-zone/fractal-graphql-api-projector": ["../graphql-api-projector/src/index.ts"],
+      "@rhi-zone/fractal-graphql-api-projector/*": ["../graphql-api-projector/src/*.ts"],
+      "@rhi-zone/fractal-http-api-projector": ["../http-api-projector/src/index.ts"],
+      "@rhi-zone/fractal-http-api-projector/*": ["../http-api-projector/src/*.ts"],
+      "@rhi-zone/fractal-json-rpc-api-projector": ["../json-rpc-api-projector/src/index.ts"],
+      "@rhi-zone/fractal-json-rpc-api-projector/*": ["../json-rpc-api-projector/src/*.ts"],
+      "@rhi-zone/fractal-mcp-api-projector": ["../mcp-api-projector/src/index.ts"],
+      "@rhi-zone/fractal-mcp-api-projector/*": ["../mcp-api-projector/src/*.ts"]
+    }
+  },
+  "include": ["src"]
+}

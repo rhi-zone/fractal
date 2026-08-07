@@ -9,6 +9,7 @@
     { "path": "packages/cli-api-projector/tsconfig.build.json" },
     { "path": "packages/graphql-api-projector/tsconfig.build.json" },
     { "path": "packages/json-rpc-api-projector/tsconfig.build.json" },
-    { "path": "packages/auth-oidc/tsconfig.build.json" }
+    { "path": "packages/auth-oidc/tsconfig.build.json" },
+    { "path": "packages/fractal/tsconfig.build.json" }
   ]
 }

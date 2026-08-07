@@ -12,12 +12,19 @@ Write the tree once. Multiple interpreters walk it to produce an HTTP server wit
 
 | Package | Role |
 |---------|------|
+| [`@rhi-zone/fractal`](packages/fractal) | Umbrella — the core on the package root, one subpath per protocol (`/http`, `/cli`, `/json-rpc`, `/graphql`, `/mcp`). Start here if you want more than one protocol |
 | [`@rhi-zone/fractal-api-tree`](packages/api-tree) | Core: `api`/`op` tree constructors, `Node`/`Handler`/`Meta`, the tag lattice, source-level schema extraction |
 | [`@rhi-zone/fractal-type-ir`](packages/type-ir) | Type IR — subtyping hierarchy + open metadata bag, projectable to 20+ targets (JSON Schema, OpenAPI, GraphQL SDL, SQL DDL, Protobuf, Zod, ...) |
 | [`@rhi-zone/fractal-http-api-projector`](packages/http-api-projector) | HTTP projection — compiled router, OpenAPI 3.1, typed client |
 | [`@rhi-zone/fractal-graphql-api-projector`](packages/graphql-api-projector) | GraphQL projection — SDL, resolver dispatch, subscriptions, typed client |
 | [`@rhi-zone/fractal-mcp-api-projector`](packages/mcp-api-projector) | MCP projection — tools, resources, prompts, sampling |
 | [`@rhi-zone/fractal-cli-api-projector`](packages/cli-api-projector) | CLI projection — subcommand dispatch, shell completions, streaming |
+| [`@rhi-zone/fractal-json-rpc-api-projector`](packages/json-rpc-api-projector) | JSON-RPC 2.0 projection — HTTP POST + WebSocket transports, batch requests, typed client |
+
+Each projector is installable on its own; `bun add @rhi-zone/fractal` gets the core plus
+HTTP, CLI, and JSON-RPC behind subpaths, with GraphQL and MCP as optional peers so neither
+protocol's runtime is loaded — or, for the MCP SDK, even installed — by a consumer that
+doesn't ask for it.
 
 ## Quick example
 

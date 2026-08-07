@@ -1,0 +1,87 @@
+{
+  "name": "@rhi-zone/fractal",
+  "version": "0.1.0-alpha.0",
+  "description": "Umbrella entry point — the api()/op() function core on the package root, one subpath per protocol projection (./http, ./cli, ./json-rpc, ./graphql, ./mcp). Pure re-export facade, no runtime code of its own",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhi-zone/fractal.git",
+    "directory": "packages/fractal"
+  },
+  "keywords": [
+    "api",
+    "projector",
+    "http",
+    "graphql",
+    "mcp",
+    "cli",
+    "json-rpc",
+    "umbrella"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    },
+    "./json-rpc": {
+      "types": "./dist/json-rpc.d.ts",
+      "import": "./dist/json-rpc.js"
+    },
+    "./graphql": {
+      "types": "./dist/graphql.d.ts",
+      "import": "./dist/graphql.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@rhi-zone/fractal-api-tree": "workspace:*",
+    "@rhi-zone/fractal-cli-api-projector": "workspace:*",
+    "@rhi-zone/fractal-http-api-projector": "workspace:*",
+    "@rhi-zone/fractal-json-rpc-api-projector": "workspace:*"
+  },
+  "peerDependencies": {
+    "@rhi-zone/fractal-graphql-api-projector": "^0.1.0-alpha.0",
+    "@rhi-zone/fractal-mcp-api-projector": "^0.1.0-alpha.0"
+  },
+  "peerDependenciesMeta": {
+    "@rhi-zone/fractal-graphql-api-projector": {
+      "optional": true
+    },
+    "@rhi-zone/fractal-mcp-api-projector": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@rhi-zone/fractal-graphql-api-projector": "workspace:*",
+    "@rhi-zone/fractal-mcp-api-projector": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

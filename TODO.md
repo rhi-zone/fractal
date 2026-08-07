@@ -74,6 +74,8 @@
 
 *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
 
+- **`bun test` is red on master, one test** (observed 2026-08-07) — `createExtractorProgram — memory-shape regression (batch vs per-call)` in `packages/type-ir` fails its `toBeLessThan` peak-heap assertion. Reproduced inside `nix develop` against a clean `ba12b4c` working tree (changes stashed), so it is neither environment drift from a partial dev shell nor caused by any pending change; everything else in the workspace is green. Unknown whether the regression is real or the threshold has become too tight — the assertion measures peak heap, which is GC-timing sensitive.
+
 - **Remaining library variants** — most of the previously-tracked matrix shipped this session (C++ RapidJSON/simdjson/Boost.JSON/glaze, Go jsoniter/sonic, Swift SwiftyJSON/ObjectMapper, Python msgspec/cattrs, Ruby RBS, Dart built_value, Java JSON-B, Kotlin Gson, C# ServiceStack, PHP Symfony/JMS). Python Pydantic variant might still be open.
 
 - **Several serialization variant compile checks are skipped** (Java/Kotlin/C#/Dart/Elm) because they need package registries (Maven, NuGet, pub.dev) — documented as CI constraint, containerized builds or registry mocking being considered for future coverage (2026-07-25).
