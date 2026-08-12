@@ -395,3 +395,51 @@ export function createFetch<T = unknown>(
 
   return withOpenApiDoc
 }
+
+/**
+ * The exact global-`fetch` call signature — `(input: RequestInfo | URL,
+ * init?: RequestInit) => Promise<Response>` — as opposed to `CompiledRouter`
+ * (compile.ts) / `Fetch` (layers.ts), which are `(req: Request) =>
+ * Promise<Response>`: the narrower shape every internal layer in this
+ * package (`corsLayer`, `autoMethodLayer`, `withALS`, consumer
+ * `middleware`, ...) composes over. `createFetch`'s return is a
+ * `CompiledRouter`, not this — it's a `fetch`-compatible *handler* (same
+ * shape as `Bun.serve`/`Deno.serve`/a Cloudflare Worker's `fetch` export),
+ * not a drop-in for code that calls `fetch(url, init)` the way a browser or
+ * `RequestInit`-typed client does. `toDropInFetch` below bridges the two.
+ */
+export type DropInFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+
+/**
+ * Adapt a `CompiledRouter` (e.g. `createFetch`'s return) to `DropInFetch` —
+ * the literal global-`fetch` signature — so it's usable anywhere code is
+ * typed against `typeof fetch` and calls it with a URL string/`URL` plus an
+ * optional `RequestInit`, rather than constructing a `Request` itself (a
+ * Postman-like playground, a doc-embedded live demo, a test harness that
+ * swaps in a mocked `fetch` global). Still runs the real handler tree
+ * in-process, same as `createFetch` itself — no socket, no fabricated data.
+ *
+ * Deliberately a separate function rather than widening `createFetch`'s own
+ * return type: `CompiledRouter` is the composition contract every layer in
+ * this file and compile.ts is built on (see `DropInFetch`'s doc above), and
+ * every existing caller in this package's own tests/README already calls
+ * `createFetch`'s result with a single `Request` — widening it would ripple
+ * through that whole internal stack for a need only the drop-in boundary
+ * actually has.
+ *
+ * `input` given as a relative string/URL (no scheme/host — the common case
+ * for a playground calling e.g. `fetch("/users/list")`) is resolved against
+ * `baseUrl` before being handed to `router`, since `Request` (unlike
+ * browser `fetch`) has no ambient document origin to resolve against and
+ * throws on a bare relative string. Default `baseUrl` is `http://localhost`
+ * — these requests never hit a real socket, so any placeholder origin
+ * works; override it if a caller's routes or handlers inspect the request
+ * URL's origin.
+ */
+export function toDropInFetch(router: CompiledRouter, baseUrl = "http://localhost"): DropInFetch {
+  return async (input, init) => {
+    const resolved =
+      input instanceof Request ? input : new URL(input instanceof URL ? input.href : input, baseUrl)
+    return router(new Request(resolved, init))
+  }
+}

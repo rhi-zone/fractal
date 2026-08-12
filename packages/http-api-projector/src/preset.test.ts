@@ -5,7 +5,7 @@ import { describe, expect, it } from "bun:test"
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
 import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation"
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/apply-validation"
-import { createFetch } from "./preset.ts"
+import { createFetch, toDropInFetch } from "./preset.ts"
 import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts"
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
 import type { Fetch } from "./layers.ts"
@@ -656,5 +656,50 @@ describe("OOTB preset — detection", () => {
     const f = createFetch(resultLikeApi, { router: radixRouter, detection: { result: false } })
     const res = await f(new Request("http://localhost/getThing"))
     expect(await res.json()).toEqual({ kind: "ok", value: 42 })
+  })
+})
+
+// ============================================================================
+// 13. toDropInFetch — adapts a CompiledRouter to the literal global-`fetch`
+// call signature ((input: RequestInfo | URL, init?: RequestInit) =>
+// Promise<Response>), for callers typed against `typeof fetch` that pass a
+// URL string + RequestInit rather than constructing a Request themselves.
+// ============================================================================
+
+describe("toDropInFetch", () => {
+  it("accepts a bare relative path string + RequestInit, same as global fetch", async () => {
+    const dropIn = toDropInFetch(fetch)
+    const res = await dropIn("/users/list")
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([{ id: 1, name: "Alice" }])
+  })
+
+  it("threads RequestInit (method, body, headers) through to the real handler", async () => {
+    const dropIn = toDropInFetch(fetch)
+    const res = await dropIn("/users/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Bob" }),
+    })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: 2, name: "Bob" })
+  })
+
+  it("accepts a URL object", async () => {
+    const dropIn = toDropInFetch(fetch)
+    const res = await dropIn(new URL("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+  })
+
+  it("still accepts a Request directly, same as the wrapped CompiledRouter", async () => {
+    const dropIn = toDropInFetch(fetch)
+    const res = await dropIn(new Request("http://localhost/users/list"))
+    expect(res.status).toBe(200)
+  })
+
+  it("resolves a relative input against a custom baseUrl", async () => {
+    const dropIn = toDropInFetch(fetch, "http://example.test")
+    const res = await dropIn("/users/list")
+    expect(res.status).toBe(200)
   })
 })

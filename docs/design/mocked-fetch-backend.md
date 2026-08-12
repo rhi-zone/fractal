@@ -165,10 +165,76 @@ initiative across all doc-generation targets" work already tracked in
 `docs/roadmap.md` (not modified by this doc, since that section is being
 edited elsewhere).
 
+## Resolved: is `createFetch`'s return a drop-in for global `fetch`?
+
+A separate, narrower question than (a)/(b) above, but one the playground use
+case (use case 1) depends on directly: the project owner's bar for "already
+done" was whether `createFetch`'s returned function has the *exact* global
+`fetch` call signature — `(input: RequestInfo | URL, init?: RequestInit) =>
+Promise<Response>` — so a playground/doc-embed UI typed against `typeof
+fetch` could swap it in with zero adaptation.
+
+**[VERIFIED-LOCAL, this session]** It did not. `createFetch` (preset.ts)
+returns `CompiledRouter` (compile.ts): `(req: Request) => Promise<Response>`
+— one required `Request` parameter, not the wider `RequestInfo | URL` +
+optional `RequestInit` global `fetch` accepts. Every existing caller in this
+package (all of preset.test.ts, client.test.ts, codegen.test.ts, etc.)
+already constructs a `Request` itself and calls `f(new Request(...))`
+accordingly — none of them, nor `client.ts`'s own `fetch` option, ever calls
+the wider form.
+
+That narrower shape isn't an oversight — `CompiledRouter`/`Fetch` (layers.ts
+declares an identical alias) is the composition contract every internal
+layer in this package is built on: `corsLayer`, `autoMethodLayer`,
+`withALS`, consumer `middleware`/`handlerMiddleware`, the webhook layers in
+webhook.ts, and `compile.ts`'s own router compilers all take and return
+exactly this shape, and their bodies read real `Request` members (`.method`,
+`.url`, ...) directly. Widening it to the full `fetch` signature would force
+every one of those internal layers to normalize `RequestInfo | URL` +
+`RequestInit` into a `Request` on every call, for no benefit to the
+in-process composition they're actually doing — pure ripple, no payoff.
+
+Resolution landed as a **second, separate function** rather than changing
+`createFetch`: `toDropInFetch(router: CompiledRouter, baseUrl?: string):
+DropInFetch` (preset.ts, exported from the package root), where `DropInFetch
+= (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>` is
+the literal global-`fetch` type. It's a thin adapter — resolves a relative
+`input` string/`URL` against `baseUrl` (default `http://localhost`, since
+these requests never hit a real socket) into an absolute `URL` (`Request`,
+unlike browser `fetch`, has no ambient document origin and throws on a bare
+relative string), constructs a `Request`, and calls the wrapped router. Still
+real in-process execution — no fabricated data, same as `createFetch`
+itself; only the outer call signature changes. Usage:
+
+```ts
+import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/preset"
+
+const fetch = toDropInFetch(createFetch(tree))
+const res = await fetch("/books/list") // string + no Request construction, like real fetch
+```
+
+Covered by new tests in `packages/http-api-projector/src/preset.test.ts`
+("toDropInFetch" describe block) — relative string input, `RequestInit`
+threading (method/headers/body), `URL` input, `Request` input (still
+accepted, since `Request` is a valid `RequestInfo`), and custom `baseUrl`.
+Full package test suite (647 tests) and `tsc --noEmit` both pass with this
+change; no existing caller's types or behavior changed, since `createFetch`
+and `CompiledRouter` are untouched.
+
+This directly unblocks use case 1's "already done" bar for reading (a)
+(in-process real execution) — a playground built against `toDropInFetch` can
+use a stock `typeof fetch`-typed integration point. It does not touch
+reading (b) (fabricated response data with no real handler execution),
+which — per the "what mocked means" section above — is still open and would
+need its own data-fabrication step regardless of this signature fix.
+
 ## See also
 
 - `packages/http-api-projector/README.md` — `createFetch` and the existing
   in-process-fetch adapter this idea's "(a)" reading overlaps with.
+- `packages/http-api-projector/src/preset.ts` — `createFetch`, `CompiledRouter`
+  vs. `DropInFetch`, and `toDropInFetch`, the signature-compatibility
+  resolution above.
 - `docs/reference/type-ir/doc-projectors.md` — source of the embedding
   findings above; read this directly before scoping the docgen use case
   further, rather than relying on this doc's summary of it.
