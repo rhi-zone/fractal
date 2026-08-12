@@ -122,6 +122,32 @@ function schemaBlock(title: string, schema: OpenApiSchema | undefined): string[]
   return [`### ${title}`, "", "```json", JSON.stringify(schema, null, 2), "```", ""]
 }
 
+/**
+ * Escape MDX-significant `{`/`}` in text destined for a RAW (non-code-span,
+ * non-frontmatter) line of generated Markdown/MDX body content — e.g. a
+ * `# ${title}` heading built from a path template like `/books/{bookId}`.
+ * MDX parses an unescaped `{...}` anywhere in flow content as a JS
+ * expression, not literal text (unlike a backtick code span, which IS
+ * literal per CommonMark — the request-line `` `${method} ${path}` `` lines
+ * elsewhere in this file don't need this because they're already
+ * backtick-wrapped). Frontmatter fields (YAML) don't need this either — YAML
+ * doesn't give `{`/`}` any special meaning in a quoted scalar.
+ *
+ * Found via examples/doc-site-verification's real `docusaurus build` pass
+ * (docs/design/mocked-fetch-backend.md's dated write-up): a fixture route's
+ * `# GET /books/{bookId}` heading (this file's Docusaurus renderer, `title`
+ * falling back to `${method} ${path}` when `operation.summary` is unset)
+ * crashed Docusaurus's SSG step with `ReferenceError: bookId is not
+ * defined` — MDX evaluated `{bookId}` as a bare identifier expression. Only
+ * that one call site was actually exercised, but `operation.description`
+ * (bodyLines below) is the same defect class — arbitrary authored text
+ * inserted as a RAW MDX line — so it's fixed here too rather than left as a
+ * known-identical latent bug.
+ */
+function mdxEscapeText(s: string): string {
+  return s.replace(/[{}]/g, (c) => `\\${c}`)
+}
+
 function frontmatterTitle(page: RoutePage): string {
   return page.operation.summary ?? `${page.method.toUpperCase()} ${page.path}`
 }
@@ -139,7 +165,7 @@ function bodyLines(page: RoutePage): string[] {
   }
 
   if (operation.description !== undefined) {
-    lines.push(operation.description, "")
+    lines.push(mdxEscapeText(operation.description), "")
   }
 
   if (operation.tags !== undefined && operation.tags.length > 0) {
@@ -180,7 +206,7 @@ function renderDocusaurusPage(page: RoutePage, opts: HttpRouteReferenceOpts): st
       "*function* can't be passed as a per-page prop here. */}",
   )
   lines.push("")
-  lines.push(`# ${title}`)
+  lines.push(`# ${mdxEscapeText(title)}`)
   lines.push("")
   lines.push(`\`${method.toUpperCase()} ${path}\``)
   lines.push("")

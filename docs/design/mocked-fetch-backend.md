@@ -390,8 +390,189 @@ fractal-specific (they consume `OpenApiDoc`/http-api-projector types
 directly), consistent with that question remaining unresolved rather than
 answered by this work.
 
+## Resolved (2026-08-13): real docusaurus build / astro build verification, persisted fixture
+
+The previous section's "Not verified: an actual production Docusaurus or
+Starlight site build" gap is now closed. Per the project owner's resolved
+scope question (bridging the same D-presupposes-C ambiguity `docs/
+roadmap.md`'s Sphinx write-up first encountered, §637 above): **persist
+this fixture** (unlike Sphinx's throwaway scratch project) **but keep it out
+of default CI/test**, because Docusaurus/Starlight scaffolding (theme
+swizzling, global MDX component registration, Starlight component
+overrides, `@astrojs/react` island wiring, `file:`-dependency-plus-
+`overrides` wiring to consume unreleased workspace packages from a plain-npm
+non-workspace project) is expensive enough to re-derive that a reusable,
+committed fixture is the more sustainable choice, while the actual
+`npm install`/`docusaurus build`/`astro build` cost (minutes, network-
+dependent) stays out of the routine CI loop for the same reason
+`docs/design/ci-pre-release-workflow.md` §2 gives for not adding Sphinx's
+bar-C check there either. The fixture lives at
+`examples/doc-site-verification/{docusaurus,starlight}/` — see that
+directory's own README.md for what's gitignored, how to invoke it manually,
+and the full reasoning; this section covers what the real builds found.
+
+**Toolchain note (an implementation detail, not a design choice — recorded
+because a future run will hit the same ceiling):** this repo's Node version
+is pinned to `nodejs_20` in `flake.nix` (not touched by this work, per
+constraint). `create-astro@latest`/`astro@latest`/`@astrojs/starlight@latest`
+all currently require Node ≥22.12, so the Astro/Starlight site pins
+`astro@^5.18.2` + `@astrojs/starlight@^0.37.0` + `@astrojs/react@^4.4.0` —
+the newest versions on each major line that still declare Node 20.3+ support
+in their own `engines` field — rather than the latest available. Docusaurus
+3.10.2 (via `create-docusaurus@latest`) declares `"node": ">=20.0"` and
+needed no such pin.
+
+**Both real builds pass**, end to end, against the real projector output:
+
+- `docusaurus build` (Docusaurus 3.10.2): succeeds, produces a real
+  `build/` directory with real HTML. The generated `docs/api/*.mdx` pages
+  (from the real `toDocusaurusRouteReference`) render with `<ApiExplorer/>`
+  registered as a global MDX component
+  (`src/theme/MDXComponents.tsx`, Docusaurus's own documented mechanism —
+  https://docusaurus.io/docs/markdown-features/react, "Global components
+  using MDXComponents" — verified by fetching that page directly before
+  writing the swizzle, not assumed) and a real
+  `toDropInFetch(createFetch(api))` wired site-wide via `src/theme/
+  Root.tsx` — confirmed present in the built HTML's SSR output
+  (`api-explorer` class markup in `build/docs/api/*/index.html`).
+- `astro build` (Astro 5.18.2 + Starlight 0.37.0): succeeds, produces a
+  real `dist/` directory with real HTML — confirmed `astro-island`
+  hydration markers and `api-explorer` markup present in
+  `dist/api/*/index.html`.
+
+**Two real bugs found, neither catchable by the existing component-level/
+MDX-text tests (both fixed in the committed source, re-verified against a
+fresh real build after each fix — same discipline as the Sphinx pass):**
+
+1. **`createFetch`/`toOpenApiFromRoute` broke ANY browser bundling, not just
+   callers using `sourceFile` extraction** (`packages/http-api-projector/
+   src/openapi.ts`, `buildDoc`'s two `await import("@rhi-zone/
+   fractal-api-tree/tree")` call sites). `preset.ts`'s `createFetch`
+   statically imports `toOpenApiFromRoute` from `openapi.ts` — needed for
+   the `/openapi.json` mount feature — and `openapi.ts`'s `buildDoc` has a
+   *dynamic* `import()` of `@rhi-zone/fractal-api-tree/tree`, gated by a
+   runtime check (`opts.sourceFile !== undefined`) that's false for every
+   `createFetch`/Root.tsx caller in this fixture. That runtime guard does
+   NOT stop a bundler (Rspack, which Docusaurus's `@docusaurus/faster`
+   preset uses) from eagerly resolving the dynamic import's whole target
+   module graph at BUILD time regardless of whether the branch executes —
+   and that graph reaches `api-tree/tree.ts` → `extract.ts` →
+   `@rhi-zone/fractal-type-ir/from-typescript.ts`, which imports the real
+   `typescript` package plus Node's `node:fs`/`node:path` (real
+   filesystem-based TS-compiler extraction — inherently Node-only).
+   Result: `docusaurus build` failed outright with `Reading from
+   "node:path" is not handled by plugins (Unhandled scheme)` for EVERY
+   page, confirmed via bisection (isolated to `Root.tsx`'s import of
+   `@rhi-zone/fractal-http-api-projector/preset`, reproduced with a minimal
+   `createFetch`/`toDropInFetch` call and no other site code). Fixed with a
+   `/* webpackIgnore: true */` magic comment (Rspack honors the
+   webpack-prefixed spelling — verified against Rspack's own docs before
+   using it, not assumed) on both dynamic imports, telling the bundler to
+   leave them as literal runtime `import()` calls instead of pre-bundling
+   them — correct because `sourceFile` extraction was never going to work
+   in a browser bundle anyway (real fs + real TS compiler), so this only
+   stops it from poisoning callers who never use that option. Re-verified:
+   `docusaurus build` succeeds after this fix, with no other change.
+   **Astro/Vite's build did NOT hard-fail on the same code path** — Vite
+   externalizes unresolvable Node builtins with a warning
+   (`Module "node:path" has been externalized for browser compatibility`)
+   rather than erroring, so this bug was Rspack/webpack-specific in its
+   failure mode, though the underlying reachability problem is the same
+   for both bundlers. A `/* @vite-ignore */` comment was tried alongside
+   `webpackIgnore` to also shrink the resulting ~3.6 MB (1 MB gzipped)
+   `tree.js` chunk Vite still produces (the whole `typescript` package
+   bundled in, even with `node:path` stubbed out) — it had no effect,
+   because `@vite-ignore` only suppresses Vite's static-analysis warning
+   for a *computed* (variable) import specifier; it doesn't skip
+   bundling a literal string specifier the way `webpackIgnore` does for
+   Rspack. That comment was removed again (misleading to leave a magic
+   comment in that verifiably does nothing here). **Net: the Astro build
+   is correct and passing, but ships a real, unaddressed multi-megabyte
+   dead-weight chunk** — flagged here as a known, non-blocking finding
+   rather than silently left uncovered; a proper fix would need
+   `api-tree/tree.ts`'s extraction machinery split into a genuinely
+   separate module/subpath so Vite's own bundler-graph reachability
+   analysis (not just a magic comment) excludes it, which is a larger
+   `api-tree` change out of proportion to this verification pass's scope.
+2. **MDX curly-brace injection in a raw (non-code-span) heading**
+   (`packages/http-api-projector/src/http-route-reference.ts`,
+   `renderDocusaurusPage`'s `# ${title}` line). The fixture's `GET
+   /books/{bookId}` route has no `operation.summary`, so `frontmatterTitle`
+   falls back to `${method} ${path}` — literally `GET /books/{bookId}` —
+   emitted as a RAW (unescaped, non-backtick-wrapped) `# GET /books/{bookId}`
+   Markdown heading line. MDX parses an unescaped `{...}` anywhere in flow
+   content as a JS expression, not literal text (unlike a backtick code
+   span, which stays literal per CommonMark — the file's other `` `${method}
+   ${path}` `` request-line text was already backtick-wrapped and unaffected).
+   Docusaurus's real SSG step crashed with `ReferenceError: bookId is not
+   defined` — MDX evaluated the bare identifier `bookId`. Fixed with a new
+   `mdxEscapeText()` helper (backslash-escapes `{`/`}`) applied to the H1
+   title line, and — since `operation.description` (`bodyLines`, shared by
+   both the Docusaurus and Starlight renderers) is inserted as a RAW MDX
+   line the same unescaped way, the identical defect class just not
+   exercised by this fixture's routes (neither carries a description
+   containing `{`/`}`) — applied there too rather than left as a known,
+   unfixed instance of the same bug found in the same investigation.
+   Starlight's renderer never emits an unescaped `# ${title}` line (its
+   page heading comes from YAML frontmatter, not injected body text, and
+   YAML doesn't give `{`/`}` any special meaning in a quoted scalar), so
+   only the Docusaurus renderer needed the title-line fix; the
+   `operation.description` fix applies to both. Re-verified: `docusaurus
+   build` succeeds with the fixture's `{bookId}`-titled page after this fix.
+
+**One design assumption in this doc's own "Resolved: use case 2" section
+above turned out wrong, verified (not guessed) against real Astro islands
+behavior — flagged explicitly per this investigation's own instructions not
+to paper over it:** that section names "a Starlight layout override" as the
+Astro-side equivalent of Docusaurus's `Root.tsx` swizzle for wiring
+`ApiExplorerFetchProvider` site-wide. It doesn't work, structurally, for
+the component-authoring shape `http-route-reference.ts`'s Starlight
+renderer actually emits (`<ApiExplorer client:load .../>`, directly, with
+no enclosing Provider JSX): Astro's islands architecture only hydrates a
+component into its own independent React root when it carries an explicit
+`client:*` directive, and a component with no directive nested inside
+another's JSX tree is bundled into THAT ancestor's island instead — but a
+Provider mounted from a *separate* layout/Head-override file is never an
+ancestor in ApiExplorer's own render tree, so it's a disconnected React
+root and context cannot cross that boundary, no matter what directive the
+Provider itself carries. `examples/doc-site-verification/starlight/src/
+fetch-setup-client.ts` documents this in full and uses a different
+mechanism instead: `ApiExplorerFetchProvider`'s whole reason to exist is
+that a JS function can't survive MDX-prop serialization
+(`fetch-context.tsx`'s own doc comment) — React context is one way to reach
+every instance without a per-page prop, but not the only one.
+`useApiExplorerFetch()` already falls back to the AMBIENT GLOBAL `fetch`
+when no Provider wraps a given `<ApiExplorer/>`, and the global `fetch`
+binding is visible across every independently-hydrated island on a page
+since they all share one `window` — so monkey-patching `window.fetch` once,
+before any island hydrates (via a Starlight `Head` component override,
+https://starlight.astro.build/reference/overrides/, loading a real
+Vite-bundled module script — verified against Starlight's own docs before
+using it), reaches every `<ApiExplorer/>` site-wide with zero React-context
+involvement. This is a site-side wiring choice, not a `fetch-context.tsx`
+API change — `ApiExplorerFetchProvider`/React context remains correct and
+necessary for Docusaurus's single-React-tree app shell, and remains the
+right mechanism for any OTHER Astro integration shape where a Provider
+genuinely IS an ancestor of every `<ApiExplorer/>` in the render tree (e.g.
+a hand-authored `.astro` page composing them directly, rather than MDX
+generated per-page by this projector). The `client:load` (vs `client:only`)
+hydration-directive choice itself, resolved earlier in this doc, was NOT
+affected by this finding and needed no change — confirmed by the passing
+real `astro build` and the `client:load`-driven `astro-island` markers
+present in the built HTML.
+
+**What's still open, unchanged by this pass:** use case 1 (the standalone
+Postman-like playground), the fractal-specific-vs-standalone-package
+question, and — new, from finding 1 above — `api-tree/tree.ts`'s
+extraction machinery not being cleanly separable from `openapi.ts`'s
+browser-safe code paths without a magic-comment workaround; a proper fix
+(splitting extraction into its own subpath/module so bundler reachability
+analysis excludes it structurally) is flagged but not built here.
+
 ## See also
 
+- `examples/doc-site-verification/README.md` — the persisted fixture this
+  section verifies against; what's gitignored, how to invoke it manually.
 - `packages/http-api-projector/README.md` — `createFetch` and the existing
   in-process-fetch adapter this idea's "(a)" reading overlaps with.
 - `packages/http-api-projector/src/preset.ts` — `createFetch`, `CompiledRouter`

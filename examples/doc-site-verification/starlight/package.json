@@ -1,0 +1,33 @@
+{
+  "name": "starlight",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "generate": "bun generate.ts"
+  },
+  "dependencies": {
+    "@astrojs/react": "^4.4.0",
+    "@astrojs/starlight": "^0.37.0",
+    "@rhi-zone/fractal-api-explorer": "file:../../../packages/api-explorer",
+    "@rhi-zone/fractal-api-tree": "file:../../../packages/api-tree",
+    "@rhi-zone/fractal-http-api-projector": "file:../../../packages/http-api-projector",
+    "@rhi-zone/fractal-type-ir": "file:../../../packages/type-ir",
+    "astro": "^5.18.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  },
+  "overrides": {
+    "@rhi-zone/fractal-api-tree": "file:../../../packages/api-tree",
+    "@rhi-zone/fractal-type-ir": "file:../../../packages/type-ir"
+  }
+}

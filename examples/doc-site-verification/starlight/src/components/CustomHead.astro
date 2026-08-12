@@ -1,0 +1,25 @@
+---
+// examples/doc-site-verification/starlight/src/components/CustomHead.astro
+//
+// Starlight's documented component-override mechanism
+// (https://starlight.astro.build/reference/overrides/ — verified before
+// writing this file): wraps the default Head component and adds a real
+// Vite-bundled `<script type="module">` that installs the site-wide mocked
+// fetch (see ../fetch-setup-client.ts's doc comment for why this replaces
+// the React-context `ApiExplorerFetchProvider` approach that Docusaurus's
+// Root.tsx uses). Registered via astro.config.mjs's
+// `starlight({ components: { Head: './src/components/CustomHead.astro' } })`.
+//
+// A real (non-`is:inline`) <script> block inside a .astro file IS processed
+// by Astro's own Vite pipeline (unlike Starlight's `head` config option,
+// whose entries are documented as NOT passing through Astro's script/style
+// processing) — which is what lets this script `import` real npm packages
+// (@rhi-zone/fractal-http-api-projector/preset, ./fixture-tree.ts) instead
+// of being restricted to inline literal JS.
+import Default from '@astrojs/starlight/components/Head.astro';
+---
+
+<Default {...Astro.props} />
+<script>
+	import '../fetch-setup-client.ts';
+</script>

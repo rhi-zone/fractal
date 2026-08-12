@@ -616,7 +616,28 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
   let schemas: SchemaMap = opts.schemas ?? {}
   let treeId: string | undefined
   if (Object.keys(schemas).length === 0 && opts.sourceFile !== undefined) {
-    const { extractRouteSchemas } = await import("@rhi-zone/fractal-api-tree/tree")
+    // `webpackIgnore` (Rspack honors the webpack-prefixed spelling too, see
+    // the comment on buildDoc's identical import below) — found via
+    // examples/doc-site-verification's real `docusaurus build` pass
+    // (docs/design/mocked-fetch-backend.md's dated write-up): without this,
+    // a bundler eagerly resolves THIS dynamic import's whole target module
+    // graph (api-tree's tree.ts -> extract.ts -> type-ir's
+    // from-typescript.ts, which imports the real `typescript` package and
+    // Node's `node:fs`/`node:path`) even though the import only actually
+    // fires when a caller passes `opts.sourceFile` — which `preset.ts`'s
+    // `createFetch`/`toDropInFetch` (documented as usable client-side for a
+    // doc-embedded live playground with no deployed server yet, per
+    // mocked-fetch-backend.md) never does. Bundlers resolve a dynamic
+    // `import()`'s target chunk at BUILD time regardless of whether the
+    // runtime branch guarding it ever executes, so without this comment
+    // *every* browser consumer of `createFetch`/`toOpenApiFromRoute` fails
+    // to bundle at all, not just ones that pass `sourceFile`. The magic
+    // comment tells the bundler to leave this as a literal runtime
+    // `import()` instead of pre-bundling it — correct here because
+    // `sourceFile` extraction is inherently Node-only (real filesystem +
+    // TypeScript compiler) and was never going to work in a browser bundle
+    // regardless; this only stops it from poisoning callers who never use it.
+    const { extractRouteSchemas } = await import(/* webpackIgnore: true */ "@rhi-zone/fractal-api-tree/tree")
     schemas = extractRouteSchemas(opts.sourceFile)
     treeId = resolveTreeId(schemas, opts.treeId)
   }
@@ -645,7 +666,9 @@ async function buildDoc(
   // files' extractRouteSchemas output), handled by the fallback chain above.
   let schemas: SchemaMap = opts.schemas ?? {}
   if (Object.keys(schemas).length === 0 && opts.sourceFile !== undefined) {
-    const { extractRouteSchemas } = await import("@rhi-zone/fractal-api-tree/tree")
+    // See the identical import's doc comment in `toOpenApi` above — same
+    // bundler-safety `webpackIgnore` fix, same reason.
+    const { extractRouteSchemas } = await import(/* webpackIgnore: true */ "@rhi-zone/fractal-api-tree/tree")
     schemas = extractRouteSchemas(opts.sourceFile)
   }
 

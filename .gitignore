@@ -14,6 +14,19 @@ node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 
+# examples/doc-site-verification — persisted-but-not-CI-gated real
+# Docusaurus/Astro site builds (see examples/doc-site-verification/README.md).
+# node_modules/ and dist/ are already covered by the generic rules above;
+# these cover build output/caches specific to these two site scaffolds, plus
+# the MDX `bun run generate` writes (regenerated from the fixture tree, not
+# meant to be committed — same footing as build/dist output here).
+examples/doc-site-verification/*/build/
+examples/doc-site-verification/*/.astro/
+examples/doc-site-verification/*/.docusaurus/
+examples/doc-site-verification/*/package-lock.json
+examples/doc-site-verification/docusaurus/docs/api/
+examples/doc-site-verification/starlight/src/content/docs/api/
+
 # IDE
 .idea/
 .vscode/
