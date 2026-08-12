@@ -190,6 +190,43 @@
     than transparent recovery. NOT verified to be the mechanism that produced
     the observed corruption — it is a plausible contributor, not a diagnosed
     cause, and should not be adopted on the strength of that guess alone.
+- **OPEN (parked, 2026-08-12): whether `http-api-projector`'s client codegen
+  (`src/codegen.ts`) needs a watch mode.** Flagged as "not ideal" by someone
+  who noticed there's no `fractal watch`-equivalent for regenerating the
+  standalone typed client; investigated, not decided — laying out what was
+  found, not recommending a build. Today regen is a one-shot script
+  (`examples/library-api/scripts/generate-client.ts`, run via `bun run
+  codegen:client`): `extractToolSchemas` + `generateClientFromNode` +
+  `Bun.write`, no CLI bin, no watch, no caching.
+  `packages/http-api-projector/package.json` has no codegen script of its own
+  at all — only `typecheck`/`test`/`test:watch`. Regen is only needed when the
+  route tree's shape or schemas change (new/changed ops, input/output types),
+  not on every save of unrelated code — the emitted `client.generated.ts`
+  carries a do-not-edit header and is consumed as a build artifact, never
+  hand-edited. A working watch pattern already exists in this repo for the
+  structurally identical problem (regenerate derived TS from a
+  TS-compiler-API walk of an entry file), so a new watch mode should extend
+  it rather than invent one: `packages/api-tree/src/cli.ts`'s `watch <entry>
+  -o <output>` subcommand (~line 205) — `fs.watch` on the entry file's
+  directory, 150ms debounce on `.ts` changes, rebuild via a fresh
+  `createExtractorProgram`, byte-for-byte diff against on-disk output (skips
+  the write and prints "no changes" when nothing actually changed), clean
+  `SIGINT` shutdown. On cost: `codegen.ts`'s own tree walk
+  (`generateClient`/`generateClientFromNode`) is cheap pure string-building
+  over an already-projected `HttpRoute`+`SchemaMap`; the only plausibly-slow
+  part is `extractToolSchemas`'s `createExtractorProgram` call — building/
+  type-checking a real `ts.Program` via the TS compiler API, which
+  `api-tree/src/tree.ts`'s own comments call out as expensive enough to avoid
+  paying twice for, and which the sibling `applyValidation` build pipeline
+  already caches via output-mtime-vs-entry-mtime skipping.
+  `generate-client.ts` does no such caching today — every run pays the full
+  `ts.Program` build. **Not measured**: actual wall-clock time of `bun run
+  codegen:client` was not run/timed as part of this investigation, so whether
+  that cost is "annoying enough to want a watch loop" vs. "fast enough that a
+  manual rerun is fine" is unverified either way. This entry is the tradeoff
+  (reuse-able watch pattern + real-but-unquantified `ts.Program`-build cost,
+  vs. no measured evidence of actual developer pain from either staleness or
+  slowness) for a later owner call.
 
 ---
 
