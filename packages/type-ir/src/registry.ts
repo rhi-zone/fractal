@@ -143,6 +143,7 @@ import { toJsonRpcMethods } from "./json-rpc.ts"
 import { toDocusaurusReference } from "./docusaurus-reference.ts"
 import { toStarlightReference } from "./starlight-reference.ts"
 import { toMkdocsReference } from "./mkdocs-reference.ts"
+import { toMkdocsVanillaReference } from "./mkdocs-vanilla-reference.ts"
 import { toSphinxReference } from "./sphinx-reference.ts"
 
 /** Name given to the root type when a document has no named definitions and
@@ -652,6 +653,7 @@ const projectorList: readonly Projector[] = [
   files("docusaurus-reference", "./docusaurus-reference", (doc) => toDocusaurusReference(doc)),
   files("starlight-reference", "./starlight-reference", (doc) => toStarlightReference(doc)),
   files("mkdocs-reference", "./mkdocs-reference", (doc) => toMkdocsReference(doc)),
+  files("mkdocs-vanilla-reference", "./mkdocs-vanilla-reference", (doc) => toMkdocsVanillaReference(doc)),
   files("sphinx-reference", "./sphinx-reference", (doc) => toSphinxReference(doc)),
 ]
 

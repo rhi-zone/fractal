@@ -124,6 +124,10 @@
       "types": "./dist/mkdocs-reference.d.ts",
       "import": "./dist/mkdocs-reference.js"
     },
+    "./mkdocs-vanilla-reference": {
+      "types": "./dist/mkdocs-vanilla-reference.d.ts",
+      "import": "./dist/mkdocs-vanilla-reference.js"
+    },
     "./json-schema-07": {
       "types": "./dist/json-schema-07.d.ts",
       "import": "./dist/json-schema-07.js"

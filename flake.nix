@@ -27,8 +27,14 @@
             # bar D), same precedent as pydantic/attrs above but for a doc
             # projector's rendered-HTML output instead of a compiled module; not
             # wired into CI or any required test gate, per bar C being out of
-            # scope for this initiative)
-            (python3.withPackages (ps: [ ps.pydantic ps.attrs ps.sphinx ]))
+            # scope for this initiative; mkdocs/mkdocs-material: same precedent,
+            # same not-CI-gated status, for mkdocs-vanilla-reference.ts's and
+            # mkdocs-reference.ts's own bar-D `mkdocs build --strict` local
+            # verification runs — both packages are pulled in together since the
+            # two targets are genuinely separate `mkdocs.yml` themes (plain
+            # `mkdocs` vs. `mkdocs-material`), not one target with an optional
+            # extra)
+            (python3.withPackages (ps: [ ps.pydantic ps.attrs ps.sphinx ps.mkdocs ps.mkdocs-material ]))
 
             # Go (encoding/json, easyjson projectors — both stdlib-only: easyjson's
             # own runtime is only needed by its code-*generator*, not by the
