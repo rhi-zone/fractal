@@ -1,5 +1,6 @@
 import { ancestors, resolve, type TypeRef, type TypeRefDocument, type TypeShape } from "./index.ts"
 import { quote } from "./codegen-helpers.ts"
+import { toJsonSchema } from "./json-schema.ts"
 
 // ============================================================================
 // MkDocs-Material reference-page projector — TypeRefDocument -> one Markdown
@@ -320,6 +321,16 @@ function exampleBlock(example: unknown): string {
   return ["```json", JSON.stringify(example, null, 2), "```"].join("\n")
 }
 
+// 4-space-indents every line of a block for nesting inside a pymdownx
+// content-tab (`=== "..."` bodies indent like a list item) — blank lines
+// stay blank rather than gaining trailing whitespace.
+function indent4(block: string): string {
+  return block
+    .split("\n")
+    .map((line) => (line.length === 0 ? "" : `    ${line}`))
+    .join("\n")
+}
+
 function examplesSection(meta: Readonly<Record<string, unknown>>): string | undefined {
   const examples: unknown[] = []
   if (meta.example !== undefined) examples.push(meta.example)
@@ -331,15 +342,47 @@ function examplesSection(meta: Readonly<Record<string, unknown>>): string | unde
   }
 
   // MkDocs-Material content tabs (pymdownx.tabbed): each `=== "Tab"` body is a
-  // 4-space-indented block, same requirement as an indented list item.
+  // 4-space-indented block, same requirement as an indented list item. Every
+  // tab shares one icon shortcode (`:material-file-code-outline:`, verified
+  // to exist in Material's bundled icon set — see this package's mkdocs.yml
+  // emission below for the matching pymdownx.emoji config) rather than a
+  // per-index numeric icon, since Material's numeric icon set isn't
+  // guaranteed to cover an arbitrarily large `examples` array.
   const tabs = examples.map((example, i) => {
-    const indented = exampleBlock(example)
-      .split("\n")
-      .map((line) => (line.length === 0 ? "" : `    ${line}`))
-      .join("\n")
-    return [`=== "Example ${i + 1}"`, "", indented].join("\n")
+    return [`=== ":material-file-code-outline: Example ${i + 1}"`, "", indent4(exampleBlock(example))].join("\n")
   })
   return ["## Examples", "", tabs.join("\n\n")].join("\n")
+}
+
+// Material grid cards (`.grid.cards` — reference/grids.md; requires
+// `attr_list` + `md_in_html`, both enabled in this file's `toMkdocsYaml`
+// output below): one card per def actually referenced from this page,
+// giving a browsable "see also" index alongside (not instead of) the
+// abbreviations block's inline hover tooltips below — the two serve
+// different UX (browsable index vs. in-text hover), same way Docusaurus's
+// "## Referenced Types" section and Starlight's cross-links both exist
+// without being redundant with each other. `:material-cube-outline:`
+// (verified against Material's bundled icon set) stands in for "a type" the
+// way Docusaurus's `<TypeRef>` component conveys "this is a linked type"
+// visually — Material has no per-kind icon vocabulary to draw from here, so
+// one fixed icon is used for every card rather than inventing a kind-to-icon
+// mapping this projector has no way to validate against Material's real set.
+function relatedTypesSection(doc: TypeRefDocument, ref: TypeRef, selfName: string): string | undefined {
+  const referenced = new Set<string>()
+  collectRefNames(ref, referenced)
+  referenced.delete(selfName)
+  if (referenced.size === 0) return undefined
+  const cards = [...referenced]
+    .sort()
+    .map((name) => {
+      const summary = oneLineSummary(name, doc.defs[name])
+      return [`-   :material-cube-outline: **[${name}](${fileName(name)})**`, "", "    ---", "", `    ${summary}`].join(
+        "\n",
+      )
+    })
+  return ["## Related Types", "", '<div class="grid cards" markdown>', "", cards.join("\n\n"), "", "</div>"].join(
+    "\n",
+  )
 }
 
 function abbreviationsBlock(doc: TypeRefDocument, ref: TypeRef, selfName: string): string | undefined {
@@ -370,7 +413,24 @@ function renderPage(name: string, ref: TypeRef, doc: TypeRefDocument): string {
 
   if (typeof meta.description === "string") sections.push(meta.description)
 
-  sections.push(["## Type Signature", "", "```typescript", `type ${name} = ${renderTypeExpr(ref, false)}`, "```"].join("\n"))
+  // Both a TypeScript-like expression and the def's real JSON Schema (via
+  // json-schema.ts, exact per-kind semantics — same "can't drift" rationale
+  // starlight-reference.ts's own signature `<Tabs>` documents), side by side
+  // in a Material content tab. Icons verified against Material's bundled
+  // icon set (see toMkdocsYaml's matching pymdownx.emoji config below).
+  sections.push(
+    [
+      "## Type Signature",
+      "",
+      '=== ":material-language-typescript: TypeScript"',
+      "",
+      indent4(["```typescript", `type ${name} = ${renderTypeExpr(ref, false)}`, "```"].join("\n")),
+      "",
+      '=== ":material-code-json: JSON Schema"',
+      "",
+      indent4(["```json", JSON.stringify(toJsonSchema(ref), null, 2), "```"].join("\n")),
+    ].join("\n"),
+  )
 
   if (isKind(kind, "object")) {
     const s = ref.shape as TypeShape & { kind: "object" }
@@ -399,6 +459,9 @@ function renderPage(name: string, ref: TypeRef, doc: TypeRefDocument): string {
   const examples = examplesSection(meta)
   if (examples !== undefined) sections.push(examples)
 
+  const relatedTypes = relatedTypesSection(doc, ref, name)
+  if (relatedTypes !== undefined) sections.push(relatedTypes)
+
   const abbreviations = abbreviationsBlock(doc, ref, name)
   if (abbreviations !== undefined) sections.push(abbreviations)
 
@@ -424,4 +487,115 @@ export function toMkdocsReference(doc: TypeRefDocument, options?: { basePath?: s
     pages.set(`${basePath}${fileName(name)}`, renderPage(name, ref, doc))
   }
   return pages
+}
+
+// ============================================================================
+// `mkdocs.yml` emission — every syntax feature `renderPage` above actually
+// uses (admonitions, content tabs with icons, abbreviations, grid cards)
+// depends on a `markdown_extensions`/`theme` config that plain `mkdocs.yml`
+// does not enable by default; without this, the pages `toMkdocsReference`
+// returns would 404 their own syntax at build time. Every block below is
+// reproduced from Material's own "Setup" reference pages (theme features,
+// palette toggle, content tabs, icon shortcodes, grid cards, social cards),
+// not invented — see this file's sibling PR/commit for the exact pages
+// checked. `nav:` is generated flat, one entry per `doc.defs` name in
+// insertion order (same order `toMkdocsReference` emits pages in); callers
+// wanting a nested/grouped nav should treat this as a starting point and
+// restructure the returned string's `nav:` block themselves.
+// ============================================================================
+
+function navEntry(name: string, ref: TypeRef, basePath: string): string {
+  const title = typeof ref.meta.title === "string" ? ref.meta.title : name
+  return `  - ${yamlQuote(title)}: ${basePath}${fileName(name)}`
+}
+
+/**
+ * Emit a `mkdocs.yml` for the pages `toMkdocsReference` produces, wired for
+ * every Material-specific syntax feature this projector actually emits:
+ * - `theme.features`: `navigation.tabs`, `navigation.top`, `content.tabs.link`
+ *   (keeps a reader's tab choice in sync across pages), `content.code.copy`,
+ *   `content.code.annotate`, `search.suggest`, `search.highlight`.
+ * - `theme.palette`: the standard light/dark scheme toggle (Material's own
+ *   "Changing the colors" setup page's copy-paste block).
+ * - `markdown_extensions`: `admonition` (deprecation notices), `pymdownx.details`,
+ *   `pymdownx.superfences` + `pymdownx.tabbed` with `alternate_style: true`
+ *   (content tabs), `pymdownx.emoji` configured for Material's own icon
+ *   shortcodes (`material.extensions.emoji.twemoji`/`to_svg` — Material's
+ *   "Icons, Emojis" setup page), `attr_list` + `md_in_html` (grid cards),
+ *   `abbr` (the abbreviations block), `tables`, and `toc` with `permalink: true`.
+ * - `nav`: one entry per `doc.defs` name, in the same order `toMkdocsReference`
+ *   emits pages.
+ * - `plugins`: `search` always; `social` only when `options.socialCards` is
+ *   `true` — Material's social-cards plugin requires `site_url` to be set
+ *   (its own "Setting up social cards" page: social previews need an
+ *   absolute URL), so passing `socialCards: true` without `siteUrl` throws
+ *   rather than emitting a config that would fail at `mkdocs build` time.
+ */
+export function toMkdocsYaml(
+  doc: TypeRefDocument,
+  options?: { siteName?: string; siteUrl?: string; basePath?: string; socialCards?: boolean },
+): string {
+  const siteName = options?.siteName ?? "Reference"
+  const siteUrl = options?.siteUrl
+  const basePath = options?.basePath ?? ""
+  const socialCards = options?.socialCards === true
+  if (socialCards && siteUrl === undefined) {
+    throw new Error(
+      "toMkdocsYaml: options.socialCards requires options.siteUrl (Material's social plugin needs an absolute site_url to compute preview URLs)",
+    )
+  }
+
+  const lines: string[] = [`site_name: ${yamlQuote(siteName)}`]
+  if (siteUrl !== undefined) lines.push(`site_url: ${yamlQuote(siteUrl)}`)
+
+  lines.push(
+    "",
+    "theme:",
+    "  name: material",
+    "  features:",
+    "    - navigation.tabs",
+    "    - navigation.top",
+    "    - content.tabs.link",
+    "    - content.code.copy",
+    "    - content.code.annotate",
+    "    - search.suggest",
+    "    - search.highlight",
+    "  palette:",
+    "    # Palette toggle for light mode",
+    "    - scheme: default",
+    "      toggle:",
+    "        icon: material/brightness-7",
+    "        name: Switch to dark mode",
+    "    # Palette toggle for dark mode",
+    "    - scheme: slate",
+    "      toggle:",
+    "        icon: material/brightness-4",
+    "        name: Switch to light mode",
+  )
+
+  lines.push(
+    "",
+    "markdown_extensions:",
+    "  - admonition",
+    "  - pymdownx.details",
+    "  - pymdownx.superfences",
+    "  - pymdownx.tabbed:",
+    "      alternate_style: true",
+    "  - pymdownx.emoji:",
+    "      emoji_index: !!python/name:material.extensions.emoji.twemoji",
+    "      emoji_generator: !!python/name:material.extensions.emoji.to_svg",
+    "  - attr_list",
+    "  - md_in_html",
+    "  - abbr",
+    "  - tables",
+    "  - toc:",
+    "      permalink: true",
+  )
+
+  lines.push("", "nav:", ...Object.entries(doc.defs).map(([name, ref]) => navEntry(name, ref, basePath)))
+
+  lines.push("", "plugins:", "  - search")
+  if (socialCards) lines.push("  - social")
+
+  return `${lines.join("\n")}\n`
 }

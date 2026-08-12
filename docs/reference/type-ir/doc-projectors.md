@@ -118,12 +118,109 @@ semantics by re-implementing them independently. Deprecation renders as an
 `<Aside type="caution">`. `options.basePath` (default `"./"`) controls the
 relative-link prefix used for cross-page references.
 
-## MkDocs
+## MkDocs (Material)
 
 ```ts
-import { toMkdocsReference, renderTypeExpr, kebabCase } from "@rhi-zone/fractal-type-ir/mkdocs-reference"
+import { toMkdocsReference, toMkdocsYaml, renderTypeExpr, kebabCase } from "@rhi-zone/fractal-type-ir/mkdocs-reference"
 
-const pages = toMkdocsReference({
+const doc = {
+  root: t(types.ref("User")),
+  defs: { User: t(types.object({ id: t(types.integer) })) },
+}
+const pages = toMkdocsReference(doc)
+// pages.get("user.md")
+const mkdocsYml = toMkdocsYaml(doc)
+```
+
+````markdown
+---
+title: "User"
+description: "Reference for User."
+---
+
+# User
+
+## Type Signature
+
+=== ":material-language-typescript: TypeScript"
+
+    ```typescript
+    type User = { id: number }
+    ```
+
+=== ":material-code-json: JSON Schema"
+
+    ```json
+    { "type": "object", "properties": { "id": { "type": "integer" } }, "required": ["id"] }
+    ```
+
+## Fields
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number | yes |  |
+````
+
+This target is the **Material for MkDocs** theme (squidfunk's
+`mkdocs-material` — #3 in docs/roadmap.md's popularity ranking), not plain
+MkDocs — see "MkDocs (vanilla)" below for that genuinely separate target.
+Every page is CommonMark plus Material's bundled `pymdownx`/`admonition`
+extension set — deliberately **not** MDX, which MkDocs cannot render:
+
+- **Type Signature** renders as a content tab (`=== "..."`) with both a
+  TypeScript-like expression and the def's real JSON Schema (via
+  `json-schema.ts`, exact per-kind semantics — same "can't drift" rationale
+  `starlight-reference.ts`'s own signature `<Tabs>` documents) side by side,
+  each tab prefixed with a Material icon shortcode.
+- **Deprecation** renders as a `!!! warning "Deprecated"` admonition.
+- **Multiple `meta.examples`** render as content tabs, one per example.
+- **`## Related Types`** renders Material's grid-cards syntax
+  (`<div class="grid cards" markdown>`) — one card per def actually
+  referenced from the page, each linking to that def's own page — as a
+  browsable "see also" index, alongside (not instead of) the
+  abbreviations block below.
+- **Trailing abbreviations block** (`*[Term]: ...`) still renders one entry
+  per referenced def, giving inline hover tooltips anywhere that def's name
+  appears in body prose — unchanged from before.
+
+Every icon shortcode this projector emits (`:material-language-typescript:`,
+`:material-code-json:`, `:material-file-code-outline:` for example tabs,
+`:material-cube-outline:` for grid cards) was checked against Material's
+actual bundled icon set (`squidfunk/mkdocs-material`'s
+`material/templates/.icons/material/*.svg`), not assumed to exist.
+
+`toMkdocsYaml(doc, options?)` emits a real `mkdocs.yml` wired for every
+syntax feature above: `theme: name: material` with a features list
+(`navigation.tabs`, `navigation.top`, `content.tabs.link`,
+`content.code.copy`, `content.code.annotate`, `search.suggest`,
+`search.highlight`) and the standard light/dark palette toggle; a
+`markdown_extensions` block (`admonition`, `pymdownx.details`,
+`pymdownx.superfences` + `pymdownx.tabbed` with `alternate_style: true`,
+`pymdownx.emoji` configured for Material's icon shortcodes, `attr_list` +
+`md_in_html` for grid cards, `abbr`, `tables`, `toc` with
+`permalink: true`); a flat `nav:` (one entry per `doc.defs` name); and a
+`plugins:` list (`search` always, `social` when `options.socialCards` is
+`true` — which requires `options.siteUrl`, since Material's social-cards
+plugin needs an absolute `site_url` to compute preview URLs, and
+`toMkdocsYaml` throws rather than emit a config that would fail at
+`mkdocs build` time). Every config block was reproduced from Material's own
+"Setup" reference pages, not invented, and this target's whole generated
+output (pages + `mkdocs.yml`) has been verified against a real
+`mkdocs build --strict` (using `mkdocs-material`) run locally — see
+docs/roadmap.md's doc-generator "basics" bar-D note.
+
+`renderTypeExpr(ref, linked?)` and `kebabCase(name)` are exported as
+standalone helpers (the same ones `renderPage` uses internally) for callers
+assembling their own page layout instead of using `toMkdocsReference`
+wholesale. `options.basePath` (default none) prefixes every returned
+filename, e.g. `"reference/"` → `"reference/user.md"`.
+
+## MkDocs (vanilla)
+
+```ts
+import { toMkdocsVanillaReference, renderTypeExpr, kebabCase } from "@rhi-zone/fractal-type-ir/mkdocs-vanilla-reference"
+
+const pages = toMkdocsVanillaReference({
   root: t(types.ref("User")),
   defs: { User: t(types.object({ id: t(types.integer) })) },
 })
@@ -151,13 +248,30 @@ type User = { id: number }
 | `id` | number | yes |  |
 ````
 
-Plain CommonMark + MkDocs-Material's extensions (admonitions `!!!`, content
-tabs `===`, abbreviations `*[Term]: ...`) — deliberately **not** MDX, which
-MkDocs cannot render. `renderTypeExpr(ref, linked?)` and `kebabCase(name)`
-are exported as standalone helpers (the same ones `renderPage` uses
-internally) for callers assembling their own page layout instead of using
-`toMkdocsReference` wholesale. `options.basePath` (default none) prefixes
-every returned filename, e.g. `"reference/"` → `"reference/user.md"`.
+Plain **MkDocs** (the `mkdocs` PyPI project, #2 in docs/roadmap.md's
+popularity ranking) with its default theme and default
+`markdown_extensions` (`toc`, `tables`, `fenced_code_blocks` — per
+mkdocs.org's "Writing Your Docs" page) only — a genuinely separate target
+from Material for MkDocs above, not a stripped-down variant of it: nothing
+here emits `!!!` admonitions, `=== "Tab"` content tabs, or `*[Term]: ...`
+abbreviations, since none of those are enabled by plain MkDocs without a
+`markdown_extensions` config this projector has no way to guarantee the
+consuming site has set up. YAML frontmatter is still used — unlike RST
+(see Sphinx below), MkDocs parses `---`-fenced YAML page meta-data
+natively, not via an extension. Deprecation renders as a plain blockquote
+(`> **Deprecated.** reason`); multiple `meta.examples` render as numbered
+`### Example N` subsections rather than a tabbed UI; there is no
+abbreviations-equivalent hover-tooltip section, same reasoning Sphinx below
+gives for omitting one — cross-linking is already fully covered by the
+inline `[Name](name.md)` links every Fields/Methods/Variants table renders.
+This target's generated output has been verified against a real
+`mkdocs build --strict` (plain `mkdocs`, no Material theme installed) run
+locally — see docs/roadmap.md's doc-generator "basics" bar-D note.
+
+`renderTypeExpr(ref, linked?)` and `kebabCase(name)` are exported as
+standalone helpers, same convention as every other doc projector in this
+package. `options.basePath` (default none) prefixes every returned
+filename, e.g. `"reference/"` → `"reference/user.md"`.
 
 ## Sphinx
 

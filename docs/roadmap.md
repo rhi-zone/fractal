@@ -590,8 +590,13 @@ Acceptance criteria for green:
 
 **Status: PARTIALLY COMPLETE (2026-08-12)**
 
-Code-level doc comment emission complete; four site-level doc projectors
-are now implemented (Docusaurus, Starlight, MkDocs, Sphinx).
+Code-level doc comment emission complete; five site-level doc projectors are
+now implemented, one per distinct target (Docusaurus, Starlight, MkDocs
+(vanilla), Material for MkDocs, Sphinx). MkDocs and Material for MkDocs
+were previously conflated under one file (`mkdocs-reference.ts`, which
+turned out to already be Material-flavored despite its name); they are now
+two genuinely separate built targets — see "MkDocs vs. Material for MkDocs
+target-identity ambiguity, resolved (2026-08-13)" below.
 
 **Completed (2026-07-22)**: Doc comment emission across all 25 projectors.
 Every projector now emits native doc comments from `meta.description` and
@@ -693,21 +698,104 @@ The scratch Sphinx project used for the visual check (minimal `conf.py`
 + the dedicated fixture's five generated `.rst` pages) was not committed,
 per the instruction not to persist bar-C-shaped tooling into the repo.
 
+**MkDocs vs. Material for MkDocs target-identity ambiguity, resolved
+(2026-08-13).** The ranked list below treats "MkDocs" (#2) and "Material
+for MkDocs" (#3) as two separate targets, but the single `mkdocs-
+reference.ts` built on 2026-07-22 turned out to already be Material-
+flavored — its own header comment named Material's `pymdownx` extension
+set (admonitions, content tabs) as what it targets, not vanilla MkDocs,
+despite the file/function names saying plain "MkDocs". Project owner's
+call: support both, as genuinely separate targets, rather than picking
+one. Resolved by:
+- Adding `mkdocs-vanilla-reference.ts` (`toMkdocsVanillaReference`) as a
+  new, independent projector for plain MkDocs — CommonMark plus only
+  what MkDocs enables by default (`toc`, `tables`, `fenced_code_blocks`,
+  native `---` frontmatter), with none of Material's `pymdownx` syntax.
+  Self-contained (its own copies of `kebabCase`/`renderTypeExpr`/etc.,
+  not importing from `mkdocs-reference.ts`), matching the convention
+  `sphinx-reference.ts` already established for keeping doc-projector
+  targets decoupled from each other.
+- Renaming the existing `mkdocs-reference.ts` file's *identity* (not its
+  filename/export name, to avoid a breaking rename) to "Material for
+  MkDocs" in every doc/comment that describes it, and closing the
+  feature-surface gap the ambiguity had left implicit: a real
+  `toMkdocsYaml()` emitting `mkdocs.yml` (theme features, palette
+  toggle, the `markdown_extensions` every syntax feature below actually
+  needs, an auto-generated `nav:`, and an optional `social` plugin
+  entry), a Type-Signature content tab showing both the TypeScript-like
+  expression and the def's real JSON Schema side by side (icon-prefixed
+  tab labels), Material grid-cards (`<div class="grid cards" markdown>`)
+  for a new "## Related Types" section, and icon-prefixed content tabs
+  for multiple `meta.examples`. Every icon shortcode used
+  (`:material-language-typescript:`, `:material-code-json:`,
+  `:material-file-code-outline:`, `:material-cube-outline:`) was checked
+  against Material's actual bundled icon set
+  (`squidfunk/mkdocs-material`'s `.icons/material/*.svg` files), not
+  assumed to exist; every `mkdocs.yml` config block was reproduced from
+  Material's own "Setup" reference pages (grids, content tabs, icons/
+  emojis, social cards, navigation, changing the colors), fetched and
+  read directly rather than recalled from memory.
+- Both targets' generated output (pages +, for Material, the emitted
+  `mkdocs.yml`) were verified against real `mkdocs build --strict` runs
+  — `mkdocs` alone for the vanilla target, `mkdocs` + `mkdocs-material`
+  for the Material target — both installed via `flake.nix` (same
+  ad hoc/local, not-CI-gated precedent `sphinx-reference.ts` set for bar
+  D; `mkdocs`/`mkdocs-material` added to the same `python3.withPackages`
+  entry the `sphinx` package already lives in). The Material build was
+  additionally spot-checked in the rendered HTML output: content tabs
+  render as real `tabbed-set` markup, icon shortcodes resolve to actual
+  `twemoji` SVGs (zero raw `:material-...:` shortcode text left
+  unresolved), grid cards render with the `grid cards` class, the
+  deprecation admonition renders with the `admonition warning` class,
+  and abbreviations render as real `<abbr title="...">` tooltips — not
+  just "the build didn't fail," but each new feature's actual rendered
+  shape confirmed.
+- Both targets are registered in `registry.ts` (`mkdocs-reference` and
+  `mkdocs-vanilla-reference`) and have their own `packages/type-ir/`
+  subpath exports, same convention as every other target.
+
+**Completed (2026-08-13)**: `mkdocs-vanilla-reference.ts` (plain MkDocs)
+built as a new target, and `mkdocs-reference.ts` (Material for MkDocs)
+extended with the feature surface above — see the resolution note
+immediately above for the full breakdown. Both now clear the same bars
+`sphinx-reference.ts` cleared first:
+- **(A) Structural smoke test** — both clear via `registry.test.ts`'s
+  generic loop plus their own dedicated structural assertions (frontmatter
+  well-formedness, trailing-newline discipline, and — specific to the
+  vanilla target — assertions that no `!!!`/`=== "`/`*[...]:` Material
+  syntax leaks in anywhere across its whole fixture's output).
+- **(B) Dedicated fixture + reviewed output** — `mkdocs-vanilla-
+  reference.test.ts` has its own blog/CMS-flavored fixture (`Post`/
+  `Author`/`Status`/`CommentEvent`/`Moderator`, distinct from Sphinx's
+  GitHub-flavored one and Material's e-commerce-flavored one below) and
+  `mkdocs-reference.test.ts` has its own e-commerce-flavored fixture
+  (`Product`/`Category`/`Availability`/`OrderEvent`/`InventoryManager`,
+  the latter with 2 documented examples to exercise the tabbed Examples
+  section) — both with hand-reviewed explicit-string assertions per
+  section kind, same convention as `sphinx-reference.test.ts`.
+- **(D) Verified correct, not just accepted** — see the resolution note
+  above for the real-`mkdocs build --strict` + rendered-HTML spot-check
+  detail.
+
+Docusaurus and Starlight are not yet retrofitted to these bars — they
+still only clear what "What the three built targets currently clear"
+below describes (that description now predates Sphinx and both MkDocs
+targets, all three of which have since moved past it).
+
 **Still planned**: The remaining site-level generators listed below
 (VitePress for JS/TS beyond Docusaurus/Starlight, mdBook for Rust, DocFX
-for C#, GitBook and Zensical/Material for MkDocs cross-language) — none
-of these ecosystem-native generators have a fractal projector yet; four
+for C#, and Zensical/GitBook cross-language) — none of these
+ecosystem-native generators have a fractal projector yet; five
 cross-ecosystem/ecosystem-native doc-site frameworks (Docusaurus,
-Starlight, MkDocs, Sphinx) are done.
+Starlight, MkDocs, Material for MkDocs, Sphinx) are done.
 
 Site-level generators to target, by language ecosystem:
 - JS/TS — Docusaurus, VitePress, Starlight
 - Python — Sphinx (autodoc), MkDocs (mkdocstrings)
 - Rust — mdBook
 - C# — DocFX (conceptual-Markdown mode — see scope note below)
-- Cross-language — Material for MkDocs (squidfunk), Zensical
-  (squidfunk's newer Rust-based doc generator), GitBook (hosted
-  docs-as-product platform)
+- Cross-language — Zensical (squidfunk's newer Rust-based doc
+  generator), GitBook (hosted docs-as-product platform)
 
 **Explicitly out of scope: API-reference extractors.** The project
 owner has scoped this initiative to *documentation site generators* —
@@ -748,7 +836,10 @@ API-extraction mode.
 #### Popularity-descending ranking of all 10 targets (research pass, 2026-08-12; trimmed 2026-08-13)
 
 A general-popularity check across the 10 in-scope targets (4 already
-built plus 6 planned — see "Explicitly out of scope: API-reference
+built plus 6 planned at the time of this research pass — updated
+2026-08-13 to 5 built plus 5 planned, per the "MkDocs vs. Material for
+MkDocs target-identity ambiguity, resolved" note above; the numbering
+below is left as originally researched — see "Explicitly out of scope: API-reference
 extractors" above for the 15 tools originally included in this research
 pass and then removed as out of scope; their entries below were deleted
 rather than kept and re-numbered, since their placement no longer
@@ -772,15 +863,20 @@ numbering.
 1. **Sphinx** (Python — **built**) — ~18.8M PyPI downloads/week
    (pypistats.org, 2026-08-12); powers CPython, Django, NumPy, pandas,
    SciPy, and Flask's own docs.
-2. **MkDocs** (Python — **built**) — ~3.87M PyPI downloads/week
-   (pypistats.org). *Coin flip vs. #3*: Material for MkDocs' own weekly
-   figure (~3.76M) is close enough that the relative order between these
-   two is not a confident call from this signal alone.
-3. **Material for MkDocs** (cross-language, squidfunk) — ~3.76M PyPI
-   downloads/week (pypistats.org); note squidfunk's own blog
-   (2025-11-05) announces this project's end-of-life for 2026-11-05 in
-   favor of Zensical (#10 below) — high current usage running alongside
-   an active sunset.
+2. **MkDocs** (Python — **built**, `mkdocs-vanilla-reference.ts` as of
+   2026-08-13; the pre-existing `mkdocs-reference.ts` this "built" tag
+   originally pointed to turned out to already be Material-flavored, not
+   this target — see the resolution note above) — ~3.87M PyPI
+   downloads/week (pypistats.org). *Coin flip vs. #3*: Material for
+   MkDocs' own weekly figure (~3.76M) is close enough that the relative
+   order between these two is not a confident call from this signal
+   alone.
+3. **Material for MkDocs** (cross-language, squidfunk — **built**,
+   `mkdocs-reference.ts`, extended 2026-08-13 per the resolution note
+   above) — ~3.76M PyPI downloads/week (pypistats.org); note squidfunk's
+   own blog (2025-11-05) announces this project's end-of-life for
+   2026-11-05 in favor of Zensical (#10 below) — high current usage
+   running alongside an active sunset.
 4. **Docusaurus** (JS — **built**) — ~1.41M npm downloads/week; 65.9k
    GitHub stars, the highest star count of any tool in this list, used
    by React/Jest/Prettier docs.
@@ -828,11 +924,13 @@ vs. Material for MkDocs (#2/#3), VitePress vs. Starlight (#6/#7).
 
 ### Production-grade initiative across all doc-generation targets — open
 
-The project owner wants to push all doc-generator targets — the four
-built (Docusaurus, Starlight, MkDocs, Sphinx) plus every planned target
-above (10 targets total as of this writing: 4 built, 6 planned, after
-the 2026-08-13 trim removing the 15 API-reference-extractor tools listed
-as out of scope above) — to "production grade" together,
+The project owner wants to push all doc-generator targets — the five
+built (Docusaurus, Starlight, MkDocs, Material for MkDocs, Sphinx) plus
+every planned target above (10 targets total as of this writing: 5
+built, 5 planned, after the 2026-08-13 trim removing the 15
+API-reference-extractor tools listed as out of scope above, and the
+same-day resolution of the MkDocs/Material-for-MkDocs target-identity
+ambiguity, see above) — to "production grade" together,
 as one initiative. No
 definition of "production grade" exists yet for this repo's doc
 projectors, and none is proposed here; both of the following are open
@@ -873,30 +971,32 @@ their tradeoffs, for the project owner to pick from (or combine, or
 reject in favor of something else not listed). None of these is
 recommended over another.
 
-**What the three built targets currently clear, as one data point (not
-the answer).** Checked against actual repo state rather than assumed:
-`docusaurus-reference.ts`/`starlight-reference.ts`/`mkdocs-reference.ts`
-type-check and are covered by `registry.test.ts`'s generic
-"universal projector" loop, which asserts non-empty output for a
-shared synthetic `sample`/`multi` `TypeRefDocument` fixture used
-identically across *every* projector in the registry (not a fixture
-specific to any one doc target) — plus one hand-written illustrative
-example per target in `docs/reference/type-ir/doc-projectors.md`
-(prose documentation, not an automated/CI-checked test). No target's
-output has been fed into the real Docusaurus/Starlight/MkDocs build
-tooling and confirmed to actually build or render; no visual check of
-the rendered result exists. That places the current bar closest to
-candidate (A) below, arguably touching (B) via the reference-doc
-examples, but not reaching (C) or (D).
+**What the two not-yet-retrofitted built targets (Docusaurus, Starlight)
+currently clear, as one data point (not the answer).** Checked against
+actual repo state rather than assumed: `docusaurus-reference.ts`/
+`starlight-reference.ts` type-check and are covered by
+`registry.test.ts`'s generic "universal projector" loop, which asserts
+non-empty output for a shared synthetic `sample`/`multi`
+`TypeRefDocument` fixture used identically across *every* projector in
+the registry (not a fixture specific to any one doc target) — plus one
+hand-written illustrative example per target in
+`docs/reference/type-ir/doc-projectors.md` (prose documentation, not an
+automated/CI-checked test). No target's output has been fed into the
+real Docusaurus/Starlight build tooling and confirmed to actually build
+or render; no visual check of the rendered result exists. That places
+the current bar closest to candidate (A) below, arguably touching (B)
+via the reference-doc examples, but not reaching (C) or (D).
 
-**Sphinx (2026-08-12), by contrast, clears (A), (B), and an ad hoc/local
-form of (D)** — see the "Documentation Generation" status callout above
-for the full breakdown and the recorded D-presupposes-C tension. It is
-the only one of the four built targets with a dedicated fixture, a
-reviewed/structural-assertion test file, and any real-tool visual
-verification at all; Docusaurus/Starlight/MkDocs have not been
-retrofitted to the same bars as part of this work — doing so, if wanted,
-is a separate follow-up the project owner would need to schedule.
+**Sphinx (2026-08-12), and both MkDocs targets (2026-08-13), by
+contrast, clear (A), (B), and an ad hoc/local form of (D)** — see the
+"Documentation Generation" status callout above for the full breakdown
+(Sphinx's D-presupposes-C tension, and both MkDocs targets' matching
+real-`mkdocs build --strict` verification). These three are the only
+built targets with a dedicated fixture, a reviewed/structural-assertion
+test file, and any real-tool visual verification at all; Docusaurus/
+Starlight have not been retrofitted to the same bars as part of this
+work — doing so, if wanted, is a separate follow-up the project owner
+would need to schedule.
 
 - **(A) Structural smoke test.** The projector runs against a fixture
   without throwing, and produces non-empty output that's at least
@@ -909,7 +1009,8 @@ is a separate follow-up the project owner would need to schedule.
   producing output that would fail to build in the real tool (a
   MkDocs-Material-specific admonition syntax typo'd wrong, for
   instance) — this bar wouldn't catch it. This is closest to the
-  current bar the three built targets clear, per above.
+  current bar the two not-yet-retrofitted built targets clear, per
+  above.
 - **(B) Dedicated fixture + reviewed/snapshotted output per target.**
   Adds a fixture representative of that target's real use (not the
   generic synthetic sample every projector currently shares) and a
@@ -987,15 +1088,25 @@ Acceptance criteria for green:
   projector in 1.0 scope — **DONE (2026-07-22)**, all 25 projectors
   emitting code-level doc comments.
 - Site-level doc projectors (docusaurus-reference, starlight-reference,
-  mkdocs-reference) built and verified with at least one representative
-  per major ecosystem to successfully generate a docs site from
-  fractal-generated code — **DONE (2026-07-22)**: `docusaurus-reference.ts`
-  (MDX + frontmatter, cross-links, `<TypeRef>` hover component, fields
-  tables, union variants), `starlight-reference.ts` (`<Aside>`/
-  `<LinkCard>`/`<Tabs>`/`<Code>`, TypeScript + JSON Schema signature
-  tabs), and `mkdocs-reference.ts` (MkDocs-Material admonitions,
-  abbreviation-based hover tooltips, content tabs, cross-links; fixed a
-  pipe-escaping bug for enums in tables along the way).
+  mkdocs-reference, mkdocs-vanilla-reference) built and verified with at
+  least one representative per major ecosystem to successfully generate
+  a docs site from fractal-generated code — **DONE (2026-07-22, extended
+  2026-08-13)**: `docusaurus-reference.ts` (MDX + frontmatter,
+  cross-links, `<TypeRef>` hover component, fields tables, union
+  variants), `starlight-reference.ts` (`<Aside>`/`<LinkCard>`/`<Tabs>`/
+  `<Code>`, TypeScript + JSON Schema signature tabs), `mkdocs-
+  reference.ts` — now explicitly the **Material for MkDocs** target
+  (MkDocs-Material admonitions, abbreviation-based hover tooltips,
+  icon-labeled content tabs for both the TypeScript/JSON-Schema
+  signature and multi-example sections, Material grid-cards for a
+  "Related Types" section, and a real `toMkdocsYaml()` `mkdocs.yml`
+  emitter; fixed a pipe-escaping bug for enums in tables along the way),
+  and `mkdocs-vanilla-reference.ts` — the genuinely separate **plain
+  MkDocs** target added 2026-08-13 (CommonMark + only MkDocs' own
+  default extensions, no Material syntax; blockquote deprecation
+  notices, numbered example subsections). See "MkDocs vs. Material for
+  MkDocs target-identity ambiguity, resolved" above for why these two
+  are separate files/targets rather than one.
 - `meta`-bag-to-doc-comment field mapping documented as a stable
   convention other projector authors can follow — already implicit in
   the 25 implemented projectors; explicit docs on the pattern TBD.
