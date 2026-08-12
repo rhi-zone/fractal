@@ -1,10 +1,13 @@
 # Relational mock-data generator — scoping notes
 
 > Pre-implementation scoping document. Captures the idea's shape, what this
-> session verified about the IR's current relation-modeling capability, prior
-> art the design should be grounded in, and open questions. Not a decision —
-> nothing here is built, and the open questions are laid out for the project
-> owner rather than resolved.
+> session verified about the IR's current relation-modeling capability
+> (including a follow-up checking whether fractal's existing newtype/brand
+> support can substitute for dedicated FK metadata, per the project owner's
+> steer that relation-modeling should be opt-in/toolkit rather than
+> core-IR), prior art the design should be grounded in, and open questions.
+> Not a decision — nothing here is built, and the open questions are laid
+> out for the project owner rather than resolved.
 
 ## The idea
 
@@ -124,6 +127,106 @@ require relations to be declared out-of-band (e.g. a side config the
 generator consumes, not carried on the `TypeRef` at all — the shape
 `@mswjs/data` and Mirage JS both use, see below) is an open question, not
 resolved here.
+
+## Follow-up: newtype/brand-based relation inference (project owner's steer)
+
+After the IR-verification section above was written, the project owner
+responded with a steer that reframes the "how relations get declared"
+question (open question 2 below): **no dedicated relation-modeling concept
+belongs in the core IR** — that stays the user's opt-in choice — but fractal
+could ship "a fully featured toolkit of utilities" for building a fake
+backend on top of whatever a user declares. Separately, they pointed out
+fractal already has newtype/branded-type support usable for database ids,
+and asked whether *that* — rather than a new FK-shaped metadata key — could
+double as the relation-detection mechanism: if entity A's id field is typed
+`UserId` (a newtype/brand) and entity B has a field also typed `UserId`,
+does that structural type-match already tell you B references A, with no
+separate FK annotation needed?
+
+This was checked against the actual IR source (`packages/type-ir/src`,
+`from-typescript.ts`, `kinds/semantic-strings.ts`) rather than assumed.
+Findings:
+
+**What newtype support actually is.** There is no dedicated `Newtype`/
+`Brand` entry in `TypeKinds` (`packages/type-ir/src/index.ts`). A branded
+type is represented as an ordinary base-shape `TypeRef` carrying
+`meta.brand: string` — a flat key in the same generic meta bag as
+`optional`/`nullable`/`readonly`, not a wrapping IR node. It's produced by
+`typeRefFromBrandedIntersection` in `from-typescript.ts` (~line 822) when
+extracting a TS type like `type UserId = string & { __brand: "UserId" }` or
+the `unique symbol`-tagged form fractal itself uses for `Uuid`/`Uri`/`Email`
+(`packages/type-ir/src/kinds/semantic-strings.ts:23-56`). Those three names
+specifically get *promoted* to real registered `TypeKinds` (`uuid`, `uri`,
+`email`, subtyped under `string`); every other brand name, including a
+hypothetical `UserId`, falls through to the generic `meta.brand` string with
+**no registry, no uniqueness enforcement, no namespacing** — two unrelated
+fields anywhere in a schema can carry `meta.brand: "UserId"` and the IR has
+no way to know whether that's the same concept or an accidental string
+collision.
+
+**Is there already an "this field is the id" concept?** Only inside the
+SQL/CQL DDL importer, and it is unrelated to brands: `from-sql.ts` sets
+`meta.primaryKey: boolean` on a column's `TypeRef` and `meta.primaryKey:
+string[]` on the table's own `TypeRef` when parsing `CREATE TABLE ...
+PRIMARY KEY` (documented at `from-sql.ts:26-38`, exercised by
+`from-sql.test.ts:108-112`). This is the same family of convention as the
+`meta.references` finding above — real, tested, but scoped to one importer
+and never cross-referenced against `meta.brand` anywhere in the codebase.
+
+**Feasibility of the two-part inference the project owner asked about:**
+
+- *(a) "F is the id, inferred from F's type being a newtype."* Not reliable
+  from brand identity alone. `meta.brand` is symmetric — the exact same
+  brand string is expected to appear on both an owning entity's id field
+  *and* every other entity's field that references it (that symmetry is the
+  whole premise of the matching idea), so nothing in the type itself
+  distinguishes "this is the primary identifier" from "this is a borrowed
+  reference to someone else's identifier." Telling the two apart needs one
+  more bit of information than the brand carries: either a naming
+  convention (field name matches a per-entity id-field convention, e.g.
+  `id`) or an explicit marker — the existing SQL-only `meta.primaryKey` key,
+  generalized outside the SQL path, is the natural candidate since it
+  already means exactly this.
+- *(b) "B relates to A, inferred from B's field type matching A's id
+  field's type."* Not derivable from the IR as it stands today, for the
+  same root reason as (a): nothing marks which entity *owns* a given brand
+  as its primary identifier. If both entity A (`id: UserId`) and, say,
+  entity C (`createdBy: UserId`) exist, and B has a field typed `UserId`,
+  brand-string matching alone cannot tell whether B references A or C —
+  ownership isn't information the IR captures anywhere, brand-based or
+  otherwise.
+- *(c) Minimal addition that would make it work, and where it hangs.* Given
+  the IR's existing generic `meta: Record<string, unknown>` bag on every
+  `TypeRef` (`index.ts`), the same "conventions over contracts" mechanism
+  `meta.references`/`meta.primaryKey` already use, the missing piece is a
+  single opt-in marker of ownership — e.g. generalizing `meta.primaryKey`
+  outside the SQL importer so any producer (hand-written schema, OpenAPI
+  extractor, whatever) can mark "this field is entity E's primary
+  identifier," paired with the field's existing `meta.brand`. Once that one
+  marker exists, brand-string equality genuinely does become a usable,
+  low-effort relation-detection mechanism for every *other* field sharing
+  that brand — no per-relationship FK annotation required, unlike
+  `meta.references` which has to be declared on every referencing field
+  individually. That is a real reduction in declaration burden compared to
+  the FK-metadata framing the original IR-verification section above
+  considered, and it requires **no new `TypeKinds` variant and no core-IR
+  relation concept** — exactly the shape of the project owner's steer: the
+  toolkit would supply the convention and the utilities that read it, a
+  schema author opts in by marking one id field per entity (or by already
+  having brand types and layering the marker on top), and nothing about
+  relation-modeling becomes mandatory or built into the IR itself.
+
+**Net assessment: newtype/brand matching is a real, feasible mechanism, but
+it is a *refinement* of the declaration question (open question 2), not a
+replacement for declaring something.** It does not let the generator infer
+relations from zero extra information — that was checked directly and does
+not hold, per (a)/(b) above. What it changes is *how little* has to be
+declared: one ownership marker per entity's id field, reusing brand types
+schemas may well already have for other reasons, versus one FK annotation
+per referencing field. Whether that's the toolkit's actual mechanism, versus
+the out-of-band-config shape Family 2 prior art below uses (`@mswjs/data`/
+Mirage-style hand-declared relations), is still the project owner's call —
+this section narrows the design space, it doesn't close it.
 
 ## Prior art
 
@@ -262,16 +365,27 @@ owner's call, not resolved:
    against a raw JSON Schema or OpenAPI doc with no fractal tree involved
    at all), the same way json-schema-faker and Prism are schema-format
    tools, not framework-specific ones.
-2. **How relations get declared**, given the IR-verification finding above:
-   generalize/formalize `from-sql.ts`'s existing (currently inert)
-   `meta.references` convention across all importers and projectors, invent
-   a separate mock-generator-specific metadata convention that doesn't
-   inherit `from-sql.ts`'s SQL-specific parsing assumptions, or require
-   relations declared out-of-band the way `@mswjs/data`/Mirage JS do (a
-   config/DSL the generator consumes, decoupled from `TypeRef.meta`
-   entirely). These have different blast radii — the first touches every
-   existing importer/projector that currently ignores `meta.references`;
-   the second and third don't touch existing code at all.
+2. **How relations get declared.** The project owner has steered part of
+   this: no dedicated relation-modeling concept goes into the core IR;
+   whatever mechanism is chosen is opt-in and lives in a toolkit of
+   utilities fractal ships, not a `TypeKinds` addition. Within that
+   constraint, still open: generalize/formalize `from-sql.ts`'s existing
+   (currently inert) `meta.references` convention across all importers and
+   projectors (one FK annotation per referencing field); generalize
+   `from-sql.ts`'s `meta.primaryKey` outside the SQL importer and pair it
+   with the existing `meta.brand` newtype convention so brand-string
+   matching does the relation-detection work (one ownership marker per
+   entity's id field — see the newtype/brand follow-up section above,
+   which confirmed this is feasible but still requires that one marker,
+   not zero declaration); or require relations declared fully out-of-band
+   the way `@mswjs/data`/Mirage JS do (a config/DSL the generator consumes,
+   decoupled from `TypeRef.meta` entirely). These have different blast
+   radii — the first touches every existing importer/projector that
+   currently ignores `meta.references`; the brand/primaryKey option and the
+   out-of-band option don't touch existing code at all, but the brand
+   option only pays off for schemas that already use (or adopt) newtype
+   ids, while the out-of-band option works regardless of how a schema
+   types its ids.
 3. **Inference vs. declaration.** Even with a declaration mechanism chosen,
    should the generator attempt to *infer* likely relations for sources that
    don't declare them at all (e.g. heuristically treating a field literally
@@ -316,13 +430,20 @@ owner's call, not resolved:
   (structural/recursive-type reference), `resolveRef`/`walkTypeRef`; source
   of this session's "no data-relation concept" finding.
 - `packages/type-ir/src/from-sql.ts` — `meta.references` FK-constraint
-  parsing (currently inert; see the IR-verification section above).
+  parsing (currently inert; see the IR-verification section above) and
+  `meta.primaryKey`, the SQL-scoped precedent the newtype/brand follow-up
+  section proposes generalizing.
 - `packages/type-ir/src/sql.ts` — the TypeRef→SQL projector that does *not*
   currently read `meta.references` back out; confirms the capture is
   one-way today.
 - `packages/type-ir/src/kinds/semantic-strings.ts` — `uuid`/`email`/etc.
   semantically-tagged kinds a data fabricator could key sample-value
-  generation off directly for the non-relational part of the problem.
+  generation off directly for the non-relational part of the problem; also
+  the `Uuid`/`Uri`/`Email` `unique symbol`-brand pattern examined in the
+  newtype/brand follow-up section.
+- `packages/type-ir/src/from-typescript.ts` — `typeRefFromBrandedIntersection`
+  (~line 822), where an arbitrary TS branded type becomes `meta.brand` on
+  extraction; source of the newtype/brand follow-up section's findings.
 - `docs/design/design-philosophy.md` — the open-metadata-bag-over-fixed-
   schema principle the `meta.references`-generalization option (open
   question 2) would extend rather than break from.
