@@ -431,6 +431,44 @@ rather than be bespoke" — not as its own scoped idea yet, unlike the
 `googleFonts()` adapter above, which stands on its own regardless of the
 audit goal.
 
+## Much bigger, much earlier-stage: brand identity development at the speed of thought
+
+**Everything above this section, exploratory as it is, still assumes
+"provide an input, a pipeline runs, output comes out" as the interaction
+shape.** This section is a genuinely different kind of idea, added in a
+follow-up round (and corrected once already, from an initial
+multiplayer/concurrent-editing framing this session got wrong — the actual
+ask is about feedback-loop speed, not simultaneous co-editing): **"design
+at the speed of thought"** — an instant feedback loop for developing a
+brand identity, either building one from scratch or applying an existing
+brand to a docs site, where a change is reflected immediately. That could
+be one person iterating alone, or one person iterating with a client
+watching/guiding live (e.g. on a call, or in the same room) — the emphasis
+is the immediacy of the loop itself, not multiple people editing the same
+session concurrently. No claim here about session/multiplayer
+infrastructure, concurrent-edit conflict resolution, or anything like it —
+that framing was floated and explicitly retracted.
+
+This is flagged, deliberately, as **notably earlier-stage than everything
+else in this document.** Nothing about it has been scoped, let alone
+designed — not what "immediate" needs to mean in practice (sub-second live
+preview re-render? something else?), not what the interaction surface
+looks like (a live-editing UI of some kind is implied but not described),
+and not how it relates to the generation/derivation work described
+elsewhere in this doc.
+
+**Whether/how this relates to the combinator/DU/interpreter pattern
+speculated about above, or to the audit-tool idea, is left as an open
+question rather than forced.** There may be a real connection — fast
+re-derivation from a changed seed color is arguably just the existing
+color-projection pipeline run cheaply/instantly rather than a different
+system — but that's speculation, not an "obvious natural link" earned by
+anything verified this session, so it's recorded here as a possibility to
+revisit, not a design decision. It's equally possible this turns out to be
+a distinct interaction layer (a live-editing surface) sitting on top of the
+same underlying derivation logic, worth keeping conceptually separate from
+it.
+
 ## Open questions
 
 Genuinely unresolved, listed rather than defaulted:
