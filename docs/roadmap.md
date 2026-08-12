@@ -680,38 +680,67 @@ The scratch Sphinx project used for the visual check (minimal `conf.py`
 per the instruction not to persist bar-C-shaped tooling into the repo.
 
 **Still planned**: The remaining site-level generators listed below
-(TypeDoc/JSDoc/VitePress for JS/TS beyond Docusaurus/Starlight, pdoc for
-Python (Sphinx itself is now done, see above), rustdoc, Javadoc, godoc,
-DocFX, YARD/RDoc, DocC, Dokka, Haddock, Doxygen, phpDocumentor, dartdoc,
-elm-doc-preview, mdBook, GitBook, Zensical) — none of these
-ecosystem-native generators have a fractal projector yet; four
+(VitePress for JS/TS beyond Docusaurus/Starlight, mdBook for Rust, DocFX
+for C#, GitBook and Zensical/Material for MkDocs cross-language) — none
+of these ecosystem-native generators have a fractal projector yet; four
 cross-ecosystem/ecosystem-native doc-site frameworks (Docusaurus,
 Starlight, MkDocs, Sphinx) are done.
 
 Site-level generators to target, by language ecosystem:
-- JS/TS — TypeDoc, JSDoc, Docusaurus, VitePress, Starlight
-- Python — Sphinx (autodoc), MkDocs (mkdocstrings), pdoc
-- Rust — rustdoc, mdBook
-- Java — Javadoc
-- Go — godoc / pkg.go.dev
-- C# — DocFX, XML doc comments
-- Ruby — YARD, RDoc
-- Swift — DocC (Apple's)
-- Kotlin — Dokka (KDoc)
-- Haskell — Haddock
-- C++ — Doxygen
-- PHP — phpDocumentor
-- Dart — dartdoc
-- Elm — elm-doc-preview
+- JS/TS — Docusaurus, VitePress, Starlight
+- Python — Sphinx (autodoc), MkDocs (mkdocstrings)
+- Rust — mdBook
+- C# — DocFX (conceptual-Markdown mode — see scope note below)
 - Cross-language — Material for MkDocs (squidfunk), Zensical
   (squidfunk's newer Rust-based doc generator), GitBook (hosted
   docs-as-product platform)
 
-#### Popularity-descending ranking of all 25 targets (research pass, 2026-08-12)
+**Explicitly out of scope: API-reference extractors.** The project
+owner has scoped this initiative to *documentation site generators* —
+tools that consume a tree of hand-authored (or otherwise pre-generated)
+content pages and build/render them into a doc site, the way
+Docusaurus/Starlight/MkDocs/Sphinx/VitePress/GitBook/mdBook/Material for
+MkDocs/Zensical all do — and explicitly excluded *API-reference
+extractors*: tools whose core job is parsing source code and inline doc
+comments (docstrings, `///`, `/** */`, XML doc comments, etc.) directly
+into reference docs, with no real concept of ingesting a separate
+hand-authored page tree. TypeDoc was the first confirmed example
+(fractal's analogue of Stainless — that whole API-reference-extraction
+niche is out of scope here), and the same distinction was then applied
+across the full planned-target list. Removed on that basis, each
+verified against its own docs/homepage rather than assumed by
+name/language rhyme with TypeDoc (2026-08-13 pass): **JSDoc** (JS),
+**pdoc** (Python), **rustdoc** (Rust), **Javadoc** (Java), **godoc /
+pkg.go.dev** (Go), **YARD** and **RDoc** (Ruby), **DocC** (Swift —
+supports Markdown articles, but only inside a `.docc` catalog tightly
+bound to one framework's symbol graph, not an independent authored-page
+tree; core identity is still API-reference compilation from code),
+**Dokka** (Kotlin), **Haddock** (Haskell), **Doxygen** (C++),
+**phpDocumentor** (PHP), **dartdoc** (Dart), and **elm-doc-preview**
+(Elm) — all confirmed pure source/doc-comment extractors with no
+hand-authored-page-tree capability.
 
-A general-popularity check across all 25 targets (the 3 already built plus
-the 22 planned), run to inform sequencing for the "what order do the 20+
-targets ship in?" question below — signals gathered live via npm/PyPI/
+**DocFX (C#) checked specifically and kept, not removed.** Its own docs
+(`docs.basic-concepts`) describe two genuinely separate pipelines: an
+optional API-extraction step (XML doc comments → YAML → HTML) and a
+"Conceptual Documentation" pipeline that builds a themed site from a
+tree of hand-authored Markdown pages with its own TOC/navigation — the
+API step can be omitted entirely and DocFX still builds a full site from
+Markdown alone, the same shape as Sphinx/MkDocs. That page-consuming
+capability is substantial, not a thin bolt-on, so DocFX stays in scope
+— targeted specifically for its conceptual-docs mode, not its optional
+API-extraction mode.
+
+#### Popularity-descending ranking of all 10 targets (research pass, 2026-08-12; trimmed 2026-08-13)
+
+A general-popularity check across the 10 in-scope targets (4 already
+built plus 6 planned — see "Explicitly out of scope: API-reference
+extractors" above for the 15 tools originally included in this research
+pass and then removed as out of scope; their entries below were deleted
+rather than kept and re-numbered, since their placement no longer
+informs anything this initiative sequences), run to inform sequencing
+for the "what order do the targets ship in?" question below — signals
+gathered live via npm/PyPI/
 RubyGems/Packagist/pub.dev/crates.io/NuGet registry APIs, GitHub star
 counts, and current comparison writeups, not estimated from memory. Per
 this doc's own "not a rigorous audit" framing (mirroring
@@ -726,88 +755,44 @@ stars vs. built-in-toolchain reasoning with no download metric at all) are
 inherently apples-to-oranges; false precision is not implied by the
 numbering.
 
-1. **Sphinx** (Python) — ~18.8M PyPI downloads/week (pypistats.org,
-   2026-08-12); powers CPython, Django, NumPy, pandas, SciPy, and Flask's
-   own docs.
-2. **TypeDoc** (JS/TS) — ~4.93M npm downloads/week (npm registry API);
-   the standard TypeScript API-doc generator.
-3. **MkDocs** (Python — **built**) — ~3.87M PyPI downloads/week
-   (pypistats.org). *Coin flip vs. #4*: Material for MkDocs' own weekly
+1. **Sphinx** (Python — **built**) — ~18.8M PyPI downloads/week
+   (pypistats.org, 2026-08-12); powers CPython, Django, NumPy, pandas,
+   SciPy, and Flask's own docs.
+2. **MkDocs** (Python — **built**) — ~3.87M PyPI downloads/week
+   (pypistats.org). *Coin flip vs. #3*: Material for MkDocs' own weekly
    figure (~3.76M) is close enough that the relative order between these
    two is not a confident call from this signal alone.
-4. **Material for MkDocs** (cross-language, squidfunk) — ~3.76M PyPI
+3. **Material for MkDocs** (cross-language, squidfunk) — ~3.76M PyPI
    downloads/week (pypistats.org); note squidfunk's own blog
    (2025-11-05) announces this project's end-of-life for 2026-11-05 in
-   favor of Zensical (#18 below) — high current usage running alongside
+   favor of Zensical (#10 below) — high current usage running alongside
    an active sunset.
-5. **JSDoc** (JS) — ~2.91M npm downloads/week (npm registry API); older
-   lineage than TypeDoc (15.5k GitHub stars vs. TypeDoc's 8.4k), fewer
-   weekly downloads.
-6. **Docusaurus** (JS — **built**) — ~1.41M npm downloads/week; 65.9k
+4. **Docusaurus** (JS — **built**) — ~1.41M npm downloads/week; 65.9k
    GitHub stars, the highest star count of any tool in this list, used
    by React/Jest/Prettier docs.
-7. **rustdoc** (Rust, built into the toolchain) — no downloadable-package
-   metric exists (it ships with every Rust install); every one of the
-   200,000+ crates on crates.io (per an October-2025 ecosystem report) is
-   documented via rustdoc on docs.rs by default. Proxy: rust-lang/rust
-   has 115k GitHub stars. **Placement here is a judgment call given the
-   total absence of a comparable download metric, not a measured
-   comparison** — flagged as the most uncertain block in this list along
-   with #8 and #9.
-8. **godoc / pkg.go.dev** (Go, built into the toolchain) — same built-in
-   caveat as #7: no downloadable-package metric, pkg.go.dev is the
-   default doc host for every public Go module. Proxy: golang/go has
-   136k GitHub stars (the highest of any repo touched in this research,
-   though that measures Go-the-language broadly, not the doc tool
-   specifically).
-9. **Javadoc** (Java, built into the JDK) — same built-in caveat; ships
-   with every JDK and is the default for effectively all Java API docs.
-   Weakest signal of the three built-ins here: no javadoc-specific repo
-   exists to proxy from (openjdk/jdk, at 23.2k stars, stands in for the
-   entire JDK, not javadoc alone).
-10. **RDoc** (Ruby, bundled with the Ruby interpreter itself) —
-    RubyGems.org shows ~332M all-time downloads, the single highest raw
-    download figure found in this whole research pass — but that figure
-    is inflated by bundling with the interpreter, not a per-project pull
-    signal.
-11. **YARD** (Ruby) — RubyGems.org shows ~231M all-time downloads; Ruby
-    Toolbox and other sources describe YARD as the gem most Ruby projects
-    actually *choose* over RDoc for real per-project documentation,
-    despite RDoc's larger bundled-download count. **Flagged: the two
-    candidate signals for Ruby (raw bundled-download volume vs. per-
-    project adoption choice) point in different directions** — #10 vs.
-    #11's relative order is genuinely unresolved by this research, not a
-    confident call.
-12. **GitBook** (cross-language, hosted/commercial) — no clean package-
-    download metric since it's SaaS, not a downloadable tool; w3techs.com
-    (August 2026) puts it at 21.0% share among sites it classifies as
-    documentation platforms, and its open-source frontend repo
-    (`GitbookIO/gitbook`) has 29.0k GitHub stars — both well above most
-    single-language tools in this list, but the underlying signal
-    (site-classification share, vendor-claimed "2M+ users") is
-    structurally different from every download-count comparison
-    elsewhere here. **Placement is low-confidence** given how different
-    the signal type is from its neighbors.
-13. **VitePress** (JS) — ~768k npm downloads/week.
-14. **Starlight** (JS — **built**) — ~708k npm downloads/week. *Coin
-    flip vs. #13*: close enough to VitePress's figure that the relative
-    order between these two is near a toss-up on this signal alone.
-15. **DocFX** (C#/.NET) — ~5.8M all-time NuGet downloads (nuget.org
-    package page and the NuGet search API agree on this figure).
-16. **mdBook** (Rust) — crates.io shows ~9.87M all-time downloads / ~837k
-    "recent" downloads (a secondary search-derived figure of ~7.7M
-    all-time didn't reconcile with the direct API read; the direct API
-    figure is treated as more reliable here).
-17. **Doxygen** (C++) — GitHub 6.5k stars; long-standing default C/C++
-    doc generator per multiple 2025 comparison writeups (Slant,
-    Markaicode), though this pass could not obtain a clean install-count
-    (Homebrew shows only ~85k installs over 365 days — a macOS-only
-    subset — and a conda-forge downloads figure came back contradictory
-    between two fetch methods and isn't usable). **Placement here is a
-    judgment call**, similar in kind to the built-in-tool uncertainty
-    above but for a different reason (real download channels exist, none
-    of them were cleanly readable).
-18. **Zensical** (cross-language, squidfunk's newer Rust-based successor
+5. **GitBook** (cross-language, hosted/commercial) — no clean package-
+   download metric since it's SaaS, not a downloadable tool; w3techs.com
+   (August 2026) puts it at 21.0% share among sites it classifies as
+   documentation platforms, and its open-source frontend repo
+   (`GitbookIO/gitbook`) has 29.0k GitHub stars — both well above most
+   single-language tools in this list, but the underlying signal
+   (site-classification share, vendor-claimed "2M+ users") is
+   structurally different from every download-count comparison
+   elsewhere here. **Placement is low-confidence** given how different
+   the signal type is from its neighbors.
+6. **VitePress** (JS) — ~768k npm downloads/week.
+7. **Starlight** (JS — **built**) — ~708k npm downloads/week. *Coin
+   flip vs. #6*: close enough to VitePress's figure that the relative
+   order between these two is near a toss-up on this signal alone.
+8. **DocFX** (C#/.NET) — ~5.8M all-time NuGet downloads (nuget.org
+   package page and the NuGet search API agree on this figure); scoped
+   here for its conceptual-Markdown-site mode specifically, not its
+   optional API-extraction mode — see the out-of-scope note above.
+9. **mdBook** (Rust) — crates.io shows ~9.87M all-time downloads / ~837k
+   "recent" downloads (a secondary search-derived figure of ~7.7M
+   all-time didn't reconcile with the direct API read; the direct API
+   figure is treated as more reliable here).
+10. **Zensical** (cross-language, squidfunk's newer Rust-based successor
     to Material for MkDocs) — ~321k PyPI downloads/week is a real,
     substantial number for a project only ~9 months old (created May
     2025, still pre-1.0 at v0.0.53 as of this research) — flagged as
@@ -816,29 +801,6 @@ numbering.
     here given the project's very early release stage), and its true
     standing will likely rise further once Material for MkDocs sunsets
     in November 2026.
-19. **phpDocumentor** (PHP) — Packagist.org shows ~3.14M total installs;
-    described in search results as "the de-facto documentation tool for
-    PHP projects."
-20. **pdoc** (Python) — ~456k PyPI downloads/week.
-21. **dartdoc** (Dart) — pub.dev shows ~106k downloads/week (two direct
-    pub.dev fetches agreed; a third, search-snippet-derived figure
-    disagreed and is treated as lower-confidence).
-22. **Dokka** (Kotlin) — GitHub 3.8k stars; no reliable download-count
-    metric found (the Gradle Plugin Portal doesn't expose one, and a
-    secondary "used in 92 components" Maven-Central mention couldn't be
-    independently confirmed).
-23. **DocC** (Swift, built into the Swift toolchain/Xcode) — same
-    built-in caveat as #7-#9; GitHub 1.4k stars for `swiftlang/swift-docc`,
-    no adoption number found beyond qualitative commentary (e.g. a 2021
-    piece on slow open-source uptake after DocC's launch).
-24. **Haddock** (Haskell, bundled with GHC) — GitHub 360 stars, and that
-    repo is itself archived (development moved into GHC's own repo in
-    2024) — the weakest signal of the built-in tools in this list.
-25. **elm-doc-preview** (Elm) — clearly the long tail by every signal
-    found: 137 GitHub stars (the lowest of all 25 targets), ~2.6k weekly
-    npm downloads (low-confidence, search-snippet-sourced since the
-    direct npm page fetch was blocked), and no release since December
-    2024.
 
 **Caveats on this whole list, restated:** this was a general-popularity
 check (registry download APIs, GitHub star counts, current comparison
@@ -846,22 +808,17 @@ writeups), not a rigorous download-count audit — treat both the ordering
 and any specific placement above as a first pass to be checked against
 real numbers when a given target's projector is actually about to be
 built, the same framing `framework-router-codegen.md`'s candidate list
-uses. The built-in-toolchain tools (rustdoc, godoc/pkg.go.dev, Javadoc,
-DocC, Haddock) have no downloadable-package metric at all and are placed
-by "used by default across an entire language ecosystem" reasoning rather
-than a measured number — the least rigorous placements in this list.
-GitBook (SaaS, no package-download metric) and RDoc/YARD (bundled-download
-inflation vs. per-project-choice signal pointing opposite directions) are
-each flagged individually above for the same reason. Coin-flip-close pairs
-called out above: MkDocs vs. Material for MkDocs (#3/#4), VitePress vs.
-Starlight (#13/#14).
+uses. GitBook (SaaS, no package-download metric) is flagged individually
+above for that reason. Coin-flip-close pairs called out above: MkDocs
+vs. Material for MkDocs (#2/#3), VitePress vs. Starlight (#6/#7).
 
 ### Production-grade initiative across all doc-generation targets — open
 
 The project owner wants to push all doc-generator targets — the four
 built (Docusaurus, Starlight, MkDocs, Sphinx) plus every planned target
-above, including the newly-added mdBook and GitBook (25 targets total as
-of this writing: 4 built, 21 planned) — to "production grade" together,
+above (10 targets total as of this writing: 4 built, 6 planned, after
+the 2026-08-13 trim removing the 15 API-reference-extractor tools listed
+as out of scope above) — to "production grade" together,
 as one initiative. No
 definition of "production grade" exists yet for this repo's doc
 projectors, and none is proposed here; both of the following are open
@@ -878,14 +835,15 @@ questions belonging to the project owner:
   support vs. which are ecosystem-specific), documentation of the
   `meta`-bag-to-native-doc-comment mapping per target, and/or something
   else not listed here.
-- **What order do the 20+ targets ship in?** No sequencing or
+- **What order do the remaining targets ship in?** No sequencing or
   prioritization is assumed here (e.g. by ecosystem popularity, by
   reuse of already-built code-level doc-comment emission, by which
   ecosystems fractal already has strong projector coverage for). This
   needs deciding before work is scheduled. A first-pass
-  popularity-descending ordering of all 25 targets, built from real
-  research rather than assumed, is now recorded above in "Popularity-
-  descending ranking of all 25 targets (research pass, 2026-08-12)" —
+  popularity-descending ordering of all 10 in-scope targets, built from
+  real research rather than assumed, is now recorded above in
+  "Popularity-descending ranking of all 10 targets (research pass,
+  2026-08-12; trimmed 2026-08-13)" —
   offered as one candidate input to this sequencing question, not a
   settled answer to it; the project owner may weight sequencing by a
   different factor entirely (reuse, existing coverage strength, etc.),
@@ -971,10 +929,10 @@ is a separate follow-up the project owner would need to schedule.
   styled, nothing is visually broken. Highest-cost bar by a wide
   margin: needs a working rendered instance of each target site
   framework per target, and either sustained human review or a visual-
-  regression pipeline maintained across 25 targets. Catches the
+  regression pipeline maintained across 10 targets. Catches the
   broadest class of real defects (a build can succeed while still
   rendering wrong) but is likely impractical to apply uniformly across
-  all 25 targets at once, versus being reserved for a smaller
+  all 10 targets at once, versus being reserved for a smaller
   representative subset.
 
 Two further dimensions, orthogonal to the above and separately
