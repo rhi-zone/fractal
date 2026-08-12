@@ -357,7 +357,7 @@ or a separate CLI, and not whether it audits only fractal-generated sites
 or is meant to generalize to arbitrary docs sites later. Recorded as a
 stated goal, not a spec.
 
-## Adjacent dependency for the audit idea: composable, placement-aware doc generation
+## Adjacent dependency for the audit idea: composable doc generation, in fractal's own combinator pattern
 
 Flagged as a real dependency of the audit idea above, not a standalone
 ask: auditing meaningfully requires knowing what got generated and *where
@@ -365,23 +365,69 @@ it landed* in a site's structure, and today's projectors don't offer that
 kind of control — per the survey above, every projector's job today is
 closer to "generate pages for everything in the input document," with
 `options.basePath` (seen in both the type-ir reference projectors and
-`http-route-reference.ts`) as the only placement knob currently found,
-not a way to selectively scope *what* gets generated or place different
-subsets at different points in a site's structure. You can't audit
-placement you don't control — an audit that wants to check "is this
-section's branding consistent with that section's" needs the generation
-step to be able to produce deliberately-scoped, deliberately-placed output
-in the first place, which is a bigger, separate capability from anything
-else in this doc.
+`http-route-reference.ts`) as the only placement knob currently found, and
+even that is a single flat prefix applied uniformly to every generated
+page (confirmed directly against `docusaurus-reference.ts`'s own doc
+comment: "every page in the set lives in the same directory"), not a way
+to selectively scope *what* gets generated or place different subsets at
+different points in a site's structure. You can't audit placement you
+don't control — an audit that wants to check "is this section's branding
+consistent with that section's" needs the generation step to be able to
+produce deliberately-scoped, deliberately-placed output in the first
+place.
 
-Not designed here at all: what "composable" means concretely (a
-filter/selector API over the input document? per-section generation calls
-that a consumer composes themselves? something else), whether this is a
-enhancement to the existing projectors or a new layer in front of them,
-and whether it's motivated *only* by the audit idea or has independent
-value (e.g. large API surfaces wanting partial/staged doc generation
-regardless of branding). Recorded here specifically as "the audit idea
-needs this to be buildable," not as its own scoped idea yet — unlike the
+The refinement from the project owner: this shouldn't be reached for as a
+bespoke pile of options on the existing projector functions (more flags
+next to `basePath`) — it should more likely follow the same structural
+pattern the rest of fractal is already built on, applied to "what gets
+generated and where it lands" instead of to routing/API or type-IR
+definitions. `docs/design/design-philosophy.md` (read directly this
+session, not paraphrased from memory) names that pattern explicitly as
+**"Three independent layers"**:
+
+1. **Combinators** — compose routing/API functionality. The authoring
+   surface.
+2. **Constructors / DU** — produce the serializable, inspectable
+   expression data.
+3. **Interpreters / projections** — consume the DU to produce surfaces.
+
+— with combinators and projections deliberately not knowing about each
+other, and the DU (discriminated union) as the sole contract between them.
+The philosophy doc also names a specific companion shape used throughout
+fractal for extensibility: an **augmentable interface producing a
+discriminated union**, where "interpreters (projections) handle the
+variants they recognize" rather than requiring a closed, exhaustively-cased
+set (the "Extensible DU + interpreter pattern" section) — and an **open
+metadata bag over fixed schema**, where projections read what they
+recognize off a plain conventional-keys object and ignore the rest, rather
+than the core needing to predict every consumer's needs up front (the
+"Open metadata bag" section).
+
+Applied — speculatively, not designed — to doc-generation placement, the
+same three-layer shape would suggest: a small set of **combinators** for
+scoping/filtering/nesting/transforming "what gets generated and where,"
+authored the way routing/API trees are authored today; those combinators
+producing a **DU** describing scope and placement as inspectable data
+(not a closure-only decision baked into a single flat-options call);
+and the existing per-framework projectors becoming **interpreters** over
+that placement DU instead of over "the whole input document, optionally
+prefixed." This would put doc-generation placement through the same
+architecture as fractal's routing and type-IR layers rather than being a
+one-off addition bolted onto the current projector functions — but this is
+this session's own reading of how the pattern *might* transfer, not
+something the project owner has confirmed maps this way, and no part of
+it — combinator names, the DU's shape, which projectors would need to
+change — is designed here.
+
+Not designed here at all: the actual combinator vocabulary (compose?
+nest? scope? filter? transform? some other verbs — none chosen), the DU's
+shape, whether this is an evolution of the existing projector functions or
+a new layer generating input *for* them, and whether it's motivated *only*
+by the audit idea or has independent value (e.g. large API surfaces
+wanting partial/staged doc generation regardless of branding). Recorded
+here as "the audit idea needs something like this to be buildable, and it
+should probably follow fractal's own combinator/DU/interpreter pattern
+rather than be bespoke" — not as its own scoped idea yet, unlike the
 `googleFonts()` adapter above, which stands on its own regardless of the
 audit goal.
 
@@ -418,11 +464,13 @@ Genuinely unresolved, listed rather than defaulted:
   each docgen target (see "Font selection" above).
 - The branding/polish audit tool's check list, output shape, and package
   boundary — entirely undesigned, see "Bigger idea: dogfooding..." above.
-- Whether composable/placement-aware doc generation (the audit idea's
-  named dependency) is scoped as part of this branding effort at all, or
-  as separate, prerequisite work tracked elsewhere — not decided, and
-  itself not designed even at the shape level yet beyond "the projectors
-  don't offer this today."
+- Whether composable doc generation (the audit idea's named dependency) is
+  scoped as part of this branding effort at all, or as separate,
+  prerequisite work tracked elsewhere — not decided. If pursued, whether it
+  actually follows fractal's combinator/DU/interpreter pattern (as
+  speculated in "Adjacent dependency..." above) or turns out not to fit
+  that shape once someone tries to design it for real — not confirmed
+  either way yet, only proposed as the likely direction.
 
 ## See also
 
@@ -441,3 +489,7 @@ Genuinely unresolved, listed rather than defaulted:
   native-config-vs-raw-CSS question above.
 - `docs/design/framework-router-codegen.md` — another scoping doc in this
   directory, referenced for structural convention.
+- `docs/design/design-philosophy.md` — source of the "Three independent
+  layers" (combinators → constructors/DU → interpreters/projections),
+  "Extensible DU + interpreter pattern," and "Open metadata bag over fixed
+  schema" sections cited in "Adjacent dependency..." above.
