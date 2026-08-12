@@ -31,7 +31,17 @@ the color-derivation piece: logo handling (light/dark logo variants), and
 font/font-pairing selection. These are noted here as in-scope for the
 overall "branding system" idea but are not researched in this pass — the
 research and prior-art grounding done this session is about the color
-piece specifically.
+piece specifically. Font selection has since been given one further bit of
+shape (a `googleFonts()` adapter — see its own section below) but is still
+otherwise undesigned; logo handling remains entirely unscoped.
+
+Two further ideas were added in a follow-up round, described in their own
+sections below rather than folded in here since they're additions to the
+doc's scope, not refinements of the original color-derivation idea: a
+stated longer-term goal of this system becoming a "lighthouse, but for
+branding" self-audit tool for fractal's own docs sites (see "Bigger idea:
+dogfooding..." below), and a composable/placement-aware doc-generation
+capability that goal would depend on (see "Adjacent dependency..." below).
 
 ## Low floor, high ceiling — what that means concretely (draft)
 
@@ -56,6 +66,44 @@ currently understood:
   spectrum (baked-in default vs. exposed knob), and whether "projecting into
   a fuller palette" produces a fixed-shape output (e.g. Radix's 12-step
   convention) or something more free-form.
+
+## Font selection — a `googleFonts()` adapter (draft)
+
+One concrete piece of shape given to the previously-unresearched
+font/font-pairing surface: a `googleFonts()` adapter as the entry point for
+font selection, the font-side analog of "give it one input, get a themed
+output" — though what exactly the "one input" is for fonts (a single font
+name? a pairing preference like "serif heading / sans body"? a vibe
+keyword?) is not decided here.
+
+The concrete DX ask, distinct from the derivation question above: an
+**exhaustive enum of known Google Fonts baked into the adapter**, so a
+consumer gets editor autocomplete over real font names instead of a
+free-text string that silently does nothing (or throws late) on a typo or
+an unsupported family. This is a scoping/DX requirement, not a design —
+open items this doc doesn't resolve:
+
+- Where the enum's source of truth comes from and how it stays current —
+  the Google Fonts catalog changes over time (fonts are added; variable-font
+  metadata changes), so a hand-maintained enum would drift. Google publishes
+  a [Fonts Developer API](https://developers.google.com/fonts/docs/developer_api)
+  that returns the current family list; whether the enum would be
+  generated from that API at build/publish time, vendored and periodically
+  refreshed, or hand-maintained is not decided.
+- Whether the enum is scoped to font *families* only, or also encodes
+  available weights/styles/variable-font axes per family (real DX value,
+  real added complexity — not designed here).
+- How this adapter's output actually reaches each docgen target — same
+  open native-hook-vs-raw-CSS question as the color system (per "How this
+  might integrate per target" below), since font loading has its own
+  per-framework mechanisms (e.g. Docusaurus/Starlight can load a
+  `<link>`/`@font-face` via their respective config or a custom-CSS/head
+  injection point; MkDocs Material has its own `theme.font` config key
+  already; Sphinx has none of these natively).
+- Whether/how this composes with the "font pairing" idea from the original
+  prompt (heading font + body font as a deliberate pair, not two
+  independent free choices) — `googleFonts()` as named so far is a
+  single-font selector; pairing is a separate, unaddressed question.
 
 ## Prior art (grounded, researched this session)
 
@@ -285,6 +333,58 @@ offer:
   branding-CSS-generation module would be new shared infrastructure, not an
   extension of an existing shared path.
 
+## Bigger idea: dogfooding this as a branding/polish audit tool ("lighthouse, but for branding")
+
+A stated longer-term goal, added in a follow-up round, well beyond the
+scope of the color/font derivation work above and not designed at all here
+— captured because the project owner wants it recorded as a real target for
+this system, not just a color-derivation utility.
+
+The idea: once fractal can *generate* a branded theme from one input, the
+same machinery (color-derivation rules, contrast checks, whatever the font
+system becomes) could plausibly also *audit* an already-built docs site —
+checking things like contrast compliance, palette consistency, and general
+"branding polish" against fractal's own generated output — in the spirit of
+how Lighthouse audits a page for performance/accessibility/SEO, but scoped
+to branding/theming coherence specifically instead. **Fractal's own docs
+sites are explicitly named as the first target** — this is meant to
+dogfood on fractal itself before it's pointed at anyone else's site.
+
+Genuinely nothing about the audit tooling is designed here: not its check
+list, not its output format (pass/fail? score? Lighthouse-style report?),
+not whether it's a new package, a mode of the branding-generation package,
+or a separate CLI, and not whether it audits only fractal-generated sites
+or is meant to generalize to arbitrary docs sites later. Recorded as a
+stated goal, not a spec.
+
+## Adjacent dependency for the audit idea: composable, placement-aware doc generation
+
+Flagged as a real dependency of the audit idea above, not a standalone
+ask: auditing meaningfully requires knowing what got generated and *where
+it landed* in a site's structure, and today's projectors don't offer that
+kind of control — per the survey above, every projector's job today is
+closer to "generate pages for everything in the input document," with
+`options.basePath` (seen in both the type-ir reference projectors and
+`http-route-reference.ts`) as the only placement knob currently found,
+not a way to selectively scope *what* gets generated or place different
+subsets at different points in a site's structure. You can't audit
+placement you don't control — an audit that wants to check "is this
+section's branding consistent with that section's" needs the generation
+step to be able to produce deliberately-scoped, deliberately-placed output
+in the first place, which is a bigger, separate capability from anything
+else in this doc.
+
+Not designed here at all: what "composable" means concretely (a
+filter/selector API over the input document? per-section generation calls
+that a consumer composes themselves? something else), whether this is a
+enhancement to the existing projectors or a new layer in front of them,
+and whether it's motivated *only* by the audit idea or has independent
+value (e.g. large API surfaces wanting partial/staged doc generation
+regardless of branding). Recorded here specifically as "the audit idea
+needs this to be buildable," not as its own scoped idea yet — unlike the
+`googleFonts()` adapter above, which stands on its own regardless of the
+audit goal.
+
 ## Open questions
 
 Genuinely unresolved, listed rather than defaulted:
@@ -313,6 +413,16 @@ Genuinely unresolved, listed rather than defaulted:
   consuming projectors directly — not discussed yet.
 - Zero-config default vs. tunable-knob boundary (see "Low floor, high
   ceiling" above) — which specific things belong on which side.
+- `googleFonts()`'s enum source of truth, its scope (families only vs.
+  weights/styles/variable axes), and how a selected font actually reaches
+  each docgen target (see "Font selection" above).
+- The branding/polish audit tool's check list, output shape, and package
+  boundary — entirely undesigned, see "Bigger idea: dogfooding..." above.
+- Whether composable/placement-aware doc generation (the audit idea's
+  named dependency) is scoped as part of this branding effort at all, or
+  as separate, prerequisite work tracked elsewhere — not decided, and
+  itself not designed even at the shape level yet beyond "the projectors
+  don't offer this today."
 
 ## See also
 
