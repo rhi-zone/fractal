@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "rewriteRelativeImportExtensions": true,
+    "paths": {}
+  },
+  "references": [
+    { "path": "../api-tree/tsconfig.build.json" },
+    { "path": "../http-api-projector/tsconfig.build.json" }
+  ],
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.fuzz.test.ts", "src/**/*.bench.ts"]
+}

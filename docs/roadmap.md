@@ -1153,8 +1153,14 @@ What's planned / open (per `TODO.md`):
   through the `Node ⇒ ProtocolType` projection pattern HTTP/type-ir use.
 - Generating idiomatic router code for existing frameworks (Express, Hono,
   Elysia, ...) as an alternative or companion to `http-api-projector`'s own
-  router output is scoped, not yet built — see
-  `docs/design/framework-router-codegen.md`.
+  router output is underway: `@rhi-zone/fractal-http-framework-projector`
+  (`packages/http-framework-projector`) now exists with Express as its first
+  target (`generateExpressRouter`/`generateExpressRouterFromNode`, eject
+  model, no generated validator per Express having no dominant convention —
+  see `docs/design/framework-router-codegen.md`). Remaining targets (Fastify,
+  NestJS, Koa, Hono, Elysia, ...) per that doc's popularity-descending list
+  are not yet started; the drift-detecting `regen` command (refuse/force/diff
+  modes) the design doc scopes is also not yet built.
 - No dedicated declaration for an operation's possible error kinds in
   the tree/meta itself (error mapping is projector-level config today).
 - A JSON-RPC projector (2026-07-24 session): corrected a stale claim

@@ -16,6 +16,7 @@ Write the tree once. Multiple interpreters walk it to produce an HTTP server wit
 | [`@rhi-zone/fractal-api-tree`](packages/api-tree) | Core: `api`/`op` tree constructors, `Node`/`Handler`/`Meta`, the tag lattice, source-level schema extraction |
 | [`@rhi-zone/fractal-type-ir`](packages/type-ir) | Type IR — subtyping hierarchy + open metadata bag, projectable to 20+ targets (JSON Schema, OpenAPI, GraphQL SDL, SQL DDL, Protobuf, Zod, ...) |
 | [`@rhi-zone/fractal-http-api-projector`](packages/http-api-projector) | HTTP projection — compiled router, OpenAPI 3.1, typed client |
+| [`@rhi-zone/fractal-http-framework-projector`](packages/http-framework-projector) | Router codegen for existing HTTP frameworks (Express, more to follow) — eject model, not a runtime |
 | [`@rhi-zone/fractal-graphql-api-projector`](packages/graphql-api-projector) | GraphQL projection — SDL, resolver dispatch, subscriptions, typed client |
 | [`@rhi-zone/fractal-mcp-api-projector`](packages/mcp-api-projector) | MCP projection — tools, resources, prompts, sampling |
 | [`@rhi-zone/fractal-cli-api-projector`](packages/cli-api-projector) | CLI projection — subcommand dispatch, shell completions, streaming |

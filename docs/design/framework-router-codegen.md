@@ -1,11 +1,22 @@
 # Framework router codegen — scoping notes
 
-> Pre-implementation scoping document. Captures the idea's shape and the
-> architectural fork it raises. Per this project's disposition, options
+> Scoping document, now partially implemented. Captures the idea's shape and
+> the architectural fork it raises. Per this project's disposition, options
 > that are still genuinely open are laid out with their tradeoffs, not
 > ranked; some questions below (package boundary, eject-as-the-model,
 > framework scope) have since received a project-owner decision and are
 > marked as such where they're recorded.
+>
+> **Status: underway.** `@rhi-zone/fractal-http-framework-projector`
+> (`packages/http-framework-projector`) exists per the package-boundary
+> decision below (Option B), with Express as its first target
+> (`src/express.ts` — `generateExpressRouter`/`generateExpressRouterFromNode`),
+> following the priority order this doc records. The eject model is
+> implemented as a `// @generated ... do not edit` header comment, the
+> minimal starting point this doc names — the drift-detecting `regen`
+> command (refuse/force/diff modes) described below is still unbuilt. Every
+> other framework in the candidate list (Fastify, NestJS, Koa, Hono, Elysia,
+> AdonisJS, Hapi, Feathers, Restify, Sails, LoopBack) is not yet started.
 
 ## The idea
 

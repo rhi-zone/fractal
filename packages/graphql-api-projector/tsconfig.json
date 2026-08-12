@@ -13,6 +13,8 @@
       "@rhi-zone/fractal-graphql-api-projector/*": ["./src/*.ts"],
       "@rhi-zone/fractal-http-api-projector": ["../http-api-projector/src/index.ts"],
       "@rhi-zone/fractal-http-api-projector/*": ["../http-api-projector/src/*.ts"],
+      "@rhi-zone/fractal-http-framework-projector": ["../http-framework-projector/src/index.ts"],
+      "@rhi-zone/fractal-http-framework-projector/*": ["../http-framework-projector/src/*.ts"],
       "@rhi-zone/fractal-json-rpc-api-projector": ["../json-rpc-api-projector/src/index.ts"],
       "@rhi-zone/fractal-json-rpc-api-projector/*": ["../json-rpc-api-projector/src/*.ts"],
       "@rhi-zone/fractal-mcp-api-projector": ["../mcp-api-projector/src/index.ts"],

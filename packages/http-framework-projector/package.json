@@ -1,0 +1,54 @@
+{
+  "name": "@rhi-zone/fractal-http-framework-projector",
+  "version": "0.1.0-alpha.0",
+  "description": "Idiomatic router codegen for existing HTTP frameworks (Express, ...) from the function-core tree's HttpRoute — eject model, not a runtime",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhi-zone/fractal.git",
+    "directory": "packages/http-framework-projector"
+  },
+  "keywords": [
+    "http",
+    "codegen",
+    "express",
+    "router",
+    "projector"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./express": {
+      "types": "./dist/express.d.ts",
+      "import": "./dist/express.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@rhi-zone/fractal-api-tree": "workspace:*",
+    "@rhi-zone/fractal-http-api-projector": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "express": "^5.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

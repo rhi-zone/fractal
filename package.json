@@ -8,6 +8,7 @@
     "packages/ffi-ir",
     "packages/playground",
     "packages/http-api-projector",
+    "packages/http-framework-projector",
     "packages/mcp-api-projector",
     "packages/json-rpc-api-projector",
     "packages/cli-api-projector",
