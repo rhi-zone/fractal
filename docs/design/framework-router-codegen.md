@@ -43,7 +43,11 @@ generic "framework router" emitter parameterized by framework.
 
 ## Architectural fork: new projector vs. new emit modules in `http-api-projector`
 
-This is the central open question — genuinely undecided, not a placeholder:
+The project owner has given direction on package boundary (see below) — Option
+B, sized/justified once scope firms up — so this is no longer the fully open
+question it was; both options are still laid out here for the tradeoffs they
+name, since the sizing question below depends on understanding what Option A
+would have reused.
 
 **Option A — sibling modules inside `http-api-projector`.** Add
 `express-router.ts`/`hono-router.ts`/`elysia-router.ts` (or however many)
@@ -65,17 +69,28 @@ working HTTP framework/runtime — undiluted by a growing list of
 third-party-framework emit targets that have nothing to do with running a
 fractal-served process.
 
-Neither option is picked here. The considerations that would decide it:
-`http-api-projector`'s README currently frames the package as "turns an
-`api()`/`op()` tree into an HTTP router" that *runs* (via the `serve*`/`to*`
-adapters) — framework codegen is adjacent (still HTTP, still walks
-`HttpRoute`) but serves a different end (someone else's runtime executes the
-output, not fractal's). Whether that's close enough to stay in-package (like
-the client codegen already does) or different enough to warrant its own
-package (like the protocol projectors did) is the actual fork, and it likely
-also depends on how many target frameworks are in scope (see below) — a
-two-framework feature and a ten-framework feature don't obviously belong in
-the same place.
+**Direction given by the project owner: Option B, as a single new package
+covering all target frameworks** — one `framework-codegen`-shaped package
+(name TBD, see this repo's "no suggesting project names" constraint) housing
+the Express/Hono/Elysia/... emitters together, not one package per framework
+and not sibling files inside `http-api-projector`. This is a real call, not
+fully final — recorded here as the direction to build toward.
+
+The remaining open part is sizing/justification, which is explicitly
+*not* yet knowable: the call was to size and justify the new package
+relative to how big framework-codegen ends up being compared to
+`http-api-projector` itself (the same "a two-framework feature and a
+ten-framework feature don't obviously belong in the same place" tension
+raised below), and that ratio depends on which frameworks are in scope and
+how much per-framework work each one takes — both still open (see the next
+section). `http-api-projector`'s README currently frames that package as
+"turns an `api()`/`op()` tree into an HTTP router" that *runs* (via the
+`serve*`/`to*` adapters); framework codegen serves a different end (someone
+else's runtime executes the output, not fractal's) — consistent with
+keeping it a separate package rather than folding it in, the same
+relationship `graphql-api-projector`/`cli-api-projector`/
+`mcp-api-projector`/`json-rpc-api-projector` have to `http-api-projector`
+and `api-tree`.
 
 ## Open question: which frameworks, and priority order
 
@@ -86,43 +101,107 @@ research), but scope — which frameworks are actually targeted, and in what
 order — is a project-owner call, not something to infer from "these are the
 frameworks that happened to come up already."
 
-## Open question: validator/schema mapping per target
+## Validator/schema mapping per target — already solved upstream
 
 Each candidate framework has its own native validation-library convention
 baked into its idiomatic router shape — Hono's `zValidator` (Zod), Elysia's
 `t.Object` (TypeBox), Express has no single dominant convention (see
 `dx-pain-express-fastify.md`: "Express ships with no protective defaults at
-all," validation is always a bolt-on). fractal's own schema representation
-is `SchemaMap`/`ToolSchema` (JSON-Schema-shaped, `StandardSchemaV1`-oriented
-per `wire-profiles-and-staged-validation.md`'s conventions elsewhere in this
-codebase). Emitting an idiomatic Hono router with real `zValidator` calls
-means generating (or requiring as a dependency) a Zod schema derived from
-fractal's own schema representation — a nontrivial per-target mapping
-problem distinct from generating the routing/path shape itself, and one
-`codegen.ts`'s existing `schemaToType` (JSON-Schema-subset → TS type string)
-doesn't currently attempt (it emits type aliases, not runtime validator
-instances). Whether framework router codegen ships with real per-framework
-validator wiring, or emits routes with validation left as a TODO/stub for
-the target framework's own idiom, is open.
+all," validation is always a bolt-on).
 
-## Open question: generated-and-regenerated vs. one-time eject
+**Correction:** an earlier version of this doc said fractal's own schema
+representation *is* `SchemaMap`/`ToolSchema` (JSON-Schema-shaped) and framed
+"generate a real Zod schema from it" as a nontrivial, unsolved per-target
+mapping problem. Both parts were wrong, verified against current code:
 
-`http-api-projector`'s existing codegen has a specific operating model:
-`fractal watch` regenerates `client.ts`/`server.ts` on every source save,
-and the generated output embeds a static drift guard
-(`AssertExact<RouteUnion<typeof app>, GenUnion>`) that turns any
-app/generated mismatch into a `tsc` error. It's not clear whether framework
-router codegen is meant to work the same way — output that stays in
-lockstep with the fractal tree and is regenerated continuously — or whether
-it's meant as a one-time "eject" (generate an idiomatic Express/Hono/Elysia
-app once, then the user owns and hand-edits it going forward, decoupled from
-the fractal source). These have very different implications: a drift-guard
-model needs the same `AssertExact`-style mechanism ported per target
-framework's type system (straightforward for Hono, which is itself
-TypeScript-typed end-to-end; less obvious for Express, which has no
-type-level route registry to assert against); an eject model needs no such
-mechanism but means the generated code is no longer fractal's problem to
-keep correct after generation. Not decided.
+- Fractal's actual base schema representation is `TypeRef` — the
+  `{ shape, meta }` pair defined in `@rhi-zone/fractal-type-ir`
+  (`packages/type-ir/src/index.ts`), a subtyping hierarchy over a closed set
+  of shape kinds plus an open metadata bag. `SchemaMap`/`ToolSchema`
+  (`packages/api-tree/src/tree.ts`) is a **JSON-Schema-shaped projection**
+  of that IR — `extractToolSchemas` derives it by going TS type → `TypeRef`
+  → JSON Schema (see `packages/api-tree/src/extract.ts`'s module comment),
+  the same walk that also exposes the pre-projection `TypeRef` directly via
+  `extractToolTypeRefs`/`TypeRefMap`/`ToolTypeInfo`. JSON Schema is one
+  target of that projection, not the representation itself.
+- `TypeRef` → Zod and `TypeRef` → TypeBox source-text generation already
+  exist and are shipped: `packages/type-ir/src/typescript-zod.ts` and
+  `packages/type-ir/src/typescript-typebox.ts`, published as the `./zod`
+  and `./typebox` subpaths of `@rhi-zone/fractal-type-ir` (each with a test
+  file: `typescript-zod.test.ts`, `typescript-typebox.test.ts`). Both emit
+  validator *builder source text* (e.g. `z.object({ ... })`,
+  `Type.Object({ ... })`), not runtime schema instances — the same
+  "emit source, don't run it" shape `codegen.ts`'s client generation
+  already follows.
+
+So generating a real `zValidator`(Zod)/`t.Object`(TypeBox) call for a
+framework router is not an open mapping problem this feature would need to
+invent: it's TypeRef (already recoverable per-leaf via `extractToolTypeRefs`,
+the same walk `extractToolSchemas` runs) fed through `type-ir`'s existing
+`./zod`/`./typebox` projectors. What's still genuinely open is Express
+(no dominant validation convention to target at all, per
+`dx-pain-express-fastify.md`) and the wiring/integration work of calling
+these projectors from framework-router codegen — not the schema-mapping
+problem itself.
+
+## Regen vs. one-time eject
+
+A proposal came back for this question: "regen is a strict superset of
+eject — if a user can always just stop rerunning codegen and hand-edit the
+last generated output, picking regen-by-default doesn't foreclose anyone
+who wants the eject workflow; they just don't rerun it." That reasoning was
+checked against what `http-api-projector`'s codegen actually does today,
+not against the mechanism this doc previously described — and the previous
+description turned out to be wrong, which changes the picture.
+
+**Correction: the drift-guard mechanism this doc cited doesn't exist in the
+current codegen.** `AssertExact<RouteUnion<typeof app>, GenUnion>` and
+`fractal watch` regenerating `client.ts`/`server.ts` are real, but they
+belong to a **retired prior design** — documented in
+`docs/design/handler-model.md`, which carries an explicit
+"Status: Superseded" banner and describes the old `Handler<R>`/`req.ctx`/
+`.meta` model and the pre-rename package split
+(`fractal-openapi-api-projector`/`fractal-client-api-projector`, since
+merged into `http-api-projector`). The doc that supersedes it,
+`docs/design/function-core-and-projection.md`, explicitly rejects the
+drift-guard approach: "A runtime meta tree (`.meta`, `_def`) is a second
+source of truth that drifts from the types and must be kept in sync by hand
+or by a guard (the old model needed an `AssertExact` drift guard precisely
+because it had two truths). Reading the types directly removes the second
+truth and the guard with it." Confirmed against current source: there is no
+`AssertExact`/drift-guard code anywhere under `packages/http-api-projector/src`;
+the only place `AssertExact` exists is `spike/drift-guard/` (an
+un-integrated research spike measuring type-instantiation cost, per its own
+README, not wired into any shipped codegen path); and today's
+`codegen.ts` only generates a client (`generateClient`/
+`generateClientFromNode`, marked `// @generated ... do not edit`) — there
+is no `server.ts` generation and no CLI `watch` command drives it (the
+current `fractal-api-tree` CLI's `watch`/`watch-schema` regenerate the
+`applyValidation` and JSON-Schema modules, not a client or router).
+
+So, checked against what's actually shipped rather than the retired model:
+`http-api-projector`'s current generated client has no self-verifying
+mechanism at all (no drift guard, no watch loop) beyond a "do not edit"
+comment header — nothing in the current output structure would make
+hand-editing it and never rerunning codegen mechanically awkward or broken.
+On that narrow point, the "regen minus rerunning it = eject" reasoning
+doesn't hit an obstacle in what exists today.
+
+That's a weaker finding than "confirmed, strict superset, no catch," though:
+the premise being evaluated (a drift-guard-backed regen model) isn't
+current behavior, so this doc can't honestly resolve the question by
+pointing at that mechanism. What it can say: (1) no evidence of a technical
+catch in the *current* shipped codegen that would make eject-by-abandonment
+awkward, and (2) if a future drift-guard mechanism were reintroduced for
+framework-router codegen specifically, the superset reasoning would need
+re-checking against whatever that mechanism actually does (a drift guard
+*embedded in the generated file itself*, if one existed, could make
+"hand-edit and stop rerunning" produce a file that still fails `tsc` unless
+the guard line is also deleted — a real asymmetry between eject and
+regen-then-stop). Whether framework router codegen adopts a regen model, an
+eject model, or revisits a drift-guard, is still a project-owner call this
+doc doesn't make — but it should be made against the current codegen's
+actual behavior, not the retired model's.
 
 ## Open question: relationship to the existing OpenAPI projection
 
@@ -161,3 +240,12 @@ which is intended.
   — existing competitive framing this doc's target frameworks are drawn from.
 - `docs/reference/type-ir/doc-projectors.md` — the one-IR/many-named-target-emitters
   precedent this idea's package shape likely follows.
+- `packages/type-ir/src/index.ts`, `packages/type-ir/README.md` — `TypeRef`,
+  fractal's actual base schema representation.
+- `packages/type-ir/src/typescript-zod.ts`, `packages/type-ir/src/typescript-typebox.ts`
+  — the existing `TypeRef` → Zod/TypeBox source-text projectors this doc now
+  points at instead of describing the mapping as unsolved.
+- `docs/design/function-core-and-projection.md` (current, itself noted as
+  partially superseded by `invariants.md`), `docs/design/handler-model.md`
+  ("Status: Superseded") — why the `AssertExact` drift guard isn't part of
+  the current model.
