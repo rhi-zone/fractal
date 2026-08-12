@@ -1,29 +1,32 @@
 # @rhi-zone/fractal-http-framework-projector
 
-Idiomatic router codegen for existing HTTP frameworks — Express first — from
-the function-core tree's `HttpRoute`.
+Idiomatic router codegen for existing HTTP frameworks — Express and Fastify
+so far — from the function-core tree's `HttpRoute`.
 
 ## What it does
 
 Where `@rhi-zone/fractal-http-api-projector` is fractal's own working HTTP
 framework/runtime (a compiled matcher your process serves directly), this
 package generates source code for frameworks *other than* fractal's own:
-a real `express.Router()` your existing (or new) Express app mounts like any
-hand-written router. It's an **eject** tool, not a runtime dependency — the
-generated file is written once, has no drift-detection or watch loop, and is
-meant to be committed and hand-edited like any other file in your project.
-See `docs/design/framework-router-codegen.md` for the full set of settled
-decisions this package implements (package boundary, eject model, framework
-scope/priority, and why Express gets no generated validator call).
+a real `express.Router()` or Fastify plugin your existing (or new) app
+mounts like any hand-written router. It's an **eject** tool, not a runtime
+dependency — the generated file is written once, has no drift-detection or
+watch loop, and is meant to be committed and hand-edited like any other file
+in your project. See `docs/design/framework-router-codegen.md` for the full
+set of settled decisions this package implements (package boundary, eject
+model, framework scope/priority, and why Express gets no generated validator
+call while Fastify gets a native JSON-Schema `schema` option).
 
 Target frameworks are added one at a time, most-popular-first (see the
-design doc's priority list) — Express is the first and, as of this writing,
-only target.
+design doc's priority list): Express first, then Fastify. Remaining targets
+(NestJS, Koa, Hono, Elysia, ...) are not yet started.
 
 ## Key exports
 
 - `generateExpressRouter(route, schemas?, options?)` (`./express`) — walks an already-projected `HttpRoute` tree, returns Express router source text
 - `generateExpressRouterFromNode(node, schemas?, options?)` — convenience wrapper: projects `node` via `httpProjection` and recovers authored member names
+- `generateFastifyRoutes(route, schemas?, options?)` (`./fastify`) — walks an already-projected `HttpRoute` tree, returns Fastify plugin source text
+- `generateFastifyRoutesFromNode(node, schemas?, options?)` — convenience wrapper: projects `node` via `httpProjection` and recovers authored member names
 
 ## Usage
 
@@ -54,7 +57,34 @@ const router = createBooksRouter({
 app.use(router) // mount into an existing Express app
 ```
 
+Fastify follows the same shape, but the generated factory returns a
+`FastifyPluginAsync` (Fastify's own "router" unit — Fastify has no `Router`
+object, a registered plugin function is the idiomatic mountable unit) instead
+of an Express `Router` instance:
+
+```ts
+import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
+import { generateFastifyRoutesFromNode } from "@rhi-zone/fractal-http-framework-projector"
+import { api } from "./tree.ts"
+
+const schemas = extractToolSchemas("./tree.ts")
+const source = generateFastifyRoutesFromNode(api, schemas, { routerName: "Books" })
+// write `source` to disk, e.g. src/books.routes.ts
+```
+
+```ts
+// src/books.routes.ts (generated, then committed)
+import { createBooksRoutes } from "./books.routes.ts"
+import { listBooks, createBook, getBook } from "./tree.ts"
+
+app.register(createBooksRoutes({
+  books: { list: listBooks, create: createBook, bookId: { get: getBook } },
+}))
+```
+
 ## Known simplifications (v1)
+
+### Express
 
 - **No generated validation.** Express has no single dominant validation
   convention to target (unlike Hono's `zValidator` or Elysia's `t.Object`) —
@@ -70,6 +100,29 @@ app.use(router) // mount into an existing Express app
   `app.use(express.json())`) for POST/PUT/PATCH — this router doesn't add
   its own, since it may be mounted inside a larger app that already
   configures one.
+
+### Fastify
+
+- **Generated validation, unlike Express.** Fastify's dominant convention —
+  native JSON-Schema validation via the route `schema` option — is emitted
+  directly from `SchemaMap`'s already-JSON-Schema-shaped `inputSchema`/
+  `outputSchema` (no Zod/TypeBox projector needed, unlike the Hono/Elysia
+  targets this package will add later). The combined `inputSchema` is split
+  into `params`/`querystring`/`body` by matching each property key against
+  the route's `:name` path-param names; a request that fails the generated
+  schema is rejected by Fastify itself (400) before the handler ever runs.
+- **Splitting degrades honestly for non-object input schemas.** If an
+  operation's input schema isn't a plain `{ type: "object", properties }`
+  shape (rare, but the `JsonSchema` union allows top-level `anyOf`/`enum`/
+  `const`), no `schema` option is emitted for that operation at all — no
+  guess is made about how to partition it.
+- **No custom status codes**, same as Express — every response is the
+  handler's return value, sent at the implicit default 200 (Fastify
+  auto-serializes an async handler's resolved return value). Status codes
+  set via `meta.http.response` are not reflected.
+- **No explicit body-parsing setup needed** — unlike Express, Fastify parses
+  JSON request bodies out of the box, so no equivalent of
+  `app.use(express.json())` is required from the consuming app.
 
 All of these are eject-model tradeoffs, not permanent limits: the generated
 file is plain, hand-editable TypeScript.

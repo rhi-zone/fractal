@@ -1165,16 +1165,22 @@ What's planned / open (per `TODO.md`):
   session's scope.
 - CLI and MCP still walk the raw `Node` tree directly rather than
   through the `Node ⇒ ProtocolType` projection pattern HTTP/type-ir use.
-- Generating idiomatic router code for existing frameworks (Express, Hono,
-  Elysia, ...) as an alternative or companion to `http-api-projector`'s own
-  router output is underway: `@rhi-zone/fractal-http-framework-projector`
-  (`packages/http-framework-projector`) now exists with Express as its first
-  target (`generateExpressRouter`/`generateExpressRouterFromNode`, eject
-  model, no generated validator per Express having no dominant convention —
-  see `docs/design/framework-router-codegen.md`). Remaining targets (Fastify,
-  NestJS, Koa, Hono, Elysia, ...) per that doc's popularity-descending list
-  are not yet started; the drift-detecting `regen` command (refuse/force/diff
-  modes) the design doc scopes is also not yet built.
+- Generating idiomatic router code for existing frameworks (Express, Fastify,
+  Hono, Elysia, ...) as an alternative or companion to `http-api-projector`'s
+  own router output is underway: `@rhi-zone/fractal-http-framework-projector`
+  (`packages/http-framework-projector`) now has two targets — Express
+  (`generateExpressRouter`/`generateExpressRouterFromNode`, no generated
+  validator per Express having no dominant convention) and Fastify
+  (`generateFastifyRoutes`/`generateFastifyRoutesFromNode`, WITH a generated
+  native JSON-Schema `schema` option per-route, split from `SchemaMap`'s
+  combined input schema into Fastify's separate `params`/`querystring`/
+  `body`/`response` positions — real requests are validated by Fastify's own
+  `ajv` against it) — both eject model, both with real end-to-end tests
+  mounting generated code into a real running server and driving it with real
+  HTTP requests (see `docs/design/framework-router-codegen.md`). Remaining
+  targets (NestJS, Koa, Hono, Elysia, ...) per that doc's popularity-descending
+  list are not yet started; the drift-detecting `regen` command (refuse/
+  force/diff modes) the design doc scopes is also not yet built.
 - No dedicated declaration for an operation's possible error kinds in
   the tree/meta itself (error mapping is projector-level config today).
 - A JSON-RPC projector (2026-07-24 session): corrected a stale claim

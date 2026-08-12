@@ -10,13 +10,27 @@
 > **Status: underway.** `@rhi-zone/fractal-http-framework-projector`
 > (`packages/http-framework-projector`) exists per the package-boundary
 > decision below (Option B), with Express as its first target
-> (`src/express.ts` — `generateExpressRouter`/`generateExpressRouterFromNode`),
-> following the priority order this doc records. The eject model is
-> implemented as a `// @generated ... do not edit` header comment, the
-> minimal starting point this doc names — the drift-detecting `regen`
-> command (refuse/force/diff modes) described below is still unbuilt. Every
-> other framework in the candidate list (Fastify, NestJS, Koa, Hono, Elysia,
-> AdonisJS, Hapi, Feathers, Restify, Sails, LoopBack) is not yet started.
+> (`src/express.ts` — `generateExpressRouter`/`generateExpressRouterFromNode`)
+> and Fastify as its second (`src/fastify.ts` —
+> `generateFastifyRoutes`/`generateFastifyRoutesFromNode`), following the
+> priority order this doc records. The eject model is implemented as a
+> `// @generated ... do not edit` header comment, the minimal starting point
+> this doc names — the drift-detecting `regen` command (refuse/force/diff
+> modes) described below is still unbuilt. Fastify's target confirms this
+> doc's "Validator/schema mapping per target" section below: its native
+> `schema` route option (`body`/`querystring`/`params`/`response`) is emitted
+> directly from `SchemaMap`'s already-JSON-Schema-shaped `inputSchema`/
+> `outputSchema` — real per-request validation, running through Fastify's own
+> `ajv`, with no Zod/TypeBox projector needed (unlike the Hono/Elysia targets
+> still ahead). The one piece of real work was splitting fractal's ONE
+> combined input schema (path params + query/body merged, mirroring
+> `assemble`'s runtime merge) into Fastify's THREE separate schema positions —
+> done by matching each property key against the route's `:name` path-param
+> names; see `src/fastify.ts`'s module doc for the exact rule and its
+> documented degradation (non-object input schemas get no `schema` option
+> rather than a guessed split). Every other framework in the candidate list
+> (NestJS, Koa, Hono, Elysia, AdonisJS, Hapi, Feathers, Restify, Sails,
+> LoopBack) is not yet started.
 
 ## The idea
 
@@ -198,11 +212,15 @@ So generating a real `zValidator`(Zod)/`t.Object`(TypeBox) call for a
 framework router is not an open mapping problem this feature would need to
 invent: it's TypeRef (already recoverable per-leaf via `extractToolTypeRefs`,
 the same walk `extractToolSchemas` runs) fed through `type-ir`'s existing
-`./zod`/`./typebox` projectors. What's still genuinely open is Express
-(no dominant validation convention to target at all, per
-`dx-pain-express-fastify.md`) and the wiring/integration work of calling
-these projectors from framework-router codegen — not the schema-mapping
-problem itself.
+`./zod`/`./typebox` projectors. What's still genuinely open is the wiring/
+integration work of calling these projectors from framework-router codegen
+for the Hono/Elysia targets that need them — not the schema-mapping problem
+itself. Express (no dominant validation convention to target at all, per
+`dx-pain-express-fastify.md`) and Fastify (native JSON-Schema `schema`
+option, no library projector needed at all — see the Status note above) are
+both now implemented, and neither needed the `./zod`/`./typebox` projectors:
+Express because it has nothing to generate a call against, Fastify because
+`SchemaMap`'s JSON-Schema shape already IS its native input.
 
 ## Regen vs. one-time eject
 
