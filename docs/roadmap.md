@@ -524,12 +524,26 @@ schema/type/sample in one of 13 browser-safe input formats, pick any of
 45 output formats, see the converted output live. All 585 input×output
 combinations verified working.
 
-A Postman-like interactive-playground mode (and a possibly-related
-embedded-in-docs use case) is scoped, not yet built — see
-`docs/design/mocked-fetch-backend.md`. A related but architecturally
-distinct fabricated-data (not real-handler) capability for the same
-playground, plus runnable doc snippets, is scoped separately in
-`docs/design/relational-mock-data-generator.md`.
+A Postman-like interactive-playground mode (use case 1 in
+`docs/design/mocked-fetch-backend.md`) is scoped, not yet built. The
+doc's other use case — a live, in-page request/response demo embedded
+INSIDE generated documentation (use case 2) — **is now built (2026-08-13)**:
+`packages/http-api-projector/src/http-route-reference.ts`
+(`toDocusaurusRouteReference`/`toStarlightRouteReference`) projects an
+`OpenApiDoc` to one MDX page per route, each embedding a
+`<ApiExplorer/>` tag; `packages/api-explorer/` ships that component
+(a real companion React package, following the same "projector emits a
+bare component reference, the consuming site wires the runtime" shape
+`docusaurus-reference.ts`'s `<TypeRef>` already established) plus an
+`ApiExplorerFetchProvider` context a site wires once, site-wide, to a
+real `toDropInFetch(createFetch(tree))` instance (or the ambient global
+`fetch` by default). MkDocs was excluded per the doc's own verified
+finding (no MDX/component-import mechanism). See that file's and
+`packages/api-explorer/src/*.tsx`'s doc comments, and
+`docs/design/mocked-fetch-backend.md`'s "resolved" section, for the full
+design. A related but architecturally distinct fabricated-data (not
+real-handler) capability for the playground, plus runnable doc snippets,
+is scoped separately in `docs/design/relational-mock-data-generator.md`.
 
 What's left:
 - Not yet deployed to a public URL — runs locally today.

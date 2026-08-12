@@ -2,14 +2,18 @@
 //
 // Package root entry point. Re-exports the DX authoring surface: `http.*`
 // method bundles, `HttpMethods`/`Method`, `crud()`, and `httpProjection()`.
-// Also re-exports the OpenAPI projection (`toOpenApi`/`toOpenApiFromRoute`)
+// Also re-exports the OpenAPI projection (`toOpenApi`/`toOpenApiFromRoute`),
+// the route-level doc-page projector (`toDocusaurusRouteReference`/
+// `toStarlightRouteReference`, `./http-route-reference.ts` — one live-
+// component-embedding MDX page per route, built on top of an `OpenApiDoc`),
 // and the runtime HTTP client (`createClient`/`createClientFromRoute`,
-// `ClientError`) — both are inherently HTTP concerns (see `openapi.ts` and
-// `client.ts` module docs) merged into this package rather than kept as
-// separate projection packages. Lower-level pieces (the direct tree-walk
-// projector, the HttpRoute rewriter pipeline, layers, the OOTB preset) stay
-// reachable via their own subpath exports (`./project`, `./route`,
-// `./layers`, `./preset`, `./verbs`, `./adapter`, `./openapi`, `./client`) —
+// `ClientError`) — all inherently HTTP concerns (see `openapi.ts`,
+// `http-route-reference.ts`, and `client.ts` module docs) merged into this
+// package rather than kept as separate projection packages. Lower-level
+// pieces (the direct tree-walk projector, the HttpRoute rewriter pipeline,
+// layers, the OOTB preset) stay reachable via their own subpath exports
+// (`./project`, `./route`, `./layers`, `./preset`, `./verbs`, `./adapter`,
+// `./openapi`, `./http-route-reference`, `./client`) —
 // this root re-exports the DX sugar described in
 // docs/design/routing-and-transforms.md § DX — constructor sugar, plus the
 // two HTTP-derived projections.
@@ -59,6 +63,8 @@ export type {
   OpenApiSharedMetaProperties,
   RouteEntry,
 } from "./openapi.ts"
+export { toDocusaurusRouteReference, toStarlightRouteReference } from "./http-route-reference.ts"
+export type { HttpRouteReferenceOpts } from "./http-route-reference.ts"
 export { createClient, createClientFromRoute } from "./client.ts"
 export type { AnyClient, ClientOptions } from "./client.ts"
 export { ClientError } from "./client-error.ts"

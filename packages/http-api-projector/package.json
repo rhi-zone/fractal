@@ -66,6 +66,10 @@
       "types": "./dist/openapi.d.ts",
       "import": "./dist/openapi.js"
     },
+    "./http-route-reference": {
+      "types": "./dist/http-route-reference.d.ts",
+      "import": "./dist/http-route-reference.js"
+    },
     "./client": {
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js"

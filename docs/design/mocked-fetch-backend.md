@@ -301,6 +301,95 @@ reading (b) (fabricated response data with no real handler execution),
 which — per the "what mocked means" section above — is still open and would
 need its own data-fabrication step regardless of this signature fix.
 
+## Resolved (2026-08-13): use case 2 (doc-embedded live playground) built
+
+Per the project owner's resolved scope above (Docusaurus and Starlight in
+scope, MkDocs out), the doc-embedding half of use case 2 is now built —
+**use case 1 (the standalone Postman-like playground) remains scoped, not
+built**; this section covers only the doc-embed path.
+
+**New route-level projector:** `packages/http-api-projector/src/
+http-route-reference.ts` — `toDocusaurusRouteReference(doc: OpenApiDoc,
+opts?)` / `toStarlightRouteReference(doc, opts?)`. Deliberately a NEW
+projector, not an extension of type-ir's `toDocusaurusReference`/
+`toStarlightReference`: those two operate on `TypeRefDocument` (named types
+only, no verb/path/route concept), and stretching a `function`-kind or
+`interface`-kind `TypeRef` def to stand in for an HTTP route was considered
+and rejected before this landed — `function`-kind is functions-only per its
+own contract elsewhere in type-ir, and `interface`-kind means "a named type
+with methods," neither of which an HTTP route actually is. The new
+projector instead lives next to `HttpRoute`/`OpenApiDoc`/`listRoutes` in
+http-api-projector, and takes an already-built `OpenApiDoc` (from
+`toOpenApi`/`toOpenApiFromRoute`) rather than re-deriving path/verb/schema
+data a second time — one page per `(path, method)` operation, same
+`Map<filename, content>` + `options.basePath` convention as the type-ir
+reference projectors.
+
+**New companion package: `packages/api-explorer/`** — the actual
+`<ApiExplorer/>` React component each generated page embeds (minimal:
+per-route method/path, path-param inputs, a request-body textarea scaffolded
+from the route's JSON Schema, a Send button, and the real response
+status+body). Not shipped by the projector itself, same "projector emits a
+bare component reference, the consuming site wires the runtime" shape
+`docusaurus-reference.ts`'s own `<TypeRef>` precedent already established
+(cited above) — a generated page's MDX comment says so explicitly.
+
+**Resolved: how the fetch implementation itself reaches the component.**
+This doc's earlier "what embedding would concretely require" section flagged
+prop-serialization as a genuinely open item — a JS *function* value (the
+fetch implementation) cannot survive MDX-prop JSON serialization the way
+`operation`/schema data can. Resolution: `packages/api-explorer/src/
+fetch-context.tsx` exports `ApiExplorerFetchProvider`, a React context
+provider a consuming site wires ONCE, site-wide (e.g. a Docusaurus
+`src/theme/Root.tsx` swizzle, or a Starlight layout override) — every
+`<ApiExplorer/>` on every generated page reads its fetch implementation from
+that context instead of receiving it as a per-page prop. Defaults to the
+ambient global `fetch` when no provider wraps it, so a site with nothing
+wired yet still works against a same-origin real backend rather than
+throwing. A site built from a tree with no deployed server yet passes
+`toDropInFetch(createFetch(tree))` as the provider's `fetch` — this is the
+direct payoff of this doc's earlier `toDropInFetch` resolution (above): the
+context's type is restated structurally as the literal `(input: RequestInfo
+| URL, init?: RequestInit) => Promise<Response>` signature (not `typeof
+fetch` — see `fetch-context.tsx`'s own doc comment for why: `typeof fetch`
+varies between DOM's and Bun's ambient lib sets), so `toDropInFetch`'s
+return slots in with zero adaptation.
+
+**Real verification performed:** `packages/api-explorer/src/
+api-explorer.test.tsx` and `end-to-end.test.tsx` render `<ApiExplorer/>`
+into a real (happy-dom) DOM, click its Send button, and assert the on-screen
+response came from an ACTUAL in-process request through
+`toDropInFetch(createFetch(tree))` over a real fixture tree — no fabricated
+data, no mocked fetch call. `end-to-end.test.tsx` goes further: it builds a
+real `OpenApiDoc`, runs it through the real `toDocusaurusRouteReference`,
+RE-PARSES the method/path/responseSchema props out of the actual generated
+MDX text (not reconstructed by hand), and drives the same render-click-assert
+cycle from those parsed props — proving the full tree → generated page →
+live component → real response chain, not each piece in isolation.
+`packages/http-api-projector/src/http-route-reference.test.ts` covers the
+projector's own output (page-per-operation, request/response schema
+embedding, the not-shipped-by-this-projector note, `client:load` on the
+Starlight tag, `options.basePath`/`options.apiExplorerImport`).
+
+**Not verified: an actual production Docusaurus or Starlight site build.**
+Every check above is a component-level (happy-dom) render/interaction test
+plus generated-MDX-text assertions — genuinely real code paths (React
+DOM rendering, a real in-process HTTP request/response cycle, real MDX
+output), but nothing here spun up an actual `docusaurus build`/`astro build`
+against the generated pages inside a real site scaffold. That heavier
+end-to-end check (full toolchain install, real site config, real MDX
+compilation by Docusaurus/Astro itself) was judged out of proportion to this
+session's scope and is flagged here as a real gap, not silently treated as
+covered by the checks above.
+
+**Not addressed by this work, still open:** use case 1 (the standalone
+Postman-like playground in `packages/playground/`), and the
+fractal-specific-vs-standalone-package question from this doc's own
+still-open section above — the projector/component built here are both
+fractal-specific (they consume `OpenApiDoc`/http-api-projector types
+directly), consistent with that question remaining unresolved rather than
+answered by this work.
+
 ## See also
 
 - `packages/http-api-projector/README.md` — `createFetch` and the existing
@@ -312,5 +401,10 @@ need its own data-fabrication step regardless of this signature fix.
   findings above; read this directly before scoping the docgen use case
   further, rather than relying on this doc's summary of it.
 - `docs/roadmap.md` — "Web Playground" section (existing `packages/playground/`
-  scope) and "Documentation Generation" / "Production-grade initiative"
-  sections (doc-projector target list and status, not edited by this doc).
+  scope, now also noting the doc-embed work below) and "Documentation
+  Generation" / "Production-grade initiative" sections (doc-projector target
+  list and status).
+- `packages/http-api-projector/src/http-route-reference.ts` — the route-level
+  Docusaurus/Starlight page projector built per the "Resolved" section below.
+- `packages/api-explorer/src/api-explorer.tsx` and `fetch-context.tsx` — the
+  embedded `<ApiExplorer/>` component and its `ApiExplorerFetchProvider`.
