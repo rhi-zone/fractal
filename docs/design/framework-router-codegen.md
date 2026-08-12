@@ -1,10 +1,11 @@
 # Framework router codegen — scoping notes
 
 > Pre-implementation scoping document. Captures the idea's shape and the
-> architectural fork it raises, not a decision. Per this project's
-> disposition, options below are laid out with their tradeoffs, not ranked —
-> scope (which frameworks, priority order) is explicitly left to the project
-> owner, flagged as open rather than guessed at.
+> architectural fork it raises. Per this project's disposition, options
+> that are still genuinely open are laid out with their tradeoffs, not
+> ranked; some questions below (package boundary, eject-as-the-model,
+> framework scope) have since received a project-owner decision and are
+> marked as such where they're recorded.
 
 ## The idea
 
@@ -92,14 +93,62 @@ relationship `graphql-api-projector`/`cli-api-projector`/
 `mcp-api-projector`/`json-rpc-api-projector` have to `http-api-projector`
 and `api-tree`.
 
-## Open question: which frameworks, and priority order
+## Framework scope and priority order
 
-Not decided here, deliberately. The prompt for this doc named Express, Hono,
-and Elysia as examples (the same three frameworks `vs-hono-elysia.md` and
-`docs/design/prior-art/{hono,elysia,dx-pain-express-fastify}.md` already
-research), but scope — which frameworks are actually targeted, and in what
-order — is a project-owner call, not something to infer from "these are the
-frameworks that happened to come up already."
+**Decided by the project owner: comprehensive coverage, not a curated
+shortlist.** Scope is all JS/TS web frameworks with real usage — the
+Express/Hono/Elysia trio named earlier in this doc were examples that
+happened to already have prior-art research, not the intended final list.
+The only carve-out is frameworks with no real adoption (the project owner's
+framing: something like "someone's personal project used by three people"),
+not any curated subset of the frameworks that *do* have real usage. Priority
+order across that comprehensive set is popularity-descending, per direction
+the project owner gave earlier — most-used frameworks get emitters first,
+long-tail frameworks later, rather than an arbitrary or hand-picked order.
+
+**A first candidate list, ordered roughly by current popularity** — useful
+as a starting point for sequencing implementation work, *not* a locked
+decision on exact ordering. Relative popularity between adjacent frameworks
+shifts (Hono and Elysia in particular are both still growing fast enough
+that this ordering could look different in another year), and this list
+itself may be missing frameworks with real usage that didn't surface in a
+quick pass — both are reasons this stays a "first candidate," to be revised
+as actual download/usage data is checked at implementation time rather than
+treated as settled:
+
+1. **Express** — still the largest install base by a wide margin (tens of
+   millions of weekly npm downloads); the default many tutorials and
+   existing codebases target.
+2. **Fastify** — the common "faster/more structured than Express" pick for
+   greenfield Node APIs; JSON-Schema-native validation, which lines up
+   well with fractal's own schema story.
+3. **NestJS** — the dominant structured/enterprise/DI-flavored framework;
+   large install base, but its router shape (decorator classes, modules) is
+   the most structurally different from the other candidates here, worth
+   flagging as likely the highest per-framework implementation cost.
+4. **Koa** — smaller ecosystem than Express but a long-standing, still
+   actively used minimal/async-first framework from the same lineage.
+5. **Hono** — the fastest-growing of the newer entrants, multi-runtime
+   (Node/Bun/Deno/Workers) as its core pitch; already named explicitly in
+   this doc's earlier sections and has prior-art research
+   (`docs/design/prior-art/hono.md`).
+6. **Elysia** — Bun-native, smaller install base than Hono but fast-growing
+   and already has prior-art research (`docs/design/prior-art/elysia.md`).
+7. **AdonisJS** — batteries-included, smaller but real and actively
+   maintained user base.
+8. **Hapi** — older, enterprise-adjacent, smaller current install base than
+   the above but still real usage.
+9. **Feathers**, **Restify**, **Sails**, **LoopBack** — longer-tail
+   frameworks with real but comparatively small current usage; candidates
+   for later sequencing, not necessarily in a firm relative order among
+   themselves at this level of research.
+
+This list was built from a general popularity check (npm weekly-download
+comparisons, current framework-comparison writeups), not a rigorous
+download-count audit — treat the ordering, and the inclusion/exclusion of
+any specific long-tail framework, as a first pass to be checked against real
+numbers when a given framework's emitter is actually about to be built, not
+as this doc settling it.
 
 ## Validator/schema mapping per target — already solved upstream
 
@@ -198,10 +247,100 @@ re-checking against whatever that mechanism actually does (a drift guard
 *embedded in the generated file itself*, if one existed, could make
 "hand-edit and stop rerunning" produce a file that still fails `tsc` unless
 the guard line is also deleted — a real asymmetry between eject and
-regen-then-stop). Whether framework router codegen adopts a regen model, an
-eject model, or revisits a drift-guard, is still a project-owner call this
-doc doesn't make — but it should be made against the current codegen's
-actual behavior, not the retired model's.
+regen-then-stop).
+
+**Decided by the project owner: eject, as the model.** Framework router
+codegen writes the router file once; nothing in fractal's build or CLI
+re-runs it automatically or asserts the output still matches the source
+types. This is a real call, recorded here as settled — not re-litigated by
+what follows.
+
+### Refinement under consideration: a drift-detecting regen command
+
+Eject-as-the-model doesn't rule out *also* shipping a `regenerate` (or
+`--force`) command a user can invoke by hand later — e.g. after the fractal
+API surface changes and they want a fresh router reflecting it. The
+project owner asked for that command to detect whether the file it's about
+to overwrite was hand-edited since it was last generated, rather than
+silently clobbering it. This section thinks that mechanism through and
+checks it against how existing codegen-with-eject tools that face the same
+problem actually behave, rather than inventing one from scratch.
+
+**Does hashing the file content work?** Yes, with one wrinkle: hashing
+"the whole file" is self-referential if the hash is also stored inside that
+same file (the hash would need to cover its own comment line). Two ways
+around that, both used in practice by real tools:
+
+- **Store the hash out-of-band**, in a sidecar (a per-file entry in a
+  manifest like `.fractal/codegen.lock.json` mapping output path → hash of
+  the content generated for it) rather than inside the generated file
+  itself. This is the shape Prisma actually uses for its own drift
+  detection: migration checksums aren't embedded in the migration SQL file,
+  they're recorded in the database's migration-history table, and `prisma
+  migrate` compares the file's current checksum against that stored value
+  to detect an applied migration was edited after the fact ("migration
+  `[name]` was modified after it was applied"). Advantage: the generated
+  file itself stays exactly what a human would hand-write, no tooling
+  metadata baked into router source. Disadvantage: the manifest is a second
+  file that has to travel with the project (and be gitignored or not,
+  itself a small decision) and can get out of sync with the outputs it
+  describes if someone deletes/moves a router file without going through
+  the tool.
+- **Embed the hash as a comment in the generated file**, computed over the
+  file's content *excluding* that comment line (generate the body first,
+  hash it, then prepend/append the `// @generated-hash: sha256:...` line).
+  Self-contained — no second file to keep in sync, the provenance travels
+  with the router file wherever it's copied — at the cost of a tooling
+  artifact sitting in what's otherwise meant to look like a plain
+  hand-editable Express/Hono/Elysia router.
+
+Either construction is mechanically sound; which one fits better is closer
+to a style call than a technical one, and is left open below rather than
+picked here.
+
+**What does the regen command do when it detects drift?** This is the part
+genuinely still open, and prior art doesn't converge on one answer —
+existing tools split across at least three real strategies:
+
+- **Refuse and require an explicit override.** Print what changed (a diff
+  against what fresh codegen would now produce) and stop; the user re-runs
+  with `--force`/`--overwrite` to proceed anyway, or resolves by hand
+  first. Safest against silent data loss; adds a step to the common case
+  where the user *does* want the refresh.
+- **Overwrite anyway, but only after an explicit flag or interactive
+  confirmation** — closer to `openapi-generator`'s `--skip-overwrite` /
+  `.openapi-generator-ignore` model: `openapi-generator` doesn't hash-check
+  for drift at all, it instead lets the user mark specific output files as
+  permanently hands-off from future regens (an ignore-file, `.gitignore`-
+  shaped) or pass `--skip-overwrite` to leave any existing file alone
+  wholesale. That sidesteps drift detection entirely by making "don't touch
+  this file again" an explicit, standing per-file declaration rather than a
+  per-run detected condition.
+- **Don't touch the live file at all — write the fresh output somewhere
+  else and let the user reconcile.** The closest working precedent is
+  `shadcn/ui`'s `diff` command: `shadcn` components are themselves an eject
+  model (copied into the user's project, not re-run automatically), and its
+  `diff`/`add --diff` commands are an on-demand, explicit check that show
+  the user a diff between their local (possibly hand-edited) copy and what
+  the registry would generate now — the user decides what to do with that
+  diff; the tool never overwrites on its own.
+
+  (For completeness: hash-based drift detection embedded in generated
+  output has also been requested, unimplemented, for GraphQL Code
+  Generator — the community discussion there proposes exactly the
+  stamped-hash-plus-`--check`-command shape this section is evaluating,
+  which suggests it's a real gap other eject/regen-hybrid tools have felt
+  too, not just a fractal-specific concern.)
+
+None of these is picked here. What's decided is the model (eject) and that
+a hash of the generated content is a workable, low-cost way to detect
+drift when a regen command is later invoked — not silently overwriting a
+hand-edited file is the shared goal. What's still open is the exact
+command UX: refuse-and-require-a-flag, ignore-file-style opt-out, or
+write-alongside-and-let-the-user-diff, and whether the hash lives in a
+sidecar manifest or a comment in the file itself. That's a project-owner
+call to make once the `regenerate` command itself is being designed, not
+before.
 
 ## Open question: relationship to the existing OpenAPI projection
 
@@ -249,3 +388,11 @@ which is intended.
   partially superseded by `invariants.md`), `docs/design/handler-model.md`
   ("Status: Superseded") — why the `AssertExact` drift guard isn't part of
   the current model.
+- Prior art consulted for the eject-plus-drift-detection refinement:
+  Prisma's migration-checksum model (checksum stored in migration history,
+  not the migration file, compared on apply), `openapi-generator`'s
+  `--skip-overwrite`/`.openapi-generator-ignore` per-file opt-out,
+  `shadcn/ui`'s on-demand `diff` command (eject model, explicit diff against
+  the registry rather than automatic overwrite-or-refuse), and GraphQL Code
+  Generator's community-requested-but-unimplemented checksum/`--check`
+  proposal.
