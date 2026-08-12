@@ -116,51 +116,124 @@ a live component without fractal's projector directly executing anything,"
 already in this codebase's design, not a novel mechanism this idea would
 have to invent from scratch.
 
-Beyond that direct textual finding, two things are relevant but
-**[UNVERIFIED this session]** — general public knowledge, not confirmed by
-fetching current Docusaurus/Starlight/MkDocs documentation in this session,
-and should not be treated as settled:
+### Verified findings, this session (2026-08-12) — resolves the prior [UNVERIFIED] flag
 
-- Docusaurus is MDX-based and MDX generally supports embedding React
-  components inside otherwise-Markdown content, which is the mechanism the
-  existing `<TypeRef>` precedent above already relies on. If that general
-  understanding holds, a live mocked-fetch playground component is
-  plausibly embeddable the same way `<TypeRef>` is designed to be.
-- Starlight is Astro-based; Astro's MDX integration and "island" component
-  model generally support embedding interactive UI-framework components
-  (React/Solid/etc.) inside otherwise-static pages. If that holds, Starlight
-  is plausibly also capable, by a different underlying mechanism (Astro
-  islands) than Docusaurus's (plain MDX/React).
-- MkDocs is the one case where the existing doc doesn't just leave the
-  question open — it states MkDocs's projector deliberately emits "plain
-  CommonMark + MkDocs-Material's extensions... deliberately **not** MDX,
-  which MkDocs cannot render." If MDX genuinely is the embedding mechanism
-  the other two rely on, this reads as a structural "no" for MkDocs
-  specifically — but this session did not separately verify whether MkDocs
-  has some non-MDX embedding mechanism of its own (an iframe-based plugin,
-  a Material extension, etc.) that could still carry a live component by a
-  different route. Treat "MkDocs can't do this" as the doc's own stated
-  reason for choosing plain Markdown, not as an exhaustively researched
-  verdict on every possible MkDocs embedding mechanism.
+The project owner resolved the scope question this doc previously left open:
+**implement live-component embedding for whichever targets actually support
+it; skip it for whichever don't.** This required settling, per-target,
+whether "supports it" is actually true — done below by fetching each
+generator's own current documentation, not by carrying forward the general
+public-knowledge assumptions the earlier version of this doc flagged as
+unverified.
 
-**Net: this session did not settle the embedding question.** What it did
-establish directly is that no existing fractal doc projector embeds live
-components today, and that the codebase already has one precedent
-(`<TypeRef>`) for how a future embed *would* be wired if the target doc
-generator supports it. Whether Docusaurus/Starlight actually do, and whether
-MkDocs categorically doesn't, needs verification against each generator's
-current documentation before this use case is scoped further — not asserted
-here as settled either way.
+**Docusaurus — supports it, confirmed.** Docusaurus's MDX docs state
+directly: "You can also import your own components defined in other files or
+third-party components installed via npm," and demonstrate importing a
+custom component from a separate `.js`/`.tsx` file and using it as a JSX tag
+inside an otherwise-Markdown page — a real, client-side-interactive React
+component, not static markup. Source:
+[Docusaurus — MDX and React](https://docusaurus.io/docs/markdown-features/react).
+This is exactly the mechanism the existing `<TypeRef>` precedent in
+`docusaurus-reference.ts` already relies on (see above) — that precedent
+wasn't a guess, it matches Docusaurus's documented capability.
 
-### Consequence for scoping this use case
+**Starlight — supports it, confirmed, via Astro islands.** Starlight's own
+docs state that because it's built on Astro, MDX/Markdoc files can use
+"components built with any supported UI framework (React, Preact, Svelte,
+Vue, Solid, and Alpine)." Source:
+[Starlight — Using Components](https://starlight.astro.build/components/using-components/).
+The underlying mechanism is Astro's islands architecture — components ship
+inert HTML by default and opt into client-side hydration via a `client:*`
+directive (`client:load`, `client:idle`, `client:visible`, `client:only`).
+One caveat surfaced during verification: `client:only` is reported broken
+inside MDX specifically ("window not defined" errors) — see
+[withastro/starlight discussion #2235](https://github.com/withastro/starlight/discussions/2235)
+— so a Starlight embed would need `client:load` or `client:visible`, not
+`client:only`, inside the generated MDX. This is a concrete implementation
+constraint, not a capability blocker.
 
-Given the above, the docgen-embedding use case should be treated as
-conditional on that verification, per the project owner's own framing: if
-Docusaurus/Starlight support live-component embedding (plausible, not yet
-confirmed) and MkDocs structurally doesn't (suggested by the existing doc's
-own reasoning, not yet independently confirmed), then this use case applies
-to a subset of doc-generation targets, not all of them uniformly — which
-also interacts with the ongoing, separately-scoped "production-grade
+**MkDocs (Material) — does not support the same class of embedding.**
+Material for MkDocs is, per its own documentation, a static Markdown-to-HTML
+generator with no MDX and no in-page framework-component-import mechanism —
+there is nothing in its docs equivalent to Docusaurus's `import Foo from
+"./Foo"` or Starlight's per-file UI-framework component imports. Its
+customization surface is `extra_javascript` (site-wide `<script>` includes
+declared in `mkdocs.yml`) plus a `document$` lifecycle observable for
+re-running JS after MkDocs-Material's instant-loading page swaps, and/or
+overriding template blocks (`{% block scripts %}`) in a custom `main.html`.
+Source: [Material for MkDocs — Customization](https://squidfunk.github.io/mkdocs-material/customization/).
+Combined with standard Markdown's raw-HTML passthrough (confirmed separately:
+plain `<iframe>` tags are known to work in MkDocs-Material pages, e.g.
+[mkdocs/mkdocs discussion #3188](https://github.com/mkdocs/mkdocs/discussions/3188)),
+it is technically possible to drop a raw custom-element tag
+(`<my-widget ...></my-widget>`) directly into a page's Markdown source and
+have a site-wide `extra_javascript` bundle register and hydrate it as a Web
+Component. That route exists, but it is not really "MkDocs support" in the
+sense the other two targets have it — raw-HTML-tag-plus-external-script
+works on essentially *any* HTML output, MkDocs-generated or not, and is not
+a documented MkDocs feature for this purpose. It's also structurally
+different from what `mkdocs-reference.ts` emits today or from what
+Docusaurus/Starlight's import-a-component idiom provides: there is no
+declarative "reference a component by name" surface in MkDocs's authoring
+format at all, only "embed literal HTML + separately wire up a script."
+Confirms the reasoning `mkdocs-reference.ts`'s own doc comment already gives
+("plain CommonMark ... deliberately **not** MDX, which MkDocs cannot
+render") as the accurate account, not just the doc's stated justification.
+
+**Net, per the project owner's resolved scope (implement where supported,
+skip where not): Docusaurus and Starlight are in scope for live-component
+embedding; MkDocs is out of scope** under this doc's reading of "supports
+it" as "the generator's own authoring format has a component-reference
+mechanism," which is what the two React-in-MDX/Astro-island targets have and
+MkDocs's raw-HTML+`extra_javascript` route is not. If the project owner
+later wants the raw-HTML/custom-element route pursued for MkDocs anyway
+despite it not fitting that reading, that's a distinct, lower-level feature
+(the projector would need to emit literal `<custom-element>` HTML plus
+instructions for wiring `extra_javascript`) and is flagged here as a
+possible-but-different follow-up, not folded into "MkDocs supports
+embedding" as verified above.
+
+### What embedding would concretely require on fractal's side, per in-scope target
+
+**Docusaurus (`docusaurus-reference.ts`).** The projector already emits a
+JSX component reference with no import statement
+(`<TypeRef name={...} summary={...} />`, relying on the consuming site
+registering `TypeRef` as a global MDX component — see the file's own
+`renderPage` output). Emitting a playground embed is the same shape: a new
+tag such as `<MockedFetchPlayground operation="..." tree={...} />` inside
+`renderPage`'s output, with a new MDX-comment note (matching the existing
+`<TypeRef>` note's pattern) telling the consuming site it must register a
+`MockedFetchPlayground` component. No new *projector* machinery is needed —
+the "emit a bare JSX component tag referencing something the site provides"
+hook already exists and is exercised today. What's genuinely new: (a)
+deciding how the operation's tree/schema data reaches the component (as a
+serialized JSON prop, most likely — nothing in the projector currently
+serializes tree data into a JSX prop), and (b) the `MockedFetchPlayground`
+component itself, which depends on the still-unresolved mocked-`fetch`
+backend work elsewhere in this doc, not on projector plumbing.
+
+**Starlight (`starlight-reference.ts`).** The projector already emits an
+explicit MDX `import { Tabs, TabItem, Aside, LinkCard, Code } from
+'@astrojs/starlight/components'` line and uses the imported components as
+JSX tags — i.e. it already has the "emit an import statement plus a
+component usage" mechanism, one step beyond Docusaurus's import-free
+`<TypeRef>` pattern. Extending this to a live playground is: add an import
+line for the playground component (from wherever the consuming site or a
+fractal-provided companion package places it) and emit its tag with an
+explicit hydration directive, e.g. `<MockedFetchPlayground client:load
+operation="..." tree={...} />` — the `client:load`/`client:visible`
+requirement noted above is a one-line addition to that emitted tag, not new
+architecture. Same open items as Docusaurus: prop-serialization strategy and
+the playground component's own implementation are out of scope for this
+projector-level change.
+
+**MkDocs (`mkdocs-reference.ts`).** Out of scope per the above — no change
+proposed here. Noted for completeness only: if ever revisited, it would need
+genuinely new machinery (the projector currently has no path to emit raw
+HTML tags at all, only CommonMark + MkDocs-Material Markdown extensions),
+not an extension of an existing hook the way the other two targets have.
+
+This also interacts with the ongoing, separately-scoped "production-grade
 initiative across all doc-generation targets" work already tracked in
 `docs/roadmap.md` (not modified by this doc, since that section is being
 edited elsewhere).
