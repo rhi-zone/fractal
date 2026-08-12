@@ -588,14 +588,15 @@ between types (see acceptance criteria below for details).
 **Still planned**: The remaining site-level generators listed below
 (TypeDoc/JSDoc/VitePress for JS/TS beyond Docusaurus/Starlight, Sphinx/
 pdoc for Python, rustdoc, Javadoc, godoc, DocFX, YARD/RDoc, DocC, Dokka,
-Haddock, Doxygen, phpDocumentor, dartdoc, elm-doc-preview, Zensical) —
-none of these ecosystem-native generators have a fractal projector yet;
-only the three cross-ecosystem doc-site frameworks above are done.
+Haddock, Doxygen, phpDocumentor, dartdoc, elm-doc-preview, mdBook,
+GitBook, Zensical) — none of these ecosystem-native generators have a
+fractal projector yet; only the three cross-ecosystem doc-site
+frameworks above are done.
 
 Site-level generators to target, by language ecosystem:
 - JS/TS — TypeDoc, JSDoc, Docusaurus, VitePress, Starlight
 - Python — Sphinx (autodoc), MkDocs (mkdocstrings), pdoc
-- Rust — rustdoc
+- Rust — rustdoc, mdBook
 - Java — Javadoc
 - Go — godoc / pkg.go.dev
 - C# — DocFX, XML doc comments
@@ -608,7 +609,36 @@ Site-level generators to target, by language ecosystem:
 - Dart — dartdoc
 - Elm — elm-doc-preview
 - Cross-language — Material for MkDocs (squidfunk), Zensical
-  (squidfunk's newer Rust-based doc generator)
+  (squidfunk's newer Rust-based doc generator), GitBook (hosted
+  docs-as-product platform)
+
+### Production-grade initiative across all doc-generation targets — open
+
+The project owner wants to push all doc-generator targets — the three
+built (Docusaurus, Starlight, MkDocs) plus every planned target above,
+including the newly-added mdBook and GitBook (25 targets total as of
+this writing: 3 built, 22 planned) — to "production grade" together,
+as one initiative. No
+definition of "production grade" exists yet for this repo's doc
+projectors, and none is proposed here; both of the following are open
+questions belonging to the project owner:
+
+- **What bar does each target need to clear?** Candidate dimensions
+  that have come up in adjacent discussion elsewhere in this doc but
+  have not been decided for this initiative: automated test coverage
+  per projector, verification against a real-world fixture (does the
+  generated output actually build/render in that ecosystem's real
+  tooling, not just structurally resemble valid output), a
+  cross-target parity checklist (which features — cross-linking,
+  hover info, deprecation markers, etc. — every target is expected to
+  support vs. which are ecosystem-specific), documentation of the
+  `meta`-bag-to-native-doc-comment mapping per target, and/or something
+  else not listed here.
+- **What order do the 20+ targets ship in?** No sequencing or
+  prioritization is assumed here (e.g. by ecosystem popularity, by
+  reuse of already-built code-level doc-comment emission, by which
+  ecosystems fractal already has strong projector coverage for). This
+  needs deciding before work is scheduled.
 
 What's planned / open:
 - Everything — no projector currently emits native doc comments from
