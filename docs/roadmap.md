@@ -524,6 +524,10 @@ schema/type/sample in one of 13 browser-safe input formats, pick any of
 45 output formats, see the converted output live. All 585 input×output
 combinations verified working.
 
+A Postman-like interactive-playground mode (and a possibly-related
+embedded-in-docs use case) is scoped, not yet built — see
+`docs/design/mocked-fetch-backend.md`.
+
 What's left:
 - Not yet deployed to a public URL — runs locally today.
 - 13 input formats is a subset of the full ingester list (browser-safe
@@ -839,6 +843,10 @@ What's planned / open (per `TODO.md`):
   session's scope.
 - CLI and MCP still walk the raw `Node` tree directly rather than
   through the `Node ⇒ ProtocolType` projection pattern HTTP/type-ir use.
+- Generating idiomatic router code for existing frameworks (Express, Hono,
+  Elysia, ...) as an alternative or companion to `http-api-projector`'s own
+  router output is scoped, not yet built — see
+  `docs/design/framework-router-codegen.md`.
 - No dedicated declaration for an operation's possible error kinds in
   the tree/meta itself (error mapping is projector-level config today).
 - A JSON-RPC projector (2026-07-24 session): corrected a stale claim
