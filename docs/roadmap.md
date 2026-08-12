@@ -526,7 +526,10 @@ combinations verified working.
 
 A Postman-like interactive-playground mode (and a possibly-related
 embedded-in-docs use case) is scoped, not yet built — see
-`docs/design/mocked-fetch-backend.md`.
+`docs/design/mocked-fetch-backend.md`. A related but architecturally
+distinct fabricated-data (not real-handler) capability for the same
+playground, plus runnable doc snippets, is scoped separately in
+`docs/design/relational-mock-data-generator.md`.
 
 What's left:
 - Not yet deployed to a public URL — runs locally today.
