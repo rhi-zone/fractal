@@ -332,15 +332,91 @@ existing tools split across at least three real strategies:
   which suggests it's a real gap other eject/regen-hybrid tools have felt
   too, not just a fractal-specific concern.)
 
-None of these is picked here. What's decided is the model (eject) and that
-a hash of the generated content is a workable, low-cost way to detect
-drift when a regen command is later invoked — not silently overwriting a
-hand-edited file is the shared goal. What's still open is the exact
-command UX: refuse-and-require-a-flag, ignore-file-style opt-out, or
-write-alongside-and-let-the-user-diff, and whether the hash lives in a
-sidecar manifest or a comment in the file itself. That's a project-owner
-call to make once the `regenerate` command itself is being designed, not
-before.
+**Decided by the project owner: support all three, not pick one.** The
+earlier framing above — "None of these is picked here... that's a
+project-owner call to make" — has been superseded: the call made was that
+the regen command supports all three strategies (refuse-and-diff,
+flag-to-override, write-alongside-for-manual-reconcile) as modes the user
+selects per-invocation, rather than fractal committing every user to one
+project-wide behavior. This is a real call, recorded here as settled — not
+re-litigated by what follows.
+
+(The ignore-file-style opt-out described above under `openapi-generator` —
+a *standing*, per-file "never touch this again" declaration, orthogonal to
+any single invocation — is a related but different mechanism from the three
+per-invocation modes the project owner scoped this decision to. It isn't
+folded into "all three" here; whether fractal also wants a persistent
+opt-out list alongside per-invocation mode selection is a separate,
+still-open question this doc doesn't resolve.)
+
+What a hash of the generated content is a workable, low-cost way to detect
+drift remains true regardless of which mode a given invocation runs in —
+refuse-and-diff and write-alongside both need that comparison to produce
+their diff, and flag-to-override needs it available even though it chooses
+to skip acting on it. Whether that hash lives in a sidecar manifest or a
+comment in the generated file itself is still open, as before.
+
+### Command surface for selecting a mode per-invocation
+
+This is this doc's own reasoned proposal for the concrete flag/subcommand
+shape — not yet project-owner-ratified the way "support all three" above
+is. It's checked against prior art rather than invented from scratch, per
+the same approach the rest of this section takes.
+
+Two shapes were considered for exposing three modes on one command:
+
+- **Three independent flags** (something like `--refuse` / `--force` /
+  `--diff-only`), left for the user to combine freely. Weighed against and
+  set aside: the three modes are mutually exclusive outcomes for the same
+  drift event, not independently-togglable options — separate boolean flags
+  invite an invalid combination (`--force` and `--diff-only` together, say)
+  that the command then has to detect and reject, rather than the CLI's
+  shape ruling it out structurally.
+- **A default write path plus a separate read-only path**, matching a split
+  prior art in this doc already draws: Prisma's `migrate dev` (writes) vs.
+  `migrate diff` (separate, read-only, never writes) are two different
+  commands, not one command with three flags; `shadcn`'s `add` (writes,
+  prompts on conflict) vs. `diff` (separate, read-only) follow the same
+  split. That split lines up with a real distinction between the three
+  modes: write-alongside-for-manual-reconcile never touches the live output
+  file — it's inspection, not a write attempt — while refuse-and-diff and
+  flag-to-override are two settings of the *same* write attempt
+  (check-then-write vs. skip-check-and-write).
+
+The second shape is what this proposal follows:
+
+- `fractal regen <target>` (command name TBD — package/CLI naming is
+  explicitly out of scope for this doc per this repo's "no suggesting
+  project names" constraint) is the write path. With no flags, it's
+  refuse-and-diff: hash what fresh codegen would produce, compare against
+  the stored last-generated hash, and if the live file doesn't match, print
+  a diff between the live file and fresh output and exit non-zero without
+  writing.
+  - `--force` (alias `--overwrite`) skips the drift check and writes the
+    fresh output unconditionally — flag-to-override.
+- Write-alongside-for-manual-reconcile gets a read-only entry point that
+  structurally cannot touch the live file, in one of two forms, both
+  workable:
+  - a `--diff` flag on the same `regen` command that, when passed, never
+    writes to the live path and instead writes fresh output to a sibling
+    file (e.g. `<file>.generated.ts` next to the hand-edited `<file>.ts`)
+    for the user to reconcile with their own diff tool; or
+  - a separate `regen:diff`-shaped subcommand mirroring `prisma migrate
+    diff` / `shadcn diff`'s command-level split.
+
+  A flag keeps the CLI surface smaller — one command name to learn. A
+  separate subcommand states the "this can never mutate your file" guarantee
+  at the command-name level, where it can't be missed the way a flag can be.
+  Which fits better is a naming/ergonomics call, closer in kind to the
+  still-open sidecar-vs-embedded-hash question above than something this
+  proposal resolves.
+
+One follow-up question this raises and doesn't answer: whether the chosen
+mode can be persisted as a project default (e.g. a `regen.driftMode` field
+in project config) so a team doesn't retype `--force` on every invocation,
+or whether mode selection is strictly per-invocation only, the way "a flag
+the user picks per-invocation" was framed when this was scoped. Left open
+here rather than assumed.
 
 ## Open question: relationship to the existing OpenAPI projection
 
