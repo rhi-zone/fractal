@@ -574,10 +574,10 @@ Acceptance criteria for green:
 
 ### Documentation Generation
 
-**Status: PARTIALLY COMPLETE (2026-07-22)**
+**Status: PARTIALLY COMPLETE (2026-08-12)**
 
-Code-level doc comment emission complete; the three named site-level doc
-projectors are now also implemented.
+Code-level doc comment emission complete; four site-level doc projectors
+are now implemented (Docusaurus, Starlight, MkDocs, Sphinx).
 
 **Completed (2026-07-22)**: Doc comment emission across all 25 projectors.
 Every projector now emits native doc comments from `meta.description` and
@@ -592,13 +592,101 @@ lives in TypeRef's open `meta` bag; this was a pure emission concern.
 their respective doc-site frameworks, with hover info and cross-linking
 between types (see acceptance criteria below for details).
 
+**Completed (2026-08-12)**: `sphinx-reference.ts` — the #1-ranked
+not-yet-built target per the popularity research below. First projector
+built against this section's basics bars (A/B/D, C explicitly out of
+scope — see "Candidate basics bars" below), and the first of the four
+site-level doc projectors overall to clear bar B and get a real (ad hoc,
+not CI-gated) bar-D visual check. Status against the bars:
+- **(A) Structural smoke test** — clears via `registry.test.ts`'s
+  generic loop (same as the other three built targets) plus RST-specific
+  structural assertions in `sphinx-reference.test.ts` (title-underline
+  length matching, well-formed `.. list-table::` blocks) that the
+  generic loop can't check and the other three targets' Markdown/MDX
+  output doesn't need.
+- **(B) Dedicated fixture + reviewed output** — `sphinx-reference.test.ts`
+  has its own fixture (a small GitHub-API-flavored `Repository`/`Owner`/
+  `Visibility`/`WebhookEvent`/`IssueTracker` document exercising nested
+  objects, an enum, a deprecated field, a discriminated union with both
+  `ref` and inline-object variants, an interface method, and a
+  documented example) plus hand-reviewed explicit-string assertions per
+  section kind (this codebase doesn't use snapshot testing anywhere
+  under `packages/type-ir/src`, so this follows the same
+  explicit-assertion convention as `compile-check.test.ts` and sibling
+  `*.test.ts` files rather than introducing one). Bar B is not yet
+  retrofitted onto Docusaurus/Starlight/MkDocs — they still only clear
+  what "What the three built targets currently clear" below describes.
+- **(D) Verified correct, not just accepted** — see the dedicated note
+  below; done as one-time, ad hoc, local verification only, per the
+  bar-C-is-out-of-scope framing.
+
+**The D-presupposes-C tension, encountered and resolved for this first
+target (read before the next target goes through this same process)**:
+bar D's own text ("Beyond the real tool accepting the output, a human ...
+confirms the rendered result actually looks right") presupposes bar C
+(verified against the real tool) already passed — but C is explicitly
+out of scope for this initiative, redirected to a separate heavier
+pre-release/RC workflow. The resolution used here: bar D's *intent* (a
+human actually looked at rendered output and confirmed it isn't broken)
+was satisfied without adopting C's *scope* (an automated, CI-gated,
+always-required `sphinx-build` step) by running the real `sphinx-build`
+tool locally, once, ad hoc, purely to render this target's dedicated
+fixture to HTML for direct visual review — not committed as a CI gate,
+not added as a required test assertion that shells out to `sphinx-build`,
+and not left as a persisted script or fixture under `packages/type-ir/src`
+(nixpkgs' `python3Packages.sphinx` was added to `flake.nix`'s Python
+toolchain for this purpose only, following the same precedent as the
+pydantic/attrs entry already there for `compile-check.test.ts`). **This
+is a judgment call bridging an ambiguity in this doc's own bar
+definitions, not a decision belonging to whoever implements the next
+target by default — the project owner should confirm or correct this
+reading before it becomes the unstated precedent every subsequent target
+follows.**
+
+What the ad hoc bar-D check actually found and fixed (recorded here
+because it demonstrates *why* D's real-tool step earns its cost even
+when scoped down to one-time/local rather than C's full CI-gated form —
+none of these three defects were structurally invalid RST, so bar A's
+smoke test could not have caught any of them; only feeding the output to
+a real `sphinx-build` did):
+1. `.. deprecated:: <reason>` — the directive's own argument grammar
+   (`sphinx.domains.changeset.VersionChange`, `optional_arguments = 1`,
+   `final_argument_whitespace = True`) silently splits a multi-word
+   single-line argument into a bogus "version" (first word) plus a
+   truncated inline explanation, garbling any deprecation reason longer
+   than one word. Fixed by moving the reason to the directive's
+   *body* (an indented paragraph) with a fixed, explicitly-non-data
+   `N/A` placeholder standing in for the version slot the directive
+   requires but this projector has no real data for.
+2. A cross-linked method signature's `.. list-table::` cell wrapped the
+   *entire* signature — including an embedded `:ref:` role — in a
+   `` `` ``-delimited literal span; docutils does not parse inline markup
+   inside a literal span, so the role rendered as dead literal text
+   instead of a working hyperlink. Fixed by leaving the signature cell
+   unwrapped (matching how the Fields table's type cell already worked).
+3. A cross-linked `ref`-typed array field (`X[]` shorthand) placed the
+   `:ref:` role's closing backtick directly against `[`; docutils
+   requires whitespace or a fixed closing-punctuation set immediately
+   after an inline-markup end-string, and `[` (an opening bracket) isn't
+   in that set, producing a real docutils warning. Fixed with docutils'
+   documented adjacent-inline-markup escape (`\ `, an escaped space that
+   renders invisibly but satisfies the boundary rule).
+
+All three are fixed in the committed `sphinx-reference.ts`, re-verified
+against a fresh `sphinx-build -W` (warnings-as-errors) run after each
+fix, and covered by dedicated assertions in `sphinx-reference.test.ts`.
+The scratch Sphinx project used for the visual check (minimal `conf.py`
++ the dedicated fixture's five generated `.rst` pages) was not committed,
+per the instruction not to persist bar-C-shaped tooling into the repo.
+
 **Still planned**: The remaining site-level generators listed below
-(TypeDoc/JSDoc/VitePress for JS/TS beyond Docusaurus/Starlight, Sphinx/
-pdoc for Python, rustdoc, Javadoc, godoc, DocFX, YARD/RDoc, DocC, Dokka,
-Haddock, Doxygen, phpDocumentor, dartdoc, elm-doc-preview, mdBook,
-GitBook, Zensical) — none of these ecosystem-native generators have a
-fractal projector yet; only the three cross-ecosystem doc-site
-frameworks above are done.
+(TypeDoc/JSDoc/VitePress for JS/TS beyond Docusaurus/Starlight, pdoc for
+Python (Sphinx itself is now done, see above), rustdoc, Javadoc, godoc,
+DocFX, YARD/RDoc, DocC, Dokka, Haddock, Doxygen, phpDocumentor, dartdoc,
+elm-doc-preview, mdBook, GitBook, Zensical) — none of these
+ecosystem-native generators have a fractal projector yet; four
+cross-ecosystem/ecosystem-native doc-site frameworks (Docusaurus,
+Starlight, MkDocs, Sphinx) are done.
 
 Site-level generators to target, by language ecosystem:
 - JS/TS — TypeDoc, JSDoc, Docusaurus, VitePress, Starlight
@@ -770,10 +858,10 @@ Starlight (#13/#14).
 
 ### Production-grade initiative across all doc-generation targets — open
 
-The project owner wants to push all doc-generator targets — the three
-built (Docusaurus, Starlight, MkDocs) plus every planned target above,
-including the newly-added mdBook and GitBook (25 targets total as of
-this writing: 3 built, 22 planned) — to "production grade" together,
+The project owner wants to push all doc-generator targets — the four
+built (Docusaurus, Starlight, MkDocs, Sphinx) plus every planned target
+above, including the newly-added mdBook and GitBook (25 targets total as
+of this writing: 4 built, 21 planned) — to "production grade" together,
 as one initiative. No
 definition of "production grade" exists yet for this repo's doc
 projectors, and none is proposed here; both of the following are open
@@ -828,6 +916,15 @@ tooling and confirmed to actually build or render; no visual check of
 the rendered result exists. That places the current bar closest to
 candidate (A) below, arguably touching (B) via the reference-doc
 examples, but not reaching (C) or (D).
+
+**Sphinx (2026-08-12), by contrast, clears (A), (B), and an ad hoc/local
+form of (D)** — see the "Documentation Generation" status callout above
+for the full breakdown and the recorded D-presupposes-C tension. It is
+the only one of the four built targets with a dedicated fixture, a
+reviewed/structural-assertion test file, and any real-tool visual
+verification at all; Docusaurus/Starlight/MkDocs have not been
+retrofitted to the same bars as part of this work — doing so, if wanted,
+is a separate follow-up the project owner would need to schedule.
 
 - **(A) Structural smoke test.** The projector runs against a fixture
   without throwing, and produces non-empty output that's at least

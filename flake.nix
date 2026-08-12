@@ -20,8 +20,15 @@
 
             # Python (dataclass projector: stdlib only; pydantic/attrs projectors:
             # real libraries pulled in here so compile-check.test.ts can actually
-            # import the generated modules, not just parse them)
-            (python3.withPackages (ps: [ ps.pydantic ps.attrs ]))
+            # import the generated modules, not just parse them; sphinx: NOT used
+            # by any committed test — pulled in for one-time local visual
+            # verification of sphinx-reference.ts's generated .rst output via a
+            # real `sphinx-build` run (docs/roadmap.md's doc-generator "basics"
+            # bar D), same precedent as pydantic/attrs above but for a doc
+            # projector's rendered-HTML output instead of a compiled module; not
+            # wired into CI or any required test gate, per bar C being out of
+            # scope for this initiative)
+            (python3.withPackages (ps: [ ps.pydantic ps.attrs ps.sphinx ]))
 
             # Go (encoding/json, easyjson projectors — both stdlib-only: easyjson's
             # own runtime is only needed by its code-*generator*, not by the

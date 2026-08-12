@@ -1,13 +1,15 @@
 # Doc projectors
 
 Unlike every code-generating projector above (`TypeRef => string`), these
-three take a whole `TypeRefDocument` — `root` + `defs` — and produce a
+four take a whole `TypeRefDocument` — `root` + `defs` — and produce a
 `Map<string, string>` of generated documentation *pages* (filename → Markdown/
-MDX content), one per named `defs` entry. `doc.root` gets no page of its own
-(it's typically the operation/entry-point shape that *uses* the named types,
-not a named type itself) — a caller wanting a page for it adds it to `defs`
-under a name first. All three cross-link `ref` targets to each other's pages
-by kebab-case filename.
+MDX/RST content), one per named `defs` entry. `doc.root` gets no page of its
+own (it's typically the operation/entry-point shape that *uses* the named
+types, not a named type itself) — a caller wanting a page for it adds it to
+`defs` under a name first. All four cross-link `ref` targets to each other's
+pages by kebab-case filename (Sphinx via an explicit `:ref:`/`.. _label:`
+pair rather than a bare Markdown link, since RST has no implicit per-file
+anchor — see its section below).
 
 ## Docusaurus
 
@@ -156,3 +158,81 @@ are exported as standalone helpers (the same ones `renderPage` uses
 internally) for callers assembling their own page layout instead of using
 `toMkdocsReference` wholesale. `options.basePath` (default none) prefixes
 every returned filename, e.g. `"reference/"` → `"reference/user.md"`.
+
+## Sphinx
+
+```ts
+import { toSphinxReference, renderTypeExpr, kebabCase } from "@rhi-zone/fractal-type-ir/sphinx-reference"
+
+const pages = toSphinxReference({
+  root: t(types.ref("User")),
+  defs: { User: t(types.object({ id: t(types.integer) })) },
+})
+// pages.get("user.rst")
+```
+
+````rst
+.. _user:
+
+User
+====
+
+Type Signature
+--------------
+
+.. code-block:: typescript
+
+   type User = { id: integer }
+
+Fields
+------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 25 10 45
+
+   * - Field
+     - Type
+     - Required
+     - Description
+   * - id
+     - integer
+     - Yes
+     -
+````
+
+Native docutils/Sphinx markup — reStructuredText, not MyST Markdown (MyST is
+a Sphinx *option*, not its default/idiomatic form, and using it here would
+blur the line with the MkDocs Markdown target above). Unlike the three
+Markdown/MDX targets above, there is no YAML frontmatter block — RST has no
+frontmatter convention, and Sphinx's own analogue (docinfo fields) is for
+document metadata like author/date, not page routing — so a def with no
+`meta.description` simply has no description paragraph, rather than falling
+back to a synthesized `"Reference for X."` line the way the frontmatter-
+carrying targets do. One `.rst` page per `defs` entry; each page opens with an explicit `.. _kebab-name:`
+cross-reference target immediately before its title, which is what every
+other page's `ref`-typed field/method/variant cross-links to via
+```` :ref:`Name <kebab-name>` ````. Section headings use a fixed
+underline-character-per-level convention consistent across every generated
+page (`=` page title, `-` sections, `~` variant subsections, `^` a variant's
+nested Fields table) — `docutils` is strict about underline length matching
+the title text exactly, which `heading()` (internal) always computes rather
+than hard-coding. Fields/Methods render as `.. list-table::` blocks;
+deprecation renders as a `.. deprecated:: <reason>` directive (the directive
+is documented as taking a version identifier as its argument, but docutils
+doesn't validate that — the reason string is used directly rather than
+inventing a fake version number). Multiple `meta.examples` render as
+numbered `Example N` subsections rather than a tabbed UI, since a tabs
+directive isn't part of a default Sphinx install (unlike MkDocs-Material's
+bundled content-tabs extension) — introducing one would mean assuming a
+third-party `sphinx-tabs` install this projector has no way to guarantee.
+There is no abbreviations-equivalent section: Sphinx's nearest analogue
+(`.. glossary::` + `:term:`) is idiomatic for a project-wide term glossary,
+not a per-page "define every type mentioned on this page" block the way
+MkDocs' `*[Term]: ...` abbreviation syntax is used here — cross-linking
+itself is fully covered by the inline `:ref:` roles in Fields/Methods/
+Variants tables, so nothing is lost by omitting it.
+`renderTypeExpr(ref, linked?)` and `kebabCase(name)` are exported as
+standalone helpers, same convention as the MkDocs projector.
+`options.basePath` (default none) prefixes every returned filename, e.g.
+`"reference/"` → `"reference/user.rst"`.
