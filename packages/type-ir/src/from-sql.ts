@@ -22,13 +22,16 @@
 // not on `meta.format`). Kinds without a dedicated IR representative (e.g. no
 // generic "unsigned" or "interval-less" concept) fall back to `meta` instead.
 //
-// Column-level SQL concepts sql.ts's forward direction doesn't model at all
-// (PRIMARY KEY, UNIQUE, REFERENCES, CHECK-as-raw-text, AUTO_INCREMENT/SERIAL)
-// are preserved as open `meta` conventions local to this pair of modules:
+// Column-level SQL concepts sql.ts's forward direction doesn't have a
+// dedicated IR shape for (PRIMARY KEY, UNIQUE, CHECK-as-raw-text,
+// AUTO_INCREMENT/SERIAL) are preserved as open `meta` conventions local to
+// this pair of modules:
 //   - meta.primaryKey: boolean — column participates in the table's primary key.
 //   - meta.unique: boolean — column has a single-column UNIQUE constraint.
 //   - meta.autoincrement: boolean — SERIAL/BIGSERIAL/AUTO_INCREMENT/AUTOINCREMENT.
 //   - meta.references: { table: string; column?: string } — FOREIGN KEY target.
+//     sql.ts's toSqlDdl DOES read this one back (unlike the others above) and
+//     emits a `REFERENCES table(column)` clause, so this key round-trips.
 //   - meta.checks: string[] — CHECK clause text that didn't parse into one of
 //     the structured constraint keys sql.ts's buildChecks already understands
 //     (minimum/maximum/exclusiveMinimum/exclusiveMaximum/minLength/maxLength/

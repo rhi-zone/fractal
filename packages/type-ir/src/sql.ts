@@ -16,6 +16,12 @@ export type SqlColumn = {
   // `COMMENT '...'` clause, or a `/* ... */` block comment for the others. Already
   // fully rendered (no `{name}` needed — comments don't reference the column name).
   comment?: string
+  // FOREIGN KEY target, mirrored from `meta.references` (from-sql.ts's own
+  // convention for the column-level SQL concepts this package's forward
+  // direction doesn't have a dedicated IR shape for — see that module's
+  // header comment). `column` omitted means the referenced table's own
+  // primary key, i.e. `REFERENCES table` with no column list.
+  references?: { table: string; column?: string }
 }
 
 export type SqlDialect = "postgres" | "sqlite" | "mysql"
@@ -451,7 +457,26 @@ export function toSqlDdl(ref: TypeRef, opts?: SqlOptions): SqlColumn {
   const comment = buildComment(ref.meta, opts?.dialect)
   if (comment !== undefined) column.comment = comment
 
+  const references = buildReferences(ref.meta)
+  if (references !== undefined) column.references = references
+
   return column
+}
+
+// Reads `meta.references` (from-sql.ts's `{ table, column? }` FK-target
+// convention) back into a `SqlColumn.references`, so a SQL -> TypeRef -> SQL
+// round trip through from-sql.ts and this module preserves FOREIGN KEY
+// constraints instead of silently dropping them. Only recognizes the shape
+// from-sql.ts actually writes (non-empty `table` string, optional `column`
+// string) — anything else in `meta.references` is ignored rather than
+// guessed at.
+function buildReferences(meta: Record<string, unknown>): { table: string; column?: string } | undefined {
+  const refs = meta.references
+  if (typeof refs !== "object" || refs === null) return undefined
+  const { table, column } = refs as { table?: unknown; column?: unknown }
+  if (typeof table !== "string" || table.length === 0) return undefined
+  if (column !== undefined && typeof column !== "string") return undefined
+  return column === undefined ? { table } : { table, column }
 }
 
 export function columnDef(name: string, col: SqlColumn): string {
@@ -459,6 +484,10 @@ export function columnDef(name: string, col: SqlColumn): string {
   if (!col.nullable) ddl += " NOT NULL"
   if (col.default !== undefined) ddl += ` DEFAULT ${col.default}`
   if (col.checks) for (const check of col.checks) ddl += ` ${check.replaceAll("{name}", name)}`
+  if (col.references !== undefined) {
+    ddl += ` REFERENCES ${col.references.table}`
+    if (col.references.column !== undefined) ddl += `(${col.references.column})`
+  }
   if (col.comment !== undefined) ddl += ` ${col.comment}`
   return ddl
 }

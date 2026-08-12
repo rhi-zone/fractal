@@ -311,4 +311,27 @@ describe("round-trip against sql.ts", () => {
     expect(ddl).toContain("nickname TEXT")
     expect(ddl).not.toContain("nickname TEXT NOT NULL")
   })
+
+  test("inline REFERENCES round-trips to an equivalent FOREIGN KEY clause", () => {
+    const result = fromSql(
+      "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id));",
+    )
+    const ddl = toCreateTable("orders", result.orders!, { dialect: "postgres" })
+    expect(ddl).toContain("user_id INTEGER REFERENCES users(id)")
+  })
+
+  test("table-level FOREIGN KEY round-trips to an equivalent inline REFERENCES clause", () => {
+    const result = fromSql(
+      "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, FOREIGN KEY (user_id) REFERENCES users (id));",
+    )
+    const ddl = toCreateTable("orders", result.orders!, { dialect: "postgres" })
+    expect(ddl).toContain("user_id INTEGER REFERENCES users(id)")
+  })
+
+  test("REFERENCES without an explicit column round-trips without a column list", () => {
+    const result = fromSql("CREATE TABLE orders (user_id INTEGER REFERENCES users);")
+    const ddl = toCreateTable("orders", result.orders!, { dialect: "postgres" })
+    expect(ddl).toContain("user_id INTEGER REFERENCES users")
+    expect(ddl).not.toContain("REFERENCES users(")
+  })
 })
