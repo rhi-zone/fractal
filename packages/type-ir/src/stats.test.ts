@@ -1,7 +1,6 @@
-// packages/type-ir/src/stats.test.ts — tests for the statistics helpers
-// (stats.ts) that back inference-eval.ts's multi-trial comparisons: mean,
-// stddev, percentile bootstrap CI, and paired bootstrap significance
-// testing.
+// Tests for the statistics helpers (stats.ts) that back inference-eval.ts's
+// multi-trial comparisons: mean, stddev, percentile bootstrap CI, and
+// paired bootstrap significance testing.
 import { describe, expect, test } from "bun:test";
 import { mean, stddev, bootstrapCI, pairedBootstrapTest, mulberry32 } from "./stats.ts";
 
@@ -129,7 +128,7 @@ describe("pairedBootstrapTest", () => {
 
   test("fails to reject when there is no real paired difference", () => {
     // `a` and `b` are independent draws from the same distribution, paired
-    // only by index — no systematic effect, so the test should NOT claim
+    // only by index — no systematic effect, so the test should not claim
     // significance.
     const rng = mulberry32(555);
     const n = 40;

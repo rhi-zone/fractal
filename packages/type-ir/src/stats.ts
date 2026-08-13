@@ -1,5 +1,3 @@
-// packages/type-ir/src/stats.ts — @rhi-zone/fractal-type-ir/stats
-//
 // Small statistics helpers for turning a set of independent trial
 // measurements into a distribution summary: mean, stddev, a percentile
 // bootstrap confidence interval, and a paired bootstrap significance test
@@ -101,7 +99,7 @@ export interface PairedBootstrapResult {
 
 /**
  * Paired bootstrap significance test: given two equal-length series of
- * trial results measured on the SAME underlying seeds (so index i in `a`
+ * trial results measured on the same underlying seeds (so index i in `a`
  * and index i in `b` share corpus-generation noise as a nuisance variable),
  * test whether `mean(a) - mean(b)` differs from 0.
  *

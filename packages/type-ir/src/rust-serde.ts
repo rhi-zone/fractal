@@ -81,9 +81,9 @@ const leaf =
 // context to hoist a fresh declaration (array elements, tuple slots, map
 // keys/values, standalone references): `object`/`enum`/`union` here fall
 // back to a caller-supplied name (`meta.typeName`/`meta.enumName`) or an
-// honest opaque escape hatch (`serde_json::Value`) rather than fabricating
-// a struct with no name. `bareType` below is the field/variant-context
-// counterpart that DOES have a name to hoist a declaration under.
+// opaque placeholder (`serde_json::Value`) rather than fabricating a struct
+// with no name. `bareType` below is the field/variant-context counterpart,
+// used where a name is available to hoist a declaration under.
 const handlers: Record<string, Converter> = {
   boolean: leaf("bool"),
   number: leaf("f64"),
@@ -120,7 +120,7 @@ const handlers: Record<string, Converter> = {
     return `Vec<${toRustType(s.element)}>`;
   },
   // No streaming construct in a plain data type — materializes to Vec<T>,
-  // same honest-degrade convention protobuf.ts/flatbuffers.ts use.
+  // the same convention protobuf.ts/flatbuffers.ts use for streams.
   stream: (shape) => {
     const s = shape as TypeShape & { kind: "stream" };
     return `Vec<${toRustType(s.element)}>`;
@@ -133,17 +133,15 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "tuple" };
     return `(${s.elements.map(toRustType).join(", ")})`;
   },
-  // Default to HashMap<K, V>; a map TypeRef whose own `meta.ordered` is true
-  // (project convention — no prior art in this codebase to match, since no
-  // existing projector distinguishes ordered/unordered maps) renders as
-  // BTreeMap<K, V> instead.
+  // Defaults to HashMap<K, V>; a map TypeRef with `meta.ordered` set to true
+  // renders as BTreeMap<K, V> instead.
   map: (shape, meta) => {
     const s = shape as TypeShape & { kind: "map" };
     const container = meta.ordered === true ? "BTreeMap" : "HashMap";
     return `${container}<${toRustType(s.key)}, ${toRustType(s.value)}>`;
   },
   // No naming context here — see the `bareType`/`buildStruct` field-context
-  // hoisting path below for the real (named) struct-generating case.
+  // hoisting path below for the named struct-generating case.
   object: (_shape, meta) =>
     typeof meta.typeName === "string" ? meta.typeName : "serde_json::Value",
   enum: (shape, meta) => {
@@ -154,7 +152,7 @@ const handlers: Record<string, Converter> = {
     typeof meta.typeName === "string" ? meta.typeName : "serde_json::Value",
   // Rust has no literal-type construct usable in a serde-derived struct field
   // (const generics don't cover strings/floats generally) — degrades to the
-  // literal's base scalar type, same lossy convention protobuf.ts/flatbuffers.ts
+  // literal's base scalar type, the same convention protobuf.ts/flatbuffers.ts
   // use for their own literal handling.
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" };
@@ -171,8 +169,8 @@ const handlers: Record<string, Converter> = {
     const [first] = s.members;
     return first === undefined ? "serde_json::Value" : toRustType(first);
   },
-  // Not serializable data — degrades honestly to serde_json::Value, same as
-  // `unknown` above.
+  // Not serializable data — degrades to serde_json::Value, same as `unknown`
+  // above.
   function: leaf("serde_json::Value"),
   interface: leaf("serde_json::Value"),
 };

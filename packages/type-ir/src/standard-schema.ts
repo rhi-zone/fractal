@@ -1,5 +1,3 @@
-// packages/type-ir/src/standard-schema.ts — @rhi-zone/fractal-type-ir/standard-schema
-//
 // TO-direction emitter: TypeRef -> a runtime object implementing Standard
 // Schema (https://standardschema.dev/) — both orthogonal interfaces the spec
 // defines:
@@ -380,7 +378,7 @@ function validateValue(ref: TypeRef, value: unknown, path: PropertyKey[]): Issue
   const issues = handler === undefined ? [] : handler(ref, value, path);
   // Constraint checks (minLength/pattern/minimum/...) only make sense once
   // the base structural check already passed — skip them on a type mismatch
-  // so a wrong-type value doesn't ALSO report spurious constraint failures.
+  // so a wrong-type value doesn't also report spurious constraint failures.
   if (issues.length > 0) return issues;
   return metaConstraintIssues(ref, value, path);
 }

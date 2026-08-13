@@ -7,8 +7,6 @@ import {
   toCamelCaseStripSeparators,
 } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/swift-codable.ts — @rhi-zone/fractal-type-ir/swift-codable
-//
 // TypeRef -> idiomatic Swift type declarations (Codable structs/enums).
 // Mirrors typescript.ts's/protobuf.ts's projector shape: a `kind`-keyed
 // handler table for the primitive/leaf cases, plus dedicated declaration
@@ -59,7 +57,7 @@ const primitiveHandlers: Record<string, string> = {
   duration: "String",
   bytes: "Data",
   // `null` has no Swift bottom type to alias directly; `Never?` (an Optional
-  // that can only ever be `nil`) is the closest honest analogue.
+  // that can only ever be `nil`) is the closest analogue.
   null: "Never?",
   void: "Void",
   unknown: "Any",
@@ -126,22 +124,22 @@ function fieldType(ref: TypeRef, hint: string, ctx: Ctx): string {
     base = literalType((ref.shape as TypeShape & { kind: "literal" }).value);
   } else if (kind === "stream" || kind === "page") {
     // Swift has no native streaming/pagination-window construct — degrades
-    // honestly to an array of the element type, same convention json-
-    // schema.ts/protobuf.ts use for these two kinds.
+    // to an array of the element type, the same convention json-schema.ts/
+    // protobuf.ts use for these two kinds.
     const s = ref.shape as TypeShape & { element: TypeRef };
     base = `[${fieldType(s.element, hint, ctx)}]`;
   } else if (kind === "intersection") {
-    // Swift has no structural intersection/mixin construct; lossy fallback
-    // to the first member, same honest-degrade convention protobuf.ts's
-    // `intersection` handler uses.
+    // Swift has no structural intersection/mixin construct; falls back to
+    // the first member, the same convention protobuf.ts's `intersection`
+    // handler uses.
     const s = ref.shape as TypeShape & { kind: "intersection" };
     const [first] = s.members;
     base = first === undefined ? "Any" : fieldType(first, hint, ctx);
   } else {
     // Primitives/extension leaf kinds, plus function/method/interface (no
     // Swift callable-type-in-field-position construct — degrades to `Any`,
-    // same honest-degrade convention protobuf.ts's `function`/`interface`
-    // handlers use).
+    // the same convention protobuf.ts's `function`/`interface` handlers
+    // use).
     base = resolve(kind, primitiveHandlers) ?? "Any";
   }
 

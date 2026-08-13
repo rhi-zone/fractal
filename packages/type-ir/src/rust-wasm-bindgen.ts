@@ -13,8 +13,8 @@ import {
 // uses for `use serde::{Serialize, Deserialize};` (declarations only, no
 // import lines emitted).
 //
-// This is deliberately a SUBSET of type-ir's kinds. wasm-bindgen's ABI
-// boundary — confirmed against the project's guide
+// This projector covers a subset of type-ir's kinds. wasm-bindgen's ABI
+// boundary — per the project's guide
 // (https://github.com/rustwasm/wasm-bindgen, guide/src/reference/types/*
 // and guide/src/reference/attributes/on-rust-exports/*, fetched 2026-08-03)
 // — only crosses a fixed set of shapes:
@@ -41,19 +41,19 @@ import {
 //     crate (JsValue + serde) instead, which is a real added dependency,
 //     not a decision this projector makes on the caller's behalf.
 //
-// Kinds outside this subset THROW rather than degrade to a lossy
-// placeholder — unlike every other projector in this package (rust-serde.ts,
-// protobuf.ts, json-schema.ts, ...), which degrade genuinely-unsupported
-// kinds to an honest opaque placeholder (`serde_json::Value`,
-// `google.protobuf.Any`, `x-function: true`) because their target formats
-// are pure data shapes with no compiled-code obligation. wasm-bindgen's
-// output has to compile and its ABI boundary is a hard wall, not a
-// best-effort data shape — silently emitting `JsValue` for, say, a `map`
-// would compile but misrepresent a structured key/value type as opaque, and
-// silently emitting Rust for an untagged union without doing dynamic-union
-// dispatch bookkeeping would compile but be wrong at runtime. Throwing
-// forces the caller to make the tradeoff explicitly (add
-// serde-wasm-bindgen, restructure the type, or hand-write the binding).
+// Kinds outside this subset throw rather than degrade to a placeholder —
+// unlike every other projector in this package (rust-serde.ts, protobuf.ts,
+// json-schema.ts, ...), which degrade genuinely-unsupported kinds to an
+// opaque placeholder (`serde_json::Value`, `google.protobuf.Any`,
+// `x-function: true`) because their target formats are pure data shapes
+// with no compiled-code obligation. wasm-bindgen's output has to compile
+// and its ABI boundary is a hard wall, not a best-effort data shape —
+// silently emitting `JsValue` for, say, a `map` would compile but
+// misrepresent a structured key/value type as opaque, and silently emitting
+// Rust for an untagged union without doing dynamic-union dispatch
+// bookkeeping would compile but be wrong at runtime. Throwing forces the
+// caller to make the tradeoff explicitly (add serde-wasm-bindgen,
+// restructure the type, or hand-write the binding).
 
 const RUST_KEYWORDS = new Set([
   "type",
@@ -157,10 +157,10 @@ const handlers: Record<string, Converter> = {
   bytes: leaf("Vec<u8>"),
   null: leaf("()"),
   void: leaf("()"),
-  // JsValue is wasm-bindgen's actual "any JS value" primitive — a faithful,
-  // fully ABI-crossable representation of "unknown", not a lossy escape
-  // hatch the way rust-serde.ts's `serde_json::Value` fallback is for a
-  // pure-data format.
+  // JsValue is wasm-bindgen's own "any JS value" primitive — a fully
+  // ABI-crossable representation of "unknown", unlike rust-serde.ts's
+  // `serde_json::Value` fallback, which is a placeholder for a pure-data
+  // format with no such native primitive.
   unknown: leaf("JsValue"),
   never: unsupported(
     "never",
@@ -172,10 +172,10 @@ const handlers: Record<string, Converter> = {
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => `Vec<${vecElementType((shape as TypeShape & { kind: "array" }).element)}>`,
   // No streaming construct crosses the wasm-bindgen ABI — materializes to
-  // Vec<T>, same honest-degrade convention rust-serde.ts uses (a stream's
-  // element type is still the closest structural analogue once the
-  // asynchrony/laziness itself can't be preserved). Vec<T> genuinely IS a
-  // valid, ABI-crossable representation, so this isn't a lossy placeholder.
+  // Vec<T>, the same convention rust-serde.ts uses (a stream's element type
+  // is the closest structural analogue once asynchrony/laziness itself
+  // can't be preserved). Vec<T> is a valid, ABI-crossable representation on
+  // its own terms, not merely a fallback placeholder.
   stream: (shape) => `Vec<${vecElementType((shape as TypeShape & { kind: "stream" }).element)}>`,
   page: (shape) => `Vec<${vecElementType((shape as TypeShape & { kind: "page" }).element)}>`,
   tuple: unsupported(
@@ -187,8 +187,8 @@ const handlers: Record<string, Converter> = {
     "no direct HashMap<K, V> ABI crossing — wasm-bindgen's own guide (arbitrary-data-with-serde.md) names HashMap as one of the exact cases requiring the serde-wasm-bindgen crate as an added dependency; js_sys::Map is available for an opaque JS Map handle but doesn't carry type-ir's key/value element types",
   ),
   // No naming context here — see `bareType`'s hoisting path for the named
-  // (real) struct-generating case. Anonymous object falls back to JsValue
-  // (an honest "opaque object" representation, not a lossy struct-in-name-only).
+  // struct-generating case. An anonymous object falls back to JsValue,
+  // representing it as an opaque object rather than a struct with no name.
   object: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "JsValue"),
   enum: (shape, meta) => {
     const s = shape as TypeShape & { kind: "enum" };
@@ -198,9 +198,9 @@ const handlers: Record<string, Converter> = {
     "union",
     "wasm-bindgen enums cross the ABI cleanly only when fieldless (string/numeric discriminants), or via the newer \"dynamic union\" mechanism restricted to single-field tuple variants with order-dependent runtime-witness dispatch. type-ir's tagged-union variants are multi-field objects (not bare wrapped types) and untagged unions carry no natural dispatch order — neither maps onto wasm-bindgen's enum forms without redesigning the variant shapes by hand, or depending on serde-wasm-bindgen to cross as JsValue",
   ),
-  // Same base-scalar degrade rust-serde.ts uses — unlike that file's other
+  // Same base-scalar degrade rust-serde.ts uses. Unlike that file's other
   // degrades, this one stays fully ABI-crossable (bool/String/i64/f64/())
-  // rather than an opaque placeholder, so it's a legitimate simplification.
+  // rather than falling back to an opaque placeholder.
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" };
     if (s.value === null) return "()";

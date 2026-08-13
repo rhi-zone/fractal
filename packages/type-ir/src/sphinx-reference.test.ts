@@ -213,8 +213,8 @@ describe("sphinx-reference — object def (Repository)", () => {
   it("marks the deprecated field with a bold deprecated marker in its Description cell", () => {
     // Same fidelity as mkdocs-reference.ts's `fieldRow`: the deprecation
     // *reason* string lives on `.. deprecated::` at the type level (see the
-    // Visibility/top-level-deprecation coverage below), not duplicated again
-    // per-field — a per-field boolean marker is all the Fields table shows.
+    // Visibility/top-level-deprecation coverage below); the Fields table
+    // shows only a per-field boolean marker.
     expect(rst).toContain("Number of users who starred this repository. — **deprecated**");
   });
 
@@ -247,11 +247,10 @@ describe("sphinx-reference — enum def (Visibility)", () => {
   });
 
   it("renders a def-level `.. deprecated::` directive with a non-data version placeholder and the reason as indented body content", () => {
-    // The reason must NOT sit on the `::` line itself — docutils' directive
-    // grammar would silently split a multi-word single-line argument into a
-    // bogus "version" (first word) plus a truncated inline explanation (see
-    // sphinx-reference.ts's `deprecatedDirective` comment; confirmed against
-    // real `sphinx-build` output, not assumed).
+    // The reason must not sit on the `::` line itself — docutils' directive
+    // grammar splits a multi-word single-line argument into a bogus
+    // "version" (first word) plus a truncated inline explanation (see
+    // sphinx-reference.ts's `deprecatedDirective` comment).
     expect(rst).toContain(
       ".. deprecated:: N/A\n\n   superseded by the `access_control` object; kept for backward compatibility",
     );

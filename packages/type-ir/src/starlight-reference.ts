@@ -8,7 +8,7 @@ import { toJsonSchema } from "./json-schema.ts";
 //
 // Unlike the single-expression projectors (typescript-native.ts) or the
 // single-module declaration projectors (python-dataclass.ts), this projector
-// is DOCUMENT-shaped: it needs one output artifact (a whole page) per named
+// is document-shaped: it needs one output artifact (a whole page) per named
 // def, plus cross-links between those pages, so it returns `Map<filename,
 // content>` rather than a single string. Only `doc.defs` entries get pages —
 // `doc.root` is not a *named* type (see index.ts's TypeRefDocument doc

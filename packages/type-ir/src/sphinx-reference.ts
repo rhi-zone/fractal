@@ -127,16 +127,15 @@ const exprHandlers: Record<string, ExprConverter> = {
     // A `:ref:` role's closing backtick may not be immediately followed by
     // `[` — docutils only allows whitespace or a fixed closing-punctuation
     // set (`)]}>...`) right after an inline-markup end-string, and `[` (an
-    // *opening* bracket) isn't in that set. Confirmed as a real
-    // `sphinx-build` "Inline interpreted text ... without end-string"
-    // warning during this projector's bar-D visual check, not assumed from
-    // the docutils spec alone — a linked `X[]` array-of-ref rendered exactly
-    // this way broke a real build. `\ ` is docutils' documented escape for
-    // placing adjacent inline markup: a backslash-escaped space is invisible
-    // in the rendered output but still counts as the whitespace boundary the
-    // parser requires. Only needed when the element is itself a linked `ref`
-    // (the only kind whose rendering ends in a role) — every other leaf kind
-    // ends in plain text, which has no such adjacency restriction.
+    // *opening* bracket) isn't in that set; a linked `X[]` array-of-ref
+    // rendered without the escape produces a `sphinx-build` "Inline
+    // interpreted text ... without end-string" warning. `\ ` is docutils'
+    // documented escape for placing adjacent inline markup: a
+    // backslash-escaped space is invisible in the rendered output but still
+    // counts as the whitespace boundary the parser requires. Only needed
+    // when the element is itself a linked `ref` (the only kind whose
+    // rendering ends in a role) — every other leaf kind ends in plain text,
+    // which has no such adjacency restriction.
     return linked && s.element.shape.kind === "ref" ? `${element}\\ []` : `${element}[]`;
   },
   tuple: (shape, linked) => {
@@ -230,18 +229,15 @@ export function renderTypeExpr(ref: TypeRef, linked = false): string {
 // = True`) parses its `::`-line as up to *two* whitespace-separated
 // arguments — version, then an inline one-line explanation — greedily
 // splitting any multi-word single-line argument into both slots rather than
-// treating it as one. Putting a multi-word reason directly on the `::` line
-// (as this function did in an earlier draft) silently produces a garbled
-// "Deprecated since version <first word>: <rest>" render — confirmed against
-// real `sphinx-build` output during this projector's bar-D visual check, not
-// assumed from the directive's own docs. The fix: only a single, non-data
-// placeholder token goes on the `::` line (this projector has no real
-// version/since information in `meta` — only a boolean-or-reason — so
-// fabricating a plausible-looking version number here would misrepresent
-// data that doesn't exist), and the actual reason is the *body* — an
-// indented paragraph below a blank line, which docutils parses as directive
-// content rather than as a second argument, so it renders as free text
-// regardless of word count.
+// treating it as one. A multi-word reason placed directly on the `::` line
+// renders as a garbled "Deprecated since version <first word>: <rest>". Only
+// a single, non-data placeholder token goes on the `::` line (this
+// projector has no real version/since information in `meta`, only a
+// boolean-or-reason, so a fabricated version number would misrepresent data
+// that doesn't exist); the actual reason is the *body* — an indented
+// paragraph below a blank line, which docutils parses as directive content
+// rather than as a second argument, so it renders as free text regardless of
+// word count.
 function deprecatedDirective(meta: Readonly<Record<string, unknown>>): string | undefined {
   if (meta.deprecated === undefined || meta.deprecated === false) return undefined;
   const reason = typeof meta.deprecated === "string" ? meta.deprecated : undefined;
@@ -290,13 +286,11 @@ function methodTableRows(methods: Readonly<Record<string, TypeRef>>): string[] {
     const description = escapeCell(
       typeof methodRef.meta.description === "string" ? methodRef.meta.description : "",
     );
-    // NOT wrapped in a `` `` `` literal span: a cross-linked signature
+    // Not wrapped in a `` `` `` literal span: a cross-linked signature
     // embeds `:ref:` roles (via `renderTypeExpr(ref, true)`), and docutils
     // does not parse inline markup inside a literal span — wrapping the
     // whole thing would render the role as dead literal text instead of a
-    // working link. Confirmed against real `sphinx-build` HTML output during
-    // this projector's bar-D visual check, not assumed. `fieldsSection`
-    // above never had this bug because it already left the type cell
+    // working link. `fieldsSection` above already leaves its type cell
     // unwrapped for the same reason.
     const signature = escapeCell(renderTypeExpr(methodRef, true));
     return [`   * - ${name}`, `     - ${signature}`, `     - ${description}`];
