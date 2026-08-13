@@ -16,8 +16,8 @@ export interface TypeKinds {
   never: { readonly kind: "never" };
   object: { readonly kind: "object"; readonly fields: Readonly<Record<string, TypeRef>> };
   // A class instance — purely nominal, carrying only class identity
-  // (`className`/`declarationFile`), never structure. Deliberately NOT a
-  // subtype of `object` (see `parents` below): a class's fields are only
+  // (`className`/`declarationFile`), never structure. Not a subtype of
+  // `object` (see `parents` below): a class's fields are only
   // half its surface (methods are the other half, and often the point), so
   // exposing `fields` here would misrepresent the type as plain data.
   // Projectors that can express nominal identity read `className` (Zod's
@@ -30,7 +30,7 @@ export interface TypeKinds {
   // `className` is kept distinct from `meta.typeName` (see below) —
   // nominal class-instance identity and a named-type reference for codegen
   // imports are different mechanisms that happen to both carry a name — but
-  // `declarationFile` (the declaring file's path) is the SAME concept
+  // `declarationFile` (the declaring file's path) is the same concept
   // `meta.declarationFile` names, so the two are aligned on that one field.
   instance: {
     readonly kind: "instance";
@@ -41,7 +41,7 @@ export interface TypeKinds {
   // An asynchronously-produced sequence of values — TypeScript's
   // `AsyncIterable<T>`/`AsyncGenerator<T, TReturn, TNext>` (and the
   // `AsyncIterableIterator<T>` an `async function*` returns), or a server-
-  // streaming gRPC/service response. Deliberately NOT a subtype of `array`:
+  // streaming gRPC/service response. Not a subtype of `array`:
   // an array is a materialized, synchronously-indexable collection, while a
   // stream is an ongoing production of values over time — collapsing the two
   // would misrepresent backpressure/laziness semantics that matter to
@@ -60,8 +60,8 @@ export interface TypeKinds {
   // `AsyncIterable<T>` plays for `stream` above. `style` records which
   // variant was matched — `"cursor"` for `CursorPage<T>` (an opaque
   // `cursor`/`hasMore` continuation token) or `"offset"` for `OffsetPage<T>`
-  // (a numeric `offset`/`total`/`hasMore` window). Deliberately NOT a subtype
-  // of `array` (same reasoning as `stream`): a page is one WINDOW over a
+  // (a numeric `offset`/`total`/`hasMore` window). Not a subtype
+  // of `array` (same reasoning as `stream`): a page is one window over a
   // larger, not-yet-fetched collection, not the collection itself — a
   // projector that can't express pagination natively degrades to its
   // array/list equivalent over `element` (the page's item type), same
@@ -86,7 +86,7 @@ export interface TypeKinds {
   // A callable type: ordered parameters, a return type, and an optional
   // `this` binding (present for class methods and other functions with an
   // explicit/implicit `this` — e.g. `types.instance("ClassName", declarationFile)`;
-  // absent for free functions with no `this`). Deliberately NOT a subtype of
+  // absent for free functions with no `this`). Not a subtype of
   // anything — see `parents` below. Not used to inline class methods onto
   // `instance` (which stays purely nominal); this kind is for callable types
   // that appear in type positions (callback params, fields, etc.).
@@ -99,10 +99,10 @@ export interface TypeKinds {
   // A callable that belongs to a type's contract — not a standalone callable
   // (that's `function`), but the shape of one entry in a service/interface's
   // method surface. Same fields as `function` (params/returnType/thisType)
-  // because a method IS a callable; `registerParent("method", "function")`
+  // because a method is a callable; `registerParent("method", "function")`
   // below means any projector without an explicit `method` handler falls back
   // to its `function` handler automatically (see `resolve`). Kept distinct
-  // from `function` so projectors that DO care about the difference (protobuf
+  // from `function` so projectors that care about the difference (protobuf
   // RPCs, Cap'n Proto interface methods, TypeScript method-signature syntax
   // vs. arrow-function syntax) can special-case it.
   method: {
@@ -115,7 +115,7 @@ export interface TypeKinds {
   // Cap'n Proto's `interface`: not data, a contract of callable operations.
   // Structural (no name of its own — naming is a declaration concern, same as
   // `object`). `methods` are TypeRefs, typically (but not necessarily) of
-  // `method` kind. Deliberately NOT a subtype of `object` (see `instance`'s
+  // `method` kind. Not a subtype of `object` (see `instance`'s
   // doc comment above for the parallel reasoning) — an interface's methods
   // are not `object` fields, and projectors that can't express a service
   // surface must degrade explicitly rather than silently rendering an object.
@@ -145,7 +145,7 @@ export type TypeRef = {
 //     that can express it (e.g. TypeScript's `readonly` keyword, JSON
 //     Schema/OpenAPI's `readOnly: true`).
 //   - `meta.typeName: string` + `meta.declarationFile: string` — a top-level
-//     TypeRef's NAMED-type provenance (set by
+//     TypeRef's named-type provenance (set by
 //     `@rhi-zone/fractal-api-tree`'s `typeRefFromFunctionNode` when a
 //     handler's parameter type is a declared alias/interface, not an inline
 //     object literal). `declarationFile` is the absolute path of the file
@@ -162,14 +162,14 @@ export type TypeRef = {
 //   - `meta.additionalPropertyType: TypeRef` — the inferred value type for a
 //     record's dynamic/varying keys, alongside its stable fields, set by
 //     `from-json-corpus.ts` when it detects a mixed record+dict shape. Kept
-//     as a distinct key from `meta.additionalProperties` above (they used to
-//     collide under the same name with type-incompatible meanings — a
-//     boolean flag vs. a TypeRef — see TODO.md's "Type-ir semantic types
-//     cleanup" entry for history). No projector currently reads this
-//     `TypeRef` back out (json-schema*.ts/openapi*.ts instead convert an
-//     object-with-schema `additionalProperties` straight to `types.map` on
-//     ingest, bypassing this meta key entirely); it's inert beyond
-//     `from-json-corpus.ts`'s own tests today.
+//     as a distinct key from `meta.additionalProperties` above since the two
+//     carry type-incompatible meanings — a boolean flag vs. a TypeRef — that
+//     must not collide under one name (see TODO.md's "Type-ir semantic types
+//     cleanup" entry). No projector currently reads this `TypeRef` back out
+//     (json-schema*.ts/openapi*.ts instead convert an object-with-schema
+//     `additionalProperties` straight to `types.map` on ingest, bypassing
+//     this meta key entirely); it's inert beyond `from-json-corpus.ts`'s own
+//     tests today.
 
 const parents: Record<string, string | null> = {
   boolean: null,
@@ -181,12 +181,12 @@ const parents: Record<string, string | null> = {
   unknown: null,
   never: null,
   object: null,
-  // NOT a subtype of `object` — see the TypeKinds.instance doc comment above.
+  // Not a subtype of `object` — see the TypeKinds.instance doc comment above.
   instance: null,
   array: null,
-  // NOT a subtype of `array` — see TypeKinds.stream doc comment above.
+  // Not a subtype of `array` — see TypeKinds.stream doc comment above.
   stream: null,
-  // NOT a subtype of `array` — see TypeKinds.page doc comment above.
+  // Not a subtype of `array` — see TypeKinds.page doc comment above.
   page: null,
   tuple: null,
   map: null,
@@ -196,10 +196,10 @@ const parents: Record<string, string | null> = {
   ref: null,
   intersection: null,
   function: null,
-  // A method IS a callable — projectors without an explicit `method` handler
+  // A method is a callable — projectors without an explicit `method` handler
   // fall back to their `function` handler (see TypeKinds.method doc comment).
   method: "function",
-  // NOT a subtype of `object` — see TypeKinds.interface doc comment above.
+  // Not a subtype of `object` — see TypeKinds.interface doc comment above.
   interface: null,
 };
 
@@ -286,21 +286,19 @@ export {
 // ============================================================================
 // TypeRefDocument — a self-contained TypeRef plus named definitions.
 //
-// `ref: { kind: "ref"; target: string }` has always existed as the recursive-
-// type marker, but until now `target` was a bare name with nothing to resolve
-// against — an external registry was implied but never modeled. `defs` closes
-// that gap: a `TypeRefDocument` carries its own `root` TypeRef plus every
-// named definition `ref`s in the tree point into, keyed by name. Recursive
-// types (and, per a caller's own `shouldShare` heuristic — see api-tree's
-// extractor — types reused enough to be worth sharing structurally) live in
-// `defs`; a recursive def's own body contains a `ref` back to its own name.
+// `ref: { kind: "ref"; target: string }` is the recursive-type marker;
+// `defs` is the registry its `target` resolves against. A `TypeRefDocument`
+// carries its own `root` TypeRef plus every named definition `ref`s in the
+// tree point into, keyed by name. Recursive types (and, per a caller's own
+// `shouldShare` heuristic — see api-tree's extractor — types reused enough
+// to be worth sharing structurally) live in `defs`; a recursive def's own
+// body contains a `ref` back to its own name.
 //
-// Backwards compatibility: every function that historically took a bare
-// `TypeRef` keeps working unchanged — a `TypeRef` with no `defs` is simply a
-// document with no shared definitions (`{ target }` refs it contains, if any,
-// are just unresolvable, exactly as before this change). `typeRefDocument()`
-// below is the wrap-a-bare-TypeRef helper for callers that want to start
-// threading `defs` through.
+// A function taking a bare `TypeRef` still works unchanged: a `TypeRef` with
+// no `defs` is simply a document with no shared definitions (any `{ target }`
+// refs it contains are unresolvable). `typeRefDocument()` below is the
+// wrap-a-bare-TypeRef helper for callers that want to start threading `defs`
+// through.
 // ============================================================================
 
 export type TypeRefDocument = {
@@ -396,7 +394,7 @@ export function resolveRef(doc: TypeRefDocument, ref: TypeRef): TypeRef {
 export interface WalkContext {
   /** Nodes on the path from the walk's starting point (`root`, or a `defs`
    * entry's own root when walking that entry) down to — but not including —
-   * the current node. Does NOT descend through unresolved `ref`s (see
+   * the current node. Does not descend through unresolved `ref`s (see
    * `childTypeRefs`); a visitor that manually resolves a ref via
    * `resolveRef` and walks the result can use `isRecursionTarget` on that
    * resolved node to detect having come full circle. */
@@ -447,7 +445,7 @@ export function walkTypeRef(
 // TS source -> TypeRef), the tree walker (tree.ts, source-level api()/op()
 // walk), the build orchestrator (build.ts), and the `fractal-api-tree`
 // build/watch/stub/check CLI (cli.ts) live in @rhi-zone/fractal-api-tree
-// instead — they walk api()/op() AUTHORING source, which is api-tree's
+// instead — they walk api()/op() authoring source, which is api-tree's
 // concern, not type-ir's.
 // ============================================================================
 
@@ -455,16 +453,11 @@ export { compileValidator, typeRefToString, type ValidationError } from "./compi
 
 // Wire profiles + staged validation (Wire -> ValidWire -> T -> valid T) — see
 // docs/design/wire-profiles-and-staged-validation.md and compile.ts's own
-// "Wire profiles + staged validation" section doc comment. Additive: none of
-// this changes `compileValidator` above, which remains the strict,
-// profile-blind path it always was. Phase D deleted the module-assembly layer
-// this used to sit alongside (`compileValidatorModule`/`compileEntryFragment`/
-// `assembleValidatorModule`/`CompiledEntryFragment` — the 2-arg
-// `applyValidation` codegen route's own compiler, retired once this
-// wire-profile path gained the `shouldShare`/defs capability that was its
-// only remaining edge) — `compileDefsBlock`/`CompiledDefsBlock` survive
-// because the wire-profile build path (api-tree's
-// `buildWireApplyValidationModuleSource*`) still uses them for its
+// "Wire profiles + staged validation" section doc comment. Additive:
+// `compileValidator` above remains the strict, profile-blind path,
+// unaffected by this. `compileDefsBlock`/`CompiledDefsBlock` exist because
+// the wire-profile build path (api-tree's
+// `buildWireApplyValidationModuleSource*`) uses them for its
 // constraints-layer shared `defs` block.
 export {
   argvProfile,
@@ -493,6 +486,6 @@ export { compileDefsBlock, type CompiledDefsBlock } from "./compile.ts";
 // decoder's authoring-site typing (function-form `encodingMap`, decision 3
 // of the wire-profiles design doc's implementation-trace addendum). See
 // wire-of.ts's own module doc for why this is a separate file from
-// compile.ts (profile NAMES, not `WireProfile` VALUES — a purely
+// compile.ts (profile names, not `WireProfile` values — a purely
 // type-level concern with no runtime counterpart at all).
 export { type WireOf, type WireProfileName } from "./wire-of.ts";

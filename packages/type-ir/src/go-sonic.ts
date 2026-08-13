@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { goDocComment, goFieldIdent, quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/go-sonic.ts — @rhi-zone/fractal-type-ir/go-sonic
-//
 // TypeRef -> idiomatic Go type declarations for github.com/bytedance/sonic
 // (https://github.com/bytedance/sonic): like jsoniter (go-jsoniter.ts), sonic
 // reads the same `json:"..."` struct tags encoding/json does via reflection

@@ -88,7 +88,7 @@ const handlers: Record<string, Converter> = {
   // GraphQL has no map/dictionary construct.
   map: leaf("JSON"),
   // GraphQL subscriptions (§ "Subscription") resolve to individual yielded
-  // values, not a wrapper type — a `Subscription` field's type IS the
+  // values, not a wrapper type — a `Subscription` field's type is the
   // element type, unlike this projector's `array` handler (which wraps in
   // `[...]`). Uses `baseType` (not `toGraphQL`) so the element's own `!`
   // suffix isn't computed twice — the stream ref's own meta (not the

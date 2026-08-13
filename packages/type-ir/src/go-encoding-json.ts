@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { goDocComment, goFieldIdent, quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/go-encoding-json.ts — @rhi-zone/fractal-type-ir/go-encoding-json
-//
 // TypeRef -> idiomatic Go type declarations (structs with `json` tags, slices,
 // maps, string-backed const enums, pointer-for-optional fields, and a
 // marker-interface encoding of sum types). Unlike toTypeScript (a single
@@ -188,7 +186,7 @@ function unionDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
 // A `interface` TypeRef (service method surface — see index.ts's
 // TypeKinds.interface doc comment) maps onto Go's own native `interface`
 // construct directly — unlike `union` above, no marker-method trick is
-// needed here since this already IS Go's real interface type.
+// needed here since this already is Go's real interface type.
 function interfaceDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
   const shape = ref.shape as TypeShape & { kind: "interface" };
   const name = goFieldIdent(hint);

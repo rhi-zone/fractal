@@ -4,8 +4,8 @@
 // value. Spec references: Haskell 2010 report (data declarations, records),
 // aeson (https://hackage.haskell.org/package/aeson) for the JSON convention.
 //
-// Haskell (unlike TypeScript/Zod/etc.) has NO anonymous structural type —
-// every `object`/`enum`/`union` must become a NAMED top-level `data`
+// Haskell (unlike TypeScript/Zod/etc.) has no anonymous structural type —
+// every `object`/`enum`/`union` must become a named top-level `data`
 // declaration before it can be referenced. Mirrors capnp.ts's/flatbuffers.ts's
 // hoisting pattern: a nested object/enum/union field is hoisted out as a
 // sibling declaration (named from its enclosing type + field name), collected
@@ -27,7 +27,7 @@ function sanitizeIdent(value: string): string {
   return /^[0-9]/.test(cleaned) ? `X${cleaned}` : cleaned;
 }
 
-// A type used as a type-application ARGUMENT (e.g. `Maybe T`, `[T]`,
+// A type used as a type-application argument (e.g. `Maybe T`, `[T]`,
 // `Map K V`) needs parens if it's itself a multi-word application (`Maybe
 // Int` -> `Maybe (Maybe Int)`), but not if it's already a self-delimiting
 // form (`[T]`, `(a, b)`).
@@ -50,7 +50,7 @@ const leaf =
 // kinds/date-time.ts). `bytes` degrades to Text the same way: aeson ships no
 // `ToJSON`/`FromJSON` instance for `Data.ByteString.ByteString` (it isn't a
 // dependency of aeson itself), and the wire convention for `bytes` is
-// already a base64 STRING, not a binary frame (see json-schema.ts's
+// already a base64 string, not a binary frame (see json-schema.ts's
 // `bytes: leaf({ type: "string", contentEncoding: "base64" })`) — so the
 // Haskell field holding that same base64 text opaquely, undecoded, is the
 // direct analogue of how uuid/uri/email hold their own wire string opaquely.
@@ -123,8 +123,8 @@ const handlers: Record<string, Converter> = {
   union: (_shape, meta) =>
     typeof meta.typeName === "string" ? capitalize(meta.typeName) : "Value",
   // Haskell has no literal-value type — degrades to the underlying scalar
-  // type, same lossy fallback typescript.ts's sibling kinds use structurally
-  // (there the literal IS representable; here it isn't, so this is honestly lossy).
+  // type. typescript.ts's sibling kinds use the same fallback structurally,
+  // where the literal is representable; here it isn't, so the degrade is lossy.
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" };
     if (s.value === null) return "()";
@@ -172,7 +172,7 @@ function toHaskellTypeBase(ref: TypeRef): string {
 
 /** Inline type-expression form — usable anywhere a type already has a name to
  * reference (a `ref`, a leaf/primitive, or a standalone declared type via
- * `meta.typeName`). Field positions that may need to HOIST an anonymous
+ * `meta.typeName`). Field positions that may need to hoist an anonymous
  * nested declaration go through `resolveFieldType` instead. */
 export function toHaskellType(ref: TypeRef): string {
   const type = toHaskellTypeBase(ref);
@@ -266,7 +266,7 @@ function deprecatedPragma(name: string, meta: Readonly<Record<string, unknown>>)
 /**
  * `object` -> a Haskell record `data` declaration. Field names are prefixed
  * with `lowerFirst(name)` (`Person` -> `personName`/`personAge`) since
- * Haskell record fields share their enclosing MODULE's namespace (not just
+ * Haskell record fields share their enclosing module's namespace (not just
  * their own type) — two records with a same-named field is a compile error
  * without this convention (or `DuplicateRecordFields`, which this projector
  * doesn't assume the consumer has enabled). Aeson instances use
@@ -358,7 +358,7 @@ function buildEnumDecl(name: string, ref: TypeRef): string {
  * `union` -> a sum type. Two encodings depending on `meta.discriminator`
  * (open metadata bag convention — same one zod.ts's `discriminatedUnion` and
  * every JSON Schema/OpenAPI projector's `oneOf`+`discriminator` read):
- *   - present: each variant (must be `object`) becomes a RECORD constructor
+ *   - present: each variant (must be `object`) becomes a record constructor
  *     carrying its non-discriminator fields; Aeson's tag + fields are emitted
  *     flattened into one JSON object (Aeson's own "TaggedObject with record
  *     constructors" behavior — https://hackage.haskell.org/package/aeson —
@@ -521,8 +521,8 @@ function buildPlainUnionDecl(
 
 /**
  * `interface` -> a typeclass: the closest Haskell analogue of a service
- * surface (a set of operations any instance type `a` must implement), same
- * KEY use case `method`/`interface` were added for (see capnp.ts's
+ * surface (a set of operations any instance type `a` must implement), the
+ * same use case `method`/`interface` were added for (see capnp.ts's
  * `toCapnpInterface`/flatbuffers.ts's `toFlatBuffersService` for the parallel
  * rationale). The receiver becomes the class's own type variable `a`
  * (prepended as the leading argument of every method), rather than an

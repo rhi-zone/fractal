@@ -359,7 +359,7 @@ describe("walkTypeRef", () => {
     const flags: boolean[] = [];
     walkTypeRef(doc, (_node, ctx) => flags.push(ctx.isRecursionTarget(outer)));
     // At the root (outer itself), outer is not yet an ancestor of itself; at
-    // the child (inner), outer IS now an ancestor.
+    // the child (inner), outer is now an ancestor.
     expect(flags).toEqual([false, true]);
   });
 });

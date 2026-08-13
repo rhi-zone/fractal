@@ -8,7 +8,7 @@ import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-hel
 // same architecture, different annotation vocabulary).
 //
 // Two renderers, same split java-jackson.ts (and TypeScript's projector)
-// uses: `toGsonType` renders a TYPE EXPRESSION (usable inside a field, a
+// uses: `toGsonType` renders a type expression (usable inside a field, a
 // generic argument, a method signature — "List<String>", "OrderStatus",
 // "int") with no accompanying declaration; `toGsonDeclaration` renders a
 // full top-level declaration (a record/class/enum/sealed interface). `toGson`
@@ -72,7 +72,7 @@ const NULLABLE_ANNOTATION = "org.jspecify.annotations.Nullable";
 
 // A leaf scalar's Java rendering: `primitive` (when one exists — Java's 8
 // primitive types have no null value, so a leaf with a primitive form only
-// gets rendered as that primitive in a NON-nullable, non-generic position;
+// gets rendered as that primitive in a non-nullable, non-generic position;
 // nullable fields and generic type arguments always fall back to `boxed`,
 // since Java generics cannot be parameterized by a primitive) and `boxed`
 // (the reference-type equivalent, always defined). `imports` is the set of
@@ -198,7 +198,7 @@ const handlers: Record<string, Converter> = {
   },
   union: (_shape, meta) => {
     // A union's idiomatic Java rendering is a top-level sealed interface
-    // (see `renderSealedInterface` below) — as a bare type EXPRESSION (this
+    // (see `renderSealedInterface` below) — as a bare type expression (this
     // path, used when a union appears nested inside a field/generic
     // position) it's rendered as a reference to that interface's name, which
     // must come from `meta.typeName` (there is no other name to reach for:
@@ -267,7 +267,7 @@ const handlers: Record<string, Converter> = {
     }
     return { boxed: "Object", imports: [] };
   },
-  // An interface's method surface has no Java FIELD-position equivalent
+  // An interface's method surface has no Java field-position equivalent
   // (unlike TypeScript, which can spell an inline callable-object type) —
   // degrades to Object, same as protobuf.ts's handling of the same kind.
   interface: () => ({ boxed: "Object", imports: [] }),
@@ -472,7 +472,7 @@ function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   const doc = javaDocComment(ref.meta, "");
   const constants = shape.members.map((member) => ({ member, constant: javaEnumConstant(member) }));
   const needsSerializedName = constants.some(({ member, constant }) => member !== constant);
-  // Gson serializes/deserializes an enum by its constant NAME by default —
+  // Gson serializes/deserializes an enum by its constant name by default —
   // unlike Jackson (which needs a backing `value` field + `@JsonValue`/
   // `@JsonCreator` to diverge from the constant name), Gson's convention is
   // to place `@SerializedName("wire-value")` directly on each constant whose

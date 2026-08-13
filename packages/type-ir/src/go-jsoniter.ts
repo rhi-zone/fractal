@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { goDocComment, goFieldIdent, quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/go-jsoniter.ts — @rhi-zone/fractal-type-ir/go-jsoniter
-//
 // TypeRef -> idiomatic Go type declarations for github.com/json-iterator/go
 // (https://github.com/json-iterator/go): jsoniter bills itself as "a
 // high-performance 100% compatible drop-in replacement of encoding/json" —
