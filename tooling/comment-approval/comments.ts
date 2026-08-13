@@ -102,47 +102,6 @@ export async function hashText(text: string): Promise<string> {
   return hasher.digest("hex");
 }
 
-/** True when `newText` provably carries the exact same comments as `oldText`
- *  — same multiset of normalized-comment hashes, order and position
- *  irrelevant (identity is content-hash-based, same as approval itself; see
- *  `ExtractedComment.hash`'s own doc comment). A pure reformat (whitespace,
- *  reindentation, statement punctuation, code moved around) leaves this
- *  true; adding, removing, or rewording even one comment makes it false.
- *  Multiset, not set: dropping one of two byte-identical comments changes
- *  the count and must be caught, so this compares sorted hash ARRAYS, not
- *  `Set`s.
- *
- *  This is what lets a caller (cli.ts's `findUnapproved`) skip asking a
- *  human to re-review a file's entire pre-existing comment backlog just
- *  because the file appears in a diff for an unrelated reason — the trigger
- *  for "does this file need backlog review" should be "did the diff
- *  plausibly touch comment-relevant content," not "was the file touched at
- *  all." A diff that's provably comment-invariant (this function returning
- *  true) can't have introduced or reworded a comment, so there is nothing
- *  new to stand behind — reviewing the backlog anyway would be reviewing
- *  content the diff never touched, on a schedule set by unrelated code
- *  changes rather than by comment changes. If the diff DOES touch comments
- *  (this returns false) the existing whole-file backlog-review behavior is
- *  unchanged — that's still the intentional, incremental "you touched
- *  something comment-relevant here, so look at what's here" design (see
- *  README's "scoped to touched FILES" section), just precisely re-targeted
- *  at diffs that could actually contain a new/changed comment instead of at
- *  every diff regardless of shape. */
-export async function commentsUnchanged(
-  oldText: string,
-  newText: string,
-  fileName = "file.ts",
-): Promise<boolean> {
-  const [oldComments, newComments] = await Promise.all([
-    extractComments(oldText, fileName),
-    extractComments(newText, fileName),
-  ]);
-  const oldHashes = oldComments.map((c) => c.hash).sort();
-  const newHashes = newComments.map((c) => c.hash).sort();
-  if (oldHashes.length !== newHashes.length) return false;
-  return oldHashes.every((hash, i) => hash === newHashes[i]);
-}
-
 function scriptKindFor(fileName: string): ts.ScriptKind {
   if (fileName.endsWith(".tsx")) return ts.ScriptKind.TSX;
   if (fileName.endsWith(".jsx")) return ts.ScriptKind.JSX;

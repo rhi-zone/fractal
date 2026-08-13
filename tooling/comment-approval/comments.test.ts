@@ -6,13 +6,7 @@
 // glue over these functions.
 
 import { describe, it, expect } from "bun:test";
-import {
-  extractComments,
-  normalizeComment,
-  hashText,
-  isSourceFile,
-  commentsUnchanged,
-} from "./comments.ts";
+import { extractComments, normalizeComment, hashText, isSourceFile } from "./comments.ts";
 
 describe("isSourceFile", () => {
   it("accepts JS/TS family extensions", () => {
@@ -188,49 +182,5 @@ describe("extractComments — multiple comments in source order", () => {
     const src = "// first\nconst a = 1 /* second */\nconst b = 2\n// third\n";
     const comments = await extractComments(src);
     expect(comments.map((c) => c.normalized)).toEqual(["first", "second", "third"]);
-  });
-});
-
-describe("commentsUnchanged", () => {
-  it("is true when only non-comment code changes (a mechanical reformat)", async () => {
-    const oldText = "// keep\nconst x=1\nfunction f(a,b){return a+b}\n// end\n";
-    const newText = "// keep\nconst x = 1;\nfunction f(a, b) {\n  return a + b;\n}\n// end\n";
-    expect(await commentsUnchanged(oldText, newText)).toBe(true);
-  });
-
-  it("is true when a comment merely moves (position isn't identity)", async () => {
-    const oldText = "// a\nconst x = 1\n// b\nconst y = 2\n";
-    const newText = "// b\nconst y = 2\n// a\nconst x = 1\n";
-    expect(await commentsUnchanged(oldText, newText)).toBe(true);
-  });
-
-  it("is true when reindentation reflows a comment's own decoration", async () => {
-    const oldText = "/**\n * hello\n */\nconst x = 1\n";
-    const newText = "  /**\n   * hello\n   */\n  const x = 1\n";
-    expect(await commentsUnchanged(oldText, newText)).toBe(true);
-  });
-
-  it("is false when a comment's wording changes", async () => {
-    const oldText = "// keep\nconst x = 1\n";
-    const newText = "// KEPT (edited)\nconst x = 1\n";
-    expect(await commentsUnchanged(oldText, newText)).toBe(false);
-  });
-
-  it("is false when a comment is added", async () => {
-    const oldText = "const x = 1\n";
-    const newText = "// new note\nconst x = 1\n";
-    expect(await commentsUnchanged(oldText, newText)).toBe(false);
-  });
-
-  it("is false when a comment is removed", async () => {
-    const oldText = "// going away\nconst x = 1\n";
-    const newText = "const x = 1\n";
-    expect(await commentsUnchanged(oldText, newText)).toBe(false);
-  });
-
-  it("is false when one of two byte-identical comments is removed (multiset, not set)", async () => {
-    const oldText = "// same\nconst x = 1\n// same\nconst y = 2\n";
-    const newText = "// same\nconst x = 1\nconst y = 2\n";
-    expect(await commentsUnchanged(oldText, newText)).toBe(false);
   });
 });

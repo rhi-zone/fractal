@@ -357,6 +357,10 @@
       "excerpt": "Join a path prefix and the next segment with \".\". No leading dot when",
       "approvedAt": "2026-08-13T05:06:32.678Z"
     },
+    "74115146792dfbf30a313f0834f93714e5e1d85a146ca1df9e0c44e416517661": {
+      "excerpt": "tooling/comment-approval/comments.test.ts — @rhi-zone/fractal (tooling, not a wo…",
+      "approvedAt": "2026-08-13T05:37:06.104Z"
+    },
     "74b9f7948c0ef9802a363c727ce02a16b509d5d65115fb645df1575f69609a01": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:06:32.683Z"

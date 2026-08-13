@@ -161,36 +161,6 @@ if invoked without `--diff-base`) for anyone who wants current backlog size/visi
 this is explicitly NOT wired into any blocking gate; it's a status view, not a recurring
 gate.
 
-## Provably comment-invariant diffs skip the file entirely
-
-File-scoped still has a sharp edge: "the file appears in a diff" and "the diff could
-plausibly contain a new or reworded comment" are not the same condition, and the original
-design conflated them — any touch to a file, including a change that couldn't possibly
-have added or edited a comment (a pure whitespace/formatter reflow, a rename, a logic-only
-edit elsewhere in the file), demanded review of that file's ENTIRE pre-existing backlog.
-That's a real cost with no matching benefit: reviewing content the diff never touched,
-gated on unrelated code changes rather than on comment changes.
-
-**Refined trigger: does the diff plausibly touch approval-relevant content, not merely
-"was the file touched at all."** For diff-relative scopes (`--staged` against `HEAD`,
-`--diff-base <ref>`), `findUnapproved` (`cli.ts`) fetches each file's content as of the
-base ref and compares its multiset of normalized-comment hashes against the current
-content's (`commentsUnchanged` in `comments.ts`) — multiset, not set, so dropping one of
-two byte-identical comments still counts as a change. If the two multisets match exactly,
-no comment could have been added, removed, or reworded by this diff, so the file is
-skipped outright: nothing new to stand behind, nothing to review. If they differ at all,
-the existing whole-file behavior is unchanged — every comment in the file still needs
-approval, same as before this refinement, since something about the diff DID plausibly
-touch comment-relevant content and the incremental-backlog-reduction rationale (see above)
-still applies.
-
-This is a general principle, not a carve-out for any particular kind of mechanical change
-(a formatter, specifically, was rejected as a special case) — it applies uniformly to any
-diff a hash comparison can prove didn't touch comments, whatever produced that diff.
-`--all` and an explicit file list keep the unconditional full-check behavior: neither is
-diff-relative in the first place (there's no "before" state to compare against), so there's
-nothing for this refinement to key off.
-
 ## Wiring
 
 - **Git hook** — `.githooks/pre-commit` (this repo's `core.hooksPath`, see `.git/config` —

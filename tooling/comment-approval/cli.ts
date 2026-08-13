@@ -10,12 +10,7 @@
 
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import {
-  commentsUnchanged,
-  extractComments,
-  isSourceFile,
-  type ExtractedComment,
-} from "./comments.ts";
+import { extractComments, isSourceFile, type ExtractedComment } from "./comments.ts";
 import {
   approveComments,
   isApproved,
@@ -77,63 +72,17 @@ async function changedFiles(base: string): Promise<string[]> {
   return gitFiles(["diff", `${base}`, "--name-only", "--diff-filter=ACM"]);
 }
 
-/** `file`'s content as of `ref`, or `undefined` if it didn't exist there yet
- *  (a newly-added file — nothing to diff against, so the caller should treat
- *  every comment in it as new). Non-zero `git show` exit is exactly that
- *  "didn't exist at ref" case (plus genuine errors, which are rare enough
- *  here — a bad ref would already have failed `changedFiles`'s own `git
- *  diff` above — that folding them into "treat as new" is an acceptable
- *  trade for keeping this a plain boolean-ish `undefined` rather than a
- *  result type only one caller needs). */
-async function gitShowText(relPath: string, ref: string): Promise<string | undefined> {
-  const proc = Bun.spawn(["git", "show", `${ref}:${relPath}`], {
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-  return exitCode === 0 ? stdout : undefined;
-}
-
 interface Unapproved {
   readonly file: string;
   readonly comment: ExtractedComment;
 }
 
-/** `baseRef`, when given, is the git ref `files` were diffed against
- *  (`--staged`'s implicit `HEAD`, or `--diff-base`'s explicit ref) — files
- *  reached via `--all` or an explicit file list pass no `baseRef`, since
- *  those scopes aren't diff-relative in the first place and keep the
- *  unconditional full-backlog-check behavior (an intentional whole-repo
- *  audit shouldn't skip anything on account of git history).
- *
- *  When `baseRef` IS given, a file whose comment content is provably
- *  unchanged since `baseRef` (see `commentsUnchanged`) is skipped entirely —
- *  the diff that put it in scope couldn't have added or reworded a comment,
- *  so there's nothing new to stand behind, and re-litigating that file's
- *  pre-existing backlog on the back of an unrelated change (a mechanical
- *  reformat, a rename, logic-only edits elsewhere in the file, …) would be
- *  reviewing content the diff never touched. A file whose comments DID
- *  change keeps the existing whole-file behavior unchanged: every comment
- *  in it — not just the changed one(s) — still needs to be approved, same
- *  as before this function existed. See README's "provably comment-
- *  invariant diffs" section for the full design rationale. */
-async function findUnapproved(
-  files: readonly string[],
-  manifest: Manifest,
-  baseRef?: string,
-): Promise<Unapproved[]> {
+async function findUnapproved(files: readonly string[], manifest: Manifest): Promise<Unapproved[]> {
   const out: Unapproved[] = [];
   for (const file of files) {
     const bunFile = Bun.file(file);
     if (!(await bunFile.exists())) continue; // deleted-then-diffed, nothing to check
     const text = await bunFile.text();
-
-    if (baseRef) {
-      const oldText = await gitShowText(relative(file), baseRef);
-      if (oldText !== undefined && (await commentsUnchanged(oldText, text, file))) continue;
-    }
-
     const comments = await extractComments(text, file);
     for (const comment of comments) {
       if (!isApproved(manifest, comment.hash)) out.push({ file, comment });
@@ -153,22 +102,15 @@ function printUnapproved(unapproved: readonly Unapproved[]): void {
   }
 }
 
-interface Scope {
-  readonly files: string[];
-  /** Set only for diff-relative scopes (`--staged`, `--diff-base`) — see
-   *  `findUnapproved`'s doc comment for what this unlocks. */
-  readonly baseRef?: string;
-}
-
-async function resolveScope(scope: string, scopeArg: string | undefined): Promise<Scope> {
+async function resolveScopeFiles(scope: string, scopeArg: string | undefined): Promise<string[]> {
   switch (scope) {
     case "--all":
-      return { files: await walkSourceFiles(REPO_ROOT) };
+      return walkSourceFiles(REPO_ROOT);
     case "--staged":
-      return { files: await stagedFiles(), baseRef: "HEAD" };
+      return stagedFiles();
     case "--diff-base":
       if (!scopeArg) throw new Error("--diff-base requires a git ref argument");
-      return { files: await changedFiles(scopeArg), baseRef: scopeArg };
+      return changedFiles(scopeArg);
     default:
       throw new Error(`unknown scope flag: ${scope}`);
   }
@@ -181,20 +123,20 @@ async function cmdCheck(args: string[]): Promise<number> {
       ? [flag, flagArg, ...rest].filter((f): f is string => Boolean(f))
       : undefined;
 
-  const scope = explicitFiles
-    ? { files: explicitFiles.filter(isSourceFile).map((f) => path.resolve(REPO_ROOT, f)) }
-    : await resolveScope(flag ?? "--all", flagArg);
+  const files = explicitFiles
+    ? explicitFiles.filter(isSourceFile).map((f) => path.resolve(REPO_ROOT, f))
+    : await resolveScopeFiles(flag ?? "--all", flagArg);
 
   const manifest = await loadManifest(MANIFEST_PATH);
-  const unapproved = await findUnapproved(scope.files, manifest, scope.baseRef);
+  const unapproved = await findUnapproved(files, manifest);
 
   if (unapproved.length === 0) {
-    console.log(`comment-approval: ${scope.files.length} file(s) scanned, all comments approved`);
+    console.log(`comment-approval: ${files.length} file(s) scanned, all comments approved`);
     return 0;
   }
 
   console.log(
-    `comment-approval: ${unapproved.length} unapproved comment(s) in ${scope.files.length} scanned file(s):\n`,
+    `comment-approval: ${unapproved.length} unapproved comment(s) in ${files.length} scanned file(s):\n`,
   );
   printUnapproved(unapproved);
   // Suggest approving exactly the affected files, by name — never a blanket
@@ -227,7 +169,7 @@ async function cmdApprove(args: string[]): Promise<number> {
 
   const files = explicitFiles
     ? explicitFiles.filter(isSourceFile).map((f) => path.resolve(REPO_ROOT, f))
-    : (await resolveScope(flag, flagArg)).files;
+    : await resolveScopeFiles(flag, flagArg);
 
   let manifest = await loadManifest(MANIFEST_PATH);
   let total = 0;
