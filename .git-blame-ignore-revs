@@ -1,0 +1,20 @@
+# Commits to skip when attributing blame — mechanical, whitespace-only (or
+# equivalent) changes whose line-by-line "blame" would otherwise bury the
+# real last-meaningful-change commit under a reformat.
+#
+# Usage:
+#   git blame --ignore-revs-file .git-blame-ignore-revs <path>
+#
+# Not auto-applied — git has no repo-committed way to turn this on globally
+# for every clone, only a per-clone opt-in:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (local to your own checkout's .git/config, so this file documents the
+# convention rather than one clone's config forcing it on everyone else's).
+# GitHub's own blame view reads this file directly with no config needed —
+# see https://github.blog/changelog/2022-03-24-ignore-commits-in-the-blame-view-beta/
+# — so the file alone already covers the primary (web) consumer; the git
+# config line above is for anyone who also wants `git blame` on the command
+# line to skip these by default in their own local checkout.
+
+# style: reformat entire codebase with oxfmt (defaults, incl. semi: true)
+957c62ce08f46f435a6da199599e20780c150b30
