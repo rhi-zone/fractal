@@ -1,8 +1,6 @@
-// spike/framework.ts
+// Design spike for a surface-agnostic, runtime-agnostic web framework.
 //
-// DESIGN SPIKE: surface-agnostic, runtime-agnostic web framework
-//
-// Layering (each lower layer is a TARGET, not a foundation):
+// Layering (each lower layer is a target, not a foundation):
 //   1. CORE   — surface- AND runtime-agnostic.
 //              Handler = async (req: CoreReq) => Result
 //              Router = a VALUE you build, mount(), attach middleware to.
@@ -14,13 +12,13 @@
 //              In this spike we call the WHATWG handler directly with constructed
 //              new Request(...) — no socket binding needed.
 //
-// Proven against real sample clusters:
+// Validated against sample clusters drawn from real code:
 //   - Config GET/PATCH pairs (24 hand-written) → 2 generic routes + registry
 //   - POST /integrations/:name/test (19 near-identical) → 1 route + dispatch map
 //   - CRUD block → crud() helper that returns a mountable sub-router
-//   - All under /admin with auth+scope middleware declared ONCE at mount
+//   - All under /admin with auth+scope middleware declared once, at the mount
 //
-// ACCEPTANCE tests at bottom: each scenario printed with status + body.
+// Acceptance tests at the bottom of the file print each scenario's status and body.
 
 export {}; // Ensure module scope — no global leakage
 
@@ -76,11 +74,11 @@ type Middleware<
 
 /** applyMiddleware: compose an ordered list of middlewares, outermost first.
  *
- *  The generic chain is collapsed: each step narrows Ctx independently.
- *  TypeScript cannot infer the chain's cumulative type through a generic
- *  reduce — this is a well-known TS limitation with heterogeneous pipelines.
- *  In practice, at a mount point all middleware share the same added-ctx type
- *  (or you group them with `withMiddleware`).  The cast is load-bearing.
+ *  The generic chain is collapsed to `any` internally: TypeScript cannot
+ *  infer a heterogeneous pipeline's cumulative Ctx type through a generic
+ *  reduce. At a mount point, all middleware share the same added-ctx type,
+ *  so the final cast back to `CoreHandler<Ctx, Res>` is sound in practice
+ *  even though the reduce step itself is untyped.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyMiddleware<Ctx extends Record<string, unknown>, Res>(
@@ -315,18 +313,17 @@ class Router<TypedVars extends Record<string, unknown> = Record<string, never>> 
     ): Promise<Response | null> => {
       if (idx >= mws.length) return final(ctx2);
       const mw = mws[idx]!;
-      // mw is responsible for calling next (or not). We capture what it returns.
-      // If it returns early (403, etc.) without calling next, we get that Response.
-      // If it calls next, the next chain result flows back through mw's return.
-      // We wrap `next` so that if the inner chain returns null (no match), we
-      // pass notFound() to the middleware — letting it see a Response either way.
+      // mw controls whether next is called: an early return (e.g. 403) skips
+      // the rest of the chain, and a call to next resumes it. The wrapped
+      // `next` converts a null (no match) from the inner chain into a 404
+      // Response, so mw always observes a Response from next, never null.
       const mwResult = await mw(ctx2, async (nextCtx) => {
         const inner = await run(idx + 1, nextCtx as HttpCtx<Record<string, unknown>>);
         return inner ?? notFound();
       });
-      // mwResult is a Response if mw returned early OR forwarded the next result.
-      // Map it back to Response | null: a 404 from notFound() stays as Response,
-      // but that's fine — the real "no match" null only comes from final() above.
+      // The true "no match" signal (null) only originates from final() at the
+      // top of this chain, not from this synthesized 404 — mwResult itself is
+      // always a Response.
       return mwResult;
     };
     return run(0, ctx);
@@ -497,9 +494,9 @@ function toHandler(router: Router<Record<string, unknown>>): (req: Request) => P
 // ╚══════════════════════════════════════════════════════════════════════════╝
 // ============================================================================
 
-// serveBun: the ONLY place a Bun symbol appears in this codebase.
-// We do NOT invoke it — we prove runtime-neutrality by calling toHandler(...)
-// directly with constructed `new Request(...)` below.
+// serveBun: the only place a Bun symbol appears in this codebase. It is not
+// invoked; runtime-neutrality is demonstrated below by calling toHandler(...)
+// directly with a constructed `new Request(...)`.
 //
 // function serveBun(h: (req: Request) => Promise<Response>) {
 //   return Bun.serve({ fetch: h })
@@ -646,10 +643,11 @@ function crud<T extends Record<string, unknown>>(
 // 1. Config GET/PATCH pairs — 24 hand-written → 2 generic routes + registry
 // ---------------------------------------------------------------------------
 
-// Section registry — data, not 24 handlers
+// Section registry: adding a config section means adding an entry here, not
+// a new pair of routes.
 interface ConfigSection<T extends Record<string, unknown>> {
   schema: StandardSchema<unknown, T>;
-  // In-memory store for spike (sample would use DB)
+  // In-memory value; a production version would back this with a database.
   _data: T;
 }
 
@@ -802,7 +800,7 @@ const orgsStore: Store<{ id: string; name: string; plan: string }> = {
   },
 };
 
-// Two entities, two calls — that's it
+// usersRouter and orgsRouter are each a single crud() call.
 const usersRouter = crud("users", {
   schema: schema({ name: "string", email: "string" }),
   store: usersStore as Store<Record<string, unknown>>,
@@ -814,7 +812,7 @@ const orgsRouter = crud("orgs", {
 });
 
 // ---------------------------------------------------------------------------
-// Auth middleware — declared ONCE at the /admin mount
+// Auth middleware — declared once, at the /admin mount
 // ---------------------------------------------------------------------------
 
 // Typed context variables set by middleware
@@ -824,8 +822,8 @@ interface AuthVars extends Record<string, unknown> {
 }
 
 /** authMiddleware: sets user + scopes in ctx.vars.
- *  In a real app this would verify a JWT; in the spike it reads an x-user header.
- *  If the header is missing → 403 (not 401, sample pattern). */
+ *  A production version would verify a JWT; this spike reads an x-user header
+ *  and treats its absence as 403. */
 const authMiddleware: RouterMiddleware<AuthVars> = async (ctx, next) => {
   const xUser = ctx.headers.get("x-user");
   if (xUser === null) {
@@ -846,19 +844,22 @@ const authMiddleware: RouterMiddleware<AuthVars> = async (ctx, next) => {
 };
 
 // ---------------------------------------------------------------------------
-// /admin router — auth middleware declared ONCE at the mount
+// /admin router — auth middleware declared once, at the mount
 // ---------------------------------------------------------------------------
 
 const adminRouter = new Router<Record<string, never>>();
 
-// A simple /admin/me endpoint that reads typed ctx.vars.user
+// The /admin/me endpoint reads typed ctx.vars.user.
 adminRouter.add(
   route({
     method: "GET",
     pattern: "/me",
     handler: async (req) => {
-      // Accessing vars — these are typed as `Record<string, unknown>` on the
-      // plain Router<Record<string,never>>. See AWKWARD section in commit message.
+      // adminRouter is a plain Router<Record<string, never>>, so vars is typed
+      // as Record<string, never> here: its own routes never statically see the
+      // AuthVars that authMiddleware adds when this router is mounted under
+      // /admin with that middleware. This cast reflects the shape authMiddleware
+      // actually populates at runtime.
       const vars = req._ctx.vars as { user?: { id: string; email: string }; scopes?: string[] };
       return json({ user: vars.user, scopes: vars.scopes });
     },
@@ -869,7 +870,7 @@ adminRouter.add(
 adminRouter.mount("/users", usersRouter as unknown as Router<Record<string, unknown>>);
 adminRouter.mount("/orgs", orgsRouter as unknown as Router<Record<string, unknown>>);
 
-// SSE endpoint — streaming, no special support needed; a Response IS a stream
+// SSE endpoint: streaming needs no special support, since a Response is a stream.
 adminRouter.add(
   route({
     method: "GET",
@@ -885,7 +886,7 @@ adminRouter.add(
 );
 
 // ---------------------------------------------------------------------------
-// Top-level app — root router, mounts admin WITH auth middleware at the mount
+// Top-level app — root router; mounts admin with auth middleware at the mount
 // ---------------------------------------------------------------------------
 
 const app = new Router<Record<string, never>>();
@@ -909,13 +910,13 @@ app.mount("/config", configRouter as unknown as Router<Record<string, unknown>>)
 // Mount integrations under /integrations (no auth)
 app.mount("/integrations", integrationsRouter as unknown as Router<Record<string, unknown>>);
 
-// Mount admin WITH auth middleware at the mount point — declared ONCE
+// Mount admin with auth middleware declared once, at the mount point.
 app.mount("/admin", adminRouter as unknown as Router<Record<string, unknown>>, authMiddleware);
 
 // ============================================================================
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  ACCEPTANCE TEST HARNESS                                               ║
-// ║  Calls (Request)=>Promise<Response> in-process — NO socket, NO Bun.   ║
+// ║  Calls (Request)=>Promise<Response> in-process: no socket, no Bun.    ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 // ============================================================================
 
@@ -1051,8 +1052,9 @@ section("12. Raw query params — no capture combinator");
 report("  GET /search?q=fractal&limit=10", await hit("GET", `${BASE}/search?q=fractal&limit=10`));
 
 section("13. Binary/blob — prove it's just a Response body (free)");
-// Binary is free: a handler returns a Response directly, body can be any BodyInit.
-// We route it via a dedicated router to confirm the full stack carries it.
+// A handler returns a Response directly, and its body can be any BodyInit, so
+// binary payloads need no separate code path. Routed through a dedicated
+// router here to confirm the full stack carries binary data unmodified.
 const blobRouter = new Router<Record<string, never>>();
 blobRouter.add(
   route({

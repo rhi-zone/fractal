@@ -9,6 +9,10 @@
       "excerpt": "Replace the dict-vs-record grouping decision. Default `defaultDetectDict`.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "004aebddf8a3ed5d7205c7ae6fb24384e576cbbe20fa1d66eef5b2a6a1600625": {
+      "excerpt": "Tiny object-schema builder used in tests below.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "008f31eb2a2b465deb31c3231431e193677f0515733fd1315f91b861eb3e6e31": {
       "excerpt": "With dirty data detection on, the uint8 type dominates and carries a",
       "approvedAt": "2026-08-13T07:48:24.471Z"
@@ -145,6 +149,10 @@
       "excerpt": "Load the `CompilerOptions` a normal `tsc` invocation would use for",
       "approvedAt": "2026-08-13T07:51:11.417Z"
     },
+    "06483a912c896248b9bfda8b373917618fb39b52928c6219b11093ec7c520872": {
+      "excerpt": "Mount integrations under /integrations (no auth)",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "064869720a478c4158c28213545e197c6001d2918c680cc96beb9836523a9d01": {
       "excerpt": "True for a symbol-keyed property (`escapedName` starting `__@`, TS's",
       "approvedAt": "2026-08-13T07:51:11.417Z"
@@ -160,6 +168,10 @@
     "06da80fbc3db1d04b2c7f74cffcb8b8f9e525e53516998960005c83f16c24b66": {
       "excerpt": "Enable CORS. `true` for permissive defaults (`origin: \"*\"`), an options object t…",
       "approvedAt": "2026-08-13T07:53:34.390Z"
+    },
+    "06dee4f8165ab05e805559a940aea401110e39afd33ef00d5fa30fddcde8fde4": {
+      "excerpt": "applyMiddleware: compose an ordered list of middlewares, outermost first.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "06f564ca340c1ba448d0a97300cf1a741a1074529faa00e8781a72779666d103": {
       "excerpt": "True for symbols with at least one `readonly`-modified declaration.",
@@ -245,6 +257,10 @@
       "excerpt": "Declared order is active, pending, done, archived -> weights 1, 0.435, 0.268, 0.…",
       "approvedAt": "2026-08-13T07:47:33.023Z"
     },
+    "0ab9649b11304b5a8397398cea9b4af3f70d8d7ac037292b29ec75dcee2d960b": {
+      "excerpt": "serveBun: the only place a Bun symbol appears in this codebase. It is not",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "0aed3f284f19ebc69896a5255fc6465ae737092f54f0c00265e3e386b73eb9be": {
       "excerpt": "Evidence for the corpus as a whole (the root structural position).",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -301,6 +317,10 @@
       "excerpt": "Called once per connection when a `connection_init` message arrives,",
       "approvedAt": "2026-08-13T07:53:17.526Z"
     },
+    "0d1d9da78b028eaaeacc5b2f19125e7bd40f223fbbefadcebc3986a1fcb06da0": {
+      "excerpt": "HttpCtx<TypedVars>: the framework's own request context.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "0d215747c85f7172d7a9f580c78393ba4b527a46fd30cb71198baecaca2240c9": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -316,6 +336,10 @@
     "0d950eae1b35a2fc7e90f04184ddd4bc364f20da23da7a7bcf27e46bc859f6d9": {
       "excerpt": "A plain graphql-js field resolver: `(parent, args, context, info) => result`.",
       "approvedAt": "2026-08-13T07:47:47.316Z"
+    },
+    "0da49d812f560b0c266a29bbbe4c588cc8aadf3424c2bd5001fb81cdd7f7faec": {
+      "excerpt": "(b) Barrel re-export: same \"Result\" name imported through a local barrel.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "0da9cdd13837b3fa641b654217d09a74862e5b930bfc231ff1dcf26a5cca2df2": {
       "excerpt": "A single numeric literal.",
@@ -353,6 +377,10 @@
       "excerpt": "evenly spread, same range (100) as the clustered base",
       "approvedAt": "2026-08-13T07:46:30.920Z"
     },
+    "0e9c5d52f7d79a558f191ef2afb3152e834bbd65dc48726f09b61de7ad2f964a": {
+      "excerpt": "cents resolves to the explicit \"body\" store under HTTP ->",
+      "approvedAt": "2026-08-13T07:54:23.706Z"
+    },
     "0ea2029669c97d4e7deb1bf7aa806d6e1ce2328c9b0522405931c24fbe7500fd": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:43:46.976Z"
@@ -365,6 +393,10 @@
       "excerpt": "Structural union splitting on plain object merges: when a position in",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "0ecf650a5d26d728041b20f1df7b6f773026dde2b0d477dd2973955f57fa3c2d": {
+      "excerpt": "Union-to-intersection: flattens a union of object types into one object",
+      "approvedAt": "2026-08-13T07:54:23.703Z"
+    },
     "0edc347ee777a61b376ae3119840ed0e60a1f251c5e5009cc22fec91777e21a7": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:48:26.652Z"
@@ -376,6 +408,10 @@
     "0eea393fd4888f731f075aaf211523020729b5016b01b3415127f56e73c990aa": {
       "excerpt": "Run `build(program)` only when the cache misses (or `options.force` is",
       "approvedAt": "2026-08-13T07:53:53.077Z"
+    },
+    "0f2b2849e30cf94c4ef573c46b09a4ffeee7665f4637a5251f23dffc2969ef84": {
+      "excerpt": "No explicit sourceMap for `cents`, method POST (default store",
+      "approvedAt": "2026-08-13T07:54:23.706Z"
     },
     "0f2de6a41f83f36dfa64101d37f9b2f91d65340710b1932305cf19eaab581d18": {
       "excerpt": "Property 1: fromJson never crashes on any valid JSON",
@@ -460,6 +496,10 @@
     "12a946202ad5ec8bb4bbcc5f405bb8de7854ebec903f86cb0a03d5831d56421d": {
       "excerpt": "Same shape.kind as the \"genuinely clustered\" case: the average-gap",
       "approvedAt": "2026-08-13T07:46:30.920Z"
+    },
+    "12b9a6ad582ee3f8565b8ef23d3751c98636bc40108b6d0b8c749ed0cf5f86aa": {
+      "excerpt": "The user's display name.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "12edfade27ca1b2bef9f48ffcac47aa13b95b6780f8b823e77833ca5dd9a2cb3": {
       "excerpt": "Positive-control classification: a case only counts as positive for a",
@@ -549,6 +589,10 @@
       "excerpt": "First value delivered; cancel before the second yield's timer fires.",
       "approvedAt": "2026-08-13T07:53:17.529Z"
     },
+    "16a5a22e941017f7fcd46c03da3c7a0c1814ffa23b04b0720d25bf7b4db17143": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "16bf22f1a0b09dba385f9a7ae62954f924a4ea93453148deae7d5ac5732fb209": {
       "excerpt": "All elements are small non-negative integers -> all infer as uint8",
       "approvedAt": "2026-08-13T07:43:20.205Z"
@@ -580,6 +624,14 @@
     "17c5383ac84dee92238aa6b86310501f43ffee6fe819f406a35d7187522bb2a8": {
       "excerpt": "── Shared-symbol branded types (one `unique symbol` key, literal values) ─",
       "approvedAt": "2026-08-13T07:51:10.076Z"
+    },
+    "17df7f4f70200b39335285572a8f65ee4b8e464f3017c2cfe2656487c7593db5": {
+      "excerpt": "@ts-expect-error — a decoder that only accepts `string` (assuming",
+      "approvedAt": "2026-08-13T07:54:23.706Z"
+    },
+    "17eb798e0533c65ea168e7573abf12a217fe0aaaa1c45cfc0a8d5a235d539f64": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "18009b936682d62db847550cffc4e8a631e5ae5db359c7c2194c6d6acbebe8e8": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -681,6 +733,10 @@
       "excerpt": "packages/fractal/src/json-rpc.ts — @rhi-zone/fractal/json-rpc",
       "approvedAt": "2026-08-13T07:44:41.532Z"
     },
+    "1c0e79d617f1d2458d10c780c8b1042b687329f5d92290dae1fd82b8286964c4": {
+      "excerpt": "route() — helper to construct a Route value. TypeScript infers S from the",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "1c1c1b49ac93c8d1710bb7129707f293ea12a8354e1e2ed79611ebefa1e8e052": {
       "excerpt": "Mutable bookkeeping shared across one whole extraction pass (e.g. every",
       "approvedAt": "2026-08-13T07:51:11.417Z"
@@ -705,6 +761,10 @@
       "excerpt": "fromStandardSchema expects a real `~standard`-shaped object at runtime, not",
       "approvedAt": "2026-08-13T07:44:41.547Z"
     },
+    "1d262281fe9852dac8647ef69a325a07595ea812281c93a7a195c12b9f1c81c5": {
+      "excerpt": "Shared plumbing for both `extractToolTypeRefs`/`extractRouteTypeRefs`'s",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "1d4abf280490996485163d96e8fb811f47dd42965817f75a014b3e36785e754b": {
       "excerpt": "Named type declarations referenced by any supplied `FieldTypeInfo`. Forwarded to…",
       "approvedAt": "2026-08-13T07:47:48.751Z"
@@ -712,6 +772,10 @@
     "1d5f944672a59c0cfa5c9ff7670286fcf3265f8ab2246960a8f69d450831c11f": {
       "excerpt": "See `ResolveStrategy.clusteringMethod`.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "1d7dfa0381aafb01de50db94448c2bdaec1f13f4f4a2ab55dda8c029a868765b": {
+      "excerpt": "adminRouter is a plain Router<Record<string, never>>, so vars is typed",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "1d9fc172bbd40cd512427568fe56ed21426771bb6c33c3aed32aace7e9991048": {
       "excerpt": "genres op has no meta.tags of its own; readOnly comes from catalog node",
@@ -753,6 +817,10 @@
       "excerpt": "Walk up from a resolved module entry point to the nearest `package.json`",
       "approvedAt": "2026-08-13T07:53:53.077Z"
     },
+    "20182167af6e53d77c610e6444c268342ee653227677aac235ec93c7ff225cc0": {
+      "excerpt": "@ts-expect-error — a decoder must return the FIELD's own domain type",
+      "approvedAt": "2026-08-13T07:54:23.706Z"
+    },
     "20274e2c8cc0272ce0cf4dda3c6117e1fb29c228008a4db2ad161381625c4655": {
       "excerpt": "Touch DEP_FIXTURE — reachable from FIXTURE (tree.fixture.ts) but not",
       "approvedAt": "2026-08-13T07:53:53.079Z"
@@ -785,6 +853,10 @@
       "excerpt": "Brand + a single refinement tag: `string & { [BrandTag]: \"email\" } &",
       "approvedAt": "2026-08-13T07:47:59.023Z"
     },
+    "2145eaee046584173a43d34326a2054c484984d921058a882c456d4294bc84e3": {
+      "excerpt": "Mount sub-routers under /admin",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "215eb1d141e13a27f90b70320b060dd88b010deb9c32a4abd363fbdcd9a52c1b": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:48:24.471Z"
@@ -792,6 +864,10 @@
     "21a4592b561e34bb0e26bc982f12b5327b5d9a5523ccfc46eda06cd1a9287402": {
       "excerpt": "Wait one microtask/macrotask tick — the protocol handler's async work (subscribe…",
       "approvedAt": "2026-08-13T07:53:17.529Z"
+    },
+    "22497fbccabcb44eaddd097270006e98c11743fe55b28d57cfc3e0cc641ac523": {
+      "excerpt": "A leaf's per-protocol `sourceMap` override, field name -> source.",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
     },
     "2257251fdefae0c9bee60609986450775e2c621de2988c9ec8e0e21754393ccc": {
       "excerpt": "Mask: which objects also have 'name'",
@@ -865,6 +941,10 @@
       "excerpt": "Build an in-memory `ts.Program` + `ts.TypeChecker` over `source` — no",
       "approvedAt": "2026-08-13T07:43:46.976Z"
     },
+    "252dee3119fde4417c68fc680734abda34141e6a906e8fa3c45b5d925a90fc96": {
+      "excerpt": "An exported factory that returns something other than a tree — the walker",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "2540598c8d9b596aac053b79b01eda09b19f553fe9c8944078d02116129c7ae4": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -916,6 +996,10 @@
     "26832f1ce6146cb9ce06e69b9b54cc9b86ef9ec5601201e9c29f5d223d5d1d2f": {
       "excerpt": "`json-rpc` needs an `interface` root; the JSON Schema sample is an",
       "approvedAt": "2026-08-13T07:44:41.543Z"
+    },
+    "269cf0caab21e2ad2e62e97779447de9af4fa6138c87fb1cc925a2e71fab73ed": {
+      "excerpt": "A non-exported factory — the negative case for the exported-only",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "26f055418eacf7866513570bed490b1feebf057719cf7d6715c3fbcc53be4985": {
       "excerpt": "============================================================================",
@@ -992,6 +1076,10 @@
     "2b0e3c87d87fa76fbdda982b6e50ae9fbf9d794059c164919d5d83b954713de1": {
       "excerpt": "`kind` is `target` or has `target` among its registered ancestors (see",
       "approvedAt": "2026-08-13T07:45:15.377Z"
+    },
+    "2b38030438a9d46820f221d17be6ef59c1924a134cab942872067f60646e92e8": {
+      "excerpt": "A stand-in for a composition-time value (e.g. `ComposedSurface`) the",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "2c0ce7d06370312e7b473c877dab0afc11adfce4e5c9e07421bfbcda6ea381ed": {
       "excerpt": "── Generic type parameter fixtures ─────────────────────────────────────────",
@@ -1153,6 +1241,10 @@
       "excerpt": "`contextValue` passed to every `server.subscribe(...)` call on this",
       "approvedAt": "2026-08-13T07:53:17.526Z"
     },
+    "31c28ce15c38d34782f72e344a9dfb05280b37e120e1cd2afe95bafa42b7c851": {
+      "excerpt": "(a) Direct import: Result<T,E> — syntax path extracts T by name + 2 typeArgs.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "31c3fbf381b9d4e3814083f9f76c8206313c87b435c003d1cae38d2232a82007": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:49:07.394Z"
@@ -1209,6 +1301,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:48:24.471Z"
     },
+    "33a3a6477b7460764b4aa7da9dfd8446a094668583358dc4ba4302e73b214429": {
+      "excerpt": "ValidatedReq<TypedVars, S>: when declared validation is attached,",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "33b22892034290ab0d39528a18072685fb5df5abe663438edf7887a25acb11d7": {
       "excerpt": "── Syntax path: explicit return type annotation on the function node ────",
       "approvedAt": "2026-08-13T07:51:10.065Z"
@@ -1232,6 +1328,14 @@
     "3443103b4e3bb77b99296859dbe24a9685694c798959b0061c2dad09c4d1f6d0": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:27.460Z"
+    },
+    "34490a7effd4f8b533f0e7f22d9d93b566750d4016c89ee78634f8f83cb3dd1e": {
+      "excerpt": "A leaf whose RETURN type reaches into a TS/DOM builtin's generically",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
+    "345603b3e6bd1094e7639e9302319b380ea19247acf382546217d9016eae8624": {
+      "excerpt": "Internal: dispatch a request through this router's routes and mounts.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "345b1a3cc7f418745dadaca8a41ab9d60e0ef8f192f05e5ab96b4d1e19042c10": {
       "excerpt": "Collapse a `Projection` to a single string for display. JSON values are",
@@ -1261,6 +1365,10 @@
       "excerpt": "Resolve the synthesized namespace `GraphQLObjectType` at `path` — the root `Quer…",
       "approvedAt": "2026-08-13T07:47:48.751Z"
     },
+    "34e9d8e6e4643ef3171a09bd341482bf28d7503d32b51f3a0d3e0aed798bb112": {
+      "excerpt": "Map of MCP tool name → derived schema/description.",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "35355f9ac65d9cf53d586780357b81800a7acfb5f8e7271bb422ac0d1c3fb6c1": {
       "excerpt": "NUMERIC affinity (the SQLite default for anything else, incl. NUMERIC/",
       "approvedAt": "2026-08-13T07:45:21.107Z"
@@ -1276,6 +1384,10 @@
     "35b55c1ab928f8ed05cb904beea4edbc927309d39784b1d2cf91401d330a2f98": {
       "excerpt": "Splits `text` into lines and prepends `spaces` spaces to each non-empty",
       "approvedAt": "2026-08-13T07:45:15.377Z"
+    },
+    "361cca2e19a2fce4531b69b9bf6fbf55aa8a456ad7ff18ccdf3833c4253bc91d": {
+      "excerpt": "Read `meta.<namespace>.encodingMap`'s STRING-literal (base-profile-name)",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "36412311d986d038c6f0003aa33434fa80e2ea00435e1aed31b94c6621ad91e2": {
       "excerpt": "The default underscore-joined name would have been \"mcpOverrides_renamed\";",
@@ -1300,6 +1412,10 @@
     "374695f00360b35edd34f9bdc2d2568470240cfde32c0982eafdbade8586f454": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:48:24.363Z"
+    },
+    "37f4985b3a319a897799011a48a4942a2d668df33f27d5407d4c12fab73c8dab": {
+      "excerpt": "Referenced so the unused-declaration linter/checker doesn't flag it — the",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "3801928b8b5039b5779d03a7fbef5ca19926e20f47bb08c832e3762f6e63f817": {
       "excerpt": "Load/save/query the approved-comment-hash manifest. Pure I/O + data-shape",
@@ -1333,6 +1449,10 @@
       "excerpt": "Every path visited (containers and leaves alike), excluding the root.",
       "approvedAt": "2026-08-13T07:48:24.363Z"
     },
+    "38d8ae24af75bd042730778cc920a7055c70e880f18017bf743d4dfab5dd01fe": {
+      "excerpt": "usersRouter and orgsRouter are each a single crud() call.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "38f5c1e573e6cbe3813e46b63d4fb552b6c0924dbca54f1eb1d369d70e96bf05": {
       "excerpt": "JSON-serialized distinct leaf values.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -1365,6 +1485,10 @@
       "excerpt": "Even if you don't use internationalization, you can use this field to set",
       "approvedAt": "2026-08-13T07:43:11.323Z"
     },
+    "39a75fcc1fd8b237e3c8684fa2d746dca053c8482a2a3d684de2e52467cd2bf2": {
+      "excerpt": "SSE streaming response — handler returns this directly",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "39cff9709ea541ee80b019d4044175045afcec7e4cab0a2c829c52e627a14d9b": {
       "excerpt": "Generate `n` synthetic JSON values that conform to `schema` — the inverse",
       "approvedAt": "2026-08-13T07:48:24.363Z"
@@ -1372,6 +1496,10 @@
     "3a0f83a4f28adfa232538f366043849ce4c9874099917fb03c0d61050b9f45aa": {
       "excerpt": "Precision-based: does the signal on introduce false positives, on cases whose gr…",
       "approvedAt": "2026-08-13T07:48:24.363Z"
+    },
+    "3a79c030b392b868c93e5d143fcbff41214c525703fa2dd70a4593e3743cdff9": {
+      "excerpt": "Per-tool derived facts: real input schema + JSDoc-derived description.",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "3a7cfecc723d15a57d34a4e86e4ae9c2d793e67e06f94ffc8a2d8f4f296a0393": {
       "excerpt": "Resolve the identifier's symbol for remaining cases.",
@@ -1409,6 +1537,14 @@
       "excerpt": "Infer from documents that arrived as separate sources rather than as one",
       "approvedAt": "2026-08-13T07:50:23.795Z"
     },
+    "3c0f25d99f8b93e374b61b905cc50afe2c44b28daa9c7b32de53e54a66fd32a7": {
+      "excerpt": "Branch: api(...) — children is required on api()'s return type.",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
+    "3c28e3de6d6af54e634cd15792856f1028d4ae50b0b2315dfa3627f2f31b2462": {
+      "excerpt": "2 generic routes covering all 24 config pairs:",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "3c376a07ed8a7a41c195e0b5b5096c7ef37599205573d3d65d0c98de88180b64": {
       "excerpt": "type: string[]",
       "approvedAt": "2026-08-13T07:53:52.216Z"
@@ -1416,6 +1552,14 @@
     "3c63021124428af6065a6b99462e324c84969ea4a77c66dca7b4e323696759df": {
       "excerpt": "--- Systems languages ---------------------------------------------------",
       "approvedAt": "2026-08-13T07:50:23.795Z"
+    },
+    "3c7f4f93f8c24be5cc3f7597038906cd7b3ccf1ded208394a18ae1f25d3cfc2b": {
+      "excerpt": "Read a string-literal override at `meta.mcp.<key>` off a resolved node",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
+    "3d334110d1009b552d82c5ee4969f50801a97dee6c07ff158e7626275f93f1a0": {
+      "excerpt": "meta.mcp.name wins outright (no prefix applied) — else the usual",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "3d3829a5002ec760bdd1cce5efa7a9cb5600c944ea4fcd71cb028ed89a8a65d3": {
       "excerpt": "An interface (not a `type` alias) as a handler's parameter type — same",
@@ -1452,6 +1596,10 @@
     "3e1acd24e36a8228fcdd1c67eec9dfe4d11b9043ca9b8882d0ceb186627e0190": {
       "excerpt": "Vendor-extension keys (`x-`-prefixed, same convention across",
       "approvedAt": "2026-08-13T07:51:10.065Z"
+    },
+    "3e5ed63608bc2ea8cb9a3dce403eebf6c760c6347723ace8c8e19eb41b6550df": {
+      "excerpt": "The multi-statement form: destructuring + local `op(...)` consts, ending",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "3e6ab50ce3cbc99043eab06f25297337b0ebcd99d61b5f8c1ce2e8b9ea541483": {
       "excerpt": "Name given to the root type when a document has no named definitions and",
@@ -1509,6 +1657,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:47:33.023Z"
     },
+    "40e46be6b698ea604aa7659ebd5c0c63fd38b95d96d64c54559853207785d5b4": {
+      "excerpt": "Both \"path\" and \"env\" map to argvProfile (CLI is uniform) — the point is",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
+    },
     "40e6e5f34220479db4ba9a227dc0ccf3fd59061a1549663c6d1b332d5d2af525": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:52.216Z"
@@ -1524,6 +1676,10 @@
     "417b9a399b4fd8d25699c12932c624ab9739177bdd62acf5fe0259bed0f5ade9": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:27.466Z"
+    },
+    "41915d99298b1238baf8bafc96e542fc2e362158567a84e2b177ba03b9c6f350": {
+      "excerpt": "HTTP query encoding requires a numeric-string-SHAPED wire per the",
+      "approvedAt": "2026-08-13T07:54:23.707Z"
     },
     "419a2c99f6d976c9e4e290dcd0b8c3ed92eacd8fa176b8bdbed97ec7258332e2": {
       "excerpt": "── Property JSDoc refinement tags (@minLength/@maxLength/@pattern/@format/",
@@ -1568,6 +1724,10 @@
     "42c67a2f1a483346554212e03e453bfc45a0f301cd51d18082f5fe5bde286e20": {
       "excerpt": "Regression: a TS builtin/global utility type (`Record<K,V>`) used",
       "approvedAt": "2026-08-13T07:51:10.076Z"
+    },
+    "42d3fe5f5fbd493c26cb1bd1409fa0819c07c04af58ea83522042f924146a6d2": {
+      "excerpt": "`onLeaf` receives both the underscore-joined MCP tool name (`name`, mirrors",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "42e392720851e9e111e752f607cc381a83896fd2e939828c439c4339a97d6e3d": {
       "excerpt": "`@rhi-zone/fractal-http-api-projector/route` -> `[http-api-projector, ./route]`",
@@ -1620,6 +1780,10 @@
     "440557048e9803222dc2efb34a97ae193206588c67673f409e16f4377d6d92fe": {
       "excerpt": "Run with `bun run generate` (see this directory's package.json and",
       "approvedAt": "2026-08-13T07:44:57.219Z"
+    },
+    "440607ecd05357cb7f8319b59ed96c1b4fc4f0f1cc86de74e91628212cf2aeae": {
+      "excerpt": "packages/api-tree/src/__fixtures__/wire-apply-validation-meta.fixture.ts",
+      "approvedAt": "2026-08-13T07:54:23.709Z"
     },
     "4454844be6644065633d06453285cb02245667ea228225b1b332b995171fa514": {
       "excerpt": "============================================================================",
@@ -1765,6 +1929,10 @@
       "excerpt": "has a `status` enum field",
       "approvedAt": "2026-08-13T07:47:33.023Z"
     },
+    "4a4534328b8e32e760c5687dafa09accaccb3ed278af98affc919eb38e9dfc46": {
+      "excerpt": "Compare the SAME leaf shape (`price`, `{ cents: number }`) across two",
+      "approvedAt": "2026-08-13T07:54:23.707Z"
+    },
     "4a4f525218af22f0a210bd768594421ac98cae2402089e60c0c4df3f66dfd293": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:27.466Z"
@@ -1776,6 +1944,10 @@
     "4a643d69de0f85b3b03366b6c902c023e58370665351303cadc8af868c1fc5f1": {
       "excerpt": "`Record<K,V>` — pure index signature, no own properties.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "4af65354cf1c3a696c0c4b81757ea705a338b2e74e8b0de9e2b84f58e81db907": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "4b15fb6d136b88b46f54b488cf3daefe11621bccb4a729efb27ce411f29f5d09": {
       "excerpt": "union path -> number of variants (for union-fidelity variant-count comparison).",
@@ -1817,9 +1989,21 @@
       "excerpt": "Distinct integer leaf values, ascending, when this position is integer-typed.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "4c759273f9ba278709c3dc159ecd3f96b85dc66267915b50749d263765c7cc0c": {
+      "excerpt": "packages/api-tree/src/__fixtures__/wire-apply-validation-hooks.fixture.ts",
+      "approvedAt": "2026-08-13T07:54:23.708Z"
+    },
     "4c78922cbfe3e15b7a72f0a1cc044aed5f09212bd461f49f67916fd479ab2044": {
       "excerpt": "every value unique — never a bounded vocabulary",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "4cc4aaf6a42ed61c6d11c81ce93dd5c4f1f09ef3b026a7eba36263cd20194276": {
+      "excerpt": "A 2-member union without the Result name or DU shape — the negative case",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
+    "4cd45164ee8aa2b2f9eb03c89bda16d74d5447b0b3f3eecd2b6a2b48781da12b": {
+      "excerpt": "A TS BUILTIN/GLOBAL utility type (`Record<K,V>`) used directly as a",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "4d0df8e38428de0ab4bfc5c5f1f1e552c3a7d9ca121b351d322e6d04b00c396e": {
       "excerpt": "Inclusive [min, max] length for `array`-kind values. Default [0, 5].",
@@ -1832,6 +2016,10 @@
     "4d3070095731bc50f6857aac2964e2e2e91987f350cb7736b3bac1920ff8e072": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:17.529Z"
+    },
+    "4dbd63cb670f58d35994c04c26044c2180f45b500364c84da1042cbd2c739381": {
+      "excerpt": "Parses a plain-decimal dollar-amount numeric string (`\"12.34\"`) -> `1234`",
+      "approvedAt": "2026-08-13T07:54:23.708Z"
     },
     "4dd151b5021bfbf855dc5cf8b8d4c0b6b60939d76d48fbdd6722f96bcff66e30": {
       "excerpt": "Build a fetch-compatible `(req: Request) => Promise<Response>` handler",
@@ -1905,6 +2093,10 @@
       "excerpt": "Full ordered arg list (captured-fallback first, then declared) — same order `pro…",
       "approvedAt": "2026-08-13T07:49:07.403Z"
     },
+    "51d382de1a894886198fdea6ac35e974e41151e38861919496f19fc043685d07": {
+      "excerpt": "Per-tool derived facts as TypeRefs (pre-projection).",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "51f8a71ee7e008da33cfe0cd07b465e98d74c97cdfb1d6de6858e7345f3c1874": {
       "excerpt": "Build the fully-defaulted strategy — including `defaultStages` — from a",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -1917,9 +2109,17 @@
       "excerpt": "Set the production url of your site here",
       "approvedAt": "2026-08-13T07:43:11.323Z"
     },
+    "52432960b0736dc94f151e4266b52c8dc083cf203f79dc465dc70c9d0a82e5d7": {
+      "excerpt": "Union input → exercises the punt path.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "525297d41817bc0b6456f77e29af328b7400fc082e75b3e7502ca8162379e91b": {
       "excerpt": "A predicate that never shares anything — recursive types bypass it entirely.",
       "approvedAt": "2026-08-13T07:51:10.076Z"
+    },
+    "525e628c179df720ce546868f7544870852d42f7cdadb1a40ba7f491673638e4": {
+      "excerpt": "Section registry: adding a config section means adding an entry here, not",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "529085aca636bbde067166ff88cb7e34b907c233f9875dbdb3aafa65960c09b8": {
       "excerpt": "============================================================================",
@@ -1953,9 +2153,21 @@
       "excerpt": "String subtype/format unification — if both are string subtypes (or a",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "53a273075aa2e9412f12bf3e594f7b0b9ae8ce02d455eb795080970d7abe2882": {
+      "excerpt": "\"12.345\" IS a numeric string (passes `numericStringLeaf`'s own",
+      "approvedAt": "2026-08-13T07:54:23.707Z"
+    },
+    "53b7b1d4342d6b523582a1215553e7f292422471434845f83843707482fafd32": {
+      "excerpt": "Promise<T> return → output schema should unwrap to T's schema.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "53f13ae99ed53bd346eb8e1c8cefb7ef8260683b50401caf101360967ea052aa": {
       "excerpt": "MCP",
       "approvedAt": "2026-08-13T07:53:53.091Z"
+    },
+    "53fd4658d66ec470cbb1369c97286f25aee0d85220795b8ec0543279a7d4cf70": {
+      "excerpt": "Force eager evaluation of a mapped/intersection type into a single plain",
+      "approvedAt": "2026-08-13T07:54:23.703Z"
     },
     "543041392db2a60e86f273f980b3682abb3000978a6cbeadfd2fe636eb6c1904": {
       "excerpt": "\"Status Enum\" has no map anywhere -- there's no positive control for detectDicts…",
@@ -1964,6 +2176,10 @@
     "544080f302e54dc655e83e7fa62ec56c715a633366abb36f6db2c0f1a5906541": {
       "excerpt": "Three shapes in a chain: A-B and B-C each overlap on one field, but A-C",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "549e089eb87fde9d9a9bfbbee17ce82d8d2d1b4152ae6eaca7b539658618ec60": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "54f897f2ba0eddceece2a13fa5488a0105235197b97737727d4b3ae1f944c66d": {
       "excerpt": "Package subpath this projector's implementation is exported from.",
@@ -1976,6 +2192,10 @@
     "55716b594897e3f8736c3bab98395b370d9d6e671ec45a26dc3c0d05fd7e53f2": {
       "excerpt": "Simulate what typeRefFromType would have recorded for a self-recursive def.",
       "approvedAt": "2026-08-13T07:51:10.076Z"
+    },
+    "55deea1f20e724b7b0006c0eaefdc19682018afca7d0847bb57ce5ed92ffcb2c": {
+      "excerpt": "meta.mcp.name / meta.mcp.segment overrides — exercises tree.ts's",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "55f3588838cfc4e95692384256fba112604a49dbffc4761dbaa09711e2e91407": {
       "excerpt": "rank 1 -> weight 1/1^1.2 = 1.0 exactly -> always present.",
@@ -1997,6 +2217,10 @@
       "excerpt": "Reference-site generators emit one page per `doc.defs` entry. A defs-less",
       "approvedAt": "2026-08-13T07:50:23.795Z"
     },
+    "56a375343da4e8a863f815dc0ce227a9a12ff9c1430453dc6e5f4fcb6c71cc5a": {
+      "excerpt": "cents resolves to the explicit \"query\" store -> WireOf<number,\"query\">",
+      "approvedAt": "2026-08-13T07:54:23.706Z"
+    },
     "56b80477457f143b61124d72c3323a8473bb28e7c1cc24e5c6e5fada88dd4e2c": {
       "excerpt": "Structural mirror of mcp-api-projector's `McpAlsContext`.",
       "approvedAt": "2026-08-13T07:53:53.090Z"
@@ -2013,13 +2237,25 @@
       "excerpt": "Base name for the emitted `<RouterName>Handlers` type and `create<RouterName>Rou…",
       "approvedAt": "2026-08-13T07:51:27.466Z"
     },
+    "571aad68e4f438df3c69c58e1c6b4a3716baf37e635d35997ae603cf51400f0a": {
+      "excerpt": "Say hello, closing over the composition-time greeting.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "5773920cd306d09d4f9877ddf6edfa408f7bbda791de68f55120ff72f752797f": {
       "excerpt": "Maps a handler's `Result.err(E)` error value to a `GraphQLErrorResponse`",
       "approvedAt": "2026-08-13T07:47:48.751Z"
     },
+    "57b6f899dbb1dbdb6e0932d15b014d87a301e4020ffbe357b2ea88e6310acc9a": {
+      "excerpt": "packages/api-tree/src/__fixtures__/tree-factory.fixture.ts",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "57c42401e979379015e85aad4c9e5e6985422d0402d30e7985a29c5e301fa5a4": {
       "excerpt": "Field names whose value was a basic (non-container) type in every element",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "57de2ef06c854314d014e82e3e4d70f82d2e863c87385a8897ebb5765f6e7927": {
+      "excerpt": "Typed context variables set by middleware",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "58007b4020647b3d1b2621aec028ed19bcd01919cfe4165d7f5fd0f855a8b692": {
       "excerpt": "Minimum samples before K=1 evidence (every sample shares one value)",
@@ -2040,6 +2276,10 @@
     "585e9223a5b43af8471d4e3e971de98b641fe9f244969ed58a83577e2f215360": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:45:15.377Z"
+    },
+    "58aae837f52eeda6338c7b722541b12c5c2f60dc9af0e7b26c65b851d2a076b8": {
+      "excerpt": "Declared validation (opt-in adapter)",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "5905823583a5a6f161745b222bb175440861bb8ba15ce6e4a8bc19d9d8621428": {
       "excerpt": "Replace with your project's social card",
@@ -2105,6 +2345,10 @@
       "excerpt": "Present when at least one raw value at this position was a plain object.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "5b059040d04b7d75deafdac5d25684e842af2835b01c2021381d211ffa59d057": {
+      "excerpt": "SSE endpoint: streaming needs no special support, since a Response is a stream.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "5b16f381c53eba2b58b860a7b39a672ca0fc4c64023d9e92399bd180f98fb27e": {
       "excerpt": "path -> the TypeRef shape kind observed there (last writer wins for union-merged…",
       "approvedAt": "2026-08-13T07:48:24.363Z"
@@ -2129,6 +2373,10 @@
       "excerpt": "`CacheFileShape`, exported read-only for Tier-2 callers that need the",
       "approvedAt": "2026-08-13T07:53:53.077Z"
     },
+    "5bad42c83a12aa2497f0e1ee834d6c5db649f1aae857d63ae5a8eba8f8b1c765": {
+      "excerpt": "authMiddleware: sets user + scopes in ctx.vars.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "5bca77213eaaf8fb0d02ff85fc76156dcf17b36af5e165a5970e46d4956dc31e": {
       "excerpt": "A property symbol's `@default` JSDoc tag value, if present. The tag text",
       "approvedAt": "2026-08-13T07:51:11.417Z"
@@ -2144,6 +2392,10 @@
     "5c5ac114709f77463aed196e82aa919eaa29a3f9f3714d8ec2dba96bef1cdd73": {
       "excerpt": "Parse + validate + `graphql-js` `subscribe` one GraphQL subscription",
       "approvedAt": "2026-08-13T07:47:48.751Z"
+    },
+    "5c5c527a1dde69c5c6ddc1eebff297bd235f51db64ecfc8d060a8d662dc725d4": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "5c95331029598888f04a8657c90b5e3195d1bd7c49db18d781a8ceb8ba7cf678": {
       "excerpt": "============================================================================",
@@ -2192,6 +2444,10 @@
     "5e526e5cc19f258aa57f4a96194126b168258fbf7d3c1442812724916f77cb9d": {
       "excerpt": "Render a root operation type (`Query`/`Mutation`/`Subscription`). GraphQL",
       "approvedAt": "2026-08-13T07:47:47.320Z"
+    },
+    "5e5a59d91091da6f0660e8bbc65e49a24138b23dab16828f867819633b65a342": {
+      "excerpt": "The function node behind a leaf's `handler` property: the call signature's",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "5e7c3a4d6aa47dfe832dfd439f3eb59db8098609f55cc95c34220b0a27a5922a": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -2253,6 +2509,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:48:26.652Z"
     },
+    "6134c91d4dec426d298a555fc022dc4d4eb88989b27c6d8b8296d94b7a1bd5b7": {
+      "excerpt": "Build the validated request visible to the handler",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "6149a001aac21a429f2bcde7edf61d0d3139ec890ad7ca2cbaa3c4aa0b31debc": {
       "excerpt": "Key sets observed at this path across the corpus",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -2260,6 +2520,10 @@
     "614caaeef981fd268cae931711be9af230c2b98d40e7af5dcaeca806b28733e7": {
       "excerpt": "packages/fractal/src/mcp.ts — @rhi-zone/fractal/mcp",
       "approvedAt": "2026-08-13T07:44:41.532Z"
+    },
+    "614d56759159ef1d4a675f3b6eb1454122412306dbb61a92466768ab0ae32115": {
+      "excerpt": "(b) Barrel re-export: Result re-exported through a local barrel FILE, name",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "6177d1d5f553a257de6ccca07daa83016dbcab5fad7c3244835396b88bd46c6e": {
       "excerpt": "`scores` has no fixed field set across samples — every generated key",
@@ -2293,6 +2557,14 @@
       "excerpt": "The rendered SDL text `schema` was built from (`buildSchema`) — for introspectio…",
       "approvedAt": "2026-08-13T07:47:48.751Z"
     },
+    "62bd43853b590d53b19ef143d0d8fd53314bd17a884863d2d5e23a00fc2bcb1f": {
+      "excerpt": "packages/api-tree/src/wire-derive.ts — @rhi-zone/fractal-api-tree",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
+    },
+    "62d4951dd3971284e36cd0ceaa08ef43f8d552da254bb9da85e9c6f01949c744": {
+      "excerpt": "Read `meta.<namespace>.encodingMap`'s FUNCTION-form entries off a resolved",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "62ec2e259b5270ac250368485918ca7b97d2599ea48db67d532c9bb53f880719": {
       "excerpt": "Render one entry of `ProjectGraphQLResult.types` — a synthesized namespace type …",
       "approvedAt": "2026-08-13T07:47:47.320Z"
@@ -2313,9 +2585,17 @@
       "excerpt": "packages/playground/src/formats.test.ts — format registry lookup tests",
       "approvedAt": "2026-08-13T07:44:41.546Z"
     },
+    "63a8d6fbf47a109338a31967758fcde23d3955d22150c6226db3195365d14c85": {
+      "excerpt": "(c) Further-generic alias: ApiResult<T> = Result<T, string>.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "63e694341732d4e4ab62c16d451cf9103edd5b7c0f0bb71f029e0e6c505e8cfc": {
       "excerpt": "True when `fileName` is one of TypeScript's own bundled ambient",
       "approvedAt": "2026-08-13T07:51:10.065Z"
+    },
+    "63faf0c26e0bd0e165bc256317567084347cd8aa96490f4b0260566211efb286": {
+      "excerpt": "packages/api-tree/src/tree-manifest.test.ts — TreeManifest<N> type-level checks",
+      "approvedAt": "2026-08-13T07:54:23.704Z"
     },
     "63ff9f3b84dca0c8904c763d2de26912333368c58760a0f9dacedf7fce567fcf": {
       "excerpt": "A and B share `shared1`; under any Jaccard-distance method a high",
@@ -2369,6 +2649,10 @@
       "excerpt": "Given an object type and the corpus of objects that produced it, check",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "65c215298476b3a475aa8a8d78111fb7d4c4d35010d201f9ff8cb5b90dfc3205": {
+      "excerpt": "packages/api-tree/src/tree-manifest.ts — @rhi-zone/fractal-api-tree",
+      "approvedAt": "2026-08-13T07:54:23.703Z"
+    },
     "66094006f779fadfa519cc5c04565edc7d2194d25ea779fa841974e4a918e954": {
       "excerpt": "Distinct integer leaf values, sorted ascending — clustering evidence for integer…",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -2393,6 +2677,10 @@
       "excerpt": "Detects `status` as an enum.",
       "approvedAt": "2026-08-13T07:48:24.471Z"
     },
+    "668f5d881ce6605a7ab310666a6d59312ae70645e0233995acf49da6ec637a2a": {
+      "excerpt": "In-memory stores for spike",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "670a87be8b5c2834a1ec99fd7919bcca29dc32c672c939a51b882fb40c0037c9": {
       "excerpt": "Field names / array markers from the root. `[\"user\",\"role\"]`, `[\"tags\",\"[]\"]`.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -2405,6 +2693,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:46:30.920Z"
     },
+    "673d4ba73f85b44545da9e8af1dbb8359500916f06d3dfbe1c632330519cf143": {
+      "excerpt": "A fallback subtree that is a BARE `op()` leaf, not `api({...})` — the",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "673eed4153e3c4a67ff158e61e390e519dbd95093de58cebc1eea47e5391bb5f": {
       "excerpt": "A plain string that won't accidentally match date/datetime/uuid/email/uri format…",
       "approvedAt": "2026-08-13T07:43:20.205Z"
@@ -2412,6 +2704,14 @@
     "67548b5ee5c4811cd811e7fa8ec3e4390de8711234999f95cbfea20a1b8c46bf": {
       "excerpt": "eslint-disable-next-line no-await-in-loop",
       "approvedAt": "2026-08-13T07:51:27.443Z"
+    },
+    "67561e6876b3a02614127bcfc6635f9e944a25d491dc82c6b6ca7bff3a0f6dbb": {
+      "excerpt": "Walk one node's resolved TYPE, invoking `onLeaf` for each leaf (a child",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
+    "67cfb9643c42008b1ea57f40af8f766a71ddb9e9bda8258482576822618ca115": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "68171416f3e3d1986c829fef1153b13ad25ee951271d8e093d2da520c5544fd6": {
       "excerpt": "Build a plain query/mutation resolver for one `Dispatch` entry: assemble",
@@ -2441,6 +2741,10 @@
       "excerpt": "── Primitives ────────────────────────────────────────────────────────────",
       "approvedAt": "2026-08-13T07:51:11.417Z"
     },
+    "699c5ed3cf25bdea20d00aa7abb1a89133c685c847e9a3ec8d66aa61ecb00acb": {
+      "excerpt": "Try routes",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "69e0f314294914f78af6c7b103a2a6104d18d058b1e5c4e7047ad30cab1ded39": {
       "excerpt": "...identically whether the signal is on or off",
       "approvedAt": "2026-08-13T07:47:33.023Z"
@@ -2465,9 +2769,17 @@
       "excerpt": "Consume constraint clauses one at a time from the front of `text` (after",
       "approvedAt": "2026-08-13T07:45:21.107Z"
     },
+    "6a948127e0a72cbdca668ff016cfc22d57f0cdbe31f50378b6c3ff3ad8919b1b": {
+      "excerpt": "Try sub-router mounts first",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "6aaaef19ddff3a7418dc978255e021b9e3ce8e65449a56ce1ca603d9e2e182fe": {
       "excerpt": "packages/graphql-api-projector/src/schema.test.ts — SDL assembly tests",
       "approvedAt": "2026-08-13T07:48:26.653Z"
+    },
+    "6b6244181fb2bc5f29202b04aa617b1468d94ccaaa92bebbb53e36691f859804": {
+      "excerpt": "True when a property symbol resolved off a type is REQUIRED (not optional).",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "6b9eb455c701d415c3dedd0b43861af5554a78fa722347354e8c620381087508": {
       "excerpt": "Build a graphql-ws protocol handler over `server` — a factory,",
@@ -2485,9 +2797,17 @@
       "excerpt": "A class with fields only, no methods — meta.interface should be absent.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
     },
+    "6bc253657a864ad345ab13654a089257ecfd6e7a7653f9abb6929d41be8fde85": {
+      "excerpt": "Req in the http layer: CoreReq carrying an HttpCtx",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "6bda035ee8b916c9198072a9f061cd3dad6c175e859ac3702a4f5564e7d0bc55": {
       "excerpt": "── Async stream (AsyncIterable/AsyncGenerator) fixtures ────────────────────",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "6be75e4959fa2e191a221354c543ce8f8a01c0ac3ab3da7b9405d26550760913": {
+      "excerpt": "List all widgets in the catalog.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "6bfdcfde87c2667ecd7021d67cbbd586f671fad56aec1dac535e568b05f0d72d": {
       "excerpt": "Score one candidate discriminant field against the raw elements. Returns",
@@ -2496,6 +2816,10 @@
     "6c1b764fdc39d8395736eeec7dccfb865f50f4a29fe9829c5ea3c289b281bbc5": {
       "excerpt": "Installs the site-wide mocked fetch before any page's islands",
       "approvedAt": "2026-08-13T07:46:43.093Z"
+    },
+    "6c2b520496c95b8ef4f81bc694be5733aa63ed0127e8c55f5e0bc64d433d4ba9": {
+      "excerpt": "HTTP store -> leaf encoding: `body` is typed JSON (dates need an ISO-",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
     },
     "6c574dfd914a5b1a1be086f56e8a51fcbec1f16fa905783b64367d70701751e8": {
       "excerpt": "Tests for createContext (./context.ts).",
@@ -2508,6 +2832,14 @@
     "6c6ba2feb4e87f372d49ae65ce1b5cb60a113f4f32ab770b640ccbcc6d1f74e5": {
       "excerpt": "Brand + more than one refinement tag, confirming all three constituents",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "6c75258f1c8170f0ae18019b55600e909b69c9e25fcd4628d9b4a704f6bdae8c": {
+      "excerpt": "raw, possibly-undefined",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "6c9b7985704dafff52f308dd2671142b305a45db441fc9fc6a6ef4ab5f7732b4": {
+      "excerpt": "(c) Further-generic alias: a local type alias that wraps Result<T, string>.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "6ca32eded9e9d2d6f8c9fc2cc5df925552168b98d83af0a320b22f7cc78c8ab3": {
       "excerpt": "Passed through to `fromJsonCorpus` when inferring from this case's generated cor…",
@@ -2528,6 +2860,10 @@
     "6d3be3298275da2dbd815dbe052c8591ad6ccb393bbb54ea6b1ff284378255fe": {
       "excerpt": "A function returning the reader-facing `Page<T>` union — ambiguous between",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "6d9464cfd4119f1e939a7631eec775218fd66923aa678ace7f7673237cdedaba": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "6da0c8c5fb14f4104668cd559ab62cdb3ccd7c443a14fb896f50f3a618395a0b": {
       "excerpt": "============================================================================",
@@ -2568,6 +2904,10 @@
     "6e9ee2d733c1dfbd6e7c5772cd35f9637a3e4bf54f25579c864a710f0bf8567e": {
       "excerpt": "A stage that decides which occurrences constitute one position.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "6eb6fcece33de7809e52857fb72a71e0ab7cba3dab3b4d03f8bcbb0bcb189964": {
+      "excerpt": "Public entry point: recurses via `TreeManifestRaw`, then runs the result",
+      "approvedAt": "2026-08-13T07:54:23.703Z"
     },
     "6ebd047100f3b790d5d9d999951e86fa8a517735fa288499af926fc019445690": {
       "excerpt": "Present when at least one raw value at this position was an array.",
@@ -2665,6 +3005,10 @@
       "excerpt": "Generate standalone TypeScript client source from a `Node` tree. The",
       "approvedAt": "2026-08-13T07:49:07.403Z"
     },
+    "728139f1db98d519df75787f65fed16298154b9c685cd701660e5518e23bc70b": {
+      "excerpt": "Named-constant op — declared separately and referenced by identifier in the",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "728b51dba9af72fdc7b5c889a236967226eed98b2d326e14ae163b9df72868aa": {
       "excerpt": "Policy: an ordered pipeline of grouping and generalization stages.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -2676,6 +3020,14 @@
     "729905506cb5d96968a1fdaa352273b227bdf310c2d4b1556d1bdcd13efe10db": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:53:52.216Z"
+    },
+    "729eb9018f2ff3f9f2402dd4885ca93ae321c2ae51884a10000e1ae11cbe6907": {
+      "excerpt": "Join a path prefix and the next segment with \".\". No leading dot when",
+      "approvedAt": "2026-08-13T07:54:23.703Z"
+    },
+    "72bb86e2fba018e470348a8500e74d071bb3bc6f074feff1a9ddfe3cf1e28f4d": {
+      "excerpt": "mount: attach a sub-router under a prefix, with optional at-mount middleware.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "72eb340d2b8c79e744f059ba9361191b074ff397505d054e8b592d090a83eb5f": {
       "excerpt": "(c): local TypeAlias → `type ApiResult<T> = Result<T, SomeError>`.",
@@ -2725,6 +3077,10 @@
       "excerpt": "The regex's `([\\s\\S]*)` for the body is greedy across the whole statement,",
       "approvedAt": "2026-08-13T07:45:21.107Z"
     },
+    "753037e4b78a92a43239fc8c047589a0d9fc70999aac2bd1f7a0771dd1782dd1": {
+      "excerpt": "into one object so every child's path is a sibling key.",
+      "approvedAt": "2026-08-13T07:54:23.703Z"
+    },
     "7531a28be5e25a9e028a92b78efdf0e8357f260fff2978acf1b3385eedd3d897": {
       "excerpt": "── Page<T>/CursorPage<T>/OffsetPage<T> (an api-tree pagination",
       "approvedAt": "2026-08-13T07:51:11.417Z"
@@ -2749,6 +3105,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:46:30.920Z"
     },
+    "7611e76f5fcc42507d208de223e37fb424599ee637adfa594036a329043be6ed": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "7670bd7a0711f97e42bba177c119e730931a07f0a7abacba248a713151af047a": {
       "excerpt": "Max recursion depth into nested composite fields — a safety net against self-ref…",
       "approvedAt": "2026-08-13T07:49:07.394Z"
@@ -2757,9 +3117,17 @@
       "excerpt": "packages/graphql-api-projector/src/resolve.ts — @rhi-zone/fractal-graphql-api-pr…",
       "approvedAt": "2026-08-13T07:47:47.316Z"
     },
+    "76a5d7565ebda1d509424f7cafe3ea9dd55e40dbcd9dfd8040bb5a7b2ccd7135": {
+      "excerpt": "The STRING form (phase B) names a base profile, not a decoder",
+      "approvedAt": "2026-08-13T07:54:23.706Z"
+    },
     "76ae53fd49fa4b0ab5e3aede01444e2774f3abe7ece2e2445c91623399b7b08c": {
       "excerpt": "Total corpus size, which some grouping decisions gate on.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "76e29690d7d09ba993882a745cf2e08ec314c1d561bde49a0962b9d8cdd16e27": {
+      "excerpt": "The leaf's own resolved `Node` TYPE (the `op()` return type, BEFORE",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "76eefb056e2e0defdb4895d87a2259c08f98de47674eb1b098fc575823ce2e75": {
       "excerpt": "Strip `| undefined` so `field?: string` lowers as a plain string —",
@@ -2817,9 +3185,25 @@
       "excerpt": "String/number sub-format (`json-schema.ts`'s tagged leaf kinds —",
       "approvedAt": "2026-08-13T07:51:10.065Z"
     },
+    "786eb85461aa903e90d88cfa2a40f1e7ee2eed695c56874250db6aa691857d91": {
+      "excerpt": "add: register a Route on this router.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "78c552a4a17887293118899af0a5144d0f2c704f506ab511dcb1a4f16a40075f": {
+      "excerpt": "PNG magic bytes",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "78f52c50064a8c1f2d69244b9abb7a6a46acc1bb27009be3f859a0fafe56d7c6": {
       "excerpt": "Context handed to every stage.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "79277acdf97f3c40c37653a419158b5c042963ce44334b6d672942b40e6b5e4c": {
+      "excerpt": "Router<TypedVars>: the central VALUE.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "79440e1e976c5d3895c228d96084686fb80c5cbdbb66eefd62de798cd7998d7e": {
+      "excerpt": "A Node value always carries `meta`; skip candidates that aren't trees",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "7960f4ffd91827727ad0608c220dec5c1f50f2b267d44af2e7f06d78f832b982": {
       "excerpt": "Run each `(case, n)` pair in `cases` x `sizes` across `trialCount`",
@@ -2832,6 +3216,10 @@
     "79cfd7d598a9d1614b2ba2eb481d85d332a1f594dbbca71bf429b4bc6cdb4c65": {
       "excerpt": "Unconstrained `T` — no bound to extract, must stay `types.unknown`.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "79d6d0df60dd0d99da30b82e3ba9e9613469d678cd5ae727be2b0f55d6797943": {
+      "excerpt": "The body never runs in any test (`toTools`/`runCli --help` never",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "79f7dd7aba69b7972b634832b1617b7c4afffe8836ad12ac60b0cdca5c4508b9": {
       "excerpt": "\"books\" is itself a branch — its client object has one property,",
@@ -2917,6 +3305,10 @@
       "excerpt": "Extract the parenthesized text starting at `text[openIdx]` (which must be",
       "approvedAt": "2026-08-13T07:45:21.107Z"
     },
+    "7c87a09d8914d2b09dab2fc9b86215aee26e78c27149cfdd59823056f5654f04": {
+      "excerpt": "The returned expression of a top-level function-declaration \"tree",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "7cfe95fdc18b85a65658476dbc864de1210a825170f75a6c70a200365cef1894": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:17.529Z"
@@ -2924,6 +3316,10 @@
     "7d00332b48aa4d36cecd7f4f4c8683e65b51ee1111f39b2694c9686dcae8e5ba": {
       "excerpt": "`true | false` collapses to the intrinsic `boolean` type before this",
       "approvedAt": "2026-08-13T07:51:11.417Z"
+    },
+    "7d1017ff5e039acd353753f780fcb835ac8a0f3ef43265e486edf2ba45e99bf5": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "7d1a35a7cd9587d5a69cd52079c442742de16208c84bd56e59285794960bd1e9": {
       "excerpt": "`createGraphQLServer`'s return value.",
@@ -2973,9 +3369,21 @@
       "excerpt": "The JSON-Schema shapes this extractor produces. `$comment` carries a",
       "approvedAt": "2026-08-13T07:51:10.065Z"
     },
+    "7ea903617fd1115f0a31e59f5b573c9a9870116d9af87a02ad669ec939b28ae1": {
+      "excerpt": "Promise<Result<T,E>> → syntax path strips Promise first, then unwraps Result.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
+    "7eaab190578e9a73c2b79a57c692efcda5ea9b69c92e778eedd21f69a7eba2eb": {
+      "excerpt": "The /admin/me endpoint reads typed ctx.vars.user.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "7ec49873211afd58d7cb33a3c908e0b74177b31741111c7a487732d4fb0373fb": {
       "excerpt": "null + T → T with nullable meta (common pattern)",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "7ef28dfb382f1e05712884ed033e20da63ea0eba95d653efabe1cf8840632723": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "7f4ff8240a9335b4b5845488f943bcfcbce9cec784912a44a10a88ab2455f238": {
       "excerpt": "Structural mirror of @opentelemetry/api's `Span` — only the members this",
@@ -3001,6 +3409,10 @@
       "excerpt": "Absolute file path -> recorded state, as of the last successful build —",
       "approvedAt": "2026-08-13T07:53:53.077Z"
     },
+    "804f7b263415aeb584d170b6b2b78ade68e15334084d86dbd41f52cc1781f018": {
+      "excerpt": "Find every exported `api(children, opts?)` TREE candidate in `source` and",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "80612c20a72de00cd31b5a6152b5e10d19fa16d2d371125a53963f18df4494bc": {
       "excerpt": "`meta.additionalPropertyType` — the dict-entry value type, distinct",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -3008,6 +3420,14 @@
     "81172d97ee99c5a685d30542f1ee5d2ac3ea7d5a3e488333da9094c1592e3d17": {
       "excerpt": "── Object-like unions: lower to `types.union([...variants])`, each",
       "approvedAt": "2026-08-13T07:51:11.417Z"
+    },
+    "817dc04468b56f5095e24efaa5c942301fe4be81a21734ed5a4204543faf8d6a": {
+      "excerpt": "Apply this router's own middleware chain",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "81832155e99d5dd7205785478b9bf7a7c1dc42148bc556b874f7f120c5565f5d": {
+      "excerpt": "RouteSchema: declared validation for a route (opt-in adapter layer).",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "818974db78343fd3cb36d9ae13a3788cf1f105ecfdd61c0b2cceae6b892454e3": {
       "excerpt": "One placeholder value per top-level schema property, keyed by its JSON",
@@ -3024,6 +3444,10 @@
     "8201ce73bed7eafc06033ede82d2f509566dd77bc6ac1b99b39d6e3a309f4fac": {
       "excerpt": "HTTP method, e.g. \"GET\", \"POST\".",
       "approvedAt": "2026-08-13T07:51:27.448Z"
+    },
+    "822d1877f3f4bb1462ed513725a81821a25b5309231f32666ec98ded633f7625": {
+      "excerpt": "Branch-level meta.mcp.segment: overrides only THIS child's own",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "82ba323bb628a1ae31ec069b874bd0def1c13d9877c1e09207164b694bf031ab": {
       "excerpt": "============================================================================",
@@ -3053,6 +3477,10 @@
       "excerpt": "Key-signature clustering: group samples by their exact key-set signature",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "837f6b1c47431572f3a6ed36c773976593428c4c2b52a91e6c604988e3db035c": {
+      "excerpt": "True when `entryFile` exports at least one `api(children, opts?)` tree at",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "83aea3b4e79ee53ae94f39f479f4cbf588341c664c2f6205544a94ece340dfd7": {
       "excerpt": "`\"/books/:bookId\"` -> `[\"bookId\"]` — path-param names, for splitting a combined …",
       "approvedAt": "2026-08-13T07:51:27.466Z"
@@ -3060,6 +3488,10 @@
     "83e559a032cf233e6fca0ad8682d6e51121b6b7c335edf68d685c065d8ae961a": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:48:02.799Z"
+    },
+    "83f0d440ae80bdf7a35626385800e274773049fdd8298fd0bb054e1c48625598": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "83f668d51e43c74127bd621c80f4fea105c8b13b061cf733a91586ad473ea882": {
       "excerpt": "Files that differ between `base` and the working tree. Compares against",
@@ -3080,6 +3512,10 @@
     "84958f167576571a054d07af0f9b9dd0b25e7813f9398abd4eaa1bf410e270b0": {
       "excerpt": "`T extends { name: string }` — an inline-object constraint.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "84a84b1e1bd732ed523c7e7eabb00f44c65e4224401c80b327736f9e6d60b9c6": {
+      "excerpt": "CLI store -> leaf encoding. All three (`flag`/`path`/`env`) map to",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
     },
     "84ae1611c4c0e4b4fdb1d9b0027c61f43dd99597495ce18963b3f712a1287206": {
       "excerpt": "`id` is unique per sample (K === N) — the cardinality gate must",
@@ -3189,6 +3625,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:48:26.652Z"
     },
+    "89246d1405c032232407672bcf80c2a86326185ee7f4fc362d05fdf07d62a44b": {
+      "excerpt": "A minimal `ParamSource`-shaped override, not imported from `input.ts`'s",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
+    },
     "89274319647d5fd63f9a4692bc92c15f270be1157b12a06fb0625a4c92e07afb": {
       "excerpt": "(a) Direct import: Result<T,E> annotated return → syntax path extracts T",
       "approvedAt": "2026-08-13T07:51:10.076Z"
@@ -3204,6 +3644,10 @@
     "89856a893808b6672a26ff2fc56dee15166ee9bc4e82197f63b04917f5518982": {
       "excerpt": "http.post bundle: checkout/start op authored with http.post",
       "approvedAt": "2026-08-13T07:52:59.088Z"
+    },
+    "898c7595cc2010be58ef31da80dac1530cef1eeecf223e47334d596be9653ce9": {
+      "excerpt": "StandardSchemaV1 minimal interface — enough to represent what the http",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "899c170ad8c307a89a2f4fb9ff1f6bd9b6c232a43826b2d05a1bf5f373f84ff4": {
       "excerpt": "A GraphQL resolver-scoped middleware — wraps the handler-invoking function `next…",
@@ -3269,6 +3713,10 @@
       "excerpt": "A `readonly` field alongside a plain one — must set `meta.readonly` only on the …",
       "approvedAt": "2026-08-13T07:47:59.023Z"
     },
+    "8c239aeb9fd45f8485bea272da8f07e3e1f045d255efbc3f93b710c52591ce73": {
+      "excerpt": "mw controls whether next is called: an early return (e.g. 403) skips",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "8c6a4c0fb8152d0b9f1f2b48f6459fd8d2eda945c620ad981bc8d9da87d43039": {
       "excerpt": "Decide whether a field with K distinct values across N samples is",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -3297,6 +3745,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "8cf014619b2670c39dc37097c599a888caf77911e1834f01458127e9c99f924a": {
+      "excerpt": "Extract the tool-name → TypeRef map for every exported `api(children, opts?)`",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "8d12e52f70e1e22f8d2109937b864ac7ba738b7e3daf032889113ee834947857": {
       "excerpt": "Choose one member of an `enum`-shaped leaf's declared members.",
       "approvedAt": "2026-08-13T07:48:24.363Z"
@@ -3316,6 +3768,10 @@
     "8daadb0e0e9b7db9b1716e43788979c72791cff26d025e48c62b0f7980ef3faf": {
       "excerpt": "N=50 clears the threshold comfortably — commits to literal.",
       "approvedAt": "2026-08-13T07:46:30.920Z"
+    },
+    "8db8a22575634bd33248ba43e38bf96231c461481a4d5e89252da8c935c83d24": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "8dbb2fb8668f7cffdcb67b403e235e964acbfab5d11d474a8eb9df9de7831945": {
       "excerpt": "Each leaf carries its own readOnly tag; tags do not inherit from the",
@@ -3344,6 +3800,10 @@
     "8e43819163b419c97f0c7bc70e3ddb6fbb01a1dea5b837f42ed0c667948c81c3": {
       "excerpt": "Compare an inferred TypeRef against the original schema it was (via a",
       "approvedAt": "2026-08-13T07:48:24.363Z"
+    },
+    "8e74339caa945f9033bbaa85474ed56db2676966e3aebb4462e2bc83369db089": {
+      "excerpt": "Run all acceptance tests",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "8ee887bb3a51d4c01372f63b8d3076db355c52a4bf728789066f3713a2dca0e4": {
       "excerpt": "Cast needed: `window.fetch`'s ambient type is the full `typeof fetch`",
@@ -3377,6 +3837,10 @@
       "excerpt": "enum shape always recovered when the signal is on",
       "approvedAt": "2026-08-13T07:47:33.023Z"
     },
+    "8f8c367f69f52834172e8b89a3182bad05f27cb61a86e4ee22257e483c6e0738": {
+      "excerpt": "A NAMED parameter type (as opposed to every other op below, whose input is",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "8fa9c6c6b54b1a5e67cb35bbb3b78792c35fb4c950ba5352124626eb6974e9e4": {
       "excerpt": "GET /books/{id} — read, placed onto the fallback wildcard",
       "approvedAt": "2026-08-13T07:52:59.088Z"
@@ -3396,6 +3860,10 @@
     "8ffdbe6eed9f96ad95672125c5738beb212759712c07c6b772d855cf93268f42": {
       "excerpt": "1-based",
       "approvedAt": "2026-08-13T07:51:06.505Z"
+    },
+    "9017481ac0b6ccd6b3e8c1f90d2f24e65f32a1d56a4f5e01bafd457eb55b3533": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "90199e8a1989719851d386bdd24a6f563223f0909660b418acff9593e4689a05": {
       "excerpt": "Does `schema`'s ground truth contain the shape `signal` is meant to detect — the…",
@@ -3465,6 +3933,10 @@
       "excerpt": "Comment/implementation-only edit inside leafTwo's handler body — no",
       "approvedAt": "2026-08-13T07:53:53.083Z"
     },
+    "926eefa05d79e010f7f6bc55f74c7159c4784d27d4af11697b17c84b1fadb692": {
+      "excerpt": "packages/api-tree/src/__fixtures__/wire-apply-validation-sharing-input.fixture.t…",
+      "approvedAt": "2026-08-13T07:54:23.709Z"
+    },
     "929c03625506cc567091d29de255b8c70433cbfdc607e1b2bc773fac4d3d9b0c": {
       "excerpt": "── Generic type parameters — extract constraint bounds ───────────────────",
       "approvedAt": "2026-08-13T07:51:10.076Z"
@@ -3489,6 +3961,10 @@
       "excerpt": "Normalize a bare registry (GraphQL SDL, SQL DDL, CQL, Cap'n Proto,",
       "approvedAt": "2026-08-13T07:50:23.795Z"
     },
+    "93c1738af560c8f9e03633bbec7e20d9a58f5190bd0d826eb852e9d905bb9dcb": {
+      "excerpt": "Relative path pattern (e.g. \"/:id\" or \"/test\"). Supports :param segments.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "93e0eb92c652f697e2c97b0888bfaef3e9abbbec6fdacc1310b1729620956db3": {
       "excerpt": "Every external (non-workspace, non-relative) specifier reachable from",
       "approvedAt": "2026-08-13T07:44:41.540Z"
@@ -3509,6 +3985,14 @@
       "excerpt": "Start a CLIENT-kind span for one outgoing call and run `fn` inside it. Ends the …",
       "approvedAt": "2026-08-13T07:53:53.086Z"
     },
+    "942c2c96d86518701bb37019d4b30d95a294d9541d8660ebbd2ca8163d32a732": {
+      "excerpt": "Design spike for a surface-agnostic, runtime-agnostic web framework.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "9432383c735ad34617a6e4885f9c47ec2afc6c4604b37f43809be2e7e69d3576": {
+      "excerpt": "The true \"no match\" signal (null) only originates from final() at the",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "9453c6c5a93927814da0b928decde7b1938bb5296430426b6e0489fb30fde15c": {
       "excerpt": "Beyond 32-bit",
       "approvedAt": "2026-08-13T07:43:20.205Z"
@@ -3525,6 +4009,10 @@
       "excerpt": "Corpus-level JSON inference: given multiple JSON values, infer the",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "952ea0e889ccb16e3036f0ad6a64a9c5649884cd418853c0bc6b7c52672e578a": {
+      "excerpt": "MountedRouter: a sub-router mounted at a prefix with optional middleware.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "95943fce8c4f87bf45e79e8f3061143e9a8a0eed2dfa068cc39672922e12baad": {
       "excerpt": "Map<K, V>/ReadonlyMap<K, V>: same rationale as Set<T> immediately above",
       "approvedAt": "2026-08-13T07:51:11.417Z"
@@ -3536,6 +4024,10 @@
     "95eb2eda2af23ab383603ca68a7eed5307ee1d05f9a39ffb0bdae5040dbd9695": {
       "excerpt": "A second mixin constituent.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "960eb9247981934a37508d04d31472c52e73a73fa40beb814d903dcc3cf8b338": {
+      "excerpt": "Same tree, HTTP hooks `cents` but CLI does NOT — the multi-protocol case",
+      "approvedAt": "2026-08-13T07:54:23.708Z"
     },
     "9613642b427fbff5c2eca11f11f291c6959479e2009d12247693f72f4d074b14": {
       "excerpt": "============================================================================",
@@ -3568,6 +4060,10 @@
     "97420bf753c9df3ad3f435028917374a584bcc23b6c9bbdb147b20a1ca45d5c3": {
       "excerpt": "Mirrors @opentelemetry/api's `SpanAttributeValue`.",
       "approvedAt": "2026-08-13T07:53:53.086Z"
+    },
+    "974a63c8062bf70b3296e45e549327f23bfc97ca05370effbd94967d64ad2bf7": {
+      "excerpt": "Street address line.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "97973350411cf9175717317802995634c058f9f5a926009a568c3a45d58d3601": {
       "excerpt": "============================================================================",
@@ -3637,6 +4133,10 @@
       "excerpt": "Named type declarations a `ref`-kind output TypeRef may target — needed to expan…",
       "approvedAt": "2026-08-13T07:49:07.394Z"
     },
+    "9b0c92d9642aedd34cb94439b36307e3f82d93152e4c4eff4be4584f5de1ddf7": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "9b2128b04074e40f84a4f1d40b89ec1e3f263ff13fb41c5bfed6c487dd3675f2": {
       "excerpt": "A second branded string, to confirm brand values aren't confused.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
@@ -3644,6 +4144,10 @@
     "9b26588955e3596db90c0ab3d221642e3347f790bcf0cf27f11b2eeba3e1c416": {
       "excerpt": "no enum anywhere in the schema",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "9b2def70f53615ddb58b7091e0f24474da88c843cb51dcae048fbb767752dd73": {
+      "excerpt": "Derive a leaf's wire-profile assignment for `protocol`, from that leaf's",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
     },
     "9b45eba3dd8695a897cb88c92c5f689a7d1701caac1cf4488afa123a7c55bbaf": {
       "excerpt": "The built-in pipeline. Same steps, same order, same behaviour as before the",
@@ -3684,6 +4188,10 @@
     "9d1e1d3ad1511e7235a5950c77dc32d5ee2c6f0aee578357e3a2275bbcb47ab7": {
       "excerpt": "Auth middleware — takes ctx with no extra vars, calls next with AuthVars added",
       "approvedAt": "2026-08-13T07:53:52.216Z"
+    },
+    "9d2c350d2ed87025adfd6a247756bc4648ed0878a810856c32382e7e4e58c3e9": {
+      "excerpt": "A NAMED parameter type (`BookQuery`, declared above) — see its doc",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "9d34578a5ba06cc469870dfcb3ce261b8f8fad39e73c0f3b8ae0f76aa55e8598": {
       "excerpt": "Add a new book. POST /books/add",
@@ -3737,9 +4245,17 @@
       "excerpt": "1 dirty value",
       "approvedAt": "2026-08-13T07:48:24.471Z"
     },
+    "9ec87546ecb6ce7efa4b2608471a98b7810309f0eb47531aa7c8e5afbd8ee733": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "9f5006d43e601d8eea7c3474f19e0623193aea325bb1ed5e63cbe94ad8e3ddd9": {
       "excerpt": "`void` is reachable here via a callable's return type",
       "approvedAt": "2026-08-13T07:51:11.417Z"
+    },
+    "9f74ded5bc89a0c7a171bc9cd69b89d89d52dbe2afa274ad45ae4f315f4cf0ea": {
+      "excerpt": "Named-constant branch referenced by identifier.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "9f84419835067a238ca3bfbe9d8323e49569a4d1c6d1f928e72bef98387f8cb8": {
       "excerpt": "The nearest ancestor kind with no parent of its own — groups width/format",
@@ -3833,6 +4349,10 @@
       "excerpt": "Dict detected. Separate common keys (record fields) from varying keys (dict entr…",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "a31f2af8aaf09a9b8da62629dfbd0dd2816cdaa123b2cb71828385921ba36f6a": {
+      "excerpt": "Raw query param demo — no capture combinator, direct access",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "a32fca187fc2625aeb5381f2be0cd7cf1c5d5d75412af34a54733a04c21eef76": {
       "excerpt": "Present iff an `http` extractor was provided — drop directly into `PresetOptions…",
       "approvedAt": "2026-08-13T07:53:53.090Z"
@@ -3921,6 +4441,10 @@
       "excerpt": "A union mixing literal types of different kinds — union of literals.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
     },
+    "a74d421fadde1ffd83efa56323f7d37676b9b495cf2cf58cc2d9b2027c79beac": {
+      "excerpt": "packages/api-tree/src/wire-apply-validation-hooks.test.ts",
+      "approvedAt": "2026-08-13T07:54:23.707Z"
+    },
     "a76240f78f5ebb1fcd74be5230a07da2801a61df16b38f26f5ab1112c1714d74": {
       "excerpt": "A single string literal (no union) — must not widen to plain string.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
@@ -3940,6 +4464,10 @@
     "a7b0fcbb918c25ae3545a5467cb650a12e4c926cb422cdf3d35159a0ac300d04": {
       "excerpt": "JSON-serialized distinct leaf values — the enum evidence's K.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "a7e8ef91959b33936044a755242d041b8b3e32a9313dcb8487f856d290ecf6a8": {
+      "excerpt": "RouterMiddleware: a middleware function in the http layer's terms.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "a806a41dcc4881d6e2dc502e2a4fec3a50526020f1e916c882ed96c67f36df86": {
       "excerpt": "Evidence gathered for one structural position in the corpus (the root, an",
@@ -3996,6 +4524,18 @@
     "aa0186fe54b937a3b7ef646343f9568d7ea92f0ef7d0575b12656b13559722d9": {
       "excerpt": "status: K=1, N=5 clears literalMinSamples -> literal, matching the integer path.",
       "approvedAt": "2026-08-13T07:46:30.920Z"
+    },
+    "aa0aab4385403696996ae2cbd1fd68defe044948bcbaded883b5fa82c2ca5051": {
+      "excerpt": "Pass = \"not me, try next handler / return 404\".",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "aa15410461bde4aa26e8babd6f838fbf42f70837a90690a293ee38ebb70ae0cb": {
+      "excerpt": "packages/api-tree/src/tree.ts — @rhi-zone/fractal-api-tree",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
+    "aa3fcb80036a6e3831647e339901d844565684910bea12473b8d994451406b2f": {
+      "excerpt": "(a) Direct import from core's package root.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "aa55cf775484efc2d9ff8e898ed6243dcf0f99cee1e51cd9e99fa37562158a92": {
       "excerpt": "NEGATIVE A: validator output missing `email` — must be a compile error",
@@ -4061,6 +4601,10 @@
       "excerpt": "Bootstrap resample count per CI. Default 2000.",
       "approvedAt": "2026-08-13T07:48:24.363Z"
     },
+    "ac4941e2235a2824e51bef22862425bdbac4b0c3bc86b5dfe1f8f08b6cb74e5a": {
+      "excerpt": "A leaf with a STRING-form `encodingMap` override only (no function) —",
+      "approvedAt": "2026-08-13T07:54:23.708Z"
+    },
     "ac5eb55c948afa390fad8a91c031e817885f425ed0ed14b2a4218cb605aa4895": {
       "excerpt": "ID value style: \"uuid\" (random hex UUID) or \"sequential\" (zero-padded counter / …",
       "approvedAt": "2026-08-13T07:48:24.363Z"
@@ -4088,6 +4632,10 @@
     "ada1d95aaece2c70469753687b1000448f8520ebf381d1473930c7b0b78375e5": {
       "excerpt": "Wrap each field's handler call so it runs inside its own",
       "approvedAt": "2026-08-13T07:47:48.751Z"
+    },
+    "adc1613ad9dd05221d94a6178ba7ec14cd88240c4a2fa3ff2b601557bdd1309c": {
+      "excerpt": "Read a string-literal value at `meta.<namespace>.<key>` off a resolved",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "adcaf934561cc345810ab2bd7a672d278cccdfe221e930707694762811ebad03": {
       "excerpt": "Promise<Result<T,E>>: syntax path strips Promise first, then unwraps Result",
@@ -4125,6 +4673,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:45:21.107Z"
     },
+    "af068728f479042a81580dc6892eada3faded2cf1fe80aed445957dc3a3dbffb": {
+      "excerpt": "Read `meta.<namespace>.sourceMap` off a resolved `Node` TYPE — one level",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "af11c9c8e4e78f61649d8e0d7d8694df8ed77488eeac4d78444627a557aa4303": {
       "excerpt": "Locate an exported const's function-typed initializer node by name.",
       "approvedAt": "2026-08-13T07:51:10.076Z"
@@ -4152,6 +4704,10 @@
     "afc878e123efa958925ef423e1b2f56aa1a36f05be0694a45f70a41bd123ed25": {
       "excerpt": "--- Python --------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:50:23.795Z"
+    },
+    "affc727db929389ee7e2ceeba164190ce35527f3c1ac480adb5b418b00fec666": {
+      "excerpt": "packages/api-tree/src/wire-derive.test.ts — @rhi-zone/fractal-api-tree",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
     },
     "b027656d7d76076f41a78868e6eb1b168e477ff44f08818f3ebec486641ec5c1": {
       "excerpt": "(b) Barrel re-export: `import type { Result as ResultFromBarrel } from \"./barrel…",
@@ -4196,6 +4752,10 @@
     "b1df167014fa1bca8556b8959d0d64f1b01aae8626d4862c791c1e8c9483983e": {
       "excerpt": "Structural intersection (`json-schema.ts`'s `intersection` shape kind",
       "approvedAt": "2026-08-13T07:51:10.065Z"
+    },
+    "b2297f482efdb7e4470182949c092220a0e2250e32523c891519cacb0437adec": {
+      "excerpt": "Age in years.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "b28c1c7aeeb178a946038b7da3e5d250d38bbc3afe5e223313506b29fb023a12": {
       "excerpt": "null + one other type -> nullable",
@@ -4341,6 +4901,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:17.529Z"
     },
+    "b82f16b3a632805484e262463719c0abd9ad291eeb7d84879a834444607e3fd1": {
+      "excerpt": "A handler returns a Response directly, and its body can be any BodyInit, so",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "b8475d104945c0bb1976f89cea71981fea9fbc57b9c6f3605284eae7d8c60876": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:43:46.976Z"
@@ -4401,6 +4965,10 @@
       "excerpt": "A union of object types with no shared literal field — no discriminator.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
     },
+    "baf509055e8cb5126e74068cddd362e27882a3af14f9346d2209fbe15ecc2fe6": {
+      "excerpt": "`encodingMap` STRING form (base-profile-name override, phase B) plus its",
+      "approvedAt": "2026-08-13T07:54:23.708Z"
+    },
     "bb24b06789b31e2039aea0ec5490be3540cb582fcff483387a239d503300e606": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:27.466Z"
@@ -4411,7 +4979,7 @@
     },
     "bb39fdf435385fefd79249f2fbe264318f0931ba865dda6a491d16396384d5e4": {
       "excerpt": "eslint-disable-next-line @typescript-eslint/no-explicit-any",
-      "approvedAt": "2026-08-13T07:51:27.450Z"
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "bb61c9b2f3ebf57cf3d3a6a1e61b54ffb10bae3100f6246826dc7ace0ee4ccdc": {
       "excerpt": "The real runtime projection resolves the same derived schema under the",
@@ -4521,6 +5089,10 @@
       "excerpt": "A field whose type is an AsyncIterableIterator — the return type of an",
       "approvedAt": "2026-08-13T07:47:59.023Z"
     },
+    "bf5621ad49549f4615dc7f1490f19441c67e9708e4a9a288eb002d3a04e151e4": {
+      "excerpt": "packages/api-tree/src/__fixtures__/wire-apply-validation.fixture.ts",
+      "approvedAt": "2026-08-13T07:54:23.708Z"
+    },
     "bf654d68c01ea042aa628d55bd9ac61e2405b0e30e7e933bf57582692c4529c9": {
       "excerpt": "Astro only hydrates a component into its own independent React root when",
       "approvedAt": "2026-08-13T07:46:43.096Z"
@@ -4553,6 +5125,10 @@
       "excerpt": "See the individual profile interfaces for what each varies and why. `{ kind: \"un…",
       "approvedAt": "2026-08-13T07:48:24.363Z"
     },
+    "c101582e1018b9c2993286136c3338498b1645b73382338e8a0e3b41a05a935a": {
+      "excerpt": "packages/api-tree/src/__fixtures__/tree.fixture.ts",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "c1197ba66e56072aeaa5fcc1afc40978790a8b3eae9dc1b382545f6b4d0623be": {
       "excerpt": "Build a runtime GraphQL client from a `Node` tree and a `GraphQLTransport`.",
       "approvedAt": "2026-08-13T07:49:07.394Z"
@@ -4577,6 +5153,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:46:30.920Z"
     },
+    "c1d5ccee99fcbc4dc1bfe954349f74d1b473ce837dcef20ea8029aaf6b311d12": {
+      "excerpt": "The single `return <expr>` shape — the expression returned directly, body",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "c1d5e7b14a3701db6e602e9c995ae3bd89aded5cea2371130b0fd70d60b2a651": {
       "excerpt": "sibling nested field with no JSDoc stays undefined",
       "approvedAt": "2026-08-13T07:51:10.076Z"
@@ -4596,6 +5176,10 @@
     "c25bf17beb7ffae72f8a37652a97a68d61252ae13997de47e3fd976212ba9aea": {
       "excerpt": "── Shared-symbol branded type fixtures ─────────────────────────────────────",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "c25c210cb68f063497a70ec722c9c1a7c7f16943974917c276dce1da818965e6": {
+      "excerpt": "Create a new user account.",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "c29a923e5f301263dffd97385e51f5ab68ab12550fbded9cba185647a59e0663": {
       "excerpt": "── Branded intersection refinement tags (MinLength<N>/MaxLength<N>/… from",
@@ -4621,6 +5205,10 @@
       "excerpt": "shape axis catches this",
       "approvedAt": "2026-08-13T07:47:33.023Z"
     },
+    "c3b3e76a2e33c33f662e45cabb45d52e646f168e0fdb68f9af001ac49bdc992b": {
+      "excerpt": "A real, hand-built `Node`-shaped runtime tree carrying a real decoder",
+      "approvedAt": "2026-08-13T07:54:23.707Z"
+    },
     "c3dab8631b58d8101762dd64e622e9a25254075dabee232b04cc04722a514b36": {
       "excerpt": "Starlight embeds <ApiExplorer/> (a React component) via",
       "approvedAt": "2026-08-13T07:46:43.093Z"
@@ -4633,6 +5221,10 @@
       "excerpt": "A function returning `AsyncIterable<T>` directly, `T` a nested object —",
       "approvedAt": "2026-08-13T07:47:59.023Z"
     },
+    "c4cb97b807610430cead04c961c78b28e56b3b0fd52ccd6a4fb02f90d739ef82": {
+      "excerpt": "Validate against section-specific schema — declared per-section, not per-route",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "c4f8da2591c60394cc5fb64b40e6b445f97f46afbeb242c7e2725caafa9f786d": {
       "excerpt": "`Pattern` tag over `string`.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
@@ -4640,6 +5232,10 @@
     "c513b07dd6fe45bf9618c7b4eea03c46e4082d8ebcd10cdab92ea583c2c84d1a": {
       "excerpt": "Present iff a `graphql` extractor was provided — drop directly into `CreateGraph…",
       "approvedAt": "2026-08-13T07:53:53.090Z"
+    },
+    "c555a42cc640652139da5401579fde7daef8db2bb6f35d0ed03f2cead6450329": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "c57437215f857d9c20806ca61a54f6bfb473e380e8504fa444c607672f7e19f6": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -4741,6 +5337,10 @@
       "excerpt": "`cursor` is now `Leaf` itself (`{ value: number }`) — one more field hop.",
       "approvedAt": "2026-08-13T07:43:46.976Z"
     },
+    "c980924284d6230a68b1503aae6e2ebcb61921cf7a29afbb172f8419385ca7f1": {
+      "excerpt": "Leaf-level meta.mcp.name: full override — the usual",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "c99d70e5e6bdbe84b6a5248d5ab4ee78018b405815a17b28bb3deffa11669018": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:52.216Z"
@@ -4773,6 +5373,10 @@
       "excerpt": "number + any integer kind → number (integers are a subset of numbers)",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "caabea4a429528127501f1548ad886cd43ff56cd764f6a2e1b0945396f5e2901": {
+      "excerpt": "use: attach middleware to this router (applied to all routes).",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "caf70e25387d66c505268addff961e700b9ced7c3891dceae2fb858c4db0cbb1": {
       "excerpt": "For optional fields, sometimes omit them",
       "approvedAt": "2026-08-13T07:43:20.205Z"
@@ -4784,6 +5388,10 @@
     "cc2b03c04c476366eaa7d49d919fe5ff2ba9e8b06b26f92ee21f0eb44fe0ccfe": {
       "excerpt": "Number of top-level corpus values.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "cc6d79f86a7d5859726868e4ef08ab77f72a55797ef205122eab1952a0610c1a": {
+      "excerpt": "Apply mount-level middleware, then dispatch into sub-router",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "ccc6037dc6a4219cde5ee17ec676ceadb95c1845b22b7d36e5f5bfabce6b2254": {
       "excerpt": "Custom resolvers for specific evidence patterns, tried at every node after the b…",
@@ -4804,6 +5412,10 @@
     "cd2a28f742f520ce3cf0ce4815af005a020dfe96e459ca303731e3b8235a2b43": {
       "excerpt": "Format an `OtelSpanContext` as a `traceparent` header value (version `\"00\"`, per…",
       "approvedAt": "2026-08-13T07:53:53.086Z"
+    },
+    "cd6e9eb56c9f0be40e9375426239bb0ad4634fde3905250088e8e41fddf615df": {
+      "excerpt": "Merge captured params",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "cda16c5befe7100d66a77358c8988025b4e57f2c6329c5255c8600e11a20167c": {
       "excerpt": "Walk `node`, wiring each leaf's handler through `runServerSpan` — see the",
@@ -4853,6 +5465,10 @@
       "excerpt": "Tiered re-validation — see the warm-check-cost doc block above. Fast",
       "approvedAt": "2026-08-13T07:53:53.077Z"
     },
+    "ceb80b85d5a18fa642345b4df808de4fd46160fff708f305eb71265bf2a01f70": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "cecf40a79e5fd100ef0dc92ec33d592d39c3ebf889eb0a9042f1e9f45fbbf3b2": {
       "excerpt": "A field whose type is a callback — lowers to types.function, not punted.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
@@ -4864,6 +5480,10 @@
     "cf1c8af942744cbc318bdc441edd2d6052caddc1ce22a7ef003bb7c5b031626a": {
       "excerpt": "1 required + 9 optional fields: omitCount = round(0.1 * 10) = 1, so",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "cf2fb1861bb5f8b493db477d7c711532fc521e24ebaeabfeeef56afb4b0fe342": {
+      "excerpt": "@ts-expect-error — cents resolves to the \"query\" store; its",
+      "approvedAt": "2026-08-13T07:54:23.706Z"
     },
     "cf34932be546146997a18f8d190a6b2a9afdb55bb7dbf1f9b2ebc11b3e0d157f": {
       "excerpt": "narrows to uint8",
@@ -4889,6 +5509,10 @@
       "excerpt": "Deterministic seed. Same seed + same schema + same n -> same corpus.",
       "approvedAt": "2026-08-13T07:48:24.363Z"
     },
+    "cfb06911d7328a0b53afbd9ca156d875fa67cf30dd14e6614de8129c8a2f3fbc": {
+      "excerpt": "CoreReq<Ctx>: minimal opaque envelope.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "cfb67f698155cd0ab9b762c2a1b25b702be9b0cc79643329505ef91eff589ba8": {
       "excerpt": "A genuine 2-member union that isn't a Result: no \"Result\" identifier in",
       "approvedAt": "2026-08-13T07:51:10.076Z"
@@ -4901,6 +5525,10 @@
       "excerpt": "Setup failure (parse/validate/coerce) — a plain ExecutionResult",
       "approvedAt": "2026-08-13T07:53:17.526Z"
     },
+    "d05174b34acdc599c2f38a24d00cb556ee665e4d782840ba08ee88686297445f": {
+      "excerpt": "The result of deriving a leaf's wire profile for one protocol:",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
+    },
     "d051c1c4c8ce04bd47eb7167fee38ffb69625332172dbb09843521da13cf73be": {
       "excerpt": "Property 5: leaf type stability — re-inferring a leaf value gives the same type",
       "approvedAt": "2026-08-13T07:43:20.205Z"
@@ -4909,9 +5537,17 @@
       "excerpt": "Roll up only the axes that had something to find in the original —",
       "approvedAt": "2026-08-13T07:48:24.363Z"
     },
+    "d09fb50a2e6ae68eb7656c2f0f40bc2de1b4287de354287d45fb49cbe9e45c27": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "d0af1274b1802ae0d7eac6ad6a16f4ab716f84fc637050a851fd013d15bc5887": {
       "excerpt": "Sanity check the paired precondition: same case name/n/trialCount on",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "d0fa056f217ce1de50634121e20b29221019f9330c80f6676be207e28b6818d8": {
+      "excerpt": "Reimplementation of `http-api-projector/src/decode.ts`'s",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
     },
     "d14143e7c0890e2f9d7ced2ceb35eadf3861b8bf777b32155de74a2f2cc903d7": {
       "excerpt": "packages/graphql-api-projector/src/source.test.ts — graphql.source() tests",
@@ -4993,6 +5629,10 @@
       "excerpt": "K=6, N=15, ratio=0.4",
       "approvedAt": "2026-08-13T07:46:30.920Z"
     },
+    "d2ea13f1554335beeba6169f97d7448bc460c760d2a983112eee064b75dcbfde": {
+      "excerpt": "Extract the tool-name → schema map for every exported `api(children, opts?)`",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "d3293bbd91d41d8344a56d50f256c2f83504d2c2dc47cc02308b1bb48b51fa01": {
       "excerpt": "@rhi-zone/fractal (tooling, not a workspace package)",
       "approvedAt": "2026-08-13T07:51:06.510Z"
@@ -5041,6 +5681,10 @@
       "excerpt": "Derive the input TypeRef from a function-typed node (arrow or function",
       "approvedAt": "2026-08-13T07:51:10.065Z"
     },
+    "d482e027b0e78f07f1aaea21b5a85ec14333f8a569fa5ea97f363c9796f13fd2": {
+      "excerpt": "Extract the tree-PATH → schema map for every exported `api(children,",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "d4841d38ce953e3b6e65fd722a243e44174a29da97c6049b30d7e9756b85b553": {
       "excerpt": "1b. No auth header → 403",
       "approvedAt": "2026-08-13T07:53:52.216Z"
@@ -5048,6 +5692,14 @@
     "d4cc71ced2ee4dc315d00716a6fea96ff1cac90b1bf37672e6a2a497d8239190": {
       "excerpt": "Shared fixture Node tree — the single source of truth for both:",
       "approvedAt": "2026-08-13T07:44:57.222Z"
+    },
+    "d4d7665d9ec27487421c12791995ffe19c4a28ea9db195e12f9783bd48b8a283": {
+      "excerpt": "packages/api-tree/src/wire-of-check.test.ts",
+      "approvedAt": "2026-08-13T07:54:23.706Z"
+    },
+    "d509054c2665d6b7804e10658f7c36006ab789604f60ade6fc5d53774b755362": {
+      "excerpt": "A named-constant branch — an `api(...)` call assigned to a const and",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
     },
     "d51dce476ce4fb30dae60b244c1b50b66451fc2e874ef3747e3ea81661d15609": {
       "excerpt": "Derive the input schema from a function-typed node (arrow or function",
@@ -5101,6 +5753,14 @@
       "excerpt": "Per-axis distribution summary — mean/stddev/CI. Keyed by `EvalAxis`.",
       "approvedAt": "2026-08-13T07:48:24.363Z"
     },
+    "d7439bee24773bcbfa2d0a97947ee36227b10d1022b1a55847e928965bb6bfde": {
+      "excerpt": "raw",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "d78e4e3e81867bd391cc28439ec9a37563671b143b672b668032389fc405ef16": {
+      "excerpt": "Lazy body thunk: pulled at most once, only when a handler calls body()",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "d7a0d708df671afc8b772350f4fb406253bacf6402a1974ffd69c28ade814c71": {
       "excerpt": "File extensions this tool considers source — matches the languages the",
       "approvedAt": "2026-08-13T07:51:06.505Z"
@@ -5112,6 +5772,10 @@
     "d7fd08b2ddd052e133704f5381801781c8d6afccaee4a40511ef859259786838": {
       "excerpt": "Verified by handler identity: decode + validation run unconditionally",
       "approvedAt": "2026-08-13T07:52:59.088Z"
+    },
+    "d8856118060965f2ef6104adea59d4108db1beb4d42415c5e877e9a71f0d1bc6": {
+      "excerpt": "Flattens `N`'s tree into a map from dot-separated path to",
+      "approvedAt": "2026-08-13T07:54:23.703Z"
     },
     "d8c383127f18510ac647c406e16f73cfef98678ef38d229ae6e401751fa7436f": {
       "excerpt": "\"./src/foo/bar.ts\" -> { dtsRel: \"./dist/foo/bar.d.ts\", jsRel: \"./dist/foo/bar.js…",
@@ -5141,6 +5805,10 @@
       "excerpt": "-1 -> int8 [-128,127], 300 -> uint16 [0,65535] -> need [-128,65535] -> int32",
       "approvedAt": "2026-08-13T07:48:24.471Z"
     },
+    "da6ad94dad4124fd5fdf0006d4bf8e0067fd525138bf3461d58cda0afad0232a": {
+      "excerpt": "Extract the ROUTE-PATH → TypeRef map for every exported `api(children,",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "da9f70dc22bbfb327aa9dcc191fbeca3b87bac21b26eb4e3699598eb8b8fd168": {
       "excerpt": "Structural mirror of graphql-api-projector's `GraphQLAlsContext`.",
       "approvedAt": "2026-08-13T07:53:53.090Z"
@@ -5168,6 +5836,10 @@
     "db672e4d1acfe178a1b051843ec9852413f45f161e44c2879e9405305e2ecac0": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "db800b15b68a8aa6f2da40ff003286dadd452c2ee78074513fc5e99e2560a594": {
+      "excerpt": "Every leaf's derived input/output TypeRef, PLUS the shared `defs` map a",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "db95d153326a4eecd6f8d8a166f644e5ad71c95e4fa8d7770939656aa0cf84b6": {
       "excerpt": "identical key sets in every sample — growthRatio 0, so dict detection",
@@ -5321,6 +5993,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:53:52.216Z"
     },
+    "e1c9f3a4ee03b5d5c48c6b8718de1194e47ab4c72ccf37024aec8ef02365fc2d": {
+      "excerpt": "Middleware<Ctx, AddedCtx, Res>:",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "e204ed1a02550c13a9fd2d260b76111db89de38ebcc98a4a3fa6e7521bb3e548": {
       "excerpt": "Split off the type text: type name + optional (args) + optional array",
       "approvedAt": "2026-08-13T07:45:21.107Z"
@@ -5361,6 +6037,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:43:46.976Z"
     },
+    "e2ff5652cc1dffac48e2a73562d0b9d17f01f12c8a92674a432be2e0ecb64fd8": {
+      "excerpt": "Leaf: op(fn, meta?) — handler is required on op()'s return type.",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "e31f2b68704bceb87aac1118db7779a06de4ff10aeb14d94e095ed61541b2e2e": {
       "excerpt": "Generate 2-5 distinct enum values",
       "approvedAt": "2026-08-13T07:48:24.471Z"
@@ -5393,6 +6073,10 @@
       "excerpt": "Generate some valid JSON — mix of types",
       "approvedAt": "2026-08-13T07:43:20.205Z"
     },
+    "e45df19a36b2e4c0bd300aea00454260aef443d06d9b61053be51fceae26b17e": {
+      "excerpt": "CoreHandler<Ctx, Res>: the fundamental arrow.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "e482a0bc34e2abb3c24f46549621be6c360d1c22acbdb32f68aa03a62b95e66e": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:10.076Z"
@@ -5412,6 +6096,10 @@
     "e4ed28a4a032e0cee2d8dbc649accba0ca301024adaad688ee0c946de5375cb7": {
       "excerpt": "Property 4: integer tightness — inferred width is the tightest possible",
       "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "e4f430cb543b018458cb3d00fb7ba719aa360cb868568a34f40076a8a850ea22": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "e55ed77f95f6ac62193580b131b9eac0ac17694ce3e4abc39c4b2f903e362dd8": {
       "excerpt": "The raw per-trial score reports, in trial order — use with `axisValues` for pair…",
@@ -5436,6 +6124,14 @@
     "e5d12acdd8e92e132a8d80968c4a2deb38d2a1dbf8275fb0e69e7da0ab9386da": {
       "excerpt": "eslint-disable-next-line @typescript-eslint/no-unused-vars",
       "approvedAt": "2026-08-13T07:51:27.455Z"
+    },
+    "e60e2fd18e747bb93a5684be2ca3f1c2a2de5519d08f3b621aef538f31dbca87": {
+      "excerpt": "A bare `export default <expr>` parses as ts.ExportAssignment, which",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
+    "e6266979a5730ab3e89685cc520fef4d83a5848e1380b01215a45c4512a45594": {
+      "excerpt": "Ensure module scope — no global leakage",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "e632914e989eaa6a671a5cfda5ea4f415552fadfd3b6bab51c5cd1ad8957986d": {
       "excerpt": "Sub-evidence merged across every element of every array at this position (index-…",
@@ -5477,6 +6173,10 @@
       "excerpt": "Nest `inner` (the leaf field's own call + selection) inside one object-field wra…",
       "approvedAt": "2026-08-13T07:49:07.394Z"
     },
+    "e7b9467866acc72b65485296db00260a7271453f65dbc52e9eb696edebfc8494": {
+      "excerpt": "Map of MCP tool name → derived TypeRefs/description.",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "e7de439189aa89caf74aa36961e513a4d1030f9850851a931093d8d33d6c91b5": {
       "excerpt": "Reported when no case in the supplied set can serve as a control for a signal (p…",
       "approvedAt": "2026-08-13T07:48:24.363Z"
@@ -5516,6 +6216,10 @@
     "e96df4ffd8ec4210ee6ab62932934b462dc65dcafa2b4e8e8ce3439637ae7171": {
       "excerpt": "95% (or `options.ciLevel`) percentile bootstrap confidence interval on the mean.",
       "approvedAt": "2026-08-13T07:48:24.363Z"
+    },
+    "e973172f4601f0dbd8a4a5d52e3f4e97751e0a8f70463a2bc966c5a7533d49e2": {
+      "excerpt": "The five wire protocols wire-profile derivation knows about, plus",
+      "approvedAt": "2026-08-13T07:54:23.705Z"
     },
     "e9a74d62abaf011b5b4b1d2a88bedc8e3b49b4f4019bc8d7f5747127be59074a": {
       "excerpt": "Useful options to enforce blogging best practices",
@@ -5569,6 +6273,10 @@
       "excerpt": "packages/fractal/src/cli.ts — @rhi-zone/fractal/cli",
       "approvedAt": "2026-08-13T07:44:41.531Z"
     },
+    "eb4a1093e25afaa60e432d78cb4bc782a873b63a16d8b4b79539a5bce9f2e3a8": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "eb81b3127fbb9e67b7d85c656fcf92f6ac9b277c5abd766a6a06f2cec00fde88": {
       "excerpt": "The corpus type is a supertype of each individual value's inferred",
       "approvedAt": "2026-08-13T07:48:24.471Z"
@@ -5576,6 +6284,10 @@
     "ebd1b5413d3217844a1eb5cc1319781078df0ed2beab5e5ff5a3a13df3d0f695": {
       "excerpt": "One resolved cluster: the union of its members' field names, and the raw member …",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "ebdf8cc00bc4d9ceee633c56c63b49955769a92ca060825c9b08e4af61326e2b": {
+      "excerpt": "Pass",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "ebf0b894ce014fb51e34808e0e935b0675a24b82142bd793f055ff301a0eb26f": {
       "excerpt": "type: { id: string; email: string }",
@@ -5621,6 +6333,10 @@
       "excerpt": "GraphQL",
       "approvedAt": "2026-08-13T07:53:53.091Z"
     },
+    "ee49fbc2f16ecd9cbba9d5df7ea947d6a9ac2724b2f13c5cd29a113fc282f1c2": {
+      "excerpt": "Fallback part — same recursion, keyed by the fallback's authored name.",
+      "approvedAt": "2026-08-13T07:54:23.703Z"
+    },
     "ee6677e17638d1550d25075bf3a30d9a458b28c74a6a982056bbcf4f8010d146": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:11.417Z"
@@ -5644,6 +6360,10 @@
     "eec56bda97d16254d453c3b4f4fd25cd44393ee036a7106731e2522f3b1bbf46": {
       "excerpt": "A class whose method is overloaded — same intersection-of-signatures",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "eef2bd671fbfb499359f7d9383f21a9a5a88327dd3609f0b30de85535eaddcfe": {
+      "excerpt": "Mount config under /config (no auth for this example)",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "eef3d45aa0722e1664d0e51f96066098c2ab951242830d17e29434de9dfba74d": {
       "excerpt": "Generalizes the previous case one level further: the mixed-shape",
@@ -5669,6 +6389,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:52:59.094Z"
     },
+    "ef8668e2ba111c80a7ee10d547ba64e3a7b4925b662759d6cc854328202db190": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "ef925aa06bc9c7f01f1f003e39fd3eedfcf5ea155de7967e71da0367b944905d": {
       "excerpt": "The name a `ts.Type` would be shared under, if it has one worth sharing:",
       "approvedAt": "2026-08-13T07:51:11.417Z"
@@ -5692,6 +6416,10 @@
     "f05b19ed6164db10a62055ae5b25273ff16b780ce56cac2a12f1eb8da7e05c13": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:48:24.363Z"
+    },
+    "f06e576baf55248644f15d70a70b20251df8cfe472f955d466ad77d5c3ae4e84": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "f080923cf086fd70c4b7b952ac5b06437c837982a675acd56ae532a4aff3285d": {
       "excerpt": "── Callable/function types ────────────────────────────────────────────────",
@@ -5761,13 +6489,25 @@
       "excerpt": "nodeCount import above is exercised implicitly via defaultShouldShare; keep",
       "approvedAt": "2026-08-13T07:43:46.976Z"
     },
+    "f2afefacfafa98561e7721d7e31e47ba41520bb840378c2b9fc648162c5ce00b": {
+      "excerpt": "Side-effect import: brings this test suite's own \"deployment\" augmentation",
+      "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
     "f2b907dffdeed61713a1783acc24063f4b26684a0f29cf3bc7aeeb55a96295b3": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:53.088Z"
     },
+    "f2de8ebf7da8095647fc2930cdcfa07af15e2a265afab20021cb9536344e64d6": {
+      "excerpt": "The Node model explicitly allows `fallback.subtree` to be a bare",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
+    },
     "f31347677f9f6a294f68cce072d89c486390a9f948fc3b8220d43c77852b12f7": {
       "excerpt": "── Mixin intersections (structural, non-branded) ─────────────────────────",
       "approvedAt": "2026-08-13T07:51:10.076Z"
+    },
+    "f32c24340565067ca85ebe14c9bac07b1a74ad198c8c0d875c95154ee1356771": {
+      "excerpt": "Walk every exported `api(children, opts?)` tree in a source file, mirroring",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "f33f07fe5142c3c5d4f89884f674e4732b850156422fe3afd2305ae1146329bc": {
       "excerpt": "============================================================================",
@@ -5828,6 +6568,10 @@
     "f44ebdf755ad779c9dd1728014b8a414cd2298ed1c43805401969615aa6e97ee": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "f4ad49100e71f1a8dde5f7e41f2f3eba1c06fb66441eab23e1323e94031cd3ad": {
+      "excerpt": "In-memory value; a production version would back this with a database.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "f4db839f9aef39964fa3d5f54c955432e26b3281d204c5fac2f19bf045d23abd": {
       "excerpt": "Did we find all the fields/positions the original schema declared?",
@@ -5905,6 +6649,10 @@
       "excerpt": "A bare property-access expression, or bracket notation when `key` isn't a valid …",
       "approvedAt": "2026-08-13T07:49:07.403Z"
     },
+    "f78d208e4073c526ca3b33072ce01fce42660db578fc94866abdaf494c6b5707": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "f7b4b742489c83824d37ea4cba61303fc53c683970d967a8b4399e53ad524d9b": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:10.065Z"
@@ -5933,6 +6681,10 @@
       "excerpt": "Convenience: `projectGraphQL` then `toSchema` in one call.",
       "approvedAt": "2026-08-13T07:47:47.320Z"
     },
+    "f8d09378c56395f88656c18c52bb09f8acc9b562dcb3313e780ece4a37912512": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "f8d63220ef81cf57d8e625b2629d9bdeb48c08320d60183befa15ddf027adef5": {
       "excerpt": "Build a Node tree with `leafCount` leaves spread across",
       "approvedAt": "2026-08-13T07:48:26.652Z"
@@ -5940,6 +6692,10 @@
     "f8e91b10946a25b708fa1d9e98ebd03223ac59e7b8fb5674da7593ca44750776": {
       "excerpt": "Tuple type — must not fall through to the object branch.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "f8fcbd449558ca333a4c0b288c8b48d7335b3c038a7147d7b479c5c8283f20d2": {
+      "excerpt": "\"wire-hooks-none\" was codegen'd with NO hookFields for `price` (see the",
+      "approvedAt": "2026-08-13T07:54:23.707Z"
     },
     "f90fecaa25b1a46c6735d6b6b2c2da8097d11ff57bdb83fccf225725584295e4": {
       "excerpt": "@ts-expect-error — \"database\" is not a registered GraphQLStoreName.",
@@ -5980,6 +6736,10 @@
     "fae0be63f6e893699f342d5cf3869e352120ddae32f27c7563b89175aabf1ec3": {
       "excerpt": "Split a full DDL string into individual statements (top-level `;`).",
       "approvedAt": "2026-08-13T07:45:21.107Z"
+    },
+    "faef3603b070e38538273619a9b82aca96726e1a201b4f4fe806fee9c589c61a": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "fb026b4f7e0b825c4ad81f9a508426766034dd4a79b05943550a4e9294233e8e": {
       "excerpt": "Evidence term: Good-Turing. `1 - singletons/N` estimates coverage; median",
@@ -6029,6 +6789,10 @@
       "excerpt": "The built-in enum decision, kept separate so a custom `Generalize` can reuse",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "fcf0d89da91f18a0140239a51fc3261b0d4740d57a051361fc53a7be22c60170": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "fcfee1971a9924bff333e89c4eb5ed2a27250317ff3d9e68eb28d79a88ec048c": {
       "excerpt": "Wire the same handler functions the fixture tree's leaves already",
       "approvedAt": "2026-08-13T07:51:27.455Z"
@@ -6041,9 +6805,17 @@
       "excerpt": "unresolvable ref — no defs given, degrade to null",
       "approvedAt": "2026-08-13T07:48:24.363Z"
     },
+    "fd581b7c74a178f62c6bafaee94aae79bd06ee6b3626cfd42c2d81f7c40b9d10": {
+      "excerpt": "Route<TypedVars, S>: a route definition (data, not function).",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
     "fd65d98f03aa9e82bf54d5e866ddbeb05a6805a502ffe6b3fadc5d98ecc27e28": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:17.529Z"
+    },
+    "fd6712d2633ddd86e15f9b31f1fd40445ca0f00cd21c5fd20911b7c0c7f21d13": {
+      "excerpt": "Read a fallback's `name` string literal off its resolved TYPE. This works",
+      "approvedAt": "2026-08-13T07:54:23.698Z"
     },
     "fd9e48578da4f17e6d1592b3b27a9ecf542722f21c1f10e5884ef8ae9c587415": {
       "excerpt": "idx: every value 0..n-1 is unique -> K===N -> conclusive non-enum",
@@ -6060,6 +6832,10 @@
     "fe09b3814fe3a2c51b0c84a6b8c282922515932b4d40f638dadfd84b698debb4": {
       "excerpt": "By default, Docusaurus generates a sidebar from the docs folder structure",
       "approvedAt": "2026-08-13T07:43:11.324Z"
+    },
+    "fe780f6b926cba2e0dac7131de3aae73cc1882cb7104f0d1e1a89583a01e1f31": {
+      "excerpt": "Mount admin with auth middleware declared once, at the mount point.",
+      "approvedAt": "2026-08-13T07:54:40.422Z"
     },
     "fe78a1f7e1c3e9d04f2854d7245a856600b5c2877688030bf74d468dd697e962": {
       "excerpt": "no DU split happened, but the discriminant still generalized to an enum",
