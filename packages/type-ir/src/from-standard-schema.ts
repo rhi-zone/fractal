@@ -37,15 +37,14 @@
 //          `.transform()` bodies are code; nothing declarative represents
 //          them, and they are gone before we see the export.
 //
-//      (b) NOT inherent, and now FIXED. TypeRef has a first-class nominal
-//          `instance` kind (className/declarationFile) and `json-schema.ts`
-//          serializes it as `{type:"object", "x-class-name": Name,
-//          "x-declaration-file": File}`. fromJsonSchema() used to drop that,
-//          degrading `instance("Date")` -> JSON Schema -> `object{}`; it now
-//          reads it back, so the round trip is exact and a vendor exporting
-//          `z.instanceof(Date)` under that convention keeps its identity.
-//          Other `x-` extensions (`x-brand`, OAS `x-*`) are likewise carried
-//          into meta rather than dropped.
+//      (b) Not inherent to JSON Schema itself. TypeRef has a first-class
+//          nominal `instance` kind (className/declarationFile), and
+//          `json-schema.ts` serializes it as `{type:"object", "x-class-name":
+//          Name, "x-declaration-file": File}`. `fromJsonSchema()` reads that
+//          convention back, so a vendor exporting `z.instanceof(Date)` under
+//          it round-trips to `instance("Date")` exactly. Other `x-`
+//          extensions (`x-brand`, OAS `x-*`) are likewise carried into meta
+//          rather than dropped.
 //
 //      Standard keywords do survive: `{type:"string", pattern, minLength}`
 //      lands as `string` with `meta.pattern`/`meta.minLength`, and
@@ -108,34 +107,30 @@ function exportJsonSchema(converter: StandardJSONSchemaV1.Converter): JsonSchema
  * `types.unknown` — in every case preserving `~standard.vendor` in
  * `meta.vendor`.
  *
- * The tiers are mutually exclusive — tier 2 is only reached when the vendor
- * exports no JSON Schema — so which is "richer" never arbitrates anything at
- * runtime. Recorded for accuracy: neither tier dominates the other in general.
+ * The two tiers are mutually exclusive (tier 2 only runs when the vendor
+ * exports no JSON Schema), so no runtime comparison between them ever
+ * happens — but they differ in what they can recover:
  *
- * Tier 1 wins on the thing a single sample categorically cannot supply: a
- * schema describes the whole space of allowed values, a sample is one point in
- * it. No amount of runtime reflection recovers optionality (a `note?: string`
- * this sample omits), enum member sets, union branches not taken, or
- * constraints (`minLength`, `pattern`). That is not historical framing; it is
- * a difference in kind, and it is why tier 1 stays the preferred path.
+ * A JSON Schema export (tier 1) describes the whole space of allowed values;
+ * a `~standard.types` sample (tier 2) is one point in it. A sample alone
+ * cannot recover optionality (a `note?: string` the sample omits), enum
+ * member sets, untaken union branches, or constraints (`minLength`,
+ * `pattern`). It also produces one-sample artifacts a schema wouldn't:
+ * `tags: ["a"]` infers a 1-`tuple`, not an `array`, since one observation
+ * can't distinguish fixed arity from variable.
  *
- *   It also avoids tier 2's one-sample artifacts: `tags: ["a"]` infers a
- *   1-`tuple`, not an `array`, because one observation cannot distinguish
- *   fixed arity from variable.
+ * Nominal identity is the one axis where tier 2 is more reliable: inference
+ * reads class identity off a runtime value's prototype, so
+ * `z.instanceof(Date)` yields `instance("Date")` directly from the sample,
+ * whereas tier 1 only recovers identity if the vendor happens to emit the
+ * non-standard `x-class-name` extension.
  *
- *   Nominal identity — no longer a tier-1 advantage. Inference now reads class
- *   identity off a runtime value's prototype, so `z.instanceof(Date)` yields
- *   `instance("Date")` from the sample directly. That is ground truth, where
- *   tier 1 recovers identity only if the vendor happens to emit the
- *   non-standard `x-class-name` extension. On this one axis tier 2 is the
- *   more reliable of the two.
- *
- * Tier 2 wins when the vendor CANNOT express the construct at all
- * (`z.custom<T>()`, instanceof-style checks) and degrades to a permissive
- * schema: `{}` and `true` both infer `unknown` and `{type:"object"}` infers an
- * empty object, while a JSON-serializable sample still yields the real field
- * shape. Unreachable given the mutual exclusivity above, but it means the
- * ordering is a property of the inputs, not a law.
+ * Tier 2 is also the only path that can say anything structural about a
+ * vendor construct with no schema-shaped representation at all
+ * (`z.custom<T>()`, instanceof-style checks): tier 1 degrades those to a
+ * permissive `{}`/`true` (-> `unknown`) or `{type:"object"}` (-> an empty
+ * object), while a JSON-serializable sample still yields the real field
+ * shape.
  */
 export function fromStandardSchema(schema: StandardSchemaV1): TypeRef {
   const props = schema["~standard"];
