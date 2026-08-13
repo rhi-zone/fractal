@@ -4,9 +4,9 @@ import { toJsonSchema } from "./json-schema.ts";
 
 // ============================================================================
 // MkDocs-Material reference-page projector — TypeRefDocument -> one Markdown
-// page per `doc.defs` entry, written for MkDocs-Material's Markdown extension
-// set (admonitions, content tabs, abbreviations), NOT MDX (MkDocs has no JSX
-// runtime, so nothing here may emit it).
+// page per `doc.defs` entry, targeting MkDocs-Material's Markdown extension
+// set (admonitions, content tabs, abbreviations). MkDocs has no JSX runtime,
+// so output is plain Markdown, not MDX.
 //
 // Every other projector in this package renders a single TypeRef to a single
 // string. This one is document-shaped instead (`Map<filename, content>`)
@@ -555,18 +555,15 @@ export function toMkdocsReference(
 }
 
 // ============================================================================
-// `mkdocs.yml` emission — every syntax feature `renderPage` above actually
-// uses (admonitions, content tabs with icons, abbreviations, grid cards)
-// depends on a `markdown_extensions`/`theme` config that plain `mkdocs.yml`
-// does not enable by default; without this, the pages `toMkdocsReference`
-// returns would 404 their own syntax at build time. Every block below is
-// reproduced from Material's own "Setup" reference pages (theme features,
-// palette toggle, content tabs, icon shortcodes, grid cards, social cards),
-// not invented — see this file's sibling PR/commit for the exact pages
-// checked. `nav:` is generated flat, one entry per `doc.defs` name in
-// insertion order (same order `toMkdocsReference` emits pages in); callers
-// wanting a nested/grouped nav should treat this as a starting point and
-// restructure the returned string's `nav:` block themselves.
+// `mkdocs.yml` emission — every syntax feature `renderPage` above uses
+// (admonitions, content tabs with icons, abbreviations, grid cards) requires
+// a `markdown_extensions`/`theme` config that plain `mkdocs.yml` does not
+// enable by default. Every block below mirrors Material's own "Setup"
+// reference pages (theme features, palette toggle, content tabs, icon
+// shortcodes, grid cards, social cards). `nav:` is generated flat, one entry
+// per `doc.defs` name in insertion order (same order `toMkdocsReference`
+// emits pages in); callers wanting a nested/grouped nav can treat this as a
+// starting point and restructure the returned string's `nav:` block.
 // ============================================================================
 
 function navEntry(name: string, ref: TypeRef, basePath: string): string {

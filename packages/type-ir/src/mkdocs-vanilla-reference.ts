@@ -3,41 +3,39 @@ import { quote } from "./codegen-helpers.ts";
 
 // ============================================================================
 // Vanilla MkDocs reference-page projector — TypeRefDocument -> one Markdown
-// page per `doc.defs` entry, written for *plain* MkDocs: the `mkdocs` PyPI
+// page per `doc.defs` entry, targeting *plain* MkDocs: the `mkdocs` PyPI
 // package with its default theme and default `markdown_extensions` (`toc`,
 // `tables`, `fenced_code_blocks` — see mkdocs.org's "Writing Your Docs" page)
-// only. Nothing here may emit MkDocs-Material's bundled `pymdownx`/`admonition`
-// extension syntax — no `!!!` admonitions (python-markdown's own `admonition`
-// extension, not enabled by MkDocs' defaults either), no `=== "Tab"` content
-// tabs (`pymdownx.tabbed`, Material-only), no `*[Term]: ...` abbreviations
-// (python-markdown's `abbr` extension — also not a MkDocs default). This is
-// `mkdocs-reference.ts`'s Material-flavored sibling's genuinely separate
-// target, not a stripped-down variant of it: MkDocs (the plain PyPI project)
-// and Material for MkDocs (squidfunk's theme layered on top of it) are two
-// independent ranked targets in docs/roadmap.md's popularity list (#2 vs #3
-// respectively), so this file has its own self-contained copy of every
-// helper below — same convention `sphinx-reference.ts` follows relative to
-// this package's other doc projectors — rather than importing from
-// `mkdocs-reference.ts` and coupling the two targets together.
+// only. None of MkDocs-Material's bundled `pymdownx`/`admonition` extension
+// syntax is used: no `!!!` admonitions (python-markdown's `admonition`
+// extension, not a MkDocs default), no `=== "Tab"` content tabs
+// (`pymdownx.tabbed`, Material-only), no `*[Term]: ...` abbreviations
+// (python-markdown's `abbr` extension, also not a MkDocs default).
 //
-// YAML frontmatter (`---` fenced) is still used: unlike RST's lack of a
+// MkDocs (the plain PyPI project) and Material for MkDocs (squidfunk's theme
+// layered on top of it) are two independently ranked targets in
+// docs/roadmap.md's popularity list (#2 and #3). This file carries its own
+// copy of every helper below — same convention `sphinx-reference.ts` follows
+// relative to this package's other doc projectors — rather than importing
+// from `mkdocs-reference.ts`, keeping the two targets decoupled.
+//
+// YAML frontmatter (`---`-fenced) is still used: unlike RST, which has no
 // frontmatter convention (see sphinx-reference.ts), MkDocs parses `---`-
-// delimited YAML page meta-data natively (not via a markdown extension —
-// see mkdocs.org's "Writing Your Docs" page), so it's available here even
-// though nothing else Material-specific is.
+// delimited YAML page metadata natively (not via a markdown extension — see
+// mkdocs.org's "Writing Your Docs" page), so it's available here even though
+// nothing else Material-specific is.
 //
 // Deprecation renders as a plain blockquote (`> **Deprecated.** reason`)
 // rather than Material's `!!! warning` admonition — blockquotes are core
 // CommonMark, no extension required. Multiple `meta.examples` render as
-// numbered `### Example N` subsections rather than a tabbed UI, same
-// reasoning sphinx-reference.ts already documents for its own numbered-
-// subsections choice (no tabs directive/extension assumed present). There
-// is no abbreviations-equivalent hover-tooltip section, same reasoning
-// sphinx-reference.ts gives for omitting one: cross-linking is already
-// fully covered by the inline `[Name](name.md)` links every Fields/Methods/
-// Variants table renders, so nothing is lost by omitting it — and unlike
-// mkdocs-reference.ts, this target has no `abbr` extension to assume is
-// configured in the consuming site's `mkdocs.yml` in the first place.
+// numbered `### Example N` subsections rather than a tabbed UI, the same
+// choice sphinx-reference.ts makes for its own numbered subsections (no tabs
+// directive/extension assumed present). There is no abbreviations-equivalent
+// hover-tooltip section, matching sphinx-reference.ts's reasoning for
+// omitting one: cross-linking is already covered by the inline
+// `[Name](name.md)` links every Fields/Methods/Variants table renders, and
+// unlike mkdocs-reference.ts, this target has no `abbr` extension to assume
+// is configured in the consuming site's `mkdocs.yml`.
 // ============================================================================
 
 export function kebabCase(name: string): string {

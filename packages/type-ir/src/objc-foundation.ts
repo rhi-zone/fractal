@@ -1,5 +1,3 @@
-// packages/type-ir/src/objc-foundation.ts — @rhi-zone/fractal-type-ir/objc
-//
 // Objective-C projector: TypeRef -> idiomatic Objective-C header (.h) +
 // implementation (.m) content. Follows the same Converter/`resolve` pattern
 // as typescript.ts/capnp.ts (see those files for the established shape).
@@ -11,13 +9,13 @@
 // named `${ParentClassName}${Capitalize(fieldName)}`.
 //
 // JSON-boundary codegen (`initWithDictionary:`/`toDictionary`) follows one
-// rule throughout: a scalar (non-pointer) property that is NOT optional is
-// unboxed on read (`[dictionary[@"x"] integerValue]`) and boxed on write
-// (`@(self.x)`), because `NSDictionary`/JSON values are always `NSNumber`-
-// boxed for numeric/boolean fields. A scalar property that IS optional is
-// instead typed `NSNumber *` (boxed) so a missing/null value can be
-// represented as `nil` — the raw C scalar types (`BOOL`, `NSInteger`, ...)
-// have no nil representation.
+// rule throughout: a required scalar (non-pointer) property is unboxed on
+// read (`[dictionary[@"x"] integerValue]`) and boxed on write (`@(self.x)`),
+// because `NSDictionary`/JSON values are always `NSNumber`-boxed for
+// numeric/boolean fields. An optional scalar property is instead typed
+// `NSNumber *` (boxed) so a missing/null value can be represented as `nil`
+// — the raw C scalar types (`BOOL`, `NSInteger`, ...) have no nil
+// representation.
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { capitalize, isA } from "./codegen-helpers.ts";
 
@@ -88,7 +86,7 @@ const handlers: Record<string, Converter> = {
     return `NSArray<${toObjCGenericArgType(s.element)}> *`;
   },
   // No native async-sequence construct in Objective-C — degrades to the
-  // materialized NSArray<T> equivalent, same honest-degrade convention
+  // materialized NSArray<T> equivalent, same fallback convention
   // typescript.ts/capnp.ts use for `stream`.
   stream: (shape) => {
     const s = shape as TypeShape & { kind: "stream" };
@@ -127,7 +125,7 @@ const handlers: Record<string, Converter> = {
   // No first-class callable-type construct in Objective-C's type system
   // (blocks need a full `returnType (^)(paramTypes)` spelling this generic
   // path can't safely reconstruct from `params`/`returnType` alone) —
-  // degrades honestly to `id`.
+  // degrades to `id`.
   function: () => "id",
   interface: () => "id",
 };

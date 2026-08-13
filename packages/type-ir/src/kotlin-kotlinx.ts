@@ -32,16 +32,14 @@ const leaf =
 
 // Kotlin built-in types: https://kotlinlang.org/docs/basic-types.html. Named
 // (object/enum/union) kinds have no anonymous Kotlin equivalent — a data
-// class, enum class, and sealed class all require a declaration site — so in
-// bare TYPE-EXPRESSION position (a field referencing a shape that isn't being
-// separately declared here) they read `meta.typeName` when the caller
-// supplied it (same provenance convention as index.ts's `meta.typeName`/
-// `meta.declarationFile`) and otherwise degrade honestly rather than
-// fabricating a name: `object` -> a structural `Map<String, Any?>`, `union`/
-// `enum` -> `Any` (an enum could read `String`, but that would silently
-// discard the closed-set constraint an enum actually asserts, which `Any`
-// does not pretend to preserve either — both are lossy, `Any` just doesn't
-// lie about being closed).
+// class, enum class, and sealed class all require a declaration site. In
+// bare type-expression position (a field referencing a shape that isn't
+// being separately declared here), these read `meta.typeName` when the
+// caller supplied it (same provenance convention as index.ts's
+// `meta.typeName`/`meta.declarationFile`), and otherwise fall back to a
+// structural type: `object` -> `Map<String, Any?>`, `union`/`enum` -> `Any`.
+// Both fallbacks are lossy; `Any` for an enum drops the closed-set
+// constraint rather than misrepresenting it as `String`.
 const handlers: Record<string, Converter> = {
   boolean: leaf("Boolean"),
   number: leaf("Double"),
@@ -81,7 +79,7 @@ const handlers: Record<string, Converter> = {
   // other data-only projector's `stream` fallback uses.
   stream: (shape) => `List<${toKotlinType((shape as TypeShape & { kind: "stream" }).element)}>`,
   // No native pagination construct — degrades to `List<T>` of the page's
-  // element type, same honest-degrade convention `stream` uses above.
+  // element type, same fallback convention `stream` uses above.
   page: (shape) => `List<${toKotlinType((shape as TypeShape & { kind: "page" }).element)}>`,
   // https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-pair/ and -triple/ —
   // Kotlin's stdlib only ships 2- and 3-element product types; 4+ elements
@@ -133,16 +131,16 @@ const handlers: Record<string, Converter> = {
   // case (a method embedded in ordinary field position).
   //
   // A service surface has no Kotlin field-position construct of its own —
-  // degrades to `Any`, same as `object`'s honest-degrade fallback above (an
-  // `interface` TypeRef used as a top-level declaration instead becomes a
-  // real Kotlin `interface` — see `toKotlin`'s interface branch below).
+  // degrades to `Any`, same as `object`'s fallback above (an `interface`
+  // TypeRef used as a top-level declaration instead becomes a real Kotlin
+  // `interface` — see `toKotlin`'s interface branch below).
   interface: leaf("Any"),
 };
 
 /** Inline type expression — used for field types, list/map element types,
- * etc. Named (object/enum/union) kinds without `meta.typeName` degrade
- * honestly rather than fabricating a declaration site; see the `handlers`
- * doc comment above for the exact per-kind fallback. */
+ * etc. Named (object/enum/union) kinds without `meta.typeName` fall back to
+ * a structural type rather than a declaration site; see the `handlers` doc
+ * comment above for the exact per-kind fallback. */
 export function toKotlinType(ref: TypeRef): string {
   const converter = resolve(ref.shape.kind, handlers);
   const type = converter === undefined ? "Any" : converter(ref.shape, ref.meta);
