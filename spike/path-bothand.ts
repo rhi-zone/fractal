@@ -1,16 +1,12 @@
-// spike/path-bothand.ts
-//
 // SPIKE: Extended path combinator — collection + exact children + param fallthrough
-// in ONE combinator, without choice().
+// in a single combinator, without choice().
 //
-// DESIGN QUESTION ANSWERED HERE:
-//   Can we unify /todos (collection) and /todos/:id (param) under a SINGLE
-//   `route` combinator that naturally holds both, so the typed client can derive
-//   a callable-object hybrid: client.todos is simultaneously callable and has
-//   method props?
+// route(collection?, { children?, param? }) unifies /todos (collection) and
+// /todos/:id (param) under one combinator, so the typed client derives a
+// callable-object hybrid: client.todos is simultaneously callable and
+// carries method properties.
 //
-// CHOSEN COMBINATOR SURFACE:
-//   route(collection?, { children?, param? })
+// Combinator surface:
 //   - collection: a methods({...}) node handling the exhausted-path case
 //   - children:   { [literal]: childNode } — exact-segment dispatch
 //   - param:      { name, child } — named param fallthrough when no exact match
@@ -18,7 +14,7 @@
 //   Dispatch order: path exhausted → collection; exact child if seg matches;
 //   else param fallthrough; else pass.
 //
-// STANDALONE — does not import the packages.
+// Standalone — does not import the packages.
 
 export {};
 
@@ -50,21 +46,16 @@ type Handler<P extends Record<string, unknown> = Record<string, never>, Res = un
 // ============================================================================
 // TMeta — tightened meta types preserving literal structure.
 //
-// CIRCULAR-REF RESOLUTION:
-//   TypeScript type aliases cannot circularly reference themselves (TS2456).
-//   The cycle is: TMeta → TBodyMeta<?,TMeta> (direct) and
-//   TMeta → TRouteMeta → TNodeShape → TNode<?,?,TMeta> (via interface).
-//
-//   Fix: Make BOTH TNodeShape and TMeta into interfaces (interfaces are lazily
-//   resolved). The interface TMeta extends a plain object type that holds the
-//   union discriminant — implemented as a mapped-union trick: we use interface
-//   TMeta with a single discriminant property and rely on the conditional-type
-//   narrowing in ClientOfMeta to pull out the concrete sub-types.
-//
-//   In practice: interfaces in TypeScript can be self-referential because they
-//   are resolved lazily during checking, not eagerly at alias expansion time.
-//   We declare `interface TMeta` as an open discriminant object and use separate
-//   typed aliases for the concrete shapes used in conditionals.
+// Circular-reference handling: TypeScript type aliases cannot circularly
+// reference themselves (TS2456). The cycle is TMeta → TBodyMeta<?,TMeta>
+// (direct) and TMeta → TRouteMeta → TNodeShape → TNode<?,?,TMeta> (via
+// interface). TNodeShape is declared as an interface (`interface TNodeShape
+// extends TNode<any, any, any> {}`) rather than a type alias, because
+// interfaces resolve lazily during checking rather than eagerly at
+// alias-expansion time, so they can be self-referential. TMeta itself stays
+// a type alias; its union members use `any` in place of the fully
+// parametric form (e.g. `TBodyMeta<any, any>`) to avoid forcing eager
+// expansion — the TMeta union below applies the same pattern.
 // ============================================================================
 
 type TLeafMeta<Res = unknown> = { kind: "leaf"; _res: Res };
@@ -90,7 +81,7 @@ type TParamSpec<K extends string, Child extends TNodeShape> = {
 };
 
 // TRouteMeta: the both-and combinator's meta.
-// Holds all three slots in ONE meta node.
+// Holds all three slots in a single meta node.
 //
 //   Collection — the methods node (or undefined)
 //   Children   — exact-segment child map
@@ -110,14 +101,13 @@ type TRouteMeta<
 
 // TMeta: the closed discriminated union of all meta shapes.
 //
-// CIRCULAR REF RESOLUTION:
-//   The apparent cycle is: TBodyMeta<T, Child> where Child extends TMeta.
-//   But in the union, we write TBodyMeta<any, any> (not TBodyMeta<T, TMeta>).
-//   `any` breaks the alias expansion cycle — TypeScript doesn't need to expand
-//   `TMeta` to resolve `TBodyMeta<any, any>`. The full parametric shapes
-//   (TBodyMeta<T, Child>, TRouteMeta<...>) are used only in conditional types
-//   where `infer` extracts the concrete parameters from a narrowed type.
-//   This is the same pattern used in spike/typed-client.ts (TParamMeta<any,any>).
+// The apparent cycle is TBodyMeta<T, Child> where Child extends TMeta, but
+// the union writes TBodyMeta<any, any> instead of TBodyMeta<T, TMeta>. `any`
+// breaks the alias-expansion cycle: TypeScript doesn't need to expand TMeta
+// to resolve TBodyMeta<any, any>. The full parametric shapes (TBodyMeta<T,
+// Child>, TRouteMeta<...>) are used only in conditional types, where `infer`
+// extracts the concrete parameters from a narrowed type — the same pattern
+// used in spike/typed-client.ts (TParamMeta<any, any>).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TMeta =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -185,19 +175,18 @@ function body<T, P extends Record<string, unknown>, Res>(
 }
 
 // ============================================================================
-// route() — the new both-and combinator
+// route() — the both-and combinator.
 //
-// Signature:
-//   route(collection?, { children?, param? })
+// Signature: route(collection?, { children?, param? })
 //
-// All three slots are independently optional.
-// P = Record<string, never> — route is always fully discharged.
+// All three slots are independently optional. P = Record<string, never> —
+// route is always fully discharged.
 //
-// The param slot uses TParamSpec<K, Child> where Child carries the child node.
-// The Omit<C,K> discharge algebra is preserved: the child node handles requests
-// that include the captured param key in their params. The route node itself
-// injects the param into req.params before calling the child handler, so the
-// outer node's P stays as Record<string, never>.
+// The param slot uses TParamSpec<K, Child> where Child carries the child
+// node. The Omit<C,K> discharge algebra is preserved: the child node handles
+// requests that include the captured param key in their params. The route
+// node injects the param into req.params before calling the child handler,
+// so the outer node's P stays as Record<string, never>.
 // ============================================================================
 
 type RouteOptions<
@@ -282,35 +271,31 @@ function route(
 }
 
 // ============================================================================
-// CLIENT TYPE DERIVATION
+// Client type derivation.
 //
-// CALLABLE-OBJECT HYBRID:
-//   When a route node has a param slot, client.todos is simultaneously:
-//     - callable: client.todos('1') → sub-client
-//     - has properties: client.todos.GET(), client.todos.POST(body)
+// Callable-object hybrid: when a route node has a param slot, client.todos
+// is simultaneously:
+//   - callable: client.todos('1') → sub-client
+//   - carrying properties: client.todos.GET(), client.todos.POST(body)
 //
-//   Realized in TypeScript as an intersection:
-//     ((value: string) => SubClient) & { GET(): Promise<Todo[]>; POST(b: CreateInput): Promise<Todo> }
+// Realized in TypeScript as an intersection:
+//   ((value: string) => SubClient) & { GET(): Promise<Todo[]>; POST(b: CreateInput): Promise<Todo> }
 //
-//   JS semantics: functions are objects. We create a function, attach properties
-//   onto it, and return it. TypeScript's intersection type captures both aspects.
+// JS semantics: functions are objects, so a function is created, properties
+// are attached onto it, and it's returned as-is. TypeScript's intersection
+// type captures both aspects.
 //
-// KEY FINDING (reported honestly):
-//   The negative assertions (NEG-1..NEG-4) require that the conditional type
-//   ClientOfMeta<M> resolves to a CONCRETE surface with literal verb keys and
-//   literal child segment keys — not `Record<string, ...>`.
-//
-//   This requires:
-//     (a) MethodsMeta carries the literal Verbs table type T (preserved — done).
-//     (b) TBodyMeta carries the literal body type T (preserved — done).
-//     (c) TRouteMeta carries the literal Children and Collection types (preserved — done).
-//     (d) ClientOfMeta conditionals resolve at the call site, not abstractly.
-//
-//   The tsgo run will tell us whether all four negatives are consumed.
+// The negative assertions (NEG-1..NEG-4) require ClientOfMeta<M> to resolve
+// to a concrete surface with literal verb keys and literal child segment
+// keys, not Record<string, ...>. That depends on:
+//   (a) MethodsMeta carrying the literal Verbs table type T.
+//   (b) TBodyMeta carrying the literal body type T.
+//   (c) TRouteMeta carrying the literal Children and Collection types.
+//   (d) ClientOfMeta's conditionals resolving at the call site, not abstractly.
 // ============================================================================
 
 // ClientOfVerbNode: maps a verb node to its callable signature.
-// Uses `any` for P to avoid contraviance rejection: TNode<{},Res,M> does not
+// Uses `any` for P to avoid contravariance rejection: TNode<{},Res,M> does not
 // extend TNode<Record<string,unknown>,Res,M> because Handler<{}> is not
 // assignable to Handler<Record<string,unknown>> (contravariance in P).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -378,14 +363,14 @@ type RouteClient<
 > = ParamCallable<ParamChild> & CollectionPart<Collection> & ChildrenPart<Children>;
 
 // ============================================================================
-// RUNTIME: makeClient
+// makeClient — runtime construction of the callable-object hybrid.
 //
-// Callable-object hybrid: create a function (for param callable), attach
-// properties (collection verbs + exact children) directly onto it.
-// JS functions are objects, so property assignment is valid.
+// Creates a function (for the param callable), then attaches properties
+// (collection verbs + exact children) directly onto it. JS functions are
+// objects, so property assignment is valid.
 //
-// ARCHITECTURE: Split into typed wrapper + untyped implementation to avoid
-// TS2589 "type instantiation excessively deep" errors when evaluating
+// Split into a typed wrapper and an untyped implementation to avoid TS2589
+// "type instantiation excessively deep" errors when evaluating
 // ClientOfMeta<M> with abstract M in recursive calls.
 // ============================================================================
 
@@ -662,7 +647,7 @@ function walk(
 //                  POST → create todo (body: {title})
 //   /todos/{id}    GET  → get todo by id
 //
-// ONE route node handles all three, no choice() needed.
+// A single route node handles all three, no choice() needed.
 // ============================================================================
 
 interface Todo {
@@ -715,16 +700,16 @@ const todosRoute = route(methods({ GET: listLeaf, POST: createNode }), {
 const appTree = route(undefined, { children: { todos: todosRoute } });
 
 // ============================================================================
-// TYPE PROBE: the callable-object hybrid client surface
+// Type probe: the callable-object hybrid client surface.
 //
-// AppClient should expand to:
+// AppClient expands to:
 // {
 //   todos: ((value: string) => MethodsClient<{GET: getByIdLeaf}>)
 //          & MethodsClient<{GET: listLeaf, POST: createNode}>
 //          & {}   (no exact children on todosRoute)
 // }
 //
-// i.e. client.todos is callable AND has .GET() and .POST(body) properties.
+// client.todos is callable and has .GET() and .POST(body) properties.
 // ============================================================================
 
 const client = makeClient(appTree);
@@ -734,7 +719,7 @@ type AppClient = ClientOf<AppTree>;
 type _ = AppClient;
 
 // ============================================================================
-// POSITIVE ASSERTIONS (compile-time type checking + runtime)
+// Positive assertions (compile-time type checking + runtime)
 // ============================================================================
 
 // client.todos.GET() → Promise<Todo[]>
@@ -750,7 +735,7 @@ const todoByIdClient = client.todos("1");
 const todoById1Result: Promise<Todo | null> = todoByIdClient.GET();
 
 // ============================================================================
-// NEGATIVE ASSERTIONS — @ts-expect-error probes
+// Negative assertions — @ts-expect-error probes
 // (wrapped in false && ... so they never execute at runtime)
 // ============================================================================
 
@@ -771,7 +756,7 @@ const _neg3 = false && client.todos.DELETE();
 const _neg4 = false && client.nonexistent;
 
 // ============================================================================
-// DISCHARGE STILL HOLDS
+// Discharge algebra.
 //
 // The Omit<C,K> discharge algebra is preserved:
 //   - getByIdLeaf: TNode<{id:string}, Todo|null, ...>
@@ -780,8 +765,9 @@ const _neg4 = false && client.nonexistent;
 //   - todosRoute: TNode<{}, unknown, TRouteMeta<...>> — fully discharged
 //   - appTree: TNode<{}, unknown, TRouteMeta<...>> — fully discharged
 //
-// G1-style check: a leaf expecting {id:number} is NOT assignable to one expecting
-// {id:string} — the type system preserves string-pinning through TNode.
+// G1-style check: a leaf expecting {id:number} is not assignable to one
+// expecting {id:string} — the type system preserves string-pinning through
+// TNode.
 // ============================================================================
 
 const _g1NumberLeaf = leaf<{ id: number }, string>(async (req) => String(req.params.id));
@@ -790,7 +776,7 @@ const _g1StringLeaf = leaf<{ id: string }, string>(async (req) => req.params.id)
 // Discharge: TNode<{id:string},...> is assignable to itself
 const _dischargeOk: TNode<{ id: string }, string, TLeafMeta<string>> = _g1StringLeaf;
 
-// G1: TNode<{id:number},...> is NOT assignable to TNode<{id:string},...>
+// G1: TNode<{id:number},...> is not assignable to TNode<{id:string},...>
 // @ts-expect-error [DISCHARGE-G1: TNode<{id:number}> not assignable to TNode<{id:string}>]
 const _dischargeG1Fail: TNode<{ id: string }, string, TLeafMeta<string>> = _g1NumberLeaf;
 
@@ -827,7 +813,7 @@ const expectedFragment: OpenApiPaths = {
 };
 
 // ============================================================================
-// RUNTIME
+// Runtime
 // ============================================================================
 
 console.log("=== spike/path-bothand.ts — both-and route + callable-object client ===\n");
