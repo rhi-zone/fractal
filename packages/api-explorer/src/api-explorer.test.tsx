@@ -22,28 +22,24 @@ import { ApiExplorer } from "./api-explorer.tsx";
 import { ApiExplorerFetchProvider } from "./fetch-context.tsx";
 
 // ============================================================================
-// Real-verification test: renders <ApiExplorer/> into a real (happy-dom) DOM,
-// clicks its "Send" button, and asserts the response shown on screen came
-// from an ACTUAL in-process request run through http-api-projector's real
-// `createFetch` + `toDropInFetch` — the same adapter
-// docs/design/mocked-fetch-backend.md resolved as the doc-embed integration
-// point. Nothing here is a mock of the component's own fetch call: the
-// tree's handler genuinely executes, genuine routing/validation happens, and
-// the assertion below reads the genuine `Response` body back out of the
-// rendered DOM. This is the "actually render/build against a fixture route"
-// check called for — not just a compile check.
+// Renders <ApiExplorer/> into a real (happy-dom) DOM, clicks its "Send"
+// button, and asserts the on-screen response came from an in-process
+// request run through http-api-projector's real `createFetch` +
+// `toDropInFetch` — the adapter docs/design/mocked-fetch-backend.md defines
+// as the doc-embed integration point. The tree's handler executes for real,
+// routing and validation run for real, and the assertion reads the real
+// `Response` body back out of the rendered DOM.
 //
-// http-api-projector's own source is imported by RELATIVE path rather than
-// its package name (`@rhi-zone/fractal-http-api-projector`): this package
-// isn't (yet) registered in the root workspaces array (a sibling in-flight
-// change owns that file right now — see this session's handoff), so no
+// http-api-projector's source is imported by relative path rather than its
+// package name (`@rhi-zone/fractal-http-api-projector`): this package is
+// not yet registered in the root workspaces array, so no
 // `node_modules/@rhi-zone/fractal-http-api-projector` symlink exists for a
 // bare-specifier import to resolve against here. A relative import bypasses
-// package resolution entirely; the imported files' OWN internal bare
+// package resolution entirely; the imported files' own internal bare
 // imports (e.g. preset.ts's `@rhi-zone/fractal-api-tree`) still resolve
-// correctly regardless, since Node/Bun resolution is always rooted at the
-// IMPORTING file's own location (packages/http-api-projector/src/, which
-// already has its own node_modules) — not at this test file's location.
+// correctly, since Node/Bun resolution is rooted at the importing file's
+// own location (packages/http-api-projector/src/, which has its own
+// node_modules), not at this test file's location.
 // ============================================================================
 
 import { api, op } from "../../api-tree/src/index.ts";
@@ -106,15 +102,17 @@ describe("ApiExplorer", () => {
 
   test("a route with a {param} segment renders one input per param, defaulted into the shown request URL", async () => {
     // Wildcard path params are authored via a tree `fallback` (see
-    // http-manifest.test.ts's own "/books/:bookId" fixture) — the segment
-    // name becomes both the URL wildcard and the bound input field.
-    // (Simulating an actual keystroke into this input and re-asserting the
+    // http-manifest.test.ts's "/books/:bookId" fixture) — the segment name
+    // becomes both the URL wildcard and the bound input field.
+    //
+    // Simulating a keystroke into this input and re-asserting the
     // interpolated URL is covered at the unit level instead, in
-    // path-template.test.ts — see that file's own comment for why: React's
+    // path-template.test.ts (see that file's comment): React's
     // controlled-input value tracking isn't reliably simulatable in this
-    // package's happy-dom test environment. This test stays DOM-level for
-    // what a DOM environment CAN reliably prove: the params UI renders and
-    // the live path preview reflects `interpolatePath`'s real output.)
+    // package's happy-dom test environment. This test stays DOM-level,
+    // covering what a DOM environment can reliably prove — that the params
+    // UI renders and the live path preview reflects `interpolatePath`'s
+    // real output.
     const echoTree = api({
       items: api(
         {},

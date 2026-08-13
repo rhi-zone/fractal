@@ -18,25 +18,24 @@ import { ApiExplorer } from "./api-explorer.tsx";
 import { ApiExplorerFetchProvider } from "./fetch-context.tsx";
 
 // ============================================================================
-// End-to-end check spanning BOTH new pieces of this session's work: the
-// route-level projector (http-api-projector's http-route-reference.ts) and
-// this package's <ApiExplorer/> component. Rather than asserting on each in
-// isolation (http-route-reference.test.ts already checks the generated MDX
-// text directly; api-explorer.test.tsx already checks the component against
+// End-to-end check spanning both the route-level projector
+// (http-api-projector's http-route-reference.ts) and this package's
+// <ApiExplorer/> component. Rather than asserting on each in isolation
+// (http-route-reference.test.ts already checks the generated MDX text
+// directly; api-explorer.test.tsx already checks the component against
 // hand-written props), this test:
 //
-//   1. builds a REAL OpenApiDoc from a REAL tree (toOpenApi)
-//   2. runs it through the REAL toDocusaurusRouteReference projector
-//   3. parses the method/path/responseSchema PROPS OUT OF THE ACTUAL
-//      GENERATED MDX TEXT (not reconstructed by hand)
-//   4. renders <ApiExplorer/> with exactly those props, wired to a REAL
-//      toDropInFetch(createFetch(tree)) over the SAME tree
-//   5. clicks Send and asserts the on-screen response is the tree's real
+//   1. builds an OpenApiDoc from a tree (toOpenApi)
+//   2. runs it through the toDocusaurusRouteReference projector
+//   3. parses the method/path/responseSchema props out of the generated
+//      MDX text (not reconstructed by hand)
+//   4. renders <ApiExplorer/> with exactly those props, wired to a
+//      toDropInFetch(createFetch(tree)) instance over the same tree
+//   5. clicks Send and asserts the on-screen response is the tree's
 //      handler output
 //
-// This is the "actually render/build against a fixture route" bar in full:
-// every step from tree -> generated doc page -> live component -> real
-// response is exercised with real code, nothing stubbed.
+// Every step, from tree construction to generated doc page to live
+// component to rendered response, runs through real code.
 // ============================================================================
 
 import { api, op } from "../../api-tree/src/index.ts";
@@ -61,10 +60,9 @@ const schemas = {
 };
 
 /** Pull `method`/`path`/`responseSchema` back out of a generated MDX page's
- * `<ApiExplorer .../>` tag — deliberately re-PARSING the projector's actual
- * text output rather than calling internal helpers, so this test proves
- * what the generated page really contains, not what the projector's source
- * intended to emit. */
+ * `<ApiExplorer .../>` tag by parsing the projector's text output, rather
+ * than calling internal helpers — this proves what the generated page
+ * contains, not just what the projector's source intended to emit. */
 function propsFromGeneratedPage(mdx: string): {
   method: string;
   path: string;
@@ -73,8 +71,8 @@ function propsFromGeneratedPage(mdx: string): {
   // `[^>]*` alone would also match the literal `<ApiExplorer .../>` mention
   // inside the page's own "not shipped by this projector" MDX-comment note
   // (see http-route-reference.ts's renderDocusaurusPage) — requiring the
-  // real tag's first real attribute (`method="`) right after the tag name
-  // is what actually disambiguates the two.
+  // real tag's first attribute (`method="`) right after the tag name
+  // disambiguates the two.
   const tag = mdx.match(/<ApiExplorer method="[^>]*\/>/)?.[0];
   if (tag === undefined) throw new Error("no <ApiExplorer/> tag found in generated page");
   const method = tag.match(/method="([^"]*)"/)?.[1];

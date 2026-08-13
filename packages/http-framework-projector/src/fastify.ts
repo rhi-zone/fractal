@@ -33,52 +33,48 @@
 //
 // VALIDATION: generated, unlike express.ts. Per
 // docs/design/framework-router-codegen.md's "Validator/schema mapping per
-// target" section, Fastify's dominant convention is JSON-Schema-NATIVE
+// target" section, Fastify's dominant convention is JSON-Schema-native
 // validation via the route `schema` option (`body`/`querystring`/`params`/
 // `response`), validated internally by Fastify's own `ajv` instance — no
 // user code calls a validator function the way Hono's `zValidator`/Elysia's
 // `t.Object` do. Fractal's `SchemaMap`/`ToolSchema.inputSchema`/
-// `outputSchema` are ALREADY JSON-Schema-shaped (see the design doc's
+// `outputSchema` are already JSON-Schema-shaped (see the design doc's
 // correction: `SchemaMap` is a JSON-Schema projection of `TypeRef`), so
-// generating Fastify's `schema` option is a direct structural fit, not a
-// TypeRef->Zod/TypeBox source-text emission the way Hono/Elysia will need —
-// the design doc explicitly calls this out ("JSON-Schema-native validation,
-// which lines up well with fractal's own schema story"). The one piece of
-// real work: `ToolSchema.inputSchema` is ONE combined object schema covering
-// every input field (path params + query/body merged, mirroring how
-// `assemble` merges them at runtime) — Fastify wants path params, query
-// params, and body validated as three SEPARATE schemas
-// (`params`/`querystring`/`body`). This module splits the combined input
-// schema's `properties` by key: keys matching a `:name` path segment go to
-// `params`, the rest go to `querystring` (GET/HEAD/DELETE) or `body`
+// generating Fastify's `schema` option is a direct structural fit rather
+// than a TypeRef->Zod/TypeBox source-text emission the way Hono/Elysia will
+// need — the design doc calls this out explicitly ("JSON-Schema-native
+// validation, which lines up well with fractal's own schema story"). The
+// one piece of real work: `ToolSchema.inputSchema` is a single combined
+// object schema covering every input field (path params + query/body
+// merged, mirroring how `assemble` merges them at runtime), while Fastify
+// wants path params, query params, and body validated as three separate
+// schemas (`params`/`querystring`/`body`). This module splits the combined
+// input schema's `properties` by key: keys matching a `:name` path segment
+// go to `params`, the rest go to `querystring` (GET/HEAD/DELETE) or `body`
 // (POST/PUT/PATCH). Splitting only happens for a plain
-// `{ type: "object", properties: {...} }` shape — an input schema that
-// isn't a simple object of properties (rare, but `JsonSchema`'s union allows
-// `anyOf`/`enum`/etc. at the top level) is left unsplit and no `schema`
-// option is emitted for that operation, the same "documented degradation,
-// not silently swallowed" approach express.ts takes for its own
-// simplifications. `response: { 200: ... }` is emitted directly from
-// `outputSchema` when present — no splitting needed, it's already the whole
-// response body shape.
+// `{ type: "object", properties: {...} }` shape; an input schema that isn't
+// a simple object of properties (rare, but `JsonSchema`'s union allows
+// `anyOf`/`enum`/etc. at the top level) is left unsplit, and no `schema`
+// option is emitted for that operation — the same documented-degradation
+// approach express.ts takes for its own simplifications.
+// `response: { 200: ... }` is emitted directly from `outputSchema` when
+// present; no splitting is needed since it's already the whole response
+// body shape.
 //
 // RESPONSE ENCODING: the handler's return value is returned directly from
-// the route handler (`return await handlers...(input)`), not sent via an
-// explicit `reply.send(...)` call — Fastify's own convention: an async
-// route handler's resolved return value becomes the response body
-// (JSON-serialized automatically), which is the documented idiomatic
-// pattern, not an invented one. This mirrors express.ts's "always the
-// implicit default 200, mirroring `defaultEncode`" — custom status codes
-// via `meta.http.response` are NOT reflected, same eject-then-hand-edit
-// answer.
+// the route handler (`return await handlers...(input)`) rather than sent
+// via an explicit `reply.send(...)` call — Fastify's own convention, where
+// an async route handler's resolved return value becomes the response body
+// (JSON-serialized automatically). This mirrors express.ts's implicit
+// default-200 behavior (`defaultEncode`); custom status codes via
+// `meta.http.response` are not reflected, same eject-then-hand-edit answer.
 //
-// ERRORS: NOT wrapped in try/catch, unlike express.ts's `next(err)`.
+// ERRORS: not wrapped in try/catch, unlike express.ts's `next(err)`.
 // Fastify's own convention: a thrown error (or rejected promise) from an
 // async route handler is caught by Fastify itself and forwarded to its
 // error-handling machinery (`setErrorHandler`, or Fastify's default JSON
-// error response) automatically — there is no `next` parameter in a Fastify
-// route handler to forward to. Adding a manual try/catch here would be
-// fighting the framework's own error-propagation convention, not following
-// it.
+// error response) automatically — there is no `next` parameter in a
+// Fastify route handler to forward to.
 //
 // See:
 //   packages/http-framework-projector/src/express.ts — this module's structural precedent (first target)
@@ -357,9 +353,9 @@ function pathParamNames(path: string): string[] {
 
 // ============================================================================
 // Internal: JSON Schema -> TypeScript type string — duplicated from
-// express.ts (see its own doc: deliberately a subset converter matching the
-// shapes JsonSchema actually has; unrecognized shapes degrade to
-// unknown/Record<string, unknown> rather than guessing).
+// express.ts (see its own doc: a subset converter matching the shapes
+// JsonSchema actually has; unrecognized shapes degrade to
+// unknown/Record<string, unknown>).
 // ============================================================================
 
 function schemaToType(schema: JsonSchema | undefined, indent: string): string {
@@ -435,9 +431,8 @@ type SplitInputSchema = {
  * `{ type: "object"|implicit, properties: {...} }` shape express.ts's own
  * `schemaToType` already assumes is the common case for a fractal input
  * type; anything else (top-level `anyOf`/`enum`/`const`, no `properties` at
- * all) is left unsplit and reported as `undefined` for both positions — no
- * `schema` option is emitted for that operation, a documented degradation
- * rather than a guess at how to partition a non-object shape.
+ * all) is left unsplit and reported as `undefined` for both positions; no
+ * `schema` option is emitted for that operation, a documented degradation.
  */
 function splitInputSchema(
   schema: JsonSchema | undefined,

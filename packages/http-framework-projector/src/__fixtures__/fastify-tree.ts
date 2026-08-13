@@ -1,10 +1,10 @@
 // packages/http-framework-projector/src/__fixtures__/fastify-tree.ts
 //
 // Schema-extraction fixture for fastify.test.ts. `extractToolSchemas` walks
-// a real SOURCE FILE (TypeScript types, not runtime values) to derive JSON
+// a real source file (TypeScript types, not runtime values) to derive JSON
 // Schema for each op's input/output — it can't be pointed at an in-memory
 // tree built inside a test function, so this file exists purely to give it
-// something to read. Its exported tree's SHAPE (keys, path-param name,
+// something to read. Its exported tree's shape (keys, path-param name,
 // input/output types) must match `makeStore()` in fastify.test.ts exactly —
 // same duplication-for-a-reason express-tree.ts documents.
 

@@ -6,14 +6,13 @@
 //      generated `schema` options) for a self-contained fixture tree.
 //   2. Eval (end-to-end): write the generated source to a temp file, import
 //      it as a real module, register the returned `FastifyPluginAsync` on a
-//      REAL `fastify()` instance, and drive real HTTP requests at it via raw
-//      `fetch` against a listening server — proving the emitted code is not
-//      just plausible-looking text but an actually-working Fastify plugin,
-//      AND that Fastify's own native JSON-Schema validation (the
-//      `schema.body`/`querystring`/`params`/`response` options this codegen
-//      emits) really runs against real requests.
+//      real `fastify()` instance, and drive real HTTP requests at it via raw
+//      `fetch` against a listening server, confirming the emitted code
+//      works as an actual Fastify plugin and that Fastify's own native
+//      JSON-Schema validation (the `schema.body`/`querystring`/`params`/
+//      `response` options this codegen emits) runs against real requests.
 //   3. HttpRoute-driven (no Node): `generateFastifyRoutes(route, schemas)`
-//      called directly, proving the core entry point works standalone.
+//      called directly, exercising the core entry point standalone.
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -201,10 +200,10 @@ describe("generated Fastify routes — real app, real requests", () => {
       routerName: "Books",
     });
 
-    // Written under the package's OWN `.local-data/` (gitignored) rather
+    // Written under the package's own `.local-data/` (gitignored) rather
     // than the OS tmpdir, same reason express.test.ts documents: the
     // generated file `import type`s "fastify", and module resolution walks
-    // UP from the importing file's directory looking for `node_modules`.
+    // up from the importing file's directory looking for `node_modules`.
     const localDataDir = join(import.meta.dir, "..", ".local-data");
     await mkdir(localDataDir, { recursive: true });
     tmpDir = await mkdtemp(join(localDataDir, "fastify-codegen-"));
@@ -214,7 +213,7 @@ describe("generated Fastify routes — real app, real requests", () => {
       createBooksRoutes: (handlers: unknown) => (fastify: FastifyInstance) => Promise<void>;
     };
 
-    // Wire the SAME handler functions the fixture tree's leaves already
+    // Wire the same handler functions the fixture tree's leaves already
     // carry — same unwrap approach express.test.ts uses.
     type LooseNode = {
       readonly children?: Record<string, LooseNode>;

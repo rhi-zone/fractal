@@ -9,60 +9,56 @@
 //
 // EJECT MODEL (see docs/design/framework-router-codegen.md "Regen vs.
 // one-time eject" — decided by the project owner): this writes the router
-// file ONCE. Nothing here re-runs codegen automatically or asserts the
+// file once. Nothing here re-runs codegen automatically or asserts the
 // output still matches the source tree. The emitted file carries a
 // `// @generated ... do not edit` header (mirroring `codegen.ts`'s HEADER)
 // as the minimal signal that hand-editing it means it will not be
-// transparently overwritten by a future regen invocation — full
-// drift-detection (hash-stamped, refuse/force/diff modes) is scoped in the
-// design doc but not implemented here.
+// transparently overwritten by a future regen invocation.
 //
 // HANDLER WIRING: the factory takes a `Handlers` argument — a plain nested
 // object mirroring the route tree's shape, each leaf typed as fractal's own
 // `Handler<I, O> = (input: I) => O | Promise<O>` signature
-// (`@rhi-zone/fractal-api-tree/node`). This is deliberate: fractal's `Handler`
-// already receives ONE assembled `input` object that includes path-param
-// values merged in alongside query/body fields (see `route.ts`'s `assemble`)
-// — so the SAME handler functions already wired into a fractal `api()`/`op()`
-// tree can be passed straight into the generated factory unchanged, with no
-// import-path guessing about where those handlers live. This differs from
-// `codegen.ts`'s CLIENT codegen, which curries path params via
-// `(id: string) => subClient` — that shape exists there because an HTTP
-// CLIENT supplies path params per call; a SERVER-side handler already
-// receives them as ordinary input fields, so no currying is needed here.
+// (`@rhi-zone/fractal-api-tree/node`). Fractal's `Handler` receives one
+// assembled `input` object that includes path-param values merged in
+// alongside query/body fields (see `route.ts`'s `assemble`), so the same
+// handler functions already wired into a fractal `api()`/`op()` tree pass
+// straight into the generated factory unchanged, with no import-path
+// guessing about where those handlers live. `codegen.ts`'s client codegen
+// curries path params instead, via `(id: string) => subClient`, because an
+// HTTP client supplies path params per call; a server-side handler receives
+// them as ordinary input fields, so no currying happens here.
 //
-// REQUEST DECODING is a deliberately simplified approximation, not a port of
-// `decode.ts`'s full `sources`/`sourceMap` machinery: for GET/HEAD/DELETE,
+// REQUEST DECODING is a simplified approximation of `decode.ts`'s full
+// `sources`/`sourceMap` machinery: for GET/HEAD/DELETE,
 // `input = { ...req.params, ...req.query }`; for POST/PUT/PATCH,
-// `input = { ...req.params, ...req.body }`. No per-param source overrides,
-// no coercion (`req.params`/`req.query` values are always strings — a
-// `number`-typed path param is NOT parsed to a number here). This is the
+// `input = { ...req.params, ...req.body }`. There are no per-param source
+// overrides and no coercion — `req.params`/`req.query` values are always
+// strings, so a `number`-typed path param stays a string here. This is the
 // same class of documented degradation `codegen.ts`'s module doc names for
-// co-located methods: real, not silently swallowed. `req.body` requires the
-// consuming app to already have body-parsing middleware mounted (e.g.
-// `app.use(express.json())`) — this router does not add it, since it may be
-// mounted inside a larger app that already configures its own.
+// co-located methods. `req.body` requires the consuming app to already have
+// body-parsing middleware mounted (e.g. `app.use(express.json())`); this
+// router does not add it, since it may be mounted inside a larger app that
+// already configures its own.
 //
 // VALIDATION: none is generated. Per
 // docs/design/framework-router-codegen.md's "Validator/schema mapping per
 // target" section, Express (unlike Hono's `zValidator` or Elysia's
 // `t.Object`) has no single dominant validation convention to target —
 // generating a Zod/TypeBox call here would be picking a convention the
-// framework itself doesn't have. `<Base>Input`/`<Base>Output` TYPE aliases
-// ARE still emitted (from `SchemaMap`, same `schemaToType` JSON-Schema-subset
-// conversion `codegen.ts` uses) purely for compile-time DX on the `Handlers`
-// type — no runtime check is generated from them.
+// framework itself doesn't have. `<Base>Input`/`<Base>Output` type aliases
+// are still emitted (from `SchemaMap`, the same `schemaToType`
+// JSON-Schema-subset conversion `codegen.ts` uses) for compile-time DX on
+// the `Handlers` type; no runtime check is generated from them.
 //
 // RESPONSE ENCODING: always `res.json(result ?? null)` at the implicit
-// default 200 status — mirrors `route.ts`'s own `defaultEncode`
-// (`jsonRouteResponse(output, { status: 200 })`), not an invented
-// convention. Custom status codes set via `meta.http.response`
-// (`applyResponse`) are NOT reflected — same "eject, then hand-edit" answer
-// as everything else this module simplifies.
+// default 200 status, mirroring `route.ts`'s own `defaultEncode`
+// (`jsonRouteResponse(output, { status: 200 })`). Custom status codes set
+// via `meta.http.response` (`applyResponse`) are not reflected — same
+// "eject, then hand-edit" answer as everything else this module simplifies.
 //
-// ERRORS: caught and passed to `next(err)` — Express's own built-in
-// error-handling convention (not a fractal invention), letting the
-// consumer's existing error-handling middleware decide the response shape.
+// ERRORS: caught and passed to `next(err)`, Express's own built-in
+// error-handling convention, letting the consumer's existing
+// error-handling middleware decide the response shape.
 //
 // See:
 //   packages/http-api-projector/src/codegen.ts — client codegen, this module's closest precedent
@@ -331,9 +327,9 @@ function handlerAccessExpr(pathKeys: readonly string[], memberName: string): str
 
 // ============================================================================
 // Internal: JSON Schema -> TypeScript type string — duplicated from
-// codegen.ts (see its own doc: deliberately a subset converter matching the
-// shapes JsonSchema actually has; unrecognized shapes degrade to
-// unknown/Record<string, unknown> rather than guessing).
+// codegen.ts (see its own doc: a subset converter matching the shapes
+// JsonSchema actually has; unrecognized shapes degrade to
+// unknown/Record<string, unknown>).
 // ============================================================================
 
 function schemaToType(schema: JsonSchema | undefined, indent: string): string {

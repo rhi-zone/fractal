@@ -5,18 +5,18 @@ import { interpolatePath, pathParamNames } from "./path-template.ts";
 // ============================================================================
 // <ApiExplorer/> — a minimal, functional "make one real request against this
 // documented route" widget, embedded per-route by http-route-reference.ts's
-// generated Docusaurus/Starlight pages. Deliberately NOT a full Postman clone
-// (auth flows, request history, collections, ...) — packages/playground/ is
-// the place for a fuller interactive tool (see docs/design/mocked-fetch-
-// backend.md's "Use case 1" vs "Use case 2" split); this component's whole
-// job is "prove the documented shape works, without leaving the doc page."
+// generated Docusaurus/Starlight pages. It is not a full Postman clone (auth
+// flows, request history, collections, ...); packages/playground/ is the
+// place for a fuller interactive tool (see docs/design/mocked-fetch-
+// backend.md's "Use case 1" vs "Use case 2" split). This component's job is
+// to prove the documented shape works, without leaving the doc page.
 //
-// Every request goes through `useApiExplorerFetch()` (fetch-context.tsx) — by
-// default the ambient global `fetch`, or whatever a site-wide
+// Every request goes through `useApiExplorerFetch()` (fetch-context.tsx) —
+// by default the ambient global `fetch`, or whatever a site-wide
 // `<ApiExplorerFetchProvider>` wires in (e.g. a mocked-fetch-backend
-// `toDropInFetch(createFetch(tree))` instance for docs built from a tree that
-// has no real deployed server yet). Either way this issues a REAL fetch call
-// through that function — nothing here fabricates a response.
+// `toDropInFetch(createFetch(tree))` instance for docs built from a tree
+// that has no real deployed server yet). Either way, this issues a real
+// fetch call through that function.
 // ============================================================================
 
 /** A JSON-Schema-shaped object, same open-bag convention as
@@ -44,10 +44,9 @@ export type ApiExplorerProps = {
 };
 
 /** One placeholder value per top-level schema property, keyed by its JSON
- * Schema `type` — enough to give a reader a valid starting shape to edit,
- * not a full JSON Schema example generator (see json-schema.ts's `examples`
- * handling elsewhere in this codebase for the richer, authored-example
- * case this deliberately doesn't duplicate). */
+ * Schema `type` — enough to give a reader a valid starting shape to edit.
+ * See json-schema.ts's `examples` handling elsewhere in this codebase for
+ * the richer, authored-example case this does not attempt. */
 function placeholderFor(schema: JsonSchemaLike | undefined): unknown {
   const type = schema?.type;
   switch (type) {

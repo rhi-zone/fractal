@@ -5,13 +5,13 @@
 //      shape (imports, path syntax, Handlers type, factory function) for a
 //      self-contained fixture tree.
 //   2. Eval (end-to-end): write the generated source to a temp file, import
-//      it as a real module, mount the returned `Router` into a REAL
+//      it as a real module, mount the returned `Router` into a real
 //      `express()` app, and drive real HTTP requests at it via `supertest`-
-//      free raw `fetch` against a listening server — proving the emitted
-//      code is not just plausible-looking text but an actually-working
-//      Express router.
+//      free raw `fetch` against a listening server, confirming the emitted
+//      code works as an actual Express router, not just matching expected
+//      text.
 //   3. HttpRoute-driven (no Node): `generateExpressRouter(route, schemas)`
-//      called directly, proving the core entry point works standalone.
+//      called directly, exercising the core entry point standalone.
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -29,9 +29,9 @@ import { generateExpressRouter, generateExpressRouterFromNode } from "./express.
 
 // ============================================================================
 // Fixture tree — books list/add (static), plus a per-book fallback subtree
-// with a co-located read/replace/remove trio, mirroring the shape
-// examples/library-api/src/tree.ts uses for the same reason (real
-// path-param + co-location coverage, not synthetic edge cases).
+// with a co-located read/replace/remove trio, matching the shape
+// examples/library-api/src/tree.ts uses: real path-param and co-location
+// coverage.
 // ============================================================================
 
 type Book = { readonly id: string; readonly title: string; readonly author: string };
@@ -189,9 +189,9 @@ describe("generated Express router — real app, real requests", () => {
       routerName: "Books",
     });
 
-    // Written under the package's OWN `.local-data/` (gitignored, see root
+    // Written under the package's own `.local-data/` (gitignored, see root
     // .gitignore) rather than the OS tmpdir: the generated file `import`s
-    // "express", and Node/Bun module resolution walks UP from the importing
+    // "express", and Node/Bun module resolution walks up from the importing
     // file's directory looking for `node_modules` — a path outside this
     // package tree would never find the package-local `node_modules/express`
     // bun's isolated linker installed.
@@ -204,10 +204,10 @@ describe("generated Express router — real app, real requests", () => {
       createBooksRouter: (handlers: unknown) => Router;
     };
 
-    // Wire the SAME handler functions the fixture tree's leaves already
-    // carry — proving the generated `Handlers` shape lines up with the
-    // authored tree without any adaptation. Handler leaves are `{ handler,
-    // meta }` in the raw Node tree; `unwrap` pulls the callable out.
+    // Wire the same handler functions the fixture tree's leaves already
+    // carry, so the generated `Handlers` shape lines up with the authored
+    // tree with no adaptation. Handler leaves are `{ handler, meta }` in the
+    // raw Node tree; `unwrap` pulls the callable out.
     type LooseNode = {
       readonly children?: Record<string, LooseNode>;
       readonly fallback?: { readonly subtree: LooseNode };
