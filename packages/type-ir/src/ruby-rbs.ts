@@ -4,7 +4,7 @@ import { capitalize, isA, quote } from "./codegen-helpers.ts";
 // RBS (https://github.com/ruby/rbs, bundled with Ruby 3+) — Ruby's own type
 // signature-file format. Unlike ruby-sorbet.ts's Sorbet mode (inline `sig`
 // blocks living alongside the `.rb` source they describe), RBS lives in a
-// SEPARATE `.rbs` file next to the Ruby source — it describes an existing
+// separate `.rbs` file next to the Ruby source — it describes an existing
 // class's shape, it does not define the class. This projector's top-level
 // entry point (`toRbsFile`) therefore emits a full `.rbs`-file-shaped
 // `class`/`type` declaration set, the RBS analogue of what ruby-sorbet.ts's
@@ -14,8 +14,8 @@ import { capitalize, isA, quote } from "./codegen-helpers.ts";
 // (`toRbsType`/`coreRbsType`, which this file duplicates rather than
 // imports — see the note below `toRbsType`):
 //
-//   - `class` declarations here carry BOTH the read accessors ruby-sorbet.ts
-//     already emits AND a `def initialize: (...) -> void` signature — a real
+//   - `class` declarations here carry both the read accessors ruby-sorbet.ts
+//     already emits and a `def initialize: (...) -> void` signature — a real
 //     `.rbs` file describes a class's full public interface, not just its
 //     attribute readers, and `initialize`'s keyword-argument signature is
 //     how RBS expresses "this attribute is required vs. has a default"
@@ -37,13 +37,13 @@ import { capitalize, isA, quote } from "./codegen-helpers.ts";
 //     rather than being inlined at every use site.
 //   - Discriminated unions (`meta.discriminator`): RBS has no native
 //     discriminated-union construct either — degrades to a plain `|` union
-//     with a comment, same honest-degrade convention python-attrs.ts uses,
-//     naming pattern matching on the discriminant field as the idiomatic
-//     Ruby-level escape hatch (RBS itself has no dispatch syntax to point
-//     at — dispatch is a `.rb`-source concern).
+//     with a comment, same degrade convention python-attrs.ts uses, naming
+//     pattern matching on the discriminant field as the idiomatic Ruby-level
+//     escape hatch (RBS itself has no dispatch syntax to point at — dispatch
+//     is a `.rb`-source concern).
 //
 // Everything else (scalar mapping, collections, union/nilable rendering,
-// literal types, function `^(...) -> R` syntax) is IDENTICAL to
+// literal types, function `^(...) -> R` syntax) is identical to
 // ruby-sorbet.ts's RBS mode — RBS's own type-expression grammar doesn't
 // change based on which projector emits it.
 

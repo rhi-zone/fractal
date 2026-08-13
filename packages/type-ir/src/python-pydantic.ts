@@ -276,9 +276,9 @@ const handlers: Record<string, Converter> = {
     ctx.typingImports.add("AsyncIterator");
     return `AsyncIterator[${toPydanticType(s.element, ctxName, ctx)}]`;
   },
-  // No pagination convention in Python's standard vocabulary — degrades
-  // honestly to `list[T]` over the page's element type, same as
-  // python-dataclass.ts's page handler.
+  // No pagination convention in Python's standard vocabulary — falls back
+  // to `list[T]` over the page's element type, same as python-dataclass.ts's
+  // page handler.
   page: (shape, _ref, ctxName, ctx) => {
     const s = shape as TypeShape & { kind: "page" };
     return `list[${toPydanticType(s.element, ctxName, ctx)}]`;

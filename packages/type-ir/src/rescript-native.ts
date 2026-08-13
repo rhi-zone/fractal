@@ -6,35 +6,33 @@
 // rescript-schema, etc. — so this projector, like flow-native.ts/php-native.ts,
 // sticks to the type layer only).
 //
-// Design choice worth flagging explicitly (see this file's header for the
-// tradeoff, not silently picked): ReScript has TWO sum-type constructs —
-// ordinary (nominal) variants (`type t = Foo | Bar(int)`, must be declared
-// under a name, cannot appear as an anonymous inline type) and polymorphic
-// variants (`` [#foo | #bar(int)] ``, structurally typed, CAN appear inline
-// with no prior declaration — see docs/design/type-ir-survey.md section 5).
-// This projector renders `union`/`enum` as ORDINARY nominal variants, hoisted
+// ReScript has two sum-type constructs — ordinary (nominal) variants
+// (`type t = Foo | Bar(int)`, must be declared under a name, cannot appear as
+// an anonymous inline type) and polymorphic variants (`` [#foo | #bar(int)] ``,
+// structurally typed, can appear inline with no prior declaration — see
+// docs/design/type-ir-survey.md section 5).
+// This projector renders `union`/`enum` as ordinary nominal variants, hoisted
 // to their own top-level declaration exactly the way elm-json.ts hoists Elm's
 // (also nominal-only) custom types — nested unions/enums encountered while
 // rendering a field are lifted out to a synthetic top-level `type` and the
-// field just references it by name. This was picked for consistency with the
+// field just references it by name. This is chosen for consistency with the
 // sibling ML-family projector (elm-json.ts) and because ordinary variants are
 // the more idiomatic, more widely tooled ReScript default (better
 // pattern-match exhaustiveness diagnostics, plays better with `@genType`/
-// interop tooling). The real alternative — inline polymorphic variants,
-// avoiding hoisting entirely and staying closer to how `union` behaves in the
-// structural projectors (flow-native.ts, php-native.ts) — is a genuine,
-// differently-shaped design with its own tradeoffs (no separate named
-// declaration needed, but weaker exhaustiveness checking, `#tag` payload
-// syntax instead of `Ctor(payload)`, and a less common idiom in ReScript
-// codebases for closed, non-extensible sum types). Not chosen here; flagged
-// rather than silently decided.
+// interop tooling). The alternative — inline polymorphic variants, avoiding
+// hoisting entirely and staying closer to how `union` behaves in the
+// structural projectors (flow-native.ts, php-native.ts) — is a differently
+// shaped design with its own tradeoffs: no separate named declaration needed,
+// but weaker exhaustiveness checking, `#tag` payload syntax instead of
+// `Ctor(payload)`, and a less common idiom in ReScript codebases for closed,
+// non-extensible sum types.
 //
 // Records are ReScript's `type name = { field: T, ... }`; unlike Elm,
-// ReScript record types (like variants) must ALSO be declared under a name —
+// ReScript record types (like variants) must also be declared under a name —
 // there's no anonymous inline record-type syntax — so a nested `object`
 // encountered in field position is hoisted exactly the same way a nested
 // union/enum is (elm-json.ts didn't need this because Elm's `{ field : T }`
-// IS a valid anonymous inline type).
+// is a valid anonymous inline type).
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { toPascalCaseFromWords } from "./codegen-helpers.ts";
 
@@ -214,8 +212,7 @@ const typeHandlers: Record<string, Converter> = {
   // `empty`/TS's `never`) usable at an arbitrary inline type position — an
   // empty variant (`type t = |`) can express "uninhabited" but only as its
   // own named declaration, not inline, so `never` degrades to the same
-  // opaque JSON-value placeholder `unknown` uses (honest degrade, not a
-  // fabricated builtin name).
+  // opaque JSON-value placeholder `unknown` uses.
   never: leaf("Js.Json.t"),
   // A nested object type has nowhere to inline to (ReScript record types, like
   // variants, must be declared under a name — no `{ field: T }` anonymous
@@ -233,7 +230,7 @@ const typeHandlers: Record<string, Converter> = {
     return `array<${rescriptType(s.element, ctx, `${nameHint}Item`)}>`;
   },
   // No native async-sequence construct — degrades to its array equivalent,
-  // same honest-degrade convention elm-json.ts/flow-native.ts use.
+  // same degrade convention elm-json.ts/flow-native.ts use.
   stream: (shape, ctx, nameHint) => {
     const s = shape as TypeShape & { kind: "stream" };
     return `array<${rescriptType(s.element, ctx, `${nameHint}Item`)}>`;
@@ -251,8 +248,7 @@ const typeHandlers: Record<string, Converter> = {
   },
   // `Js.Dict.t<V>` — ReScript's standard string-keyed dictionary
   // (https://rescript-lang.org/docs/manual/latest/api/js/dict). Only a
-  // faithful rendering for STRING keys; see the file-level design-choice note
-  // for non-string-keyed maps (flagged as ambiguous below, not guessed at).
+  // faithful rendering for string keys; non-string-keyed maps fall back below.
   map: (shape, ctx, nameHint) => {
     const s = shape as TypeShape & { kind: "map" };
     if (s.key.shape.kind === "string")
@@ -262,8 +258,7 @@ const typeHandlers: Record<string, Converter> = {
     // string-keyed only; `Belt.Map.t` needs a first-class comparator module,
     // not just two type parameters) — degrades to an array of key/value
     // tuples, the closest structural analog that stays representable without
-    // inventing a comparator. See file header: this is a real, flagged
-    // design choice, not the only reasonable one.
+    // inventing a comparator.
     return `array<(${rescriptType(s.key, ctx, `${nameHint}Key`)}, ${rescriptType(s.value, ctx, `${nameHint}Value`)})>`;
   },
   union: (_shape, ctx, nameHint) => hoistedName(ctx, currentRef!, nameHint),
@@ -336,7 +331,7 @@ export function toReScriptType(ref: TypeRef): string {
 
 /** Decapitalizes just the leading character — the inverse of the trivial
  * "first letter uppercased" step of PascalCasing, used below to check
- * whether a constructor name is a LOSSLESS rendering of its member (a pure
+ * whether a constructor name is a lossless rendering of its member (a pure
  * casing difference, e.g. `"active"` -> `Active`) vs. one that actually
  * dropped/reordered information (`"in-progress"` -> `InProgress`, the
  * hyphen is gone for good). */
@@ -497,7 +492,7 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
  * anonymous inline record or sum-type syntax — see this file's header for
  * the union-vs-polymorphic-variant design choice this projector makes).
  *
- * This projector emits TYPES ONLY — no JSON encoder/decoder pair (contrast
+ * This projector emits types only — no JSON encoder/decoder pair (contrast
  * elm-json.ts) — since idiomatic ReScript JSON handling is typically
  * delegated to a chosen library rather than baked into every generated type.
  */

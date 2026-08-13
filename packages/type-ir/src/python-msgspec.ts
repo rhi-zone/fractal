@@ -20,16 +20,16 @@ import { capitalize, quote } from "./codegen-helpers.ts";
 //     `Annotated[T, msgspec.Meta(...)]` — msgspec's own constraint-carrying
 //     construct, enforced during `msgspec.json.decode`/`convert`
 //     (https://jcristharif.com/msgspec/constraints.html). Unlike
-//     python-attrs.ts, `multipleOf` HAS a direct home here
-//     (`msgspec.Meta(multiple_of=...)`) — msgspec ships this constraint even
-//     though attrs' validator vocabulary doesn't.
+//     python-attrs.ts, `multipleOf` has a direct home here
+//     (`msgspec.Meta(multiple_of=...)`) — msgspec ships this constraint,
+//     which attrs' validator vocabulary doesn't.
 //   - `meta.description` also lands inside the same `msgspec.Meta(...)` call
 //     (msgspec.Meta accepts `description`/`title` for schema-generation
 //     purposes) rather than a separate kwarg the way attrs uses
 //     `attrs.field(metadata={...})`.
 //   - `meta.deprecated` has no `msgspec.Meta` slot — msgspec's constraint
 //     vocabulary is about validation, not lifecycle — so it's rendered as a
-//     trailing `# deprecated` comment on the field, the same honest-degrade
+//     trailing `# deprecated` comment on the field, the same degrade
 //     convention ruby-sorbet.ts uses for `@deprecated`.
 //   - msgspec.Struct has no per-field validator hook and no
 //     `__post_init__`-style cross-field-validation hook at all (decoding is
@@ -53,7 +53,7 @@ import { capitalize, quote } from "./codegen-helpers.ts";
 //   - `enum` renders as plain `class X(Enum):` (python-dataclass.ts's/
 //     python-attrs.ts's choice) — msgspec decodes any Enum subclass by
 //     value, no JSON-encoding opinion to motivate str-backing.
-//   - Discriminated unions (`meta.discriminator`): msgspec has REAL native
+//   - Discriminated unions (`meta.discriminator`): msgspec has native
 //     tagged-union support (`msgspec.Struct(tag_field=..., tag=...)`,
 //     https://jcristharif.com/msgspec/structs.html#tagged-unions) — the
 //     degrade comment names that mechanism directly rather than reaching for
@@ -296,9 +296,9 @@ const handlers: Record<string, Converter> = {
     ctx.typingImports.add("AsyncIterator");
     return `AsyncIterator[${toMsgspecType(s.element, ctxName, ctx)}]`;
   },
-  // No pagination convention in Python's standard vocabulary — degrades
-  // honestly to `list[T]` over the page's element type, same as the other
-  // Python variants' page handler.
+  // No pagination convention in Python's standard vocabulary — falls back
+  // to `list[T]` over the page's element type, same as the other Python
+  // variants' page handler.
   page: (shape, _ref, ctxName, ctx) => {
     const s = shape as TypeShape & { kind: "page" };
     return `list[${toMsgspecType(s.element, ctxName, ctx)}]`;

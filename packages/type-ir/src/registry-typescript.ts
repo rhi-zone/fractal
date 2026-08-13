@@ -4,7 +4,7 @@
 // running the real type checker, which needs a `ts.Program` built over the
 // file and its imports, plus the name of the symbol to extract.
 //
-// They live in their own module because `typescript` is an OPTIONAL peer
+// They live in their own module because `typescript` is an optional peer
 // dependency — a consumer who never imports this file never pulls the compiler
 // in, at runtime or at typecheck time. But they are built with the same
 // `defineRegistry` as the base entries and are the same kind of value, so a

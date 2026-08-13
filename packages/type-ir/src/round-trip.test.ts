@@ -8,10 +8,10 @@
 // exercises "does a real external schema survive a round trip," since a
 // TypeRef built by hand is already in the ingester's own preferred shape.
 //
-// Per the task's guidance: never compare the two JSON Schema/OpenAPI
-// documents literally (key order, `$ref` spelling, spurious annotations a
-// projector adds are all expected to differ) — only the ingested TypeRef
-// trees are compared, via `toEqual` (structural deep equality).
+// The two JSON Schema/OpenAPI documents are never compared literally (key
+// order, `$ref` spelling, spurious annotations a projector adds are all
+// expected to differ) — only the ingested TypeRef trees are compared, via
+// `toEqual` (structural deep equality).
 import { describe, expect, test } from "bun:test";
 import { t, types, typeRefDocument, type TypeRef, type TypeRefDocument } from "./index.ts";
 import { fromJsonSchema, type JsonSchema } from "./from-json-schema.ts";

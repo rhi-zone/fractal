@@ -14,8 +14,8 @@ import { capitalize, isA, quote } from "./codegen-helpers.ts";
 //     file next to the `.rb` source it describes, not inline — a caller
 //     that wants RBS output picks these entry points explicitly.
 //
-// Both modes share the same "honest degrade" convention the rest of this
-// package's projectors use (see typescript.ts, protobuf.ts): a shape neither
+// Both modes share the same degrade convention the rest of this package's
+// projectors use (see typescript.ts, protobuf.ts): a shape neither
 // Sorbet nor RBS can express natively (`interface`, a callable in field
 // position, an unnamed nested `object`/`enum` with nowhere to hang a class
 // name) degrades to `T.untyped`/`untyped` rather than fabricating syntax.
@@ -79,7 +79,7 @@ const handlers: Record<string, Converter> = {
   },
   // Sorbet has no native tuple type; a uniform tuple degrades to
   // `T::Array[T]`, a heterogeneous one to `T::Array[T.any(...)]` over its
-  // distinct element types (same lossy-but-honest degrade protobuf.ts uses
+  // distinct element types (same lossy degrade convention protobuf.ts uses
   // for tuples).
   tuple: (shape) => {
     const s = shape as TypeShape & { kind: "tuple" };
@@ -89,7 +89,7 @@ const handlers: Record<string, Converter> = {
   },
   // `Enumerator` is Ruby's closest native analogue to an asynchronously (or
   // lazily) produced sequence — there's no built-in async-iterable construct
-  // to target 1:1, same honest-degrade reasoning as protobuf.ts's `stream`.
+  // to target 1:1, same degrade convention as protobuf.ts's `stream`.
   stream: (shape) => {
     const s = shape as TypeShape & { kind: "stream" };
     return `T::Enumerator[${toRubyType(s.element)}]`;
@@ -147,9 +147,9 @@ const handlers: Record<string, Converter> = {
     return `T.proc${paramsClause}.returns(${toRubyType(s.returnType)})`;
   },
   // A service surface (`interface`) has no Sorbet value-type equivalent —
-  // it's a module's *method* surface, not a type occupying a variable/field
-  // position — degrades honestly to `T.untyped`, same as protobuf.ts's
-  // `interface` handler.
+  // it's a module's method surface, not a type occupying a variable/field
+  // position — degrades to `T.untyped`, same as protobuf.ts's `interface`
+  // handler.
   interface: leaf("T.untyped"),
 };
 
@@ -291,7 +291,7 @@ export function toRubyEnum(name: string, ref: TypeRef): string {
  * Sorbet `sig` block + method signature line for a `function`/`method`
  * TypeRef — used for rendering `interface.methods` entries (an
  * `interface`'s own TypeRef has no Sorbet value-type form, see the
- * `interface` handler above, but its individual methods DO have a natural
+ * `interface` handler above, but its individual methods have a natural
  * Sorbet rendering as instance methods).
  */
 export function toRubyMethodSig(methodName: string, ref: TypeRef): string {

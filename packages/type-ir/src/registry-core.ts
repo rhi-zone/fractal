@@ -9,7 +9,7 @@
 // one function, rather than two parallel dispatch surfaces a caller has to
 // choose between.
 //
-// It is also why this file has no imports at all. `typescript` is an OPTIONAL
+// It is also why this file has no imports at all. `typescript` is an optional
 // peer dependency, so a consumer that never touches the TypeScript-backed
 // entries must not typecheck against `ts.*` — not even in a type position.
 // A registry generic in its entry type never names those types, so the

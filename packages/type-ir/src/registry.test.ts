@@ -57,10 +57,10 @@ describe("registry coverage", () => {
     expect(() => getImporter("nope")).toThrow(/unknown input format/);
   });
 
-  // `typescript` is an OPTIONAL peer dependency. Keeping it out of the core
+  // `typescript` is an optional peer dependency. Keeping it out of the core
   // mechanism and the base registry is the entire reason the checker-backed
-  // entries live in their own module, and it is a property a single casual
-  // import would silently destroy — so it is asserted, not just documented.
+  // entries live in their own module; a single casual import would break
+  // that property, so it is asserted here rather than left as documentation.
   it("neither the core mechanism nor the base registry imports typescript", async () => {
     for (const module of ["registry-core.ts", "registry.ts"]) {
       const source = await Bun.file(`${import.meta.dir}/${module}`).text();

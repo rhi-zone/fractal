@@ -20,8 +20,8 @@ import { capitalize, isA, quote } from "./codegen-helpers.ts";
 //     construct the way Sorbet has `T::Enum` — an enum is just a constrained
 //     type, so the named form is a constant assignment, not a class).
 //
-// Same "honest degrade" convention as every other projector in this package
-// (see typescript.ts, protobuf.ts, ruby-sorbet.ts): a shape dry-types has no
+// Same degrade convention as every other projector in this package (see
+// typescript.ts, protobuf.ts, ruby-sorbet.ts): a shape dry-types has no
 // native combinator for (callable, service surface, nominal class instance
 // treated structurally) degrades to `Types::Any` rather than fabricating
 // syntax dry-types doesn't have.
@@ -55,9 +55,9 @@ export function dryTypesPreamble(): string {
 // Render a `meta.default`/literal value (JSON-ish: string/number/boolean/
 // null/array/object) as a Ruby literal expression. Strings get `.freeze`
 // (Ruby string literals are otherwise mutable, and a shared frozen literal is
-// the idiomatic default-value convention); arrays/hashes are NOT frozen here
-// because `defaultClause` below wraps them in a `.default { ... }` block
-// instead, so each struct instance gets its own object rather than one
+// the idiomatic default-value convention); arrays/hashes are left unfrozen
+// here since `defaultClause` below wraps them in a `.default { ... }` block
+// instead, giving each struct instance its own object rather than one
 // literal mutated across instances.
 function rubyLiteral(value: unknown): string {
   if (value === null || value === undefined) return "nil";
@@ -106,7 +106,7 @@ const handlers: Record<string, Converter> = {
   // the unconstrained `Types::Any`.
   void: leaf("Types::Any"),
   unknown: leaf("Types::Any"),
-  // dry-types has no bottom/uninhabited type — `Types::Any` is the honest
+  // dry-types has no bottom/uninhabited type — `Types::Any` is the closest
   // (if imprecise) degrade, same as ruby-sorbet.ts falling back for anything
   // it can't express natively.
   never: leaf("Types::Any"),
@@ -127,7 +127,7 @@ const handlers: Record<string, Converter> = {
   },
   // dry-types has no native tuple combinator; a uniform tuple degrades to
   // `Types::Array.of(T)`, a heterogeneous one to an array of the unioned
-  // element types (same lossy-but-honest degrade ruby-sorbet.ts uses for
+  // element types (same lossy degrade convention ruby-sorbet.ts uses for
   // tuples via `T::Array[T.any(...)]`).
   tuple: (shape) => {
     const s = shape as TypeShape & { kind: "tuple" };
@@ -136,9 +136,9 @@ const handlers: Record<string, Converter> = {
     return `Types::Array.of(${elementTypes.length <= 1 ? (first ?? "Types::Any") : elementTypes.join(" | ")})`;
   },
   // No lazy/asynchronous-sequence combinator in dry-types (it models values,
-  // not enumeration timing) — degrades to the materialized array form, same
-  // honest-degrade reasoning as ruby-sorbet.ts's `T::Enumerator` choice picks
-  // a *different* (but still lossy) Ruby analogue; here there's no runtime
+  // not enumeration timing) — degrades to the materialized array form. Same
+  // degrade convention as ruby-sorbet.ts's `T::Enumerator` choice, which picks
+  // a different (but still lossy) Ruby analogue; here there's no runtime
   // constraint that can express "lazily produced," so array is the closest
   // dry-types can get.
   stream: (shape) => {
@@ -154,7 +154,7 @@ const handlers: Record<string, Converter> = {
   // `Types::Hash.map(key_type, value_type)` is dry-types' homogeneous-map
   // combinator (dry-types >= 1.5) — every key must satisfy `key_type`, every
   // value `value_type`; distinct from `Types::Hash.schema(...)`, which
-  // declares a FIXED set of named keys (that's `object`'s job here, not
+  // declares a fixed set of named keys (that's `object`'s job here, not
   // `map`'s).
   map: (shape) => {
     const s = shape as TypeShape & { kind: "map" };
@@ -181,7 +181,7 @@ const handlers: Record<string, Converter> = {
   },
   // dry-types has no dedicated literal-value type — `.enum(value)`
   // constrains the base type down to that single value while keeping its
-  // coercion behavior, the closest honest analogue.
+  // coercion behavior, the closest analogue available.
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" };
     if (s.value === null) return "Types::Nil";
@@ -201,17 +201,16 @@ const handlers: Record<string, Converter> = {
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // dry-types has no intersection combinator (`&`-composing two type
   // constraints isn't part of its vocabulary the way `|` for unions is) —
-  // degrades to `Types::Any`, same honest-degrade choice ruby-sorbet.ts's
-  // `T.all` alternative doesn't need to make (Sorbet DOES have `T.all`) but
-  // that dry-types genuinely has no analogue for.
+  // degrades to `Types::Any`. Sorbet has `T.all` for the same case
+  // (ruby-sorbet.ts's `intersection` handler), but dry-types has no analogue.
   intersection: () => "Types::Any",
   // dry-types models data types, not callables — there's no proc/lambda type
-  // combinator — degrades to `Types::Any`, same as ruby-sorbet.ts falls back
-  // for shapes it can't express (there, `T.proc` IS available; here it isn't).
+  // combinator — degrades to `Types::Any`. ruby-sorbet.ts has `T.proc` for
+  // this case; dry-types has no equivalent.
   function: () => "Types::Any",
   // A service surface (`interface`) has no dry-types value-type equivalent —
   // it's a method surface, not a value dry-types coerces/validates — degrades
-  // honestly to `Types::Any`, same as ruby-sorbet.ts's `interface` handler.
+  // to `Types::Any`, same as ruby-sorbet.ts's `interface` handler.
   interface: leaf("Types::Any"),
 };
 
@@ -277,7 +276,7 @@ function structField(
 
   // `attribute?` is dry-struct's "this key may be omitted entirely" macro
   // (https://dry-rb.org/gems/dry-struct/main/#optional-attributes) —
-  // distinct from `.optional` on the TYPE (which allows `nil` as a present
+  // distinct from `.optional` on the type (which allows `nil` as a present
   // value). A field carrying a `.default(...)` doesn't need `attribute?`:
   // the default already covers the omitted-key case, so the plain
   // `attribute` macro is used (matching python-pydantic.ts's parallel
