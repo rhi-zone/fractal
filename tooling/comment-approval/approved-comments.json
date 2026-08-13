@@ -165,6 +165,10 @@
       "excerpt": "A spy rewriter, built on the exported `mapRoute` tree-visitor, wraps",
       "approvedAt": "2026-08-13T07:08:47.728Z"
     },
+    "08585a24d0f511ebb2463fa41e4257d48cc9fc33da448b45bb366cf7def07422": {
+      "excerpt": "Emit an RBS `type` alias for an `enum` TypeRef — a plain literal-value",
+      "approvedAt": "2026-08-13T07:11:42.591Z"
+    },
     "086aed545b1f890c2eab6be715d6a5acaf2510eea63dbeb964748239ae090a93": {
       "excerpt": "`.object` is SwiftyJSON's fully-untyped escape hatch (`Any`) — the",
       "approvedAt": "2026-08-13T07:10:46.701Z"
@@ -373,6 +377,10 @@
       "excerpt": "Underscore-joined tree-path → derived input/output TypeRefs — the same `FieldTyp…",
       "approvedAt": "2026-08-13T07:11:09.579Z"
     },
+    "0fd9c84f06b1f17fd291dcccb2084876b808b78d5d79a158ce7d7177045303d1": {
+      "excerpt": "A two-variant union with `null` collapses to dry-types' `.optional`",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "0ff9d5423381cc631ac3fdcc30c5bd3bf72a0394597b2a15a53dff08af272da7": {
       "excerpt": "Swagger 2.0 has no `not` keyword (dropped from the OAS 2.0 JSON Schema",
       "approvedAt": "2026-08-13T07:11:16.450Z"
@@ -489,6 +497,14 @@
       "excerpt": "Literal chunk up to the next ':' (if any) — the part matched against existing ch…",
       "approvedAt": "2026-08-13T07:11:03.688Z"
     },
+    "145fefd50f5a7ce855ac418e4bfc88faa67b0fc0bf459520b27d4d0052ffde17": {
+      "excerpt": "dry-types has no intersection combinator (`&`-composing two type",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
+    "151ca1e3893550d44b93bfc3d0fa1feb057d4ac357d72802479ea87b800680b7": {
+      "excerpt": "Top-level entry point: `object` and `enum` TypeRefs (given a `name`) lower",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "1532e90f2b6cdd7442ecf0e0cd890fd2cbf3721b5c40b47ad1058966c08a5774": {
       "excerpt": "A Standard Schema requiring `title` to be a non-empty string; coerces `year` to …",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -516,6 +532,10 @@
     "16729507b5ce1e68e2870bc0af59f1db3a691843c5826b7655e2b8ad19447e0a": {
       "excerpt": "consume this node's own prefix",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "1684e5b79ab88d33b2475e4afa0e6428d61bd95fea6dd7e513a97225483f0a5f": {
+      "excerpt": "Mirrors protobuf.ts's `enumName` meta convention: with nowhere (no field",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "168a533fdf9f10281a4c00d535410101a4cf212291b20a3352010ca7573b924e": {
       "excerpt": "eslint-disable-next-line @typescript-eslint/no-implied-eval -- deliberate: this …",
@@ -609,6 +629,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
     },
+    "19ee15fb02cf0883f7eb71dc2c40f156835cf59f190aff3d5aa9c9391281294f": {
+      "excerpt": "dry-types has no bottom/uninhabited type — `Types::Any` is the honest",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "1a1a9a5a83306725dab8d79343fab54430445d6f9aab17f86c2680d143a626be": {
       "excerpt": "generic params, e.g. `struct List(T)` — not modeled",
       "approvedAt": "2026-08-13T07:09:42.607Z"
@@ -640,6 +664,10 @@
     "1bdec8996a0ae2da1a740fb192815e778531f7bad271f6374fbcd18fd83bd69c": {
       "excerpt": "Build a `{ subscribe, resolve }` field config for a subscription",
       "approvedAt": "2026-08-13T07:08:38.040Z"
+    },
+    "1be174c20a1d664c007d7c8ab3764859cdbf7818bee6a4d649cc21a50abc9655": {
+      "excerpt": "Top-level entry point: `object` and `enum` TypeRefs (given a `name`) lower",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "1c652c42023b94f71a701f4c6cdd741afe555e14de10814f4e1d5329a17ef7b0": {
       "excerpt": "Path parameters: extracted from the computed path",
@@ -689,9 +717,17 @@
       "excerpt": "Write the full run (system info, route-tree size, build cost + memory,",
       "approvedAt": "2026-08-13T07:11:03.688Z"
     },
+    "1ed1ca782f2efe36911a3624680c96609035f90b6cc49b51e38e9e7868587ee7": {
+      "excerpt": "No native calendar-only Date-vs-DateTime split matters here (see",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "1ee6fb9a8d3fa0dc5bde7128b74e4f1f957458cf0b803be466f7ec679fb497ee": {
       "excerpt": "Strips comment delimiters and normalizes incidental formatting that",
       "approvedAt": "2026-08-13T05:02:19.633Z"
+    },
+    "1eee6e265ba357ef7fe6dfbbdc387491de2fbdfdd6c9aad566edbffe87459745": {
+      "excerpt": "Ruby/dry-types projector — a second Ruby target alongside ruby-sorbet.ts,",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "1f70fa1d40c098e25510f81729196deea1769c598f2a579811f013f40dae984d": {
       "excerpt": "Concrete values used to expand dynamic routes into the map, and to build",
@@ -732,6 +768,10 @@
     "211d3a25db06442a708192f5514f9180779430e25f98037f63f7ecd473215718": {
       "excerpt": "The field's rendered SDL name (query fields: just the leaf's own field name, not…",
       "approvedAt": "2026-08-13T07:10:43.573Z"
+    },
+    "2169319532e37d8471247f5184526bd47a8373d53f2138034f0c761b841ef4f7": {
+      "excerpt": "`const` for a field marked `readonly` — Sorbet's T::Props distinguishes",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "2192ff06919ee36163fc1d4067a94546332152b302b41d26e7563958383c883d": {
       "excerpt": "draft-04 has no boolean schemas (that arrives draft-06), so `never` cannot be",
@@ -833,6 +873,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.579Z"
     },
+    "25d8c435650f082c0d2344f7e805f17485fe30720247c3f7861f6a947b0b2ee1": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "25ea6814f7c9d8f279f56c58563ee06f65b697a4fe082cd5ba84373f598b3bb9": {
       "excerpt": "A mock socket recording every sent frame + close call, decoding each `send` back…",
       "approvedAt": "2026-08-13T07:10:43.583Z"
@@ -881,6 +925,10 @@
       "excerpt": "Classic POJO: private final fields (annotated `@SerializedName` where the",
       "approvedAt": "2026-08-13T07:09:42.427Z"
     },
+    "27d686df4253af3bae338dc3a451b7e9c99d526e55d66d00abe43f1622178fc2": {
+      "excerpt": "A service surface (`interface`) has no Sorbet value-type equivalent —",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "27ebe1794a993d546ab05d1fffbfaa97f407540ecbd245fa88afeb54c8d2ca0f": {
       "excerpt": "Feed one raw text frame received on the socket.",
       "approvedAt": "2026-08-13T07:10:43.581Z"
@@ -908,6 +956,10 @@
     "28e4c320abc1014cd6b2792747521db9ab26126cdb390a6db9f3172025c4a701": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.815Z"
+    },
+    "2907c1d26ec810d5b9a619ddf1109d57765f6a3e25d9255d4468bd587ea40629": {
+      "excerpt": "dry-types' `.default(...)` combinator takes a plain value for immutable",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "290a85f1e8590f16540ce728734ea147241f43cda852c29b631181e2dc19c265": {
       "excerpt": "============================================================================",
@@ -1109,6 +1161,10 @@
       "excerpt": "JTD has no tuple form. Degrade to the first element's schema (lossy —",
       "approvedAt": "2026-08-13T07:10:20.621Z"
     },
+    "31e1ba6b3a85328baad5df2a6134bbbb2ee2b5059127a7205025bc7ece19e751": {
+      "excerpt": "RBS (https://github.com/ruby/rbs, bundled with Ruby 3+) — Ruby's own type",
+      "approvedAt": "2026-08-13T07:11:42.591Z"
+    },
     "32267bfb5f76568d44313b2c686d1dc2a1ee29c562d6e54818ca4f0452c3c15c": {
       "excerpt": "OAS 3.0.3 §4.8.24 inherits JSON Schema's `allOf` — the faithful encoding",
       "approvedAt": "2026-08-13T07:11:16.453Z"
@@ -1201,6 +1257,10 @@
       "excerpt": "Convert a single field's declared type + default/annotations/ordinal into",
       "approvedAt": "2026-08-13T07:09:42.607Z"
     },
+    "35829a741bac394a226834430d0817d4138e49135001964e6306426b08b3c4b3": {
+      "excerpt": "Sorbet's `T.all` composes multiple types the same way TS's `&` does.",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "35e113b71451b047fb8e4d95f2f707848e54c455b52bbac57c0e1f248a7c8d67": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -1244,6 +1304,10 @@
     "37cb943e4c58f29caab5979805671e41296836a91e5acebf84df82d25f01e3da": {
       "excerpt": "No tuple construct (§ \"Structs\") — heterogeneous positional elements have",
       "approvedAt": "2026-08-13T07:09:42.597Z"
+    },
+    "3804c3fc5de63ccbee669bdd3794488440d00c0f900425136cf227ed26d4724b": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:42.599Z"
     },
     "386bc2a869e4b1aac8b19b0882f92b3b3bf35e630230387b9348a7e82124d888": {
       "excerpt": "============================================================================",
@@ -1316,6 +1380,10 @@
     "3b51061a2a9a78d2c19324767bb5b5a12c2cf7c89b5544d87180b95cdc39d030": {
       "excerpt": "Case E: unbalanced tree — 60 shallow (2-level) siblings vs. one 18-level chain.",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "3b57652ecc6dc2a4b66e39987769c9d2f501c879f8922b1f4ca6cc0e9c3f7f7f": {
+      "excerpt": "Lower an `enum` TypeRef to a named `T::Enum` class",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "3ba6a200868736eb9d491a6d3c7b2ff479e9220949a4e07ac675ece8eee4b162": {
       "excerpt": "Either pagination style — the type a handler signature typically names",
@@ -1404,6 +1472,10 @@
     "3e57d230c3390265c91aca8cc6e8cf81b56d077079d977dbc80b1dfaf11c9783": {
       "excerpt": "Renders a `deprecated` marker as its own `#` line comment — `# Deprecated`",
       "approvedAt": "2026-08-13T07:09:42.597Z"
+    },
+    "3e709a2f747b3a1ee8ea0e36e4b35a7d3c23628e306d5f7e094e7c7cec4f6083": {
+      "excerpt": "An RBS type expression for `ref`.",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "3e8b8a40c7c437e344b697f8c1a2eb29f0ee3be35baad275f40eda6b2dc82c95": {
       "excerpt": "Emit a freezed sealed-class union",
@@ -1525,6 +1597,10 @@
       "excerpt": "Full field-name override (prefix/camelCase-join ignored when set).",
       "approvedAt": "2026-08-13T07:08:35.589Z"
     },
+    "45313d74a6bbe8a3d071406a3fc5fc301c2c9a39d1ee0106ee1d83e78fc6bbba": {
+      "excerpt": "prop/const declaration for one T::Struct field, handling the",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "458079a87c48096e696fde2f9cc9d4d787862f1393581289c997b171e8c497a6": {
       "excerpt": "Proto3 enums (§ \"Enum\"): the first defined value's number must be 0.",
       "approvedAt": "2026-08-13T07:10:47.056Z"
@@ -1588,6 +1664,10 @@
     "48466105c9b81acdfc8448e6b542964e860c7bd2bf3ddfeb9577544a176165d6": {
       "excerpt": "tooling/comment-approval/manifest.ts",
       "approvedAt": "2026-08-13T07:07:40.079Z"
+    },
+    "4868245c60109d1ecfc0638667a9f339ccdfded5c1259a6d8a296bc424ef31fd": {
+      "excerpt": "Lower an `object` TypeRef to an RBS `class` signature block — one",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "486e2d19878d3ac86b8b822a591944e8d4e86b138020bb4ac0292d3f215de3c3": {
       "excerpt": "case name -> ns/request",
@@ -1685,6 +1765,10 @@
       "excerpt": "Convert a root JTD schema plus its `definitions` (RFC 8927 §2.2.1's",
       "approvedAt": "2026-08-13T07:10:20.623Z"
     },
+    "4d285cffacb6de581c411b348b4655baf03c7c08b5b3a348e6b6b837b180b08f": {
+      "excerpt": "dry-types has no dedicated literal-value type — `.enum(value)`",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "4d3070095731bc50f6857aac2964e2e2e91987f350cb7736b3bac1920ff8e072": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.583Z"
@@ -1716,6 +1800,10 @@
     "4f1e388c9e3f4d1437af7ebc72a1ad17f2faca23adb474429a7968404ce1b1db": {
       "excerpt": "Merge multiple OpenAPI documents (each produced by `toOpenApi`/",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "4f46cb312363f0a248c6f1140083fc921ae02d3674d2fd71c415320d569a6674": {
+      "excerpt": "Sorbet `sig` block + method signature line for a `function`/`method`",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "4f98ac01818e7a8694d9dff1e092a6ca5b523c77c0b369644f04a86dad800559": {
       "excerpt": "============================================================================",
@@ -1881,6 +1969,10 @@
       "excerpt": "Primitives/extension leaf kinds, plus function/method/interface (no",
       "approvedAt": "2026-08-13T07:10:46.692Z"
     },
+    "5422d7edd39518b55836bde3d034eb21bb2de6ceaf2c64c87e643dac24ef3bd4": {
+      "excerpt": "An RBS type expression for `ref` — suitable for an `attr_reader`,",
+      "approvedAt": "2026-08-13T07:11:42.591Z"
+    },
     "54417d9f61a803630a9c57fc75f1e0c50ea7a9ad803e01925eb8f776335ed7bb": {
       "excerpt": "Table fields are optional by default.",
       "approvedAt": "2026-08-13T07:09:56.027Z"
@@ -1989,13 +2081,25 @@
       "excerpt": "RFC 8927 §3.3.5 — properties form",
       "approvedAt": "2026-08-13T07:10:20.621Z"
     },
+    "59052116b3a246ae3fca6f332a2f12e91cc64c26b82960ecf5aed1ba682eeee4": {
+      "excerpt": "Ruby projector — two independent output modes:",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "5905823583a5a6f161745b222bb175440861bb8ba15ce6e4a8bc19d9d8621428": {
       "excerpt": "Replace with your project's social card",
       "approvedAt": "2026-08-13T07:09:53.729Z"
     },
+    "5947e5c2fb5be66f84b01bf9e8c81e41885a66ec132487856e1a1dc8e286a365": {
+      "excerpt": "Emit a full `.rbs` `class` declaration: one `attr_reader` per field plus a",
+      "approvedAt": "2026-08-13T07:11:42.591Z"
+    },
     "59b54bd51da9ef61f114f6b4adaffd4e61a4c1b75b7e71c60e0b55ac89762e4b": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.804Z"
+    },
+    "59bb8886f8f8ea57b632117515e8414b974978fd2548a4cd21102aae00ad7719": {
+      "excerpt": "No native pagination construct — degrades to the element array, same",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "59fbc7abe2c9bdbeb52838b1882e9dbf901f538957d1909c2a89cb8929324cf8": {
       "excerpt": "============================================================================",
@@ -2084,6 +2188,10 @@
     "5da3b65dbc7bf8d17b008910d08a02862b4d4cd89aa684bb28aa5964f44134e2": {
       "excerpt": "Unrecognized character (whitespace variant, stray symbol) — skip rather",
       "approvedAt": "2026-08-13T07:09:42.607Z"
+    },
+    "5de6b55c8be82a0343e2c81580490e6afc184539c41e2f598c7bcecbd02caa4d": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:42.591Z"
     },
     "5df734bf00b2178644147726334227212e0b55a3d5e1e52c2ac9ebac4f538f9b": {
       "excerpt": "Declared \"userId: String!\" wins over the captured \"userId: ID!\" placeholder — no…",
@@ -2240,6 +2348,10 @@
     "6306ecb41a3b98844624173118e55b6180c05d3251d12c98b948deaddfb55b82": {
       "excerpt": "Swagger 2.0 has no service/interface-with-methods concept — degrade to",
       "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
+    "63136c76c2c67e9c88bf6b52242561373b39558453079715242b0d3b98320873": {
+      "excerpt": "Sorbet has no literal-value type — degrades to the value's runtime class.",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "63198da04ff5ac7a11f825f04601199f5d1ad31f5f4c894d4bce53514739c4a4": {
       "excerpt": "`method` has no explicit entry — `registerParent(\"method\", \"function\")`",
@@ -2497,6 +2609,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.804Z"
     },
+    "6f40ec323ca23a8d86da9d3c29277ee9dd917604c5c46b5b7bec8afa39a490d2": {
+      "excerpt": "`Enumerator` is Ruby's closest native analogue to an asynchronously (or",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "6f5be9b311c9703673acc0b620f731dcb0aac2d2761f021ee38a7217e50c3d58": {
       "excerpt": "explicit negative preserved",
       "approvedAt": "2026-08-13T05:06:32.673Z"
@@ -2709,6 +2825,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
     },
+    "782be5c06ffc82c02f9b264bf243b8a28c5048ef6279624c964c5cd982278120": {
+      "excerpt": "Sorbet's `T.proc` builder is the closest native callable-type construct",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "7868cd1543370aae068cf71e1773508d199b7f1340294f6761378974a92bff1d": {
       "excerpt": "Proto3 language spec: https://protobuf.dev/programming-guides/proto3/",
       "approvedAt": "2026-08-13T07:10:47.056Z"
@@ -2741,6 +2861,10 @@
       "excerpt": "packages/api-tree/src/direct.test.ts — createDirectApi (zero-protocol-overhead p…",
       "approvedAt": "2026-08-13T07:10:02.233Z"
     },
+    "7b03fee0f51f76e264019711016be0cbcea6ce211e65288743614e375b09d0a0": {
+      "excerpt": "Top-level entry point: render `ref` as the full contents of a `.rbs`",
+      "approvedAt": "2026-08-13T07:11:42.591Z"
+    },
     "7b1e5acc6a3b158b241e7773ae7bbd922d69c68ac2cf33f106b6931fe5eaa0ef": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.813Z"
@@ -2748,6 +2872,10 @@
     "7b28adbd0fba3a979587762617a96f1e40134a999aac05d71289efe1e1d5af24": {
       "excerpt": "`OPTIONS` preflight response — 204 + the standard CORS preflight headers.",
       "approvedAt": "2026-08-13T07:11:09.589Z"
+    },
+    "7b560e28409bd3764143fe07ed63a8d92c0803dfc2b928e4b116b8f9303119fe": {
+      "excerpt": "A service surface (`interface`) has no dry-types value-type equivalent —",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "7b5e3a577a944cd6047895821c6cabc4926874a64790f4026c9a69f851217d31": {
       "excerpt": "Underscore-joined name (default operationId source) — see `nameFromPath`.",
@@ -2784,6 +2912,10 @@
     "7c7e135c5ca41370c0b9d9eb8d421af7c42015f2b3763a11a284bc09509df55c": {
       "excerpt": "packages/graphql-api-projector/src/source.ts — @rhi-zone/fractal-graphql-api-pro…",
       "approvedAt": "2026-08-13T07:11:09.591Z"
+    },
+    "7c83b53a313ba7efa3f4b4dd2b82c2cb1666bd9e00210a59d0aacbaa9229e08b": {
+      "excerpt": "attribute/const declaration for one Dry::Struct field, handling the",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "7cc282e01364e15c32f0d02df795e62e8595a5eb84bfae9cf4b6803cc34e5798": {
       "excerpt": "Bare type expression for `ref` — the reference (boxed) spelling, suitable",
@@ -2836,6 +2968,10 @@
     "7f003a89ba99a8af621105c0ec30219c2cf95cce9ddf3baf28b83690d7ec0be6": {
       "excerpt": "`toDataClass` always ends its own class body with a bare \")\" line",
       "approvedAt": "2026-08-13T07:09:42.440Z"
+    },
+    "7f1789df7a86977c02a0d4947973105e41a725eb67c1cfae4087b273145d9b94": {
+      "excerpt": "Lower an `enum` TypeRef to a named constant binding — dry-types has no",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "7f78cd48870463ae9c759a400226d09746238cc7fcfa838f53365b072cc3825e": {
       "excerpt": "Skip a brace-delimited block whose contents this parser doesn't model",
@@ -2949,6 +3085,10 @@
       "excerpt": "Render one field's SDL declaration line — shared by root-type and",
       "approvedAt": "2026-08-13T07:11:09.587Z"
     },
+    "869f07a4955b7b236c4e8b620dc2a5972f2cab73fb6fa90a1faf35fb3515e3f8": {
+      "excerpt": "RBS does support literal types (https://github.com/ruby/rbs/blob/master/docs/syn…",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "86a3978d2b3c111999f54d5fdd04fab834e521ac8f9c78a437b9a974351f04fe": {
       "excerpt": "eslint-disable-next-line @typescript-eslint/no-implied-eval -- deliberate: this …",
       "approvedAt": "2026-08-13T07:11:03.688Z"
@@ -3045,6 +3185,10 @@
       "excerpt": "An `interface` TypeRef (a service/contract's method surface — see",
       "approvedAt": "2026-08-13T07:10:20.614Z"
     },
+    "8b6602a289ca635f518f4c38a15daf51ed67be8491f1e01380e539a995ab50f8": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "8b9a78bdd016301b80dcd515c905e3e6e45aaa110989a129154bb1edc5654445": {
       "excerpt": "Same degrade as `function`, but carrying `x-method: true` instead of",
       "approvedAt": "2026-08-13T07:10:55.717Z"
@@ -3096,6 +3240,10 @@
     "8ddcf3c4a2b1aa38dbacf93d7a1330c2c4559bdb3798e75bc57d0a5d602e2add": {
       "excerpt": "Name of the emitted `Client` type and factory return type. Defaults to \"Client\".",
       "approvedAt": "2026-08-13T07:11:09.579Z"
+    },
+    "8e0ee21708782ab4b1c425f77319c6815cc4f21f2ce42ff513beb4f7545fd36b": {
+      "excerpt": "Same reasoning as ruby-sorbet.ts's datetime/date handlers: no native",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "8e1f46be24323be33a89e13ee5dc2f3b69c2fe894614cc71683b477db526abf9": {
       "excerpt": "Scalar types: https://flatbuffers.dev/schema/#scalars",
@@ -3180,6 +3328,10 @@
     "90375c479e8223446d856ee587bec23e3dd159cb4a238791753308f08fefb696": {
       "excerpt": "The synthetic map-entry message is not a user-facing def.",
       "approvedAt": "2026-08-13T07:10:47.066Z"
+    },
+    "9048fa710a0ad871c1fbe9ad2531f7ef11dad2f7bdcc06c1923d18f376800487": {
+      "excerpt": "No context (field name) is available here to name an anonymous nested",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "9049477efc65318c3a6efb845317debae7d92e8e0f1e58b48c2262b6773a257c": {
       "excerpt": "`type: [T, \"null\"]` nullable leaf form.",
@@ -3289,6 +3441,10 @@
       "excerpt": "No intersection/mixin construct (§ \"Tables\") — lossy: falls back to the",
       "approvedAt": "2026-08-13T07:09:56.017Z"
     },
+    "9581cd6d739803e15db3334482066cd2759294cbf0fd2c49bbd4186da0550944": {
+      "excerpt": "`Types::String.enum(...)` is dry-types' native closed-set-of-values",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "95b09c8c8282c17f14ae13062cfed547f52dcb144dac0e71fea62a28c382167a": {
       "excerpt": "Path-keyed lookup first (schemas built via extractRouteSchemas — the",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -3329,6 +3485,10 @@
       "excerpt": "A class instance carries only nominal identity (className/source), never",
       "approvedAt": "2026-08-13T07:09:42.441Z"
     },
+    "972790e974e6abbe0794e920b0f6c9d6d31fba661444de9548edd2310e869ea8": {
+      "excerpt": "Sorbet has no native tuple type; a uniform tuple degrades to",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "976a5b9f2c891e086116475974b563e7374628df6bdfc4ff795e8daeda7fc049": {
       "excerpt": "Unrecognized character — skip defensively rather than throw (honest",
       "approvedAt": "2026-08-13T07:09:56.025Z"
@@ -3360,6 +3520,10 @@
     "98bb63805c5f4adfe7bd83eceb79022e380daf0b0f831d45ba346b56ec2ee2e1": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "995d17412636bb6fe6029276f80fce88afa715bb2cab18359c956f21d6db17a6": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:42.591Z"
     },
     "99b55b4fff7bcdb58edd9d69ac80da375fc5d360f2b0a0d1b7e4dc162708c794": {
       "excerpt": "The Node model allows `fallback.subtree` to be a bare leaf (`op()`),",
@@ -3401,6 +3565,10 @@
       "excerpt": "examples/doc-site-verification/starlight/src/fetch-setup-client.ts",
       "approvedAt": "2026-08-13T07:09:53.731Z"
     },
+    "9c51d1a9061baacf02c26edbd0c96a47cd916dbed31b1b44a13d0369ebbd6168": {
+      "excerpt": "A Sorbet type expression for `ref` — suitable for a `sig` param/return",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "9c5cd9a57b508048da4fcdd8e1da96a7df9553fad84e685d6dc92e5765a6d8a9": {
       "excerpt": "draft-04 has no service/interface-with-methods vocabulary either —",
       "approvedAt": "2026-08-13T07:10:55.724Z"
@@ -3408,6 +3576,10 @@
     "9c6600bfb1520ac08f875c2f14334776cac73d5b6060dc4c714e211f5d1d8007": {
       "excerpt": "draft-07 §10: `readOnly` is a per-schema annotation, driven by the",
       "approvedAt": "2026-08-13T07:10:55.727Z"
+    },
+    "9c8320248261a61601e97621dc5175294aac81dc2385a81c028913d9a6406f8a": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "9cb7f1d8a63beb9b695171e68da8a03c5ba3f2e8b5576597fdb10d2dfbd5ea26": {
       "excerpt": "packages/type-ir/src/swift-swiftyjson.ts — @rhi-zone/fractal-type-ir/swift-swift…",
@@ -3461,6 +3633,10 @@
       "excerpt": "Kotlin data class / sealed class projector for Google's Gson",
       "approvedAt": "2026-08-13T07:09:42.438Z"
     },
+    "9e56eca63070edabb9faa6e552406f225209b903ce192427f08d82cde95b8158": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:42.593Z"
+    },
     "9edd5fa8121037c90924e3f0ea82ed6442216fd3248a66816673ef8144d68d12": {
       "excerpt": "packages/type-ir/src/swift-objectmapper.ts — @rhi-zone/fractal-type-ir/swift-obj…",
       "approvedAt": "2026-08-13T07:10:46.698Z"
@@ -3492,6 +3668,10 @@
     "a138cde3cfb61f6104bf9d4fb759296c5975bc1ddfd821ea04db2217f5f6bad5": {
       "excerpt": "packages/http-api-projector/src/openapi.ts — @rhi-zone/fractal-http-api-projecto…",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "a14b059eae364695296b20c0a89fe05a6bf0ce555c567d2ef63cc8af7d375568": {
+      "excerpt": "Lower an `object` TypeRef to a named `Dry::Struct` class",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "a15dcc1410753220b6bcf2d0d51150e2beda89628e11e111f6a3b0cda9626457": {
       "excerpt": "draft-04 has no `type` array nor `anyOf`-free nullable idiom distinct from",
@@ -3921,6 +4101,10 @@
       "excerpt": "type-ir's generic `number`/`integer`/`date` degrade to a *narrower*",
       "approvedAt": "2026-08-13T07:10:20.625Z"
     },
+    "b5ab6b2f46a17d3b31be717e25d29f9bc1ddd91c0ceec40547a298e86e7ee947": {
+      "excerpt": "`void`/`unknown` have no dedicated dry-types construct — both degrade to",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "b648b30fb727478957a719e7a57f9ab59a3c041ed95e10e8190b9a64b94d8915": {
       "excerpt": "Direct-dependency memo, shared across every entry's BFS below — a file",
       "approvedAt": "2026-08-13T07:10:02.228Z"
@@ -3960,6 +4144,10 @@
     "b85759680cb4684741d07c97afa7df68150fba3d73e59cc1c8e0db382a51ed8a": {
       "excerpt": "draft-07 has no streaming/async-sequence vocabulary either — same",
       "approvedAt": "2026-08-13T07:10:55.727Z"
+    },
+    "b8eb308445fbebf3117fe1c18819e7a5747100490d81f2f289ec5d70d55d77cb": {
+      "excerpt": "No context (field name) is available here to name an anonymous nested",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "b8f6a6d381bbdd4680d40a797e86b88d56c266e68f8615e2c88c5e01a3384728": {
       "excerpt": "Extracts every `//` and `/* *​/` comment from `sourceText`, in source",
@@ -4073,6 +4261,10 @@
       "excerpt": "typeref.fixture.ts is not an entry and nothing in this batch imports it.",
       "approvedAt": "2026-08-13T07:10:02.230Z"
     },
+    "bcb340c9318a25419f62539f641b2a2e54bf1556cd8c5f85ee97b5d336877af9": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "bccbd9544bf0c087b7aa6b2f38ff55b21f85d98ec70c92cf3de8f3789c109ba0": {
       "excerpt": "itemPath = [admin, ping]; base (self) = [admin, ping];",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -4125,6 +4317,10 @@
       "excerpt": "MkDocs-Material content tabs (pymdownx.tabbed): each `=== \"Tab\"` body is a",
       "approvedAt": "2026-08-13T07:10:43.813Z"
     },
+    "bf9d799ecd1f358525475305044f5d22dd3a51b11dabbb470548b89b9ffa43a7": {
+      "excerpt": "Lower an `object` TypeRef to a named `T::Struct` class — Sorbet's typed",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
     "bfcc565ae1ebdee829ee8b60d072680533d92c36808f0cbeb98c2b79b00360ea": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.576Z"
@@ -4173,6 +4369,10 @@
       "excerpt": "IAsyncEnumerable<T> (System.Collections.Generic) is C#'s native",
       "approvedAt": "2026-08-13T07:09:42.423Z"
     },
+    "c3225cd1ba42b60ac99b551c47d75e99081f1facf013ecfcc6830a783927f056": {
+      "excerpt": "dry-types has no native tuple combinator; a uniform tuple degrades to",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "c36b942fd83d89e8394c5b660839cbceff43775c1ffe61fdcedfd826d289ca9d": {
       "excerpt": "A variant with no `meta.typeName` of its own is named after: a `ref`'s",
       "approvedAt": "2026-08-13T07:10:46.692Z"
@@ -4180,6 +4380,10 @@
     "c39ca4fec5999710ed6816f1923bebf2fd9075186a400c79e6e03915a6fa5c2f": {
       "excerpt": "Options for `projectGraphQL`.",
       "approvedAt": "2026-08-13T07:08:35.589Z"
+    },
+    "c3bd065248928fe2aaafa210ce4b0380f8b5f1de17f0eb511c21bf1c2b6b3080": {
+      "excerpt": "T::Enum convention: constants are SCREAMING_SNAKE_CASE identifiers bound to",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "c408812b9a8d9809346c3e6c2ac9991c731da349020bbb89428af009458dde02": {
       "excerpt": "--- Case B: deep narrow tree — 25 levels, one child each, short segments.",
@@ -4241,6 +4445,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.688Z"
     },
+    "c7b175c920c628004b3d5b738848442f85606aae5ddc252eecefeae7f50a5514": {
+      "excerpt": "dry-types models data types, not callables — there's no proc/lambda type",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "c7b50a985dc0533a85dabb422c1c367862b5cf7a094b57eedaaa6e6523b9bac8": {
       "excerpt": "webpackIgnore: true",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -4248,6 +4456,10 @@
     "c7e130a08b1a94658be8f6e8f3b1ffbc3a3045631d7d956f0c45aaefbb05feb3": {
       "excerpt": "ObjectMapper's built-in transforms don't include a Date parser out of",
       "approvedAt": "2026-08-13T07:10:46.698Z"
+    },
+    "c87d6dd8bf53368dfda1335178f07f001cd2ad77ebcd872577808b53a7ca0dbe": {
+      "excerpt": "Render a `meta.default`/literal value (JSON-ish: string/number/boolean/",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "c8a5b62d27cd2d07d724eab9ffe76ea3186c9f0312fc96044511056a7948bda2": {
       "excerpt": "Unwrap `array` shapes to their element type — array-ness doesn't affect selectio…",
@@ -4284,6 +4496,10 @@
     "ca6e6c0b0b44c3fa69bc8e5b14d520acfa406d9f3aa8c52e7188d513ac1744c9": {
       "excerpt": "Build a runtime GraphQL client from a `Node` tree and a `GraphQLTransport`.",
       "approvedAt": "2026-08-13T07:08:38.033Z"
+    },
+    "ca7eba01b81a2f2cb6072576e2be759e881025489afb7e2132b74b5f997d8031": {
+      "excerpt": "`void` only has native meaning in Sorbet's `sig { void }` return",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "cafe1eff6b3c46e3fa80945a9447d43ea1bad7a0cf46bdc555819ee2a1d566ea": {
       "excerpt": "Group numbers are assigned left-to-right by OPENING paren position in",
@@ -4420,6 +4636,10 @@
     "d160424bf5400a75bad0e93c1dd991add1a08ade68ee401f5afeb77e925e25b7": {
       "excerpt": "tooling/comment-approval/manifest.test.ts — @rhi-zone/fractal (tooling, not a wo…",
       "approvedAt": "2026-08-13T07:07:40.079Z"
+    },
+    "d1683fbf9aa235abc3d6db71345a7ee77deba7fbd121aa7464ca31569685587d": {
+      "excerpt": "`attribute?` is dry-struct's \"this key may be omitted entirely\" macro",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "d1b1a9b813f842bae8ee57792e37167d2dc4e9beae7d60e578df66d15636641c": {
       "excerpt": "Bare type expression for `ref` — the reference (boxed) spelling, suitable",
@@ -4584,6 +4804,10 @@
     "d979c78b6bdc7b986a3baa869909f054f3dc858a77504af5b13f6b8a31a499b4": {
       "excerpt": "Top-level selection-set entry point: `\"\"` for a scalar/unknown output (no",
       "approvedAt": "2026-08-13T07:08:38.033Z"
+    },
+    "d9e217e2a0a0d0a6113b8d24ff2a0a3b1866b3d8b40604e6a2b882a5c0cf3fd0": {
+      "excerpt": "A two-variant union with `null` collapses to Sorbet's dedicated",
+      "approvedAt": "2026-08-13T07:11:42.597Z"
     },
     "da379112351cf3db9cc452108886adfef22a1abbe1e5f47b6f482e7bc04ccd78": {
       "excerpt": "A oneof may be entirely unset — it's inherently optional presence.",
@@ -5089,6 +5313,10 @@
       "excerpt": "`graphql.source(map)` — declares which GraphQL store (`argument`,",
       "approvedAt": "2026-08-13T07:11:09.591Z"
     },
+    "eef66d5e56631d352d7ca88fe420ada798ad1d6642c6b1de8838162fc3512809": {
+      "excerpt": "The `module Types; include Dry.Types(); end` boilerplate every generated",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "eef8208e69b9c26db4b5e9eb0c79b01d23cbc0e21f18bbfceecef11ff0c5aa38": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:35.589Z"
@@ -5113,9 +5341,17 @@
       "excerpt": "packages/graphql-api-projector/src/source.test.ts — graphql.source() tests",
       "approvedAt": "2026-08-13T07:11:09.591Z"
     },
+    "efeaf6aa70a551a5c899e067fcc3ea5b4b4a02723be3f2bab9e757be08c92761": {
+      "excerpt": "dry-types unions are built with the `|` operator",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "f03f9a6cd91fdf6dcdcd95e541137b15ef60bf40c62c43975c5aae2c6da13276": {
       "excerpt": "packages/api-tree/src/node.test.ts — new Node/Handler/Meta/fallback model",
       "approvedAt": "2026-08-13T05:06:32.673Z"
+    },
+    "f0619619d6d38a356332299026ebca9780dc8bb3f8ff9b54d83ae774acb4420b": {
+      "excerpt": "`Types::Hash.map(key_type, value_type)` is dry-types' homogeneous-map",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "f06bf7d2f3214fde7cea18a13dfe1e5b86445a25e22891e90f4aa5d241ec0f4b": {
       "excerpt": "Scalar/collection type name — https://dart.dev/language/built-in-types.",
@@ -5128,6 +5364,10 @@
     "f0add688c716215abeac716351382a59416bff1c24f6ae2d4c8368818b14e571": {
       "excerpt": "packages/api-tree/src/context.test.ts — createContext (./context.ts)",
       "approvedAt": "2026-08-13T07:10:02.224Z"
+    },
+    "f0ba7944a776cceb8ae433680926151d9a431e2ff3659d32343154da4137526b": {
+      "excerpt": "One `initialize` keyword parameter (`name: Type` for a required field,",
+      "approvedAt": "2026-08-13T07:11:42.591Z"
     },
     "f0dedc6f791042581e89c6144152495300396bef9041330c62388c59061f4b15": {
       "excerpt": "A class instance carries only nominal identity (className/source), never fields",
@@ -5305,6 +5545,10 @@
       "excerpt": "A bare property-access expression, or bracket notation when `key` isn't a valid …",
       "approvedAt": "2026-08-13T07:11:09.579Z"
     },
+    "f7d6ea89f7daf8e087f044ef6856e513b55f203590ff543891b5c7dc454f18be": {
+      "excerpt": "No lazy/asynchronous-sequence combinator in dry-types (it models values,",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
     "f7e2cc44ecfc52d69affa89a28adc82104f7383324ae223ae391084c7339a444": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.573Z"
@@ -5384,6 +5628,10 @@
     "faf76181b23bf6bb6b25eac00980afa667c983d5de1e38208cac000430cae11f": {
       "excerpt": "discriminator field is carried by unionKey, not duplicated as a constructor para…",
       "approvedAt": "2026-08-13T07:10:51.091Z"
+    },
+    "fafadb288c125366597b9957c0a04e292587b09342dd5d6cc3f0934a955dea87": {
+      "excerpt": "A dry-types type expression for `ref` — suitable for an `attribute`",
+      "approvedAt": "2026-08-13T07:11:42.588Z"
     },
     "fb1fde0f51776d14e082f6853bb96715dad6001dd9cdb749a602194a7379e6a0": {
       "excerpt": "GraphQL has no map/dictionary construct.",
