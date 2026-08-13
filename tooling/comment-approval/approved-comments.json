@@ -353,6 +353,10 @@
       "excerpt": "No explicit sourceMap for `cents`, method POST (default store",
       "approvedAt": "2026-08-13T07:10:02.235Z"
     },
+    "0f5269162bfa23380cc207b4c1da825dc3b15d1b2fcbe0778c0152570e00dba0": {
+      "excerpt": "OAS 3.0.3 has no `const` (also a 2020-12 addition) — a single-value `enum`",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "0f5b7a9a4b0ba0c9303c49e2c612ad0518eb9d41cffe39d20ce68378d277c76e": {
       "excerpt": "--- Case E: unbalanced tree — one very deep branch (18 levels) hanging",
       "approvedAt": "2026-08-13T07:11:03.688Z"
@@ -368,6 +372,10 @@
     "0fab3d5bb23bbf3dd36a6e59ecb74762f871bfcc456315d5fb92fc5196b786c6": {
       "excerpt": "Underscore-joined tree-path → derived input/output TypeRefs — the same `FieldTyp…",
       "approvedAt": "2026-08-13T07:11:09.579Z"
+    },
+    "0ff9d5423381cc631ac3fdcc30c5bd3bf72a0394597b2a15a53dff08af272da7": {
+      "excerpt": "Swagger 2.0 has no `not` keyword (dropped from the OAS 2.0 JSON Schema",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "104afb8b7e50855a0ceaf628605eccd931b86104ab1c96060bd248d6f9133b5e": {
       "excerpt": "Meta carried by a BRANCH node (an `api()` result).",
@@ -485,6 +493,10 @@
       "excerpt": "A Standard Schema requiring `title` to be a non-empty string; coerces `year` to …",
       "approvedAt": "2026-08-13T07:11:03.700Z"
     },
+    "155dd15ab17a4eb05dfb3731bc0e157c3c55ec891ddb3937d1cd2001943531ab": {
+      "excerpt": "Swagger 2.0 §4.7.4: Schema Object supports `readOnly` (boolean) directly.",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "15bfb6bcdb96e09a48b26e7622ab4b22b32e8bf434b8acdecf9299e380e00620": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.586Z"
@@ -512,6 +524,10 @@
     "169ffde928ec8979ca77eb5cc705eac505a5f2b73571b22c394562d5d3a16b79": {
       "excerpt": "First value delivered; cancel before the second yield's timer fires.",
       "approvedAt": "2026-08-13T07:10:43.583Z"
+    },
+    "16c066def1676e2f4eb572222a11c28c64412600ce0a40df437d7d7be7a6f123": {
+      "excerpt": "`deprecated` on Schema Object is an OAS 3.0 addition; no standard Swagger",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "16ccbeea1e9f602dc9bd84ffb901155d2a31231459c2c22e89ce71fc819f65df": {
       "excerpt": "examples/library-api/src/client.test.ts",
@@ -644,6 +660,10 @@
     "1d58aa2e31713c365643dbb28f314df17481ac866d8d39acedf37832d524f285": {
       "excerpt": "Force eager evaluation of a mapped/intersection type into a single plain",
       "approvedAt": "2026-08-13T05:06:32.678Z"
+    },
+    "1d7fd37a678dc238f50cb6160b1b9886db7f649dcf1c0d9b7737aa3e8832acc2": {
+      "excerpt": "Same const-less asymmetry as OAS 3.0 (see the dedicated test above) —",
+      "approvedAt": "2026-08-13T07:11:16.459Z"
     },
     "1d94a0a450807b0a1ff5deff589870771dbb4be94be34d2d463ef8fb35f148ff": {
       "excerpt": "The path segment value (\"actual-book-id\") must NOT leak into `bookId`",
@@ -1021,6 +1041,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.576Z"
     },
+    "2f8a4606c79979920e743164277250e39161921b4e775283b0175d861d31e506": {
+      "excerpt": "Swagger 2.0 §4.7.4: `discriminator` is a *string* naming the property",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "2fd064c4f2df113bf74772dd4857c4c9619e07ce2b268db4e795e3f7deb146fc": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.590Z"
@@ -1085,6 +1109,10 @@
       "excerpt": "JTD has no tuple form. Degrade to the first element's schema (lossy —",
       "approvedAt": "2026-08-13T07:10:20.621Z"
     },
+    "32267bfb5f76568d44313b2c686d1dc2a1ee29c562d6e54818ca4f0452c3c15c": {
+      "excerpt": "OAS 3.0.3 §4.8.24 inherits JSON Schema's `allOf` — the faithful encoding",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "32440a264a54b1af66e94dbb47c4b319cadf1ea19f34d1c605e2f31ebe6af9b9": {
       "excerpt": "Cap'n Proto's `interface` (https://capnproto.org/language.html#interfaces)",
       "approvedAt": "2026-08-13T07:09:42.597Z"
@@ -1104,6 +1132,10 @@
     "330c4675dfe7fc55135dde6208c5f6bdda367c753b00fda07bf633e4b0362a3b": {
       "excerpt": "Build a fully executable GraphQL server from a Node tree: projects `tree`",
       "approvedAt": "2026-08-13T07:10:43.573Z"
+    },
+    "330d77a4fa61b887a4bdcfc75563ef90ec686513301f48a2fec08a32219a6282": {
+      "excerpt": "Swagger 2.0 §4.7.4 Schema Object has a singular `example` field; the",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "333f9436ce686cd0ac56d5b5aa06d55a29b7b5a3238e03343f7e64c24806740d": {
       "excerpt": "A declaration hoisted out while lowering a table field whose type has no",
@@ -1192,6 +1224,10 @@
     "36c1bae30dbc69a0f304edfe8a24f33b1ce3f17cece65b20d516e6a59f731280": {
       "excerpt": "Cap'n Proto has no doc-comment keyword (§ \"Language Reference\"); `#` line",
       "approvedAt": "2026-08-13T07:09:42.597Z"
+    },
+    "37167306098b0b3e7aec124d3650397559edfe55443de94b1ec18fb1ed23639a": {
+      "excerpt": "`kind` uses `enum` rather than `literal` here — a single-value",
+      "approvedAt": "2026-08-13T07:11:16.459Z"
     },
     "3763bd6cda31ade0da34e1e830cbba0ff371ad9647670b74b3ef2879d8cf2cf8": {
       "excerpt": "Root `Query` type fields — top-level branches/leaves only; nested namespace fiel…",
@@ -1305,6 +1341,10 @@
       "excerpt": "Kotlin built-in types: https://kotlinlang.org/docs/basic-types.html. Named",
       "approvedAt": "2026-08-13T07:09:42.438Z"
     },
+    "3cc4b325976d570255640709299d5075eb2d4e8afeeeb4cb1f51e46b3e75990d": {
+      "excerpt": "OAS 3.0.3 is draft-05-based and has no `const` keyword (a later JSON",
+      "approvedAt": "2026-08-13T07:11:16.459Z"
+    },
     "3d074b9a81a691babc225e4bb3280a9921a907236ceb52865d38a295515209dd": {
       "excerpt": "draft-07 §9.2.1.3 defines `oneOf` (exactly one variant matches) but no",
       "approvedAt": "2026-08-13T07:10:55.727Z"
@@ -1405,6 +1445,10 @@
       "excerpt": "ALS wrapping (see CreateGraphQLServerOptions.als) — innermost, closer to",
       "approvedAt": "2026-08-13T07:10:43.573Z"
     },
+    "41d368981ed0886e4b9e0db30fed72b5c17111f4ce13782f2a8b06f5f7732ac5": {
+      "excerpt": "OAS 3.0.3 is restricted to a JSON Schema Wright Draft-05-based vocabulary",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "41f0a9407fe2af6a1c50b591757e378d402e25570cb5974c5c7cc0b80b36a0be": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:09:42.437Z"
@@ -1416,6 +1460,10 @@
     "428ec03776e3addc8a02e408a66f0d5abd0b3a2bf547305164fc04e63f3fbc4b": {
       "excerpt": "Both fixtures import `api`/`op` from ../node.ts.",
       "approvedAt": "2026-08-13T07:10:02.230Z"
+    },
+    "42aa0d7f49757017fc54e861bfed7444f996e5aab9396bebdfd2a7963bc81870": {
+      "excerpt": "Empty schema (or a schema carrying only annotation/vendor keywords",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
     },
     "42acd626b93928cbb76c6fefab397756640d22975cd4f8bf9d4c7ca1c1f338b2": {
       "excerpt": "\"optional\" is consumed by the object handler (properties/optionalProperties",
@@ -1561,6 +1609,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "49bfc111778eb35e07c41265e9f5ee9d4cc1486c0e2e104bda0340341ef0676c": {
+      "excerpt": "Swagger 2.0 §4.7.4: `readOnly` is a per-schema annotation, driven by",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "49c29acbd4792b531db294414b343285d2f9fb7e21bbbd4350ce50a07d7730f2": {
       "excerpt": "packages/graphql-api-projector/src/ws.test.ts — createWsHandler (graphql-ws prot…",
       "approvedAt": "2026-08-13T07:10:43.583Z"
@@ -1637,6 +1689,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.583Z"
     },
+    "4d749a856d8f11b0022ad61a63f16efc19d17256f7a4eee6833acdceba5f3a05": {
+      "excerpt": "Swagger 2.0 §4.7.4 kept `allOf` from its draft-04 base (the only",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "4dd151b5021bfbf855dc5cf8b8d4c0b6b60939d76d48fbdd6722f96bcff66e30": {
       "excerpt": "Build a fetch-compatible `(req: Request) => Promise<Response>` handler",
       "approvedAt": "2026-08-13T07:11:09.589Z"
@@ -1645,9 +1701,17 @@
       "excerpt": "SwiftyJSON has no dedicated UUID/URL/Date/Data accessor — these all",
       "approvedAt": "2026-08-13T07:10:46.701Z"
     },
+    "4e7d65a37ab6b3016b21d3801ccf530c3e2e8033deb5c9ed9e646848f3567a44": {
+      "excerpt": "Swagger 2.0 Data Type Format table (§4.6) lists `byte` (base64-encoded",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "4e88c485706ffa4b73129df28e3bb2211052cbf5c668821848254169fcc46636": {
       "excerpt": "Force eager evaluation of a mapped/intersection type into a plain object type.",
       "approvedAt": "2026-08-13T05:12:43.183Z"
+    },
+    "4f14301086f22b4940ab60a50db06dbb9eade4d5b1daf2215b51e2b4332b0fab": {
+      "excerpt": "No recognized structural keyword -> falls through to the unknown-schema default.",
+      "approvedAt": "2026-08-13T07:11:16.459Z"
     },
     "4f1e388c9e3f4d1437af7ebc72a1ad17f2faca23adb474429a7968404ce1b1db": {
       "excerpt": "Merge multiple OpenAPI documents (each produced by `toOpenApi`/",
@@ -1752,6 +1816,10 @@
     "528ae05ba8f73cfdc382758c003903bb8a0220efc8c6d741fa5a9611df0c6a27": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:12:43.183Z"
+    },
+    "52baa15cc341307a091b2493f8c6d4e6ec2a125f2782dbb33902dac0d621b3a1": {
+      "excerpt": "Annotation keywords shared verbatim by both OAS versions' Schema Object",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
     },
     "52cd6ddf0ad6e01a8d7b3ff274a20a67891122cd936abf49df27234efa536cbc": {
       "excerpt": "============================================================================",
@@ -1901,6 +1969,10 @@
       "excerpt": "draft-04 §5.1.1: exclusiveMinimum is a boolean modifier on `minimum`.",
       "approvedAt": "2026-08-13T07:10:55.724Z"
     },
+    "582725631369c923c7a49e516a3d264951b258a2a358ddd4c7659d1d205ff3de": {
+      "excerpt": "OAS 3.0.3 §4.8.24.2: `readOnly` is a per-schema annotation, driven by",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "58328003cbf6cfc983e09d89ad1ab8d41b76bd3d06c24bb37f988ba7c4b580c7": {
       "excerpt": "Delimiter-stripped, reindentation-normalized text — see normalizeComment.",
       "approvedAt": "2026-08-13T05:02:19.633Z"
@@ -2021,6 +2093,10 @@
       "excerpt": "Offset-based pagination: a numeric window over a known-size collection.",
       "approvedAt": "2026-08-13T07:10:02.226Z"
     },
+    "5e0d66b12a06072672af59554d9fb1b8c9707759af625689584756ed695bd169": {
+      "excerpt": "Swagger 2.0 §4.7.4 keeps `allOf` from its JSON Schema draft-04 base (the",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "5e35d07283b4353c64fbe54bba3cda9fbdf87caf220faa2442e47a71d63b523e": {
       "excerpt": "Render a complete .fbs file (§ \"Schemas\": https://flatbuffers.dev/schema/)",
       "approvedAt": "2026-08-13T07:09:56.017Z"
@@ -2028,6 +2104,10 @@
     "5e408b24adead52413959f9806baf050e03c900369b0393bf4f02e4da60eb057": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:38.033Z"
+    },
+    "5e5df1c89a259cfb3f8c95501f152525a5ed132623621aee059db404df6213d5": {
+      "excerpt": "Swagger 2.0 §4.7.4: \"items - Required if type is array. Value MUST be an",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "5e787bcf3000bbb50a644fdfc907f172b6b8268f7af97724470ccd6c948f3c88": {
       "excerpt": "Case D: large tree (200+ routes) + long paths, combined in one mixed set.",
@@ -2088,6 +2168,10 @@
     "604d19eb7dcf42b9c5b063d4e6caeb89cabefbbad82e6fa90b8140fcb7ba6b96": {
       "excerpt": "No server-sent complete for a client-initiated cancellation.",
       "approvedAt": "2026-08-13T07:10:43.583Z"
+    },
+    "6079cc127628cff096043b612ac8589bfd2a2f5a41dd15fe4c91ad35a634a416": {
+      "excerpt": "No `const` keyword in draft-04 — same substitution as JSON Schema/OAS 3.0.",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "607e7ab8d29ee959a5a9eb6d1028b37ea120aa176f45aacd7bd6595738a80e5b": {
       "excerpt": "\"list\" and \"create\" carry no `moveTo` directive, so they stay at their",
@@ -2153,6 +2237,10 @@
       "excerpt": "Render one entry of `ProjectGraphQLResult.types` — a synthesized namespace type …",
       "approvedAt": "2026-08-13T07:11:09.587Z"
     },
+    "6306ecb41a3b98844624173118e55b6180c05d3251d12c98b948deaddfb55b82": {
+      "excerpt": "Swagger 2.0 has no service/interface-with-methods concept — degrade to",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "63198da04ff5ac7a11f825f04601199f5d1ad31f5f4c894d4bce53514739c4a4": {
       "excerpt": "`method` has no explicit entry — `registerParent(\"method\", \"function\")`",
       "approvedAt": "2026-08-13T07:09:42.441Z"
@@ -2193,6 +2281,10 @@
       "excerpt": "Real schema has properties.prefix",
       "approvedAt": "2026-08-13T07:08:47.728Z"
     },
+    "64a8107daf9883b9af844e58d15255f6b909b070911e66d1c21fecbe924b9635": {
+      "excerpt": "Swagger 2.0's `x-deprecated` (openapi20.ts's vendor-extension stand-in",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "64b9a4ac28cca136c36dde4c671e000b2f06b2e14e901da0e7b3c607a39ba2cd": {
       "excerpt": "Convert a `protobufjs` message field into a `ProtoFieldDescriptor`.",
       "approvedAt": "2026-08-13T07:10:47.064Z"
@@ -2208,6 +2300,10 @@
     "6554da7b67e9eb211df851c6652c21848370b40047fe3848214ad03de90f165f": {
       "excerpt": "packages/graphql-api-projector/src/client.ts — @rhi-zone/fractal-graphql-api-pro…",
       "approvedAt": "2026-08-13T07:08:38.033Z"
+    },
+    "659b0d768e21b904663a4668adbc6bd2345cde2194a28de0efe9b8b8fcf4946e": {
+      "excerpt": "Swagger 2.0 has no callable-type concept — same vendor-extension",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "65b89eaa028ed805b54c0e99d926c7a92ce5d416ea83fbdcb448b661274ebf34": {
       "excerpt": "Standard tags resolved correctly",
@@ -2369,6 +2465,10 @@
       "excerpt": "Project a `TypeRef` to standalone ObjectMapper-flavored Swift source:",
       "approvedAt": "2026-08-13T07:10:46.698Z"
     },
+    "6e3e6f4d30b91e69752e4b09ea49abb4bc518d8336282d2b022737c2fd8a0397": {
+      "excerpt": "Swagger 2.0's Schema Object (§4.7.4) borrows its numeric-validation",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "6e5ede359659feb5b0317c38577e8d743144be3a58be7386a358343ce9ec5266": {
       "excerpt": "Extract param names from path segments like /books/{bookId}/details → [\"bookId\"]…",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -2480,6 +2580,10 @@
     "72ff61a5753f9d63f2cd0dd7f40508f4eb5b0b9ef9e24e115befff2365cb8bf9": {
       "excerpt": "JSON object keys are always strings — ObjectMapper's dictionary",
       "approvedAt": "2026-08-13T07:10:46.698Z"
+    },
+    "73321252156e8888a99e5f1ec197f8fefea4fdd803ac40fc4b06301f670dbc39": {
+      "excerpt": "Project a whole `TypeRefDocument` (see type-ir/src/index.ts) to a schema",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
     },
     "73344ae54d1258d257de3d4bd5181414ff0583e9f9be02ac58f7d357fbfb5bc7": {
       "excerpt": "https://kotlinlang.org/docs/sealed-classes.html +",
@@ -2685,6 +2789,10 @@
       "excerpt": "Bare type expression for `ref` — the reference (boxed) spelling, suitable",
       "approvedAt": "2026-08-13T07:09:42.427Z"
     },
+    "7ce5241bd3ee3bd0071c7215168a8f5964ea6cebd9e892cebd7d8c8e7b64fa8f": {
+      "excerpt": "Swagger 2.0 §4.7.4: Schema Object's `discriminator` is a bare",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "7cfe95fdc18b85a65658476dbc864de1210a825170f75a6c70a200365cef1894": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.583Z"
@@ -2736,6 +2844,10 @@
     "7f801eedb9baf25e54e667209b3a76211a50dde4161833927bc3397934fb2761": {
       "excerpt": "Splits an anyOf's variants into the non-null variants and whether a",
       "approvedAt": "2026-08-13T07:10:55.731Z"
+    },
+    "80520fba2021c67040ea7739c2178a8818f98d8aa397741ee6069f3a349f776e": {
+      "excerpt": "Swagger 2.0 has no streaming/async-sequence vocabulary — degrades to the",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "80b8de602a62753b13ac63187fc9077d960b749b3bb3311c193dc66a5ceb99ce": {
       "excerpt": "Message, enum, or unresolved — all become a `ref` (an unresolved name",
@@ -2873,6 +2985,10 @@
       "excerpt": "draft-07 has no callable-type vocabulary either — same honest degradation",
       "approvedAt": "2026-08-13T07:10:55.727Z"
     },
+    "88211f09bdd7c7fdd268cc7d6a67e566161606062d55e82036a29b5412773ce2": {
+      "excerpt": "OAS 3.0.3 §4.8.25 Discriminator Object: `discriminator.propertyName` names",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "882697270510c8607d53a619a5ae5c38e8c0b0e6bcfa4b433abbf397fe6daf12": {
       "excerpt": "Java has no structural tuple type. Rendered as a reference to a",
       "approvedAt": "2026-08-13T07:09:42.437Z"
@@ -2996,6 +3112,10 @@
     "8e3271038d7d0c7a7ed3235de859426853b0b3e75197bb72042bb6c4ff3fd8cd": {
       "excerpt": "Options for toOpenApi / toOpenApiFromRoute.",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "8e5600c038796fd7bcd6885f72c8645fe9790ae1cacdfb92a53e1f044e999e05": {
+      "excerpt": "OAS 3.0.3 §4.8.24 (Schema Object, \"Composition and Inheritance\") + §4.8.24.1",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
     },
     "8e7e4f52db8a0ff635a4b438889b08a3dd69108003374d1349d9753474ed6a8d": {
       "excerpt": "No native paginated-collection type — degrades to its element's List",
@@ -3200,6 +3320,10 @@
     "96ba1d5dca9fbeaa39899ea6b57ce32a976c32524358a243318b402975ee0414": {
       "excerpt": "Around-hooks wrapping each field's handler call — `F => F` where",
       "approvedAt": "2026-08-13T07:10:43.573Z"
+    },
+    "96c25bf58645a7cfb4a8b20590162785627559d66e59f68796fda80f00656133": {
+      "excerpt": "OAS 3.0.3 §4.8.24.2 Properties table: readOnly/writeOnly are booleans,",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
     },
     "9702545450adc545fcadcbfb02254a175a960de3861fc8bcb5d3c0b3315904a7": {
       "excerpt": "A class instance carries only nominal identity (className/source), never",
@@ -3505,6 +3629,10 @@
       "excerpt": "packages/graphql-api-projector/src/client.test.ts — createGraphQLClient tests",
       "approvedAt": "2026-08-13T07:08:38.036Z"
     },
+    "a707f1d7453480394fdb20178803dcebab134dac002b6e66854607f571ba0f6c": {
+      "excerpt": "OAS 3.0.3 §4.8.24.1 Properties: nullable is the substitute for a \"null\" type,",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "a72cf3afb035d930ef028ffa71aa910e196b0513b459742f2f5944bd7ac60bd3": {
       "excerpt": "`:name` (colon-prefixed), matching extractRouteTypeRefs's own",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -3533,6 +3661,10 @@
       "excerpt": "Directories never worth scanning: dependency trees, build output, VCS/tool",
       "approvedAt": "2026-08-13T05:02:19.630Z"
     },
+    "a8a4a53faac25709fc30ce26931160cc1e85f42ffd24569259d16fd56e7522e8": {
+      "excerpt": "Mirrored into the lowercase `meta.readonly` convention alongside the",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "a8d3343d0b5493848dad46c50cd0ad8f7d38121eede5527cc967521077f99c9e": {
       "excerpt": "Wrap each field's handler call so it runs inside its own",
       "approvedAt": "2026-08-13T07:10:43.573Z"
@@ -3560,6 +3692,10 @@
     "a9a96ad66cd1bcd3fb287c09ef10f22e9d766d1b97b573a7ff903bcd892b3dbc": {
       "excerpt": "Underscore-joined tree-path → derived input/output TypeRefs (from codegen). Forw…",
       "approvedAt": "2026-08-13T07:10:43.573Z"
+    },
+    "a9bf8328a61b77dc49689676eb08fc3eadbbe06d343c16d00d0b38dc6a94cf23": {
+      "excerpt": "Swagger 2.0 has no `oneOf`/`anyOf` (both OAS 3.0 additions — the only",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "a9cb755c9ab0fa6c07152ca373645c943aa06b2a221c3d5b3eee743abaf3d123": {
       "excerpt": "`method` has no explicit entry — falls back to `function` (JSON) via",
@@ -3601,9 +3737,17 @@
       "excerpt": "`@deprecated(reason: ...)` — only meaningful when `deprecated` resolves true.",
       "approvedAt": "2026-08-13T07:08:35.589Z"
     },
+    "ac182e9cadb13046a3cd6dd66af08ef429a805b7a1446b47841ba73966406d7c": {
+      "excerpt": "Formatted-string kinds recognized by both OAS versions' Data Type Format",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "ac3cd47aad5bcf55e1575947d1390e48501c504824c9bd3b4e4824ed12e15a17": {
       "excerpt": "An unrelated leaf moving elsewhere in the tree must not affect",
       "approvedAt": "2026-08-13T07:11:03.700Z"
+    },
+    "acd69cc16337d72b334b3ac442bb47ddd2d608c3ad0ed5d077f24eefa98f4808": {
+      "excerpt": "Swagger 2.0 §2.2/§4.7.4: schemas referenced via `#/definitions/Name` live in",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "aceeeaafff56e07828230eb8a3db7b436a32efb1941e56b7d6da8d50ec567c46": {
       "excerpt": "Assemble one query/mutation/subscription document string. Exported for the",
@@ -3620,6 +3764,10 @@
     "ad9fbc05c5ba069c1c7c5e9dc5412d1da6ae016e0d9c1637cb88163eedd062bb": {
       "excerpt": "JSON Schema has no service/interface-with-methods vocabulary either —",
       "approvedAt": "2026-08-13T07:10:55.717Z"
+    },
+    "add469ba8605ae2ae3c9d10c759a29c1a0a98d5bdaf164277343a0952760a2f3": {
+      "excerpt": "Convert a Swagger 2.0 (§4.7.4 Schema Object) schema into a type-ir",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
     },
     "ade2190380a4ce32257626ead598082f7ad7c213c6cd5324cc74a74a7f8e2e92": {
       "excerpt": "Declarations hoisted out of a field/element position, to be emitted as",
@@ -3720,6 +3868,10 @@
     "b2fcc9e1c10a47c656e8966f693b71349ad2301eeec39813690ff0f44a01954e": {
       "excerpt": "GitHub pages deployment config.",
       "approvedAt": "2026-08-13T07:09:53.729Z"
+    },
+    "b390b21d90b0d06d27b93bf20bfe1bb3486889c95f5acd4558722c93a07578ea": {
+      "excerpt": "No `type: \"null\"` and no `nullable` keyword exist in Swagger 2.0 — the",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "b393d719dd0bb107b8e4b3526171f64fd7fe259c2b3e998bf36a8c6ec38e5ec4": {
       "excerpt": "examples/library-api/src/stores.ts — the deployment's ONE store augmentation",
@@ -3857,6 +4009,10 @@
       "excerpt": "JSON Schema 2019-09 §9.2.1.2 defines no `discriminator` keyword itself,",
       "approvedAt": "2026-08-13T07:10:55.717Z"
     },
+    "ba67de3ec30e4e5d1d02579588d00ba865134d576d588e778ac5611fe941454b": {
+      "excerpt": "OAS 3.0 has no callable-type concept — same vendor-extension degradation",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "ba936750be7e92d2edaa15ad54e4b27b8e9f7c1846feb9810b48b69ce8580376": {
       "excerpt": "Builds one property's `[JsonProperty(...)]` attribute + declaration.",
       "approvedAt": "2026-08-13T07:09:42.413Z"
@@ -3929,6 +4085,10 @@
       "excerpt": "Cap'n Proto enumerants are assigned sequential ordinals by declaration",
       "approvedAt": "2026-08-13T07:09:42.607Z"
     },
+    "bd6938af51740f4b3941fc5ce9116d2cd858e2c236f74b795cf7e5065400998a": {
+      "excerpt": "Swagger 2.0 §4.7.4 Schema Object `$ref` resolves against the top-level",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "bd93af6ff7a62d1505cc43c246716bfaf4904ef377a1459f67cf6672e1c7cbc7": {
       "excerpt": "No C# equivalent to `never` — degrades to `object`, flagged via comment",
       "approvedAt": "2026-08-13T07:09:42.419Z"
@@ -3980,6 +4140,10 @@
     "c0fcea12ffe913328f0b3d34530d6ebd276aeb8e04d3fdf6a3b2f1efd9669044": {
       "excerpt": "packages/type-ir/src/from-protobuf.ts — @rhi-zone/fractal-type-ir/from-protobuf",
       "approvedAt": "2026-08-13T07:10:47.064Z"
+    },
+    "c11091712b173f15a96bb228f57d0014f06fe45f9cb00a77e358a1ffdee4c908": {
+      "excerpt": "Swagger 2.0 has no `nullable` keyword and `type` cannot be an array",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
     },
     "c16629016ab0c7f1729d2e0e513cecad59944d0eb5710dea7c68572aee144b8d": {
       "excerpt": "No separator to split on: a name with no lowercase letters at all (e.g. a",
@@ -4037,6 +4201,10 @@
       "excerpt": "Present iff a `graphql` extractor was provided — drop directly into `CreateGraph…",
       "approvedAt": "2026-08-13T07:10:02.219Z"
     },
+    "c519b8dd3acd825b9c07d1c09d0d800504b0006370cc9d0389e47fbafcc155cc": {
+      "excerpt": "Vendor-extension (`x-*`) passthrough into the open metadata bag (see",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "c52dfa5c457003ee857f5bb46f5db5940f54a6faec47d2216ec571dd02397190": {
       "excerpt": "How an optional/nullable field's type is rendered: \"nullable\" (default)",
       "approvedAt": "2026-08-13T07:09:42.427Z"
@@ -4056,6 +4224,10 @@
     "c6cf1309cd700e5a84e18d0b1d5877b9a608141037ac40445d484398256fc56c": {
       "excerpt": "warmup",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "c6e2f086131cdf910e5ed1293361afba70625762a5aa3ad3226fee17366ca06f": {
+      "excerpt": "Same degrade as `stream` — OAS 3.0 has no pagination vocabulary either —",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
     },
     "c6f9102f9dfe5df69a5b60936b25b01c63d28e55ecb14e80f96956daf27644f3": {
       "excerpt": "Every built-in leaf kind (plus the pre-1.0 extension kinds — int/float",
@@ -4116,6 +4288,10 @@
     "cafe1eff6b3c46e3fa80945a9447d43ea1bad7a0cf46bdc555819ee2a1d566ea": {
       "excerpt": "Group numbers are assigned left-to-right by OPENING paren position in",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "cc08b6e711dd20eda48d7eff92344b65856bf4b8810258a44de9533cc567f685": {
+      "excerpt": "`mapping` has no forward-projector consumer yet (toOpenApi30 only",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
     },
     "cc60d3047150b3fa1e0d598316dd195dde171b61af1c4379a441ff7196d82ca6": {
       "excerpt": "Same degrade as `stream` — a page is one window over a larger collection",
@@ -4201,6 +4377,10 @@
       "excerpt": "packages/graphql-api-projector/src/schema.ts — @rhi-zone/fractal-graphql-api-pro…",
       "approvedAt": "2026-08-13T07:11:09.587Z"
     },
+    "cf92f1dca7963198802395990bd847fec3e51faa7aeb20d4b6b4a77b0c99b972": {
+      "excerpt": "Convert an OpenAPI 3.0 (OAS 3.0.3, §4.8.24 Schema Object) schema into a",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "cfa97c361e94dda0d4f661cda36693dc8d171323cfd41ee866fd6efebf9096b2": {
       "excerpt": "m.kind === \"union\": a Cap'n Proto union always has exactly one active",
       "approvedAt": "2026-08-13T07:09:42.607Z"
@@ -4228,6 +4408,10 @@
     "d0817b9a36e1cf54fbe3cea24a713989dd7fe0a6fc0e39c19a31e2fb5a05d68c": {
       "excerpt": "draft-04 has no streaming/async-sequence vocabulary either — same",
       "approvedAt": "2026-08-13T07:10:55.724Z"
+    },
+    "d0ede11b3c608806461ae9092f49783fd8a985851e10535263e3a9462e1e5a69": {
+      "excerpt": "OAS 3.0.3 §4.8.24.1: `nullable: true` is the substitute for JSON",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
     },
     "d1405324bb94808b9869e85c44bc94a5a0ca367c726d62ef42d80e50915568c8": {
       "excerpt": "FieldOptions.deprecated (descriptor.proto): renders as the `[deprecated = true]`",
@@ -4280,6 +4464,10 @@
     "d3df71e8140454c37be80ec5de9811d01a0c4c715d44c3864e8efecbeba60138": {
       "excerpt": "draft-07 has no service/interface-with-methods vocabulary either —",
       "approvedAt": "2026-08-13T07:10:55.727Z"
+    },
+    "d3fd55a5118fedbac416fc24b08716476b71874397cc0aff9816b46e0c58f41f": {
+      "excerpt": "OAS 3.0 has no service/interface-with-methods concept — degrade to an",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
     },
     "d41b71a449136cc1ea316ec351de39e5a0120b3fcfa59ada1c9ad451278b829c": {
       "excerpt": "Each item here is one entry in the navigation menu.",
@@ -4385,6 +4573,14 @@
       "excerpt": "\"push\" (4 chars) underlined with 4 `~` — not `=` (reserved for the",
       "approvedAt": "2026-08-13T07:10:43.810Z"
     },
+    "d95d93a5ed5187be53f0f8faaecc496a1fa3f8fc7d6170978ca09ae2b0593f0a": {
+      "excerpt": "See the 3.0 test above for why `kind` uses `enum` rather than `literal`.",
+      "approvedAt": "2026-08-13T07:11:16.459Z"
+    },
+    "d965b8ac44e0fe487bcf10ff34326e094aaad39fbecbfb9b47e7e280ff54e429": {
+      "excerpt": "OAS 3.0 has no streaming/async-sequence vocabulary — degrades to the same",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "d979c78b6bdc7b986a3baa869909f054f3dc858a77504af5b13f6b8a31a499b4": {
       "excerpt": "Top-level selection-set entry point: `\"\"` for a scalar/unknown output (no",
       "approvedAt": "2026-08-13T07:08:38.033Z"
@@ -4417,6 +4613,10 @@
       "excerpt": "The full per-request store bag a GraphQL field dispatch builds and threads",
       "approvedAt": "2026-08-13T07:08:38.040Z"
     },
+    "db9c4dc88100b0fe235f3456866446a05a92f1067ef0f2fc71f1d203cdf23c83": {
+      "excerpt": "Swagger 2.0 has no `oneOf`/`anyOf` (only `allOf` survived from its",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "dbd651ed543db909274780b4898c7b28d6e6afa924063c6e9e547f36491d2a7f": {
       "excerpt": "--- Case A: wide branching — one node (/api/v1/*) with 120 static",
       "approvedAt": "2026-08-13T07:11:03.688Z"
@@ -4440,6 +4640,10 @@
     "dc988e83403dd513f7558b4e55abdf2a23987c0c4b5176000108c2540cf3090a": {
       "excerpt": "An error encoder's GraphQL-specific target shape — message + optional `extension…",
       "approvedAt": "2026-08-13T07:08:38.040Z"
+    },
+    "dcbb1a373fab719629af620f24855aaf4a2e7e07512137985db59c844e696e86": {
+      "excerpt": "OAS 3.0.3 §4.8.24.2: components live under `#/components/schemas/`, not",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
     },
     "dd47408ad7dccab63dd32f62a3e62828cbadf6f106342fb0e410238707a7d54e": {
       "excerpt": "`struct Name: Mappable { var field: T!; init?(map: Map) {}; mutating func",
@@ -4589,6 +4793,10 @@
       "excerpt": "search op has no meta.tags of its own; readOnly comes from catalog node",
       "approvedAt": "2026-08-13T07:08:47.728Z"
     },
+    "e29d8c02586b73c978446a76634bba731283b38a37afb0879a4148c24e1e9188": {
+      "excerpt": "Same degrade as `function`, distinguished by `x-method: true`.",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
     "e2a73beeccb3fcad076d03c6828f504db8d516e703119b979cd8a5066a19e9ef": {
       "excerpt": "+ the \"deep\" root segment = 25 levels total",
       "approvedAt": "2026-08-13T07:11:03.688Z"
@@ -4708,6 +4916,10 @@
     "e7e5d4c8a9a40e4b1cfe104aa79fe2e728bc5e96a830f32a7653c8ee1c665291": {
       "excerpt": "end-to-end: verb-helper-authored reserve op dispatches correctly",
       "approvedAt": "2026-08-13T07:08:47.728Z"
+    },
+    "e7ec505187fd79cd979b6329ada943ca09efdf5e866c53a881ab74dc893d6380": {
+      "excerpt": "OAS 3.0.3 schemas are constrained to JSON Schema Wright Draft-04/-07 style",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
     },
     "e8314a50fa2b555db39515a364edade36214f34c863648091bfce40df77044f6": {
       "excerpt": "FieldOptions.deprecated renders as a bracketed field option",
@@ -4925,6 +5137,10 @@
       "excerpt": "Discriminated (`meta.discriminator`) or plain union -> an abstract base",
       "approvedAt": "2026-08-13T07:09:42.423Z"
     },
+    "f125ae029a0102716bfa9d810ab876c32efa354f6202ea69db04a8d6e1f62571": {
+      "excerpt": "Mirrors openapi30.ts's/openapi20.ts's own `passthroughKeys` (the forward",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
     "f16c8c5ca0e1df251e117a5373869d037150503bd51f303a1bda7898d797d01e": {
       "excerpt": "`sources.paramNames` is codegen-derived (see `findRouteSourceCoverageProblems`'s",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -4956,6 +5172,10 @@
     "f23395f0c45d9400ad02c7aa544afa0a52c1b190c74fe2a587a702fc0d7d02d4": {
       "excerpt": "draft 2020-12 §6.2.3/6.2.4 (numeric form, since draft-06 — see json-schema-04.ts",
       "approvedAt": "2026-08-13T07:10:55.717Z"
+    },
+    "f2e6e4dbecc828e0ca7014d936744dbd27e7b947759bc939730ce7633bd69070": {
+      "excerpt": "Reverses openapi30.ts's `#/components/schemas/NAME` and",
+      "approvedAt": "2026-08-13T07:11:16.455Z"
     },
     "f30a4961c6f43fc2307b15b2e387cd564a0a152161228bba3686a49a8bec07b9": {
       "excerpt": "Builds one property's `[DataMember(Name = \"...\")]` attribute + declaration.",
@@ -5121,9 +5341,17 @@
       "excerpt": "Same fidelity as mkdocs-reference.ts's `fieldRow`: the deprecation",
       "approvedAt": "2026-08-13T07:10:43.810Z"
     },
+    "f96caa22eca9939d651ccdc9ad00bb1ba2066b7107d1a70c2a7e0506765a9ceb": {
+      "excerpt": "Swagger 2.0 spec §4.6 (Data Types) + §4.7.4 (Schema Object): the vocabulary is",
+      "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
     "f96fd2eeffae06e99e36e97b444bf278581d37ece451f6f6ba9ee4315b1e232c": {
       "excerpt": "Dart 3 records (https://dart.dev/language/records) are positional-field",
       "approvedAt": "2026-08-13T07:10:51.094Z"
+    },
+    "f9755febd30642dd6ea4b70f30b29db0880a96570c86c4be028efcf592693eb8": {
+      "excerpt": "\"minimum\"/\"maximum\" are handled explicitly in withMeta (interacting with",
+      "approvedAt": "2026-08-13T07:11:16.453Z"
     },
     "f9e478cde2da382b3a2e4a2de996db541a1f37d25593ca171603c1fe2f44d2c9": {
       "excerpt": "An object/interface field with arguments is a resolver, not plain data —",

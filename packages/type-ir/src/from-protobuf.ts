@@ -609,34 +609,6 @@ function convertMessage(node: InstanceType<typeof protobuf.Type>): ProtoMessageD
 }
 
 /**
- * Parse `.proto` text via `protobufjs`'s own grammar (`protobuf.parse`) and
- * adapt the resulting reflection tree (`Type`/`Enum`/`Field`/`OneOf`) into
- * the same descriptor shape `fromProtoDescriptor` consumes. Type references
- * (`Field#type`/`MapField#keyType`) are read as written, unresolved —
- * `resolveAll()` is deliberately never called, since that would require
- * well-known types (`google.protobuf.Timestamp` etc.) and any `import`ed
- * files to actually be loadable, which callers passing standalone `.proto`
- * snippets can't generally provide. Resolution instead happens the same way
- * it always has, in `fromProtoDescriptor`'s own registry (self/enclosing
- * scope search, then a well-known-types table, then a dangling `ref` as a
- * last resort — see `resolveTypeName`'s doc comment).
- *
- * `protobufjs` defaults to proto2 semantics when a file has no `syntax`
- * declaration (relevant to how it treats the `optional` keyword: proto2's
- * plain field-presence `optional` vs. proto3's explicit-presence `optional`,
- * which synthesizes a single-member oneof under the hood — see
- * `convertField`'s doc comment); since this ingester's domain is proto3
- * (per this module's header comment), a missing `syntax` statement is
- * treated as `proto3` rather than `protobufjs`'s own proto2 default.
- *
- * `service`/`rpc` blocks parse into `protobufjs` `Service` nodes, which
- * `convertMessage`'s nested-node walk simply doesn't recognize (only `Type`
- * and `Enum` are matched) — so they're structurally skipped without any
- * special-casing, matching this ingester's message/enum-schema-only scope
- * (RPCs are a projector-output-only concept in this package's protobuf.ts,
- * via `toProtoService`).
- */
-/**
  * File-level (as opposed to message-nested) `Type`/`Enum` declarations,
  * found by descending through any wrapping `Namespace` nodes. A `package`
  * statement (near-universal in real-world `.proto` files, e.g. every
@@ -671,6 +643,34 @@ function collectTopLevelDeclarations(ns: InstanceType<typeof protobuf.Namespace>
   return { types, enums };
 }
 
+/**
+ * Parse `.proto` text via `protobufjs`'s own grammar (`protobuf.parse`) and
+ * adapt the resulting reflection tree (`Type`/`Enum`/`Field`/`OneOf`) into
+ * the same descriptor shape `fromProtoDescriptor` consumes. Type references
+ * (`Field#type`/`MapField#keyType`) are read as written, unresolved —
+ * `resolveAll()` is deliberately never called, since that would require
+ * well-known types (`google.protobuf.Timestamp` etc.) and any `import`ed
+ * files to actually be loadable, which callers passing standalone `.proto`
+ * snippets can't generally provide. Resolution instead happens the same way
+ * it always has, in `fromProtoDescriptor`'s own registry (self/enclosing
+ * scope search, then a well-known-types table, then a dangling `ref` as a
+ * last resort — see `resolveTypeName`'s doc comment).
+ *
+ * `protobufjs` defaults to proto2 semantics when a file has no `syntax`
+ * declaration (relevant to how it treats the `optional` keyword: proto2's
+ * plain field-presence `optional` vs. proto3's explicit-presence `optional`,
+ * which synthesizes a single-member oneof under the hood — see
+ * `convertField`'s doc comment); since this ingester's domain is proto3
+ * (per this module's header comment), a missing `syntax` statement is
+ * treated as `proto3` rather than `protobufjs`'s own proto2 default.
+ *
+ * `service`/`rpc` blocks parse into `protobufjs` `Service` nodes, which
+ * `convertMessage`'s nested-node walk simply doesn't recognize (only `Type`
+ * and `Enum` are matched) — so they're structurally skipped without any
+ * special-casing, matching this ingester's message/enum-schema-only scope
+ * (RPCs are a projector-output-only concept in this package's protobuf.ts,
+ * via `toProtoService`).
+ */
 export function parseProtoText(source: string): ProtoFileDescriptor {
   const withSyntax = /^\s*syntax\s*=/m.test(source) ? source : `syntax = "proto3";\n${source}`;
   const parsed = protobuf.parse(withSyntax, { keepCase: true, alternateCommentMode: true });
