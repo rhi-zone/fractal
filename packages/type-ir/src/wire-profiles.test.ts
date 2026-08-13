@@ -1,6 +1,6 @@
-// packages/type-ir/src/wire-profiles.test.ts — staged wire-profile validator
-// codegen (Wire --validateEncoding--> ValidWire --decode--> T
-// --defaults-fill--> T --validateConstraints--> valid T).
+// Staged wire-profile validator codegen (Wire --validateEncoding-->
+// ValidWire --decode--> T --defaults-fill--> T --validateConstraints-->
+// valid T).
 //
 // See docs/design/wire-profiles-and-staged-validation.md for the design this
 // exercises, and compile.ts's "Wire profiles + staged validation" section for
@@ -43,7 +43,7 @@ function evalWireModule(source: string): Record<string, WireTriple> {
   return new Function(commonJs)();
 }
 
-/** Compile+evaluate ONE (entry, profile) pair via the full `compileWireModule`
+/** Compile+evaluate one (entry, profile) pair via the full `compileWireModule`
  * assembly (not a hand-rolled harness) — realistic end-to-end, and exercises
  * `assembleWireModule`'s module-scope wiring (the shared `__inferTypeRef`
  * helper, the `ValidationError` type, the by-name `constraintsFn` call) the
@@ -105,7 +105,7 @@ describe("wire profiles — per-profile emission", () => {
       kind: "ok",
       value: { count: 3, active: true },
     });
-    // A numeric STRING is a wire-shape violation under json (typed wire, no
+    // A numeric string is a wire-shape violation under json (typed wire, no
     // coercion) — unlike argv/query, where the same input coerces.
     const err = v.parse({ count: "3", active: true }) as { kind: "err"; errors: ValidationError[] };
     expect(err.kind).toBe("err");
@@ -250,12 +250,12 @@ describe("wire profiles — shared constraint validator reused across profiles",
 
   it("two DIFFERENT entries' constraints fns don't collide on hoisted const names when spliced into one module (regression, phase A/B bug)", () => {
     // Both entries' `age`-shaped field triggers a `type`-kind error referencing a
-    // hoisted `refLiteral` const inside `compileConstraintsFn`'s own GenCtx — before
-    // the fix, two entries' independently-fresh `GenCtx`es both minted `__ref0`,
-    // producing a duplicate `const __ref0 = ...` when spliced into one module's shared
-    // scope (`assembleWireModule`). Evaluating the module (not just generating its
-    // source text) is the real assertion: a duplicate `const` is a SyntaxError at
-    // eval/transpile time.
+    // hoisted `refLiteral` const inside `compileConstraintsFn`'s own `GenCtx`. Two
+    // entries' independently-fresh `GenCtx`es can each mint the same `__ref0` name,
+    // producing a duplicate `const __ref0 = ...` when spliced into one module's
+    // shared scope (`assembleWireModule`) — evaluating the module (not just
+    // generating its source text) is the real assertion here, since a duplicate
+    // `const` is a SyntaxError at eval/transpile time.
     const refA = t(types.object({ age: t(types.number, { minimum: 0 }) }));
     const refB = t(types.object({ age: t(types.number, { minimum: 0 }) }));
     const source = compileWireModule(
@@ -324,7 +324,7 @@ describe("wire profiles — composite per-field profiles (compileWireEntryFragme
       { count: queryProfile, startedAt: jsonProfile },
       identityProfile,
     );
-    // `count` under queryProfile: a numeric STRING coerces.
+    // `count` under queryProfile: a numeric string coerces.
     const ok = v.parse({ count: "42", startedAt: "2024-01-01T00:00:00.000Z" }) as {
       kind: "ok";
       value: { count: number; startedAt: Date };
@@ -333,7 +333,7 @@ describe("wire profiles — composite per-field profiles (compileWireEntryFragme
     expect(ok.value.count).toBe(42);
     expect(ok.value.startedAt).toBeInstanceOf(Date);
 
-    // `startedAt` under jsonProfile does NOT accept queryProfile's numeric-string
+    // `startedAt` under jsonProfile does not accept queryProfile's numeric-string
     // coercion rule leaking over: a non-ISO-string value is an encoding error.
     const badDate = v.parse({ count: "42", startedAt: 12345 }) as {
       kind: "err";
@@ -342,7 +342,7 @@ describe("wire profiles — composite per-field profiles (compileWireEntryFragme
     expect(badDate.kind).toBe("err");
     expect(badDate.errors[0]!.kind).toBe("encoding");
 
-    // `count` under queryProfile does NOT fall back to jsonProfile/identity's
+    // `count` under queryProfile does not fall back to jsonProfile/identity's
     // "must already be a number" rule — a non-numeric string is a (query-shaped)
     // encoding error, not silently accepted as a string.
     const badCount = v.parse({ count: "abc", startedAt: "2024-01-01T00:00:00.000Z" }) as {
@@ -372,9 +372,9 @@ describe("wire profiles — composite per-field profiles (compileWireEntryFragme
 describe("wire profiles — defs/ref recursion (phase D)", () => {
   // A self-recursive def: Category.parent: Category — per finalizeSharedDefs'
   // "always shared" rule (from-typescript.ts), a self-recursive type is
-  // ALWAYS shared regardless of `shouldShare`, so this is the concrete shape
-  // that was silently wrong before this phase (a `ref` under a wire profile
-  // fell through as a structural no-op with no coercion/recursion at all).
+  // always shared regardless of `shouldShare`. This is the concrete shape a
+  // `ref` under a wire profile needs to actually recurse into, rather than
+  // falling through as a structural no-op with no coercion/recursion at all.
   const categoryRef = t(
     types.object({
       name: t(types.string),

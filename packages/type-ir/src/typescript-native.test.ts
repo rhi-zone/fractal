@@ -119,10 +119,10 @@ test("object with readonly optional field", () => {
   expect(toTypeScript(ref)).toBe("{ readonly id?: string }");
 });
 
-// Regression: a field name that isn't a valid bare TS identifier (contains a
-// hyphen, e.g. DOM's `Headers`/fetch multi-value-cookie surface exposing a
-// `"set-cookie"` member) rendered UNQUOTED — `set-cookie?: string[]` — is a
-// genuine syntax error (`TS1005`/parser "Unexpected -"), not a style nit.
+// A field name that isn't a valid bare TS identifier (contains a hyphen —
+// e.g. DOM's `Headers`/fetch multi-value-cookie surface exposing a
+// `"set-cookie"` member) renders as a quoted string key; left unquoted,
+// `set-cookie?: string[]` is a syntax error (`TS1005`/parser "Unexpected -").
 test("object field name that isn't a valid identifier renders as a quoted string key", () => {
   const ref = t(types.object({ "set-cookie": t(types.array(t(types.string))) }));
   expect(toTypeScript(ref)).toBe('{ "set-cookie": string[] }');
@@ -192,13 +192,12 @@ test("array of intersection uses Array<>", () => {
   expect(toTypeScript(ref)).toBe("Array<string & number>");
 });
 
-// Regression: a `function`-shaped intersection member (the overloaded-method
-// rendering — `functionRefFromSignatures`/`methodRefFromSignatures` in
-// from-typescript.ts wrap ≥2 call signatures as
-// `types.intersection([types.function(...), types.function(...)])`) MUST be
-// parenthesized — TypeScript's own grammar requires it (`TS1387: Function
-// type notation must be parenthesized when used in an intersection type`),
-// not just a style preference.
+// A `function`-shaped intersection member (the overloaded-method rendering —
+// `functionRefFromSignatures`/`methodRefFromSignatures` in from-typescript.ts
+// wrap ≥2 call signatures as
+// `types.intersection([types.function(...), types.function(...)])`) is
+// parenthesized per TypeScript's own grammar (`TS1387: Function type notation
+// must be parenthesized when used in an intersection type`).
 test("intersection of function-typed members parenthesizes each function member", () => {
   const ref = t(
     types.intersection([
@@ -220,9 +219,9 @@ test("union of function-typed members parenthesizes each function member", () =>
   expect(toTypeScript(ref)).toBe("((a: string) => number) | ((a: number) => string)");
 });
 
-// A `union`-shaped intersection member changes MEANING (not just a syntax
-// error) if left unwrapped: `A & X | Y & B` reads completely differently
-// from the intended `A & (X | Y) & B` — `&` binds tighter than `|`.
+// A `union`-shaped intersection member changes meaning if left unwrapped:
+// `A & X | Y & B` reads differently from the intended `A & (X | Y) & B` —
+// `&` binds tighter than `|`.
 test("intersection of a union member parenthesizes the union member", () => {
   const ref = t(
     types.intersection([

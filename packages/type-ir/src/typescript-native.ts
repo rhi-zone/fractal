@@ -7,8 +7,8 @@ import { flowTsDocComment, quote } from "./codegen-helpers.ts";
 // below so the `ref` handler can tell "a ref to a known def, render the
 // locally-declared alias" apart from "a ref to something else entirely,
 // render the bare (unimportable) name" (see `ref`'s own doc comment).
-// Defaults to an empty set everywhere, so every existing call site that
-// doesn't pass `defNames` keeps rendering exactly as before this change.
+// Defaults to an empty set, so a call site that doesn't pass `defNames`
+// renders every `ref` as an unimported bare name.
 type Converter = (shape: TypeShape, defNames: ReadonlySet<string>) => string;
 
 const leaf =
@@ -147,8 +147,8 @@ const handlers: Record<string, Converter> = {
   // locally-declared alias name, which the caller assembling this into a
   // module is guaranteed to have in scope. Any other `ref` (not in `defNames`
   // — an arbitrary named type this projector has no import mechanism for)
-  // renders the bare target name as before, unimported — the caller is
-  // responsible for ensuring it resolves, same as `instance`/`page` above.
+  // renders the bare target name, unimported — the caller is responsible for
+  // ensuring it resolves, same as `instance`/`page` above.
   ref: (shape, defNames) => {
     const s = shape as TypeShape & { kind: "ref" };
     return defNames.has(s.target) ? defTypeAliasName(s.target) : s.target;
@@ -209,36 +209,35 @@ export function toTypeScript(ref: TypeRef, defNames: ReadonlySet<string> = new S
 
 /**
  * `toTypeScript(ref)`, but parenthesized when needed for `ref` to be safely
- * embedded as ONE MEMBER of a bigger union (`|`) or intersection (`&`) —
+ * embedded as one member of a bigger union (`|`) or intersection (`&`) —
  * used by both the `union`/`intersection` handlers above (never called at
  * the top level).
  *
  * TypeScript's function-type syntax is the lowest-precedence type-level
- * grammar production (it extends as far right as it can) — a bare function
- * type as a union/intersection member is a genuine SYNTAX ERROR
- * (`TS1385`/`TS1387`: "Function type notation must be parenthesized when
- * used in a union/intersection type"), not just a style nit. This shape is
- * produced by `functionRefFromSignatures`/`methodRefFromSignatures`
- * (from-typescript.ts), which wrap ≥2 overloaded signatures as
+ * grammar production (it extends as far right as it can), so a bare function
+ * type as a union/intersection member is a syntax error (`TS1385`/`TS1387`:
+ * "Function type notation must be parenthesized when used in a
+ * union/intersection type"). This shape is produced by
+ * `functionRefFromSignatures`/`methodRefFromSignatures` (from-typescript.ts),
+ * which wrap ≥2 overloaded signatures as
  * `types.intersection([types.function(...), …])`.
  *
- * Two more cases genuinely change MEANING (not just a syntax error) if left
- * unwrapped, both because `|` binds looser than `&`:
+ * Two more cases change the type's meaning if left unwrapped, both because
+ * `|` binds looser than `&`:
  *   - A `union`-shaped member nested in an intersection: `A & (X | Y) & B`
- *     unwrapped would read as `A & X | Y & B` — a completely different type.
+ *     unwrapped would read as `A & X | Y & B` — a different type.
  *   - A `meta.nullable` member (renders as `X | null`) nested in an
- *     intersection: same issue, the trailing `| null` silently becomes a
- *     top-level alternative of the whole intersection instead of applying
- *     only to this one member.
+ *     intersection: the trailing `| null` would silently become a top-level
+ *     alternative of the whole intersection instead of applying only to this
+ *     one member.
  *
- * Wrapping in the union-nests-brand/nullable case (a `meta.brand` member,
- * `X & {...}`, or `meta.nullable`, `X | null`, nested in a UNION) is not
- * strictly required by precedence (`&` already binds tighter than `|`, so
- * it parses correctly unwrapped) but is harmless — the same conservative
- * "wrap whenever the rendered text is a compound expression" rule below
- * covers both call sites with one implementation rather than threading a
- * union-vs-intersection context parameter through for a purely-cosmetic
- * difference.
+ * Wrapping a `meta.brand` member (`X & {...}`) or `meta.nullable` member
+ * (`X | null`) nested in a union isn't required by precedence — `&` already
+ * binds tighter than `|`, so it parses correctly unwrapped — but is
+ * harmless; the same conservative "wrap whenever the rendered text is a
+ * compound expression" rule covers both call sites with one implementation
+ * rather than threading a union-vs-intersection context parameter through
+ * for a purely-cosmetic difference.
  */
 function toTypeScriptAsCompoundMember(ref: TypeRef, defNames: ReadonlySet<string>): string {
   const text = toTypeScript(ref, defNames);

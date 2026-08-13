@@ -7,8 +7,6 @@ import {
   toCamelCaseStripSeparators,
 } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/swift-objectmapper.ts — @rhi-zone/fractal-type-ir/swift-objectmapper
-//
 // TypeRef -> idiomatic Swift types for ObjectMapper
 // (https://github.com/tristanhimmelman/ObjectMapper): a struct/class opts
 // into mapping by conforming to `Mappable` (`init?(map: Map)` +
@@ -79,9 +77,9 @@ interface Ctx {
 /**
  * The Swift type expression for `ref` in a field/element/key/value
  * position, with a plain `?` suffix for optional/nullable — same shape as
- * swift-codable.ts's/swift-swiftyjson.ts's own `fieldType`/`swiftType`. This
- * does NOT decide `T!` vs `T` — that implicitly-unwrapped-vs-bare choice is
- * a struct-*property*-declaration concern (see `propertyType` below), not a
+ * swift-codable.ts's/swift-swiftyjson.ts's own `fieldType`/`swiftType`. The
+ * implicitly-unwrapped-vs-bare choice (`T!` vs `T`) is a struct-*property*
+ * -declaration concern handled separately (see `propertyType` below), not a
  * property of the type itself: an array's element type or a tuple's member
  * type must stay a clean `T`/`T?`, never `T!` — nesting an implicitly
  * -unwrapped optional inside `[...]`/`(...)` is both needless (the

@@ -6,8 +6,6 @@ import {
   toCamelCaseStripSeparators,
 } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/swift-swiftyjson.ts — @rhi-zone/fractal-type-ir/swift-swiftyjson
-//
 // TypeRef -> idiomatic Swift types for SwiftyJSON
 // (https://github.com/SwiftyJSON/SwiftyJSON): unlike swift-codable.ts's
 // protocol-conformance encoding (a struct declares `: Codable` and the

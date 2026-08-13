@@ -1,8 +1,8 @@
-// packages/type-ir/src/test-fixtures.ts — shared realistic schemas used by
-// both cross-projector.test.ts (string-level smoke tests over every
-// projector) and compile-check.test.ts (real-compiler checks over the
-// projectors that emit a genuinely compilable target language). Factored out
-// so the two suites exercise the exact same shapes rather than drifting.
+// Shared realistic schemas used by both cross-projector.test.ts (string-level
+// smoke tests over every projector) and compile-check.test.ts (real-compiler
+// checks over the projectors that emit a genuinely compilable target
+// language) — factored out so the two suites exercise the exact same shapes
+// rather than drifting.
 import { t, types, type TypeRef } from "./index.ts";
 import { bytes, datetime, email, int32 } from "./kinds/common.ts";
 
@@ -49,12 +49,12 @@ export const ecommerceOrder = obj({
 // (b) Recursive Tree — self-referential via `ref`. Each projector renders a
 // standalone TypeRef, so the inner `ref` just needs to render as the type's
 // own name (verified against typescript-zod.ts / json-schema.ts / etc. — none
-// of them require a resolvable registry for a bare `toX(ref)` call). NOTE:
-// because the self-reference is the literal string "TreeNode", any caller
-// that needs the emitted code to actually resolve (compile-check.test.ts,
-// unlike cross-projector.test.ts's pure string-shape check) MUST render this
-// fixture with the root name "TreeNode" — passing any other name leaves the
-// self-reference dangling.
+// of them require a resolvable registry for a bare `toX(ref)` call). The
+// self-reference is the literal string "TreeNode", so a caller that needs the
+// emitted code to actually resolve (compile-check.test.ts, unlike
+// cross-projector.test.ts's pure string-shape check) renders this fixture
+// with the root name "TreeNode"; any other name leaves the self-reference
+// dangling.
 export const treeNode = obj({
   value: t(types.string),
   children: t(types.array(t(types.ref("TreeNode")))),
